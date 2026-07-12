@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 // Mock at module level - this is hoisted by Vitest
 vi.mock("../utils/terminal-adapter", () => ({
   execCommand: vi.fn(),
+  powershellCommand: (options: { cwd: string; command?: string; argv?: readonly string[]; env: Record<string, string> }) => options.command || options.argv?.join(" ") || "",
   TerminalAdapter: class {},
 }));
 

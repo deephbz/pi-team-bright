@@ -5,7 +5,7 @@
  * Note: Zellij uses --close-on-exit, so explicit kill is not needed.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand } from "../utils/terminal-adapter";
+import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
 
 export class ZellijAdapter implements TerminalAdapter {
   readonly name = "zellij";
@@ -16,17 +16,20 @@ export class ZellijAdapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
+    const legacyEnvArgs = options.argv ? [] : [
+      "env",
+      ...Object.entries(options.env)
+        .filter(([k]) => k.startsWith("PI_"))
+        .map(([k, v]) => `${k}=${v}`),
+    ];
     const zellijArgs = [
       "run",
       "--name", options.name,
       "--cwd", options.cwd,
       "--close-on-exit",
       "--",
-      "env",
-      ...Object.entries(options.env)
-        .filter(([k]) => k.startsWith("PI_"))
-        .map(([k, v]) => `${k}=${v}`),
-      "sh", "-c", options.command
+      ...legacyEnvArgs,
+      "sh", "-c", options.argv ? shellCommand(options) : options.command!
     ];
 
     const result = execCommand("zellij", zellijArgs);

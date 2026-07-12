@@ -5,7 +5,7 @@
  * Uses wezterm cli split-pane for pane management.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand } from "../utils/terminal-adapter";
+import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, powershellCommand } from "../utils/terminal-adapter";
 
 export class WezTermAdapter implements TerminalAdapter {
   readonly name = "WezTerm";
@@ -73,22 +73,6 @@ export class WezTermAdapter implements TerminalAdapter {
     }
   }
 
-  /**
-   * Build command arguments for the current platform.
-   * On Windows, uses PowerShell. On Unix, uses sh.
-   */
-  private buildCommandArgs(options: SpawnOptions, envArgs: string[]): string[] {
-    if (process.platform === "win32") {
-      // Windows: Use PowerShell
-      // Build the command without environment variables (they'll be set via WezTerm's env)
-      const psCommand = `cd '${options.cwd}'; ${options.command}`;
-      return ["pwsh", "-NoExit", "-Command", psCommand];
-    } else {
-      // Unix: Use sh
-      return ["env", ...envArgs, "sh", "-c", options.command];
-    }
-  }
-
   spawn(options: SpawnOptions): string {
     const weztermBin = this.findWeztermBinary();
     if (!weztermBin) {
@@ -104,12 +88,7 @@ export class WezTermAdapter implements TerminalAdapter {
 
     if (process.platform === "win32") {
       // Windows: Use PowerShell with double quotes (works when WezTerm wraps in single quotes)
-      const envVars = Object.entries(options.env)
-        .filter(([k]) => k.startsWith("PI_"))
-        .map(([k, v]) => `$env:${k}="${v}"`)
-        .join("; ");
-      
-      const psCommand = `${envVars}; cd "${options.cwd}"; ${options.command}`;
+      const psCommand = powershellCommand(options);
       // Use 'powershell' (built-in) instead of 'pwsh' (PowerShell Core, may not be installed)
       const cmdArgs = ["powershell", "-NoExit", "-Command", psCommand];
 
@@ -133,10 +112,7 @@ export class WezTermAdapter implements TerminalAdapter {
       }
     } else {
       // Unix: Use sh with env command
-      const envArgs = Object.entries(options.env)
-        .filter(([k]) => k.startsWith("PI_"))
-        .map(([k, v]) => `${k}=${v}`);
-      const cmdArgs = ["env", ...envArgs, "sh", "-c", options.command];
+      const cmdArgs = ["sh", "-c", shellCommand(options)];
 
       if (isFirstPane) {
         weztermArgs = [
@@ -232,12 +208,7 @@ export class WezTermAdapter implements TerminalAdapter {
 
     if (process.platform === "win32") {
       // Windows: Use PowerShell with double quotes (works when WezTerm wraps in single quotes)
-      const envVars = Object.entries(options.env)
-        .filter(([k]) => k.startsWith("PI_"))
-        .map(([k, v]) => `$env:${k}="${v}"`)
-        .join("; ");
-      
-      const psCommand = `${envVars}; cd "${options.cwd}"; ${options.command}`;
+      const psCommand = powershellCommand(options);
       
       spawnArgs = [
         "cli", "spawn", "--new-window",
@@ -246,14 +217,10 @@ export class WezTermAdapter implements TerminalAdapter {
       ];
     } else {
       // Unix: Use env command
-      const envArgs = Object.entries(options.env)
-        .filter(([k]) => k.startsWith("PI_"))
-        .map(([k, v]) => `${k}=${v}`);
-      
       spawnArgs = [
         "cli", "spawn", "--new-window",
         "--cwd", options.cwd,
-        "--", "env", ...envArgs, "sh", "-c", options.command
+        "--", "sh", "-c", shellCommand(options)
       ];
     }
 

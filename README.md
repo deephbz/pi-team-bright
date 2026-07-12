@@ -52,7 +52,7 @@ pi install npm:pi-teams
 - **Plan Approval Mode**: Require teammates to submit their implementation plans for your approval before they touch any code.
 - **Broadcast Messaging**: Send a message to the entire team at once for global coordination and announcements.
 - **Quality Gate Hooks**: Automated shell scripts run when tasks are completed (e.g., to run tests or linting).
-- **Thinking Level Control**: Set per-teammate thinking levels (`off`, `minimal`, `low`, `medium`, `high`) to balance speed vs. reasoning depth.
+- **Thinking Level Control**: Set per-teammate thinking levels (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`) to balance speed vs. reasoning depth.
 
 ## 💬 Key Examples
 

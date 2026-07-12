@@ -5,7 +5,7 @@
  * Uses wt (Windows Terminal) CLI for pane management and PowerShell for command execution.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand } from "../utils/terminal-adapter";
+import { TerminalAdapter, SpawnOptions, execCommand, powershellCommand } from "../utils/terminal-adapter";
 
 export class WindowsAdapter implements TerminalAdapter {
   readonly name = "Windows";
@@ -151,15 +151,7 @@ export class WindowsAdapter implements TerminalAdapter {
     const psBin = this.findPsBinary();
     const panes = this.getPanes();
 
-    // Build environment variables for PowerShell
-    const envVars = Object.entries(options.env)
-      .filter(([k]) => k.startsWith("PI_"))
-      .map(([k, v]) => `$env:${k}='${v}'`)
-      .join(" ");
-
-    // Build the PowerShell command
-    // Use icm (Invoke-Command) to run in a specific directory with env vars
-    const psCommand = `cd '${options.cwd}'; ${envVars}; ${options.command}`;
+    const psCommand = powershellCommand(options);
 
     // Use wt split-pane command
     // First pane splits vertically (right), subsequent panes stack
@@ -245,14 +237,7 @@ export class WindowsAdapter implements TerminalAdapter {
 
     const psBin = this.findPsBinary();
 
-    // Build environment variables for PowerShell
-    const envVars = Object.entries(options.env)
-      .filter(([k]) => k.startsWith("PI_"))
-      .map(([k, v]) => `$env:${k}='${v}'`)
-      .join(" ");
-
-    // Build the PowerShell command
-    const psCommand = `cd '${options.cwd}'; ${envVars}; ${options.command}`;
+    const psCommand = powershellCommand(options);
 
     // Format window title as "teamName: agentName" if teamName is provided
     const windowTitle = options.teamName

@@ -29,6 +29,17 @@ export interface TeamConfig {
   members: Member[];
   defaultModel?: string;
   separateWindows?: boolean;
+  /** Task authority. Omitted means the historical local JSON store. */
+  taskBackend?: "legacy" | "beads";
+  /** Absolute working directory containing the team's initialized Beads repo. */
+  taskWorkspace?: string;
+  /** Durable evidence for the one-way legacy -> Beads cutover. */
+  taskCutover?: {
+    inventoryPath: string;
+    inventorySha256: string;
+    markerPath?: string;
+    cutoverAt: string;
+  };
 }
 
 export interface TaskFile {
@@ -36,13 +47,15 @@ export interface TaskFile {
   subject: string;
   description: string;
   activeForm?: string;
-  status: "pending" | "planning" | "in_progress" | "completed" | "deleted";
+  status: "pending" | "planning" | "in_progress" | "blocked" | "completed" | "deleted";
   plan?: string;
   planFeedback?: string;
   blocks: string[];
   blockedBy: string[];
   owner?: string;
   metadata?: Record<string, any>;
+  /** Store-native optimistic concurrency token, when the backend supplies one. */
+  version?: string;
 }
 
 export interface InboxMessage {

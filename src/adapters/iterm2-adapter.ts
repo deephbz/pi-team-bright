@@ -5,7 +5,7 @@
  * Uses AppleScript for all operations.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand } from "../utils/terminal-adapter";
+import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, shellQuote, appleScriptQuote } from "../utils/terminal-adapter";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as paths from "../utils/paths";
@@ -44,13 +44,8 @@ export class Iterm2Adapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
-    const envStr = Object.entries(options.env)
-      .filter(([k]) => k.startsWith("PI_"))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(" ");
-
-    const itermCmd = `cd '${options.cwd}' && ${envStr} ${options.command}`;
-    const escapedCmd = itermCmd.replace(/"/g, '\\"');
+    const itermCmd = `cd ${shellQuote(options.cwd)} && ${shellCommand(options)}`;
+    const escapedCmd = appleScriptQuote(itermCmd).slice(1, -1);
 
     let script: string;
 
@@ -69,7 +64,7 @@ end tell`;
   repeat with aWindow in windows
     repeat with aTab in tabs of aWindow
       repeat with aSession in sessions of aTab
-        if id of aSession is "${this.spawnContext.lastSessionId}" then
+        if id of aSession is ${appleScriptQuote(this.spawnContext.lastSessionId)} then
           tell aSession
             set newSession to split horizontally with default profile
             tell newSession
@@ -237,19 +232,14 @@ end tell`;
    * Spawn a new separate OS window with the given options.
    */
   spawnWindow(options: SpawnOptions): string {
-    const envStr = Object.entries(options.env)
-      .filter(([k]) => k.startsWith("PI_"))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(" ");
-
-    const itermCmd = `cd '${options.cwd}' && ${envStr} ${options.command}`;
-    const escapedCmd = itermCmd.replace(/"/g, '\\"');
+    const itermCmd = `cd ${shellQuote(options.cwd)} && ${shellCommand(options)}`;
+    const escapedCmd = appleScriptQuote(itermCmd).slice(1, -1);
 
     const windowTitle = options.teamName
       ? `${options.teamName}: ${options.name}`
       : options.name;
 
-    const escapedTitle = windowTitle.replace(/"/g, '\\"');
+    const escapedTitle = appleScriptQuote(windowTitle).slice(1, -1);
 
     const script = `tell application "iTerm2"
   set newWindow to (create window with default profile)
@@ -260,7 +250,7 @@ end tell`;
     -- We use double backslashes for AppleScript to emit a single backslash to the shell
     write text "printf '\\\\033]2;${escapedTitle}\\\\007'"
     -- Execute the command
-    write text "cd '${options.cwd}' && ${escapedCmd}"
+    write text "${escapedCmd}"
     return id of newWindow
   end tell
 end tell`;

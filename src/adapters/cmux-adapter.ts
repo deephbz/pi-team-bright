@@ -11,7 +11,7 @@
  *   4. `cmux respawn-pane --surface <id> --command <cmd>` to run the command
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand } from "../utils/terminal-adapter";
+import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, validateLegacyCommand } from "../utils/terminal-adapter";
 
 const SURFACE_POLL_ATTEMPTS = 20;
 const SURFACE_POLL_DELAY_MS = 150;
@@ -65,13 +65,7 @@ export class CmuxAdapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
-    // Construct the full command with PI_ environment variables
-    const envPrefix = Object.entries(options.env)
-      .filter(([k]) => k.startsWith("PI_"))
-      .map(([k, v]) => `${k}=${v}`)
-      .join(" ");
-
-    const fullCommand = envPrefix ? `env ${envPrefix} ${options.command}` : options.command;
+    const fullCommand = shellCommand(options);
 
     // 1. Snapshot existing surfaces before the split
     const before = this.listSurfaceRefs();
@@ -167,12 +161,7 @@ export class CmuxAdapter implements TerminalAdapter {
       // but CMUX commands usually target the current window unless specified.
       // Wait a bit for the window to be ready?
       
-      const envPrefix = Object.entries(options.env)
-        .filter(([k]) => k.startsWith("PI_"))
-        .map(([k, v]) => `${k}=${v}`)
-        .join(" ");
-      
-      const fullCommand = envPrefix ? `env ${envPrefix} ${options.command}` : options.command;
+      const fullCommand = shellCommand(options);
 
       // Target the new window
       execCommand("cmux", ["new-workspace", "--window", windowId, "--command", fullCommand]);
@@ -230,7 +219,7 @@ export class CmuxAdapter implements TerminalAdapter {
   createProblemWorkspace(title: string, command?: string): string {
     const args = ["new-workspace"];
     if (command) {
-      args.push("--command", command);
+      args.push("--command", validateLegacyCommand(command));
     }
     
     const result = execCommand("cmux", args);

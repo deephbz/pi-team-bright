@@ -24,7 +24,7 @@ import { spawnSync } from "node:child_process";
  * - shim-based installs (e.g. Volta): process.execPath is `node` and argv[1]
  *   may be a shim path, so the safest relaunch command is plain `pi`
  */
-function getPiLaunchCommand(): string {
+function getPiLaunchArgv(): string[] {
   const argv1 = process.argv[1];
   const execPath = process.execPath;
 
@@ -35,7 +35,7 @@ function getPiLaunchCommand(): string {
       || /(?:^|[/\\])dist[/\\]cli\.js$/i.test(argv1);
 
     if (looksLikeScript) {
-      return `node ${JSON.stringify(argv1)}`;
+      return ["node", argv1];
     }
   }
 
@@ -43,12 +43,19 @@ function getPiLaunchCommand(): string {
   if (execPath) {
     const base = path.basename(execPath).toLowerCase();
     if (base !== "node" && base !== "node.exe" && base !== "bun" && base !== "bun.exe") {
-      return JSON.stringify(execPath);
+      return [execPath];
     }
   }
 
   // Shim-based installs (like Volta) are safest to relaunch through PATH.
-  return "pi";
+  return ["pi"];
+}
+
+function buildPiArgv(base: string[], model?: string, thinking?: string): string[] {
+  const argv = [...base];
+  if (model) argv.push("--model", thinking ? `${model}:${thinking}` : model);
+  else if (thinking) argv.push("--thinking", thinking);
+  return argv;
 }
 
 // Cache for available models
@@ -251,9 +258,11 @@ function cleanupStaleTeam(teamName: string, terminal: any): boolean {
     
     // Only cleanup if the lead PID is actually dead
     if (session.pid && !isPidAlive(session.pid)) {
+      let preservesBeadsAuthority = false;
       // Read config to get member info for cleanup
       try {
         const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+        preservesBeadsAuthority = config.taskBackend === "beads";
         
         // Kill all teammate panes/windows
         for (const member of config.members || []) {
@@ -281,16 +290,13 @@ function cleanupStaleTeam(teamName: string, terminal: any): boolean {
         }
       } catch {}
       
-      // Delete entire team directory
-      const teamDirectory = paths.teamDir(teamName);
-      if (fs.existsSync(teamDirectory)) {
-        fs.rmSync(teamDirectory, { recursive: true });
-      }
-      
-      // Delete tasks directory
-      const tasksDirectory = paths.taskDir(teamName);
-      if (fs.existsSync(tasksDirectory)) {
-        fs.rmSync(tasksDirectory, { recursive: true });
+      // Beads cutover is durable: preserve the team config and legacy task
+      // files as authority/evidence. Legacy teams keep historical cleanup.
+      if (!preservesBeadsAuthority) {
+        const teamDirectory = paths.teamDir(teamName);
+        if (fs.existsSync(teamDirectory)) fs.rmSync(teamDirectory, { recursive: true });
+        const tasksDirectory = paths.taskDir(teamName);
+        if (fs.existsSync(tasksDirectory)) fs.rmSync(tasksDirectory, { recursive: true });
       }
       
       return true;
@@ -620,19 +626,7 @@ export default function (pi: ExtensionAPI) {
       await teams.addMember(safeTeamName, member);
       await messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, params.prompt, "Initial prompt");
 
-      const piBinary = getPiLaunchCommand();
-      let piCmd = piBinary;
-
-      if (chosenModel) {
-        // Use the combined --model provider/model:thinking format
-        if (params.thinking) {
-          piCmd = `${piBinary} --model ${chosenModel}:${params.thinking}`;
-        } else {
-          piCmd = `${piBinary} --model ${chosenModel}`;
-        }
-      } else if (params.thinking) {
-        piCmd = `${piBinary} --thinking ${params.thinking}`;
-      }
+      const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, params.thinking);
 
       const env: Record<string, string> = {
         ...process.env,
@@ -649,7 +643,7 @@ export default function (pi: ExtensionAPI) {
           terminalId = terminal.spawnWindow({
             name: safeName,
             cwd: params.cwd,
-            command: piCmd,
+            argv: piCmd,
             env: env,
             teamName: safeTeamName,
           });
@@ -673,7 +667,7 @@ export default function (pi: ExtensionAPI) {
           terminalId = terminal.spawn({
             name: safeName,
             cwd: params.cwd,
-            command: piCmd,
+            argv: piCmd,
             env: env,
             anchorPaneId,
           });
@@ -705,16 +699,11 @@ export default function (pi: ExtensionAPI) {
 
       const teamConfig = await teams.readConfig(safeTeamName);
       const cwd = params.cwd || process.cwd();
-      const piBinary = getPiLaunchCommand();
-      let piCmd = piBinary;
-      if (teamConfig.defaultModel) {
-        // Use the combined --model provider/model format
-        piCmd = `${piBinary} --model ${teamConfig.defaultModel}`;
-      }
+      const piCmd = buildPiArgv(getPiLaunchArgv(), teamConfig.defaultModel);
 
       const env = { ...process.env, PI_TEAM_NAME: safeTeamName, PI_AGENT_NAME: "team-lead" };
       try {
-        const windowId = terminal.spawnWindow({ name: "team-lead", cwd, command: piCmd, env, teamName: safeTeamName });
+        const windowId = terminal.spawnWindow({ name: "team-lead", cwd, argv: piCmd, env, teamName: safeTeamName });
         await teams.updateMember(safeTeamName, "team-lead", { windowId });
         return { content: [{ type: "text", text: `Lead window spawned: ${windowId}` }], details: { windowId } };
       } catch (e) {
@@ -798,9 +787,15 @@ export default function (pi: ExtensionAPI) {
       team_name: Type.String(),
       subject: Type.String(),
       description: Type.String(),
-    }),
+      active_form: Type.Optional(Type.String()),
+      metadata: Type.Optional(Type.Record(Type.String(), Type.Any())),
+      idempotency_key: Type.Optional(Type.String()),
+    }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const task = await tasks.createTask(params.team_name, params.subject, params.description);
+      const task = await tasks.createTask(params.team_name, params.subject, params.description, params.active_form || "", {
+        ...(params.metadata || {}),
+        ...(params.idempotency_key ? { pi_teams_idempotency_key: params.idempotency_key } : {}),
+      });
       return {
         content: [{ type: "text", text: `Task ${task.id} created.` }],
         details: { task },
@@ -816,9 +811,10 @@ export default function (pi: ExtensionAPI) {
       team_name: Type.String(),
       task_id: Type.String(),
       plan: Type.String(),
-    }),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read/task_list" })),
+    }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const updated = await tasks.submitPlan(params.team_name, params.task_id, params.plan);
+      const updated = await tasks.submitPlan(params.team_name, params.task_id, params.plan, { actor: agentName, expectedVersion: params.expected_version });
       return {
         content: [{ type: "text", text: `Plan submitted for task ${params.task_id}.` }],
         details: { task: updated },
@@ -835,9 +831,10 @@ export default function (pi: ExtensionAPI) {
       task_id: Type.String(),
       action: StringEnum(["approve", "reject"]),
       feedback: Type.Optional(Type.String({ description: "Required for rejection" })),
-    }),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read/task_list" })),
+    }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const updated = await tasks.evaluatePlan(params.team_name, params.task_id, params.action as any, params.feedback);
+      const updated = await tasks.evaluatePlan(params.team_name, params.task_id, params.action as any, params.feedback, { actor: agentName, expectedVersion: params.expected_version });
       return {
         content: [{ type: "text", text: `Plan for task ${params.task_id} has been ${params.action}d.` }],
         details: { task: updated },
@@ -870,12 +867,54 @@ export default function (pi: ExtensionAPI) {
       task_id: Type.String(),
       status: Type.Optional(StringEnum(["pending", "planning", "in_progress", "completed", "deleted"])),
       owner: Type.Optional(Type.String()),
-    }),
+      claim: Type.Optional(Type.Boolean({ default: false, description: "Atomically claim the task for the current agent" })),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read/task_list" })),
+      blocks: Type.Optional(Type.Array(Type.String({ description: "Task IDs this task blocks" }))),
+      blocked_by: Type.Optional(Type.Array(Type.String({ description: "Task IDs blocking this task" }))),
+      progress: Type.Optional(Type.String({ description: "Append a communicated progress entry" })),
+      pending_problem: Type.Optional(Type.String({ description: "Append an unresolved problem entry" })),
+    }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const updated = await tasks.updateTask(params.team_name, params.task_id, {
-        status: params.status as any,
-        owner: params.owner,
-      });
+      const writeOptions = { actor: agentName, expectedVersion: params.expected_version };
+      const config = await teams.readConfig(params.team_name);
+      const hasFieldUpdate = params.status !== undefined || params.owner !== undefined;
+      const dependencyOps = (params.blocked_by || []).length + (params.blocks || []).length;
+      const mutationCount = (params.claim ? 1 : 0) + (hasFieldUpdate ? 1 : 0) + dependencyOps + (params.progress ? 1 : 0) + (params.pending_problem ? 1 : 0);
+      if (mutationCount > 1) {
+        throw new Error("task_update supports one atomic backend mutation per call; split the request and re-read expected_version between writes.");
+      }
+      if (config.taskBackend === "beads" && (params.blocks || []).length > 0) {
+        throw new Error("Beads task_update.blocks mutates another task but has no separate expected_version; use blocked_by on the target task instead.");
+      }
+      const idsToValidate = [
+        params.task_id,
+        ...(params.blocked_by || []),
+        ...(config.taskBackend !== "beads" ? (params.blocks || []) : []),
+      ];
+      for (const id of idsToValidate) await tasks.readTask(params.team_name, id);
+      let updated;
+      if (params.claim) {
+        updated = await tasks.claimTask(params.team_name, params.task_id, agentName, writeOptions);
+      }
+      const updates: Record<string, unknown> = {};
+      if (params.status !== undefined) updates.status = params.status;
+      if (params.owner !== undefined) updates.owner = params.owner;
+      if (Object.keys(updates).length > 0) {
+        updated = await tasks.updateTask(params.team_name, params.task_id, updates as any, params.claim ? { actor: agentName } : writeOptions);
+      }
+      if (!updated) updated = await tasks.readTask(params.team_name, params.task_id);
+      for (const blockerId of params.blocked_by || []) {
+        updated = await tasks.addTaskDependency(params.team_name, params.task_id, blockerId, writeOptions);
+      }
+      for (const blockedId of params.blocks || []) {
+        updated = await tasks.addTaskDependency(params.team_name, blockedId, params.task_id, writeOptions);
+      }
+      if (params.progress) {
+        updated = await tasks.addTaskProgress(params.team_name, params.task_id, { kind: "progress", text: params.progress, actor: agentName }, writeOptions);
+      }
+      if (params.pending_problem) {
+        updated = await tasks.addTaskProgress(params.team_name, params.task_id, { kind: "pending-problem", text: params.pending_problem, actor: agentName }, writeOptions);
+      }
       return {
         content: [{ type: "text", text: `Task ${params.task_id} updated.` }],
         details: { task: updated },
@@ -899,8 +938,9 @@ export default function (pi: ExtensionAPI) {
         }
         const dir = paths.teamDir(teamName);
         const tasksDir = paths.taskDir(teamName);
-        if (fs.existsSync(tasksDir)) fs.rmSync(tasksDir, { recursive: true });
-        if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
+        const preservesBeadsAuthority = config.taskBackend === "beads";
+        if (!preservesBeadsAuthority && fs.existsSync(tasksDir)) fs.rmSync(tasksDir, { recursive: true });
+        if (!preservesBeadsAuthority && fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
 
         // Clean up orphaned agent session folders (older than 1 hour)
         const cleanedSessions = cleanupAgentSessionFolders(60 * 60 * 1000);
@@ -908,9 +948,9 @@ export default function (pi: ExtensionAPI) {
         return {
           content: [{
             type: "text",
-            text: `Team ${teamName} shut down.${cleanedSessions > 0 ? ` Cleaned up ${cleanedSessions} orphaned agent session folder(s).` : ""}`
+            text: `Team ${teamName} shut down.${preservesBeadsAuthority ? " Beads task authority and migration evidence retained." : ""}${cleanedSessions > 0 ? ` Cleaned up ${cleanedSessions} orphaned agent session folder(s).` : ""}`
           }],
-          details: { cleanedSessions }
+          details: { cleanedSessions, taskAuthorityRetained: preservesBeadsAuthority }
         };
       } catch (e) {
         throw new Error(`Failed to shutdown team: ${e}`);
@@ -1175,18 +1215,7 @@ export default function (pi: ExtensionAPI) {
           await teams.addMember(safeTeamName, member);
           await messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, agentDef.prompt, "Initial prompt from predefined team");
 
-          const piBinary = getPiLaunchCommand();
-          let piCmd = piBinary;
-
-          if (chosenModel) {
-            if (agentDef.thinking) {
-              piCmd = `${piBinary} --model ${chosenModel}:${agentDef.thinking}`;
-            } else {
-              piCmd = `${piBinary} --model ${chosenModel}`;
-            }
-          } else if (agentDef.thinking) {
-            piCmd = `${piBinary} --thinking ${agentDef.thinking}`;
-          }
+          const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking);
 
           const env: Record<string, string> = {
             ...process.env,
@@ -1203,7 +1232,7 @@ export default function (pi: ExtensionAPI) {
               terminalId = terminal.spawnWindow({
                 name: safeName,
                 cwd: params.cwd,
-                command: piCmd,
+                argv: piCmd,
                 env: env,
                 teamName: safeTeamName,
               });
@@ -1227,7 +1256,7 @@ export default function (pi: ExtensionAPI) {
               terminalId = terminal.spawn({
                 name: safeName,
                 cwd: params.cwd,
-                command: piCmd,
+                argv: piCmd,
                 env: env,
                 anchorPaneId,
               });

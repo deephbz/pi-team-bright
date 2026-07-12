@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { createTask, updateTask, readTask, listTasks, submitPlan, evaluatePlan } from "./tasks";
+import { createTask, updateTask, readTask, listTasks, submitPlan, evaluatePlan, addTaskDependency } from "./tasks";
 import * as paths from "./paths";
 import * as teams from "./teams";
 
@@ -42,6 +42,13 @@ describe("Tasks Utilities", () => {
     
     const taskData = JSON.parse(fs.readFileSync(path.join(testDir, "1.json"), "utf-8"));
     expect(taskData.status).toBe("in_progress");
+  });
+
+  it("should preserve omitted owner fields in the legacy store", async () => {
+    const task = await createTask("test-team", "Owner", "Preserve owner");
+    await updateTask("test-team", task.id, { owner: "worker", status: "in_progress" });
+    const updated = await updateTask("test-team", task.id, { status: "completed" });
+    expect(updated.owner).toBe("worker");
   });
 
   it("should submit a plan successfully", async () => {
@@ -138,5 +145,12 @@ describe("Tasks Utilities", () => {
     await expect(readTask("test-team", dirtyId)).rejects.toThrow(/Invalid name: "..\/evil-id"/);
     await expect(updateTask("test-team", dirtyId, { status: "in_progress" })).rejects.toThrow(/Invalid name: "..\/evil-id"/);
     await expect(evaluatePlan("test-team", dirtyId, "approve")).rejects.toThrow(/Invalid name: "..\/evil-id"/);
+  });
+
+  it("does not leave a dangling legacy dependency when the blocker is missing", async () => {
+    const task = await createTask("test-team", "Dependency", "atomic");
+    await expect(addTaskDependency("test-team", task.id, "missing")).rejects.toThrow("Task missing not found");
+    const reread = await readTask("test-team", task.id);
+    expect(reread.blockedBy).toEqual([]);
   });
 });

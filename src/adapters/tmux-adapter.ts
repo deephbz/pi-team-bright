@@ -5,7 +5,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { TerminalAdapter, SpawnOptions, execCommand } from "../utils/terminal-adapter";
+import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
 
 export class TmuxAdapter implements TerminalAdapter {
   readonly name = "tmux";
@@ -59,7 +59,8 @@ export class TmuxAdapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
-    const envArgs = Object.entries(options.env)
+    const command = options.argv ? shellCommand(options) : options.command!;
+    const legacyEnvArgs = options.argv ? [] : Object.entries(options.env)
       .filter(([k]) => k.startsWith("PI_"))
       .map(([k, v]) => `${k}=${v}`);
 
@@ -76,8 +77,8 @@ export class TmuxAdapter implements TerminalAdapter {
 
     tmuxArgs.push(
       "-c", options.cwd,
-      "env", ...envArgs,
-      "sh", "-c", options.command
+      ...(legacyEnvArgs.length > 0 ? ["env", ...legacyEnvArgs] : []),
+      "sh", "-c", command
     );
 
     const result = execCommand("tmux", tmuxArgs);

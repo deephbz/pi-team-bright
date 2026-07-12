@@ -15,8 +15,10 @@ export interface SpawnOptions {
   name: string;
   /** Working directory for the new pane/window */
   cwd: string;
-  /** Command to execute in the pane/window */
-  command: string;
+  /** Structured executable and arguments to execute in the pane/window. */
+  argv?: readonly string[];
+  /** Legacy static command string retained for older adapter consumers. */
+  command?: string;
   /** Environment variables to set (key-value pairs) */
   env: Record<string, string>;
   /** Team name for window title formatting (e.g., "team: agent") */
@@ -129,4 +131,67 @@ export function execCommand(command: string, args: string[]): { stdout: string; 
     stderr: result.stderr?.toString() ?? "",
     status: result.status,
   };
+}
+
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function appleScriptQuote(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
+}
+
+export function powershellQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function validatedEnv(options: SpawnOptions): Array<[string, string]> {
+  return Object.entries(options.env)
+    .filter(([key]) => key.startsWith("PI_"))
+    .map(([key, value]) => {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) throw new Error(`Invalid environment variable name: ${key}`);
+      return [key, value] as [string, string];
+    });
+}
+
+export function spawnArgv(options: SpawnOptions): string[] {
+  if (options.argv && options.command) throw new Error("SpawnOptions must use argv or command, not both.");
+  if (options.argv) {
+    if (options.argv.length === 0 || options.argv.some(value => typeof value !== "string" || value.includes("\0"))) {
+      throw new Error("Spawn argv must contain a non-empty executable and NUL-free strings.");
+    }
+    return [...options.argv];
+  }
+  return [validateLegacyCommand(options.command)];
+}
+
+export function validateLegacyCommand(command: string | undefined): string {
+  if (!command || /[\0\r\n;&|`$()<>{}]/.test(command)) {
+    throw new Error("Legacy spawn command contains unsupported shell syntax; use argv instead.");
+  }
+  return command;
+}
+
+export function validateSpawnOptions(options: SpawnOptions): void {
+  if (!options.cwd.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(options.cwd)) {
+    throw new Error(`Spawn cwd must be absolute: ${options.cwd}`);
+  }
+  validatedEnv(options);
+  spawnArgv(options);
+}
+
+export function shellCommand(options: SpawnOptions): string {
+  validateSpawnOptions(options);
+  const command = options.argv ? options.argv.map(shellQuote).join(" ") : options.command!;
+  const env = validatedEnv(options).map(([key, value]) => options.argv ? shellQuote(`${key}=${value}`) : `${key}=${value}`);
+  return env.length > 0 ? `env ${env.join(" ")} ${command}` : command;
+}
+
+export function powershellCommand(options: SpawnOptions): string {
+  validateSpawnOptions(options);
+  const env = validatedEnv(options)
+    .map(([key, value]) => `$env:${key} = ${powershellQuote(value)}`)
+    .join("; ");
+  const argv = options.argv ? `& ${options.argv.map(powershellQuote).join(" ")}` : options.command!;
+  return `${env ? `${env}; ` : ""}Set-Location -LiteralPath ${powershellQuote(options.cwd)}; ${argv}`;
 }
