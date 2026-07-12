@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { BeadsError, BeadsTaskStore, BdCommandResult, BdRunner } from "./beads";
+import { bdExecFailure, BeadsError, BeadsTaskStore, BdCommandResult, BdRunner } from "./beads";
 import { teamDir } from "./paths";
 
 type FakeIssue = {
@@ -138,6 +138,17 @@ describe("BeadsTaskStore with fake bd fixture", () => {
 
   afterEach(() => {
     fs.rmSync(teamDir(team), { recursive: true, force: true });
+  });
+
+  it("classifies an actual spawn ENOENT as unavailable", async () => {
+    expect(bdExecFailure({ code: "ENOENT" })).toEqual({
+      stdout: "",
+      stderr: "bd: command not found",
+      exitCode: 127,
+    });
+    const runner: BdRunner = { run: async () => bdExecFailure({ code: "ENOENT" }) };
+    const store = new BeadsTaskStore({ teamName: team, workspace, runner, requireExpectedVersion: false });
+    await expect(store.list()).rejects.toMatchObject({ kind: "unavailable" } satisfies Partial<BeadsError>);
   });
 
   it("persists create/list/read/update/claim/dependency/progress/close mappings", async () => {

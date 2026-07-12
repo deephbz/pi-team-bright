@@ -1,6 +1,6 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
-import { StringEnum } from "@mariozechner/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { StringEnum } from "@earendil-works/pi-ai";
 import * as paths from "../src/utils/paths";
 import * as teams from "../src/utils/teams";
 import * as tasks from "../src/utils/tasks";
@@ -51,10 +51,11 @@ function getPiLaunchArgv(): string[] {
   return ["pi"];
 }
 
-function buildPiArgv(base: string[], model?: string, thinking?: string): string[] {
+export function buildPiArgv(base: string[], model?: string, thinking?: string, tools?: string[]): string[] {
   const argv = [...base];
   if (model) argv.push("--model", thinking ? `${model}:${thinking}` : model);
   else if (thinking) argv.push("--thinking", thinking);
+  if (tools && tools.length > 0) argv.push("--tools", tools.join(","));
   return argv;
 }
 
@@ -527,7 +528,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       team_name: Type.String(),
       description: Type.Optional(Type.String()),
-      default_model: Type.Optional(Type.String()),
+      default_model: Type.Optional(Type.String({ description: "Default model for teammates. Omit this parameter to use Pi's configured default model; set it only when the user explicitly requests a specific model." })),
       separate_windows: Type.Optional(Type.Boolean({ default: false, description: "Open teammates in separate OS windows instead of panes" })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
@@ -559,7 +560,7 @@ export default function (pi: ExtensionAPI) {
       name: Type.String(),
       prompt: Type.String(),
       cwd: Type.String(),
-      model: Type.Optional(Type.String()),
+      model: Type.Optional(Type.String({ description: "Model for this teammate. Omit this parameter to use the team or Pi default; set it only when the user explicitly requests a specific model." })),
       thinking: Type.Optional(StringEnum(["off", "minimal", "low", "medium", "high", "xhigh"])),
       plan_mode_required: Type.Optional(Type.Boolean({ default: false })),
       separate_window: Type.Optional(Type.Boolean({ default: false })),
@@ -626,7 +627,8 @@ export default function (pi: ExtensionAPI) {
       await teams.addMember(safeTeamName, member);
       await messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, params.prompt, "Initial prompt");
 
-      const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, params.thinking);
+      const agentDef = predefined.getAgentDefinition(safeName, params.cwd);
+      const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, params.thinking, agentDef?.tools);
 
       const env: Record<string, string> = {
         ...process.env,
@@ -1142,7 +1144,7 @@ export default function (pi: ExtensionAPI) {
       team_name: Type.String({ description: "Name for the new team instance" }),
       predefined_team: Type.String({ description: "Name of the predefined team template from teams.yaml" }),
       cwd: Type.String({ description: "Working directory for spawned agents" }),
-      default_model: Type.Optional(Type.String({ description: "Default model for agents without a specified model" })),
+      default_model: Type.Optional(Type.String({ description: "Default model for agents without a specified model. Omit this parameter to use Pi's configured default model; set it only when the user explicitly requests a specific model." })),
       separate_windows: Type.Optional(Type.Boolean({ default: false, description: "Open teammates in separate OS windows instead of panes" })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
@@ -1215,7 +1217,7 @@ export default function (pi: ExtensionAPI) {
           await teams.addMember(safeTeamName, member);
           await messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, agentDef.prompt, "Initial prompt from predefined team");
 
-          const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking);
+          const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking, agentDef.tools);
 
           const env: Record<string, string> = {
             ...process.env,

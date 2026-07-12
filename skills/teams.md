@@ -33,7 +33,8 @@ Required: `team_name`.
 Optional: `description`, `default_model`, and `separate_windows` (default
 `false`). It creates the team and registers the current session as the lead.
 `separate_windows` asks the terminal adapter to use OS windows instead of
-panes when supported.
+panes when supported. Omit `default_model` unless the user explicitly requests
+an override; omission preserves Pi's configured default.
 
 ### `spawn_teammate`
 
@@ -43,7 +44,9 @@ Optional: `model`, `thinking` (`off`, `minimal`, `low`, `medium`, `high`, or
 `xhigh`), `plan_mode_required` (default `false`), and `separate_window`
 (default `false`). Existing teammates with the same name are stopped and
 replaced. The tool rejects missing teams, missing terminal adapters, and
-unsupported window mode.
+unsupported window mode. Omit `model` unless the user explicitly requests an
+override. When `name` matches a discovered agent definition, its `tools`
+allowlist is passed to Pi's `--tools` launch option.
 
 ### `spawn_lead_window`
 
@@ -166,7 +169,9 @@ No parameters. Lists discovered agent definitions and their `name`,
 Required: `team_name`, `predefined_team`, and `cwd`. Optional:
 `default_model` and `separate_windows` (default `false`). It creates the team
 and attempts to spawn every agent in the template, returning per-agent
-`spawned`, `skipped`, or `error` results.
+`spawned`, `skipped`, or `error` results. Omit `default_model` unless the user
+explicitly requests an override. Each definition's `tools` allowlist is passed
+to Pi's `--tools` launch option.
 
 ### `save_team_as_template`
 

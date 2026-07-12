@@ -1,6 +1,6 @@
 {
   "name": "pi-teams",
-  "version": "0.9.14",
+  "version": "0.10.0-hypercarrier.0",
   "description": "Agent teams for pi, ported from claude-code-teams-mcp",
   "repository": {
     "type": "git",
@@ -36,8 +36,9 @@
   ],
   "dependencies": {},
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@sinclair/typebox": "*"
+    "@earendil-works/pi-ai": "^0.80.6",
+    "@earendil-works/pi-coding-agent": "^0.80.6",
+    "typebox": "^1.1.38"
   },
   "pi": {
     "image": "https://raw.githubusercontent.com/burggraf/pi-teams/main/pi-team-in-action.png",
@@ -52,6 +53,6 @@
     "@types/node": "^25.3.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.10"
   }
 }

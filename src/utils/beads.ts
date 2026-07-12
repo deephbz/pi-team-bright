@@ -23,6 +23,19 @@ export interface BdRunner {
   run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult>;
 }
 
+export function bdExecFailure(error: any): BdCommandResult {
+  const stdout = typeof error?.stdout === "string" ? error.stdout : "";
+  const commandMissing = error?.code === "ENOENT";
+  const stderr = typeof error?.stderr === "string" && error.stderr
+    ? error.stderr
+    : commandMissing
+      ? "bd: command not found"
+      : "";
+  const timedOut = error?.killed || error?.code === "ETIMEDOUT";
+  const exitCode = commandMissing ? 127 : typeof error?.code === "number" ? error.code : timedOut ? 124 : 1;
+  return { stdout, stderr, exitCode };
+}
+
 class ExecBdRunner implements BdRunner {
   async run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult> {
     try {
@@ -34,11 +47,7 @@ class ExecBdRunner implements BdRunner {
       });
       return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
     } catch (error: any) {
-      const stdout = typeof error?.stdout === "string" ? error.stdout : "";
-      const stderr = typeof error?.stderr === "string" ? error.stderr : "";
-      const timedOut = error?.killed || error?.code === "ETIMEDOUT";
-      const exitCode = typeof error?.code === "number" ? error.code : timedOut ? 124 : 1;
-      return { stdout, stderr, exitCode };
+      return bdExecFailure(error);
     }
   }
 }
@@ -223,7 +232,7 @@ function parseJson<T>(result: BdCommandResult, command: string): T {
     const lower = `${stderr} ${result.stdout}`.toLowerCase();
     const kind = result.exitCode === 124 || lower.includes("timed out") || lower.includes("timeout")
       ? "timeout"
-      : lower.includes("not found") || lower.includes("no such file")
+      : result.exitCode === 127 || lower.includes("not found") || lower.includes("no such file")
         ? "unavailable"
         : "command";
     throw new BeadsError(
