@@ -9,7 +9,8 @@ import * as paths from "./paths";
 import { configureBeadsTaskBackend, createTeam } from "./teams";
 
 const source = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
-const skill = fs.readFileSync(path.join(process.cwd(), "skills/teams.md"), "utf8");
+const skillPath = path.join(process.cwd(), "skills/pi-teams/SKILL.md");
+const skill = fs.readFileSync(skillPath, "utf8");
 const reference = fs.readFileSync(path.join(process.cwd(), "docs/reference.md"), "utf8");
 const publicDocs = [
   fs.readFileSync(path.join(process.cwd(), "README.md"), "utf8"),
@@ -27,6 +28,11 @@ piTeams({
 const shippedTools = registeredTools.map(tool => tool.name);
 
 describe("registered PiTeams tool surface", () => {
+  it("ships a standards-compliant Agent Skill", () => {
+    expect(skillPath).toMatch(/skills\/pi-teams\/SKILL\.md$/);
+    expect(skill).toMatch(/^---\nname: pi-teams\ndescription: .+\n---\n/m);
+  });
+
   it("documents exactly the 21 registered tools", () => {
     expect(shippedTools).toHaveLength(21);
     expect(new Set(shippedTools).size).toBe(21);

@@ -1,3 +1,8 @@
+---
+name: pi-teams
+description: Operate PiTeams agent orchestration tools for creating teams, spawning teammates, coordinating tasks, and managing teammate lifecycle.
+---
+
 # PiTeams
 
 PiTeams is an orchestration extension for Pi. It owns team membership,
