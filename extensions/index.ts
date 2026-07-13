@@ -347,8 +347,8 @@ function cleanupAgentSessionFolders(maxAgeMs: number = 24 * 60 * 60 * 1000): num
 }
 
 export default function (pi: ExtensionAPI) {
-  const isTeammate = !!process.env.PI_AGENT_NAME;
-  const agentName = process.env.PI_AGENT_NAME || "team-lead";
+  let isTeammate = !!process.env.PI_AGENT_NAME;
+  let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
 
   // For leads without PI_TEAM_NAME, check if we're registered as lead for a team
@@ -403,9 +403,20 @@ export default function (pi: ExtensionAPI) {
     stopInboxPolling();
     sessionCtx = ctx;
 
-    // A fresh process has no lead environment variables. Match its resumed Pi
-    // session to the durable lead record before restoring lead behavior.
+    // A fresh `pi -r` process has no teammate environment variables. A
+    // teammate's first startup persists its Pi session file, which is enough
+    // to restore its identity before the normal teammate lifecycle runs.
     const piSessionFile = ctx.sessionManager?.getSessionFile?.();
+    if (!isTeammate && !teamName && piSessionFile) {
+      const resumedMember = teams.findTeammateBySessionFile(piSessionFile);
+      if (resumedMember) {
+        isTeammate = true;
+        agentName = resumedMember.member.name;
+        teamName = resumedMember.teamName;
+      }
+    }
+    // A fresh lead process has no lead environment variables either. Match
+    // its resumed Pi session to the durable lead record.
     if (!isTeammate && !teamName) {
       teamName = findLeadTeamForSession(piSessionFile);
     }
@@ -414,10 +425,13 @@ export default function (pi: ExtensionAPI) {
       if (teamName) {
         const pidFile = path.join(paths.teamDir(teamName), `${agentName}.pid`);
         fs.writeFileSync(pidFile, process.pid.toString());
-        // A resumed tmux process receives a new pane ID. Persist it before
-        // health checks so fresh runtime telemetry is never tied to its old pane.
-        if (process.env.TMUX_PANE) {
-          await teams.updateMember(teamName, agentName, { tmuxPaneId: process.env.TMUX_PANE });
+        // Persist the durable session identity on initial startup and replace
+        // any stale tmux pane before health checks on a later `pi -r`.
+        const memberUpdates: Partial<Member> = {};
+        if (piSessionFile) memberUpdates.sessionFile = piSessionFile;
+        if (process.env.TMUX_PANE) memberUpdates.tmuxPaneId = process.env.TMUX_PANE;
+        if (Object.keys(memberUpdates).length > 0) {
+          await teams.updateMember(teamName, agentName, memberUpdates);
         }
         await runtime.writeRuntimeStatus(teamName, agentName, {
           pid: process.pid,

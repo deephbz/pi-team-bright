@@ -33,11 +33,11 @@ not task status.
 
 A killed Pi process is not a PiTeams shutdown. Resume the same lead session
 with `pi -r`; PiTeams matches its durable Pi session file, then refreshes the
-lead PID, tmux pane, and inbox polling. Resume a killed tmux teammate in a new
-pane with its original `PI_TEAM_NAME` and `PI_AGENT_NAME`, then use `pi -r` to
-select its prior Pi session. Startup refreshes that member's tracked pane and
-runtime identity, so health and inbox communication continue to use the
-existing roster.
+lead PID, tmux pane, and inbox polling. A teammate's first startup records the
+same durable Pi session identity, so it can also be resumed in a new pane with
+plain `pi -r`; startup restores its member identity and refreshes the tracked
+pane/runtime state. An older team without that binding needs one resume with
+its original `PI_TEAM_NAME` and `PI_AGENT_NAME` to establish it.
 
 ## Team and teammate tools
 

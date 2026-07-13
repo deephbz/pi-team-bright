@@ -106,7 +106,41 @@ describe("Pi session lifecycle", () => {
     const ctx = lifecycleContext("/tmp/pi-teams-resumed-teammate.jsonl");
     await handlers.get("session_start")?.({}, ctx);
 
-    expect((await teams.readConfig(teamName)).members.find(member => member.name === "reviewer")?.tmuxPaneId).toBe("%resumed-teammate");
+    const reviewer = (await teams.readConfig(teamName)).members.find(member => member.name === "reviewer");
+    expect(reviewer?.tmuxPaneId).toBe("%resumed-teammate");
+    expect(reviewer?.sessionFile).toBe("/tmp/pi-teams-resumed-teammate.jsonl");
+    await handlers.get("session_shutdown")?.({}, ctx);
+  });
+
+  it("rebinds a resumed teammate by Pi session file without environment variables", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("TMUX", "");
+    vi.stubEnv("TMUX_PANE", "%envless-resume");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const teamName = testTeamName("envless-teammate");
+    const sessionFile = "/tmp/pi-teams-envless-resume.jsonl";
+    paths.ensureDirs();
+    teams.createTeam(teamName, "session", "lead-agent");
+    await teams.addMember(teamName, {
+      agentId: `reviewer@${teamName}`,
+      name: "reviewer",
+      agentType: "teammate",
+      joinedAt: Date.now(),
+      tmuxPaneId: "%dead-pane",
+      sessionFile,
+      cwd: process.cwd(),
+      subscriptions: [],
+    });
+
+    const handlers = registeredHandlers();
+    const ctx = lifecycleContext(sessionFile);
+    await handlers.get("session_start")?.({}, ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("00-pi-teams", "[REVIEWER]");
+    const reviewer = (await teams.readConfig(teamName)).members.find(member => member.name === "reviewer");
+    expect(reviewer?.tmuxPaneId).toBe("%envless-resume");
+    expect(reviewer?.sessionFile).toBe(sessionFile);
     await handlers.get("session_shutdown")?.({}, ctx);
   });
 

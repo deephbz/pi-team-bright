@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { TeamConfig, Member } from "./models";
-import { configPath, teamDir, taskDir } from "./paths";
+import { configPath, teamDir, taskDir, TEAMS_DIR } from "./paths";
 import { withLock } from "./lock";
 
 export interface CutoverMarker {
@@ -228,6 +228,31 @@ export function writeConfigAtomic(p: string, config: TeamConfig): void {
     }
     throw error;
   }
+}
+
+/**
+ * Locate a teammate by the Pi session file it registered on first startup.
+ * Session files survive a new process launched with `pi -r`, unlike PIDs and
+ * terminal pane IDs. Invalid or incomplete foreign team records are ignored
+ * during discovery; their owning operation will surface a precise error.
+ */
+export function findTeammateBySessionFile(sessionFile: string): { teamName: string; member: Member } | null {
+  if (!sessionFile || !fs.existsSync(TEAMS_DIR)) return null;
+
+  for (const teamName of fs.readdirSync(TEAMS_DIR)) {
+    try {
+      const configFile = configPath(teamName);
+      if (!fs.existsSync(configFile)) continue;
+      const config = readConfigRaw(configFile);
+      const member = config.members.find(candidate =>
+        candidate.agentType === "teammate" && candidate.sessionFile === sessionFile
+      );
+      if (member) return { teamName, member };
+    } catch {
+      // One malformed or concurrently removed team must not block other resumes.
+    }
+  }
+  return null;
 }
 
 export async function readConfig(teamName: string): Promise<TeamConfig> {

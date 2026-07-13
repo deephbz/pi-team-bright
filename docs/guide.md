@@ -47,17 +47,18 @@ its project directory and select the lead's prior Pi session. PiTeams matches
 the selected durable session file, updates the lead PID and tmux pane, and
 restores lead inbox polling.
 
-To resume a tmux teammate whose pane exited, create a new pane with the same
-team and agent environment, then run `pi -r` and select that teammate's prior
-session:
+To resume a tmux teammate whose pane exited, create a new pane in the same
+project directory, run `pi -r`, and select that teammate's prior session.
+PiTeams recorded the teammate's durable session file at its first startup, so
+it restores the teammate identity and refreshes the tracked tmux pane/runtime
+record without `PI_TEAM_NAME` or `PI_AGENT_NAME`.
 
-```sh
-env PI_TEAM_NAME=my-team PI_AGENT_NAME=reviewer pi -r
-```
-
-PiTeams refreshes that member's tracked tmux pane and runtime record during
-startup. This preserves the team roster and transient inboxes; it does not
-replay missed agent work or make a killed process a graceful shutdown.
+Teams created by an older PiTeams version, or a teammate killed before its
+first startup completes, have no recorded teammate session file. Resume those
+once with `PI_TEAM_NAME` and `PI_AGENT_NAME`; that startup records the binding
+for later environment-free resumes. This preserves the team roster and
+transient inboxes; it does not replay missed agent work or make a killed
+process a graceful shutdown.
 
 ## A task workflow
 

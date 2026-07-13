@@ -59,9 +59,10 @@ The result includes `alive`, `unreadCount`, `health`, `agentLoopReady`,
 `hasRecentHeartbeat`, `startupStalled`, and runtime telemetry. Health is
 terminal/process and inbox telemetry, not task status. The normal labels are
 `dead`, `stalled`, `healthy`, `idle`, and `starting`. A dead member's runtime
-status file is removed. When a tmux teammate resumes its original Pi session
-with `PI_TEAM_NAME` and `PI_AGENT_NAME` preserved, startup replaces the stale
-tracked pane ID before this health check runs.
+status file is removed. A tmux teammate's first startup records its Pi session
+file. When that session resumes with `pi -r`, startup restores the teammate
+identity and replaces the stale tracked pane ID before this health check runs,
+without requiring team environment variables.
 
 ### `process_shutdown_approved`
 

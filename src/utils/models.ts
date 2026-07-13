@@ -9,6 +9,8 @@ export interface Member {
   model?: string;
   joinedAt: number;
   tmuxPaneId: string;
+  /** Durable Pi session identity, recorded after the teammate's first start. */
+  sessionFile?: string;
   windowId?: string;
   cwd: string;
   subscriptions: any[];
