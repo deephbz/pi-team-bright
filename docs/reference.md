@@ -1,663 +1,336 @@
-# pi-teams Tool Reference
+# PiTeams tool reference
 
-Complete documentation of all tools, parameters, and automated behavior.
+PiTeams registers exactly 21 Pi tools. The names and schemas below are the
+public tool surface; examples are Pi tool calls, not shell commands.
 
----
+## Team lifecycle
 
-## Table of Contents
+### `team_create`
 
-- [Team Management](#team-management)
-- [Teammates](#teammates)
-- [Task Management](#task-management)
-- [Messaging](#messaging)
-- [Task Planning & Approval](#task-planning--approval)
-- [Automated Behavior](#automated-behavior)
-- [Task Statuses](#task-statuses)
-- [Configuration & Data](#configuration--data)
+Creates a team and registers the current session as its lead.
 
----
+Required: `team_name`.
 
-## Team Management
+Optional: `description`, `default_model`, and `separate_windows` (default
+`false`). `default_model` is inherited by spawned teammates when supplied;
+omit it to keep Pi's configured default. `separate_windows` requests OS
+windows instead of panes and is rejected when the selected adapter does not
+support windows.
 
-### team_create
-
-Start a new team with optional default model.
-
-**Parameters**:
-- `team_name` (required): Name for the team
-- `description` (optional): Team description
-- `default_model` (optional): Default AI model for all teammates (e.g., `gpt-4o`, `haiku`, `glm-4.7`)
-
-**Examples**:
-```javascript
-team_create({ team_name: "my-team" })
-team_create({ team_name: "research", default_model: "gpt-4o" })
+```js
+team_create({ team_name: "audit", description: "Security review" })
 ```
 
----
+Creating a team does not itself spawn a teammate or require a terminal adapter.
+A terminal adapter is required by the spawn tools.
 
-### team_delete
+### `spawn_teammate`
 
-Delete a team and all its data (configuration, tasks, messages).
+Starts a teammate in a pane or OS window and adds it to the roster.
 
-**Parameters**:
-- `team_name` (required): Name of the team to delete
+Required: `team_name`, `name`, `prompt`, `cwd`.
 
-**Example**:
-```javascript
-team_delete({ team_name: "my-team" })
-```
+Optional: `model`, `thinking` (`off`, `minimal`, `low`, `medium`, `high`, or
+`xhigh`), `plan_mode_required` (default `false`), and `separate_window`
+(default `false`). Omit `model` unless an explicit override is requested.
+`cwd` must be absolute. A discovered agent definition with the same name can
+supply a Pi tool allowlist to the launched process. Spawning a name already in
+the roster stops and replaces that teammate.
 
----
+The initial `prompt` is written to the teammate's inbox. The teammate process
+also receives an injected instruction to call `read_inbox`; PiTeams does not
+make that tool call on its behalf. The spawn operation does not create a
+"started" message in the lead's inbox.
 
-### read_config
+### `spawn_lead_window`
 
-Get details about the team and its members.
+Opens the existing lead session in a separate OS window.
 
-**Parameters**:
-- `team_name` (required): Name of the team
+Required: `team_name`. Optional: `cwd` (defaults to the current working
+directory). The selected adapter must support OS windows.
 
-**Returns**: Team configuration including:
-- Team name and description
-- Default model
-- List of members with their models and thinking levels
-- Creation timestamp
+### `check_teammate`
 
-**Example**:
-```javascript
-read_config({ team_name: "my-team" })
-```
+Inspects one roster member.
 
----
+Required: `team_name` and `agent_name`.
 
-## Teammates
+The result includes `alive`, `unreadCount`, `health`, `agentLoopReady`,
+`hasRecentHeartbeat`, `startupStalled`, and runtime telemetry. Health is
+terminal/process and inbox telemetry, not task status. The normal labels are
+`dead`, `stalled`, `healthy`, `idle`, and `starting`. A dead member's runtime
+status file is removed.
 
-### spawn_teammate
+### `process_shutdown_approved`
 
-Launch a new agent into a terminal pane with a role and instructions.
+Shuts down one teammate, removes its runtime status, and removes it from the
+roster.
 
-**Parameters**:
-- `team_name` (required): Name of the team
-- `name` (required): Friendly name for the teammate (e.g., "security-bot")
-- `prompt` (required): Instructions for the teammate's role and initial task
-- `cwd` (required): Working directory for the teammate
-- `model` (optional): AI model for this teammate (overrides team default)
-- `thinking` (optional): Thinking level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`)
-- `plan_mode_required` (optional): If `true`, teammate must submit plans for approval
+Required: `team_name` and `agent_name`. The lead cannot be removed with this
+tool. PiTeams attempts both the tracked process and the adapter pane/window.
 
-**Model Options**:
-- Any model available in your pi configuration
-- Common models: `gpt-4o`, `haiku` (Anthropic), `glm-4.7`, `glm-5` (Zhipu AI)
+### `team_shutdown`
 
-**Thinking Levels**:
-- `off`: No thinking blocks (fastest)
-- `minimal`: Minimal reasoning overhead
-- `low`: Light reasoning for quick decisions
-- `medium`: Balanced reasoning (default)
-- `high`: Extended reasoning for complex problems
-- `xhigh`: Maximum available reasoning for the hardest tasks
+Stops all teammates and performs orphaned Pi-session cleanup.
 
-**Examples**:
-```javascript
-// Basic spawn
-spawn_teammate({
-  team_name: "my-team",
-  name: "security-bot",
-  prompt: "Scan the codebase for hardcoded API keys",
-  cwd: "/path/to/project"
-})
+Required: `team_name`.
 
-// With custom model
-spawn_teammate({
-  team_name: "my-team",
-  name: "speed-bot",
-  prompt: "Run benchmarks on the API endpoints",
-  cwd: "/path/to/project",
-  model: "haiku"
-})
+For a legacy team it removes the team and local task directories. For a
+Beads-cutover team it retains the team configuration, Beads authority, and
+legacy task files as migration evidence; task truth is not deleted. The
+response reports whether task authority was retained and how many old agent
+session folders were cleaned. It does not replace post-shutdown inspection of
+the Beads workspace.
 
-// With plan approval
-spawn_teammate({
-  team_name: "my-team",
-  name: "refactor-bot",
-  prompt: "Refactor the user service",
-  cwd: "/path/to/project",
-  plan_mode_required: true
-})
+### `cleanup_agent_sessions`
 
-// With custom model and thinking
-spawn_teammate({
-  team_name: "my-team",
-  name: "architect-bot",
-  prompt: "Design the new feature architecture",
-  cwd: "/path/to/project",
-  model: "gpt-4o",
-  thinking: "xhigh"
-})
-```
+Removes orphaned folders under `~/.pi/agent/teams/`.
 
----
+Optional: `max_age_hours` (default `24`). The tool returns the number removed.
+`team_shutdown` invokes the same cleanup with a one-hour threshold.
 
-### check_teammate
+## Communication
 
-Check if a teammate is still running or has unread messages.
+### `send_message`
 
-**Parameters**:
-- `team_name` (required): Name of the team
-- `agent_name` (required): Name of the teammate to check
+Writes one transient inbox message.
 
-**Returns**: Status information including:
-- `alive`: Whether the teammate process/pane/window is still running
-- `unreadCount`: Number of unread inbox messages
-- `health`: One of `healthy`, `idle`, `starting`, `stalled`, `dead`
-- `agentLoopReady`: Whether the teammate has executed its inbox-read loop at least once
-- `hasRecentHeartbeat`: Whether heartbeat data has been updated recently
-- `startupStalled`: Detects the "alive but not consuming inbox" startup failure mode
-- `runtime`: Raw runtime telemetry (timestamps, pid, last error)
+Required: `team_name`, `recipient`, `content`, and `summary`. There is no
+`color` parameter on direct messages.
 
-**Example**:
-```javascript
-check_teammate({ team_name: "my-team", agent_name: "security-bot" })
-```
+### `broadcast_message`
 
----
+Sends one transient message to every team member except the sender.
 
-### force_kill_teammate
+Required: `team_name`, `content`, and `summary`. Optional: `color`.
 
-Forcibly kill a teammate's tmux pane and remove them from the team.
+### `read_inbox`
 
-**Parameters**:
-- `team_name` (required): Name of the team
-- `agent_name` (required): Name of the teammate to kill
+Reads an agent inbox.
 
-**Example**:
-```javascript
-force_kill_teammate({ team_name: "my-team", agent_name: "security-bot" })
-```
+Required: `team_name`. Optional: `agent_name` and `unread_only` (default
+`true`). Omitting `agent_name` reads the current agent's inbox. Reading an
+inbox is communication-state inspection; it does not claim or update a task.
+For a teammate reading its own inbox, PiTeams records that the agent loop is
+ready and updates heartbeat telemetry.
 
----
+Teammates poll their own inbox while idle about every 30 seconds. The lead
+also polls while idle after creating or reconnecting to a team.
 
-### process_shutdown_approved
+## Tasks
 
-Initiate orderly shutdown for a finished teammate.
+### `task_create`
 
-**Parameters**:
-- `team_name` (required): Name of the team
-- `agent_name` (required): Name of the teammate to shut down
+Creates a task in the team's configured task backend.
 
-**Example**:
-```javascript
-process_shutdown_approved({ team_name: "my-team", agent_name: "security-bot" })
-```
+Required: `team_name`, `subject`, and `description`.
 
----
+Optional: `active_form`, `metadata`, and `idempotency_key`. New tasks start as
+`pending`; ownership and status are changed later with `task_update`. The
+returned `id` is the backend task ID.
 
-## Task Management
-
-### task_create
-
-Create a new task for the team.
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `subject` (required): Brief task title
-- `description` (required): Detailed task description
-- `status` (optional): Initial status (`pending`, `in_progress`, `planning`, `completed`, `deleted`). Default: `pending`
-- `owner` (optional): Name of the teammate assigned to the task
-
-**Example**:
-```javascript
+```js
 task_create({
-  team_name: "my-team",
-  subject: "Audit auth endpoints",
-  description: "Review all authentication endpoints for SQL injection vulnerabilities",
-  status: "pending",
-  owner: "security-bot"
+  team_name: "audit",
+  subject: "Review authentication",
+  description: "Check the authentication handlers for unsafe input."
 })
 ```
 
----
+### `task_read`
 
-### task_list
+Reads one complete task record.
 
-List all tasks and their current status.
+Required: `team_name` and `task_id`. The record can include its backend ID,
+description, plan and feedback, owner, dependency fields, metadata, and a
+backend version token in `version`. Use the exact ID returned by `task_create`
+or `task_list`. For a subsequent Beads mutation, pass the returned `version`
+value as `expected_version`.
 
-**Parameters**:
-- `team_name` (required): Name of the team
+### `task_list`
 
-**Returns**: Array of all tasks with their current status, owners, and details.
+Lists the team's current non-deleted tasks.
 
-**Example**:
-```javascript
-task_list({ team_name: "my-team" })
+Required: `team_name`. IDs are not universally numeric: legacy tasks normally
+use local numeric IDs, while Beads-cutover tasks use Beads IDs.
+
+### `task_update`
+
+Performs one atomic backend mutation.
+
+Required: `team_name` and `task_id`.
+
+At most one of these mutation paths may be used per call:
+
+- `status`: `pending`, `planning`, `in_progress`, `completed`, or `deleted`;
+- `owner`: an assignment name, or an empty string to clear it;
+- `claim`: atomically claim for the current agent where supported;
+- `blocks` or `blocked_by`: dependency IDs;
+- `progress`: append a communicated progress entry;
+- `pending_problem`: append an unresolved-problem entry.
+
+`expected_version` is an optimistic concurrency token from `task_read` or
+`task_list`: copy the returned task's `version` field into this parameter.
+Re-read the task and copy the new `version` between separate mutations.
+`blocked` is a derived
+read state, not a writable status. On Beads, `blocks` is rejected because it
+would mutate another task without a second version token; add `blocked_by` to
+the target task instead.
+
+Beads-cutover non-claim writes require `expected_version`. Beads 1.1.0 has no
+true CLI compare-and-swap, so the token is a serialized preflight and another
+writer can still race after the check. A failed Beads command, timeout,
+malformed response, scope failure, or conflict fails the tool; PiTeams never
+falls back to legacy files.
+
+Completion hooks run when a task is completed. See [Hooks](#completion-hook)
+for backend-specific transition details. In the legacy backend, `deleted`
+removes the task file. In Beads, `deleted` is a closed, soft-deleted record so
+history remains available.
+
+### `task_submit_plan`
+
+Submits a non-empty plan and sets the task to `planning`.
+
+Required: `team_name`, `task_id`, and `plan`. Optional:
+`expected_version`. A Beads-cutover task requires the version token.
+
+### `task_evaluate_plan`
+
+Evaluates a submitted plan.
+
+Required: `team_name`, `task_id`, and `action` (`approve` or `reject`).
+Optional: `feedback` and `expected_version`; rejection requires non-empty
+feedback, and Beads requires the version token. Approval sets
+`in_progress`. Rejection keeps the task in `planning` and stores the feedback;
+it does not move the task to `in_progress`.
+
+## Templates and runtime teams
+
+### `list_predefined_teams`
+
+Takes no parameters. Lists templates discovered from global and project
+`teams.yaml` files and reports whether referenced agent definitions exist.
+Global definitions are read from `~/.pi/teams.yaml`, with the historical
+`~/.pi/agent/teams.yaml` location also supported; project definitions are in
+`.pi/teams.yaml`.
+
+### `list_predefined_agents`
+
+Takes no parameters. Lists discovered agent definitions and their `name`,
+`description`, `tools`, `model`, and `thinking` fields. Global definitions
+come from `~/.pi/agent/agents/`; project definitions come from `.pi/agents/`.
+
+### `create_predefined_team`
+
+Creates a team from a discovered template and attempts to spawn all of its
+agents, returning per-agent `spawned`, `skipped`, or `error` results.
+
+Required: `team_name`, `predefined_team`, and `cwd`.
+
+Optional: `default_model` and `separate_windows` (default `false`). Agent
+settings and tool allowlists from each definition are used when launching.
+
+### `save_team_as_template`
+
+Saves a runtime team with at least one spawned teammate as reusable agent
+files plus a `teams.yaml` entry.
+
+Required: `team_name` and `template_name`. Optional: `description` and `scope`
+(`user` or `project`, default `user`). User scope writes under `~/.pi`; project
+scope writes under the current project.
+
+### `list_runtime_teams`
+
+Takes no parameters. Lists runtime team configurations under `~/.pi/teams/`
+that can be saved as templates. It reports name, description, member count,
+and creation time; it does not create or delete teams.
+
+## Completion hook
+
+The supported hook is `.pi/team-hooks/task_completed.sh`, resolved relative to
+the current Pi process working directory. When a completion write invokes it,
+the task record is passed as a JSON string in the first argument and `PI_TEAM`
+is set to the team name.
+
+Both the legacy task store and `BeadsTaskStore` invoke the hook. Legacy runs it
+when `task_update` writes `completed`; Beads runs it when a task transitions to
+closed through completion. Hook failure is logged and does not undo the task
+mutation. A hook is not a transactional quality gate.
+
+## Task authority and Beads cutover
+
+A team without `taskBackend: "beads"` uses the legacy JSON task store under
+`~/.pi/tasks/<team>/`. Legacy IDs are local numeric strings. Migration is
+explicit:
+
+```sh
+npm run migrate:tasks -- <team-name> <absolute-beads-workspace> [report-path]
 ```
 
----
+The workspace must be absolute and contain an initialized Beads repository.
+The migration inventories and hashes legacy files, imports or reconciles by
+`pi_teams_legacy_id`, maps statuses, owners, plans, dependencies and metadata,
+reconciles before and after values, and only then records the cutover. An
+interrupted migration can be rerun safely. Pre-cutover drift blocks authority
+change until reviewed; an operator override is explicit and persisted.
 
-### task_get
+After cutover the team config records `taskBackend: "beads"`, the absolute
+`taskWorkspace`, and cutover evidence. Beads is the sole writable authority.
+Changed or newly created legacy files are reported as orphaned old-client
+writes and are never imported automatically. Mixed legacy/Beads writers are
+not a supported steady state. Beads IDs remain the task IDs; do not translate
+them back to local numbers.
 
-Get full details of a specific task.
+Beads mapping is explicit: subject and description become title and
+description; owner becomes assignee; `pending` and `planning` are open with a
+phase marker; `in_progress` maps directly; `completed` closes the issue;
+dependencies use `blocks` links; plans, progress, and problems use namespaced
+metadata/comments. PiTeams continues to own membership, panes, processes, and
+transient inboxes.
 
-**Parameters**:
-- `team_name` (required): Name of the team
-- `task_id` (required): ID of the task to retrieve
+After `team_shutdown` on a Beads-cutover team, use the retained absolute
+`taskWorkspace` from the preserved team config:
 
-**Returns**: Full task object including:
-- Subject and description
-- Status and owner
-- Plan (if in planning mode)
-- Plan feedback (if rejected)
-- Blocked relationships
-
-**Example**:
-```javascript
-task_get({ team_name: "my-team", task_id: "task_abc123" })
+```sh
+bd --directory <taskWorkspace> --json list --label pi-teams:<team-name> --all --no-pager --limit 0
+bd --directory <taskWorkspace> show <beads-id> --long --include-comments --include-dependents
+bd --directory <taskWorkspace> graph --dot <beads-id> > task.dot
+bd --directory <taskWorkspace> graph --html <beads-id> > task.html
 ```
 
----
-
-### task_update
-
-Update a task's status or owner.
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `task_id` (required): ID of the task to update
-- `status` (optional): New status (`pending`, `planning`, `in_progress`, `completed`, `deleted`)
-- `owner` (optional): New owner (teammate name)
-
-**Example**:
-```javascript
-task_update({
-  team_name: "my-team",
-  task_id: "task_abc123",
-  status: "in_progress",
-  owner: "security-bot"
-})
-```
-
-**Note**: When status changes to `completed`, any hook script at `.pi/team-hooks/task_completed.sh` will automatically run.
-
----
-
-## Messaging
-
-### send_message
-
-Send a message to a specific teammate or the team lead.
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `recipient` (required): Name of the agent receiving the message
-- `content` (required): Full message content
-- `summary` (required): Brief summary for message list
-- `color` (optional): Message color for UI highlighting
-
-**Example**:
-```javascript
-send_message({
-  team_name: "my-team",
-  recipient: "security-bot",
-  content: "Please focus on the auth module first",
-  summary: "Focus on auth module"
-})
-```
-
----
-
-### broadcast_message
-
-Send a message to the entire team (excluding the sender).
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `content` (required): Full message content
-- `summary` (required): Brief summary for message list
-- `color` (optional): Message color for UI highlighting
-
-**Use cases**:
-- API endpoint changes
-- Database schema updates
-- Team announcements
-- Priority shifts
-
-**Example**:
-```javascript
-broadcast_message({
-  team_name: "my-team",
-  content: "The API endpoint has changed to /v2. Please update your work accordingly.",
-  summary: "API endpoint changed to v2"
-})
-```
-
----
-
-### read_inbox
-
-Read incoming messages for an agent.
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `agent_name` (optional): Whose inbox to read. Defaults to current agent.
-- `unread_only` (optional): Only show unread messages. Default: `true`
-
-**Returns**: Array of messages with sender, content, timestamp, and read status.
-
-**Examples**:
-```javascript
-// Read my unread messages
-read_inbox({ team_name: "my-team" })
-
-// Read all messages (including read)
-read_inbox({ team_name: "my-team", unread_only: false })
-
-// Read a teammate's inbox (as lead)
-read_inbox({ team_name: "my-team", agent_name: "security-bot" })
-```
-
----
-
-## Task Planning & Approval
-
-### task_submit_plan
-
-For teammates to submit their implementation plans for approval.
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `task_id` (required): ID of the task
-- `plan` (required): Implementation plan description
-
-**Behavior**:
-- Updates task status to `planning`
-- Saves the plan to the task
-- Lead agent can then review and approve/reject
-
-**Example**:
-```javascript
-task_submit_plan({
-  team_name: "my-team",
-  task_id: "task_abc123",
-  plan: "1. Add password strength validator component\n2. Integrate with existing signup form\n3. Add unit tests using zxcvbn library"
-})
-```
-
----
-
-### task_evaluate_plan
-
-For the lead agent to approve or reject a submitted plan.
-
-**Parameters**:
-- `team_name` (required): Name of the team
-- `task_id` (required): ID of the task
-- `action` (required): `"approve"` or `"reject"`
-- `feedback` (optional): Feedback message (required when rejecting)
-
-**Behavior**:
-- **Approve**: Sets task status to `in_progress`, clears any previous feedback
-- **Reject**: Sets task status back to `in_progress` (for revision), saves feedback
-
-**Examples**:
-```javascript
-// Approve plan
-task_evaluate_plan({
-  team_name: "my-team",
-  task_id: "task_abc123",
-  action: "approve"
-})
-
-// Reject with feedback
-task_evaluate_plan({
-  team_name: "my-team",
-  task_id: "task_abc123",
-  action: "reject",
-  feedback: "Please add more detail about error handling and edge cases"
-})
-```
-
----
-
-## Automated Behavior
-
-### Initial Greeting
-
-When a teammate is spawned, they automatically:
-1. Send a message to the lead announcing they've started
-2. Begin checking their inbox for work
-
-**Example message**: "I've started and am checking my inbox for tasks."
-
----
-
-### Idle Polling
-
-If a teammate is idle (has no active work), they automatically check for new messages every **30 seconds**.
-
-This ensures teammates stay responsive to new tasks, messages, and task reassignments without manual intervention.
-
----
-
-### Automated Hooks
-
-When a task's status changes to `completed`, pi-teams automatically executes:
-
-`.pi/team-hooks/task_completed.sh`
-
-The hook receives the task data as a JSON string as the first argument.
-
-**Common hook uses**:
-- Run test suite
-- Run linting
-- Notify external systems (Slack, email)
-- Trigger deployments
-- Generate reports
-
-**See [Usage Guide](guide.md#hook-system) for detailed examples.**
-
----
-
-### Context Injection
-
-Each teammate is given a custom system prompt that includes:
-- Their role and instructions
-- Team context (team name, member list)
-- Available tools
-- Team environment guidelines
-
-This ensures teammates understand their responsibilities and can work autonomously.
-
----
-
-## Task Statuses
-
-### pending
-
-Task is created but not yet assigned or started.
-
-### planning
-
-Task is being planned. Teammate has submitted a plan and is awaiting lead approval. (Only available when `plan_mode_required` is true for the teammate)
-
-### in_progress
-
-Task is actively being worked on by the assigned teammate.
-
-### completed
-
-Task is finished. Status change triggers the `task_completed.sh` hook.
-
-### deleted
-
-Task is removed from the active task list. Still preserved in data history.
-
----
-
-## Configuration & Data
-
-### Data Storage
-
-All pi-teams data is stored in your home directory under `~/.pi/`:
-
-```
-~/.pi/
-├── teams/
-│   └── <team-name>/
-│       └── config.json      # Team configuration and member list
-├── tasks/
-│   └── <team-name>/
-│       ├── task_*.json      # Individual task files
-│       └── tasks.json       # Task index
-└── messages/
-    └── <team-name>/
-        ├── <agent-name>.json  # Per-agent message history
-        └── index.json         # Message index
-```
-
-### Team Configuration (config.json)
-
-```json
-{
-  "name": "my-team",
-  "description": "Code review team",
-  "defaultModel": "gpt-4o",
-  "members": [
-    {
-      "name": "security-bot",
-      "model": "gpt-4o",
-      "thinking": "medium",
-      "planModeRequired": true
-    },
-    {
-      "name": "frontend-dev",
-      "model": "haiku",
-      "thinking": "low",
-      "planModeRequired": false
-    }
-  ]
-}
-```
-
-### Task File (task_*.json)
-
-```json
-{
-  "id": "task_abc123",
-  "subject": "Audit auth endpoints",
-  "description": "Review all authentication endpoints for vulnerabilities",
-  "status": "in_progress",
-  "owner": "security-bot",
-  "plan": "1. Scan /api/login\n2. Scan /api/register\n3. Scan /api/refresh",
-  "planFeedback": null,
-  "blocks": [],
-  "blockedBy": [],
-  "activeForm": "Auditing auth endpoints",
-  "createdAt": "2024-02-22T10:00:00Z",
-  "updatedAt": "2024-02-22T10:30:00Z"
-}
-```
-
-### Message File (<agent-name>.json)
-
-```json
-{
-  "messages": [
-    {
-      "id": "msg_def456",
-      "from": "team-lead",
-      "to": "security-bot",
-      "content": "Please focus on the auth module first",
-      "summary": "Focus on auth module",
-      "timestamp": "2024-02-22T10:15:00Z",
-      "read": false
-    }
-  ]
-}
-```
-
----
-
-## Environment Variables
-
-pi-teams respects the following environment variables:
-
-- `ZELLIJ`: Automatically detected when running inside Zellij. Enables Zellij pane management.
-- `TMUX`: Automatically detected when running inside tmux. Enables tmux pane management.
-- `PI_DEFAULT_THINKING_LEVEL`: Default thinking level for spawned teammates if not specified (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`).
-
----
-
-## Terminal Integration
-
-### tmux Detection
-
-If the `TMUX` environment variable is set, pi-teams uses `tmux split-window` to create panes.
-
-**Layout**: Large lead pane on the left, teammates stacked on the right.
-
-### Zellij Detection
-
-If the `ZELLIJ` environment variable is set, pi-teams uses `zellij run` to create panes.
-
-**Layout**: Same as tmux - large lead pane on left, teammates on right.
-
-### iTerm2 Detection
-
-If neither tmux nor Zellij is detected, and you're on macOS with iTerm2, pi-teams uses AppleScript to split the window.
-
-**Layout**: Same as tmux/Zellij - large lead pane on left, teammates on right.
-
-**Requirements**:
-- macOS
-- iTerm2 terminal
-- Not inside tmux or Zellij
-
----
-
-## Error Handling
-
-### Lock Files
-
-pi-teams uses lock files to prevent concurrent modifications:
-
-```
-~/.pi/teams/<team-name>/.lock
-~/.pi/tasks/<team-name>/.lock
-~/.pi/messages/<team-name>/.lock
-```
-
-If a lock file is stale (process no longer running), it's automatically removed after 60 seconds.
-
-### Race Conditions
-
-The locking system prevents race conditions when multiple teammates try to update tasks or send messages simultaneously.
-
-### Recovery
-
-If a lock file persists beyond 60 seconds, it's automatically cleaned up. For manual recovery:
-
-```bash
-# Remove stale lock
-rm ~/.pi/teams/my-team/.lock
-```
-
----
-
-## Performance Considerations
-
-### Idle Polling Overhead
-
-Teammates poll their inboxes every 30 seconds when idle. This is minimal overhead (one file read per poll).
-
-### Lock Timeout
-
-Lock files timeout after 60 seconds. Adjust if you have very slow operations.
-
-### Message Storage
-
-Messages are stored as JSON. For teams with extensive message history, consider periodic cleanup:
-
-```bash
-# Archive old messages
-mv ~/.pi/messages/my-team/ ~/.pi/messages-archive/my-team-2024-02-22/
-```
+Include `--all` when listing closed history. `bd graph --all` is an open-work
+view; visualize a specific ID when closed dependencies must appear.
+
+## Terminal adapters and limitations
+
+The registry selects the first detected adapter in this order: `tmux`,
+`zellij`, `cmux`, `iTerm2`, `WezTerm`, then `Windows`. A missing adapter makes
+spawning unavailable. Pane support is available through all six adapters.
+Separate OS windows are supported by `cmux`, iTerm2, WezTerm, and Windows
+Terminal; `tmux` and Zellij support panes only.
+
+- **tmux** requires `TMUX` and supports pane split/kill/liveness, but never OS
+  windows.
+- **Zellij** requires `ZELLIJ` outside tmux. It uses `--close-on-exit`, so
+  explicit pane kill is a no-op and its synthetic liveness result is
+  best-effort; health can be advisory.
+- **cmux** is selected by `CMUX_SOCKET_PATH` or `CMUX_WORKSPACE_ID` outside
+  tmux/Zellij. It manages surfaces and can create/close windows through the
+  `cmux` CLI.
+- **iTerm2** requires macOS iTerm2 (`TERM_PROGRAM=iTerm.app`) outside
+  tmux/Zellij. Pane and window operations use AppleScript.
+- **WezTerm** requires `WEZTERM_PANE` and a working `wezterm` CLI outside
+  tmux/Zellij. It supports panes and separate windows; window shutdown is
+  implemented by killing the window's panes.
+- **Windows Terminal** is selected on Windows outside tmux, Zellij, and
+  WezTerm. It requires `wt` at spawn time and PowerShell for commands. Its
+  pane/window IDs are synthetic: the adapter has no direct pane/window kill or
+  reliable liveness query, and tab titles are limited. Process shutdown may
+  still use the tracked teammate PID, but terminal cleanup and
+  `check_teammate` liveness are not equivalent to tmux, cmux, iTerm2, or
+  WezTerm.
+
+The `separate_window` and `separate_windows` flags therefore express a request,
+not a portable guarantee. PiTeams rejects the request when the selected
+adapter reports no window capability.

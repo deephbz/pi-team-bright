@@ -109,7 +109,9 @@ Required: `team_name`, `subject`, and `description`. Optional: `active_form`,
 
 Required: `team_name` and `task_id`. It returns the full task record, including
 its backend ID, description, plan fields, owner, dependency fields, metadata,
-and a backend version token when available. `task_read` is the shipped name;
+and a backend version token in the returned `version` field when available.
+Pass that exact `version` value as `expected_version` on the next Beads
+mutation. `task_read` is the shipped name;
 there is no `task_get`.
 
 ### `task_list`
@@ -132,11 +134,15 @@ Required: `team_name` and `task_id`. Optional fields are:
 `blocked` is a derived/read state, not a writable status. Each `task_update`
 call accepts one backend mutation; split status, dependency, and progress
 changes into separate calls and re-read `expected_version` between them.
+Here, “re-read `expected_version`” means call `task_read`/`task_list` again and
+copy the returned task `version` into the next call's `expected_version`.
 Beads-cutover non-claim writes require `expected_version`; Beads 1.1.0 has no
 true CLI CAS, so the token is a serialized preflight and an external writer
-can still race after the check. `completed` runs the
-configured `.pi/team-hooks/task_completed.sh` hook for legacy tasks. `deleted`
-is a real file deletion only in the legacy backend; Beads stores a closed,
+can still race after the check. `completed` invokes the configured
+`.pi/team-hooks/task_completed.sh` hook for both backends: legacy runs it on a
+completed write, while Beads runs it when the task transitions to closed.
+Hook failures are logged and do not undo the task mutation. `deleted` is a
+real file deletion only in the legacy backend; Beads stores a closed,
 soft-deleted record so history is retained.
 
 ### `task_submit_plan`
@@ -218,6 +224,23 @@ and description; owner maps to `assignee`; `pending`/`planning` map to Beads
 closed; dependencies use Beads `blocks` links; plans and progress use
 namespaced metadata/comments; Beads IDs remain task IDs. PiTeams still owns
 membership, panes, process lifecycle, and transient inboxes.
+
+### Post-shutdown Beads inspection
+
+After a Beads-cutover `team_shutdown`, use the retained absolute
+`taskWorkspace` from the preserved team config as the query root. Include
+`--all` to retain closed task history:
+
+```sh
+bd --directory <taskWorkspace> --json list --label pi-teams:<team-name> --all --no-pager --limit 0
+bd --directory <taskWorkspace> show <beads-id> --long --include-comments --include-dependents
+bd --directory <taskWorkspace> graph --dot <beads-id> > task.dot
+bd --directory <taskWorkspace> graph --html <beads-id> > task.html
+```
+
+`bd graph --all` is an open-work view, so visualize a specific task when its
+closed dependencies must appear. The Beads workspace is the task authority;
+the retained PiTeams config provides the workspace and cutover provenance.
 
 ## Nonexistent APIs
 

@@ -1,384 +1,285 @@
-# pi-teams Usage Guide
+# PiTeams usage guide
 
-This guide provides detailed examples, patterns, and best practices for using pi-teams.
+PiTeams is a Pi extension, so the operations in this guide are Pi tools. The
+extension registers exactly 21 tools; the complete parameter reference is in
+[reference.md](reference.md).
 
-## Table of Contents
+## Getting started
 
-- [Getting Started](#getting-started)
-- [Common Workflows](#common-workflows)
-- [Hook System](#hook-system)
-- [Best Practices](#best-practices)
-- [Troubleshooting](#troubleshooting)
+Install the package in Pi:
 
----
-
-## Getting Started
-
-### Basic Team Setup
-
-First, make sure you're inside a tmux session, Zellij session, or iTerm2:
-
-```bash
-tmux  # or zellij, or just use iTerm2
+```sh
+pi install npm:pi-teams
 ```
 
-Then start pi:
+Create a team, then spawn teammates with absolute working directories:
 
-```bash
-pi
+```js
+team_create({ team_name: "my-team" })
+spawn_teammate({
+  team_name: "my-team",
+  name: "reviewer",
+  prompt: "Review the authentication code and report concrete findings.",
+  cwd: "/absolute/path/to/project"
+})
 ```
 
-Create your first team:
+A team can be created without a terminal adapter, but `spawn_teammate` and
+`create_predefined_team` need one. A teammate's initial prompt is placed in
+its transient inbox. On startup it receives an instruction to call
+`read_inbox`; there is no automatic tool call and no automatic started event
+in the lead's inbox. Idle agents poll inboxes about every 30 seconds.
 
-> **You:** "Create a team named 'my-team'"
+Use `check_teammate` for runtime health, not task progress:
 
-Set a default model for all teammates:
-
-> **You:** "Create a team named 'Research' and use 'gpt-4o' for everyone"
-
----
-
-## Common Workflows
-
-### 1. Code Review Team
-
-> **You:** "Create a team named 'code-review' using 'gpt-4o'"
-> **You:** "Spawn a teammate named 'security-reviewer' to check for vulnerabilities"
-> **You:** "Spawn a teammate named 'performance-reviewer' using 'haiku' to check for optimization opportunities"
-> **You:** "Create a task for security-reviewer: 'Review the auth module for SQL injection risks' and set it to in_progress"
-> **You:** "Create a task for performance-reviewer: 'Analyze the database queries for N+1 issues' and set it to in_progress"
-
-### 2. Refactor with Plan Approval
-
-> **You:** "Create a team named 'refactor-squad'"
-> **You:** "Spawn a teammate named 'refactor-bot' and require plan approval before they make any changes"
-> **You:** "Create a task for refactor-bot: 'Refactor the user service to use dependency injection' and set it to in_progress"
-
-Teammate submits a plan. Review it:
-
-> **You:** "List all tasks and show me refactor-bot's plan for task 1"
-
-Approve or reject:
-
-> **You:** "Approve refactor-bot's plan for task 1"
-
-> **You:** "Reject refactor-bot's plan for task 1 with feedback: 'Add unit tests for the new injection pattern'"
-
-### 3. Testing with Automated Hooks
-
-Create a hook script at `.pi/team-hooks/task_completed.sh`:
-
-```bash
-#!/bin/bash
-# This script runs automatically when any task is completed
-
-echo "Running post-task checks..."
-npm test
-if [ $? -ne 0 ]; then
-  echo "Tests failed! Please fix before marking task complete."
-  exit 1
-fi
-
-npm run lint
-echo "All checks passed!"
+```js
+check_teammate({ team_name: "my-team", agent_name: "reviewer" })
+read_inbox({ team_name: "my-team" })
 ```
 
-> **You:** "Create a team named 'test-team'"
-> **You:** "Spawn a teammate named 'qa-bot' to write tests"
-> **You:** "Create a task for qa-bot: 'Write unit tests for the payment module' and set it to in_progress"
+`check_teammate` combines terminal liveness, unread messages, startup timing,
+and heartbeat telemetry. It does not inspect whether a task is complete.
 
-When qa-bot marks the task as completed, the hook automatically runs tests and linting.
+## A task workflow
 
-### 4. Coordinated Migration
+Create first, then read/list and make one update at a time:
 
-> **You:** "Create a team named 'migration-team'"
-> **You:** "Spawn a teammate named 'db-migrator' to handle database changes"
-> **You:** "Spawn a teammate named 'api-updater' using 'gpt-4o' to update API endpoints"
-> **You:** "Spawn a teammate named 'test-writer' to write tests for the migration"
-> **You:** "Create a task for db-migrator: 'Add new columns to the users table' and set it to in_progress"
+```js
+const task = task_create({
+  team_name: "my-team",
+  subject: "Review authentication",
+  description: "Inspect authentication handlers for unsafe input."
+})
 
-After db-migrator completes, broadcast the schema change:
-
-> **You:** "Broadcast to the team: 'New columns added to users table: phone, email_verified. Please update your code accordingly.'"
-
-### 5. Mixed-Speed Team
-
-Use different models for cost optimization:
-
-> **You:** "Create a team named 'mixed-speed' using 'gpt-4o'"
-> **You:** "Spawn a teammate named 'architect' using 'gpt-4o' with 'xhigh' thinking level for design decisions"
-> **You:** "Spawn a teammate named 'implementer' using 'haiku' with 'low' thinking level for quick coding"
-> **You:** "Spawn a teammate named 'reviewer' using 'gpt-4o' with 'medium' thinking level for code reviews"
-
-Now you have expensive reasoning for design and reviews, but fast/cheap implementation.
-
----
-
-## Hook System
-
-### Overview
-
-Hooks are shell scripts that run automatically at specific events. Currently supported:
-
-- **`task_completed.sh`** - Runs when any task's status changes to `completed`
-
-### Hook Location
-
-Hooks should be placed in `.pi/team-hooks/` in your project directory:
-
-```
-your-project/
-├── .pi/
-│   └── team-hooks/
-│       └── task_completed.sh
+task_list({ team_name: "my-team" })
+task_read({ team_name: "my-team", task_id: "<id-from-task_create>" })
+task_update({
+  team_name: "my-team",
+  task_id: "<task-id>",
+  owner: "reviewer"
+})
 ```
 
-### Hook Payload
+`task_create` does not accept initial status or owner. Use `task_update` for
+those fields. Its status values are `pending`, `planning`, `in_progress`,
+`completed`, and `deleted`. `blocked` can appear as a derived task status but
+is not writable. A task update may contain only one mutation path: split
+status, ownership, claim, dependency, progress, and pending-problem writes and
+re-read the version token between them.
 
-The hook receives the task data as a JSON string as the first argument:
+The read result names the token `version`; the write parameter is named
+`expected_version`. Copy the exact returned `version` value into the next
+Beads mutation's `expected_version` field.
 
-```bash
-#!/bin/bash
-TASK_DATA="$1"
-echo "Task completed: $TASK_DATA"
+For a teammate that must propose work first:
+
+```js
+task_submit_plan({
+  team_name: "my-team",
+  task_id: "<task-id>",
+  plan: "Inspect handlers; add focused tests; report findings."
+})
+
+task_evaluate_plan({
+  team_name: "my-team",
+  task_id: "<task-id>",
+  action: "approve"
+})
 ```
 
-Example payload:
-```json
-{
-  "id": "task_123",
-  "subject": "Fix login bug",
-  "description": "Users can't login with special characters",
-  "status": "completed",
-  "owner": "fixer-bot"
-}
+Approval changes `planning` to `in_progress`. Rejection requires `feedback`
+and keeps the task in `planning`; it does not automatically start the task.
+`plan_mode_required` on `spawn_teammate` records the teammate's plan-mode
+setting, while plan state is changed through the two task plan tools.
+
+Use `claim: true` for an atomic claim where supported. Use `blocked_by` to add
+a dependency to the target task. Beads rejects `blocks`, because that form
+would mutate a second task without a second version token. `progress` and
+`pending_problem` append communicated entries rather than replacing the task
+record.
+
+## Communication and shutdown
+
+Direct messages and broadcasts are transient coordination state:
+
+```js
+send_message({
+  team_name: "my-team",
+  recipient: "reviewer",
+  content: "Please prioritize the session validation path.",
+  summary: "Prioritize session validation"
+})
+
+broadcast_message({
+  team_name: "my-team",
+  content: "The test environment is ready.",
+  summary: "Test environment ready"
+})
 ```
 
-### Example Hooks
+`send_message` has no `color` parameter; `broadcast_message` optionally does.
+Use `read_inbox` to inspect messages. Inbox state is separate from task state.
 
-#### Test on Completion
+When one teammate is finished, use:
 
-```bash
-#!/bin/bash
+```js
+process_shutdown_approved({ team_name: "my-team", agent_name: "reviewer" })
+```
+
+For the whole team:
+
+```js
+team_shutdown({ team_name: "my-team" })
+```
+
+Whole-team shutdown attempts process and pane/window cleanup and removes old
+Pi agent-session folders older than one hour. A legacy team loses its team and
+local task directories as part of normal cleanup. A Beads-cutover team keeps
+its team configuration, Beads authority, and legacy task files as migration
+evidence, so task data remains queryable after the panes close. Run
+`cleanup_agent_sessions({ max_age_hours: 24 })` for a separate cleanup with a
+custom age threshold.
+
+## Legacy tasks and Beads cutover
+
+Before migration, the legacy backend stores per-task JSON under
+`~/.pi/tasks/<team>/` and normally assigns numeric local IDs. A migrated team
+records `taskBackend: "beads"`, an absolute `taskWorkspace`, and durable
+cutover evidence. From cutover onward, Beads is the only writable task
+authority and task IDs are Beads IDs such as `bd-abc123`; do not use the old
+numeric ID as a new task ID.
+
+Run migration outside Pi with:
+
+```sh
+npm run migrate:tasks -- <team-name> <absolute-beads-workspace> [report-path]
+```
+
+The helper inventories and hashes legacy files, imports/reconciles by
+`pi_teams_legacy_id`, maps task fields and dependencies, reconciles the result,
+and flips authority only after successful reconciliation. Pre-cutover drift
+blocks the flip until an explicitly reviewed operator override is recorded.
+Interrupted migration can be rerun. After cutover, changed or newly created
+legacy files are orphaned old-client writes and are never imported
+automatically; mixed old/new writers are not a supported steady state.
+
+For Beads writes after cutover, supply `expected_version` from a fresh
+`task_read` or `task_list` result for non-claim mutations. Beads 1.1.0 does not
+provide true CLI compare-and-swap, so this is a serialized preflight rather
+than a guarantee against an external race. If Beads is unavailable, malformed,
+times out, rejects the task's scope, or reports a conflict, the tool fails and
+does not write legacy files.
+
+Beads maps `pending` and `planning` to open issues with PiTeams metadata,
+`in_progress` directly, and `completed` to closed. Plans, progress, and
+pending problems use namespaced metadata/comments. `deleted` is soft deletion
+in Beads, preserving history; legacy deletion removes the local task file.
+
+After Beads-cutover shutdown, read the preserved team configuration to obtain
+the absolute workspace, then query it directly:
+
+```sh
+bd --directory <taskWorkspace> --json list --label pi-teams:<team-name> --all --no-pager --limit 0
+bd --directory <taskWorkspace> show <beads-id> --long --include-comments --include-dependents
+bd --directory <taskWorkspace> graph --dot <beads-id> > task.dot
+bd --directory <taskWorkspace> graph --html <beads-id> > task.html
+```
+
+`--all` retains closed history in the list. `bd graph --all` is an open-work
+view, so graph a specific ID when closed dependencies matter.
+
+## Completion hook
+
+The supported hook is `.pi/team-hooks/task_completed.sh`, relative to the
+current Pi process working directory. When a task is completed, PiTeams passes
+the task record as JSON in the hook's first argument and sets `PI_TEAM` to the
+team name.
+
+Both task backends invoke this hook: the legacy store invokes it on a
+`completed` write, while `BeadsTaskStore` invokes it when an open task
+transitions to closed through completion. Hook errors are logged and do not
+reverse the task mutation, so the hook is notification/automation rather than
+a transactional quality gate.
+
+```sh
+#!/bin/sh
 # .pi/team-hooks/task_completed.sh
-
-TASK_DATA="$1"
-SUBJECT=$(echo "$TASK_DATA" | jq -r '.subject')
-
-echo "Running tests after task: $SUBJECT"
-npm test
+printf 'completed: %s\n' "$1" >> .pi/completions.log
 ```
 
-#### Notify Slack
+## Templates
 
-```bash
-#!/bin/bash
-# .pi/team-hooks/task_completed.sh
+Templates are discovered from global and project files:
 
-TASK_DATA="$1"
-SUBJECT=$(echo "$TASK_DATA" | jq -r '.subject')
-OWNER=$(echo "$TASK_DATA" | jq -r '.owner')
+- global teams: `~/.pi/teams.yaml` (with the historical
+  `~/.pi/agent/teams.yaml` fallback);
+- project teams: `.pi/teams.yaml`;
+- global agents: `~/.pi/agent/agents/*.md` or `SKILL.md` directories;
+- project agents: `.pi/agents/*.md` or `SKILL.md` directories.
 
-curl -X POST -H 'Content-type: application/json' \
-  --data "{\"text\":\"Task '$SUBJECT' completed by $OWNER\"}" \
-  "$SLACK_WEBHOOK_URL"
+Use the listing tools before creating a template-based team:
+
+```js
+list_predefined_teams()
+list_predefined_agents()
+create_predefined_team({
+  team_name: "review-team",
+  predefined_team: "security-review",
+  cwd: "/absolute/path/to/project"
+})
 ```
 
-#### Conditional Checks
+`create_predefined_team` attempts every agent and returns per-agent results;
+one missing or failed definition does not necessarily prevent other agents
+from being attempted. Agent definitions can provide prompts, models, thinking
+levels, and Pi tool allowlists.
 
-```bash
-#!/bin/bash
-# .pi/team-hooks/task_completed.sh
+To reuse a runtime team:
 
-TASK_DATA="$1"
-SUBJECT=$(echo "$TASK_DATA" | jq -r '.subject')
-
-# Only run full test suite for production-related tasks
-if [[ "$SUBJECT" == *"production"* ]] || [[ "$SUBJECT" == *"deploy"* ]]; then
-  npm run test:ci
-else
-  npm test
-fi
+```js
+list_runtime_teams()
+save_team_as_template({
+  team_name: "my-team",
+  template_name: "security-review",
+  scope: "project"
+})
 ```
 
----
+Saving requires at least one spawned teammate. `scope: "user"` (the default)
+writes under `~/.pi`; `scope: "project"` writes project-local definitions.
 
-## Best Practices
+## Terminal adapters
 
-### 1. Use Thinking Levels Wisely
+The adapter registry checks `tmux`, Zellij, cmux, iTerm2, WezTerm, then
+Windows Terminal. All can provide panes. Only cmux, iTerm2, WezTerm, and
+Windows Terminal report separate OS-window support, so window flags can fail
+on tmux or Zellij.
 
-- **`off`** - Simple tasks: formatting, moving code, renaming
-- **`minimal`** - Quick decisions: small refactors, straightforward bugfixes
-- **`low`** - Standard work: typical feature implementation, tests
-- **`medium`** - Complex work: architecture decisions, tricky bugs
-- **`high`** - Critical work: security reviews, major refactors, design specs
-- **`xhigh`** - Deepest available reasoning: architecture audits, thorny debugging, high-stakes review work
+- **tmux:** requires `TMUX`; pane kill and liveness are supported; no OS
+  windows.
+- **Zellij:** requires `ZELLIJ` outside tmux; panes use `--close-on-exit`,
+  explicit kill is a no-op, and synthetic pane liveness is best-effort.
+- **cmux:** requires `CMUX_SOCKET_PATH` or `CMUX_WORKSPACE_ID` outside tmux and
+  Zellij; it manages surfaces and OS windows through the `cmux` CLI.
+- **iTerm2:** requires macOS iTerm2 outside tmux and Zellij; AppleScript manages
+  panes and windows.
+- **WezTerm:** requires `WEZTERM_PANE` and a working `wezterm` CLI outside tmux
+  and Zellij; it can kill panes and closes a spawned window by killing its
+  panes.
+- **Windows Terminal:** requires Windows, `wt` at spawn time, and PowerShell.
+  Pane/window IDs are synthetic; direct terminal kill and reliable liveness
+  queries are unavailable. Process shutdown may use the tracked teammate PID,
+  but terminal cleanup and `check_teammate` liveness are advisory.
 
-### 2. Team Composition
+Run Pi in the terminal environment you intend to manage. If no adapter is
+detected, use task and messaging tools without spawning, or configure a
+supported adapter before spawning.
 
-Balanced teams typically include:
-- **1-2 high-thinking, high-model** agents for architecture and reviews
-- **Use `xhigh` sparingly** for the one teammate doing the hardest reasoning-heavy work
-- **2-3 low-thinking, fast-model** agents for implementation
-- **1 medium-thinking** agent for coordination
+## The 21 registered tools
 
-Example:
-```bash
-# Design/Review duo (expensive but thorough)
-spawn "architect" using "gpt-4o" with "xhigh" thinking
-spawn "reviewer" using "gpt-4o" with "medium" thinking
-
-# Implementation trio (fast and cheap)
-spawn "backend-dev" using "haiku" with "low" thinking
-spawn "frontend-dev" using "haiku" with "low" thinking
-spawn "test-writer" using "haiku" with "off" thinking
-```
-
-### 3. Plan Approval for High-Risk Changes
-
-Enable plan approval mode for:
-- Database schema changes
-- API contract changes
-- Security-related work
-- Performance-critical code
-
-Disable for:
-- Documentation updates
-- Test additions
-- Simple bug fixes
-
-### 4. Broadcast for Coordination
-
-Use broadcasts when:
-- API endpoints change
-- Database schemas change
-- Deployment happens
-- Team priorities shift
-
-### 5. Clear Task Descriptions
-
-Good task:
-```
-"Add password strength validation to the signup form. 
-Requirements: minimum 8 chars, at least one number and symbol.
-Use the zxcvbn library for strength calculation."
-```
-
-Bad task:
-```
-"Fix signup form"
-```
-
-### 6. Check Progress Regularly
-
-> **You:** "List all tasks"
-> **You:** "Check my inbox for messages"
-> **You:** "How is the team doing?"
-
-This helps you catch blockers early and provide feedback.
-
----
-
-## Troubleshooting
-
-### Teammate Not Responding
-
-**Problem**: A teammate is idle but not picking up messages.
-
-**Solution**:
-1. Check if they're still running:
-   > **You:** "Check on teammate named 'security-bot'"
-2. Check their inbox:
-   > **You:** "Read security-bot's inbox"
-3. Force kill and respawn if needed:
-   > **You:** "Force kill security-bot and respawn them"
-
-### tmux Pane Issues
-
-**Problem**: tmux panes don't close when killing teammates.
-
-**Solution**: Make sure you started pi inside a tmux session. If you started pi outside tmux, it won't work properly.
-
-```bash
-# Correct way
-tmux
-pi
-
-# Incorrect way
-pi  # Then try to use tmux commands
-```
-
-### Hook Not Running
-
-**Problem**: Your task_completed.sh script isn't executing.
-
-**Checklist**:
-1. File exists at `.pi/team-hooks/task_completed.sh`
-2. File is executable: `chmod +x .pi/team-hooks/task_completed.sh`
-3. Shebang line is present: `#!/bin/bash`
-4. Test manually: `.pi/team-hooks/task_completed.sh '{"test":"data"}'`
-
-### Model Errors
-
-**Problem**: "Model not found" or similar errors.
-
-**Solution**: Check the model name is correct and available in your pi config. Some model names vary between providers:
-
-- `gpt-4o` - OpenAI
-- `haiku` - Anthropic (usually `claude-3-5-haiku`)
-- `glm-4.7` - Zhipu AI
-
-Check your pi config for available models.
-
-### Data Location
-
-All team data is stored in:
-- `~/.pi/teams/<team-name>/` - Team configuration, member list
-- `~/.pi/tasks/<team-name>/` - Task files
-- `~/.pi/messages/<team-name>/` - Message history
-
-You can manually inspect these JSON files to debug issues.
-
-### iTerm2 Not Working
-
-**Problem**: iTerm2 splits aren't appearing.
-
-**Requirements**:
-1. You must be on macOS
-2. iTerm2 must be your terminal
-3. You must NOT be inside tmux or Zellij (iTerm2 detection only works as a fallback)
-
-**Alternative**: Use tmux or Zellij for more reliable pane management.
-
----
-
-## Inter-Agent Communication
-
-Teammates can message each other without your intervention:
-
-```
-Frontend Bot → Backend Bot: "What's the response format for /api/users?"
-Backend Bot → Frontend Bot: "Returns {id, name, email, created_at}"
-```
-
-This enables autonomous coordination. You can see these messages by:
-> **You:** "Read backend-bot's inbox"
-
----
-
-## Cleanup
-
-To remove all team data:
-
-```bash
-# Shut down team first
-> "Shut down the team named 'my-team'"
-
-# Then delete data directory
-rm -rf ~/.pi/teams/my-team/
-rm -rf ~/.pi/tasks/my-team/
-rm -rf ~/.pi/messages/my-team/
-```
-
-Or use the delete command:
-> **You:** "Delete the team named 'my-team'"
+`team_create`, `spawn_teammate`, `spawn_lead_window`, `send_message`,
+`broadcast_message`, `read_inbox`, `task_create`, `task_submit_plan`,
+`task_evaluate_plan`, `task_list`, `task_update`, `team_shutdown`,
+`cleanup_agent_sessions`, `task_read`, `check_teammate`,
+`process_shutdown_approved`, `list_predefined_teams`, `list_predefined_agents`,
+`create_predefined_team`, `save_team_as_template`, and `list_runtime_teams`.

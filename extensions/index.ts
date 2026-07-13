@@ -360,6 +360,16 @@ export default function (pi: ExtensionAPI) {
   // Track whether lead inbox polling has been started (to avoid duplicates)
   let leadPollingStarted = false;
   let sessionCtx: any = null;
+  let leadPollingTimer: ReturnType<typeof setInterval> | null = null;
+  let teammatePollingTimer: ReturnType<typeof setInterval> | null = null;
+
+  function stopInboxPolling() {
+    if (leadPollingTimer) clearInterval(leadPollingTimer);
+    if (teammatePollingTimer) clearInterval(teammatePollingTimer);
+    leadPollingTimer = null;
+    teammatePollingTimer = null;
+    leadPollingStarted = false;
+  }
 
   /**
    * Start inbox polling for the team lead.
@@ -370,23 +380,27 @@ export default function (pi: ExtensionAPI) {
     if (leadPollingStarted || isTeammate || !sessionCtx) return;
     leadPollingStarted = true;
 
-    setInterval(async () => {
+    leadPollingTimer = setInterval(async () => {
       if (!teamName) return;
-      if (sessionCtx.isIdle()) {
-        try {
+      try {
+        // Pi invalidates extension contexts after shutdown, reload, or session
+        // replacement. The idle check itself can throw, so guard it too.
+        if (sessionCtx?.isIdle()) {
           const unread = await messaging.readInbox(teamName, agentName, true, false);
           if (unread.length > 0) {
             pi.sendUserMessage(`I have ${unread.length} new message(s) in my inbox. Reading them now...`);
           }
-        } catch {
-          // Ignore errors for lead polling
         }
+      } catch {
+        // A stale ctx or transient inbox failure must not become an uncaught
+        // timer exception after the Pi session has settled.
       }
     }, 30000);
   }
 
   pi.on("session_start", async (_event, ctx) => {
     paths.ensureDirs();
+    stopInboxPolling();
     sessionCtx = ctx;
 
     if (isTeammate) {
@@ -422,9 +436,9 @@ export default function (pi: ExtensionAPI) {
 
       // Inbox polling for teammates
       if (teamName) {
-        setInterval(async () => {
-          if (ctx.isIdle()) {
-            try {
+        teammatePollingTimer = setInterval(async () => {
+          try {
+            if (sessionCtx === ctx && ctx.isIdle()) {
               const unread = await messaging.readInbox(teamName!, agentName, true, false);
               await runtime.writeRuntimeStatus(teamName!, agentName, {
                 lastHeartbeatAt: Date.now(),
@@ -432,7 +446,9 @@ export default function (pi: ExtensionAPI) {
               if (unread.length > 0) {
                 pi.sendUserMessage(`I have ${unread.length} new message(s) in my inbox. Reading them now...`);
               }
-            } catch (e) {
+            }
+          } catch (e) {
+            if (sessionCtx === ctx) {
               await runtime.writeRuntimeStatus(teamName!, agentName, {
                 lastHeartbeatAt: Date.now(),
                 lastError: runtime.createRuntimeError(e),
@@ -446,6 +462,11 @@ export default function (pi: ExtensionAPI) {
       ctx.ui.setStatus("pi-teams", `Lead @ ${teamName}`);
       startLeadInboxPolling();
     }
+  });
+
+  pi.on("session_shutdown", async () => {
+    stopInboxPolling();
+    sessionCtx = null;
   });
 
   pi.on("turn_start", async (_event, ctx) => {
