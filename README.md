@@ -15,8 +15,12 @@ capabilities.
 ## Installation
 
 ```sh
-pi install npm:pi-teams
+pi install git:github.com/deephbz/pi-teams@v0.10.0-hypercarrier.0
 ```
+
+This is the HyperCarrier fork. `npm:pi-teams` currently resolves to the
+upstream package and does not include this fork's Beads and session-recovery
+work.
 
 ## Quick start
 

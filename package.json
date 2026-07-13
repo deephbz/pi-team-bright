@@ -4,7 +4,7 @@
   "description": "Agent teams for pi, ported from claude-code-teams-mcp",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/burggraf/pi-teams.git"
+    "url": "git+https://github.com/deephbz/pi-teams.git"
   },
   "author": "Mark Burggraf",
   "license": "MIT",
@@ -32,7 +32,9 @@
     "skills",
     "src",
     "package.json",
-    "README.md"
+    "README.md",
+    "docs/guide.md",
+    "docs/reference.md"
   ],
   "dependencies": {},
   "peerDependencies": {

@@ -9,8 +9,11 @@ extension registers exactly 21 tools; the complete parameter reference is in
 Install the package in Pi:
 
 ```sh
-pi install npm:pi-teams
+pi install git:github.com/deephbz/pi-teams@v0.10.0-hypercarrier.0
 ```
+
+This guide describes the HyperCarrier fork; `npm:pi-teams` is the separate
+upstream package and does not yet provide this release.
 
 Create a team, then spawn teammates with absolute working directories:
 
