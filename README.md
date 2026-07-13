@@ -60,6 +60,10 @@ runtime health and `task_list`/`task_read` for task state.
 - **Shutdown:** `process_shutdown_approved` handles one teammate;
   `team_shutdown` handles the team. `cleanup_agent_sessions` can clean old
   orphaned Pi agent-session folders independently.
+- **Process recovery:** after a killed Pi process, resume the same Pi session
+  with `pi -r`. A resumed lead reclaims its team by the durable Pi session
+  file; a resumed tmux teammate must retain `PI_TEAM_NAME` and `PI_AGENT_NAME`
+  so PiTeams can refresh its tracked pane and runtime identity.
 - **Templates:** `list_predefined_teams`, `list_predefined_agents`,
   `create_predefined_team`, `save_team_as_template`, and `list_runtime_teams`
   support reusable team definitions.

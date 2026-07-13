@@ -189,25 +189,26 @@ function resolveModelWithProvider(modelName: string): string | null {
 }
 
 /**
- * Find the team this session is the lead for (if any).
- * Checks the lead-session.json file to match PID.
+ * Find the team this session leads. A Pi session file is durable across
+ * `pi -r`; the PID is only a backward-compatible same-process fallback.
  */
-function findLeadTeamForSession(): string | null {
+function findLeadTeamForSession(piSessionFile?: string): string | null {
   try {
     const teamsDir = paths.TEAMS_DIR;
     if (!fs.existsSync(teamsDir)) return null;
 
     for (const teamDir of fs.readdirSync(teamsDir)) {
-      const sessionFile = paths.leadSessionPath(teamDir);
-      if (fs.existsSync(sessionFile)) {
-        try {
-          const session = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));
-          if (session.pid === process.pid) {
-            return teamDir;
-          }
-        } catch {
-          // Ignore corrupted session files
-        }
+      const recordPath = paths.leadSessionPath(teamDir);
+      if (!fs.existsSync(recordPath)) continue;
+      try {
+        const session = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as {
+          pid?: unknown;
+          sessionFile?: unknown;
+        };
+        if (piSessionFile && session.sessionFile === piSessionFile) return teamDir;
+        if (session.pid === process.pid) return teamDir;
+      } catch {
+        // Ignore corrupted session files.
       }
     }
     return null;
@@ -216,15 +217,14 @@ function findLeadTeamForSession(): string | null {
   }
 }
 
-/**
- * Register this session as the lead for a team.
- */
-function registerLeadSession(teamName: string) {
-  const sessionFile = paths.leadSessionPath(teamName);
-  const dir = path.dirname(sessionFile);
+/** Register the current process and durable Pi session as a team's lead. */
+function registerLeadSession(teamName: string, piSessionFile?: string) {
+  const recordPath = paths.leadSessionPath(teamName);
+  const dir = path.dirname(recordPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(sessionFile, JSON.stringify({
+  fs.writeFileSync(recordPath, JSON.stringify({
     pid: process.pid,
+    sessionFile: piSessionFile,
     startedAt: Date.now(),
   }));
 }
@@ -403,10 +403,22 @@ export default function (pi: ExtensionAPI) {
     stopInboxPolling();
     sessionCtx = ctx;
 
+    // A fresh process has no lead environment variables. Match its resumed Pi
+    // session to the durable lead record before restoring lead behavior.
+    const piSessionFile = ctx.sessionManager?.getSessionFile?.();
+    if (!isTeammate && !teamName) {
+      teamName = findLeadTeamForSession(piSessionFile);
+    }
+
     if (isTeammate) {
       if (teamName) {
         const pidFile = path.join(paths.teamDir(teamName), `${agentName}.pid`);
         fs.writeFileSync(pidFile, process.pid.toString());
+        // A resumed tmux process receives a new pane ID. Persist it before
+        // health checks so fresh runtime telemetry is never tied to its old pane.
+        if (process.env.TMUX_PANE) {
+          await teams.updateMember(teamName, agentName, { tmuxPaneId: process.env.TMUX_PANE });
+        }
         await runtime.writeRuntimeStatus(teamName, agentName, {
           pid: process.pid,
           startedAt: Date.now(),
@@ -458,7 +470,14 @@ export default function (pi: ExtensionAPI) {
         }, 30000);
       }
     } else if (teamName) {
-      // Lead reconnecting to an existing team
+      // Lead reconnecting to an existing team, including a new `pi -r`
+      // process. Refresh both volatile process identity and tmux location.
+      if (teams.teamExists(teamName)) {
+        registerLeadSession(teamName, piSessionFile);
+        if (process.env.TMUX_PANE) {
+          await teams.updateMember(teamName, "team-lead", { tmuxPaneId: process.env.TMUX_PANE });
+        }
+      }
       ctx.ui.setStatus("pi-teams", `Lead @ ${teamName}`);
       startLeadInboxPolling();
     }
@@ -560,8 +579,8 @@ export default function (pi: ExtensionAPI) {
       }
       
       const config = teams.createTeam(params.team_name, "local-session", "lead-agent", params.description, params.default_model, params.separate_windows);
-      // Register this session as the lead so it can receive inbox messages
-      registerLeadSession(params.team_name);
+      // Register this session as the lead so it can receive inbox messages.
+      registerLeadSession(params.team_name, ctx.sessionManager.getSessionFile());
       // Update teamName and start inbox polling for the lead
       teamName = params.team_name;
       startLeadInboxPolling();
@@ -1183,7 +1202,7 @@ export default function (pi: ExtensionAPI) {
 
       // Create the team
       const config = teams.createTeam(params.team_name, "local-session", "lead-agent", `Predefined team: ${params.predefined_team}`, params.default_model, params.separate_windows);
-      registerLeadSession(params.team_name);
+      registerLeadSession(params.team_name, ctx.sessionManager.getSessionFile());
       // Update teamName and start inbox polling for the lead
       teamName = params.team_name;
       startLeadInboxPolling();

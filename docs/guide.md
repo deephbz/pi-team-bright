@@ -40,6 +40,25 @@ read_inbox({ team_name: "my-team" })
 `check_teammate` combines terminal liveness, unread messages, startup timing,
 and heartbeat telemetry. It does not inspect whether a task is complete.
 
+## Recovering a killed Pi process
+
+A process kill is not a PiTeams shutdown. To resume a lead, start `pi -r` in
+its project directory and select the lead's prior Pi session. PiTeams matches
+the selected durable session file, updates the lead PID and tmux pane, and
+restores lead inbox polling.
+
+To resume a tmux teammate whose pane exited, create a new pane with the same
+team and agent environment, then run `pi -r` and select that teammate's prior
+session:
+
+```sh
+env PI_TEAM_NAME=my-team PI_AGENT_NAME=reviewer pi -r
+```
+
+PiTeams refreshes that member's tracked tmux pane and runtime record during
+startup. This preserves the team roster and transient inboxes; it does not
+replay missed agent work or make a killed process a graceful shutdown.
+
 ## A task workflow
 
 Create first, then read/list and make one update at a time:

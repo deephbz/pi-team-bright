@@ -29,6 +29,16 @@ also polls while idle. A teammate's `check_teammate` health is derived from
 terminal liveness, inbox state, startup timing, and runtime heartbeat; it is
 not task status.
 
+## Process recovery
+
+A killed Pi process is not a PiTeams shutdown. Resume the same lead session
+with `pi -r`; PiTeams matches its durable Pi session file, then refreshes the
+lead PID, tmux pane, and inbox polling. Resume a killed tmux teammate in a new
+pane with its original `PI_TEAM_NAME` and `PI_AGENT_NAME`, then use `pi -r` to
+select its prior Pi session. Startup refreshes that member's tracked pane and
+runtime identity, so health and inbox communication continue to use the
+existing roster.
+
 ## Team and teammate tools
 
 ### `team_create`
