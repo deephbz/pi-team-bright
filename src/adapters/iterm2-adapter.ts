@@ -205,12 +205,13 @@ end tell`;
       const configFile = paths.configPath(teamName);
       const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
       const member = config.members?.find((m: any) => m.name === agentName);
+      const paneId = member?.tmuxPaneId;
       if (
-        member?.tmuxPaneId &&
-        member.tmuxPaneId.startsWith("iterm_") &&
-        !member.tmuxPaneId.startsWith("iterm_win_")
+        typeof paneId === "string" &&
+        paneId.startsWith("iterm_") &&
+        !paneId.startsWith("iterm_win_")
       ) {
-        this.cachedOwnSessionId = member.tmuxPaneId.replace("iterm_", "");
+        this.cachedOwnSessionId = paneId.replace("iterm_", "");
         return this.cachedOwnSessionId;
       }
     } catch {

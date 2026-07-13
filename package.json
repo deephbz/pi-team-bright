@@ -1,6 +1,6 @@
 {
   "name": "pi-teams",
-  "version": "0.10.0-hypercarrier.0",
+  "version": "0.10.0-hypercarrier.1",
   "description": "Agent teams for pi, ported from claude-code-teams-mcp",
   "repository": {
     "type": "git",
@@ -23,7 +23,8 @@
     "tmux"
   ],
   "scripts": {
-    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && vitest run",
     "migrate:tasks": "ts-node --transpile-only src/cli/migrate-tasks.ts"
   },
   "main": "extensions/index.ts",
