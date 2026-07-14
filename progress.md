@@ -1,4 +1,8 @@
-# Progress Log: Separate Windows Mode Implementation
+# Archived progress log: superseded separate-windows implementation
+
+> Historical implementation notes only. This file doesn't describe the current
+> public API. In particular, `spawn_lead_window` was removed; use
+> `docs/reference.md` as the authoritative tool contract.
 
 ## 2026-02-26
 

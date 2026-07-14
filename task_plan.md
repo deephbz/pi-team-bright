@@ -1,4 +1,8 @@
-# Implementation Plan: Separate Windows Mode for pi-teams
+# Archived implementation plan: superseded separate-windows design
+
+> Historical design notes only. This plan isn't the current product contract.
+> In particular, `spawn_lead_window` was removed; use `docs/reference.md` as the
+> authoritative tool and terminal-adapter reference.
 
 ## Goal
 Implement the ability to open team members (including the team lead) in separate OS windows instead of panes, with window titles set to "team-name: agent-name" format.

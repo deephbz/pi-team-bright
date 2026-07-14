@@ -75,8 +75,9 @@ describe("runtime status", () => {
 
   describe("deleteRuntimeStatus", () => {
     it("deletes existing runtime status", async () => {
-      await writeRuntimeStatus(teamName, agentName, { ready: true });
-      const deleted = await deleteRuntimeStatus(teamName, agentName);
+      const expected = { membershipId: "membership-runtime-test", pid: 123, startedAt: 1_000 };
+      await writeRuntimeStatus(teamName, agentName, { ...expected, ready: true }, expected.membershipId);
+      const deleted = await deleteRuntimeStatus(teamName, agentName, expected);
       expect(deleted).toBe(true);
 
       const runtime = await readRuntimeStatus(teamName, agentName);
@@ -84,8 +85,34 @@ describe("runtime status", () => {
     });
 
     it("returns false when status does not exist", async () => {
-      const deleted = await deleteRuntimeStatus(teamName, "nonexistent");
+      const deleted = await deleteRuntimeStatus(teamName, "nonexistent", {
+        membershipId: "membership-missing",
+        pid: 123,
+        startedAt: 1_000,
+      });
       expect(deleted).toBe(false);
+    });
+
+    it("does not delete a newer process generation of the same Membership", async () => {
+      const membershipId = "membership-runtime-test";
+      await writeRuntimeStatus(teamName, agentName, {
+        pid: 456,
+        startedAt: 2_000,
+        ready: false,
+      }, membershipId);
+
+      const deleted = await deleteRuntimeStatus(teamName, agentName, {
+        membershipId,
+        pid: 123,
+        startedAt: 1_000,
+      });
+
+      expect(deleted).toBe(false);
+      expect(await readRuntimeStatus(teamName, agentName)).toMatchObject({
+        membershipId,
+        pid: 456,
+        startedAt: 2_000,
+      });
     });
   });
 

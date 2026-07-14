@@ -7,11 +7,14 @@ import * as tasks from "../src/utils/tasks";
 import * as messaging from "../src/utils/messaging";
 import {
   DirectMessageDelivery,
-  directMessageDeliveryEnabled,
   messagePollMs,
 } from "../src/utils/message-delivery";
+import {
+  TaskChangeDelivery,
+  taskPollMs,
+} from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
-import { Member } from "../src/utils/models";
+import { Member, TaskFile } from "../src/utils/models";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
 import * as predefined from "../src/utils/predefined-teams";
@@ -193,33 +196,36 @@ function resolveModelWithProvider(modelName: string): string | null {
   return null;
 }
 
-/**
- * Find the team this session leads. A Pi session file is durable across
- * `pi -r`; the PID is only a backward-compatible same-process fallback.
- */
+/** Find the team this durable Pi Session leads. */
 function findLeadTeamForSession(piSessionFile?: string): string | null {
-  try {
-    const teamsDir = paths.TEAMS_DIR;
-    if (!fs.existsSync(teamsDir)) return null;
+  const teamsDir = paths.TEAMS_DIR;
+  if (!fs.existsSync(teamsDir)) return null;
 
-    for (const teamDir of fs.readdirSync(teamsDir)) {
-      const recordPath = paths.leadSessionPath(teamDir);
+  const sessionMatches: string[] = [];
+  for (const teamDir of fs.readdirSync(teamsDir)) {
+    try {
+      const recordPath = paths.configPath(teamDir);
       if (!fs.existsSync(recordPath)) continue;
-      try {
-        const session = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as {
-          pid?: unknown;
-          sessionFile?: unknown;
-        };
-        if (piSessionFile && session.sessionFile === piSessionFile) return teamDir;
-        if (session.pid === process.pid) return teamDir;
-      } catch {
-        // Ignore corrupted session files.
-      }
+      const config = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as {
+        members?: Member[];
+      };
+      const lead = [...(config.members || [])].reverse().find(
+        (member) => member.name === "team-lead" && member.isActive !== false,
+      );
+      if (piSessionFile && lead?.sessionFile === piSessionFile) sessionMatches.push(teamDir);
+    } catch {
+      // Ignore corrupted session files.
     }
-    return null;
-  } catch {
-    return null;
   }
+
+  if (sessionMatches.length > 1) {
+    throw new Error(
+      `Ambiguous lead Session binding: this durable Pi Session is registered to multiple teams (${sessionMatches.join(", ")}). ` +
+      "Refusing to choose by filesystem order. Set PI_TEAM_NAME to the intended current team before resuming, or repair the stale lead-session records.",
+    );
+  }
+  if (sessionMatches.length === 1) return sessionMatches[0];
+  return null;
 }
 
 /** Register the current process and durable Pi session as a team's lead. */
@@ -234,95 +240,29 @@ function registerLeadSession(teamName: string, piSessionFile?: string) {
   }));
 }
 
-/**
- * Check if a process with the given PID is still alive.
- */
-function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0); // Signal 0 = check if process exists
-    return true;
-  } catch {
-    return false;
-  }
+export interface AgentSessionCleanupInspection {
+  candidates: string[];
+  cleaned: 0;
+  reason: string;
 }
 
 /**
- * Clean up a stale team if the lead process is dead.
- * Kills all teammate panes/windows and removes all state files.
- * Returns true if cleanup was performed, false otherwise.
+ * Age can identify review candidates, but cannot prove a Pi-core session is
+ * orphaned. Report candidates without deleting until liveness evidence exists.
  */
-function cleanupStaleTeam(teamName: string, terminal: any): boolean {
-  const sessionFile = paths.leadSessionPath(teamName);
-  const configFile = paths.configPath(teamName);
-  
-  if (!fs.existsSync(sessionFile) || !fs.existsSync(configFile)) {
-    return false;
+export function inspectAgentSessionCleanup(
+  maxAgeMs: number = 24 * 60 * 60 * 1000,
+  agentTeamsDir: string = path.join(os.homedir(), ".pi", "agent", "teams"),
+): AgentSessionCleanupInspection {
+  if (!Number.isFinite(maxAgeMs) || maxAgeMs < 0) {
+    throw new Error("max_age_hours must be a finite non-negative number.");
   }
-  
-  try {
-    const session = JSON.parse(fs.readFileSync(sessionFile, "utf-8"));
-    
-    // Only cleanup if the lead PID is actually dead
-    if (session.pid && !isPidAlive(session.pid)) {
-      let preservesBeadsAuthority = false;
-      // Read config to get member info for cleanup
-      try {
-        const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
-        preservesBeadsAuthority = config.taskBackend === "beads";
-        
-        // Kill all teammate panes/windows
-        for (const member of config.members || []) {
-          if (member.name === "team-lead") continue;
-          
-          // Kill via PID file
-          const pidFile = path.join(paths.teamDir(teamName), `${member.name}.pid`);
-          if (fs.existsSync(pidFile)) {
-            try {
-              const pid = fs.readFileSync(pidFile, "utf-8").trim();
-              process.kill(parseInt(pid), "SIGKILL");
-              fs.unlinkSync(pidFile);
-            } catch {}
-          }
-          
-          // Kill via terminal adapter
-          if (terminal) {
-            if (member.windowId) {
-              try { terminal.killWindow(member.windowId); } catch {}
-            }
-            if (member.tmuxPaneId) {
-              try { terminal.kill(member.tmuxPaneId); } catch {}
-            }
-          }
-        }
-      } catch {}
-      
-      // Beads cutover is durable: preserve the team config and legacy task
-      // files as authority/evidence. Legacy teams keep historical cleanup.
-      if (!preservesBeadsAuthority) {
-        const teamDirectory = paths.teamDir(teamName);
-        if (fs.existsSync(teamDirectory)) fs.rmSync(teamDirectory, { recursive: true });
-        const tasksDirectory = paths.taskDir(teamName);
-        if (fs.existsSync(tasksDirectory)) fs.rmSync(tasksDirectory, { recursive: true });
-      }
-      
-      return true;
-    }
-  } catch {}
-  
-  return false;
-}
-
-/**
- * Clean up orphaned agent session folders from ~/.pi/agent/teams/
- * These are created by the pi core system when agents are spawned.
- * We remove folders that are older than 24 hours to avoid deleting active sessions.
- * Returns the number of folders cleaned up.
- */
-function cleanupAgentSessionFolders(maxAgeMs: number = 24 * 60 * 60 * 1000): number {
-  const agentTeamsDir = path.join(os.homedir(), ".pi", "agent", "teams");
-  if (!fs.existsSync(agentTeamsDir)) return 0;
-
-  let cleaned = 0;
+  const report: AgentSessionCleanupInspection = {
+    candidates: [],
+    cleaned: 0,
+    reason: "Age alone cannot prove a Pi-core agent session is orphaned; no folders were deleted.",
+  };
+  if (!fs.existsSync(agentTeamsDir)) return report;
   const now = Date.now();
 
   for (const dir of fs.readdirSync(agentTeamsDir)) {
@@ -338,91 +278,128 @@ function cleanupAgentSessionFolders(maxAgeMs: number = 24 * 60 * 60 * 1000): num
       const config = JSON.parse(fs.readFileSync(configFile, "utf-8"));
       const createdAt = config.createdAt ? new Date(config.createdAt).getTime() : 0;
 
-      // If the folder is older than maxAgeMs, delete it
+      // Old age is only a review signal, never deletion authority.
       if (createdAt > 0 && (now - createdAt) > maxAgeMs) {
-        fs.rmSync(sessionDir, { recursive: true });
-        cleaned++;
+        report.candidates.push(dir);
       }
     } catch {
       // Ignore errors for individual folders
     }
   }
 
-  return cleaned;
+  return report;
 }
 
 export default function (pi: ExtensionAPI) {
   let isTeammate = !!process.env.PI_AGENT_NAME;
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
+  const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
 
   // For leads without PI_TEAM_NAME, check if we're registered as lead for a team
   const detectedTeamName = envTeamName || findLeadTeamForSession();
   let teamName = detectedTeamName;
+  let currentMembershipId: string | undefined;
 
   const terminal = getTerminalAdapter();
 
-  // Track whether lead inbox polling has been started (to avoid duplicates)
-  let leadPollingStarted = false;
-  let sessionCtx: any = null;
-  let leadPollingTimer: ReturnType<typeof setInterval> | null = null;
-  let teammatePollingTimer: ReturnType<typeof setInterval> | null = null;
   let directMessageDelivery: DirectMessageDelivery | null = null;
+  let taskChangeDelivery: TaskChangeDelivery | null = null;
   let directMessageSessionEligible = true;
+  let taskChangeSessionEligible = true;
 
-  function stopInboxPolling() {
-    if (leadPollingTimer) clearInterval(leadPollingTimer);
-    if (teammatePollingTimer) clearInterval(teammatePollingTimer);
-    leadPollingTimer = null;
-    teammatePollingTimer = null;
-    leadPollingStarted = false;
+  function taskMutationContent(
+    task: TaskFile,
+    appliedOperations: string[],
+    warnings: string[] = [],
+  ): string {
+    return JSON.stringify({
+      task: {
+        id: task.id,
+        status: task.status,
+        owner: task.owner ?? null,
+        version: task.version ?? null,
+      },
+      appliedOperations,
+      warnings,
+    });
+  }
+
+  function stopDeliveries() {
     directMessageDelivery?.stop();
     directMessageDelivery = null;
+    taskChangeDelivery?.stop();
+    taskChangeDelivery = null;
+  }
+
+  async function assertCurrentSessionBinding(ctx: any, requestedTeam: string): Promise<Member> {
+    const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+    if (!sessionFile) throw new Error("A durable Pi Session is required for every team-scoped tool operation.");
+    return teams.assertCurrentSessionBinding(requestedTeam, agentName, sessionFile);
+  }
+
+  async function writeCurrentTeammateRuntime(ctx: any, updates: Partial<runtime.AgentRuntimeStatus>) {
+    if (!isTeammate || !teamName) return;
+    const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+    if (!sessionFile) throw new Error("A durable Pi Session is required for teammate runtime updates.");
+    const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+    if (!member.membershipId || (currentMembershipId && currentMembershipId !== member.membershipId)) {
+      throw new Error(`Runtime update rejected for stale Membership of ${agentName} on team ${teamName}.`);
+    }
+    currentMembershipId = member.membershipId;
+    await runtime.writeRuntimeStatus(teamName, agentName, updates, member.membershipId);
   }
 
   async function startDirectMessageDelivery(ctx: any) {
     if (!teamName || !directMessageSessionEligible) return;
+    const sessionFile = ctx.sessionManager?.getSessionFile?.();
+    if (!sessionFile) return;
+    const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+    if (!member.membershipId) throw new Error(`Current Membership for ${agentName} has no membershipId.`);
+    currentMembershipId = member.membershipId;
     directMessageDelivery?.stop();
     directMessageDelivery = new DirectMessageDelivery(pi, {
       teamName,
       recipient: agentName,
+      membershipId: member.membershipId,
+      sessionFile,
       pollMs: messagePollMs(),
     });
     await directMessageDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
   }
 
-  /**
-   * Start inbox polling for the team lead.
-   * Called when a team is created or when the lead reconnects to an existing team.
-   * Requires sessionCtx to be set (from session_start).
-   */
-  function startLeadInboxPolling() {
-    if (leadPollingStarted || isTeammate || !sessionCtx) return;
-    leadPollingStarted = true;
-
-    leadPollingTimer = setInterval(async () => {
-      if (!teamName) return;
-      try {
-        // Pi invalidates extension contexts after shutdown, reload, or session
-        // replacement. The idle check itself can throw, so guard it too.
-        if (sessionCtx?.isIdle()) {
-          const unread = await messaging.readInbox(teamName, agentName, true, false);
-          if (unread.length > 0) {
-            pi.sendUserMessage(`I have ${unread.length} new message(s) in my inbox. Reading them now...`);
-          }
-        }
-      } catch {
-        // A stale ctx or transient inbox failure must not become an uncaught
-        // timer exception after the Pi session has settled.
-      }
-    }, 30000);
+  async function startTaskChangeDelivery(ctx: any) {
+    if (!teamName || !taskChangeSessionEligible) return;
+    const sessionFile = ctx.sessionManager?.getSessionFile?.();
+    if (!sessionFile) return;
+    const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+    if (!member.membershipId) throw new Error(`Current Membership for ${agentName} has no membershipId.`);
+    taskChangeDelivery?.stop();
+    taskChangeDelivery = new TaskChangeDelivery(pi, {
+      teamName,
+      recipient: agentName,
+      membershipId: member.membershipId,
+      sessionFile,
+      pollMs: taskPollMs(),
+    });
+    await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
   }
 
   pi.on("session_start", async (event, ctx) => {
     paths.ensureDirs();
-    stopInboxPolling();
-    sessionCtx = ctx;
+    stopDeliveries();
     directMessageSessionEligible = event.reason !== "fork";
+    taskChangeSessionEligible = event.reason !== "fork";
+
+    if (event.reason === "fork") {
+      // A fork is a new Session identity, not a continuation of the source
+      // member. Keep it unbound until an explicit team_create/rebind action.
+      isTeammate = false;
+      agentName = "unbound-session";
+      teamName = null;
+      currentMembershipId = undefined;
+      return;
+    }
 
     // A fresh `pi -r` process has no teammate environment variables. A
     // teammate's first startup persists its Pi session file, which is enough
@@ -434,6 +411,7 @@ export default function (pi: ExtensionAPI) {
         isTeammate = true;
         agentName = resumedMember.member.name;
         teamName = resumedMember.teamName;
+        currentMembershipId = resumedMember.member.membershipId;
       }
     }
     // A fresh lead process has no lead environment variables either. Match
@@ -442,33 +420,39 @@ export default function (pi: ExtensionAPI) {
       teamName = findLeadTeamForSession(piSessionFile);
     }
 
+    if (envTeamName && !teams.teamExists(envTeamName)) {
+      throw new Error(
+        `Explicit PI_TEAM_NAME '${envTeamName}' does not name a current team. ` +
+        "Refusing implicit fallback or team-state creation; choose an existing team or create it explicitly.",
+      );
+    }
+
     if (isTeammate) {
-      let firstDurableSessionBinding = false;
       if (teamName) {
-        if (piSessionFile && event.reason !== "fork") {
-          const config = await teams.readConfig(teamName);
-          const currentMember = config.members.find(member => member.name === agentName);
-          firstDurableSessionBinding = !currentMember?.sessionFile;
-        }
-        const pidFile = path.join(paths.teamDir(teamName), `${agentName}.pid`);
-        fs.writeFileSync(pidFile, process.pid.toString());
-        // Persist the durable session identity on initial startup and replace
-        // any stale tmux pane before health checks on a later `pi -r`.
-        const memberUpdates: Partial<Member> = {};
-        // A fork is a new Session identity. It must not replace the source
-        // teammate's durable binding, even though the process environment is inherited.
-        if (piSessionFile && event.reason !== "fork") memberUpdates.sessionFile = piSessionFile;
-        if (process.env.TMUX_PANE) memberUpdates.tmuxPaneId = process.env.TMUX_PANE;
-        if (Object.keys(memberUpdates).length > 0) {
-          await teams.updateMember(teamName, agentName, memberUpdates);
-        }
-        await runtime.writeRuntimeStatus(teamName, agentName, {
-          pid: process.pid,
-          startedAt: Date.now(),
-          lastHeartbeatAt: Date.now(),
-          ready: false,
-          lastError: undefined,
+        if (!piSessionFile) throw new Error("Teammate startup requires a durable Pi Session file.");
+        const candidate = await teams.currentMembership(teamName, agentName);
+        const bound = await teams.withMembershipMutationLease(teamName, candidate.membershipId!, async () => {
+          const current = await teams.bindMemberSession(
+            teamName!,
+            agentName,
+            piSessionFile,
+            envLaunchId,
+            process.env.TMUX_PANE ? { tmuxPaneId: process.env.TMUX_PANE } : {},
+            candidate.membershipId,
+          );
+          // Process-generation publication is part of the lifecycle transition:
+          // shutdown uses the same exact-Membership lease, so it observes either
+          // the old generation or this complete replacement, never an interleave.
+          await runtime.writeRuntimeStatus(teamName!, agentName, {
+            pid: process.pid,
+            startedAt: Date.now(),
+            lastHeartbeatAt: Date.now(),
+            ready: false,
+            lastError: undefined,
+          }, current.membershipId);
+          return current;
         });
+        currentMembershipId = bound.membershipId;
       }
       ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
       ctx.ui.setStatus("00-pi-teams", `[${agentName.toUpperCase()}]`);
@@ -485,64 +469,51 @@ export default function (pi: ExtensionAPI) {
         setTimeout(setIt, 5000);
       }
 
-      if (!directMessageDeliveryEnabled() && firstDurableSessionBinding) {
-        setTimeout(() => {
-          if (sessionCtx === ctx) {
-            pi.sendUserMessage(`I am starting my work as '${agentName}' on team '${teamName}'. Checking my inbox for instructions...`);
-          }
-        }, 1000);
-      }
-
-      // Inbox polling for teammates
-      if (teamName && directMessageDeliveryEnabled()) {
+      if (teamName) {
         await startDirectMessageDelivery(ctx);
-      } else if (teamName) {
-        teammatePollingTimer = setInterval(async () => {
-          try {
-            if (sessionCtx === ctx && ctx.isIdle()) {
-              const unread = await messaging.readInbox(teamName!, agentName, true, false);
-              await runtime.writeRuntimeStatus(teamName!, agentName, {
-                lastHeartbeatAt: Date.now(),
-              });
-              if (unread.length > 0) {
-                pi.sendUserMessage(`I have ${unread.length} new message(s) in my inbox. Reading them now...`);
-              }
-            }
-          } catch (e) {
-            if (sessionCtx === ctx) {
-              await runtime.writeRuntimeStatus(teamName!, agentName, {
-                lastHeartbeatAt: Date.now(),
-                lastError: runtime.createRuntimeError(e),
-              });
-            }
-          }
-        }, 30000);
+        await startTaskChangeDelivery(ctx);
       }
     } else if (teamName) {
+      if (!piSessionFile) throw new Error("Lead resume requires a durable Pi Session file.");
       // Lead reconnecting to an existing team, including a new `pi -r`
       // process. Refresh both volatile process identity and tmux location.
       if (teams.teamExists(teamName)) {
+        const lead = await teams.assertCurrentSessionBinding(teamName, "team-lead", piSessionFile);
+        currentMembershipId = lead.membershipId;
         registerLeadSession(teamName, piSessionFile);
         if (process.env.TMUX_PANE) {
-          await teams.updateMember(teamName, "team-lead", { tmuxPaneId: process.env.TMUX_PANE });
+          await teams.updateMembership(teamName, lead.membershipId!, { tmuxPaneId: process.env.TMUX_PANE });
         }
       }
       ctx.ui.setStatus("pi-teams", `Lead @ ${teamName}`);
-      if (directMessageDeliveryEnabled()) {
-        await startDirectMessageDelivery(ctx);
-      } else {
-        startLeadInboxPolling();
-      }
+      await startDirectMessageDelivery(ctx);
+      await startTaskChangeDelivery(ctx);
     }
   });
 
   pi.on("session_shutdown", async () => {
-    stopInboxPolling();
-    sessionCtx = null;
+    stopDeliveries();
   });
 
   pi.on("context", async (event) => {
     await directMessageDelivery?.observeContext(event.messages);
+    await taskChangeDelivery?.observeContext(event.messages);
+  });
+
+  pi.on("turn_end", async (event, ctx) => {
+    const stopReason = event.message?.role === "assistant" ? event.message.stopReason : undefined;
+    if (stopReason === "error" || stopReason === "aborted") return;
+    if (isTeammate && teamName) {
+      await writeCurrentTeammateRuntime(ctx, {
+        ready: true,
+        lastHeartbeatAt: Date.now(),
+        lastError: undefined,
+      });
+    }
+    await Promise.all([
+      directMessageDelivery?.commitPresentedAfterSuccessfulTurn(stopReason),
+      taskChangeDelivery?.commitPresentedAfterSuccessfulTurn(stopReason),
+    ]);
   });
 
   pi.on("turn_start", async (_event, ctx) => {
@@ -551,7 +522,7 @@ export default function (pi: ExtensionAPI) {
       if ((ctx.ui as any).setTitle) (ctx.ui as any).setTitle(fullTitle);
       if (terminal) terminal.setTitle(fullTitle);
       if (teamName) {
-        await runtime.writeRuntimeStatus(teamName, agentName, {
+        await writeCurrentTeammateRuntime(ctx, {
           lastHeartbeatAt: Date.now(),
         });
       }
@@ -564,7 +535,7 @@ export default function (pi: ExtensionAPI) {
       firstTurn = false;
 
       if (teamName) {
-        await runtime.writeRuntimeStatus(teamName, agentName, {
+        await writeCurrentTeammateRuntime(ctx, {
           lastHeartbeatAt: Date.now(),
         });
       }
@@ -586,40 +557,193 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      const inboxInstruction = directMessageDeliveryEnabled()
-        ? directMessageSessionEligible
-          ? "Direct Messages are delivered in context by stable Message ID. Do not call read_inbox merely to discover or fetch them; read_inbox remains available for explicit inspection."
-          : "This fork is a new Session identity and is not bound to the source recipient inbox. Do not consume the source inbox."
-        : `Start by calling read_inbox(team_name="${teamName}") to get your initial instructions.`;
+      const inboxInstruction = directMessageSessionEligible
+        ? "Direct Messages are delivered in context by stable Message ID. Do not call read_inbox merely to discover or fetch them; read_inbox remains available for explicit inspection."
+        : "This fork is a new Session identity and is not bound to the source recipient inbox. Do not consume the source inbox.";
+      const taskInstruction = taskChangeSessionEligible
+        ? "Assigned Task changes are delivered in context by authority-scoped TaskChangeRef. Treat the payload as a versioned snapshot and re-read the Task authority before a conflicting write."
+        : "This fork is a new Session identity and receives none of the source Agent's pending Task changes.";
       return {
-        systemPrompt: event.systemPrompt + `\n\nYou are teammate '${agentName}' on team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}\n${inboxInstruction}`,
+        systemPrompt: event.systemPrompt + `\n\nYou are teammate '${agentName}' on team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}\n${inboxInstruction}\n${taskInstruction}`,
       };
     }
   });
 
-  async function killTeammate(teamName: string, member: Member) {
-    if (member.name === "team-lead") return;
+  type TeammateStopEvidence = {
+    kind: "terminal_pane_stopped" | "terminal_window_stopped" | "bound_process_already_exited";
+    adapter?: string;
+    target?: string;
+    membershipId: string;
+  };
 
-    const pidFile = path.join(paths.teamDir(teamName), `${member.name}.pid`);
-    if (fs.existsSync(pidFile)) {
-      try {
-        const pid = fs.readFileSync(pidFile, "utf-8").trim();
-        process.kill(parseInt(pid), "SIGKILL");
-        fs.unlinkSync(pidFile);
-      } catch (e) {
-        // ignore
+  function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStatus | null): runtime.RuntimeGeneration | null {
+    const generation = runtime.runtimeGeneration(status);
+    return member.membershipId && generation?.membershipId === member.membershipId ? generation : null;
+  }
+
+  function exactBoundProcessAlreadyExited(generation: runtime.RuntimeGeneration | null): boolean {
+    if (!generation || generation.pid === process.pid) return false;
+    try {
+      process.kill(generation.pid, 0);
+      return false;
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === "ESRCH";
+    }
+  }
+
+  async function killTeammate(teamName: string, member: Member): Promise<TeammateStopEvidence> {
+    if (member.name === "team-lead") throw new Error("The team leader has no teammate terminal stop operation.");
+    if (!member.membershipId) throw new Error(`Cannot stop ${member.name}: its current Membership has no stable identity.`);
+
+    // Runtime status is usable only when it names this exact Membership
+    // generation. We never kill a PID from this durable record: after PID reuse,
+    // the record cannot prove that the live OS process is still the teammate.
+    // It can safely prove the weaker fact that the recorded process no longer
+    // exists, which lets an operator finalize a manually closed Windows/Zellij
+    // teammate without reviving the old unscoped *.pid behavior.
+    const status = await runtime.readRuntimeStatus(teamName, member.name);
+    const observedGeneration = exactRuntimeGeneration(member, status);
+    if (exactBoundProcessAlreadyExited(observedGeneration)) {
+      const deleted = await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration!);
+      if (!deleted) {
+        throw new Error(
+          `Cannot confirm shutdown of ${member.name}: its runtime process generation changed after exit evidence. ` +
+          "The Membership remains current; inspect the resumed process and retry.",
+        );
       }
+      return {
+        kind: "bound_process_already_exited",
+        membershipId: member.membershipId,
+      };
     }
 
-    if (member.windowId && terminal) {
+    if (!terminal) {
+      throw new Error(`Cannot stop ${member.name}: no terminal adapter is available and no exact Membership-bound runtime record proves the process exited.`);
+    }
+
+    if (member.windowId) {
       terminal.killWindow(member.windowId);
+      if (terminal.isWindowAlive(member.windowId)) {
+        throw new Error(
+          `Cannot confirm shutdown of ${member.name}: ${terminal.name} did not stop window ${member.windowId}. ` +
+          "The Membership remains current; close the process manually and retry.",
+        );
+      }
+      if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
+      return {
+        kind: "terminal_window_stopped",
+        adapter: terminal.name,
+        target: member.windowId,
+        membershipId: member.membershipId,
+      };
     }
 
-    if (member.tmuxPaneId && terminal) {
+    if (member.tmuxPaneId) {
       terminal.kill(member.tmuxPaneId);
+      if (terminal.isAlive(member.tmuxPaneId)) {
+        throw new Error(
+          `Cannot confirm shutdown of ${member.name}: ${terminal.name} did not stop pane ${member.tmuxPaneId}. ` +
+          "The Membership remains current; close the process manually and retry.",
+        );
+      }
+      if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
+      return {
+        kind: "terminal_pane_stopped",
+        adapter: terminal.name,
+        target: member.tmuxPaneId,
+        membershipId: member.membershipId,
+      };
     }
 
-    await runtime.deleteRuntimeStatus(teamName, member.name);
+    throw new Error(
+      `Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. ` +
+      "The Membership remains current.",
+    );
+  }
+
+  async function transitionCurrentMembership(
+    targetTeamName: string,
+    member: Member,
+    reason: NonNullable<Member["deactivationReason"]>,
+    stopTerminal: boolean,
+  ): Promise<{ member: Member | null; stopEvidence?: TeammateStopEvidence }> {
+    if (!member.membershipId) {
+      throw new Error(`Current Membership for ${member.name} on team ${targetTeamName} has no membershipId.`);
+    }
+    return teams.withCurrentMembershipLease(targetTeamName, member.membershipId, async (current) => {
+      const stopEvidence = stopTerminal ? await killTeammate(targetTeamName, current) : undefined;
+      return {
+        member: await teams.deactivateMembership(targetTeamName, member.membershipId!, reason),
+        stopEvidence,
+      };
+    });
+  }
+
+  type PreparedLaunchTarget = { terminalId: string; isWindow: boolean };
+
+  async function compensatePreparedLaunch(
+    targetTeamName: string,
+    prepared: Member,
+    target: PreparedLaunchTarget | null,
+  ): Promise<void> {
+    if (!prepared.membershipId) throw new Error(`Prepared Membership for ${prepared.name} has no stable identity.`);
+    await teams.withCurrentMembershipLease(targetTeamName, prepared.membershipId, async (current) => {
+      if (target) {
+        if (!terminal) throw new Error(`cannot stop ${target.terminalId}: no terminal adapter is available`);
+        if (target.isWindow) {
+          terminal.killWindow(target.terminalId);
+          if (terminal.isWindowAlive(target.terminalId)) {
+            throw new Error(`${terminal.name} did not stop window ${target.terminalId}`);
+          }
+        } else {
+          terminal.kill(target.terminalId);
+          if (terminal.isAlive(target.terminalId)) {
+            throw new Error(`${terminal.name} did not stop pane ${target.terminalId}`);
+          }
+        }
+        const status = await runtime.readRuntimeStatus(targetTeamName, current.name);
+        const generation = exactRuntimeGeneration(current, status);
+        if (generation) await runtime.deleteRuntimeStatus(targetTeamName, current.name, generation);
+      }
+      await teams.deactivateMembership(targetTeamName, prepared.membershipId!, "replaced");
+    });
+  }
+
+  async function launchPreparedMembership(
+    targetTeamName: string,
+    prepared: Member,
+    initialMessage: () => Promise<unknown>,
+    spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>,
+  ): Promise<PreparedLaunchTarget> {
+    let target: PreparedLaunchTarget | null = null;
+    try {
+      await initialMessage();
+      target = await spawn();
+      if (!target.terminalId) throw new Error("terminal adapter returned an empty target ID");
+      await teams.updateMembership(
+        targetTeamName,
+        prepared.membershipId!,
+        target.isWindow ? { windowId: target.terminalId } : { tmuxPaneId: target.terminalId },
+      );
+      return target;
+    } catch (launchError) {
+      try {
+        await compensatePreparedLaunch(targetTeamName, prepared, target);
+      } catch (cleanupError) {
+        const targetText = target
+          ? `${target.isWindow ? "window" : "pane"} ${target.terminalId}`
+          : "the prepared Membership before terminal spawn";
+        throw new Error(
+          `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
+          + `Compensation failed for ${targetText}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
+          + "The Membership remains current because process shutdown could not be confirmed.",
+        );
+      }
+      throw new Error(
+        `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
+        + "The exact prepared Membership was deactivated after compensation.",
+      );
+    }
   }
 
   // Tools
@@ -634,23 +758,37 @@ export default function (pi: ExtensionAPI) {
       separate_windows: Type.Optional(Type.Boolean({ default: false, description: "Open teammates in separate OS windows instead of panes" })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      // Auto-cleanup stale team if the previous lead process is dead
-      // This handles the case where a session was aborted and restarted
-      if (teams.teamExists(params.team_name)) {
-        cleanupStaleTeam(params.team_name, terminal);
-      }
-      
-      const config = teams.createTeam(params.team_name, "local-session", "lead-agent", params.description, params.default_model, params.separate_windows);
+      const leadSessionFile = ctx?.sessionManager?.getSessionFile?.();
+      if (!leadSessionFile) throw new Error("team_create requires a durable Pi Session file.");
+      const safeTeamName = paths.sanitizeName(params.team_name);
+      return teams.withTeamTopologyLease(safeTeamName, async (topologyLease) => {
+      const taskAuthority = await tasks.resolveTeamTaskAuthority(safeTeamName);
+      const config = await teams.createTeam(
+        safeTeamName,
+        leadSessionFile,
+        "lead-agent",
+        params.description,
+        params.default_model,
+        params.separate_windows,
+        taskAuthority.workspace,
+        taskAuthority.authorityId,
+        taskAuthority.fingerprint,
+        topologyLease,
+      );
       // Register this session as the lead so it can receive inbox messages.
-      registerLeadSession(params.team_name, ctx.sessionManager.getSessionFile());
-      // Update teamName and start inbox polling for the lead
-      teamName = params.team_name;
-      if (directMessageDeliveryEnabled()) await startDirectMessageDelivery(ctx);
-      else startLeadInboxPolling();
+      registerLeadSession(safeTeamName, leadSessionFile);
+      // Update teamName and start native custom delivery for the lead.
+      isTeammate = false;
+      agentName = "team-lead";
+      teamName = safeTeamName;
+      currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
+      await startDirectMessageDelivery(ctx);
+      await startTaskChangeDelivery(ctx);
       return {
-        content: [{ type: "text", text: `Team ${params.team_name} created.` }],
+        content: [{ type: "text", text: `Team ${safeTeamName} created.` }],
         details: { config },
       };
+      });
     },
   });
 
@@ -665,12 +803,20 @@ export default function (pi: ExtensionAPI) {
       cwd: Type.String(),
       model: Type.Optional(Type.String({ description: "Model for this teammate. Omit this parameter to use the team or Pi default; set it only when the user explicitly requests a specific model." })),
       thinking: Type.Optional(StringEnum(["off", "minimal", "low", "medium", "high", "xhigh"])),
-      plan_mode_required: Type.Optional(Type.Boolean({ default: false })),
       separate_window: Type.Optional(Type.Boolean({ default: false })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const safeName = paths.sanitizeName(params.name);
       const safeTeamName = paths.sanitizeName(params.team_name);
+
+      if (safeName === "team-lead") {
+        throw new Error("'team-lead' is reserved for the Team leader and cannot be used as a teammate name.");
+      }
+
+      return teams.withTeamTopologyLease(safeTeamName, async () => {
+      // The caller may have become stale while waiting for another topology
+      // transaction. Revalidate only after this Team's lease is held.
+      await assertCurrentSessionBinding(ctx, safeTeamName);
 
       if (!teams.teamExists(safeTeamName)) {
         throw new Error(`Team ${params.team_name} does not exist`);
@@ -684,10 +830,9 @@ export default function (pi: ExtensionAPI) {
       
       // Check if a teammate with this name already exists - kill them first
       // This handles the case where the user aborts mid-execution and restarts
-      const existingMember = teamConfig.members.find(m => m.name === safeName && m.agentType === "teammate");
+      const existingMember = [...teamConfig.members].reverse().find(m => m.name === safeName && m.agentType === "teammate" && m.isActive !== false);
       if (existingMember) {
-        await killTeammate(safeTeamName, existingMember);
-        await teams.removeMember(safeTeamName, safeName);
+        await transitionCurrentMembership(safeTeamName, existingMember, "replaced", true);
       }
       
       let chosenModel = params.model || teamConfig.defaultModel;
@@ -713,6 +858,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       const member: Member = {
+        membershipId: teams.newMembershipId(),
+        pendingLaunchId: teams.newLaunchId(),
         agentId: `${safeName}@${safeTeamName}`,
         name: safeName,
         agentType: "teammate",
@@ -721,14 +868,13 @@ export default function (pi: ExtensionAPI) {
         tmuxPaneId: "",
         cwd: params.cwd,
         subscriptions: [],
+        isActive: true,
         prompt: params.prompt,
         color: "blue",
         thinking: params.thinking,
-        planModeRequired: params.plan_mode_required,
       };
 
       await teams.addMember(safeTeamName, member);
-      await messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, params.prompt, "Initial prompt");
 
       const agentDef = predefined.getAgentDefinition(safeName, params.cwd);
       const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, params.thinking, agentDef?.tools);
@@ -737,90 +883,62 @@ export default function (pi: ExtensionAPI) {
         ...process.env,
         PI_TEAM_NAME: safeTeamName,
         PI_AGENT_NAME: safeName,
+        PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
       };
 
-      let terminalId = "";
-      let isWindow = false;
-
-      try {
+      const launch = await launchPreparedMembership(
+        safeTeamName,
+        member,
+        () => messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, params.prompt, "Initial prompt"),
+        () => {
         if (useSeparateWindow) {
-          isWindow = true;
-          terminalId = terminal.spawnWindow({
+          const terminalId = terminal.spawnWindow({
             name: safeName,
             cwd: params.cwd,
             argv: piCmd,
             env: env,
             teamName: safeTeamName,
           });
-          await teams.updateMember(safeTeamName, safeName, { windowId: terminalId });
-        } else {
-          if (terminal instanceof Iterm2Adapter) {
-            const teammates = teamConfig.members.filter(m => m.agentType === "teammate" && m.tmuxPaneId.startsWith("iterm_"));
-            const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
-            if (lastTeammate?.tmuxPaneId) {
-              terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
-            } else {
-              terminal.setSpawnContext({});
-            }
-          }
-
-          const leadMember = teamConfig.members.find(m => m.name === "team-lead");
-          const anchorPaneId = terminal.name === "tmux"
-            ? leadMember?.tmuxPaneId || process.env.TMUX_PANE || undefined
-            : undefined;
-
-          terminalId = terminal.spawn({
-            name: safeName,
-            cwd: params.cwd,
-            argv: piCmd,
-            env: env,
-            anchorPaneId,
-          });
-          await teams.updateMember(safeTeamName, safeName, { tmuxPaneId: terminalId });
+          return { terminalId, isWindow: true };
         }
-      } catch (e) {
-        throw new Error(`Failed to spawn ${terminal.name} ${isWindow ? 'window' : 'pane'}: ${e}`);
-      }
+        if (terminal instanceof Iterm2Adapter) {
+          const teammates = teamConfig.members.filter(m => m.agentType === "teammate" && m.tmuxPaneId.startsWith("iterm_"));
+          const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
+          if (lastTeammate?.tmuxPaneId) {
+            terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
+          } else {
+            terminal.setSpawnContext({});
+          }
+        }
+
+        const leadMember = teamConfig.members.find(m => m.name === "team-lead");
+        const anchorPaneId = terminal.name === "tmux"
+          ? leadMember?.tmuxPaneId || process.env.TMUX_PANE || undefined
+          : undefined;
+
+        const terminalId = terminal.spawn({
+          name: safeName,
+          cwd: params.cwd,
+          argv: piCmd,
+          env: env,
+          anchorPaneId,
+        });
+        return { terminalId, isWindow: false };
+        },
+      );
 
       return {
-        content: [{ type: "text", text: `Teammate ${params.name} spawned in ${isWindow ? 'window' : 'pane'} ${terminalId}.` }],
-        details: { agentId: member.agentId, terminalId, isWindow },
+        content: [{ type: "text", text: `Teammate ${params.name} spawned in ${launch.isWindow ? 'window' : 'pane'} ${launch.terminalId}.` }],
+        details: { agentId: member.agentId, membershipId: member.membershipId, terminalId: launch.terminalId, isWindow: launch.isWindow },
       };
+      });
     },
-  });
-
-  pi.registerTool({
-    name: "spawn_lead_window",
-    label: "Spawn Lead Window",
-    description: "Open the team lead in a separate OS window.",
-    parameters: Type.Object({
-      team_name: Type.String(),
-      cwd: Type.Optional(Type.String()),
-    }),
-    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const safeTeamName = paths.sanitizeName(params.team_name);
-      if (!teams.teamExists(safeTeamName)) throw new Error(`Team ${params.team_name} does not exist`);
-      if (!terminal || !terminal.supportsWindows()) throw new Error("Windows mode not supported.");
-
-      const teamConfig = await teams.readConfig(safeTeamName);
-      const cwd = params.cwd || process.cwd();
-      const piCmd = buildPiArgv(getPiLaunchArgv(), teamConfig.defaultModel);
-
-      const env = { ...process.env, PI_TEAM_NAME: safeTeamName, PI_AGENT_NAME: "team-lead" };
-      try {
-        const windowId = terminal.spawnWindow({ name: "team-lead", cwd, argv: piCmd, env, teamName: safeTeamName });
-        await teams.updateMember(safeTeamName, "team-lead", { windowId });
-        return { content: [{ type: "text", text: `Lead window spawned: ${windowId}` }], details: { windowId } };
-      } catch (e) {
-        throw new Error(`Failed: ${e}`);
-      }
-    }
   });
 
   pi.registerTool({
     name: "send_message",
     label: "Send Message",
-    description: "Send a message to a teammate.",
+    description: "Send substantive coordination to a teammate. Avoid ACK-only messages unless semantic confirmation is required.",
     parameters: Type.Object({
       team_name: Type.String(),
       recipient: Type.String(),
@@ -828,9 +946,31 @@ export default function (pi: ExtensionAPI) {
       summary: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const message = await messaging.sendPlainMessage(params.team_name, agentName, params.recipient, params.content, params.summary);
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      let message;
+      try {
+        message = await messaging.sendPlainMessage(params.team_name, agentName, params.recipient, params.content, params.summary, undefined, actorMembership.membershipId && actorMembership.sessionFile ? {
+          membershipId: actorMembership.membershipId,
+          sessionFile: actorMembership.sessionFile,
+        } : undefined);
+      } catch (error) {
+        if (error instanceof messaging.MessageTeamDoesNotExistError) {
+          throw new Error(`Cannot send message: Team '${params.team_name}' does not exist. Create or select an existing team first.`);
+        }
+        if (error instanceof messaging.RecipientNotCurrentMemberError) {
+          throw new Error(
+            `Cannot send message: recipient '${params.recipient}' is not a current member of team '${params.team_name}'. ` +
+            "Contact or escalate to the team leader 'team-lead' to resolve the intended recipient.",
+          );
+        }
+        throw error;
+      }
       return {
-        content: [{ type: "text", text: `Message sent to ${params.recipient}.` }],
+        content: [{ type: "text", text: JSON.stringify({
+          status: "accepted",
+          recipient: params.recipient,
+          messageId: message.id,
+        }) }],
         details: { messageId: message.id },
       };
     },
@@ -839,7 +979,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "broadcast_message",
     label: "Broadcast Message",
-    description: "Broadcast a message to all team members except the sender.",
+    description: "Broadcast substantive coordination to current team members except the sender.",
     parameters: Type.Object({
       team_name: Type.String(),
       content: Type.String(),
@@ -847,10 +987,14 @@ export default function (pi: ExtensionAPI) {
       color: Type.Optional(Type.String()),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      await messaging.broadcastMessage(params.team_name, agentName, params.content, params.summary, params.color);
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      const result = await messaging.broadcastMessage(params.team_name, agentName, params.content, params.summary, params.color, actorMembership.membershipId && actorMembership.sessionFile ? {
+        membershipId: actorMembership.membershipId,
+        sessionFile: actorMembership.sessionFile,
+      } : undefined);
       return {
-        content: [{ type: "text", text: `Message broadcasted to all team members.` }],
-        details: {},
+        content: [{ type: "text", text: JSON.stringify(result) }],
+        details: result,
       };
     },
   });
@@ -858,18 +1002,28 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "read_inbox",
     label: "Read Inbox",
-    description: "Read messages from an agent's inbox.",
+    description: "Explicitly audit or inspect Message history. Never use this tool to fetch normal delivery; accepted Messages arrive as native custom context.",
     parameters: Type.Object({
       team_name: Type.String(),
       agent_name: Type.Optional(Type.String({ description: "Whose inbox to read. Defaults to your own." })),
       unread_only: Type.Optional(Type.Boolean({ default: true })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
       const targetAgent = params.agent_name || agentName;
-      const msgs = await messaging.readInbox(params.team_name, targetAgent, params.unread_only);
+      const readingOwnInbox = targetAgent === agentName;
+      const msgs = readingOwnInbox && actorMembership?.membershipId
+        ? await messaging.readInboxForMembership(
+            params.team_name,
+            targetAgent,
+            actorMembership.membershipId,
+            params.unread_only,
+            true,
+          )
+        : await messaging.readInbox(params.team_name, targetAgent, params.unread_only, false);
 
       if (isTeammate && teamName && params.team_name === teamName && targetAgent === agentName) {
-        await runtime.writeRuntimeStatus(teamName, agentName, {
+        await writeCurrentTeammateRuntime(ctx, {
           lastHeartbeatAt: Date.now(),
           lastInboxReadAt: Date.now(),
           ready: true,
@@ -887,7 +1041,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_create",
     label: "Create Task",
-    description: "Create a new team task.",
+    description: "Create a team Task and return its post-state receipt; do not immediately task_read or task_list the same result.",
     parameters: Type.Object({
       team_name: Type.String(),
       subject: Type.String(),
@@ -897,12 +1051,14 @@ export default function (pi: ExtensionAPI) {
       idempotency_key: Type.Optional(Type.String()),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
       const task = await tasks.createTask(params.team_name, params.subject, params.description, params.active_form || "", {
         ...(params.metadata || {}),
         ...(params.idempotency_key ? { pi_teams_idempotency_key: params.idempotency_key } : {}),
-      });
+      }, actorMembership.membershipId && actingSessionFile ? { actor: agentName, actingMembershipId: actorMembership.membershipId, actingSessionFile } : undefined);
       return {
-        content: [{ type: "text", text: `Task ${task.id} created.` }],
+        content: [{ type: "text", text: taskMutationContent(task, ["create"]) }],
         details: { task },
       };
     },
@@ -911,18 +1067,19 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_submit_plan",
     label: "Submit Plan",
-    description: "Submit a plan for a task, updating its status to 'planning'.",
+    description: "Submit a Task plan and return its post-state receipt; do not immediately re-read it.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
       plan: Type.String(),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read/task_list" })),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const updated = await tasks.submitPlan(params.team_name, params.task_id, params.plan, { actor: agentName, expectedVersion: params.expected_version });
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      const result = await tasks.submitPlanWithReceipt(params.team_name, params.task_id, params.plan, { actor: agentName, expectedVersion: params.expected_version, actingMembershipId: actorMembership.membershipId, actingSessionFile: ctx?.sessionManager?.getSessionFile?.() });
       return {
-        content: [{ type: "text", text: `Plan submitted for task ${params.task_id}.` }],
-        details: { task: updated },
+        content: [{ type: "text", text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings) }],
+        details: result,
       };
     },
   });
@@ -930,19 +1087,20 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_evaluate_plan",
     label: "Evaluate Plan",
-    description: "Evaluate a submitted plan for a task.",
+    description: "Evaluate a submitted Task plan and return its post-state receipt; do not immediately re-read it.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
       action: StringEnum(["approve", "reject"]),
       feedback: Type.Optional(Type.String({ description: "Required for rejection" })),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read/task_list" })),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const updated = await tasks.evaluatePlan(params.team_name, params.task_id, params.action as any, params.feedback, { actor: agentName, expectedVersion: params.expected_version });
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      const result = await tasks.evaluatePlanWithReceipt(params.team_name, params.task_id, params.action as any, params.feedback, { actor: agentName, expectedVersion: params.expected_version, actingMembershipId: actorMembership.membershipId, actingSessionFile: ctx?.sessionManager?.getSessionFile?.() });
       return {
-        content: [{ type: "text", text: `Plan for task ${params.task_id} has been ${params.action}d.` }],
-        details: { task: updated },
+        content: [{ type: "text", text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings) }],
+        details: result,
       };
     },
   });
@@ -950,11 +1108,12 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_list",
     label: "List Tasks",
-    description: "List all tasks for a team.",
+    description: "Query the current non-deleted Task projection on demand, not as follow-up to a mutation receipt.",
     parameters: Type.Object({
       team_name: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertCurrentSessionBinding(ctx, params.team_name);
       const taskList = await tasks.listTasks(params.team_name);
       return {
         content: [{ type: "text", text: JSON.stringify(taskList, null, 2) }],
@@ -966,63 +1125,35 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_update",
     label: "Update Task",
-    description: "Update a task's status or owner.",
+    description: "Apply one semantic Task mutation and return its post-state receipt; do not immediately task_read or task_list the same result.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
-      status: Type.Optional(StringEnum(["pending", "planning", "in_progress", "completed", "deleted"])),
+      status: Type.Optional(StringEnum(["pending", "planning", "in_progress", "blocked", "completed", "deleted"])),
       owner: Type.Optional(Type.String()),
       claim: Type.Optional(Type.Boolean({ default: false, description: "Atomically claim the task for the current agent" })),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read/task_list" })),
-      blocks: Type.Optional(Type.Array(Type.String({ description: "Task IDs this task blocks" }))),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
       blocked_by: Type.Optional(Type.Array(Type.String({ description: "Task IDs blocking this task" }))),
       progress: Type.Optional(Type.String({ description: "Append a communicated progress entry" })),
       pending_problem: Type.Optional(Type.String({ description: "Append an unresolved problem entry" })),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const writeOptions = { actor: agentName, expectedVersion: params.expected_version };
-      const config = await teams.readConfig(params.team_name);
-      const hasFieldUpdate = params.status !== undefined || params.owner !== undefined;
-      const dependencyOps = (params.blocked_by || []).length + (params.blocks || []).length;
-      const mutationCount = (params.claim ? 1 : 0) + (hasFieldUpdate ? 1 : 0) + dependencyOps + (params.progress ? 1 : 0) + (params.pending_problem ? 1 : 0);
-      if (mutationCount > 1) {
-        throw new Error("task_update supports one atomic backend mutation per call; split the request and re-read expected_version between writes.");
-      }
-      if (config.taskBackend === "beads" && (params.blocks || []).length > 0) {
-        throw new Error("Beads task_update.blocks mutates another task but has no separate expected_version; use blocked_by on the target task instead.");
-      }
-      const idsToValidate = [
-        params.task_id,
-        ...(params.blocked_by || []),
-        ...(config.taskBackend !== "beads" ? (params.blocks || []) : []),
-      ];
-      for (const id of idsToValidate) await tasks.readTask(params.team_name, id);
-      let updated;
-      if (params.claim) {
-        updated = await tasks.claimTask(params.team_name, params.task_id, agentName, writeOptions);
-      }
-      const updates: Record<string, unknown> = {};
-      if (params.status !== undefined) updates.status = params.status;
-      if (params.owner !== undefined) updates.owner = params.owner;
-      if (Object.keys(updates).length > 0) {
-        updated = await tasks.updateTask(params.team_name, params.task_id, updates as any, params.claim ? { actor: agentName } : writeOptions);
-      }
-      if (!updated) updated = await tasks.readTask(params.team_name, params.task_id);
-      for (const blockerId of params.blocked_by || []) {
-        updated = await tasks.addTaskDependency(params.team_name, params.task_id, blockerId, writeOptions);
-      }
-      for (const blockedId of params.blocks || []) {
-        updated = await tasks.addTaskDependency(params.team_name, blockedId, params.task_id, writeOptions);
-      }
-      if (params.progress) {
-        updated = await tasks.addTaskProgress(params.team_name, params.task_id, { kind: "progress", text: params.progress, actor: agentName }, writeOptions);
-      }
-      if (params.pending_problem) {
-        updated = await tasks.addTaskProgress(params.team_name, params.task_id, { kind: "pending-problem", text: params.pending_problem, actor: agentName }, writeOptions);
-      }
+      const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      const result = await tasks.applySemanticTaskUpdate(params.team_name, params.task_id, {
+        status: params.status,
+        owner: params.owner,
+        claim: params.claim,
+        blockedBy: params.blocked_by,
+        progress: params.progress,
+        pendingProblem: params.pending_problem,
+      }, { actor: agentName, expectedVersion: params.expected_version, actingSessionFile, actingMembershipId: actorMembership.membershipId });
       return {
-        content: [{ type: "text", text: `Task ${params.task_id} updated.` }],
-        details: { task: updated },
+        content: [{
+          type: "text",
+          text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings),
+        }],
+        details: result,
       };
     },
   });
@@ -1030,56 +1161,93 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "team_shutdown",
     label: "Shutdown Team",
-    description: "Shutdown the entire team and close all panes/windows.",
+    description: "Attempt to stop every teammate and deactivate only Memberships whose terminal/process stop is confirmed.",
     parameters: Type.Object({
       team_name: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const teamName = params.team_name;
+      const teamName = paths.sanitizeName(params.team_name);
+      return teams.withTeamTopologyLease(teamName, async () => {
+      await assertCurrentSessionBinding(ctx, teamName);
       try {
         const config = await teams.readConfig(teamName);
-        for (const member of config.members) {
-          await killTeammate(teamName, member);
+        const current = config.members.filter((member) => member.isActive !== false);
+        const deactivated: Member[] = [];
+        const failures: Array<{ name: string; error: string }> = [];
+        const teammates = current.filter((member) => member.name !== "team-lead" && member.agentType !== "lead");
+        const outcomes = await Promise.allSettled(teammates.map(async (member) => {
+          const changed = await transitionCurrentMembership(teamName, member, "team_shutdown", true);
+          if (changed.member) deactivated.push(changed.member);
+          return changed.stopEvidence;
+        }));
+        const stopEvidence: TeammateStopEvidence[] = [];
+        outcomes.forEach((outcome, index) => {
+          if (outcome.status === "rejected") failures.push({
+            name: teammates[index].name,
+            error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
+          });
+          else if (outcome.value) stopEvidence.push(outcome.value);
+        });
+        // The lead remains current whenever a teammate could not be stopped,
+        // so one live coordinator retains authority to retry or inspect the
+        // partial shutdown. It closes only after every teammate terminal
+        // action and membership transition succeeded.
+        if (failures.length === 0) {
+          const lead = current.find((member) => member.name === "team-lead" || member.agentType === "lead");
+          if (lead) {
+            const changed = await transitionCurrentMembership(teamName, lead, "team_shutdown", false);
+            if (changed.member) deactivated.push(changed.member);
+          }
         }
-        const dir = paths.teamDir(teamName);
-        const tasksDir = paths.taskDir(teamName);
-        const preservesBeadsAuthority = config.taskBackend === "beads";
-        if (!preservesBeadsAuthority && fs.existsSync(tasksDir)) fs.rmSync(tasksDir, { recursive: true });
-        if (!preservesBeadsAuthority && fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
-
-        // Clean up orphaned agent session folders (older than 1 hour)
-        const cleanedSessions = cleanupAgentSessionFolders(60 * 60 * 1000);
-
+        const finalConfig = await teams.readConfig(teamName);
+        const details = {
+          taskAuthorityRetained: true,
+          agentSessionCleanupPerformed: false,
+          deactivatedMembers: deactivated.map((member) => member.name),
+          failures,
+          stopEvidence,
+          staleBindings: finalConfig.members.filter((member) => member.isActive === false && !!(member.tmuxPaneId || member.windowId)).map((member) => ({
+            name: member.name,
+            sessionFile: member.sessionFile,
+            tmuxPaneId: member.tmuxPaneId,
+            windowId: member.windowId,
+          })),
+        };
         return {
           content: [{
             type: "text",
-            text: `Team ${teamName} shut down.${preservesBeadsAuthority ? " Beads task authority and migration evidence retained." : ""}${cleanedSessions > 0 ? ` Cleaned up ${cleanedSessions} orphaned agent session folder(s).` : ""}`
+            text: JSON.stringify({
+              status: failures.length === 0 ? "shut_down" : "partially_shut_down",
+              teamName,
+              ...details,
+            }),
           }],
-          details: { cleanedSessions, taskAuthorityRetained: preservesBeadsAuthority }
+          details,
         };
       } catch (e) {
         throw new Error(`Failed to shutdown team: ${e}`);
       }
+      });
     },
   });
 
   pi.registerTool({
     name: "cleanup_agent_sessions",
     label: "Cleanup Agent Sessions",
-    description: "Clean up orphaned agent session folders from ~/.pi/agent/teams/ that are older than a specified age.",
+    description: "Report old Pi-core agent session folders for review without deleting them.",
     parameters: Type.Object({
       max_age_hours: Type.Optional(Type.Number()),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const maxAgeHours = params.max_age_hours ?? 24;
       const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
-      const cleaned = cleanupAgentSessionFolders(maxAgeMs);
+      const report = inspectAgentSessionCleanup(maxAgeMs);
       return {
         content: [{
           type: "text",
-          text: `Cleaned up ${cleaned} orphaned agent session folder(s) older than ${maxAgeHours} hour(s).`
+          text: JSON.stringify({ ...report, maxAgeHours }),
         }],
-        details: { cleaned, maxAgeHours }
+        details: { ...report, maxAgeHours }
       };
     },
   });
@@ -1087,12 +1255,13 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_read",
     label: "Read Task",
-    description: "Read details of a specific task.",
+    description: "Read current Task details on demand, especially before a later conditional write; mutation receipts already contain their post-state.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertCurrentSessionBinding(ctx, params.team_name);
       const task = await tasks.readTask(params.team_name, params.task_id);
       return {
         content: [{ type: "text", text: JSON.stringify(task, null, 2) }],
@@ -1104,15 +1273,17 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "check_teammate",
     label: "Check Teammate",
-    description: "Check a single teammate's status.",
+    description: "Diagnose one teammate's runtime health on demand. Do not routinely poll this tool for progress or completion.",
     parameters: Type.Object({
       team_name: Type.String(),
       agent_name: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertCurrentSessionBinding(ctx, params.team_name);
       const config = await teams.readConfig(params.team_name);
-      const member = config.members.find(m => m.name === params.agent_name);
+      const member = [...config.members].reverse().find(m => m.name === params.agent_name && m.isActive !== false);
       if (!member) throw new Error(`Teammate ${params.agent_name} not found`);
+      if (!member.membershipId) throw new Error(`Current Membership for ${params.agent_name} has no membershipId.`);
 
       let alive = false;
       if (member.windowId && terminal) {
@@ -1121,8 +1292,15 @@ export default function (pi: ExtensionAPI) {
         alive = terminal.isAlive(member.tmuxPaneId);
       }
 
-      const unreadCount = (await messaging.readInbox(params.team_name, params.agent_name, true, false)).length;
-      const runtimeStatus = await runtime.readRuntimeStatus(params.team_name, params.agent_name);
+      const unreadCount = (await messaging.readInboxForMembership(
+        params.team_name,
+        params.agent_name,
+        member.membershipId,
+        true,
+        false,
+      )).length;
+      const storedRuntime = await runtime.readRuntimeStatus(params.team_name, params.agent_name);
+      const runtimeStatus = storedRuntime?.membershipId === member.membershipId ? storedRuntime : null;
       const now = Date.now();
       const hasRecentHeartbeat = !!runtimeStatus?.lastHeartbeatAt
         && (now - runtimeStatus.lastHeartbeatAt) <= runtime.HEARTBEAT_STALE_MS;
@@ -1148,9 +1326,11 @@ export default function (pi: ExtensionAPI) {
         runtime: runtimeStatus,
       };
 
-      // Clean up runtime status for dead teammates
-      if (!alive && runtimeStatus) {
-        await runtime.deleteRuntimeStatus(params.team_name, params.agent_name);
+      // Absence of a terminal surface is not sufficient evidence to delete a
+      // live runtime generation. Cleanup only the exact observed dead process.
+      const checkedGeneration = exactRuntimeGeneration(member, runtimeStatus);
+      if (!alive && exactBoundProcessAlreadyExited(checkedGeneration)) {
+        await runtime.deleteRuntimeStatus(params.team_name, params.agent_name, checkedGeneration!);
       }
 
       return {
@@ -1163,22 +1343,32 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "process_shutdown_approved",
     label: "Process Shutdown Approved",
-    description: "Process a teammate's shutdown.",
+    description: "Stop one teammate and deactivate its current Membership only after shutdown is confirmed.",
     parameters: Type.Object({
       team_name: Type.String(),
       agent_name: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const config = await teams.readConfig(params.team_name);
-      const member = config.members.find(m => m.name === params.agent_name);
-      if (!member) throw new Error(`Teammate ${params.agent_name} not found`);
+      const safeTeamName = paths.sanitizeName(params.team_name);
+      const safeAgentName = paths.sanitizeName(params.agent_name);
+      return teams.withTeamTopologyLease(safeTeamName, async () => {
+        await assertCurrentSessionBinding(ctx, safeTeamName);
+        const config = await teams.readConfig(safeTeamName);
+        const member = [...config.members].reverse().find(m => m.name === safeAgentName && m.isActive !== false);
+        if (!member) throw new Error(`Teammate ${safeAgentName} not found`);
+        if (member.name === "team-lead" || member.agentType === "lead") {
+          throw new Error("process_shutdown_approved cannot shut down the team leader; use team_shutdown for whole-team lifecycle closure.");
+        }
 
-      await killTeammate(params.team_name, member);
-      await teams.removeMember(params.team_name, params.agent_name);
-      return {
-        content: [{ type: "text", text: `Teammate ${params.agent_name} has been shut down.` }],
-        details: {},
-      };
+        const changed = await transitionCurrentMembership(safeTeamName, member, "process_shutdown", true);
+        return {
+          content: [{ type: "text", text: `Teammate ${safeAgentName} stopped and its current Membership was deactivated.` }],
+          details: {
+            deactivatedMembershipId: changed.member?.membershipId,
+            stopEvidence: changed.stopEvidence,
+          },
+        };
+      });
     },
   });
 
@@ -1252,24 +1442,46 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const projectDir = ctx.cwd;
+      const leadSessionFile = ctx?.sessionManager?.getSessionFile?.();
+      if (!leadSessionFile) throw new Error("create_predefined_team requires a durable Pi Session file.");
       const predefinedTeam = predefined.getPredefinedTeam(params.predefined_team, projectDir);
       
       if (!predefinedTeam) {
         const available = predefined.getAllPredefinedTeams(projectDir).map(t => t.name);
         throw new Error(`Predefined team "${params.predefined_team}" not found. Available teams: ${available.join(", ") || "none"}`);
       }
+      const duplicateNames = [...new Set(predefinedTeam.agents.filter((name, index) => predefinedTeam.agents.indexOf(name) !== index))];
+      if (predefinedTeam.agents.includes("team-lead") || duplicateNames.length > 0) {
+        throw new Error(`Invalid predefined team '${params.predefined_team}': teammate names must be unique and 'team-lead' is reserved${duplicateNames.length ? `; duplicates: ${duplicateNames.join(", ")}` : ""}.`);
+      }
 
       if (!terminal) {
         throw new Error("No terminal adapter detected.");
       }
 
+      const safeTeamName = paths.sanitizeName(params.team_name);
+      return teams.withTeamTopologyLease(safeTeamName, async (topologyLease) => {
+
       // Create the team
-      const config = teams.createTeam(params.team_name, "local-session", "lead-agent", `Predefined team: ${params.predefined_team}`, params.default_model, params.separate_windows);
-      registerLeadSession(params.team_name, ctx.sessionManager.getSessionFile());
-      // Update teamName and start inbox polling for the lead
-      teamName = params.team_name;
-      if (directMessageDeliveryEnabled()) await startDirectMessageDelivery(ctx);
-      else startLeadInboxPolling();
+      const taskAuthority = await tasks.resolveTeamTaskAuthority(safeTeamName);
+      const config = await teams.createTeam(
+        safeTeamName,
+        leadSessionFile,
+        "lead-agent",
+        `Predefined team: ${params.predefined_team}`,
+        params.default_model,
+        params.separate_windows,
+        taskAuthority.workspace,
+        taskAuthority.authorityId,
+        taskAuthority.fingerprint,
+        topologyLease,
+      );
+      registerLeadSession(safeTeamName, leadSessionFile);
+      // Update teamName and start native custom delivery for the lead.
+      teamName = safeTeamName;
+      currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
+      await startDirectMessageDelivery(ctx);
+      await startTaskChangeDelivery(ctx);
 
       const agentDefinitions = predefined.getAllAgentDefinitions(projectDir);
       const spawnResults: Array<{ name: string; status: string; error?: string }> = [];
@@ -1285,7 +1497,6 @@ export default function (pi: ExtensionAPI) {
 
         try {
           const safeName = paths.sanitizeName(agentName);
-          const safeTeamName = paths.sanitizeName(params.team_name);
           
           let chosenModel = agentDef.model || params.default_model || config.defaultModel;
           
@@ -1305,6 +1516,8 @@ export default function (pi: ExtensionAPI) {
           }
 
           const member: Member = {
+            membershipId: teams.newMembershipId(),
+            pendingLaunchId: teams.newLaunchId(),
             agentId: `${safeName}@${safeTeamName}`,
             name: safeName,
             agentType: "teammate",
@@ -1319,7 +1532,6 @@ export default function (pi: ExtensionAPI) {
           };
 
           await teams.addMember(safeTeamName, member);
-          await messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, agentDef.prompt, "Initial prompt from predefined team");
 
           const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking, agentDef.tools);
 
@@ -1327,63 +1539,69 @@ export default function (pi: ExtensionAPI) {
             ...process.env,
             PI_TEAM_NAME: safeTeamName,
             PI_AGENT_NAME: safeName,
+            PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
           };
 
-          let terminalId = "";
-          let isWindow = false;
-
-          try {
+          await launchPreparedMembership(
+            safeTeamName,
+            member,
+            () => messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, agentDef.prompt, "Initial prompt from predefined team"),
+            async () => {
             if (useSeparateWindow) {
-              isWindow = true;
-              terminalId = terminal.spawnWindow({
+              const terminalId = terminal.spawnWindow({
                 name: safeName,
                 cwd: params.cwd,
                 argv: piCmd,
                 env: env,
                 teamName: safeTeamName,
               });
-              await teams.updateMember(safeTeamName, safeName, { windowId: terminalId });
-            } else {
-              if (terminal instanceof Iterm2Adapter) {
-                const teammates = (await teams.readConfig(safeTeamName)).members.filter(m => m.agentType === "teammate" && m.tmuxPaneId.startsWith("iterm_"));
-                const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
-                if (lastTeammate?.tmuxPaneId) {
-                  terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
-                } else {
-                  terminal.setSpawnContext({});
-                }
+              return { terminalId, isWindow: true };
+            }
+            if (terminal instanceof Iterm2Adapter) {
+              const teammates = (await teams.readConfig(safeTeamName)).members.filter(m => m.agentType === "teammate" && m.tmuxPaneId.startsWith("iterm_"));
+              const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
+              if (lastTeammate?.tmuxPaneId) {
+                terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
+              } else {
+                terminal.setSpawnContext({});
               }
-
-              const leadMember = (await teams.readConfig(safeTeamName)).members.find(m => m.name === "team-lead");
-              const anchorPaneId = terminal.name === "tmux"
-                ? leadMember?.tmuxPaneId || process.env.TMUX_PANE || undefined
-                : undefined;
-
-              terminalId = terminal.spawn({
-                name: safeName,
-                cwd: params.cwd,
-                argv: piCmd,
-                env: env,
-                anchorPaneId,
-              });
-              await teams.updateMember(safeTeamName, safeName, { tmuxPaneId: terminalId });
             }
 
-            spawnResults.push({ name: agentName, status: "spawned", error: undefined });
-          } catch (e) {
-            spawnResults.push({ name: agentName, status: "error", error: `Failed to spawn: ${e}` });
-          }
+            const leadMember = (await teams.readConfig(safeTeamName)).members.find(m => m.name === "team-lead");
+            const anchorPaneId = terminal.name === "tmux"
+              ? leadMember?.tmuxPaneId || process.env.TMUX_PANE || undefined
+              : undefined;
+
+            const terminalId = terminal.spawn({
+              name: safeName,
+              cwd: params.cwd,
+              argv: piCmd,
+              env: env,
+              anchorPaneId,
+            });
+            return { terminalId, isWindow: false };
+            },
+          );
+
+          spawnResults.push({ name: agentName, status: "spawned", error: undefined });
         } catch (e) {
           spawnResults.push({ name: agentName, status: "error", error: String(e) });
         }
       }
 
       const summary = spawnResults.map(r => `${r.name}: ${r.status}${r.error ? ` (${r.error})` : ""}`).join("\n");
+      const failed = spawnResults.filter((result) => result.status !== "spawned");
+      if (failed.length > 0) {
+        throw new Error(
+          `Predefined team "${params.predefined_team}" was only partially launched; failed members were compensated or left current only when shutdown could not be confirmed:\n${summary}`,
+        );
+      }
       
       return {
-        content: [{ type: "text", text: `Team "${params.team_name}" created from predefined team "${params.predefined_team}".\n\nAgent spawn results:\n${summary}` }],
-        details: { teamName: params.team_name, predefinedTeam: params.predefined_team, results: spawnResults },
+        content: [{ type: "text", text: `Team "${safeTeamName}" created from predefined team "${params.predefined_team}".\n\nAgent spawn results:\n${summary}` }],
+        details: { teamName: safeTeamName, predefinedTeam: params.predefined_team, results: spawnResults },
       };
+      });
     },
   });
 
@@ -1398,6 +1616,7 @@ export default function (pi: ExtensionAPI) {
       scope: Type.Optional(StringEnum(["user", "project"], { description: "Where to save: 'user' for global (~/.pi), 'project' for project-local (.pi). Defaults to 'user'." })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertCurrentSessionBinding(ctx, params.team_name);
       const teamName = params.team_name;
       
       // Verify the team exists
@@ -1409,7 +1628,7 @@ export default function (pi: ExtensionAPI) {
       const config = await teams.readConfig(teamName);
       
       // Check that there are teammates to save
-      const teammates = config.members.filter(m => m.agentType === "teammate");
+      const teammates = config.members.filter(m => m.agentType === "teammate" && m.isActive !== false);
       if (teammates.length === 0) {
         throw new Error(`Team "${teamName}" has no teammates to save. Only teams with spawned teammates can be saved as templates.`);
       }

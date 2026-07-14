@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-14T16:26:17.368Z",
+  "boundary": "BeadsTaskStore",
+  "releaseGate": false,
+  "mode": "server",
+  "semanticIntents": 500,
+  "wallMs": 264588.607167,
+  "peakConcurrency": 4,
+  "errors": 0,
+  "intentLatency": {
+    "count": 500,
+    "meanMs": 2109.055514404,
+    "p50Ms": 2246.897958,
+    "p95Ms": 3688.420208,
+    "p99Ms": 4621.557208,
+    "maxMs": 5177.325458
+  },
+  "bd": {
+    "version": "bd version 1.1.0 (8e4e59d39)",
+    "invocations": 1280,
+    "invocationsPerIntent": 2.56,
+    "totalInvocationMs": 1053174.239204,
+    "invocationLatency": {
+      "count": 1280,
+      "meanMs": 822.792374,
+      "p50Ms": 756.407292,
+      "p95Ms": 1311.029833,
+      "p99Ms": 1839.672167,
+      "maxMs": 2208.642583
+    },
+    "commandCounts": {
+      "create": 20,
+      "show": 680,
+      "list": 300,
+      "update": 180,
+      "comment": 100
+    },
+    "errors": 0
+  },
+  "byVerb": {
+    "create": { "intents": 20, "meanMs": 1303.725154, "p95Ms": 1600.29775, "bdCalls": 40, "bdCallsPerIntent": 2 },
+    "read": { "intents": 100, "meanMs": 1323.182408, "p95Ms": 1590.648583, "bdCalls": 200, "bdCallsPerIntent": 2 },
+    "list": { "intents": 100, "meanMs": 905.591777, "p95Ms": 1335.226667, "bdCalls": 100, "bdCallsPerIntent": 1 },
+    "status_update": { "intents": 100, "meanMs": 3315.302769, "p95Ms": 4621.557208, "bdCalls": 300, "bdCallsPerIntent": 3 },
+    "owner_status_update": { "intents": 80, "meanMs": 2590.340059, "p95Ms": 3204.169083, "bdCalls": 240, "bdCallsPerIntent": 3 },
+    "progress": { "intents": 48, "meanMs": 2818.279102, "p95Ms": 3481.84375, "bdCalls": 192, "bdCallsPerIntent": 4 },
+    "pending_problem": { "intents": 52, "meanMs": 2529.63379, "p95Ms": 3394.410791, "bdCalls": 208, "bdCallsPerIntent": 4 }
+  },
+  "interpretation": {
+    "validFor": "Storage-adapter subprocess amplification and external-server calibration.",
+    "notValidFor": "Agent-facing task_update latency or release acceptance because this run bypassed applySemanticTaskUpdate and delivery publication.",
+    "nextEvidence": "Run the same 500-intent mix through task_create, task_read, task_list, and applySemanticTaskUpdate after redundant post-mutation reads are removed."
+  },
+  "privacy": {
+    "workspacePathIncluded": false,
+    "taskPayloadIncluded": false,
+    "userIdentityIncluded": false
+  }
+}

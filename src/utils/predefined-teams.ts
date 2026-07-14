@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { ThinkingLevel } from "./models";
+import { Member, ThinkingLevel } from "./models";
 
 /**
  * Represents an agent definition from a .md file
@@ -23,6 +23,19 @@ export interface PredefinedTeam {
   name: string;
   agents: string[];
   description?: string;
+}
+
+/**
+ * Project the append-ordered Membership history to the current teammate
+ * roster. The latest record for a name is authoritative; an inactive latest
+ * record therefore cannot accidentally resurrect an older active record.
+ */
+export function currentRuntimeTeammates(members: Member[]): Member[] {
+  const latestByName = new Map<string, Member>();
+  for (const member of members) latestByName.set(member.name, member);
+  return [...latestByName.values()].filter(member =>
+    member.agentType === "teammate" && member.isActive !== false
+  );
 }
 
 /**
@@ -415,8 +428,9 @@ export function saveTeamTemplate(
     fs.mkdirSync(agentsDir, { recursive: true });
   }
 
-  // Filter to only teammates (not the lead)
-  const teammates = teamConfig.members.filter(m => m.agentType === "teammate");
+  // Export only the current roster. Historical Membership records remain in
+  // TeamConfig for audit/recovery but are not reusable template members.
+  const teammates = currentRuntimeTeammates(teamConfig.members as Member[]);
   const agentNames: string[] = [];
   const savedAgents: SaveTeamTemplateResult["savedAgents"] = [];
 
@@ -503,7 +517,7 @@ export function listRuntimeTeams(): Array<{
         teams.push({
           name: config.name || teamDir.name,
           description: config.description,
-          memberCount: (config.members || []).filter((m: any) => m.agentType === "teammate").length,
+          memberCount: currentRuntimeTeammates(config.members || []).length,
           createdAt: config.createdAt,
         });
       } catch {

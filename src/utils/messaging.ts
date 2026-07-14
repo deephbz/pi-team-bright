@@ -4,7 +4,45 @@ import { createHash, randomUUID } from "node:crypto";
 import { IdentifiedInboxMessage, InboxMessage } from "./models";
 import { withLock } from "./lock";
 import { inboxPath } from "./paths";
-import { readConfig } from "./teams";
+import { readConfig, teamExists, withCurrentConfig } from "./teams";
+import { writeJsonAtomic } from "./atomic-json";
+
+export class MessageTeamDoesNotExistError extends Error {
+  constructor(readonly teamName: string) {
+    super(`Team '${teamName}' does not exist.`);
+    this.name = "MessageTeamDoesNotExistError";
+  }
+}
+
+export class RecipientNotCurrentMemberError extends Error {
+  constructor(
+    readonly teamName: string,
+    readonly recipient: string,
+  ) {
+    super(`Recipient '${recipient}' is not a current member of team '${teamName}'.`);
+    this.name = "RecipientNotCurrentMemberError";
+  }
+}
+
+export class RecipientMembershipUnresolvedError extends Error {
+  constructor(
+    readonly teamName: string,
+    readonly recipient: string,
+  ) {
+    super(`Current recipient '${recipient}' in team '${teamName}' has no membership identity.`);
+    this.name = "RecipientMembershipUnresolvedError";
+  }
+}
+
+export interface BroadcastMessageResult {
+  accepted: Array<{ recipient: string; messageId: string }>;
+  failures: Array<{ recipient: string; error: string }>;
+}
+
+export interface ExpectedSenderBinding {
+  membershipId: string;
+  sessionFile: string;
+}
 
 export function nowIso(): string {
   return new Date().toISOString();
@@ -66,7 +104,7 @@ export async function appendMessage(
       id: message.id || newMessageId(),
     };
     msgs.push(identifiedMessage);
-    fs.writeFileSync(p, JSON.stringify(msgs, null, 2));
+    writeJsonAtomic(p, msgs);
     return identifiedMessage;
   });
 }
@@ -101,9 +139,50 @@ export async function readInbox(
     }
 
     if (changed) {
-      fs.writeFileSync(p, JSON.stringify(allMsgs, null, 2));
+      writeJsonAtomic(p, allMsgs);
     }
 
+    return result;
+  });
+}
+
+/**
+ * Read only records addressed to one exact membership generation.
+ * Legacy unscoped records remain available through readInbox for historical
+ * inspection, but are never interpreted as live work for a current member.
+ */
+export async function readInboxForMembership(
+  teamName: string,
+  agentName: string,
+  membershipId: string,
+  unreadOnly = false,
+  markAsRead = true,
+): Promise<IdentifiedInboxMessage[]> {
+  const p = inboxPath(teamName, agentName);
+  if (!fs.existsSync(p)) return [];
+
+  return await withLock(p, async () => {
+    const rawMessages: InboxMessage[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const identified = identifyMessages(teamName, agentName, rawMessages);
+    const addressed = identified.messages.filter(
+      (message) => message.recipientMembershipId === membershipId,
+    );
+    const result = unreadOnly ? addressed.filter((message) => !message.read) : addressed;
+    let changed = identified.changed;
+    if (markAsRead && result.length > 0) {
+      const selected = new Set(result.map((message) => message.id));
+      for (const message of identified.messages) {
+        if (
+          message.recipientMembershipId === membershipId
+          && selected.has(message.id)
+          && !message.read
+        ) {
+          message.read = true;
+          changed = true;
+        }
+      }
+    }
+    if (changed) writeJsonAtomic(p, identified.messages);
     return result;
   });
 }
@@ -130,8 +209,39 @@ export async function markMessagesRead(
       }
     }
     if (identified.changed || marked > 0) {
-      fs.writeFileSync(p, JSON.stringify(identified.messages, null, 2));
+      writeJsonAtomic(p, identified.messages);
     }
+    return marked;
+  });
+}
+
+/** Acknowledge IDs only when they belong to the exact recipient generation. */
+export async function markMessagesReadForMembership(
+  teamName: string,
+  agentName: string,
+  membershipId: string,
+  messageIds: Iterable<string>,
+): Promise<number> {
+  const p = inboxPath(teamName, agentName);
+  if (!fs.existsSync(p)) return 0;
+  const ids = new Set(messageIds);
+  if (ids.size === 0) return 0;
+
+  return await withLock(p, async () => {
+    const rawMessages: InboxMessage[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const identified = identifyMessages(teamName, agentName, rawMessages);
+    let marked = 0;
+    for (const message of identified.messages) {
+      if (
+        message.recipientMembershipId === membershipId
+        && ids.has(message.id)
+        && !message.read
+      ) {
+        message.read = true;
+        marked += 1;
+      }
+    }
+    if (identified.changed || marked > 0) writeJsonAtomic(p, identified.messages);
     return marked;
   });
 }
@@ -142,17 +252,42 @@ export async function sendPlainMessage(
   toName: string,
   text: string,
   summary: string,
-  color?: string
+  color?: string,
+  expectedSender?: ExpectedSenderBinding,
 ): Promise<IdentifiedInboxMessage> {
-  const msg: InboxMessage = {
-    from: fromName,
-    text,
-    timestamp: nowIso(),
-    read: false,
-    summary,
-    color,
-  };
-  return await appendMessage(teamName, toName, msg);
+  if (!teamExists(teamName)) throw new MessageTeamDoesNotExistError(teamName);
+  return withCurrentConfig(teamName, async (config) => {
+    const recipient = [...config.members].reverse().find(
+      (member) => member.name === toName && member.isActive !== false,
+    );
+    if (!recipient) {
+      throw new RecipientNotCurrentMemberError(teamName, toName);
+    }
+    if (!recipient.membershipId) {
+      throw new RecipientMembershipUnresolvedError(teamName, toName);
+    }
+    const sender = [...config.members].reverse().find(
+      (member) => member.name === fromName && member.isActive !== false,
+    );
+    if (expectedSender && (
+      !sender
+      || sender.membershipId !== expectedSender.membershipId
+      || sender.sessionFile !== expectedSender.sessionFile
+    )) {
+      throw new Error(`Sender ${fromName} is no longer bound to Membership ${expectedSender.membershipId} / Session ${expectedSender.sessionFile}; refusing a stale Message append.`);
+    }
+    const msg: InboxMessage = {
+      recipientMembershipId: recipient.membershipId,
+      ...(sender?.membershipId ? { senderMembershipId: sender.membershipId } : {}),
+      from: fromName,
+      text,
+      timestamp: nowIso(),
+      read: false,
+      summary,
+      color,
+    };
+    return appendMessage(teamName, toName, msg);
+  });
 }
 
 /**
@@ -168,23 +303,37 @@ export async function broadcastMessage(
   fromName: string,
   text: string,
   summary: string,
-  color?: string
-) {
+  color?: string,
+  expectedSender?: ExpectedSenderBinding,
+): Promise<BroadcastMessageResult> {
   const config = await readConfig(teamName);
+  const recipients = config.members
+    .filter((member) => member.isActive !== false && member.name !== fromName)
+    .map((member) => member.name);
 
-  // Create an array of delivery promises for all members except the sender
-  const deliveryPromises = config.members
-    .filter((member) => member.name !== fromName)
-    .map((member) => sendPlainMessage(teamName, fromName, member.name, text, summary, color));
+  const deliveryPromises = recipients
+    .map((recipient) => sendPlainMessage(teamName, fromName, recipient, text, summary, color, expectedSender));
 
   // Execute deliveries in parallel and wait for all to settle
   const results = await Promise.allSettled(deliveryPromises);
 
   // Log failures for diagnostics
-  const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+  const accepted: BroadcastMessageResult["accepted"] = [];
+  const failures: BroadcastMessageResult["failures"] = [];
+  results.forEach((result, index) => {
+    const recipient = recipients[index];
+    if (result.status === "fulfilled") {
+      accepted.push({ recipient, messageId: result.value.id });
+    } else {
+      failures.push({
+        recipient,
+        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+      });
+    }
+  });
   if (failures.length > 0) {
     console.error(`Broadcast partially failed: ${failures.length} messages could not be delivered.`);
-    // Optionally log individual errors
-    failures.forEach((f) => console.error(`- Delivery error:`, f.reason));
+    failures.forEach((failure) => console.error(`- ${failure.recipient}: ${failure.error}`));
   }
+  return { accepted, failures };
 }

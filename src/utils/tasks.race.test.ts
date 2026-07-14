@@ -1,44 +1,36 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
-import path from "node:path";
 import os from "node:os";
-import { createTask, listTasks } from "./tasks";
+import path from "node:path";
+import { createTask } from "./tasks";
 import * as paths from "./paths";
 
-const testDir = path.join(os.tmpdir(), "pi-tasks-race-test-" + Date.now());
+describe("unmigrated Task authority concurrency", () => {
+  afterEach(() => vi.restoreAllMocks());
 
-describe("Tasks Race Condition Bug", () => {
-  beforeEach(() => {
-    if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true });
-    fs.mkdirSync(testDir, { recursive: true });
-    
-    vi.spyOn(paths, "taskDir").mockReturnValue(testDir);
-    vi.spyOn(paths, "configPath").mockReturnValue(path.join(testDir, "config.json"));
-    fs.writeFileSync(path.join(testDir, "config.json"), JSON.stringify({ name: "test-team" }));
-  });
+  it("fails concurrent runtime creates closed without mutating legacy evidence", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-tasks-legacy-race-"));
+    const config = path.join(root, "config.json");
+    const legacy = path.join(root, "1.json");
+    fs.writeFileSync(config, JSON.stringify({ name: "test-team" }));
+    fs.writeFileSync(legacy, JSON.stringify({ id: "1", subject: "evidence" }));
+    vi.spyOn(paths, "configPath").mockReturnValue(config);
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true });
-  });
-
-  it("should potentially fail to create unique IDs under high concurrency (Demonstrating Bug 1)", async () => {
-    const numTasks = 20;
-    const promises = [];
-    
-    for (let i = 0; i < numTasks; i++) {
-      promises.push(createTask("test-team", `Task ${i}`, `Desc ${i}`));
+    try {
+      const attempts = Array.from({ length: 20 }, (_, index) =>
+        createTask("test-team", `Task ${index}`, `Desc ${index}`),
+      );
+      const results = await Promise.allSettled(attempts);
+      expect(results).toHaveLength(20);
+      expect(results.every((result) => result.status === "rejected")).toBe(true);
+      for (const result of results) {
+        if (result.status === "rejected") {
+          expect(String(result.reason)).toContain("npm run migrate:tasks -- test-team");
+        }
+      }
+      expect(JSON.parse(fs.readFileSync(legacy, "utf8"))).toEqual({ id: "1", subject: "evidence" });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
-    
-    const results = await Promise.all(promises);
-    const ids = results.map(r => r.id);
-    const uniqueIds = new Set(ids);
-    
-    // If Bug 1 exists (getTaskId outside the lock but actually it is inside the lock in createTask),
-    // this test might still pass because createTask locks the directory.
-    // WAIT: I noticed createTask uses withLock(lockPath, ...) where lockPath = dir.
-    // Let's re-verify createTask in src/utils/tasks.ts
-    
-    expect(uniqueIds.size).toBe(numTasks);
   });
 });

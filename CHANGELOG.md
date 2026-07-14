@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0-hypercarrier.0] - 2026-07-15
+
+### Breaking
+- Replaced extension-owned JSON task state with Beads as the only runtime task authority. Existing teams require the explicit, verified one-way migration before restart.
+- Replaced mailbox polling and compatibility delivery flags with native queued steering for agent-facing message and task notifications.
+
+### Added
+- Exact session and membership binding for actor identity, plus serialized membership and topology mutation.
+- Durable owner-transition outbox, launch compensation, terminal-task semantics, and external Beads authority fingerprint checks.
+- Composite conformance, migration, race, recovery, and long-horizon benchmark coverage for the clean-cut contracts.
+
+### Changed
+- Team roles remain metadata associated with durable session identity; ephemeral processes can rebind without becoming a new agent.
+- Git tags are the supported release channel for this fork. The upstream-owned npm package is not published by this repository.
+
 ## [0.9.14] - 2025-04-03
 
 ### Fixed

@@ -14,6 +14,9 @@ export function ensureDirs() {
 
 export function sanitizeName(name: string): string {
   // Allow only alphanumeric characters, hyphens, and underscores.
+  if (!name) {
+    throw new Error("Invalid name: names must not be empty.");
+  }
   if (/[^a-zA-Z0-9_-]/.test(name)) {
     throw new Error(`Invalid name: "${name}". Only alphanumeric characters, hyphens, and underscores are allowed.`);
   }
@@ -30,6 +33,24 @@ export function taskDir(teamName: string) {
 
 export function inboxPath(teamName: string, agentName: string) {
   return path.join(teamDir(teamName), "inboxes", `${sanitizeName(agentName)}.json`);
+}
+
+/** Task-authority-local delivery evidence for one resolved recipient. */
+export function taskDeliveryPath(teamName: string, agentName: string) {
+  return path.join(teamDir(teamName), "task-delivery", `${sanitizeName(agentName)}.json`);
+}
+
+export function taskDeliveryTombstonePath(teamName: string, agentName: string) {
+  return path.join(teamDir(teamName), "task-delivery", `${sanitizeName(agentName)}.observed.json`);
+}
+
+export function taskDeliveryRecoveryPath(teamName: string) {
+  return path.join(teamDir(teamName), "task-delivery", "recovery.json");
+}
+
+/** Durable adapter intent for Task ownership-change delivery recovery. */
+export function taskOwnerTransitionOutboxPath(teamName: string) {
+  return path.join(teamDir(teamName), "task-delivery", "owner-transitions.json");
 }
 
 export function runtimeStatusPath(teamName: string, agentName: string) {

@@ -1,7 +1,7 @@
 # PiTeams usage guide
 
 PiTeams is a Pi extension, so the operations in this guide are Pi tools. The
-extension registers exactly 21 tools; the complete parameter reference is in
+extension registers exactly 20 tools; the complete parameter reference is in
 [reference.md](reference.md).
 
 ## Getting started
@@ -9,11 +9,29 @@ extension registers exactly 21 tools; the complete parameter reference is in
 Install the package in Pi:
 
 ```sh
-pi install git:github.com/deephbz/pi-teams@v0.10.0-hypercarrier.1
+pi install git:github.com/deephbz/pi-teams@v0.11.0-hypercarrier.0
 ```
 
 This guide describes the HyperCarrier fork; `npm:pi-teams` is the separate
 upstream package and does not yet provide this release.
+
+Treat each Alpha upgrade as one team-wide epoch. Stop the whole team, change
+the installed PiTeams version, run any required out-of-band Task migration,
+then restart every process on that same version. Rolling upgrades and mixed
+old/new live processes in one team aren't supported.
+
+Before starting Pi, configure one absolute, initialized Beads workspace as the
+Task authority for newly created teams:
+
+```sh
+mkdir -p /absolute/path/to/task-workspace
+cd /absolute/path/to/task-workspace
+bd init --non-interactive --skip-agents
+export PI_TEAMS_BEADS_WORKSPACE=/absolute/path/to/task-workspace
+```
+
+The Pi lead and spawned teammates must inherit that environment. `team_create`
+validates the workspace and fails closed when it is missing or unhealthy.
 
 Create a team, then spawn teammates with absolute working directories:
 
@@ -28,29 +46,27 @@ spawn_teammate({
 ```
 
 A team can be created without a terminal adapter, but `spawn_teammate` and
-`create_predefined_team` need one. A teammate's initial prompt is placed in
-its transient inbox. In the default legacy mode, its first durable Session
-binding receives an instruction to call `read_inbox`; replacing and resuming
-the process on that Session does not inject the bootstrap again. There is no
-automatic tool call and no automatic started event in the lead's inbox. Idle
-agents poll inboxes about every 30 seconds.
+`create_predefined_team` need one. A teammate's initial prompt is accepted into
+its transient inbox and delivered as native custom context; no model-issued
+`read_inbox` call or synthetic user-message bootstrap is required.
 
-Use `check_teammate` for runtime health, not task progress:
+Use `check_teammate` only when diagnosing suspected runtime trouble, not as a
+routine progress/completion poll:
 
 ```js
 check_teammate({ team_name: "my-team", agent_name: "reviewer" })
-read_inbox({ team_name: "my-team" })
 ```
 
 `check_teammate` combines terminal liveness, unread messages, startup timing,
 and heartbeat telemetry. It does not inspect whether a task is complete.
+Normal progress should arrive through Task changes or substantive Messages.
 
 ## Recovering a killed Pi process
 
 A process kill is not a PiTeams shutdown. To resume a lead, start `pi -r` in
 its project directory and select the lead's prior Pi session. PiTeams matches
 the selected durable session file, updates the lead PID and tmux pane, and
-restores lead inbox polling.
+restores native Message and Task delivery.
 
 To resume a tmux teammate whose pane exited, create a new pane in the same
 project directory, run `pi -r`, and select that teammate's prior session.
@@ -58,16 +74,22 @@ PiTeams recorded the teammate's durable session file at its first startup, so
 it restores the teammate identity and refreshes the tracked tmux pane/runtime
 record without `PI_TEAM_NAME` or `PI_AGENT_NAME`.
 
-Teams created by an older PiTeams version, or a teammate killed before its
-first startup completes, have no recorded teammate session file. Resume those
-once with `PI_TEAM_NAME` and `PI_AGENT_NAME`; that startup records the binding
-for later environment-free resumes. This preserves the team roster and
-transient inboxes; it does not replay missed agent work or make a killed
-process a graceful shutdown.
+A first startup binds only when it presents the exact single-use
+`PI_AGENT_LAUNCH_ID` prepared for that Membership. An older or incomplete
+Membership with neither an exact Session binding nor its original launch
+capability fails closed; stop and explicitly respawn it. Names and environment
+selectors alone never manufacture identity.
+
+If historical records associate the same durable lead Session with multiple
+teams, environment-free resume fails closed instead of choosing by directory
+order. Set `PI_TEAM_NAME` to the intended current team for that resume, then
+review and repair the stale `lead-session.json` record. An explicit
+`PI_TEAM_NAME` must name an existing team; a typo fails closed and creates no
+replacement team state.
 
 ## A task workflow
 
-Create first, then read/list and make one update at a time:
+Create first, then use `task_read` before a conditional update:
 
 ```js
 const task = task_create({
@@ -87,14 +109,25 @@ task_update({
 
 `task_create` does not accept initial status or owner. Use `task_update` for
 those fields. Its status values are `pending`, `planning`, `in_progress`,
-`completed`, and `deleted`. `blocked` can appear as a derived task status but
-is not writable. A task update may contain only one mutation path: split
-status, ownership, claim, dependency, progress, and pending-problem writes and
-re-read the version token between them.
+`blocked`, `completed`, and `deleted`. Explicit `blocked` work state is
+independent of `blocked_by` dependency edges. One call may combine owner with a compatible nonterminal
+status because Beads applies both in one command. A single dependency,
+progress entry, or pending problem is its own semantic operation; combinations
+requiring several commands fail before mutation rather than hide partial
+success. The result includes complete post-state and applied operations.
+Soft-deleted Tasks are immutable through all Task mutation tools. Completed
+Tasks can be reopened only by an explicit `task_update` status transition;
+`claim` and `task_submit_plan` never reopen them implicitly.
 
-The read result names the token `version`; the write parameter is named
-`expected_version`. Copy the exact returned `version` value into the next
-Beads mutation's `expected_version` field.
+The `task_read` result names the authoritative token `version`; the optional
+write parameter is `expected_version`. When supplied, a mismatch fails closed.
+`task_list` is a performant projection and omits `version` because the Beads
+list representation doesn't contain the complete authority snapshot.
+
+Mutation tools return concise model-visible JSON containing Task `id`,
+`status`, `owner`, and new `version`, plus applied operations and delivery
+warnings. Continue from that version without immediate read-after-write; use
+`task_read` when later activity may have changed it.
 
 For a teammate that must propose work first:
 
@@ -114,8 +147,11 @@ task_evaluate_plan({
 
 Approval changes `planning` to `in_progress`. Rejection requires `feedback`
 and keeps the task in `planning`; it does not automatically start the task.
-`plan_mode_required` on `spawn_teammate` records the teammate's plan-mode
-setting, while plan state is changed through the two task plan tools.
+Rejection consumes that submitted plan, so revise it and call
+`task_submit_plan` again before requesting another evaluation.
+Plan state is changed explicitly through the two Task plan tools. If a
+teammate must propose work before executing, say so in its prompt or Message;
+PiTeams doesn't expose a separate spawn-time plan-mode switch.
 
 Use `claim: true` for an atomic claim where supported. Use `blocked_by` to add
 a dependency to the target task. Beads rejects `blocks`, because that form
@@ -143,33 +179,65 @@ broadcast_message({
 ```
 
 `send_message` has no `color` parameter; `broadcast_message` optionally does.
-Use `read_inbox` to inspect messages. Inbox state is separate from task state.
+Use `read_inbox` only for explicit audit/history inspection. Normal accepted
+Messages arrive as native custom context, so never call it merely to fetch
+delivery. Inbox state is separate from task state. Avoid ACK-only
+`send_message` calls unless semantic confirmation is required.
+Direct send accepts only a recipient in the team's current roster; an old
+inbox file does not keep a removed teammate addressable.
+Direct-send receipts expose the stable Message ID. Broadcast receipts expose
+accepted recipient/Message-ID pairs and per-recipient failures, so partial
+fan-out is explicit. Reading another Agent's inbox is non-consuming; only an
+Agent's explicit read of its own inbox may mark returned Messages read.
 
-### Opt-in direct Message delivery
-
-Set `PI_TEAMS_MESSAGE_DELIVERY=steer` in a recipient process to replace the
-generic wake-plus-fetch path for direct inbox Messages. Spawned teammates
-inherit the lead process environment, so setting it before starting the lead
-opts those recipients in as well.
+### Direct Message delivery
 
 The recipient adapter assigns or migrates a stable `id` on each inbox record,
 coalesces currently unread records into one `pi-teams.direct-message` custom
 Message containing every ID and full body, and sends it with
 `deliverAs: "steer"` plus `triggerTurn: true`. It does not change Pi's
-session-wide steering mode. A Message remains unread until Pi's `context` hook
-observes that custom Message; the observation is then persisted in the Pi
-Session before the inbox records are acknowledged. Same-Session resume uses
-those observation entries for recovery, while a fork does not consume the
-source recipient's pending inbox.
+session-wide steering mode. Pi's `context` hook only stages the exact Message
+IDs in process memory. The first assistant `turn_end` whose stop reason is not
+`error` or `aborted` appends a successful-turn acknowledgement to the Pi
+Session and marks those inbox records read. An error or abort leaves them
+pending, so a same-Session restart presents a resume steer; a fork does not
+consume the source recipient's pending inbox.
 
-`read_inbox` remains available for rollback and explicit inspection. Set
+`read_inbox` remains available for explicit inspection. Set
 `PI_TEAMS_MESSAGE_POLL_MS` to a positive integer to change the fallback rescan
 interval; the default is 30000 milliseconds. Filesystem activity is only a
 latency hint, so correctness does not depend on receiving every watch event.
-This mode changes only recipient inbox presentation; Task/Beads behavior is
-unchanged. A broadcast still fans out one inbox record per recipient, so those
-records use the recipient's selected presentation mode while broadcast
-acceptance and fan-out semantics stay the same.
+This changes only recipient inbox presentation; Task/Beads behavior is
+separate. A broadcast still fans out one inbox record per recipient.
+
+### Task change delivery
+
+Successful Task assignments and later changes surface directly to the exact
+assignee Session. The Beads backend remains authoritative. The adapter writes a
+separate task-local delivery record keyed by authority instance, native Task
+ID, accepted version, change kind, recipient and Session, then emits a
+`pi-teams.task-change` custom steer containing the versioned Task payload.
+It never creates an inbox Message, and context/runtime observation never
+changes Task owner or status.
+
+Pi's `context` hook only stages the exact custom Task change in process memory.
+The first assistant `turn_end` whose stop reason is not `error` or `aborted`
+appends a successful-turn acknowledgement and settles its delivery record.
+Same-Session process resume recovers pending delivery; a fork or unrelated
+fresh Session consumes none of the source Agent's pending changes.
+`PI_TEAMS_TASK_POLL_MS` controls local-spool fallback rescans and defaults to
+30000 milliseconds; it never causes a periodic Beads list.
+
+Delivery is at-least-once until Pi stages the custom context and completes a
+non-error/non-aborted assistant turn. An errored transport leaves the delivery
+pending for same-Session restart. If Beads commits
+before the separate delivery spool is written, delivery start/restart
+reconciles latest owner-addressed state plus durable targeted recovery records.
+Successfully acknowledged versions leave exact Session-bound tombstones, so compaction cannot
+make the reconciler echo settled work.
+
+Direct external `bd` writes remain authoritative and queryable, but Alpha live
+push covers PiTeams-mediated writes only; there is no per-Agent Beads polling.
 
 When one teammate is finished, use:
 
@@ -183,22 +251,27 @@ For the whole team:
 team_shutdown({ team_name: "my-team" })
 ```
 
-Whole-team shutdown attempts process and pane/window cleanup and removes old
-Pi agent-session folders older than one hour. A legacy team loses its team and
-local task directories as part of normal cleanup. A Beads-cutover team keeps
-its team configuration, Beads authority, and legacy task files as migration
-evidence, so task data remains queryable after the panes close. Run
-`cleanup_agent_sessions({ max_age_hours: 24 })` for a separate cleanup with a
-custom age threshold.
+Whole-team shutdown attempts each teammate independently and deactivates only a
+Membership whose terminal surface is confirmed gone, or whose exact
+Membership-bound runtime record proves its process already exited. A failed
+stop and the lead remain current, and the receipt identifies the failure for
+retry. Shutdown never performs global age-based Pi-core session deletion. It
+retains the team configuration, Beads authority, and any legacy task files as
+migration evidence, so Task data remains queryable after the panes close.
+`cleanup_agent_sessions` reports old folders as review candidates but deletes
+none because age alone cannot prove that another long-running team or process
+is inactive.
 
 ## Legacy tasks and Beads cutover
 
-Before migration, the legacy backend stores per-task JSON under
-`~/.pi/tasks/<team>/` and normally assigns numeric local IDs. A migrated team
-records `taskBackend: "beads"`, an absolute `taskWorkspace`, and durable
-cutover evidence. From cutover onward, Beads is the only writable task
-authority and task IDs are Beads IDs such as `bd-abc123`; do not use the old
-numeric ID as a new task ID.
+Historical PiTeams versions stored per-task JSON under `~/.pi/tasks/<team>/`
+with numeric local IDs. Current runtime code never reads or writes those files
+as a Task backend: an unmigrated Team fails closed until the one-time migration
+records `taskBackend: "beads"`, an absolute `taskWorkspace`, a stable
+opaque `taskAuthorityId`, a versioned `taskAuthorityFingerprint` containing the
+non-secret Beads project/database identity, and durable cutover evidence.
+The workspace itself must be an initialized Beads 1.1 root: a `.beads` found
+only in an ancestor is a different authority and is rejected before any write.
 
 Run migration outside Pi with:
 
@@ -212,19 +285,25 @@ and flips authority only after successful reconciliation. Pre-cutover drift
 blocks the flip until an explicitly reviewed operator override is recorded.
 Interrupted migration can be rerun. After cutover, changed or newly created
 legacy files are orphaned old-client writes and are never imported
-automatically; mixed old/new writers are not a supported steady state.
+automatically; mixed old/new writers are not a supported steady state. A
+post-cutover rerun must name the exact configured workspace. It reconciles the
+persisted legacy-to-Beads mapping and fails closed if the supplied path differs
+or that authority workspace is unavailable. It requires the preserved
+`taskAuthorityId` and fingerprint, and never silently mints a replacement
+identity or rebinds to a different valid database at the same path.
 
-For Beads writes after cutover, supply `expected_version` from a fresh
-`task_read` or `task_list` result for non-claim mutations. Beads 1.1.0 does not
-provide true CLI compare-and-swap, so this is a serialized preflight rather
-than a guarantee against an external race. If Beads is unavailable, malformed,
+For Beads writes after cutover, `expected_version` is optional and enforced
+when supplied. It is a digest of the canonical authority snapshot rather than
+Beads' second-resolution timestamp. Beads 1.1.0 does not provide true CLI
+compare-and-swap, so this is a serialized preflight rather than a guarantee
+against an external race. If Beads is unavailable, malformed,
 times out, rejects the task's scope, or reports a conflict, the tool fails and
 does not write legacy files.
 
 Beads maps `pending` and `planning` to open issues with PiTeams metadata,
 `in_progress` directly, and `completed` to closed. Plans, progress, and
 pending problems use namespaced metadata/comments. `deleted` is soft deletion
-in Beads, preserving history; legacy deletion removes the local task file.
+in Beads, preserving history.
 
 After Beads-cutover shutdown, read the preserved team configuration to obtain
 the absolute workspace, then query it directly:
@@ -246,11 +325,10 @@ current Pi process working directory. When a task is completed, PiTeams passes
 the task record as JSON in the hook's first argument and sets `PI_TEAM` to the
 team name.
 
-Both task backends invoke this hook: the legacy store invokes it on a
-`completed` write, while `BeadsTaskStore` invokes it when an open task
-transitions to closed through completion. Hook errors are logged and do not
-reverse the task mutation, so the hook is notification/automation rather than
-a transactional quality gate.
+`BeadsTaskStore` invokes this hook when an open Task transitions to closed
+through completion. Hook errors are logged and do not reverse the Task
+mutation, so the hook is notification/automation rather than a transactional
+quality gate.
 
 ```sh
 #!/bin/sh
@@ -308,8 +386,9 @@ on tmux or Zellij.
 
 - **tmux:** requires `TMUX`; pane kill and liveness are supported; no OS
   windows.
-- **Zellij:** requires `ZELLIJ` outside tmux; panes use `--close-on-exit`,
-  explicit kill is a no-op, and synthetic pane liveness is best-effort.
+- **Zellij:** requires `ZELLIJ` outside tmux; panes use `--close-on-exit`, but a
+  synthetic pane ID cannot confirm explicit shutdown. The tool fails closed and
+  keeps Membership current until the process is closed manually.
 - **cmux:** requires `CMUX_SOCKET_PATH` or `CMUX_WORKSPACE_ID` outside tmux and
   Zellij; it manages surfaces and OS windows through the `cmux` CLI.
 - **iTerm2:** requires macOS iTerm2 outside tmux and Zellij; AppleScript manages
@@ -319,16 +398,18 @@ on tmux or Zellij.
   panes.
 - **Windows Terminal:** requires Windows, `wt` at spawn time, and PowerShell.
   Pane/window IDs are synthetic; direct terminal kill and reliable liveness
-  queries are unavailable. Process shutdown may use the tracked teammate PID,
-  but terminal cleanup and `check_teammate` liveness are advisory.
+  queries are unavailable. Shutdown fails closed and keeps Membership current
+  until manual process closure. PiTeams never kills a PID from durable state
+  alone; exact Membership-bound runtime evidence can only prove that the
+  recorded process already exited. `check_teammate` liveness remains advisory.
 
 Run Pi in the terminal environment you intend to manage. If no adapter is
 detected, use task and messaging tools without spawning, or configure a
 supported adapter before spawning.
 
-## The 21 registered tools
+## The 20 registered tools
 
-`team_create`, `spawn_teammate`, `spawn_lead_window`, `send_message`,
+`team_create`, `spawn_teammate`, `send_message`,
 `broadcast_message`, `read_inbox`, `task_create`, `task_submit_plan`,
 `task_evaluate_plan`, `task_list`, `task_update`, `team_shutdown`,
 `cleanup_agent_sessions`, `task_read`, `check_teammate`,

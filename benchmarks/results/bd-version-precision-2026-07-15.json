@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-15T00:19:17+08:00",
+  "bdVersion": "bd version 1.1.0 (8e4e59d39)",
+  "mode": "embedded",
+  "probe": {
+    "create": {
+      "updatedAt": "2026-07-14T16:19:16.378709Z",
+      "description": "state-v0"
+    },
+    "immediateShow": {
+      "updatedAt": "2026-07-14T16:19:16Z",
+      "description": "state-v0"
+    },
+    "update": {
+      "updatedAt": "2026-07-14T16:19:17Z",
+      "description": "state-v1"
+    },
+    "postUpdateShow": {
+      "updatedAt": "2026-07-14T16:19:17Z",
+      "description": "state-v1"
+    }
+  },
+  "findings": [
+    "The create response and immediate show represent identical state but use different timestamp precision.",
+    "A timestamp string is therefore not a stable optimistic-concurrency token.",
+    "The adapter must derive a canonical version from logical authority state and return a fresh post-state after mutation."
+  ],
+  "verification": {
+    "canonicalDigestFixture": "src/utils/clean-cut-round2.test.ts",
+    "sameStateAcrossFormatting": "pass",
+    "sameTimestampLogicalMutationChangesVersion": "pass"
+  },
+  "containsWorkspacePath": false,
+  "containsTaskPayloadSecrets": false
+}

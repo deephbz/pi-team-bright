@@ -1,0 +1,563 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import piTeams from "../../extensions/index";
+import type { TeamConfig } from "./models";
+import * as messaging from "./messaging";
+import * as paths from "./paths";
+import {
+  DIRECT_MESSAGE_CUSTOM_TYPE,
+} from "./message-delivery";
+import {
+  TASK_CHANGE_CUSTOM_TYPE,
+  TASK_CHANGE_ACK_ENTRY_TYPE,
+  TaskChangeDelivery,
+  enqueueTaskChange,
+  readTaskDeliveries,
+} from "./task-delivery";
+import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
+import * as teams from "./teams";
+
+type RegisteredTool = {
+  name: string;
+  execute: (
+    toolCallId: string,
+    params: any,
+    signal?: unknown,
+    onUpdate?: unknown,
+    ctx?: any,
+  ) => Promise<any>;
+};
+
+type Handler = (event: any, ctx: any) => Promise<any>;
+
+const testTeams: string[] = [];
+const testRoots: string[] = [];
+const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
+
+// This evaluator exercises real `bd` workspaces and fsync-backed durability.
+// Parallel full-suite load can exceed Vitest's unit-test-oriented 5s default.
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
+function uniqueTeam(suffix: string): string {
+  const name = `clean-cut-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
+  testTeams.push(name);
+  return name;
+}
+
+function tempRoot(suffix: string): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `pi-teams-${suffix}-`));
+  testRoots.push(root);
+  return root;
+}
+
+function writeTeam(
+  name: string,
+  options: {
+    workerSession?: string;
+    taskWorkspace?: string;
+    legacy?: boolean;
+  } = {},
+): TeamConfig {
+  fs.mkdirSync(paths.teamDir(name), { recursive: true });
+  fs.mkdirSync(paths.taskDir(name), { recursive: true });
+  const taskWorkspace = options.legacy
+    ? ""
+    : options.taskWorkspace || (hasBd ? initBeadsWorkspace() : path.join(tempRoot("declared-workspace"), "beads"));
+  const config: TeamConfig = {
+    name,
+    description: "clean-cut evaluator fixture",
+    createdAt: Date.now(),
+    leadAgentId: "lead-agent",
+    leadSessionId: "lead-session",
+    members: [
+      {
+        membershipId: `membership_lead_${name}`,
+        agentId: `lead@${name}`,
+        name: "team-lead",
+        agentType: "lead",
+        joinedAt: Date.now(),
+        tmuxPaneId: "",
+        cwd: process.cwd(),
+        subscriptions: [],
+        sessionFile: "lead-session",
+      },
+      ...(options.workerSession
+          ? [{
+            membershipId: `membership_worker_${name}`,
+            agentId: `worker@${name}`,
+            name: "worker",
+            agentType: "teammate",
+            joinedAt: Date.now(),
+            tmuxPaneId: "",
+            sessionFile: options.workerSession,
+            cwd: process.cwd(),
+            subscriptions: [],
+          }]
+        : []),
+    ],
+    ...(options.legacy
+      ? {}
+      : {
+          taskBackend: "beads" as const,
+          taskWorkspace,
+          taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
+          taskAuthorityFingerprint: hasBd
+            ? readBeadsAuthorityFingerprint(taskWorkspace)
+            : { schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: "test", projectId: "test" },
+        }),
+  };
+  teams.writeConfigAtomic(paths.configPath(name), config);
+  return config;
+}
+
+function extensionHarness() {
+  const tools = new Map<string, RegisteredTool>();
+  const handlers = new Map<string, Handler>();
+  const sendMessage = vi.fn();
+  const appendEntry = vi.fn();
+  const sendUserMessage = vi.fn();
+  piTeams({
+    registerTool(tool: RegisteredTool) {
+      tools.set(tool.name, tool);
+    },
+    on(event: string, handler: Handler) {
+      handlers.set(event, handler);
+    },
+    sendMessage,
+    appendEntry,
+    sendUserMessage,
+  } as never);
+  return { tools, handlers, sendMessage, appendEntry, sendUserMessage };
+}
+
+function sessionContext(sessionFile: string) {
+  return {
+    isIdle: vi.fn(() => false),
+    sessionManager: {
+      getSessionFile: vi.fn(() => sessionFile),
+      buildContextEntries: vi.fn(() => []),
+    },
+    ui: { setStatus: vi.fn(), notify: vi.fn(), setTitle: vi.fn() },
+  };
+}
+
+function initBeadsWorkspace(): string {
+  const workspace = path.join(tempRoot("beads-workspace"), "workspace");
+  fs.mkdirSync(workspace, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: workspace });
+  execFileSync("bd", ["init", "--quiet", "--skip-agents", "--skip-hooks"], {
+    cwd: workspace,
+    stdio: "ignore",
+  });
+  return workspace;
+}
+
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+  for (const name of testTeams.splice(0)) {
+    fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
+    fs.rmSync(paths.taskDir(name), { recursive: true, force: true });
+  }
+  for (const root of testRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
+
+describe("clean-cut public contract", () => {
+  it("removes delivery feature flags and the synthetic inbox bootstrap from the shipped surface", () => {
+    const extension = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
+    const messageDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/message-delivery.ts"), "utf8");
+    const taskDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
+    const tasks = fs.readFileSync(path.join(process.cwd(), "src/utils/tasks.ts"), "utf8");
+    const docs = ["README.md", "docs/guide.md", "docs/reference.md", "skills/pi-teams/SKILL.md"]
+      .map((file) => fs.readFileSync(path.join(process.cwd(), file), "utf8"))
+      .join("\n");
+
+    for (const removed of ["PI_TEAMS_MESSAGE_DELIVERY", "PI_TEAMS_TASK_DELIVERY"]) {
+      expect(`${extension}\n${messageDelivery}\n${taskDelivery}\n${tasks}\n${docs}`).not.toContain(removed);
+    }
+    expect(extension).not.toContain("sendUserMessage(");
+    expect(extension).not.toContain("startLeadInboxPolling");
+    expect(extension).not.toContain("teammatePollingTimer");
+    expect(extension).not.toMatch(/Start by calling read_inbox/);
+  });
+
+  it("delivers accepted direct Messages as steer by default and never uses read_inbox as delivery", async () => {
+    vi.stubEnv("TMUX", "");
+    const name = uniqueTeam("message-default");
+    const sessionFile = `/tmp/${name}.jsonl`;
+    writeTeam(name, { workerSession: sessionFile });
+    vi.stubEnv("PI_TEAM_NAME", name);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const accepted = await messaging.sendPlainMessage(
+      name,
+      "team-lead",
+      "worker",
+      "full body is already in context",
+      "do work",
+    );
+
+    const harness = extensionHarness();
+    const ctx = sessionContext(sessionFile);
+    await harness.handlers.get("session_start")?.({ reason: "resume" }, ctx);
+
+    const direct = harness.sendMessage.mock.calls.find(
+      ([message]) => message.customType === DIRECT_MESSAGE_CUSTOM_TYPE,
+    );
+    expect(direct).toBeDefined();
+    expect(direct?.[0]).toMatchObject({
+      details: { teamName: name, recipient: "worker", messageIds: [accepted.id] },
+    });
+    expect(direct?.[0].content).toContain("full body is already in context");
+    expect(direct?.[1]).toEqual({ triggerTurn: true, deliverAs: "steer" });
+    expect(harness.sendUserMessage).not.toHaveBeenCalled();
+
+    const beforeStart = await harness.handlers.get("before_agent_start")?.(
+      { systemPrompt: "base" },
+      ctx,
+    );
+    expect(beforeStart?.systemPrompt).toContain("delivered in context");
+    expect(beforeStart?.systemPrompt).not.toContain("Start by calling read_inbox");
+    await harness.handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
+  });
+
+  it("delivers accepted Task changes as steer by default without creating a Message", async () => {
+    vi.stubEnv("TMUX", "");
+    const name = uniqueTeam("task-default");
+    const sessionFile = `/tmp/${name}.jsonl`;
+    writeTeam(name, { workerSession: sessionFile });
+    vi.stubEnv("PI_TEAM_NAME", name);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const task = {
+      id: "task-1",
+      subject: "Act on the Task authority",
+      description: "complete payload",
+      status: "in_progress" as const,
+      blocks: [],
+      blockedBy: [],
+      owner: "worker",
+      version: "v1",
+    };
+    await enqueueTaskChange(name, task, "assigned", "team-lead");
+
+    const harness = extensionHarness();
+    const ctx = sessionContext(sessionFile);
+    await harness.handlers.get("session_start")?.({ reason: "resume" }, ctx);
+
+    const taskCall = harness.sendMessage.mock.calls.find(
+      ([message]) => message.customType === TASK_CHANGE_CUSTOM_TYPE,
+    );
+    expect(taskCall).toBeDefined();
+    expect(taskCall?.[0]).toMatchObject({
+      details: {
+        teamName: name,
+        recipient: "worker",
+        changes: [{ ref: { nativeId: task.id, version: task.version } }],
+      },
+    });
+    expect(taskCall?.[0].content).toContain("complete payload");
+    expect(taskCall?.[1]).toEqual({ triggerTurn: true, deliverAs: "steer" });
+    expect(await messaging.readInbox(name, "worker", false, false)).toEqual([]);
+    expect(harness.sendUserMessage).not.toHaveBeenCalled();
+    await harness.handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
+  });
+});
+
+describe("Beads-only authority and migration boundary", () => {
+  it("fails closed when the operator default workspace is missing or unhealthy", async () => {
+    vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", "");
+    const missing = uniqueTeam("missing-workspace");
+    const missingCreate = extensionHarness().tools.get("team_create")!;
+    await expect(missingCreate.execute("create", { team_name: missing }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/missing-lead.jsonl", buildContextEntries: () => [] },
+      ui: { setStatus: vi.fn() },
+    })).rejects.toThrow(
+      /PI_TEAMS_BEADS_WORKSPACE|Beads workspace/i,
+    );
+    expect(fs.existsSync(paths.configPath(missing))).toBe(false);
+
+    const unhealthyRoot = tempRoot("unhealthy-workspace");
+    vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", unhealthyRoot);
+    const unhealthy = uniqueTeam("unhealthy-workspace");
+    const unhealthyCreate = extensionHarness().tools.get("team_create")!;
+    await expect(unhealthyCreate.execute("create", { team_name: unhealthy }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/unhealthy-lead.jsonl", buildContextEntries: () => [] },
+      ui: { setStatus: vi.fn() },
+    })).rejects.toThrow(
+      /initialized Beads|Beads workspace|bd/i,
+    );
+    expect(fs.existsSync(paths.configPath(unhealthy))).toBe(false);
+  });
+
+  it.skipIf(!hasBd)("creates every new Team against the operator-configured Beads authority", async () => {
+    const workspace = initBeadsWorkspace();
+    vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
+    const name = uniqueTeam("new-beads-team");
+    const create = extensionHarness().tools.get("team_create")!;
+    const result = await create.execute("create", { team_name: name }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/new-lead.jsonl", buildContextEntries: () => [] },
+      ui: { setStatus: vi.fn() },
+    });
+    const config = result.details.config as TeamConfig & { taskAuthorityId?: string };
+
+    expect(config).toMatchObject({ taskBackend: "beads", taskWorkspace: workspace });
+    expect(config.taskAuthorityId).toMatch(/^task_authority_[0-9a-f-]+$/);
+    expect(fs.existsSync(paths.taskDir(name))).toBe(false);
+  });
+
+  it.skipIf(!hasBd)("rejects team creation in an uninitialized child of another Beads authority", async () => {
+    const parentWorkspace = initBeadsWorkspace();
+    const childWorkspace = path.join(parentWorkspace, "uninitialized-child");
+    fs.mkdirSync(childWorkspace);
+    vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", childWorkspace);
+    const name = uniqueTeam("nested-wrong-authority");
+    const create = extensionHarness().tools.get("team_create")!;
+
+    await expect(create.execute("create", { team_name: name }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/nested-wrong-authority-lead.jsonl", buildContextEntries: () => [] },
+      ui: { setStatus: vi.fn() },
+    })).rejects.toThrow(/not an initialized authority root|exact workspace/i);
+    expect(fs.existsSync(paths.configPath(name))).toBe(false);
+  });
+
+  it.skipIf(!hasBd)("uses the persisted opaque Task authority ID when workspace spelling changes", async () => {
+    const workspace = initBeadsWorkspace();
+    const alias = path.join(tempRoot("workspace-alias"), "beads-link");
+    fs.symlinkSync(workspace, alias);
+    vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
+    const name = uniqueTeam("opaque-authority");
+    const sessionFile = `/tmp/${name}.jsonl`;
+    const create = extensionHarness().tools.get("team_create")!;
+    const result = await create.execute("create", { team_name: name }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/opaque-lead.jsonl", buildContextEntries: () => [] },
+      ui: { setStatus: vi.fn() },
+    });
+    const created = result.details.config as TeamConfig & { taskAuthorityId?: string };
+    expect(created.taskAuthorityId).toEqual(expect.any(String));
+    await teams.addMember(name, {
+      agentId: `worker@${name}`,
+      name: "worker",
+      agentType: "teammate",
+      joinedAt: Date.now(),
+      tmuxPaneId: "",
+      sessionFile,
+      cwd: process.cwd(),
+      subscriptions: [],
+    });
+    const rebound = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
+    teams.writeConfigAtomic(paths.configPath(name), { ...rebound, taskWorkspace: alias });
+    const record = await enqueueTaskChange(name, {
+      id: "task-opaque",
+      subject: "opaque authority",
+      description: "workspace path is adapter config",
+      status: "in_progress",
+      owner: "worker",
+      blocks: [],
+      blockedBy: [],
+      version: "v1",
+    }, "assigned", "team-lead");
+
+    expect(record?.ref.authorityId).toBe(created.taskAuthorityId);
+    expect(record?.ref.authorityId).not.toContain(workspace);
+    expect(record?.ref.authorityId).not.toContain(alias);
+  });
+
+  it("rejects an old public-release Team with one actionable migration command", async () => {
+    const name = uniqueTeam("legacy-rejected");
+    writeTeam(name, { legacy: true });
+    fs.writeFileSync(path.join(paths.taskDir(name), "1.json"), JSON.stringify({
+      id: "1",
+      subject: "legacy",
+      description: "must migrate",
+      status: "pending",
+      blocks: [],
+      blockedBy: [],
+    }));
+    const workspace = path.join(tempRoot("migration-target"), "workspace");
+    vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
+    const create = extensionHarness().tools.get("team_create")!;
+
+    await expect(create.execute("create", { team_name: name }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/lead.jsonl" },
+      ui: { setStatus: vi.fn() },
+    })).rejects.toThrow(new RegExp(`npm run migrate:tasks -- ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    expect(JSON.parse(fs.readFileSync(path.join(paths.taskDir(name), "1.json"), "utf8"))).toMatchObject({
+      subject: "legacy",
+    });
+  });
+});
+
+describe("durability and recovery", () => {
+  it("never exposes a truncated inbox when the atomic replacement fails", async () => {
+    const name = uniqueTeam("atomic-inbox");
+    writeTeam(name);
+    const first = await messaging.sendPlainMessage(name, "team-lead", "team-lead", "first", "first");
+    const file = paths.inboxPath(name, "team-lead");
+    const before = fs.readFileSync(file, "utf8");
+    const originalRename = fs.renameSync;
+    vi.spyOn(fs, "renameSync").mockImplementation((source, target) => {
+      if (target === file) throw new Error("simulated rename failure");
+      return originalRename(source, target);
+    });
+
+    await expect(messaging.sendPlainMessage(name, "team-lead", "team-lead", "second", "second"))
+      .rejects.toThrow("simulated rename failure");
+    expect(fs.readFileSync(file, "utf8")).toBe(before);
+    expect(JSON.parse(before)).toEqual([expect.objectContaining({ id: first.id, text: "first" })]);
+  });
+
+  it("never exposes a truncated Task delivery spool when atomic replacement fails", async () => {
+    const name = uniqueTeam("atomic-task-spool");
+    const sessionFile = `/tmp/${name}.jsonl`;
+    writeTeam(name, { workerSession: sessionFile });
+    const base = {
+      id: "task-1",
+      subject: "first",
+      description: "first snapshot",
+      status: "in_progress" as const,
+      blocks: [],
+      blockedBy: [],
+      owner: "worker",
+      version: "v1",
+    };
+    await enqueueTaskChange(name, base, "assigned", "team-lead");
+    const file = paths.taskDeliveryPath(name, "worker");
+    const before = fs.readFileSync(file, "utf8");
+    const originalRename = fs.renameSync;
+    vi.spyOn(fs, "renameSync").mockImplementation((source, target) => {
+      if (target === file) throw new Error("simulated rename failure");
+      return originalRename(source, target);
+    });
+
+    await expect(enqueueTaskChange(name, { ...base, description: "second", version: "v2" }, "status_changed", "team-lead"))
+      .rejects.toThrow("simulated rename failure");
+    expect(fs.readFileSync(file, "utf8")).toBe(before);
+    expect(JSON.parse(before)).toHaveLength(1);
+  });
+
+  it.skipIf(!hasBd)("reconciles a committed assigned Task whose delivery spool was lost before same-Session resume", async () => {
+    vi.stubEnv("TMUX", "");
+    const workspace = initBeadsWorkspace();
+    const name = uniqueTeam("task-reconcile");
+    const sessionFile = `/tmp/${name}.jsonl`;
+    writeTeam(name, { workerSession: sessionFile, taskWorkspace: workspace });
+    vi.stubEnv("PI_TEAM_NAME", name);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const store = new BeadsTaskStore({
+      teamName: name,
+      workspace,
+      actor: "team-lead",
+      requireExpectedVersion: false,
+    });
+    const created = await store.create({ subject: "committed", description: "survives fault" });
+    const assigned = await store.update(created.id, { owner: "worker", status: "in_progress" });
+    expect(await readTaskDeliveries(name, "worker")).toEqual([]);
+
+    const harness = extensionHarness();
+    const ctx = sessionContext(sessionFile);
+    await harness.handlers.get("session_start")?.({ reason: "resume" }, ctx);
+
+    const rebuilt = await readTaskDeliveries(name, "worker");
+    expect(rebuilt).toEqual([
+      expect.objectContaining({
+        ref: expect.objectContaining({ nativeId: assigned.id, version: assigned.version }),
+        recipientSessionFile: sessionFile,
+        taskSnapshot: expect.objectContaining({ description: "survives fault" }),
+      }),
+    ]);
+    expect(harness.sendMessage.mock.calls.some(
+      ([message]) => message.customType === TASK_CHANGE_CUSTOM_TYPE,
+    )).toBe(true);
+    await harness.handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
+  }, 60_000);
+
+  it("makes the steer/Session fault cut explicitly at-least-once until successful-turn acknowledgement", async () => {
+    const name = uniqueTeam("at-least-once");
+    const sessionFile = `/tmp/${name}.jsonl`;
+    writeTeam(name, { workerSession: sessionFile });
+    const record = await enqueueTaskChange(name, {
+      id: "task-once",
+      subject: "retry across crash",
+      description: "same logical delivery may be attempted again",
+      status: "in_progress",
+      owner: "worker",
+      blocks: [],
+      blockedBy: [],
+      version: "v1",
+    }, "assigned", "team-lead");
+    expect(record).not.toBeNull();
+
+    const firstSend = vi.fn();
+    const first = new TaskChangeDelivery({ sendMessage: firstSend, appendEntry: vi.fn() }, {
+      teamName: name,
+      recipient: "worker",
+      sessionFile,
+    });
+    await first.start([]);
+    expect(firstSend).toHaveBeenCalledTimes(1);
+    first.stop();
+
+    // Process death before Pi persists the custom Message can retry the same
+    // stable delivery ID. Consumers therefore deduplicate by ID, not attempt.
+    const retrySend = vi.fn();
+    const retry = new TaskChangeDelivery({ sendMessage: retrySend, appendEntry: vi.fn() }, {
+      teamName: name,
+      recipient: "worker",
+      sessionFile,
+    });
+    await retry.start([]);
+    expect(retrySend).toHaveBeenCalledTimes(1);
+    expect(retrySend.mock.calls[0][0].details.deliveryIds).toEqual([record!.deliveryId]);
+    retry.stop();
+
+    const presented = {
+      type: "custom_message",
+      id: "presented",
+      parentId: null,
+      timestamp: "2026-07-14T00:00:00.000Z",
+      customType: TASK_CHANGE_CUSTOM_TYPE,
+      content: "canonical Task payload",
+      display: true,
+      details: retrySend.mock.calls[0][0].details,
+    } as any;
+    const observed = {
+      type: "custom",
+      id: "observed",
+      parentId: "presented",
+      timestamp: "2026-07-14T00:00:01.000Z",
+      customType: TASK_CHANGE_ACK_ENTRY_TYPE,
+      data: retrySend.mock.calls[0][0].details,
+    } as any;
+    const settledSend = vi.fn();
+    const settled = new TaskChangeDelivery({ sendMessage: settledSend, appendEntry: vi.fn() }, {
+      teamName: name,
+      recipient: "worker",
+      sessionFile,
+    });
+    await settled.start([presented, observed]);
+    expect(settledSend).not.toHaveBeenCalled();
+    expect((await readTaskDeliveries(name, "worker"))[0].successfulTurnAckAt).toEqual(expect.any(String));
+    settled.stop();
+  });
+
+  it("rejects completion/deletion combined with another mutation instead of claiming atomicity", async () => {
+    const name = uniqueTeam("terminal-state-atomicity");
+    writeTeam(name);
+    const update = extensionHarness().tools.get("task_update")!;
+    for (const status of ["completed", "deleted"]) {
+      await expect(update.execute("update", {
+        team_name: name,
+        task_id: "task-1",
+        status,
+        progress: "must not be half-applied",
+      }, undefined, undefined, {
+        sessionManager: { getSessionFile: () => "lead-session" },
+      })).rejects.toThrow(/atomic|combine|one.*mutation/i);
+    }
+  });
+});

@@ -22,6 +22,7 @@ export interface RuntimeError {
 export interface AgentRuntimeStatus {
   teamName: string;
   agentName: string;
+  membershipId?: string;
   pid?: number;
   startedAt?: number;
   lastHeartbeatAt?: number;
@@ -30,13 +31,36 @@ export interface AgentRuntimeStatus {
   lastError?: RuntimeError;
 }
 
+/** Exact ephemeral process generation within one durable Membership. */
+export interface RuntimeGeneration {
+  membershipId: string;
+  pid: number;
+  startedAt: number;
+}
+
+export function runtimeGeneration(status: AgentRuntimeStatus | null): RuntimeGeneration | null {
+  if (
+    !status?.membershipId
+    || !Number.isSafeInteger(status.pid)
+    || status.pid! <= 1
+    || !Number.isFinite(status.startedAt)
+    || status.startedAt! <= 0
+  ) return null;
+  return {
+    membershipId: status.membershipId,
+    pid: status.pid!,
+    startedAt: status.startedAt!,
+  };
+}
+
 /**
  * Write runtime status for an agent. Merges with existing status.
  */
 export async function writeRuntimeStatus(
   teamName: string,
   agentName: string,
-  updates: Partial<AgentRuntimeStatus>
+  updates: Partial<AgentRuntimeStatus>,
+  membershipId?: string,
 ): Promise<AgentRuntimeStatus> {
   const p = runtimeStatusPath(teamName, agentName);
   const dir = path.dirname(p);
@@ -62,6 +86,7 @@ export async function writeRuntimeStatus(
       ...updates,
       teamName,
       agentName,
+      ...(membershipId ? { membershipId } : {}),
     };
 
     fs.writeFileSync(p, JSON.stringify(next, null, 2));
@@ -95,7 +120,8 @@ export async function readRuntimeStatus(
  */
 export async function deleteRuntimeStatus(
   teamName: string,
-  agentName: string
+  agentName: string,
+  expected: RuntimeGeneration,
 ): Promise<boolean> {
   const p = runtimeStatusPath(teamName, agentName);
   if (!fs.existsSync(p)) return false;
@@ -103,6 +129,13 @@ export async function deleteRuntimeStatus(
   return await withLock(p, async () => {
     if (!fs.existsSync(p)) return false;
     try {
+      const current = runtimeGeneration(JSON.parse(fs.readFileSync(p, "utf8")) as AgentRuntimeStatus);
+      if (
+        !current
+        || current.membershipId !== expected.membershipId
+        || current.pid !== expected.pid
+        || current.startedAt !== expected.startedAt
+      ) return false;
       fs.unlinkSync(p);
       return true;
     } catch {

@@ -1,291 +1,429 @@
 // Project: pi-teams
-import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { TaskFile } from "./models";
-import { taskDir, sanitizeName } from "./paths";
-import { teamExists, readConfig } from "./teams";
-import { withLock, withLocks } from "./lock";
-import { runHook } from "./hooks";
+import { BeadsAuthorityFingerprint, TaskFile, TeamConfig } from "./models";
+import { teamExists, readConfig, assertCurrentSessionBinding, withCurrentSessionBinding } from "./teams";
 import {
   BeadsTaskStore,
   CreateTaskInput,
   TaskWriteOptions,
   BeadsTaskStoreOptions,
   BeadsProgressEntry,
+  TaskMutationResult,
+  assertBeadsWorkspaceRoot,
+  readBeadsAuthorityFingerprint,
 } from "./beads";
+import {
+  completeOwnerTransitionIntent,
+  enqueueTaskChangeForRecipient,
+  prepareOwnerTransitionIntent,
+  recordTaskDeliveryRecovery,
+  suppressTaskVersionForSession,
+  TaskChangeKind,
+} from "./task-delivery";
+import { withSemanticTrace } from "./trace";
 
-export type UpdateTaskOptions = TaskWriteOptions | number;
+export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
+
+export interface ResolvedTaskAuthority {
+  workspace: string;
+  authorityId: string;
+  fingerprint: BeadsAuthorityFingerprint;
+}
+
+export function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = process.env): string {
+  const workspace = env[BEADS_WORKSPACE_ENV]?.trim();
+  if (!workspace) {
+    throw new Error(`No default Beads workspace is configured. Set ${BEADS_WORKSPACE_ENV} to an absolute initialized Beads workspace.`);
+  }
+  if (!path.isAbsolute(workspace)) throw new Error(`${BEADS_WORKSPACE_ENV} must be an absolute path: ${workspace}`);
+  return workspace;
+}
+
+/** Resolve one operator-owned Task authority for team creation/reconnect. */
+export async function resolveTeamTaskAuthority(teamName: string): Promise<ResolvedTaskAuthority> {
+  if (teamExists(teamName)) {
+    const existing = await readConfig(teamName);
+    if (existing.taskBackend !== "beads" || !existing.taskWorkspace) {
+      const target = process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
+      throw new Error(`Team ${teamName} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${teamName} ${target}`);
+    }
+    if (!existing.taskAuthorityId || !existing.taskAuthorityFingerprint) {
+      throw new Error(`Team ${teamName} has an incomplete Beads Task authority binding; restore taskAuthorityId and taskAuthorityFingerprint through an explicit recovery review.`);
+    }
+    assertBeadsWorkspaceRoot(existing.taskWorkspace);
+    const store = new BeadsTaskStore({
+      teamName,
+      workspace: existing.taskWorkspace,
+      authorityFingerprint: existing.taskAuthorityFingerprint,
+      requireExpectedVersion: true,
+    });
+    await store.assertWorkspaceRoot();
+    await store.list();
+    return { workspace: existing.taskWorkspace, authorityId: existing.taskAuthorityId, fingerprint: existing.taskAuthorityFingerprint };
+  }
+  const workspace = configuredBeadsWorkspace();
+  assertBeadsWorkspaceRoot(workspace);
+  const fingerprint = readBeadsAuthorityFingerprint(workspace);
+  const store = new BeadsTaskStore({ teamName, workspace, authorityFingerprint: fingerprint, requireExpectedVersion: true });
+  await store.assertWorkspaceRoot();
+  await store.list();
+  return { workspace, authorityId: `task_authority_${crypto.randomUUID()}`, fingerprint };
+}
 
 export interface TaskStore {
   create(input: CreateTaskInput, options?: TaskWriteOptions): Promise<TaskFile>;
   update(taskId: string, updates: Partial<TaskFile>, options?: TaskWriteOptions): Promise<TaskFile>;
   submitPlan(taskId: string, plan: string, options?: TaskWriteOptions): Promise<TaskFile>;
   evaluatePlan(taskId: string, action: "approve" | "reject", feedback?: string, options?: TaskWriteOptions): Promise<TaskFile>;
-  read(taskId: string, retries?: number): Promise<TaskFile>;
+  read(taskId: string): Promise<TaskFile>;
   list(): Promise<TaskFile[]>;
   claim?(taskId: string, actor?: string, options?: TaskWriteOptions): Promise<TaskFile>;
   addDependency?(taskId: string, blockerId: string, options?: TaskWriteOptions): Promise<TaskFile>;
   addProgress?(taskId: string, entry: BeadsProgressEntry, options?: TaskWriteOptions): Promise<TaskFile>;
-  resetOwnerTasks(agentName: string): Promise<void>;
 }
 
-function versionOf(raw: string): string {
-  return crypto.createHash("sha256").update(raw).digest("hex");
-}
-
-function withLegacyVersion(raw: string, task: TaskFile): TaskFile {
-  return { ...task, version: versionOf(raw) };
-}
-
-export class LegacyTaskStore implements TaskStore {
-  constructor(readonly teamName: string) {}
-
-  private getTaskPath(taskId: string): string {
-    const dir = taskDir(this.teamName);
-    return path.join(dir, `${sanitizeName(taskId)}.json`);
-  }
-
-  async create(input: CreateTaskInput): Promise<TaskFile> {
-    if (!input.subject || !input.subject.trim()) throw new Error("Task subject must not be empty");
-    if (!teamExists(this.teamName)) throw new Error(`Team ${this.teamName} does not exist`);
-
-    const dir = taskDir(this.teamName);
-    return await withLock(dir, async () => {
-      const id = getTaskId(this.teamName);
-      const task: TaskFile = {
-        id,
-        subject: input.subject,
-        description: input.description,
-        activeForm: input.activeForm,
-        status: "pending",
-        blocks: [],
-        blockedBy: [],
-        metadata: input.metadata,
-      };
-      const serialized = JSON.stringify(task, null, 2);
-      fs.writeFileSync(path.join(dir, `${id}.json`), serialized);
-      return withLegacyVersion(serialized, task);
-    });
-  }
-
-  async update(taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    const p = this.getTaskPath(taskId);
-    return await withLock(p, async () => {
-      if (!fs.existsSync(p)) throw new Error(`Task ${taskId} not found`);
-      const raw = fs.readFileSync(p, "utf-8");
-      const task: TaskFile = JSON.parse(raw);
-      if (options.expectedVersion && versionOf(raw) !== options.expectedVersion) {
-        throw new Error(`Task ${taskId} changed since version ${options.expectedVersion}; re-read and retry.`);
-      }
-      const updated = { ...task, ...updates };
-
-      if (updates.status === "deleted") {
-        fs.unlinkSync(p);
-        return { ...updated, version: undefined };
-      }
-
-      const serialized = JSON.stringify(updated, null, 2);
-      fs.writeFileSync(p, serialized);
-
-      if (updates.status === "completed") await runHook(this.teamName, "task_completed", updated);
-      return withLegacyVersion(serialized, updated);
-    }, options.retries);
-  }
-
-  async submitPlan(taskId: string, plan: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    if (!plan || !plan.trim()) throw new Error("Plan must not be empty");
-    return this.update(taskId, { status: "planning", plan }, options);
-  }
-
-  async evaluatePlan(taskId: string, action: "approve" | "reject", feedback?: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    const p = this.getTaskPath(taskId);
-    return await withLock(p, async () => {
-      if (!fs.existsSync(p)) throw new Error(`Task ${taskId} not found`);
-      const raw = fs.readFileSync(p, "utf-8");
-      const task: TaskFile = JSON.parse(raw);
-      if (options.expectedVersion && versionOf(raw) !== options.expectedVersion) {
-        throw new Error(`Task ${taskId} changed since version ${options.expectedVersion}; re-read and retry.`);
-      }
-      if (task.status !== "planning") {
-        throw new Error(`Cannot evaluate plan for task ${taskId} because its status is '${task.status}'. Tasks must be in 'planning' status to be evaluated.`);
-      }
-      if (!task.plan || !task.plan.trim()) throw new Error(`Cannot evaluate plan for task ${taskId} because no plan has been submitted.`);
-      if (action === "reject" && (!feedback || !feedback.trim())) throw new Error("Feedback is required when rejecting a plan.");
-      const updates: Partial<TaskFile> = action === "approve"
-        ? { status: "in_progress", planFeedback: "" }
-        : { status: "planning", planFeedback: feedback };
-      const updated = { ...task, ...updates };
-      const serialized = JSON.stringify(updated, null, 2);
-      fs.writeFileSync(p, serialized);
-      return withLegacyVersion(serialized, updated);
-    });
-  }
-
-  async read(taskId: string, retries = 50): Promise<TaskFile> {
-    const p = this.getTaskPath(taskId);
-    if (!fs.existsSync(p)) throw new Error(`Task ${taskId} not found`);
-    return await withLock(p, async () => {
-      const raw = fs.readFileSync(p, "utf-8");
-      return withLegacyVersion(raw, JSON.parse(raw));
-    }, retries);
-  }
-
-  async list(): Promise<TaskFile[]> {
-    const dir = taskDir(this.teamName);
-    return await withLock(dir, async () => {
-      const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
-      const tasks = files.map(file => {
-        const id = parseInt(path.parse(file).name, 10);
-        if (Number.isNaN(id)) return null;
-        const raw = fs.readFileSync(path.join(dir, file), "utf-8");
-        return withLegacyVersion(raw, JSON.parse(raw));
-      }).filter((task): task is TaskFile => task !== null);
-      return tasks.sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
-    });
-  }
-
-  async claim(taskId: string, actor?: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    const task = await this.read(taskId);
-    if (task.owner && task.owner !== actor) throw new Error(`Task ${taskId} is already claimed by ${task.owner}`);
-    return this.update(taskId, { owner: actor, status: "in_progress" }, options);
-  }
-
-  async addDependency(taskId: string, blockerId: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    if (taskId === blockerId) throw new Error("A task cannot depend on itself");
-    const taskPath = this.getTaskPath(taskId);
-    const blockerPath = this.getTaskPath(blockerId);
-    return withLocks([taskPath, blockerPath], async () => {
-      if (!fs.existsSync(taskPath)) throw new Error(`Task ${taskId} not found`);
-      if (!fs.existsSync(blockerPath)) throw new Error(`Task ${blockerId} not found`);
-      const taskRaw = fs.readFileSync(taskPath, "utf8");
-      const blockerRaw = fs.readFileSync(blockerPath, "utf8");
-      const task = withLegacyVersion(taskRaw, JSON.parse(taskRaw) as TaskFile);
-      const blocker = withLegacyVersion(blockerRaw, JSON.parse(blockerRaw) as TaskFile);
-      if (options.expectedVersion && task.version !== options.expectedVersion) {
-        throw new Error(`Task ${taskId} changed since version ${options.expectedVersion}; re-read and retry.`);
-      }
-      try {
-        if (!task.blockedBy.includes(blockerId)) {
-          const updatedTask = { ...task, blockedBy: [...task.blockedBy, blockerId] };
-          fs.writeFileSync(taskPath, JSON.stringify(updatedTask, null, 2));
-        }
-        if (!blocker.blocks.includes(taskId)) {
-          const updatedBlocker = { ...blocker, blocks: [...blocker.blocks, taskId] };
-          fs.writeFileSync(blockerPath, JSON.stringify(updatedBlocker, null, 2));
-        }
-      } catch (error) {
-        fs.writeFileSync(taskPath, taskRaw);
-        fs.writeFileSync(blockerPath, blockerRaw);
-        throw error;
-      }
-      const finalRaw = fs.readFileSync(taskPath, "utf8");
-      return withLegacyVersion(finalRaw, JSON.parse(finalRaw) as TaskFile);
-    });
-  }
-
-  async addProgress(taskId: string, entry: BeadsProgressEntry, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    const task = await this.read(taskId);
-    const key = entry.kind === "pending-problem" ? "pendingProblems" : "progress";
-    const current = Array.isArray(task.metadata?.[key]) ? task.metadata?.[key] : [];
-    return this.update(taskId, {
-      metadata: {
-        ...(task.metadata || {}),
-        [key]: [...current, { text: entry.text, actor: entry.actor, at: new Date().toISOString() }],
-      },
-    }, options);
-  }
-
-  async resetOwnerTasks(agentName: string): Promise<void> {
-    const dir = taskDir(this.teamName);
-    await withLock(dir, async () => {
-      const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
-      for (const file of files) {
-        const p = path.join(dir, file);
-        const raw = fs.readFileSync(p, "utf-8");
-        const task: TaskFile = JSON.parse(raw);
-        if (task.owner === agentName) {
-          task.owner = undefined;
-          if (task.status !== "completed") task.status = "pending";
-          fs.writeFileSync(p, JSON.stringify(task, null, 2));
-        }
-      }
-    });
-  }
-}
-
-export function getTaskId(teamName: string): string {
-  const dir = taskDir(teamName);
-  const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
-  const ids = files.map(f => parseInt(path.parse(f).name, 10)).filter(id => !Number.isNaN(id));
-  return ids.length > 0 ? (Math.max(...ids) + 1).toString() : "1";
-}
-
-async function storeFor(teamName: string): Promise<TaskStore> {
+async function storeFor(teamName: string): Promise<BeadsTaskStore> {
   const config = await readConfig(teamName);
-  if (config.taskBackend !== "beads") return new LegacyTaskStore(teamName);
+  if (config.taskBackend !== "beads") {
+    const target = process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
+    throw new Error(`Team ${teamName} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${teamName} ${target}`);
+  }
   if (!config.taskWorkspace) {
     throw new Error(`Team ${teamName} is configured for Beads but has no taskWorkspace. Re-run migration configuration; legacy task files are not a fallback.`);
   }
-  return new BeadsTaskStore({ teamName, workspace: config.taskWorkspace, requireExpectedVersion: true });
-}
-
-function optionsFrom(value?: UpdateTaskOptions): { retries?: number; options: TaskWriteOptions } {
-  return typeof value === "number" ? { retries: value, options: {} } : { options: value || {} };
-}
-
-export async function createTask(teamName: string, subject: string, description: string, activeForm = "", metadata?: Record<string, any>): Promise<TaskFile> {
-  const store = await storeFor(teamName);
-  const idempotencyKey = typeof metadata?.pi_teams_idempotency_key === "string" ? metadata.pi_teams_idempotency_key : undefined;
-  return store.create({ subject, description, activeForm, metadata, idempotencyKey }, { idempotencyKey });
-}
-
-export async function updateTask(teamName: string, taskId: string, updates: Partial<TaskFile>, retriesOrOptions?: UpdateTaskOptions): Promise<TaskFile> {
-  const parsed = optionsFrom(retriesOrOptions);
-  const store = await storeFor(teamName);
-  if (parsed.retries !== undefined && store instanceof LegacyTaskStore) {
-    // Preserve the historical fourth positional retry argument for callers/tests.
-    return store.update(taskId, updates, { ...parsed.options, retries: parsed.retries });
+  if (!config.taskAuthorityId || !config.taskAuthorityFingerprint) {
+    throw new Error(`Team ${teamName} has an incomplete Beads Task authority binding.`);
   }
-  return store.update(taskId, updates, parsed.options);
+  return new BeadsTaskStore({
+    teamName,
+    workspace: config.taskWorkspace!,
+    authorityFingerprint: config.taskAuthorityFingerprint,
+    requireExpectedVersion: false,
+  });
+}
+
+function storeForConfig(config: TeamConfig): BeadsTaskStore {
+  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
+    throw new Error(`Team ${config.name} has no complete Beads Task authority binding.`);
+  }
+  return new BeadsTaskStore({
+    teamName: config.name,
+    workspace: config.taskWorkspace,
+    authorityFingerprint: config.taskAuthorityFingerprint,
+    requireExpectedVersion: false,
+  });
+}
+
+export interface AgentMutationBinding {
+  actor: string;
+  actingSessionFile?: string;
+  actingMembershipId?: string;
+}
+
+async function withAgentMutationAuthority<T>(
+  teamName: string,
+  options: AgentMutationBinding,
+  action: (store: BeadsTaskStore) => Promise<T>,
+): Promise<T> {
+  if (!options.actingSessionFile) return action(await storeFor(teamName));
+  const membershipId = options.actingMembershipId
+    || (await assertCurrentSessionBinding(teamName, options.actor, options.actingSessionFile)).membershipId;
+  if (!membershipId) throw new Error(`Current Membership for ${options.actor} on team ${teamName} has no membershipId.`);
+  return withCurrentSessionBinding(teamName, options.actor, options.actingSessionFile, membershipId, async (config) => action(storeForConfig(config)));
+}
+
+export interface SemanticTaskUpdate {
+  status?: TaskFile["status"];
+  owner?: string;
+  claim?: boolean;
+  blockedBy?: string[];
+  blocks?: string[];
+  progress?: string;
+  pendingProblem?: string;
+}
+
+export interface SemanticTaskUpdateResult {
+  task: TaskFile;
+  before: TaskFile;
+  appliedOperations: string[];
+  deliveryDegraded: boolean;
+  deliveryWarnings: string[];
+}
+
+export interface TaskMutationReceipt {
+  task: TaskFile;
+  appliedOperations: string[];
+  deliveryDegraded: boolean;
+  deliveryWarnings: string[];
+}
+
+function ownerTransitionOperation(teamName: string, afterOwner: string | undefined) {
+  const operationId = `task_owner_transition_${crypto.randomUUID()}`;
+  return {
+    operationId,
+    writeOption: {
+      operationId,
+      prepare: (before: TaskFile, previousOperationId?: string) => prepareOwnerTransitionIntent({
+        operationId,
+        teamName,
+        before,
+        afterOwner: afterOwner || undefined,
+        previousOperationId,
+      }),
+    },
+  };
+}
+
+export async function applySemanticTaskUpdate(
+  teamName: string,
+  taskId: string,
+  update: SemanticTaskUpdate,
+  options: TaskWriteOptions & AgentMutationBinding,
+): Promise<SemanticTaskUpdateResult> {
+  return withSemanticTrace("task_update", { teamName, taskId }, async () => {
+    const desiredOwner = update.claim ? options.actor : update.owner;
+    const ownerTransition = desiredOwner !== undefined
+      ? ownerTransitionOperation(teamName, desiredOwner)
+      : undefined;
+    const terminal = update.status === "completed" || update.status === "deleted";
+    const nonterminalOperations = update.owner !== undefined
+      || update.claim
+      || (update.blockedBy?.length ?? 0) > 0
+      || (update.blocks?.length ?? 0) > 0
+      || !!update.progress
+      || !!update.pendingProblem;
+    if (terminal && nonterminalOperations) {
+      throw new Error("A terminal status transition cannot be combined with owner, claim, dependency, progress, or pending-problem changes.");
+    }
+    if (update.claim && (update.owner !== undefined || update.status !== undefined || (update.blockedBy?.length ?? 0) > 0 || !!update.progress || !!update.pendingProblem)) {
+      throw new Error("claim is an atomic ownership operation and cannot be combined with other task_update mutations.");
+    }
+    if ((update.blocks?.length ?? 0) > 0) {
+      throw new Error("task_update.blocks mutates another Task without its version; use blocked_by on the target Task.");
+    }
+    const fieldClass = update.status !== undefined || update.owner !== undefined;
+    const dependencyCount = update.blockedBy?.length ?? 0;
+    const progressClass = !!update.progress;
+    const problemClass = !!update.pendingProblem;
+    const semanticClasses = Number(fieldClass) + Number(dependencyCount > 0) + Number(progressClass) + Number(problemClass);
+    if (semanticClasses > 1) {
+      throw new Error("task_update cannot hide partial multi-command success: combine only owner with a nonterminal status; dependency, progress, and pending_problem are separate semantic operations.");
+    }
+    if (dependencyCount > 1) {
+      throw new Error("Multiple dependency links require a transactional Beads batch and are not yet supported in one task_update.");
+    }
+    const mutation = await withAgentMutationAuthority(teamName, options, async (store) => {
+      let firstBefore: TaskFile | undefined;
+      let current: TaskFile | undefined;
+      const appliedOperations: string[] = [];
+      let expectedVersion = options.expectedVersion;
+      const absorb = (result: TaskMutationResult) => {
+        firstBefore ||= result.before;
+        current = result.after;
+        appliedOperations.push(...result.appliedOperations);
+        expectedVersion = result.after.version;
+      };
+
+      if (update.claim) {
+        absorb(await store.claimWithResult(taskId, options.actor, {
+          ...options,
+          expectedVersion,
+          internalOwnerTransition: ownerTransition?.writeOption,
+        }));
+      } else {
+        const fields: Partial<TaskFile> = {};
+        if (update.status !== undefined) fields.status = update.status;
+        if (update.owner !== undefined) fields.owner = update.owner;
+        if (Object.keys(fields).length > 0) absorb(await store.updateWithResult(taskId, fields, {
+          ...options,
+          expectedVersion,
+          internalOwnerTransition: ownerTransition?.writeOption,
+        }));
+        for (const blockerId of update.blockedBy || []) absorb(await store.addDependencyWithResult(taskId, blockerId, { ...options, expectedVersion }));
+        if (update.progress) absorb(await store.addProgressWithResult(taskId, { kind: "progress", text: update.progress, actor: options.actor }, { ...options, expectedVersion }));
+        if (update.pendingProblem) absorb(await store.addProgressWithResult(taskId, { kind: "pending-problem", text: update.pendingProblem, actor: options.actor }, { ...options, expectedVersion }));
+      }
+      if (!current) current = await store.read(taskId);
+      firstBefore ||= current;
+      return { firstBefore, current, appliedOperations };
+    });
+    const { firstBefore, current, appliedOperations } = mutation;
+    if (
+      options.actingSessionFile
+      && (firstBefore.owner === options.actor || current.owner === options.actor)
+    ) {
+      await suppressTaskVersionForSession(teamName, options.actor, options.actingSessionFile, current);
+    }
+    const ownerChanged = firstBefore.owner !== current.owner;
+    const deliveryWarnings = appliedOperations.length === 0
+      ? []
+      : ownerChanged && ownerTransition
+        ? await completeOwnerTransitionIntent(teamName, ownerTransition.operationId, current)
+        : await publishTaskMutation(teamName, firstBefore, current, changeKindForUpdate({ status: update.status, owner: update.owner }), options.actor);
+    return {
+      task: current,
+      before: firstBefore,
+      appliedOperations,
+      deliveryDegraded: deliveryWarnings.length > 0,
+      deliveryWarnings,
+    };
+  });
+}
+
+export async function createTask(teamName: string, subject: string, description: string, activeForm = "", metadata?: Record<string, any>, binding?: AgentMutationBinding): Promise<TaskFile> {
+  return withSemanticTrace("task_create", { teamName }, async () => {
+    const idempotencyKey = typeof metadata?.pi_teams_idempotency_key === "string" ? metadata.pi_teams_idempotency_key : undefined;
+    const mutate = (store: BeadsTaskStore) => store.create({ subject, description, activeForm, metadata, idempotencyKey }, { idempotencyKey, actor: binding?.actor });
+    return binding ? withAgentMutationAuthority(teamName, binding, mutate) : mutate(await storeFor(teamName));
+  });
+}
+
+export async function updateTask(teamName: string, taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskFile> {
+  const store = await storeFor(teamName);
+  const transition = updates.owner !== undefined ? ownerTransitionOperation(teamName, updates.owner) : undefined;
+  const mutation = await store.updateWithResult(taskId, updates, {
+    ...options,
+    internalOwnerTransition: transition?.writeOption,
+  });
+  if (mutation.before.owner !== mutation.after.owner && transition) {
+    await completeOwnerTransitionIntent(teamName, transition.operationId, mutation.after);
+  } else {
+    await publishTaskMutation(teamName, mutation.before, mutation.after, changeKindForUpdate(updates), options.actor);
+  }
+  return mutation.after;
 }
 
 export async function submitPlan(teamName: string, taskId: string, plan: string, options?: TaskWriteOptions): Promise<TaskFile> {
-  return (await storeFor(teamName)).submitPlan(taskId, plan, options);
+  return (await submitPlanWithReceipt(teamName, taskId, plan, options)).task;
+}
+
+export async function submitPlanWithReceipt(teamName: string, taskId: string, plan: string, options?: TaskWriteOptions & Partial<AgentMutationBinding>): Promise<TaskMutationReceipt> {
+  return withSemanticTrace("task_submit_plan", { teamName, taskId }, async () => {
+    const mutate = (store: BeadsTaskStore) => store.submitPlan(taskId, plan, options);
+    const updated = options?.actor ? await withAgentMutationAuthority(teamName, options as TaskWriteOptions & AgentMutationBinding, mutate) : await mutate(await storeFor(teamName));
+    const deliveryWarnings = await publishTaskChange(teamName, updated, "plan_changed", options?.actor);
+    return {
+      task: updated,
+      appliedOperations: ["submit_plan"],
+      deliveryDegraded: deliveryWarnings.length > 0,
+      deliveryWarnings,
+    };
+  });
 }
 
 export async function evaluatePlan(teamName: string, taskId: string, action: "approve" | "reject", feedback?: string, options?: TaskWriteOptions): Promise<TaskFile> {
-  return (await storeFor(teamName)).evaluatePlan(taskId, action, feedback, options);
+  return (await evaluatePlanWithReceipt(teamName, taskId, action, feedback, options)).task;
 }
 
-export async function readTask(teamName: string, taskId: string, retries?: number): Promise<TaskFile> {
-  return (await storeFor(teamName)).read(taskId, retries);
+export async function evaluatePlanWithReceipt(teamName: string, taskId: string, action: "approve" | "reject", feedback?: string, options?: TaskWriteOptions & Partial<AgentMutationBinding>): Promise<TaskMutationReceipt> {
+  return withSemanticTrace("task_evaluate_plan", { teamName, taskId }, async () => {
+    const mutate = (store: BeadsTaskStore) => store.evaluatePlan(taskId, action, feedback, options);
+    const updated = options?.actor ? await withAgentMutationAuthority(teamName, options as TaskWriteOptions & AgentMutationBinding, mutate) : await mutate(await storeFor(teamName));
+    const deliveryWarnings = await publishTaskChange(teamName, updated, "plan_changed", options?.actor);
+    return {
+      task: updated,
+      appliedOperations: [`${action}_plan`],
+      deliveryDegraded: deliveryWarnings.length > 0,
+      deliveryWarnings,
+    };
+  });
+}
+
+export async function readTask(teamName: string, taskId: string): Promise<TaskFile> {
+  return withSemanticTrace("task_read", { teamName, taskId }, async () => (await storeFor(teamName)).read(taskId));
 }
 
 export async function listTasks(teamName: string): Promise<TaskFile[]> {
-  return (await storeFor(teamName)).list();
+  return withSemanticTrace("task_list", { teamName }, async () => {
+    const tasks = await (await storeFor(teamName)).list();
+    return tasks.map(({ version: _projectionRevision, ...task }) => task);
+  });
 }
 
 export async function claimTask(teamName: string, taskId: string, actor: string, options?: TaskWriteOptions): Promise<TaskFile> {
   const store = await storeFor(teamName);
-  if (!store.claim) throw new Error(`Task backend for team ${teamName} does not support atomic claims.`);
-  return store.claim(taskId, actor, options);
+  const transition = ownerTransitionOperation(teamName, actor);
+  const mutation = await store.claimWithResult(taskId, actor, {
+    ...options,
+    internalOwnerTransition: transition.writeOption,
+  });
+  if (mutation.before.owner !== mutation.after.owner) {
+    await completeOwnerTransitionIntent(teamName, transition.operationId, mutation.after);
+  } else {
+    await publishTaskMutation(teamName, mutation.before, mutation.after, "assigned", actor);
+  }
+  return mutation.after;
 }
 
 export async function addTaskDependency(teamName: string, taskId: string, blockerId: string, options?: TaskWriteOptions): Promise<TaskFile> {
   const store = await storeFor(teamName);
   if (!store.addDependency) throw new Error(`Task backend for team ${teamName} does not support dependencies.`);
-  return store.addDependency(taskId, blockerId, options);
+  const updated = await store.addDependency(taskId, blockerId, options);
+  await publishTaskChange(teamName, updated, "dependency_changed", options?.actor);
+  return updated;
 }
 
 export async function addTaskProgress(teamName: string, taskId: string, entry: BeadsProgressEntry, options?: TaskWriteOptions): Promise<TaskFile> {
   const store = await storeFor(teamName);
   if (!store.addProgress) throw new Error(`Task backend for team ${teamName} does not support progress entries.`);
-  return store.addProgress(taskId, entry, options);
+  const updated = await store.addProgress(taskId, entry, options);
+  await publishTaskChange(teamName, updated, "progress_changed", options?.actor);
+  return updated;
 }
 
-export async function resetOwnerTasks(teamName: string, agentName: string): Promise<void> {
-  return (await storeFor(teamName)).resetOwnerTasks(agentName);
+function changeKindForUpdate(updates: Partial<TaskFile>): TaskChangeKind {
+  if (updates.owner !== undefined) return "assigned";
+  if (updates.status !== undefined) return "status_changed";
+  if (updates.plan !== undefined || updates.planFeedback !== undefined) return "plan_changed";
+  if (updates.blockedBy !== undefined || updates.blocks !== undefined) return "dependency_changed";
+  return "task_changed";
+}
+
+async function publishTaskChange(teamName: string, task: TaskFile, kind: TaskChangeKind, actor?: string): Promise<string[]> {
+  // Reuse the mutation publisher so post-commit delivery degradation is both
+  // recoverable and visible to the caller without making delivery transactional.
+  return publishTaskMutation(teamName, task, task, kind, actor);
+}
+
+async function publishTaskMutation(
+  teamName: string,
+  before: TaskFile,
+  after: TaskFile,
+  kind: TaskChangeKind,
+  actor?: string,
+): Promise<string[]> {
+  const targets: Array<{ recipient: string; kind: TaskChangeKind }> = [];
+  if (before.owner && before.owner !== after.owner) {
+    targets.push({ recipient: before.owner, kind: "ownership_lost" });
+  }
+  if (after.owner) targets.push({ recipient: after.owner, kind });
+  const unique = [...new Map(targets.map((target) => [`${target.recipient}:${target.kind}`, target])).values()];
+  const warnings: string[] = [];
+  for (const target of unique) {
+    try {
+      await enqueueTaskChangeForRecipient(teamName, after, target.recipient, target.kind);
+    } catch (error) {
+      const warning = `Task ${after.id} committed but delivery enqueue for ${target.recipient} failed`;
+      warnings.push(warning);
+      try {
+        await recordTaskDeliveryRecovery({
+          teamName,
+          taskId: after.id,
+          taskVersion: after.version || "unknown",
+          recipients: [target.recipient],
+          changeKind: target.kind,
+          recordedAt: new Date().toISOString(),
+          reason: "enqueue-failed",
+          taskSnapshot: structuredClone(after),
+        });
+      } catch {
+        warnings.push(`${warning}; recovery evidence could not be persisted`);
+      }
+      console.warn(`[pi-teams] ${warning}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return warnings;
 }
 
 export function createBeadsStore(options: BeadsTaskStoreOptions): BeadsTaskStore {

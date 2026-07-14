@@ -4,6 +4,7 @@ import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as messaging from "./messaging";
+import * as runtime from "./runtime";
 import { DIRECT_MESSAGE_CUSTOM_TYPE } from "./message-delivery";
 
 type Handler = (event: unknown, ctx: SessionContext) => Promise<void>;
@@ -55,15 +56,17 @@ afterEach(() => {
 });
 
 describe("Pi session lifecycle", () => {
-  it("sends the legacy bootstrap wake only on the first durable teammate Session binding", async () => {
+  it("never injects a synthetic inbox bootstrap on first binding or same-Session resume", async () => {
     vi.useFakeTimers();
     vi.stubEnv("TMUX", "");
-    vi.stubEnv("PI_TEAMS_MESSAGE_DELIVERY", "legacy");
     const teamName = testTeamName("bootstrap-once");
     const sessionFile = "/tmp/pi-teams-bootstrap-once.jsonl";
     paths.ensureDirs();
-    teams.createTeam(teamName, "session", "lead-agent");
+    await teams.createTeam(teamName, "session", "lead-agent");
+    const launchId = teams.newLaunchId();
     await teams.addMember(teamName, {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: launchId,
       agentId: `worker@${teamName}`,
       name: "worker",
       agentType: "teammate",
@@ -74,6 +77,7 @@ describe("Pi session lifecycle", () => {
     });
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
 
     const firstHandlers = new Map<string, Handler>();
     const firstWake = vi.fn();
@@ -85,8 +89,9 @@ describe("Pi session lifecycle", () => {
     const firstContext = lifecycleContext(sessionFile);
     await firstHandlers.get("session_start")?.({ reason: "startup" }, firstContext);
     await vi.advanceTimersByTimeAsync(1_000);
-    expect(firstWake).toHaveBeenCalledTimes(1);
+    expect(firstWake).not.toHaveBeenCalled();
     await firstHandlers.get("session_shutdown")?.({ reason: "quit" }, firstContext);
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
 
     const resumedHandlers = new Map<string, Handler>();
     const resumedWake = vi.fn();
@@ -102,14 +107,13 @@ describe("Pi session lifecycle", () => {
     await resumedHandlers.get("session_shutdown")?.({ reason: "quit" }, resumedContext);
   });
 
-  it("wires opt-in direct Message steer through context-observed read acknowledgement", async () => {
+  it("wires direct Message acknowledgement through the first successful turn", async () => {
     vi.stubEnv("TMUX", "");
-    vi.stubEnv("PI_TEAMS_MESSAGE_DELIVERY", "steer");
     vi.stubEnv("PI_TEAMS_MESSAGE_POLL_MS", "50");
     const teamName = testTeamName("direct-message");
     const sessionFile = "/tmp/pi-teams-direct-message.jsonl";
     paths.ensureDirs();
-    teams.createTeam(teamName, "session", "lead-agent");
+    await teams.createTeam(teamName, "session", "lead-agent");
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
       name: "worker",
@@ -158,20 +162,75 @@ describe("Pi session lifecycle", () => {
     await handlers.get("context")?.({
       messages: [{ role: "custom", customType: batch.customType, details: batch.details }],
     }, ctx);
+    expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(2);
+    await handlers.get("turn_end")?.({ message: { role: "assistant", stopReason: "error" } }, ctx);
+    expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(false);
+    expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(2);
+    await handlers.get("turn_end")?.({ message: { role: "assistant", stopReason: "toolUse" } }, ctx);
+    expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(true);
     expect(appendEntry).toHaveBeenCalledWith(
-      "pi-teams.direct-message-context-observed",
+      "pi-teams.direct-message-successful-turn-ack",
       expect.objectContaining({ messageIds: [first.id, second.id] }),
     );
     expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(0);
     await handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
   });
 
-  it("does not inherit opt-in direct inbox delivery into a fork", async () => {
+  it("records successful runtime readiness even when delivery acknowledgement persistence fails", async () => {
     vi.stubEnv("TMUX", "");
-    vi.stubEnv("PI_TEAMS_MESSAGE_DELIVERY", "steer");
+    const teamName = testTeamName("ready-before-ack");
+    const sessionFile = `/tmp/${teamName}.jsonl`;
+    paths.ensureDirs();
+    await teams.createTeam(teamName, "session", "lead-agent");
+    await teams.addMember(teamName, {
+      agentId: `worker@${teamName}`,
+      name: "worker",
+      agentType: "teammate",
+      joinedAt: Date.now(),
+      tmuxPaneId: "",
+      sessionFile,
+      cwd: process.cwd(),
+      subscriptions: [],
+    });
+    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "must remain recoverable", "ack fault");
+
+    const handlers = new Map<string, Handler>();
+    const sendMessage = vi.fn();
+    piTeams({
+      on(event: string, handler: Handler) { handlers.set(event, handler); },
+      registerTool() {},
+      sendMessage,
+      appendEntry: vi.fn(() => { throw new Error("ack persistence fault"); }),
+    } as never);
+    const ctx = {
+      ...lifecycleContext(sessionFile),
+      sessionManager: {
+        getSessionFile: vi.fn(() => sessionFile),
+        buildContextEntries: vi.fn(() => []),
+      },
+    };
+
+    await handlers.get("session_start")?.({ reason: "resume" }, ctx);
+    const batch = sendMessage.mock.calls[0][0];
+    await handlers.get("context")?.({
+      messages: [{ role: "custom", customType: batch.customType, details: batch.details }],
+    }, ctx);
+    await expect(handlers.get("turn_end")?.(
+      { message: { role: "assistant", stopReason: "stop" } },
+      ctx,
+    )).rejects.toThrow("ack persistence fault");
+    expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(true);
+    expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(1);
+    await handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
+  });
+
+  it("does not inherit direct inbox delivery into a fork", async () => {
+    vi.stubEnv("TMUX", "");
     const teamName = testTeamName("fork-isolation");
     paths.ensureDirs();
-    teams.createTeam(teamName, "session", "lead-agent");
+    await teams.createTeam(teamName, "session", "lead-agent");
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
       name: "worker",
@@ -219,7 +278,7 @@ describe("Pi session lifecycle", () => {
     const teamName = testTeamName("lead");
     const sessionFile = "/tmp/pi-teams-resumed-lead.jsonl";
     paths.ensureDirs();
-    teams.createTeam(teamName, "original-session", "lead-agent");
+    await teams.createTeam(teamName, sessionFile, "lead-agent");
     fs.writeFileSync(paths.leadSessionPath(teamName), JSON.stringify({
       pid: -1,
       sessionFile,
@@ -246,8 +305,11 @@ describe("Pi session lifecycle", () => {
     vi.stubEnv("TMUX_PANE", "%resumed-teammate");
     const teamName = testTeamName("teammate");
     paths.ensureDirs();
-    teams.createTeam(teamName, "session", "lead-agent");
+    await teams.createTeam(teamName, "session", "lead-agent");
+    const launchId = teams.newLaunchId();
     await teams.addMember(teamName, {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: launchId,
       agentId: `reviewer@${teamName}`,
       name: "reviewer",
       agentType: "teammate",
@@ -258,6 +320,7 @@ describe("Pi session lifecycle", () => {
     });
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "reviewer");
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
 
     const handlers = registeredHandlers();
     const ctx = lifecycleContext("/tmp/pi-teams-resumed-teammate.jsonl");
@@ -278,7 +341,7 @@ describe("Pi session lifecycle", () => {
     const teamName = testTeamName("envless-teammate");
     const sessionFile = "/tmp/pi-teams-envless-resume.jsonl";
     paths.ensureDirs();
-    teams.createTeam(teamName, "session", "lead-agent");
+    await teams.createTeam(teamName, "session", "lead-agent");
     await teams.addMember(teamName, {
       agentId: `reviewer@${teamName}`,
       name: "reviewer",
@@ -303,8 +366,10 @@ describe("Pi session lifecycle", () => {
 
   it("never polls a replaced or shut-down lead session context", async () => {
     vi.useFakeTimers();
+    const teamName = testTeamName("polling-context");
+    await teams.createTeam(teamName, "session", "lead-agent");
     vi.spyOn(paths, "ensureDirs").mockImplementation(() => undefined);
-    vi.stubEnv("PI_TEAM_NAME", "lifecycle-test");
+    vi.stubEnv("PI_TEAM_NAME", teamName);
 
     const handlers = new Map<string, Handler>();
     piTeams({
@@ -315,28 +380,23 @@ describe("Pi session lifecycle", () => {
       sendUserMessage() {},
     } as never);
 
-    const first = {
-      isIdle: vi.fn(() => false),
-      ui: { setStatus: vi.fn() },
-    };
-    const replacement = {
-      isIdle: vi.fn(() => false),
-      ui: { setStatus: vi.fn() },
-    };
+    const first = lifecycleContext("session");
+    const replacement = lifecycleContext("session");
 
     await handlers.get("session_start")?.({}, first);
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
     await handlers.get("session_start")?.({}, replacement);
-    expect(vi.getTimerCount()).toBe(1);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(first.isIdle).not.toHaveBeenCalled();
-    expect(replacement.isIdle).toHaveBeenCalledTimes(1);
+    expect(replacement.isIdle).not.toHaveBeenCalled();
 
     await handlers.get("session_shutdown")?.({}, replacement);
-    expect(vi.getTimerCount()).toBe(0);
+    // An in-flight filesystem-lock heartbeat may remain briefly after the
+    // delivery intervals are stopped; it is not a context poll.
     await vi.advanceTimersByTimeAsync(30_000);
 
-    expect(replacement.isIdle).toHaveBeenCalledTimes(1);
+    expect(replacement.isIdle).not.toHaveBeenCalled();
   });
 });

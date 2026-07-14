@@ -3,6 +3,11 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
 export interface Member {
+  /** Unique identity for this one Team membership generation. */
+  membershipId?: string;
+  /** Single-use capability accepted only while this generation is unbound. */
+  pendingLaunchId?: string;
+  launchConsumedAt?: string;
   agentId: string;
   name: string;
   agentType: string;
@@ -17,9 +22,20 @@ export interface Member {
   prompt?: string;
   color?: string;
   thinking?: ThinkingLevel;
-  planModeRequired?: boolean;
   backendType?: string;
   isActive?: boolean;
+  /** Durable lifecycle evidence; inactive members remain historical identities. */
+  deactivatedAt?: string;
+  deactivationReason?: "team_shutdown" | "process_shutdown" | "replaced";
+}
+
+/** Versioned external identity evidence for one Beads 1.1 authority. */
+export interface BeadsAuthorityFingerprint {
+  schema: "pi-teams-beads-authority/1";
+  backend: "dolt";
+  database: "dolt";
+  doltDatabase: string;
+  projectId: string;
 }
 
 export interface TeamConfig {
@@ -33,6 +49,10 @@ export interface TeamConfig {
   separateWindows?: boolean;
   /** Task authority. Omitted means the historical local JSON store. */
   taskBackend?: "legacy" | "beads";
+  /** Stable opaque authority identity; independent of workspace path spelling. */
+  taskAuthorityId?: string;
+  /** Canonical external evidence binding the opaque identity to one Beads DB. */
+  taskAuthorityFingerprint?: BeadsAuthorityFingerprint;
   /** Absolute working directory containing the team's initialized Beads repo. */
   taskWorkspace?: string;
   /** Durable evidence for the one-way legacy -> Beads cutover. */
@@ -63,6 +83,10 @@ export interface TaskFile {
 export interface InboxMessage {
   /** Communication-authority identity. Optional only for legacy on-disk records. */
   id?: string;
+  /** Exact destination membership generation. Absent only on historical legacy records. */
+  recipientMembershipId?: string;
+  /** Exact sender membership generation when the sender is a current Team member. */
+  senderMembershipId?: string;
   from: string;
   text: string;
   timestamp: string;

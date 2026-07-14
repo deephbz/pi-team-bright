@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { TeamConfig, Member } from "./models";
-import { configPath, teamDir, taskDir, TEAMS_DIR } from "./paths";
+import { BeadsAuthorityFingerprint, TeamConfig, Member } from "./models";
+import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
 import { withLock } from "./lock";
 
 export interface CutoverMarker {
@@ -85,6 +85,25 @@ function validateConfigShape(value: Record<string, unknown>, configFile: string)
   if (value.taskWorkspace !== undefined && typeof value.taskWorkspace !== "string") {
     throw malformedConfigError(configFile, "taskWorkspace must be a string");
   }
+  if (value.taskAuthorityId !== undefined && typeof value.taskAuthorityId !== "string") {
+    throw malformedConfigError(configFile, "taskAuthorityId must be a string");
+  }
+  if (value.taskAuthorityFingerprint !== undefined) {
+    const fingerprint = value.taskAuthorityFingerprint as Partial<BeadsAuthorityFingerprint> | null;
+    if (
+      !fingerprint
+      || typeof fingerprint !== "object"
+      || fingerprint.schema !== "pi-teams-beads-authority/1"
+      || fingerprint.backend !== "dolt"
+      || fingerprint.database !== "dolt"
+      || typeof fingerprint.doltDatabase !== "string"
+      || !fingerprint.doltDatabase
+      || typeof fingerprint.projectId !== "string"
+      || !fingerprint.projectId
+    ) {
+      throw malformedConfigError(configFile, "taskAuthorityFingerprint must be a complete pi-teams-beads-authority/1 record");
+    }
+  }
   if (value.taskCutover !== undefined) {
     const cutover = value.taskCutover;
     if (!cutover || typeof cutover !== "object" || Array.isArray(cutover)) throw malformedConfigError(configFile, "taskCutover must be an object");
@@ -100,21 +119,108 @@ export function teamExists(teamName: string) {
   return fs.existsSync(configPath(teamName));
 }
 
-export function createTeam(
+export function newMembershipId(): string {
+  return `membership_${crypto.randomUUID()}`;
+}
+
+export function newLaunchId(): string {
+  return `launch_${crypto.randomUUID()}`;
+}
+
+/** 600 lock attempts at 100 ms each: bounded to one minute. */
+export const TEAM_TOPOLOGY_LEASE_RETRIES = 600;
+
+export interface TeamTopologyLease {
+  readonly teamName: string;
+}
+
+const activeTopologyLeases = new WeakSet<TeamTopologyLease>();
+
+function teamTopologyLeasePath(teamName: string): string {
+  // Validate the public identity, then keep coordination records outside the
+  // Team directory so probing a missing Team does not create Team state.
+  const safeName = sanitizeName(teamName);
+  const identity = crypto.createHash("sha256").update(safeName).digest("hex");
+  return path.join(PI_DIR, "team-topology-leases", identity);
+}
+
+/**
+ * Serialize lifecycle/topology transactions for one Team. Callers must take
+ * exact Membership leases only inside this lease, preserving the global order
+ * topology -> Membership -> TeamConfig. Different Teams remain independent.
+ */
+export async function withTeamTopologyLease<T>(
+  teamName: string,
+  action: (lease: TeamTopologyLease) => Promise<T>,
+  options: { retries?: number } = {},
+): Promise<T> {
+  const safeName = sanitizeName(teamName);
+  return withLock(teamTopologyLeasePath(safeName), async () => {
+    const lease: TeamTopologyLease = { teamName: safeName };
+    activeTopologyLeases.add(lease);
+    try {
+      return await action(lease);
+    } finally {
+      activeTopologyLeases.delete(lease);
+    }
+  }, options.retries ?? TEAM_TOPOLOGY_LEASE_RETRIES);
+}
+
+function assertTopologyLease(teamName: string, lease: TeamTopologyLease): void {
+  const safeName = sanitizeName(teamName);
+  if (!activeTopologyLeases.has(lease) || lease.teamName !== safeName) {
+    throw new Error(`Invalid or inactive topology lease for team ${safeName}.`);
+  }
+}
+
+export async function createTeam(
   name: string,
   sessionId: string,
   leadAgentId: string,
   description = "",
   defaultModel?: string,
-  separateWindows?: boolean
-): TeamConfig {
+  separateWindows?: boolean,
+  taskWorkspace?: string,
+  taskAuthorityId?: string,
+  taskAuthorityFingerprint?: BeadsAuthorityFingerprint,
+  topologyLease?: TeamTopologyLease,
+): Promise<TeamConfig> {
+  if (!topologyLease) {
+    return withTeamTopologyLease(name, (lease) => createTeam(
+      name,
+      sessionId,
+      leadAgentId,
+      description,
+      defaultModel,
+      separateWindows,
+      taskWorkspace,
+      taskAuthorityId,
+      taskAuthorityFingerprint,
+      lease,
+    ));
+  }
+  assertTopologyLease(name, topologyLease);
+  if ([taskWorkspace, taskAuthorityId, taskAuthorityFingerprint].filter(Boolean).length !== 0
+    && [taskWorkspace, taskAuthorityId, taskAuthorityFingerprint].filter(Boolean).length !== 3) {
+    throw new Error("Beads taskWorkspace, taskAuthorityId, and taskAuthorityFingerprint must be configured together.");
+  }
   const dir = teamDir(name);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   const priorConfigPath = configPath(name);
-  let priorAuthority: Pick<TeamConfig, "taskBackend" | "taskWorkspace" | "taskCutover"> = {};
+  return withLock(priorConfigPath, async () => {
+  let priorAuthority: Pick<TeamConfig, "taskBackend" | "taskWorkspace" | "taskAuthorityId" | "taskAuthorityFingerprint" | "taskCutover"> = {};
+  let priorMembers: Member[] = [];
   if (fs.existsSync(priorConfigPath)) {
     const prior = readConfigRaw(priorConfigPath);
+    const currentMembers = prior.members.filter((member) => member.isActive !== false);
+    if (currentMembers.length > 0) {
+      throw new Error(
+        `Team ${name} still has current Memberships (${currentMembers.map((member) => member.name).join(", ")}); ` +
+        "run team_shutdown from its current lead before recreating the Team. team_create never implicitly stops processes or replaces live identities.",
+      );
+    }
+    priorMembers = structuredClone(prior.members);
     const cutoverEvidence = findCutoverEvidence(name);
     if (cutoverEvidence && prior.taskBackend !== "beads") {
       throw new Error(`Team ${name} has a ${cutoverEvidence.marker.state} Beads cutover marker at ${cutoverEvidence.markerPath}, but its config is not Beads-authoritative; refusing to reconnect the team to legacy tasks. Restore the Beads TeamConfig or complete an explicit recovery review.`);
@@ -123,11 +229,27 @@ export function createTeam(
       if (!prior.taskWorkspace) {
         throw new Error(`Team ${name} is marked Beads-authoritative but has no taskWorkspace; refusing to recreate it against legacy tasks. Restore the original TeamConfig and Beads workspace.`);
       }
+      if (taskWorkspace && prior.taskWorkspace !== taskWorkspace) {
+        throw new Error(`Team ${name} already uses Beads workspace ${prior.taskWorkspace}; refusing to silently switch authority.`);
+      }
+      if (taskAuthorityId && prior.taskAuthorityId !== taskAuthorityId) {
+        throw new Error(`Team ${name} already has a different opaque Task authority identity; refusing to rebind it.`);
+      }
+      if (taskAuthorityFingerprint && JSON.stringify(prior.taskAuthorityFingerprint) !== JSON.stringify(taskAuthorityFingerprint)) {
+        throw new Error(`Team ${name} already has a different external Task authority fingerprint; refusing to rebind it.`);
+      }
       priorAuthority = {
         taskBackend: prior.taskBackend,
         taskWorkspace: prior.taskWorkspace,
+        taskAuthorityId: prior.taskAuthorityId,
+        taskAuthorityFingerprint: prior.taskAuthorityFingerprint,
         taskCutover: prior.taskCutover,
       };
+      if (!priorAuthority.taskAuthorityId || !priorAuthority.taskAuthorityFingerprint) {
+        throw new Error(`Team ${name} has an incomplete Beads Task authority binding; restore taskAuthorityId and taskAuthorityFingerprint through an explicit recovery review.`);
+      }
+    } else if (taskWorkspace) {
+      throw new Error(`Team ${name} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${name} ${taskWorkspace}`);
     }
   } else {
     const cutoverEvidence = findCutoverEvidence(name);
@@ -136,10 +258,13 @@ export function createTeam(
     }
   }
 
-  const tasksDir = taskDir(name);
-  if (!fs.existsSync(tasksDir)) fs.mkdirSync(tasksDir, { recursive: true });
+  if (!taskWorkspace) {
+    const tasksDir = taskDir(name);
+    if (!fs.existsSync(tasksDir)) fs.mkdirSync(tasksDir, { recursive: true });
+  }
 
   const leadMember: Member = {
+    membershipId: newMembershipId(),
     agentId: leadAgentId,
     name: "team-lead",
     agentType: "lead",
@@ -147,6 +272,8 @@ export function createTeam(
     tmuxPaneId: process.env.TMUX_PANE || "",
     cwd: process.cwd(),
     subscriptions: [],
+    isActive: true,
+    ...(sessionId ? { sessionFile: sessionId } : {}),
   };
 
   const config: TeamConfig = {
@@ -155,14 +282,16 @@ export function createTeam(
     createdAt: Date.now(),
     leadAgentId,
     leadSessionId: sessionId,
-    members: [leadMember],
+    members: [...priorMembers, leadMember],
     defaultModel,
     separateWindows,
+    ...(taskWorkspace ? { taskBackend: "beads" as const, taskWorkspace, taskAuthorityId, taskAuthorityFingerprint } : {}),
     ...priorAuthority,
   };
 
   writeConfigAtomic(configPath(name), config);
   return config;
+  });
 }
 
 function readConfigRaw(p: string): TeamConfig {
@@ -239,20 +368,26 @@ export function writeConfigAtomic(p: string, config: TeamConfig): void {
 export function findTeammateBySessionFile(sessionFile: string): { teamName: string; member: Member } | null {
   if (!sessionFile || !fs.existsSync(TEAMS_DIR)) return null;
 
+  const matches: Array<{ teamName: string; member: Member }> = [];
   for (const teamName of fs.readdirSync(TEAMS_DIR)) {
     try {
       const configFile = configPath(teamName);
       if (!fs.existsSync(configFile)) continue;
       const config = readConfigRaw(configFile);
-      const member = config.members.find(candidate =>
-        candidate.agentType === "teammate" && candidate.sessionFile === sessionFile
+      const member = [...config.members].reverse().find(candidate =>
+        candidate.agentType === "teammate" && candidate.isActive !== false && candidate.sessionFile === sessionFile
       );
-      if (member) return { teamName, member };
+      if (member) matches.push({ teamName, member });
     } catch {
       // One malformed or concurrently removed team must not block other resumes.
     }
   }
-  return null;
+  if (matches.length > 1) {
+    throw new Error(
+      `Ambiguous teammate Session binding: ${sessionFile} is current in multiple teams (${matches.map((match) => match.teamName).join(", ")}); refusing filesystem-order selection.`,
+    );
+  }
+  return matches[0] ?? null;
 }
 
 export async function readConfig(teamName: string): Promise<TeamConfig> {
@@ -269,21 +404,235 @@ export async function readConfig(teamName: string): Promise<TeamConfig> {
   });
 }
 
+/** Hold current membership/config stable across a dependent filesystem write. */
+export async function withCurrentConfig<T>(teamName: string, action: (config: TeamConfig) => Promise<T>): Promise<T> {
+  const p = configPath(teamName);
+  if (!fs.existsSync(p)) throw new Error(`Team ${teamName} not found`);
+  return withLock(p, async () => action(readConfigRaw(p)));
+}
+
+/** 600 lock attempts at 100 ms each: bounded to one minute. */
+export const MEMBERSHIP_MUTATION_LEASE_RETRIES = 600;
+
+function membershipMutationLeasePath(teamName: string, membershipId: string): string {
+  if (!membershipId) throw new Error("A Membership identity is required for a mutation lease.");
+  const directory = path.join(teamDir(teamName), "membership-mutation-leases");
+  fs.mkdirSync(directory, { recursive: true });
+  const identity = crypto.createHash("sha256").update(membershipId).digest("hex");
+  return path.join(directory, identity);
+}
+
+/**
+ * Serialize authority mutation and lifecycle transition for one exact
+ * Membership generation without blocking unrelated team members. The lease
+ * heartbeat is maintained by withLock, so a slow but live backend operation
+ * cannot be mistaken for an abandoned writer.
+ */
+export async function withMembershipMutationLease<T>(
+  teamName: string,
+  membershipId: string,
+  action: () => Promise<T>,
+  options: { retries?: number } = {},
+): Promise<T> {
+  return withLock(
+    membershipMutationLeasePath(teamName, membershipId),
+    action,
+    options.retries ?? MEMBERSHIP_MUTATION_LEASE_RETRIES,
+  );
+}
+
+/**
+ * Hold one exact Membership generation's mutation lease, briefly revalidate
+ * its Session binding under the TeamConfig lock, then release TeamConfig
+ * before the external authority operation. Replacement and shutdown acquire
+ * the same Membership lease, so no stale write can cross a generation while
+ * unrelated members remain concurrent.
+ */
+export async function withCurrentSessionBinding<T>(
+  teamName: string,
+  agentName: string,
+  sessionFile: string,
+  expectedMembershipId: string,
+  action: (config: TeamConfig, member: Member) => Promise<T>,
+): Promise<T> {
+  if (!sessionFile || !expectedMembershipId) throw new Error("An exact Membership and durable Pi Session are required for a team-scoped mutation.");
+  return withMembershipMutationLease(teamName, expectedMembershipId, async () => {
+    const binding = await withCurrentConfig(teamName, async (config) => {
+      const member = [...config.members].reverse().find((candidate) => candidate.name === agentName && candidate.isActive !== false);
+      if (!member || member.membershipId !== expectedMembershipId || member.sessionFile !== sessionFile) {
+        throw new Error(`Membership ${expectedMembershipId} / Session ${sessionFile} is not the current binding for ${agentName} on team ${teamName}; stale processes cannot mutate authority state.`);
+      }
+      return {
+        config: structuredClone(config),
+        member: structuredClone(member),
+      };
+    });
+    return action(binding.config, binding.member);
+  });
+}
+
+/**
+ * Acquire the exact generation lease used by Task mutation, then verify that
+ * generation is still current before a terminal/lifecycle side effect.
+ */
+export async function withCurrentMembershipLease<T>(
+  teamName: string,
+  membershipId: string,
+  action: (member: Member) => Promise<T>,
+): Promise<T> {
+  return withMembershipMutationLease(teamName, membershipId, async () => {
+    const member = await withCurrentConfig(teamName, async (config) => {
+      const current = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
+      if (!current) throw new Error(`Membership ${membershipId} is no longer current in team ${teamName}.`);
+      return structuredClone(current);
+    });
+    return action(member);
+  });
+}
+
+export async function currentMembership(teamName: string, agentName: string): Promise<Member> {
+  const config = await readConfig(teamName);
+  const member = [...config.members].reverse().find((candidate) => candidate.name === agentName && candidate.isActive !== false);
+  if (!member) throw new Error(`Agent ${agentName} is not a current member of team ${teamName}.`);
+  if (!member.membershipId) {
+    throw new Error(`Current Membership for ${agentName} on team ${teamName} has no membershipId; stop the team and respawn it with the current PiTeams version.`);
+  }
+  return structuredClone(member);
+}
+
+export async function bindMemberSession(
+  teamName: string,
+  agentName: string,
+  sessionFile: string,
+  launchId?: string,
+  updates: Pick<Partial<Member>, "tmuxPaneId" | "windowId"> = {},
+  expectedMembershipId?: string,
+): Promise<Member> {
+  if (!sessionFile) throw new Error("A durable Pi Session file is required for Membership binding.");
+  const p = configPath(teamName);
+  return withLock(p, async () => {
+    const config = readConfigRaw(p);
+    const member = [...config.members].reverse().find((candidate) => candidate.name === agentName && candidate.isActive !== false);
+    if (!member) throw new Error(`Agent ${agentName} is not a current member of team ${teamName}.`);
+    if (!member.membershipId) {
+      throw new Error(`Current Membership for ${agentName} on team ${teamName} has no membershipId; stop the team and respawn it.`);
+    }
+    if (expectedMembershipId && member.membershipId !== expectedMembershipId) {
+      throw new Error(
+        `Membership ${expectedMembershipId} is no longer the current generation for ${agentName} on team ${teamName}; ` +
+        "refusing to bind a replacement Membership from a stale startup.",
+      );
+    }
+    if (member.sessionFile) {
+      if (launchId) throw new Error(`Launch capability for ${agentName} has already been consumed; resume by exact Session binding without a launch ID.`);
+      if (member.sessionFile !== sessionFile) {
+        throw new Error(`Session ${sessionFile} cannot replace current binding ${member.sessionFile} for ${agentName} on team ${teamName}.`);
+      }
+    } else {
+      if (!launchId || !member.pendingLaunchId || launchId !== member.pendingLaunchId) {
+        throw new Error(`A matching pending launch capability is required for the first Session binding of ${agentName} on team ${teamName}.`);
+      }
+      member.sessionFile = sessionFile;
+      member.pendingLaunchId = undefined;
+      member.launchConsumedAt = new Date().toISOString();
+    }
+    Object.assign(member, updates);
+    writeConfigAtomic(p, config);
+    return structuredClone(member);
+  });
+}
+
+export async function assertCurrentSessionBinding(teamName: string, agentName: string, sessionFile: string): Promise<Member> {
+  if (!sessionFile) throw new Error("A durable Pi Session file is required for a team-scoped mutation.");
+  const config = await readConfig(teamName);
+  const member = [...config.members].reverse().find((candidate) => candidate.name === agentName && candidate.isActive !== false);
+  if (!member) throw new Error(`Agent ${agentName} is not a current member of team ${teamName}.`);
+  const bound = member.sessionFile;
+  if (!bound || bound !== sessionFile) {
+    throw new Error(`Session ${sessionFile} is not the current binding for ${agentName} on team ${teamName}; fork/stale Sessions cannot mutate team state.`);
+  }
+  return structuredClone(member);
+}
+
 export async function addMember(teamName: string, member: Member) {
   const p = configPath(teamName);
   await withLock(p, async () => {
     const config = readConfigRaw(p);
-    config.members.push(member);
+    const next = structuredClone(member);
+    if (next.name === "team-lead" || next.agentType === "lead") {
+      throw new Error("'team-lead' and lead Memberships are reserved for team creation.");
+    }
+    next.membershipId ||= newMembershipId();
+    if (next.isActive !== false && next.agentType === "teammate") {
+      if (!!next.sessionFile === !!next.pendingLaunchId) {
+        throw new Error(`Current teammate Membership ${next.membershipId} must be exactly one of launch-prepared or Session-bound.`);
+      }
+    }
+    if (config.members.some((candidate) => candidate.membershipId === next.membershipId)) {
+      throw new Error(`Duplicate membershipId ${next.membershipId} in team ${teamName}.`);
+    }
+    if (config.members.some((candidate) => candidate.name === next.name && candidate.isActive !== false)) {
+      throw new Error(`A current member named ${next.name} already exists in team ${teamName}.`);
+    }
+    config.members.push(next);
     writeConfigAtomic(p, config);
   });
 }
 
-export async function removeMember(teamName: string, agentName: string) {
+export async function deactivateMember(
+  teamName: string,
+  agentName: string,
+  reason: NonNullable<Member["deactivationReason"]>,
+): Promise<Member | null> {
   const p = configPath(teamName);
-  await withLock(p, async () => {
+  return withLock(p, async () => {
     const config = readConfigRaw(p);
-    config.members = config.members.filter(m => m.name !== agentName);
+    const member = config.members.find((candidate) => candidate.name === agentName && candidate.isActive !== false);
+    if (!member) return null;
+    member.isActive = false;
+    member.deactivatedAt = new Date().toISOString();
+    member.deactivationReason = reason;
     writeConfigAtomic(p, config);
+    return structuredClone(member);
+  });
+}
+
+/** Deactivate exactly one Membership generation; never resolve by reusable name. */
+export async function deactivateMembership(
+  teamName: string,
+  membershipId: string,
+  reason: NonNullable<Member["deactivationReason"]>,
+): Promise<Member | null> {
+  const p = configPath(teamName);
+  return withLock(p, async () => {
+    const config = readConfigRaw(p);
+    const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
+    if (!member) return null;
+    member.isActive = false;
+    member.deactivatedAt = new Date().toISOString();
+    member.deactivationReason = reason;
+    writeConfigAtomic(p, config);
+    return structuredClone(member);
+  });
+}
+
+export async function deactivateCurrentMembers(
+  teamName: string,
+  reason: NonNullable<Member["deactivationReason"]>,
+): Promise<{ deactivated: Member[]; staleBindings: Member[] }> {
+  const p = configPath(teamName);
+  return withLock(p, async () => {
+    const config = readConfigRaw(p);
+    const current = config.members.filter((member) => member.isActive !== false);
+    const staleBindings = config.members.filter((member) => member.isActive === false && !!(member.tmuxPaneId || member.windowId));
+    const at = new Date().toISOString();
+    for (const member of current) {
+      member.isActive = false;
+      member.deactivatedAt = at;
+      member.deactivationReason = reason;
+    }
+    if (current.length > 0) writeConfigAtomic(p, config);
+    return { deactivated: structuredClone(current), staleBindings: structuredClone(staleBindings) };
   });
 }
 
@@ -291,7 +640,7 @@ export async function updateMember(teamName: string, agentName: string, updates:
   const p = configPath(teamName);
   await withLock(p, async () => {
     const config = readConfigRaw(p);
-    const m = config.members.find(m => m.name === agentName);
+    const m = [...config.members].reverse().find(m => m.name === agentName && m.isActive !== false);
     if (m) {
       Object.assign(m, updates);
       writeConfigAtomic(p, config);
@@ -299,9 +648,22 @@ export async function updateMember(teamName: string, agentName: string, updates:
   });
 }
 
+export async function updateMembership(teamName: string, membershipId: string, updates: Partial<Member>): Promise<Member> {
+  const p = configPath(teamName);
+  return withLock(p, async () => {
+    const config = readConfigRaw(p);
+    const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
+    if (!member) throw new Error(`Membership ${membershipId} is not current in team ${teamName}.`);
+    Object.assign(member, updates);
+    writeConfigAtomic(p, config);
+    return structuredClone(member);
+  });
+}
+
 export async function configureBeadsTaskBackend(
   teamName: string,
   taskWorkspace: string,
+  taskAuthorityFingerprint: BeadsAuthorityFingerprint,
   taskCutover: NonNullable<TeamConfig["taskCutover"]>,
 ): Promise<TeamConfig> {
   const p = configPath(teamName);
@@ -311,8 +673,14 @@ export async function configureBeadsTaskBackend(
     if (config.taskBackend === "beads" && config.taskWorkspace && config.taskWorkspace !== taskWorkspace) {
       throw new Error(`Team ${teamName} is already cut over to Beads workspace ${config.taskWorkspace}; refusing to switch authority silently.`);
     }
+    if (config.taskBackend === "beads" && config.taskAuthorityFingerprint
+      && JSON.stringify(config.taskAuthorityFingerprint) !== JSON.stringify(taskAuthorityFingerprint)) {
+      throw new Error(`Team ${teamName} is already bound to a different Beads authority fingerprint; refusing to switch authority silently.`);
+    }
     config.taskBackend = "beads";
     config.taskWorkspace = taskWorkspace;
+    config.taskAuthorityId ||= `task_authority_${crypto.randomUUID()}`;
+    config.taskAuthorityFingerprint = taskAuthorityFingerprint;
     config.taskCutover = taskCutover;
     writeConfigAtomic(p, config);
     return config;

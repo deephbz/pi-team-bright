@@ -1,10 +1,17 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { TaskFile, TeamConfig } from "./models";
+import { BeadsAuthorityFingerprint, TaskFile, TeamConfig } from "./models";
 import { taskDir, teamDir, sanitizeName } from "./paths";
 import { configureBeadsTaskBackend, readConfig, readLatestCutoverMarker } from "./teams";
-import { BeadsTaskStore, BeadsTaskStoreOptions, TaskWriteOptions } from "./beads";
+import {
+  assertBeadsAuthorityFingerprint,
+  assertBeadsWorkspaceRoot,
+  BeadsTaskStore,
+  BeadsTaskStoreOptions,
+  readBeadsAuthorityFingerprint,
+  TaskWriteOptions,
+} from "./beads";
 import { withLock } from "./lock";
 
 const MIGRATION_SCHEMA = "pi-teams-task-migration/1";
@@ -126,6 +133,9 @@ function inventoryFromLegacy(teamName: string, sourceDir: string, now: Date): Mi
       const task = JSON.parse(raw) as TaskFile;
       return { legacyId: task.id, fileName, sha256: sha256(raw), raw, task };
     });
+  const duplicateIds = duplicateValues(tasks.map(task => task.legacyId));
+  if (duplicateIds.length > 0) throw new Error(`Duplicate legacy Task IDs in source inventory: ${duplicateIds.join(", ")}; refusing migration.`);
+  assertDependencyTargets(tasks.map(item => item.task));
   return {
     schema: MIGRATION_SCHEMA,
     teamName,
@@ -153,9 +163,30 @@ function readInventory(filePath: string): MigrationInventory {
       throw new Error(`Migration inventory task payload failed authentication: ${filePath}`);
     }
   }
+  const duplicateIds = duplicateValues(inventory.tasks.map(task => task.legacyId));
+  if (duplicateIds.length > 0) throw new Error(`Duplicate legacy Task IDs in migration inventory: ${duplicateIds.join(", ")}; refusing migration.`);
+  assertDependencyTargets(inventory.tasks.map(item => item.task));
   const expectedHash = canonicalInventoryHash(inventory.tasks);
   if (expectedHash !== inventory.inventorySha256) throw new Error(`Migration inventory hash mismatch: ${filePath}`);
   return inventory;
+}
+
+function duplicateValues(values: string[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const value of values) seen.has(value) ? duplicates.add(value) : seen.add(value);
+  return [...duplicates].sort();
+}
+
+function assertDependencyTargets(tasks: TaskFile[]): void {
+  const ids = new Set(tasks.map(task => task.id));
+  const missing = new Set<string>();
+  for (const task of tasks) {
+    for (const target of [...task.blockedBy, ...task.blocks]) {
+      if (!ids.has(target)) missing.add(`${task.id}->${target}`);
+    }
+  }
+  if (missing.size > 0) throw new Error(`Legacy Task dependencies reference missing targets: ${[...missing].sort().join(", ")}; refusing migration.`);
 }
 
 function hasDriftOverride(filePath: string, teamName: string, inventorySha256: string): boolean {
@@ -214,14 +245,33 @@ function comparable(task: TaskFile): Record<string, unknown> {
 }
 
 function collectMismatches(legacy: TaskFile, actual: TaskFile, expectedBlockers: string[], expectedBlocks: string[]): MigrationMismatch[] {
-  const expected = comparable({ ...legacy, status: beadsStatus(legacy.status), blockedBy: expectedBlockers, blocks: expectedBlocks });
+  const expectedMetadata = {
+    ...(legacy.metadata || {}),
+    pi_teams_legacy_id: legacy.id,
+    pi_teams_migration_schema: MIGRATION_SCHEMA,
+  };
+  const expected = comparable({
+    ...legacy,
+    status: beadsStatus(legacy.status),
+    blockedBy: expectedBlockers,
+    blocks: expectedBlocks,
+  });
   const observed = comparable(actual);
-  return Object.keys(expected).flatMap(field => JSON.stringify(expected[field]) === JSON.stringify(observed[field]) ? [] : [{
+  const fieldMismatches = Object.keys(expected).flatMap(field => JSON.stringify(expected[field]) === JSON.stringify(observed[field]) ? [] : [{
     legacyId: legacy.id,
     field,
     expected: expected[field],
     actual: observed[field],
   }]);
+  const metadataMatches = Object.entries(expectedMetadata).every(([key, value]) =>
+    JSON.stringify(value) === JSON.stringify(actual.metadata?.[key]));
+  const metadataMismatches: MigrationMismatch[] = metadataMatches ? [] : [{
+    legacyId: legacy.id,
+    field: "metadata",
+    expected: expectedMetadata,
+    actual: actual.metadata || {},
+  }];
+  return [...fieldMismatches, ...metadataMismatches];
 }
 
 function appendMarker(markerPath: string, event: Record<string, unknown>): void {
@@ -230,6 +280,74 @@ function appendMarker(markerPath: string, event: Record<string, unknown>): void 
 
 function reportFile(report: MigrationReport, reportPath?: string): void {
   if (reportPath) fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+}
+
+async function reconcileCutoverAuthority(
+  options: MigrateTaskOptions,
+  config: TeamConfig,
+  inventory: MigrationInventory,
+  report: MigrationReport,
+): Promise<void> {
+  if (!config.taskWorkspace) {
+    report.errors.push("TeamConfig is marked Beads-authoritative but has no taskWorkspace; refusing to guess the Task authority location.");
+    return;
+  }
+  if (!config.taskAuthorityId) {
+    report.errors.push("TeamConfig is marked Beads-authoritative but has no taskAuthorityId; refusing to mint or guess an authority identity during migration rerun. Restore the binding through an explicit authority-recovery review.");
+    return;
+  }
+  if (!config.taskAuthorityFingerprint) {
+    report.errors.push("TeamConfig is marked Beads-authoritative but has no taskAuthorityFingerprint; refusing to infer or rebind external authority identity during migration rerun. Restore it through an explicit authority-recovery review.");
+    return;
+  }
+
+  const requestedWorkspace = path.resolve(options.workspace);
+  const configuredWorkspace = path.resolve(config.taskWorkspace);
+  if (requestedWorkspace !== configuredWorkspace) {
+    report.errors.push(`Team is already cut over to Beads workspace ${configuredWorkspace}; refusing migration rerun against ${requestedWorkspace}. Re-run with the configured workspace.`);
+    return;
+  }
+  try {
+    assertBeadsAuthorityFingerprint(configuredWorkspace, config.taskAuthorityFingerprint);
+  } catch (error) {
+    report.errors.push(`${error instanceof Error ? error.message : String(error)} Restore that exact authority workspace before rerunning migration.`);
+    return;
+  }
+
+  const beads = options.beads || new BeadsTaskStore({
+    teamName: report.teamName,
+    workspace: configuredWorkspace,
+    authorityFingerprint: config.taskAuthorityFingerprint,
+    ...(options.beadsOptions || {}),
+    requireExpectedVersion: false,
+  });
+  const actualByLegacy = new Map<string, TaskFile>();
+  try {
+    // This is intentionally unconditional: an empty migration inventory must
+    // still prove that the configured Beads authority is initialized,
+    // reachable, and able to answer a team-scoped read.
+    if (beads instanceof BeadsTaskStore) await beads.assertWorkspaceRoot(config.taskAuthorityFingerprint);
+    await beads.list();
+    for (const item of inventory.tasks) {
+      const mapped = await beads.findByLegacyId(item.legacyId);
+      if (!mapped) {
+        report.mismatches.push({ legacyId: item.legacyId, field: "presence", expected: "present", actual: "missing" });
+        continue;
+      }
+      const actual = await beads.read(mapped.id);
+      actualByLegacy.set(item.legacyId, actual);
+      report.mapping[item.legacyId] = actual.id;
+    }
+    report.after = {
+      count: actualByLegacy.size,
+      beadsIds: [...actualByLegacy.values()].map(task => task.id).sort(),
+    };
+    if (report.mismatches.length > 0) {
+      report.errors.push("Post-cutover authority reconciliation could not find every migrated legacy Task mapping. No writes were attempted.");
+    }
+  } catch (error) {
+    report.errors.push(`Could not reconcile the configured Beads Task authority: ${error instanceof Error ? error.message : String(error)}. No writes were attempted.`);
+  }
 }
 
 async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<MigrationReport> {
@@ -271,6 +389,9 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
     baseReport.alreadyCutOver = config.taskBackend === "beads" || activeMarker?.state === "active";
     baseReport.authority = config.taskBackend === "beads" ? "beads" : undefined;
     baseReport.cutover = config.taskBackend === "beads";
+    if (config.taskBackend === "beads") {
+      await reconcileCutoverAuthority(options, config, inventory, baseReport);
+    }
     reportFile(baseReport, options.reportPath);
     return baseReport;
   }
@@ -281,9 +402,19 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
     return baseReport;
   }
 
+  let taskAuthorityFingerprint: BeadsAuthorityFingerprint;
+  try {
+    taskAuthorityFingerprint = readBeadsAuthorityFingerprint(options.workspace);
+  } catch (error) {
+    baseReport.errors.push(`${error instanceof Error ? error.message : String(error)} No Beads writes were attempted.`);
+    reportFile(baseReport, options.reportPath);
+    return baseReport;
+  }
+
   const beads = options.beads || new BeadsTaskStore({
     teamName,
     workspace: options.workspace,
+    authorityFingerprint: taskAuthorityFingerprint,
     ...(options.beadsOptions || {}),
     requireExpectedVersion: false,
   });
@@ -291,6 +422,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
   const writeOptions: TaskWriteOptions = { actor: options.beadsOptions?.actor || "pi-teams-migration" };
 
   try {
+    if (beads instanceof BeadsTaskStore) await beads.assertWorkspaceRoot(taskAuthorityFingerprint);
     const initialDuplicates = duplicateLegacyMappings(await beads.list());
     if (initialDuplicates.length > 0) throw new Error(`Duplicate Beads legacy mappings for ${initialDuplicates.join(", ")}; refusing cutover.`);
     for (const item of inventory.tasks) {
@@ -302,17 +434,27 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
         pi_teams_legacy_id: legacy.id,
         pi_teams_migration_schema: MIGRATION_SCHEMA,
       };
+      const desiredStatus = beadsStatus(legacy.status);
+      const terminalStatus = desiredStatus === "completed" || desiredStatus === "deleted"
+        ? desiredStatus
+        : undefined;
+      // A Beads terminal transition is its own authority mutation. Reconcile
+      // every non-terminal field first, then apply completion/deletion in a
+      // separate pass after dependency import. This keeps the migration inside
+      // the same contract enforced for normal runtime writes and lets a rerun
+      // resume safely after any individual committed step.
+      const fields: Partial<TaskFile> = {
+        subject: legacy.subject,
+        description: legacy.description,
+        activeForm: legacy.activeForm,
+        plan: legacy.plan,
+        planFeedback: legacy.planFeedback,
+        owner: legacy.owner || "",
+        metadata,
+        ...(!terminalStatus ? { status: desiredStatus } : {}),
+      };
       let task = existing
-        ? await beads.update(existing.id, {
-            subject: legacy.subject,
-            description: legacy.description,
-            activeForm: legacy.activeForm,
-            plan: legacy.plan,
-            planFeedback: legacy.planFeedback,
-            owner: legacy.owner || "",
-            metadata,
-            status: beadsStatus(legacy.status),
-          }, { ...writeOptions, expectedVersion: existingForWrite?.version })
+        ? await beads.update(existing.id, fields, { ...writeOptions, expectedVersion: existingForWrite?.version })
         : await beads.create({
             subject: legacy.subject,
             description: legacy.description,
@@ -322,16 +464,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
           }, writeOptions);
       if (!existing) {
         const createdForWrite = await beads.read(task.id);
-        task = await beads.update(task.id, {
-          subject: legacy.subject,
-          description: legacy.description,
-          activeForm: legacy.activeForm,
-          plan: legacy.plan,
-          planFeedback: legacy.planFeedback,
-          owner: legacy.owner || "",
-          metadata,
-          status: beadsStatus(legacy.status),
-        }, { ...writeOptions, expectedVersion: createdForWrite.version });
+        task = await beads.update(task.id, fields, { ...writeOptions, expectedVersion: createdForWrite.version });
       }
       idMap.set(legacy.id, task.id);
       baseReport.mapping[legacy.id] = task.id;
@@ -359,7 +492,17 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       }
     }
 
-    const afterTasks = await beads.list();
+    for (const item of inventory.tasks) {
+      const desiredStatus = beadsStatus(item.task.status);
+      if (desiredStatus !== "completed" && desiredStatus !== "deleted") continue;
+      const taskId = idMap.get(item.legacyId);
+      if (!taskId) continue;
+      const current = await beads.read(taskId);
+      if (current.status !== desiredStatus) {
+        await beads.update(taskId, { status: desiredStatus }, { ...writeOptions, expectedVersion: current.version });
+      }
+    }
+
     const actualByLegacy = new Map<string, TaskFile>();
     for (const item of inventory.tasks) {
       const beadsId = idMap.get(item.legacyId);
@@ -377,7 +520,14 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       const expectedBlocks = item.task.blocks.map(id => idMap.get(id)).filter((id): id is string => !!id);
       baseReport.mismatches.push(...collectMismatches(item.task, actual, expectedBlockers, expectedBlocks));
     }
-    baseReport.after = { count: afterTasks.length, beadsIds: afterTasks.map(task => task.id).sort() };
+    // The migration report describes the imported inventory, not the normal
+    // runtime list projection (which intentionally hides deleted Tasks).
+    // Count every authenticated mapping so a loss check cannot silently drop
+    // a deleted legacy Task from its before/after evidence.
+    baseReport.after = {
+      count: actualByLegacy.size,
+      beadsIds: [...actualByLegacy.values()].map(task => task.id).sort(),
+    };
     if (baseReport.mismatches.length > 0) {
       baseReport.errors.push("Before/after reconciliation failed; the legacy source remains authoritative until this report is resolved.");
       reportFile(baseReport, options.reportPath);
@@ -390,6 +540,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       inventoryPath,
       inventorySha256: inventory.inventorySha256,
       workspace: options.workspace,
+      taskAuthorityFingerprint,
     });
     const cutover = {
       inventoryPath,
@@ -397,8 +548,8 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       markerPath,
       cutoverAt: now().toISOString(),
     } satisfies NonNullable<TeamConfig["taskCutover"]>;
-    await configureBeadsTaskBackend(teamName, options.workspace, cutover);
-    appendMarker(markerPath, { state: "active", ...cutover });
+    await configureBeadsTaskBackend(teamName, options.workspace, taskAuthorityFingerprint, cutover);
+    appendMarker(markerPath, { state: "active", taskAuthorityFingerprint, ...cutover });
     baseReport.cutover = true;
     baseReport.authority = "beads";
     reportFile(baseReport, options.reportPath);
@@ -414,9 +565,8 @@ export async function migrateTeamTasks(options: MigrateTaskOptions): Promise<Mig
   const teamName = sanitizeName(options.teamName);
   const workspace = path.resolve(options.workspace);
   fs.mkdirSync(teamDir(teamName), { recursive: true });
-  const workspaceKey = sha256(workspace).slice(0, 32);
   return withLock(
-    path.join(teamDir(teamName), `.task-migration-${workspaceKey}`),
+    path.join(teamDir(teamName), ".task-migration"),
     () => migrateTeamTasksUnlocked({ ...options, teamName, workspace }),
     MIGRATION_LOCK_RETRIES,
   );

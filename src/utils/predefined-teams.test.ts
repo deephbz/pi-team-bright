@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -11,6 +11,8 @@ import {
   getAllPredefinedTeams,
   getAgentDefinition,
   getPredefinedTeam,
+  currentRuntimeTeammates,
+  listRuntimeTeams,
   saveTeamTemplate,
 } from "./predefined-teams";
 
@@ -507,5 +509,58 @@ describe("saveTeamTemplate", () => {
     expect(fs.existsSync(globalTeamsPath)).toBe(true);
     expect(fs.readFileSync(globalTeamsPath, "utf-8")).toContain("audit-team:");
     expect(fs.existsSync(path.join(globalAgentsDir, "security-worker.md"))).toBe(true);
+  });
+
+  it("exports only the latest active Membership per teammate name", () => {
+    const members = [
+      { name: "worker", agentType: "teammate", prompt: "old prompt", isActive: false },
+      { name: "retired", agentType: "teammate", prompt: "retired prompt", isActive: false },
+      { name: "worker", agentType: "teammate", prompt: "replacement prompt", isActive: true },
+    ] as any[];
+
+    expect(currentRuntimeTeammates(members).map(member => member.name)).toEqual(["worker"]);
+    const result = saveTeamTemplate(
+      { name: "membership-history", members },
+      { templateName: "membership-history", scope: "project", projectDir },
+    );
+
+    expect(result.savedAgents.map(agent => agent.name)).toEqual(["worker"]);
+    expect(fs.readFileSync(path.join(projectDir, ".pi", "agents", "worker.md"), "utf8")).toContain("replacement prompt");
+    expect(fs.readFileSync(path.join(projectDir, ".pi", "teams.yaml"), "utf8")).not.toContain("retired");
+  });
+
+  it("does not resurrect an older active record after the latest Membership is shut down", () => {
+    const members = [
+      { name: "worker", agentType: "teammate", isActive: true },
+      { name: "worker", agentType: "teammate", isActive: false, deactivationReason: "team_shutdown" },
+    ] as any[];
+
+    expect(currentRuntimeTeammates(members)).toEqual([]);
+  });
+
+  it("counts the current roster rather than historical Membership records", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-runtime-list-"));
+    const homedir = vi.spyOn(os, "homedir").mockReturnValue(home);
+    try {
+      const dir = path.join(home, ".pi", "teams", "runtime-history");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
+        name: "runtime-history",
+        members: [
+          { name: "worker", agentType: "teammate", isActive: false },
+          { name: "worker", agentType: "teammate", isActive: true },
+          { name: "retired", agentType: "teammate", isActive: false },
+          { name: "team-lead", agentType: "lead", isActive: true },
+        ],
+      }));
+
+      expect(listRuntimeTeams()).toEqual([expect.objectContaining({
+        name: "runtime-history",
+        memberCount: 1,
+      })]);
+    } finally {
+      homedir.mockRestore();
+      fs.rmSync(home, { recursive: true, force: true });
+    }
   });
 });

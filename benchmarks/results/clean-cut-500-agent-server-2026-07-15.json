@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-07-14T16:37:55.128Z",
+  "boundary": "agent-facing Task functions",
+  "releaseGate": true,
+  "mode": "server",
+  "semanticIntents": 500,
+  "traceRecords": 500,
+  "wallMs": 189231.86425,
+  "peakConcurrency": 4,
+  "errors": 0,
+  "intentLatency": {
+    "count": 500,
+    "meanMs": 1498.327016,
+    "p50Ms": 1791.113708,
+    "p95Ms": 2613.437167,
+    "p99Ms": 2915.820708,
+    "maxMs": 3339.067042
+  },
+  "bd": {
+    "version": "bd version 1.1.0 (8e4e59d39)",
+    "invocations": 1080,
+    "invocationsPerIntent": 2.16,
+    "totalInvocationMs": 744206,
+    "invocationLatency": {
+      "count": 1080,
+      "meanMs": 689.07963,
+      "p50Ms": 649,
+      "p95Ms": 974,
+      "p99Ms": 1276,
+      "maxMs": 1511
+    },
+    "commandCounts": {
+      "comment": 100,
+      "create": 20,
+      "list": 100,
+      "show": 680,
+      "update": 180
+    },
+    "errors": 0
+  },
+  "byVerb": {
+    "create": { "intents": 20, "meanMs": 1595.385756, "p95Ms": 2334.521917, "bdCalls": 40, "bdCallsPerIntent": 2, "lockWaitMs": 316 },
+    "read": { "intents": 100, "meanMs": 698.202105, "p95Ms": 1000.753958, "bdCalls": 100, "bdCallsPerIntent": 1, "lockWaitMs": 341 },
+    "list": { "intents": 100, "meanMs": 661.308045, "p95Ms": 787.883041, "bdCalls": 100, "bdCallsPerIntent": 1, "lockWaitMs": 365 },
+    "status_update": { "intents": 100, "meanMs": 2183.824725, "p95Ms": 2892.610792, "bdCalls": 300, "bdCallsPerIntent": 3, "lockWaitMs": 391 },
+    "owner_status_update": { "intents": 80, "meanMs": 2108.890499, "p95Ms": 2766.532208, "bdCalls": 240, "bdCallsPerIntent": 3, "lockWaitMs": 437 },
+    "progress": { "intents": 48, "meanMs": 1861.393855, "p95Ms": 2155.381166, "bdCalls": 144, "bdCallsPerIntent": 3, "lockWaitMs": 380 },
+    "pending_problem": { "intents": 52, "meanMs": 2016.61847, "p95Ms": 2820.620833, "bdCalls": 156, "bdCallsPerIntent": 3, "lockWaitMs": 413 }
+  },
+  "deliveryMetrics": {
+    "deliveryRecords": 120,
+    "uniqueDeliveryIds": 120,
+    "steerReasons": 0,
+    "selfEchoes": 0,
+    "priorOwnerNotices": 0,
+    "reconciliationBdCalls": 0,
+    "pruneReasons": {}
+  },
+  "privacy": {
+    "workspacePathIncluded": false,
+    "taskPayloadIncluded": false,
+    "userIdentityIncluded": false
+  }
+}

@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { appendMessage, readInbox, sendPlainMessage, broadcastMessage, markMessagesRead } from "./messaging";
+import {
+  appendMessage,
+  readInbox,
+  readInboxForMembership,
+  sendPlainMessage,
+  broadcastMessage,
+  markMessagesRead,
+  markMessagesReadForMembership,
+  RecipientNotCurrentMemberError,
+} from "./messaging";
 import * as paths from "./paths";
 
 // Mock the paths to use a temporary directory
@@ -21,6 +30,13 @@ describe("Messaging Utilities", () => {
     vi.spyOn(paths, "configPath").mockImplementation((teamName) => {
       return path.join(testDir, "config.json");
     });
+    fs.writeFileSync(path.join(testDir, "config.json"), JSON.stringify({
+      name: "test-team",
+      members: [
+        { name: "sender", membershipId: "membership_sender" },
+        { name: "receiver", membershipId: "membership_receiver" },
+      ],
+    }));
   });
 
   afterEach(() => {
@@ -72,6 +88,86 @@ describe("Messaging Utilities", () => {
     for (let i = 0; i < numMessages; i++) {
       expect(texts).toContain(`msg-${i}`);
     }
+  }, 30_000);
+
+  it("rejects a direct message to an address absent from the current roster", async () => {
+    await expect(sendPlainMessage("test-team", "sender", "former-member", "body", "summary"))
+      .rejects.toEqual(expect.objectContaining<Partial<RecipientNotCurrentMemberError>>({
+        name: "RecipientNotCurrentMemberError",
+        teamName: "test-team",
+        recipient: "former-member",
+      }));
+    expect(fs.existsSync(path.join(testDir, "inboxes", "former-member.json"))).toBe(false);
+  });
+
+  it("stamps exact sender and recipient membership generations", async () => {
+    const accepted = await sendPlainMessage("test-team", "sender", "receiver", "body", "summary");
+    expect(accepted).toMatchObject({
+      senderMembershipId: "membership_sender",
+      recipientMembershipId: "membership_receiver",
+    });
+  });
+
+  it("rejects a stale sender binding at the Message append boundary", async () => {
+    const configFile = path.join(testDir, "config.json");
+    const config = JSON.parse(fs.readFileSync(configFile, "utf8"));
+    config.members[0].sessionFile = "/tmp/current-sender.jsonl";
+    fs.writeFileSync(configFile, JSON.stringify(config));
+
+    await expect(sendPlainMessage(
+      "test-team",
+      "sender",
+      "receiver",
+      "stale body",
+      "stale",
+      undefined,
+      { membershipId: "membership_sender", sessionFile: "/tmp/stale-sender.jsonl" },
+    )).rejects.toThrow(/refusing a stale Message append/);
+    expect(fs.existsSync(path.join(testDir, "inboxes", "receiver.json"))).toBe(false);
+  });
+
+  it("keeps historical generations queryable while current reads and acks stay exact", async () => {
+    const inboxFile = path.join(testDir, "inboxes", "receiver.json");
+    fs.mkdirSync(path.dirname(inboxFile), { recursive: true });
+    fs.writeFileSync(inboxFile, JSON.stringify([
+      {
+        id: "message_old",
+        recipientMembershipId: "membership_old",
+        from: "sender",
+        text: "old generation",
+        timestamp: "2026-01-01T00:00:00.000Z",
+        read: false,
+      },
+      {
+        id: "message_legacy",
+        from: "sender",
+        text: "unscoped legacy evidence",
+        timestamp: "2026-01-01T00:00:01.000Z",
+        read: false,
+      },
+    ]));
+    const current = await sendPlainMessage("test-team", "sender", "receiver", "current generation", "current");
+
+    expect((await readInbox("test-team", "receiver", false, false)).map((message) => message.id))
+      .toEqual(["message_old", "message_legacy", current.id]);
+    expect((await readInboxForMembership(
+      "test-team",
+      "receiver",
+      "membership_receiver",
+      true,
+      false,
+    )).map((message) => message.id)).toEqual([current.id]);
+
+    expect(await markMessagesReadForMembership(
+      "test-team",
+      "receiver",
+      "membership_receiver",
+      ["message_old", "message_legacy", current.id],
+    )).toBe(1);
+    const all = await readInbox("test-team", "receiver", false, false);
+    expect(all.find((message) => message.id === "message_old")?.read).toBe(false);
+    expect(all.find((message) => message.id === "message_legacy")?.read).toBe(false);
+    expect(all.find((message) => message.id === current.id)?.read).toBe(true);
   });
 
   it("should mark messages as read", async () => {
@@ -88,7 +184,7 @@ describe("Messaging Utilities", () => {
     expect(all.every(m => m.read)).toBe(true);
   });
 
-  it("should acknowledge only context-observed Message IDs", async () => {
+  it("should acknowledge only explicitly selected Message IDs", async () => {
     const first = await sendPlainMessage("test-team", "sender", "receiver", "msg1", "summary1");
     const second = await sendPlainMessage("test-team", "sender", "receiver", "msg2", "summary2");
 
@@ -103,15 +199,20 @@ describe("Messaging Utilities", () => {
     const config = {
       name: "test-team",
       members: [
-        { name: "sender" },
-        { name: "member1" },
-        { name: "member2" }
+        { name: "sender", membershipId: "membership_sender" },
+        { name: "member1", membershipId: "membership_member1" },
+        { name: "member2", membershipId: "membership_member2" }
       ]
     };
     const configFilePath = path.join(testDir, "config.json");
     fs.writeFileSync(configFilePath, JSON.stringify(config));
     
-    await broadcastMessage("test-team", "sender", "broadcast text", "summary");
+    const result = await broadcastMessage("test-team", "sender", "broadcast text", "summary");
+    expect(result.failures).toEqual([]);
+    expect(result.accepted).toEqual([
+      { recipient: "member1", messageId: expect.stringMatching(/^message_/) },
+      { recipient: "member2", messageId: expect.stringMatching(/^message_/) },
+    ]);
 
     // Check member1's inbox
     const inbox1 = await readInbox("test-team", "member1", false, false);
@@ -128,5 +229,28 @@ describe("Messaging Utilities", () => {
     // Check sender's inbox (should be empty)
     const inboxSender = await readInbox("test-team", "sender", false, false);
     expect(inboxSender.length).toBe(0);
+  });
+
+  it("returns accepted Message IDs and recipient-specific partial failures", async () => {
+    fs.writeFileSync(path.join(testDir, "config.json"), JSON.stringify({
+      name: "test-team",
+      members: [
+        { name: "sender", membershipId: "membership_sender" },
+        { name: "accepted", membershipId: "membership_accepted" },
+        { name: "broken", membershipId: "membership_broken" },
+      ],
+    }));
+    const brokenPath = path.join(testDir, "inboxes", "broken.json");
+    fs.mkdirSync(brokenPath, { recursive: true });
+
+    const result = await broadcastMessage("test-team", "sender", "broadcast text", "summary");
+
+    expect(result.accepted).toEqual([
+      { recipient: "accepted", messageId: expect.stringMatching(/^message_/) },
+    ]);
+    expect(result.failures).toEqual([
+      { recipient: "broken", error: expect.stringMatching(/EISDIR|directory/i) },
+    ]);
+    expect(await readInbox("test-team", "accepted", false, false)).toHaveLength(1);
   });
 });

@@ -45,4 +45,74 @@ describe("withLock", () => {
     await expect(withLock(lockPath, fn)).rejects.toThrow("failure");
     expect(fs.existsSync(lockFile)).toBe(false);
   });
+
+  it("does not steal an old-looking lock while its recorded process is alive", async () => {
+    let releaseOwner!: () => void;
+    const ownerMayExit = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    let ownerEntered!: () => void;
+    const ownerDidEnter = new Promise<void>((resolve) => { ownerEntered = resolve; });
+
+    const first = withLock(lockPath, async () => {
+      ownerEntered();
+      await ownerMayExit;
+    });
+    await ownerDidEnter;
+
+    const staleTime = new Date(Date.now() - 31_000);
+    fs.utimesSync(lockFile, staleTime, staleTime);
+
+    const contender = vi.fn().mockResolvedValue(undefined);
+    await expect(withLock(lockPath, contender, 2)).rejects.toThrow("Could not acquire lock");
+    expect(contender).not.toHaveBeenCalled();
+
+    releaseOwner();
+    await first;
+    expect(fs.existsSync(lockFile)).toBe(false);
+  });
+
+  it("does not let a former owner delete a successor's lock", async () => {
+    let releaseOwner!: () => void;
+    const ownerMayExit = new Promise<void>((resolve) => { releaseOwner = resolve; });
+    let ownerEntered!: () => void;
+    const ownerDidEnter = new Promise<void>((resolve) => { ownerEntered = resolve; });
+
+    const first = withLock(lockPath, async () => {
+      ownerEntered();
+      await ownerMayExit;
+    });
+    await ownerDidEnter;
+
+    const successor = { pid: process.pid, token: "successor-token" };
+    fs.writeFileSync(lockFile, JSON.stringify(successor));
+
+    releaseOwner();
+    await first;
+
+    expect(JSON.parse(fs.readFileSync(lockFile, "utf8"))).toEqual(successor);
+  });
+
+  it("recovers a stale legacy lock after its process is dead", async () => {
+    fs.writeFileSync(lockFile, "2147483647");
+    const staleTime = new Date(Date.now() - 31_000);
+    fs.utimesSync(lockFile, staleTime, staleTime);
+
+    const fn = vi.fn().mockResolvedValue("recovered");
+    await expect(withLock(lockPath, fn, 2)).resolves.toBe("recovered");
+    expect(fn).toHaveBeenCalledOnce();
+    expect(fs.existsSync(lockFile)).toBe(false);
+  });
+
+  it("fails closed with manual recovery instructions when a recovery claimer died", async () => {
+    const claimFile = `${lockFile}.recovery`;
+    fs.writeFileSync(lockFile, "2147483647");
+    const staleTime = new Date(Date.now() - 31_000);
+    fs.utimesSync(lockFile, staleTime, staleTime);
+    fs.writeFileSync(claimFile, JSON.stringify({ pid: 2147483647, token: "dead-recovery" }));
+    fs.utimesSync(claimFile, staleTime, staleTime);
+
+    await expect(withLock(lockPath, async () => "must-not-enter", 2))
+      .rejects.toThrow(/recovery claim.*abandoned.*manually/i);
+    expect(fs.existsSync(lockFile)).toBe(true);
+    expect(fs.existsSync(claimFile)).toBe(true);
+  });
 });

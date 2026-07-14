@@ -19,7 +19,7 @@ The agent in your main terminal window. You are responsible for:
 Agents spawned in separate panes. They are designed for:
 - **Focus**: Executing specific, isolated tasks (e.g., "Security Audit", "Frontend Refactor").
 - **Parallelism**: Working on multiple parts of the project simultaneously.
-- **Autonomy**: Checking their own inboxes, submitting plans, and reporting progress without constant hand-holding.
+- **Autonomy**: Receiving native Message/Task delivery, submitting plans, and reporting progress without constant hand-holding. Inbox reads are explicit audit/history only.
 
 ---
 
@@ -41,7 +41,7 @@ A centralized source of truth for the entire team:
 Communication flows naturally between team members:
 - **Direct Messaging**: Send specific instructions to one teammate.
 - **Broadcasts**: Announce global changes (like API updates) to everyone at once.
-- **Inbox Polling**: Teammates automatically "wake up" to check for new work every 30 seconds when idle.
+- **Native Delivery**: Accepted Messages and Task changes steer the exact current Session; agents don't poll inboxes to discover work.
 
 ### 🛡️ Plan Approval Mode
 For critical changes, you can require teammates to submit a plan before they start:
@@ -62,8 +62,8 @@ Use this when you have 3-4 independent features to build.
 
 ### Pattern 2: The "Safety First" Audit
 Use this for refactoring or security work.
-1. Spawn a teammate with `plan_mode_required: true`.
-2. Assign the refactoring task.
+1. Spawn a teammate with an explicit instruction to propose a plan before implementation.
+2. Assign the refactoring task and have the teammate call `task_submit_plan`.
 3. Review their proposed changes before any code is touched.
 4. Approve the plan to let them execute.
 
@@ -84,4 +84,4 @@ Use automated hooks to ensure standards.
 ## ⚠️ Best Practices
 - **Isolation**: Give teammates tasks that don't overlap too much to avoid git conflicts.
 - **Clear Prompts**: Be specific about the teammate's role and boundaries when spawning.
-- **Check-ins**: Use `task_list` regularly to see the "big picture" of your team's progress.
+- **Check-ins**: Mutation receipts already contain post-state. Use `task_list`, `task_read`, or `check_teammate` on demand when a current projection or runtime diagnosis is actually needed, not as routine polling.

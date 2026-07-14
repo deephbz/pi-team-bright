@@ -8,36 +8,59 @@ description: Operate PiTeams agent orchestration tools for creating teams, spawn
 PiTeams is an orchestration extension for Pi. It owns team membership,
 terminal panes/windows, inbox messages, runtime health, and the task-tool
 workflow. It does not provide slash commands; every operation below is a Pi
-tool. The extension registers exactly 21 tools.
+tool. The extension registers exactly 20 tools.
+
+Use one PiTeams version per live team. For an Alpha upgrade, stop the whole
+team, run any required out-of-band Task migration, then restart every process
+on the same version; don't attempt a rolling mixed-version upgrade.
+
+Before `team_create`, require `PI_TEAMS_BEADS_WORKSPACE` to name an absolute,
+initialized Beads workspace inherited by the Pi process. Beads is the only
+runtime Task authority; don't create or update legacy JSON Task files.
 
 ## Normal workflow
 
 1. Call `team_create`.
 2. Call `spawn_teammate` for each specialist, or use
    `create_predefined_team` for a saved template.
-3. Use `task_create`, `task_update`, `task_list`, and `task_read` for work.
-4. Use `send_message`, `broadcast_message`, and `read_inbox` for transient
-   coordination.
-5. Use `check_teammate` while work is running, then
+3. Use `task_create` and `task_update` for work. Their receipts contain the
+   authoritative post-state, so don't immediately follow them with
+   `task_read` or `task_list`; query later only when current state is needed.
+4. Use `send_message` and `broadcast_message` for substantive transient
+   coordination. Avoid ACK-only Messages unless semantic confirmation is
+   required; use `read_inbox` only for explicit audit/history inspection.
+5. Use `check_teammate` only to diagnose suspected runtime trouble, then
    `process_shutdown_approved` for one teammate or `team_shutdown` for the
    whole team.
 
-When a teammate is launched, PiTeams sends its initial prompt to its inbox and
-injects a prompt telling it to call `read_inbox`; it is not an automatic tool
-call. Idle teammates poll their own inbox about every 30 seconds. The lead
-also polls while idle. A teammate's `check_teammate` health is derived from
-terminal liveness, inbox state, startup timing, and runtime heartbeat; it is
-not task status.
+When a teammate is launched, PiTeams accepts its initial prompt into the inbox
+and delivers it as native custom context; don't call `read_inbox` merely to
+fetch delivery. A teammate's `check_teammate` health is derived from terminal
+liveness, inbox state, startup timing, and runtime heartbeat; it is not Task
+status.
+
+Task assignments and changes
+addressed to the current exact Pi Session arrive as `pi-teams.task-change`
+custom context with an authority-scoped Task ID/version. Act on that payload;
+re-read Task authority before a conflicting write. It isn't a Communication
+Message, and observing it doesn't acknowledge completion or change Task state.
 
 ## Process recovery
 
 A killed Pi process is not a PiTeams shutdown. Resume the same lead session
 with `pi -r`; PiTeams matches its durable Pi session file, then refreshes the
-lead PID, tmux pane, and inbox polling. A teammate's first startup records the
+lead PID, tmux pane, and native delivery. A teammate's first startup records the
 same durable Pi session identity, so it can also be resumed in a new pane with
 plain `pi -r`; startup restores its member identity and refreshes the tracked
-pane/runtime state. An older team without that binding needs one resume with
-its original `PI_TEAM_NAME` and `PI_AGENT_NAME` to establish it.
+pane/runtime state. A first startup binds only when it presents the exact
+single-use `PI_AGENT_LAUNCH_ID` prepared for that Membership. An older or
+incomplete Membership without either an exact Session binding or its original
+launch capability fails closed; stop and explicitly respawn it rather than
+guessing identity from names.
+If one durable lead Session appears in multiple historical team records,
+resume fails closed; set `PI_TEAM_NAME` to the intended team and repair the
+stale lead-session record instead of relying on directory order. The explicit
+name must identify an existing team; an invalid selector never creates one.
 
 ## Team and teammate tools
 
@@ -56,17 +79,11 @@ an override; omission preserves Pi's configured default.
 Required: `team_name`, `name`, `prompt`, and `cwd`.
 
 Optional: `model`, `thinking` (`off`, `minimal`, `low`, `medium`, `high`, or
-`xhigh`), `plan_mode_required` (default `false`), and `separate_window`
-(default `false`). Existing teammates with the same name are stopped and
-replaced. The tool rejects missing teams, missing terminal adapters, and
-unsupported window mode. Omit `model` unless the user explicitly requests an
-override. When `name` matches a discovered agent definition, its `tools`
-allowlist is passed to Pi's `--tools` launch option.
-
-### `spawn_lead_window`
-
-Required: `team_name`. Optional: `cwd`. It opens the lead in a separate OS
-window and uses the team's default model when one is configured.
+`xhigh`), and `separate_window` (default `false`). Existing teammates with the
+same name are stopped and replaced. The tool rejects missing teams, missing
+terminal adapters, and unsupported window mode. Omit `model` unless the user
+explicitly requests an override. When `name` matches a discovered agent
+definition, its `tools` allowlist is passed to Pi's `--tools` launch option.
 
 ### `check_teammate`
 
@@ -74,44 +91,60 @@ Required: `team_name` and `agent_name`. The result includes `alive`,
 `unreadCount`, `health` (`dead`, `stalled`, `healthy`, `idle`, or `starting`),
 `agentLoopReady`, `hasRecentHeartbeat`, `startupStalled`, and raw `runtime`
 telemetry. Dead runtime status files are cleaned up.
+It is an on-demand diagnostic, not a progress/completion poll.
 
 ### `process_shutdown_approved`
 
-Required: `team_name` and `agent_name`. It kills that teammate's process or
-pane/window, removes runtime status, and removes the teammate from the team
-roster. The lead is not removed by this tool.
+Required: `team_name` and `agent_name`. It deactivates the current Membership
+only after the pane/window is confirmed gone, or an exact Membership-bound
+runtime record proves the recorded process already exited. It never kills a PID
+from durable state alone. If shutdown cannot be confirmed, escalate the manual
+close to the operator and retry; the Membership remains current. The lead is
+not removed by this tool.
 
 ### `team_shutdown`
 
-Required: `team_name`. It stops all teammates and performs the normal orphaned
-Pi-session cleanup. For a legacy task backend it removes the team and local
-task directories as before. For a Beads-cutover team it retains the team
-configuration, Beads authority, and legacy task files as migration evidence;
-task truth is never deleted by shutdown.
+Required: `team_name`. It attempts every teammate independently without global
+age-based Pi-session deletion. Only confirmed stops are deactivated; failed
+stops and the lead remain current, and the receipt reports failures and stop
+evidence. It retains the team configuration, Beads authority, and legacy task
+files as migration evidence; task truth is never deleted by shutdown.
+Historical teams without Beads authority have no runtime Task store and must
+use the explicit migration workflow before Task tools can run.
 
 ### `cleanup_agent_sessions`
 
-Optional: `max_age_hours` (default `24`). It removes orphaned folders under
-`~/.pi/agent/teams/` older than that age and returns the count removed.
+Optional: `max_age_hours` (default `24`, finite and non-negative). It reports
+old folders under `~/.pi/agent/teams/` as review candidates but deletes none;
+age alone isn't sufficient liveness evidence.
 
 ## Communication tools
 
 ### `send_message`
 
 Required: `team_name`, `recipient`, `content`, and `summary`. It appends one
-message to the recipient's transient inbox. There is no `color` field.
+message to the recipient's transient inbox. The recipient must be in the
+team's current roster; if not, escalate to `team-lead` rather than treating an
+old inbox as membership evidence. A nonexistent team errors without creating
+state. There is no `color` field. The model-visible receipt includes the
+accepted stable Message ID.
+Avoid ACK-only Messages unless semantic confirmation is required.
 
 ### `broadcast_message`
 
-Required: `team_name`, `content`, and `summary`. Optional: `color`. It sends to
-all team members except the sender.
+Required: `team_name`, `content`, and `summary`. Optional: `color`. It attempts
+one Message for every current member except the sender and returns accepted
+recipient/Message-ID pairs plus recipient-specific failures.
 
 ### `read_inbox`
 
 Required: `team_name`. Optional: `agent_name` and `unread_only` (default
 `true`). Without `agent_name`, the current agent's inbox is read. Reading a
 teammate's inbox is an inspection operation; messages remain PiTeams
-communication state, not task state.
+communication state, not task state. Foreign inspection is non-consuming;
+reading one's own inbox may mark returned Messages read.
+Normal accepted Messages are delivered as native custom context; never call
+`read_inbox` merely to fetch delivery.
 
 ## Task tools
 
@@ -119,12 +152,13 @@ communication state, not task state.
 
 Required: `team_name`, `subject`, and `description`. Optional: `active_form`,
 `metadata`, and `idempotency_key`. It returns the backend task ID.
+The mutation receipt includes post-state; don't immediately re-read or list it.
 
 ### `task_read`
 
 Required: `team_name` and `task_id`. It returns the full task record, including
 its backend ID, description, plan fields, owner, dependency fields, metadata,
-and a backend version token in the returned `version` field when available.
+and the authoritative write token in the returned `version` field.
 Pass that exact `version` value as `expected_version` on the next Beads
 mutation. `task_read` is the shipped name;
 there is no `task_get`.
@@ -132,46 +166,54 @@ there is no `task_get`.
 ### `task_list`
 
 Required: `team_name`. It returns the team's current non-deleted tasks. IDs
-are not assumed to be numeric: after Beads cutover they are Beads IDs.
+are not assumed to be numeric: after Beads cutover they are Beads IDs. This
+performant projection omits `version`; use `task_read` before a conditional
+write.
+Don't call this immediately after a mutation merely to confirm its receipt.
 
 ### `task_update`
 
 Required: `team_name` and `task_id`. Optional fields are:
 
-- `status`: `pending`, `planning`, `in_progress`, `completed`, or `deleted`;
+- `status`: `pending`, `planning`, `in_progress`, `blocked`, `completed`, or `deleted`;
 - `owner`: assignment name, or an empty string to clear it;
 - `claim`: atomically claim for the current agent where the backend supports it;
 - `expected_version`: optimistic concurrency token;
-- `blocks` and `blocked_by`: dependency IDs;
+- `blocked_by`: one dependency ID to add to this Task;
 - `progress`: append a communicated progress entry;
 - `pending_problem`: append an unresolved-problem entry.
 
-`blocked` is a derived/read state, not a writable status. Each `task_update`
-call accepts one backend mutation; split status, dependency, and progress
-changes into separate calls and re-read `expected_version` between them.
-Here, “re-read `expected_version`” means call `task_read`/`task_list` again and
-copy the returned task `version` into the next call's `expected_version`.
-Beads-cutover non-claim writes require `expected_version`; Beads 1.1.0 has no
-true CLI CAS, so the token is a serialized preflight and an external writer
-can still race after the check. `completed` invokes the configured
-`.pi/team-hooks/task_completed.sh` hook for both backends: legacy runs it on a
-completed write, while Beads runs it when the task transitions to closed.
-Hook failures are logged and do not undo the task mutation. `deleted` is a
-real file deletion only in the legacy backend; Beads stores a closed,
-soft-deleted record so history is retained.
+`blocked` is an explicit writable work state and is independent of
+`blocked_by` dependency edges. One `task_update` may combine owner with a compatible nonterminal status because Beads applies
+both in one command. One dependency, progress entry, or pending problem is its
+own semantic operation; combinations requiring several commands fail before
+mutation. The result contains complete post-state and applied operations. `expected_version`
+is optional and enforced when supplied. Every mutation tool's model-visible
+receipt includes post-state `id`, `status`, `owner`, `version`, applied
+operations, and warnings without large Task bodies. Don't immediately call
+`task_read` or `task_list` merely to confirm that receipt. Beads 1.1.0 has no
+true CLI CAS, so a
+supplied token is a serialized preflight and an external writer can still race
+after the check. Terminal transitions and claim cannot be combined with other
+mutations. `completed` invokes the configured
+`.pi/team-hooks/task_completed.sh` hook when the Beads Task transitions to
+closed. Hook failures are logged and do not undo the Task mutation. `deleted`
+stores a closed, soft-deleted Beads record so history is retained.
 
 ### `task_submit_plan`
 
 Required: `team_name`, `task_id`, and non-empty `plan`. Optional:
-`expected_version`. It stores the plan and sets status to `planning`; a
-Beads-cutover team requires the version token.
+`expected_version`. It stores the plan and sets status to `planning`. A
+supplied version token is enforced.
 
 ### `task_evaluate_plan`
 
 Required: `team_name`, `task_id`, and `action` (`approve` or `reject`).
 Optional: `feedback`, which is required for rejection, and `expected_version`.
 Approval sets `in_progress`; rejection keeps `planning` and stores the
-feedback. A Beads-cutover team requires the version token.
+feedback. Rejection consumes that submitted plan, so revise it and call
+`task_submit_plan` again before another evaluation. A supplied version token
+is enforced.
 
 ## Predefined/template tools
 
@@ -208,13 +250,14 @@ time. It does not create or delete teams.
 
 ## Task authority and migration
 
-Teams without `taskBackend: "beads"` use the historical per-task JSON files
-under `~/.pi/tasks/<team>/`; this is the legacy compatibility store. A migrated
-team records `taskBackend: "beads"`, an absolute `taskWorkspace`, and a
-cutover record in its team config. From that point Beads is the sole writable
-task authority: if `bd` is unavailable, malformed, times out, rejects a scope,
-or reports a conflict, the tool fails with an actionable error and never
-writes the legacy files.
+Teams without `taskBackend: "beads"` have no runtime Task authority. Historical
+per-task JSON files under `~/.pi/tasks/<team>/` are migration input only. A
+migrated team records `taskBackend: "beads"`, an absolute `taskWorkspace`, a
+stable opaque `taskAuthorityId`, a versioned external authority fingerprint,
+and a cutover record in its team config. Beads is the
+sole runtime Task authority: if `bd` is unavailable, malformed, times out,
+rejects a scope, or reports a conflict, the tool fails with an actionable error
+and never writes the legacy files.
 
 Run the migration helper with:
 

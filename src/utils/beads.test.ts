@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { bdExecFailure, BeadsError, BeadsTaskStore, BdCommandResult, BdRunner } from "./beads";
+import {
+  bdExecFailure,
+  BeadsError,
+  BeadsTaskStore,
+  BdCommandResult,
+  BdRunner,
+  OWNER_TRANSITION_OPERATION_METADATA,
+} from "./beads";
 import { teamDir } from "./paths";
 
 type FakeIssue = {
@@ -28,6 +35,16 @@ class FakeBd implements BdRunner {
   sequence = 0;
   version = 0;
   failure: "unavailable" | "malformed" | "timeout" | undefined;
+  private nextUpdateGate: { reached: () => void; released: Promise<void> } | undefined;
+
+  delayNextUpdate(): { reached: Promise<void>; release: () => void } {
+    let markReached!: () => void;
+    let release!: () => void;
+    const reached = new Promise<void>((resolve) => { markReached = resolve; });
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    this.nextUpdateGate = { reached: markReached, released };
+    return { reached, release };
+  }
 
   private touch(issue: FakeIssue): void {
     issue.updated_at = `v${++this.version}`;
@@ -68,17 +85,25 @@ class FakeBd implements BdRunner {
     }
     if (command === "list") {
       const label = flag(rest, "--label");
-      return toJson([...this.issues.values()].filter(issue => !label || issue.labels.includes(label)).map(issue => ({
-        ...issue,
-        dependency_count: issue.dependencies.length,
-        dependent_count: 0,
-        comment_count: issue.comments.length,
-      })));
+      return toJson([...this.issues.values()].filter(issue => !label || issue.labels.includes(label)).map(issue => {
+        const { dependencies, comments, ...projection } = issue;
+        return {
+          ...projection,
+          dependency_count: dependencies.length,
+          dependent_count: [...this.issues.values()].filter(candidate => candidate.dependencies.some(dependency => dependency.id === issue.id)).length,
+          comment_count: comments.length,
+        };
+      }));
     }
     const id = rest[0];
     const issue = this.issues.get(id);
     if (!issue) return { stdout: JSON.stringify({ error: "not found" }), stderr: "not found", exitCode: 1 };
-    if (command === "show") return toJson([{ ...issue, comments: issue.comments, dependencies: issue.dependencies }]);
+    if (command === "show") {
+      const dependents = [...this.issues.values()]
+        .filter(candidate => candidate.dependencies.some(dependency => dependency.id === issue.id))
+        .map(candidate => ({ id: candidate.id, status: candidate.status, dependency_type: "blocks" as const }));
+      return toJson([{ ...issue, comments: issue.comments, dependencies: issue.dependencies, dependents }]);
+    }
     if (command === "comment") {
       const text = rest[1];
       issue.comments.push({ id: `comment-${issue.comments.length + 1}`, issue_id: issue.id, author: actor, text, created_at: `t${++this.version}` } as any);
@@ -98,6 +123,12 @@ class FakeBd implements BdRunner {
       return toJson(issue);
     }
     if (command === "update") {
+      const gate = this.nextUpdateGate;
+      if (gate) {
+        this.nextUpdateGate = undefined;
+        gate.reached();
+        await gate.released;
+      }
       const claim = rest.includes("--claim");
       if (claim) {
         if (issue.assignee && issue.assignee !== actor) return { stdout: "", stderr: `issue already claimed by ${issue.assignee}`, exitCode: 1 };
@@ -170,9 +201,88 @@ describe("BeadsTaskStore with fake bd fixture", () => {
     expect(reread.blockedBy).toEqual([blocker.id]);
     expect((await store.read(blocker.id)).blocks).toEqual([task.id]);
     await store.update(task.id, { status: "in_progress" });
+    const blocked = await store.update(task.id, { status: "blocked" });
+    expect(blocked.status).toBe("blocked");
+    expect((await store.read(task.id)).status).toBe("blocked");
     expect((await store.update(task.id, { status: "completed" })).status).toBe("completed");
     expect((await store.read(task.id)).status).toBe("completed");
     expect((await store.list()).map(item => item.id)).toEqual([blocker.id, task.id]);
+  });
+
+  it("embeds owner-transition evidence in the same owner update without exposing it as Task metadata", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, actor: "lead", runner: fake, requireExpectedVersion: false });
+    const task = await store.create({ subject: "Move", description: "change owner" });
+    const prepared: string[] = [];
+    const updated = await store.updateWithResult(task.id, { owner: "worker" }, {
+      internalOwnerTransition: {
+        operationId: "owner-op-atomic",
+        prepare: async (before, previousOperationId) => {
+          prepared.push(`${before.owner || "none"}:${previousOperationId || "none"}`);
+          return true;
+        },
+      },
+    });
+
+    expect(updated.before.owner).toBeUndefined();
+    expect(updated.after.owner).toBe("worker");
+    expect(prepared).toEqual(["none:none"]);
+    expect(updated.after.metadata?.[OWNER_TRANSITION_OPERATION_METADATA]).toBeUndefined();
+    expect(await store.readOwnerTransitionEvidence(task.id)).toMatchObject({
+      task: { owner: "worker" },
+      operationId: "owner-op-atomic",
+    });
+
+    const claimTask = await store.create({ subject: "Claim", description: "atomic claim" });
+    await store.claimWithResult(claimTask.id, "reviewer", {
+      internalOwnerTransition: {
+        operationId: "owner-op-claim",
+        prepare: async () => true,
+      },
+    });
+    expect(await store.readOwnerTransitionEvidence(claimTask.id)).toMatchObject({
+      task: { owner: "reviewer" },
+      operationId: "owner-op-claim",
+    });
+  });
+
+  it("keeps soft-deleted Tasks immutable across every agent-facing mutation", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, actor: "lead", runner: fake, requireExpectedVersion: false });
+    const task = await store.create({ subject: "Delete", description: "immutable history" });
+    const blocker = await store.create({ subject: "Blocker", description: "live task" });
+    const deleted = await store.update(task.id, { status: "deleted" });
+    expect(deleted.status).toBe("deleted");
+
+    const mutations = [
+      () => store.update(task.id, { status: "pending" }),
+      () => store.claim(task.id, "worker"),
+      () => store.submitPlan(task.id, "secret reopen"),
+      () => store.addProgress(task.id, { kind: "progress", text: "should fail" }),
+      () => store.addDependency(task.id, blocker.id),
+    ];
+    for (const mutate of mutations) {
+      await expect(mutate()).rejects.toMatchObject({ kind: "conflict" });
+      await expect(mutate()).rejects.toThrow(/deleted and immutable/i);
+    }
+    expect((await store.read(task.id)).status).toBe("deleted");
+  });
+
+  it("requires an explicit status transition before a completed Task can accept a new plan", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, actor: "lead", runner: fake, requireExpectedVersion: false });
+    const task = await store.create({ subject: "Complete", description: "explicit reopen only" });
+    const completed = await store.update(task.id, { status: "completed" });
+    expect(completed.status).toBe("completed");
+
+    await expect(store.submitPlan(task.id, "implicit reopen")).rejects.toMatchObject({ kind: "conflict" });
+    await expect(store.submitPlan(task.id, "implicit reopen")).rejects.toThrow(/explicit nonterminal status/i);
+    await expect(store.claim(task.id, "worker")).rejects.toThrow(/cannot reopen it implicitly/i);
+
+    const reopened = await store.update(task.id, { status: "pending" });
+    expect(reopened.status).toBe("pending");
+    const planned = await store.submitPlan(task.id, "new explicit phase");
+    expect(planned).toMatchObject({ status: "planning", plan: "new explicit phase" });
   });
 
   it("allows exactly one claimant and rejects stale optimistic versions", async () => {
@@ -185,6 +295,92 @@ describe("BeadsTaskStore with fake bd fixture", () => {
     const fresh = await store.read(task.id);
     fake.mutate(task.id, issue => { issue.title = "human edit"; });
     await expect(store.update(task.id, { description: "lost?" }, { expectedVersion: fresh.version })).rejects.toMatchObject({ kind: "conflict" });
+  });
+
+  it.each([
+    ["approve", "reject"],
+    ["reject", "approve"],
+  ] as const)("serializes concurrent plan %s/%s decisions under one Task lock", async (firstAction, secondAction) => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, runner: fake, requireExpectedVersion: false });
+    const task = await store.create({ subject: "Plan race", description: "race" });
+    await store.submitPlan(task.id, "inspect, then test");
+
+    const gate = fake.delayNextUpdate();
+    const first = store.evaluatePlan(task.id, firstAction, firstAction === "reject" ? "revise first" : undefined);
+    await gate.reached;
+    const second = store.evaluatePlan(task.id, secondAction, secondAction === "reject" ? "revise second" : undefined);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    gate.release();
+
+    const [firstResult, secondResult] = await Promise.allSettled([first, second]);
+    expect(firstResult.status).toBe("fulfilled");
+    expect(secondResult.status).toBe("rejected");
+    if (secondResult.status === "rejected") expect(secondResult.reason).toMatchObject({ kind: "conflict" });
+
+    const final = await store.read(task.id);
+    expect(final.status).toBe(firstAction === "approve" ? "in_progress" : "planning");
+    expect(final.planFeedback).toBe(firstAction === "reject" ? "revise first" : undefined);
+  });
+
+  it("versions relationships by edge identity, not neighboring Task content", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, runner: fake, requireExpectedVersion: false });
+    const blocker = await store.create({ subject: "Blocker", description: "stable edge owner" });
+    const dependent = await store.create({ subject: "Dependent", description: "v0" });
+    await store.addDependency(dependent.id, blocker.id);
+    const before = await store.read(blocker.id);
+
+    fake.mutate(dependent.id, issue => {
+      issue.description = "neighbor changed";
+      issue.status = "in_progress";
+    });
+    expect((await store.read(blocker.id)).version).toBe(before.version);
+
+    const second = await store.create({ subject: "Second", description: "new edge" });
+    await store.addDependency(second.id, blocker.id);
+    expect((await store.read(blocker.id)).version).not.toBe(before.version);
+  });
+
+  it("uses one version for equivalent list and show projections with comments and dependents", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, runner: fake, requireExpectedVersion: false });
+    const blocker = await store.create({ subject: "Blocker", description: "shared projection" });
+    const dependent = await store.create({ subject: "Dependent", description: "shared projection" });
+    const initial = await store.read(blocker.id);
+
+    await store.addProgress(blocker.id, { kind: "progress", text: "commented" });
+    const commented = await store.read(blocker.id);
+    expect(commented.version).not.toBe(initial.version);
+
+    await store.addDependency(dependent.id, blocker.id);
+    const linked = await store.read(blocker.id);
+    expect(linked.version).not.toBe(commented.version);
+    expect((await store.list()).find((task) => task.id === blocker.id)?.version).toBe(linked.version);
+  });
+
+  it("honors the caller's lock retry budget on Task mutations", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, runner: fake, requireExpectedVersion: false });
+    const task = await store.create({ subject: "Retry budget", description: "must not be ignored" });
+    const updatesBefore = fake.version;
+
+    await expect(store.update(task.id, { description: "must not run" }, { retries: 0 }))
+      .rejects.toThrow(/could not acquire lock/i);
+    expect(fake.version).toBe(updatesBefore);
+    expect((await store.read(task.id)).description).toBe("must not be ignored");
+  });
+
+  it("distinguishes a later authority revision even when logical state returns to the same value", async () => {
+    const fake = new FakeBd();
+    const store = new BeadsTaskStore({ teamName: team, workspace, runner: fake, requireExpectedVersion: false });
+    const task = await store.create({ subject: "ABA", description: "same" });
+    const first = await store.read(task.id);
+    fake.mutate(task.id, () => undefined);
+    const restored = await store.read(task.id);
+    expect(restored.subject).toBe(first.subject);
+    expect(restored.description).toBe(first.description);
+    expect(restored.version).not.toBe(first.version);
   });
 
   it("refuses a task ID outside the configured team scope", async () => {
@@ -219,4 +415,5 @@ describe("BeadsTaskStore with fake bd fixture", () => {
     expect(updated.description).toBe("narrow");
     await expect(store.addProgress(task.id, { kind: "progress", text: "stale" }, { expectedVersion: fresh.version })).rejects.toMatchObject({ kind: "conflict" });
   });
+
 });
