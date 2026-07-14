@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { appendMessage, readInbox, sendPlainMessage, broadcastMessage } from "./messaging";
+import { appendMessage, readInbox, sendPlainMessage, broadcastMessage, markMessagesRead } from "./messaging";
 import * as paths from "./paths";
 
 // Mock the paths to use a temporary directory
@@ -35,6 +35,24 @@ describe("Messaging Utilities", () => {
     const inbox = await readInbox("test-team", "receiver", false, false);
     expect(inbox.length).toBe(1);
     expect(inbox[0].text).toBe("hello");
+    expect(inbox[0].id).toMatch(/^message_/);
+  });
+
+  it("should persist deterministic IDs for legacy records", async () => {
+    const inboxFile = path.join(testDir, "inboxes", "receiver.json");
+    fs.mkdirSync(path.dirname(inboxFile), { recursive: true });
+    fs.writeFileSync(inboxFile, JSON.stringify([{
+      from: "sender",
+      text: "legacy body",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      read: false,
+    }]));
+
+    const first = await readInbox("test-team", "receiver", true, false);
+    const second = await readInbox("test-team", "receiver", true, false);
+    expect(first[0].id).toMatch(/^legacy_/);
+    expect(second[0].id).toBe(first[0].id);
+    expect(JSON.parse(fs.readFileSync(inboxFile, "utf8"))[0].id).toBe(first[0].id);
   });
 
   it("should handle concurrent appends (Stress Test)", async () => {
@@ -68,6 +86,16 @@ describe("Messaging Utilities", () => {
     const all = await readInbox("test-team", "receiver", false, false);
     expect(all.length).toBe(2);
     expect(all.every(m => m.read)).toBe(true);
+  });
+
+  it("should acknowledge only context-observed Message IDs", async () => {
+    const first = await sendPlainMessage("test-team", "sender", "receiver", "msg1", "summary1");
+    const second = await sendPlainMessage("test-team", "sender", "receiver", "msg2", "summary2");
+
+    expect(await markMessagesRead("test-team", "receiver", [second.id])).toBe(1);
+    const all = await readInbox("test-team", "receiver", false, false);
+    expect(all.find(message => message.id === first.id)?.read).toBe(false);
+    expect(all.find(message => message.id === second.id)?.read).toBe(true);
   });
 
   it("should broadcast message to all members except the sender", async () => {

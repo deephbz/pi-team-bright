@@ -29,9 +29,11 @@ spawn_teammate({
 
 A team can be created without a terminal adapter, but `spawn_teammate` and
 `create_predefined_team` need one. A teammate's initial prompt is placed in
-its transient inbox. On startup it receives an instruction to call
-`read_inbox`; there is no automatic tool call and no automatic started event
-in the lead's inbox. Idle agents poll inboxes about every 30 seconds.
+its transient inbox. In the default legacy mode, its first durable Session
+binding receives an instruction to call `read_inbox`; replacing and resuming
+the process on that Session does not inject the bootstrap again. There is no
+automatic tool call and no automatic started event in the lead's inbox. Idle
+agents poll inboxes about every 30 seconds.
 
 Use `check_teammate` for runtime health, not task progress:
 
@@ -142,6 +144,32 @@ broadcast_message({
 
 `send_message` has no `color` parameter; `broadcast_message` optionally does.
 Use `read_inbox` to inspect messages. Inbox state is separate from task state.
+
+### Opt-in direct Message delivery
+
+Set `PI_TEAMS_MESSAGE_DELIVERY=steer` in a recipient process to replace the
+generic wake-plus-fetch path for direct inbox Messages. Spawned teammates
+inherit the lead process environment, so setting it before starting the lead
+opts those recipients in as well.
+
+The recipient adapter assigns or migrates a stable `id` on each inbox record,
+coalesces currently unread records into one `pi-teams.direct-message` custom
+Message containing every ID and full body, and sends it with
+`deliverAs: "steer"` plus `triggerTurn: true`. It does not change Pi's
+session-wide steering mode. A Message remains unread until Pi's `context` hook
+observes that custom Message; the observation is then persisted in the Pi
+Session before the inbox records are acknowledged. Same-Session resume uses
+those observation entries for recovery, while a fork does not consume the
+source recipient's pending inbox.
+
+`read_inbox` remains available for rollback and explicit inspection. Set
+`PI_TEAMS_MESSAGE_POLL_MS` to a positive integer to change the fallback rescan
+interval; the default is 30000 milliseconds. Filesystem activity is only a
+latency hint, so correctness does not depend on receiving every watch event.
+This mode changes only recipient inbox presentation; Task/Beads behavior is
+unchanged. A broadcast still fans out one inbox record per recipient, so those
+records use the recipient's selected presentation mode while broadcast
+acceptance and fan-out semantics stay the same.
 
 When one teammate is finished, use:
 

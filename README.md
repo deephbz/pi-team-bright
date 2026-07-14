@@ -41,10 +41,13 @@ task_create({
 })
 ```
 
-A teammate's initial prompt is written to its transient inbox and startup
-injects an instruction to call `read_inbox`. PiTeams does not make that tool
-call automatically and does not create a started message in the lead's inbox.
-Idle agents poll inboxes about every 30 seconds. Use `check_teammate` for
+A teammate's initial prompt is written to its transient inbox. In the default
+legacy mode, its first durable Session binding injects an instruction to call
+`read_inbox`; a same-Session process resume does not inject that bootstrap
+again. PiTeams does not make the tool call automatically and does not create a
+started message in the lead's inbox. Idle agents poll inboxes about every 30
+seconds. An experimental recipient-side custom-steer mode is documented in
+the communication guide. Use `check_teammate` for
 runtime health and `task_list`/`task_read` for task state.
 
 ## Core workflows

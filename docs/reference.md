@@ -37,10 +37,11 @@ Optional: `model`, `thinking` (`off`, `minimal`, `low`, `medium`, `high`, or
 supply a Pi tool allowlist to the launched process. Spawning a name already in
 the roster stops and replaces that teammate.
 
-The initial `prompt` is written to the teammate's inbox. The teammate process
-also receives an injected instruction to call `read_inbox`; PiTeams does not
-make that tool call on its behalf. The spawn operation does not create a
-"started" message in the lead's inbox.
+The initial `prompt` is written to the teammate's inbox. In default legacy
+delivery, the teammate's first durable Session binding also receives an
+injected instruction to call `read_inbox`; a same-Session process resume does
+not receive it again. PiTeams does not make that tool call on its behalf. The
+spawn operation does not create a "started" message in the lead's inbox.
 
 ### `spawn_lead_window`
 
@@ -96,7 +97,8 @@ Optional: `max_age_hours` (default `24`). The tool returns the number removed.
 
 ### `send_message`
 
-Writes one transient inbox message.
+Writes one transient inbox Message with an authority-local stable `id`. The
+tool result exposes that ID as `details.messageId`.
 
 Required: `team_name`, `recipient`, `content`, and `summary`. There is no
 `color` parameter on direct messages.
@@ -121,6 +123,18 @@ Teammates poll their own inbox while idle about every 30 seconds. The lead
 also polls while idle after creating or reconnecting to a team. A lead resumed
 with `pi -r` is recognized by its persisted Pi session file, not its former
 process ID, and resumes this polling after updating its PID and tmux pane.
+
+Recipient processes may opt into direct custom-steer presentation with
+`PI_TEAMS_MESSAGE_DELIVERY=steer`. Unread direct Messages are coalesced into a
+`pi-teams.direct-message` custom Message with full bodies and stable IDs. The
+adapter uses `triggerTurn: true` and `deliverAs: "steer"` without changing the
+session-wide steering mode, and marks records read only after the custom
+Message appears in a Pi `context` event. `PI_TEAMS_MESSAGE_POLL_MS` controls the
+fallback rescan interval, whose default is `30000`; filesystem watch events are
+hints.
+Legacy `read_inbox` remains available. The opt-in does not alter Task/Beads.
+Broadcast fan-out still creates recipient inbox records, which use each
+recipient's selected presentation mode without changing broadcast acceptance.
 
 ## Tasks
 

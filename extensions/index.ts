@@ -5,6 +5,11 @@ import * as paths from "../src/utils/paths";
 import * as teams from "../src/utils/teams";
 import * as tasks from "../src/utils/tasks";
 import * as messaging from "../src/utils/messaging";
+import {
+  DirectMessageDelivery,
+  directMessageDeliveryEnabled,
+  messagePollMs,
+} from "../src/utils/message-delivery";
 import * as runtime from "../src/utils/runtime";
 import { Member } from "../src/utils/models";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
@@ -362,6 +367,8 @@ export default function (pi: ExtensionAPI) {
   let sessionCtx: any = null;
   let leadPollingTimer: ReturnType<typeof setInterval> | null = null;
   let teammatePollingTimer: ReturnType<typeof setInterval> | null = null;
+  let directMessageDelivery: DirectMessageDelivery | null = null;
+  let directMessageSessionEligible = true;
 
   function stopInboxPolling() {
     if (leadPollingTimer) clearInterval(leadPollingTimer);
@@ -369,6 +376,19 @@ export default function (pi: ExtensionAPI) {
     leadPollingTimer = null;
     teammatePollingTimer = null;
     leadPollingStarted = false;
+    directMessageDelivery?.stop();
+    directMessageDelivery = null;
+  }
+
+  async function startDirectMessageDelivery(ctx: any) {
+    if (!teamName || !directMessageSessionEligible) return;
+    directMessageDelivery?.stop();
+    directMessageDelivery = new DirectMessageDelivery(pi, {
+      teamName,
+      recipient: agentName,
+      pollMs: messagePollMs(),
+    });
+    await directMessageDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
   }
 
   /**
@@ -398,10 +418,11 @@ export default function (pi: ExtensionAPI) {
     }, 30000);
   }
 
-  pi.on("session_start", async (_event, ctx) => {
+  pi.on("session_start", async (event, ctx) => {
     paths.ensureDirs();
     stopInboxPolling();
     sessionCtx = ctx;
+    directMessageSessionEligible = event.reason !== "fork";
 
     // A fresh `pi -r` process has no teammate environment variables. A
     // teammate's first startup persists its Pi session file, which is enough
@@ -422,13 +443,21 @@ export default function (pi: ExtensionAPI) {
     }
 
     if (isTeammate) {
+      let firstDurableSessionBinding = false;
       if (teamName) {
+        if (piSessionFile && event.reason !== "fork") {
+          const config = await teams.readConfig(teamName);
+          const currentMember = config.members.find(member => member.name === agentName);
+          firstDurableSessionBinding = !currentMember?.sessionFile;
+        }
         const pidFile = path.join(paths.teamDir(teamName), `${agentName}.pid`);
         fs.writeFileSync(pidFile, process.pid.toString());
         // Persist the durable session identity on initial startup and replace
         // any stale tmux pane before health checks on a later `pi -r`.
         const memberUpdates: Partial<Member> = {};
-        if (piSessionFile) memberUpdates.sessionFile = piSessionFile;
+        // A fork is a new Session identity. It must not replace the source
+        // teammate's durable binding, even though the process environment is inherited.
+        if (piSessionFile && event.reason !== "fork") memberUpdates.sessionFile = piSessionFile;
         if (process.env.TMUX_PANE) memberUpdates.tmuxPaneId = process.env.TMUX_PANE;
         if (Object.keys(memberUpdates).length > 0) {
           await teams.updateMember(teamName, agentName, memberUpdates);
@@ -456,12 +485,18 @@ export default function (pi: ExtensionAPI) {
         setTimeout(setIt, 5000);
       }
 
-      setTimeout(() => {
-        pi.sendUserMessage(`I am starting my work as '${agentName}' on team '${teamName}'. Checking my inbox for instructions...`);
-      }, 1000);
+      if (!directMessageDeliveryEnabled() && firstDurableSessionBinding) {
+        setTimeout(() => {
+          if (sessionCtx === ctx) {
+            pi.sendUserMessage(`I am starting my work as '${agentName}' on team '${teamName}'. Checking my inbox for instructions...`);
+          }
+        }, 1000);
+      }
 
       // Inbox polling for teammates
-      if (teamName) {
+      if (teamName && directMessageDeliveryEnabled()) {
+        await startDirectMessageDelivery(ctx);
+      } else if (teamName) {
         teammatePollingTimer = setInterval(async () => {
           try {
             if (sessionCtx === ctx && ctx.isIdle()) {
@@ -493,13 +528,21 @@ export default function (pi: ExtensionAPI) {
         }
       }
       ctx.ui.setStatus("pi-teams", `Lead @ ${teamName}`);
-      startLeadInboxPolling();
+      if (directMessageDeliveryEnabled()) {
+        await startDirectMessageDelivery(ctx);
+      } else {
+        startLeadInboxPolling();
+      }
     }
   });
 
   pi.on("session_shutdown", async () => {
     stopInboxPolling();
     sessionCtx = null;
+  });
+
+  pi.on("context", async (event) => {
+    await directMessageDelivery?.observeContext(event.messages);
   });
 
   pi.on("turn_start", async (_event, ctx) => {
@@ -543,8 +586,13 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
+      const inboxInstruction = directMessageDeliveryEnabled()
+        ? directMessageSessionEligible
+          ? "Direct Messages are delivered in context by stable Message ID. Do not call read_inbox merely to discover or fetch them; read_inbox remains available for explicit inspection."
+          : "This fork is a new Session identity and is not bound to the source recipient inbox. Do not consume the source inbox."
+        : `Start by calling read_inbox(team_name="${teamName}") to get your initial instructions.`;
       return {
-        systemPrompt: event.systemPrompt + `\n\nYou are teammate '${agentName}' on team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}\nStart by calling read_inbox(team_name="${teamName}") to get your initial instructions.`,
+        systemPrompt: event.systemPrompt + `\n\nYou are teammate '${agentName}' on team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}\n${inboxInstruction}`,
       };
     }
   });
@@ -597,7 +645,8 @@ export default function (pi: ExtensionAPI) {
       registerLeadSession(params.team_name, ctx.sessionManager.getSessionFile());
       // Update teamName and start inbox polling for the lead
       teamName = params.team_name;
-      startLeadInboxPolling();
+      if (directMessageDeliveryEnabled()) await startDirectMessageDelivery(ctx);
+      else startLeadInboxPolling();
       return {
         content: [{ type: "text", text: `Team ${params.team_name} created.` }],
         details: { config },
@@ -779,10 +828,10 @@ export default function (pi: ExtensionAPI) {
       summary: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      await messaging.sendPlainMessage(params.team_name, agentName, params.recipient, params.content, params.summary);
+      const message = await messaging.sendPlainMessage(params.team_name, agentName, params.recipient, params.content, params.summary);
       return {
         content: [{ type: "text", text: `Message sent to ${params.recipient}.` }],
-        details: {},
+        details: { messageId: message.id },
       };
     },
   });
@@ -1219,7 +1268,8 @@ export default function (pi: ExtensionAPI) {
       registerLeadSession(params.team_name, ctx.sessionManager.getSessionFile());
       // Update teamName and start inbox polling for the lead
       teamName = params.team_name;
-      startLeadInboxPolling();
+      if (directMessageDeliveryEnabled()) await startDirectMessageDelivery(ctx);
+      else startLeadInboxPolling();
 
       const agentDefinitions = predefined.getAllAgentDefinitions(projectDir);
       const spawnResults: Array<{ name: string; status: string; error?: string }> = [];

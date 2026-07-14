@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { InboxMessage } from "./models";
+import { createHash, randomUUID } from "node:crypto";
+import { IdentifiedInboxMessage, InboxMessage } from "./models";
 import { withLock } from "./lock";
 import { inboxPath } from "./paths";
 import { readConfig } from "./teams";
@@ -9,18 +10,64 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export async function appendMessage(teamName: string, agentName: string, message: InboxMessage) {
+function newMessageId(): string {
+  return `message_${randomUUID()}`;
+}
+
+function legacyMessageId(
+  teamName: string,
+  agentName: string,
+  message: InboxMessage,
+  index: number,
+): string {
+  const identity = JSON.stringify({
+    teamName,
+    agentName,
+    index,
+    from: message.from,
+    text: message.text,
+    timestamp: message.timestamp,
+    summary: message.summary,
+    color: message.color,
+  });
+  return `legacy_${createHash("sha256").update(identity).digest("hex").slice(0, 24)}`;
+}
+
+function identifyMessages(
+  teamName: string,
+  agentName: string,
+  messages: InboxMessage[],
+): { messages: IdentifiedInboxMessage[]; changed: boolean } {
+  let changed = false;
+  const identified = messages.map((message, index) => {
+    if (message.id) return message as IdentifiedInboxMessage;
+    changed = true;
+    return { ...message, id: legacyMessageId(teamName, agentName, message, index) };
+  });
+  return { messages: identified, changed };
+}
+
+export async function appendMessage(
+  teamName: string,
+  agentName: string,
+  message: InboxMessage,
+): Promise<IdentifiedInboxMessage> {
   const p = inboxPath(teamName, agentName);
   const dir = path.dirname(p);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  await withLock(p, async () => {
+  return await withLock(p, async () => {
     let msgs: InboxMessage[] = [];
     if (fs.existsSync(p)) {
       msgs = JSON.parse(fs.readFileSync(p, "utf-8"));
     }
-    msgs.push(message);
+    const identifiedMessage: IdentifiedInboxMessage = {
+      ...message,
+      id: message.id || newMessageId(),
+    };
+    msgs.push(identifiedMessage);
     fs.writeFileSync(p, JSON.stringify(msgs, null, 2));
+    return identifiedMessage;
   });
 }
 
@@ -29,28 +76,63 @@ export async function readInbox(
   agentName: string,
   unreadOnly = false,
   markAsRead = true
-): Promise<InboxMessage[]> {
+): Promise<IdentifiedInboxMessage[]> {
   const p = inboxPath(teamName, agentName);
   if (!fs.existsSync(p)) return [];
 
   return await withLock(p, async () => {
-    const allMsgs: InboxMessage[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const rawMessages: InboxMessage[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const identified = identifyMessages(teamName, agentName, rawMessages);
+    const allMsgs = identified.messages;
     let result = allMsgs;
 
     if (unreadOnly) {
       result = allMsgs.filter(m => !m.read);
     }
 
+    let changed = identified.changed;
     if (markAsRead && result.length > 0) {
       for (const m of allMsgs) {
         if (result.includes(m)) {
           m.read = true;
+          changed = true;
         }
       }
+    }
+
+    if (changed) {
       fs.writeFileSync(p, JSON.stringify(allMsgs, null, 2));
     }
 
     return result;
+  });
+}
+
+/** Mark only Messages observed in Pi model context as read. */
+export async function markMessagesRead(
+  teamName: string,
+  agentName: string,
+  messageIds: Iterable<string>,
+): Promise<number> {
+  const p = inboxPath(teamName, agentName);
+  if (!fs.existsSync(p)) return 0;
+  const ids = new Set(messageIds);
+  if (ids.size === 0) return 0;
+
+  return await withLock(p, async () => {
+    const rawMessages: InboxMessage[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const identified = identifyMessages(teamName, agentName, rawMessages);
+    let marked = 0;
+    for (const message of identified.messages) {
+      if (ids.has(message.id) && !message.read) {
+        message.read = true;
+        marked += 1;
+      }
+    }
+    if (identified.changed || marked > 0) {
+      fs.writeFileSync(p, JSON.stringify(identified.messages, null, 2));
+    }
+    return marked;
   });
 }
 
@@ -61,7 +143,7 @@ export async function sendPlainMessage(
   text: string,
   summary: string,
   color?: string
-) {
+): Promise<IdentifiedInboxMessage> {
   const msg: InboxMessage = {
     from: fromName,
     text,
@@ -70,7 +152,7 @@ export async function sendPlainMessage(
     summary,
     color,
   };
-  await appendMessage(teamName, toName, msg);
+  return await appendMessage(teamName, toName, msg);
 }
 
 /**
