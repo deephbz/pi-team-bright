@@ -72,6 +72,15 @@ function findCutoverEvidence(teamName: string): { markerPath: string; marker: Cu
   return undefined;
 }
 
+/** Refuse any new authority initialization when migration evidence outlived TeamConfig. */
+export function assertNoOrphanedBeadsCutover(teamName: string): void {
+  if (fs.existsSync(configPath(teamName))) return;
+  const cutoverEvidence = findCutoverEvidence(teamName);
+  if (cutoverEvidence) {
+    throw new Error(`Team ${teamName} config is missing, but ${cutoverEvidence.marker.state} Beads cutover evidence exists at ${cutoverEvidence.markerPath}; refusing to initialize a new Task authority. Restore config.json from backup or perform an explicit Beads recovery review.`);
+  }
+}
+
 function malformedConfigError(configFile: string, detail: string): Error {
   return new Error(`Team config ${configFile} is malformed (${detail}); refusing to overwrite it. Restore the file or move it aside only after reviewing its contents.`);
 }
@@ -252,10 +261,7 @@ export async function createTeam(
       throw new Error(`Team ${name} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${name} ${taskWorkspace}`);
     }
   } else {
-    const cutoverEvidence = findCutoverEvidence(name);
-    if (cutoverEvidence) {
-      throw new Error(`Team ${name} config is missing, but ${cutoverEvidence.marker.state} Beads cutover evidence exists at ${cutoverEvidence.markerPath}; refusing to initialize legacy authority. Restore config.json from backup or perform an explicit Beads recovery review.`);
-    }
+    assertNoOrphanedBeadsCutover(name);
   }
 
   if (!taskWorkspace) {

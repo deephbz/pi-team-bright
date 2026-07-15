@@ -107,7 +107,7 @@ describe("Round 3 canonical Task revision and delivery dedupe", () => {
       requireExpectedVersion: false,
     });
 
-    const firstA = await store.create({ subject: "A to B to A", description: "A" });
+    const firstA = await store.create({ title: "A to B to A", description: "A" });
     const middleB = await store.update(firstA.id, { description: "B" });
     const secondA = await store.update(firstA.id, { description: "A" });
 

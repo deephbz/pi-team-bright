@@ -14,6 +14,7 @@ import {
   taskPollMs,
 } from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
+import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { Member, TaskFile } from "../src/utils/models";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
@@ -307,6 +308,17 @@ export default function (pi: ExtensionAPI) {
   let taskChangeDelivery: TaskChangeDelivery | null = null;
   let directMessageSessionEligible = true;
   let taskChangeSessionEligible = true;
+  let footerModel: any;
+
+  async function refreshTeamFooter(ctx: any) {
+    if (!ctx?.ui) return undefined;
+    footerModel = ctx?.model ?? footerModel;
+    return syncTeamFooter(pi, ctx, {
+      teamName,
+      role: agentName,
+      membershipId: currentMembershipId,
+    }, () => footerModel);
+  }
 
   function taskMutationContent(
     task: TaskFile,
@@ -317,8 +329,8 @@ export default function (pi: ExtensionAPI) {
       task: {
         id: task.id,
         status: task.status,
-        owner: task.owner ?? null,
-        version: task.version ?? null,
+        assignee: task.assignee ?? null,
+        version: task.version,
       },
       appliedOperations,
       warnings,
@@ -388,6 +400,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (event, ctx) => {
     paths.ensureDirs();
     stopDeliveries();
+    footerModel = ctx.model;
+    clearTeamFooter(ctx);
     directMessageSessionEligible = event.reason !== "fork";
     taskChangeSessionEligible = event.reason !== "fork";
 
@@ -455,8 +469,6 @@ export default function (pi: ExtensionAPI) {
         currentMembershipId = bound.membershipId;
       }
       ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
-      ctx.ui.setStatus("00-pi-teams", `[${agentName.toUpperCase()}]`);
-
       if (terminal) {
         const fullTitle = teamName ? `${teamName}: ${agentName}` : agentName;
         const setIt = () => {
@@ -485,14 +497,19 @@ export default function (pi: ExtensionAPI) {
           await teams.updateMembership(teamName, lead.membershipId!, { tmuxPaneId: process.env.TMUX_PANE });
         }
       }
-      ctx.ui.setStatus("pi-teams", `Lead @ ${teamName}`);
       await startDirectMessageDelivery(ctx);
       await startTaskChangeDelivery(ctx);
     }
+    await refreshTeamFooter(ctx);
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
     stopDeliveries();
+    clearTeamFooter(ctx);
+  });
+
+  pi.on("model_select", async (event) => {
+    footerModel = event.model;
   });
 
   pi.on("context", async (event) => {
@@ -517,6 +534,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("turn_start", async (_event, ctx) => {
+    await refreshTeamFooter(ctx);
     if (isTeammate) {
       const fullTitle = teamName ? `${teamName}: ${agentName}` : agentName;
       if ((ctx.ui as any).setTitle) (ctx.ui as any).setTitle(fullTitle);
@@ -784,6 +802,7 @@ export default function (pi: ExtensionAPI) {
       currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
       await startDirectMessageDelivery(ctx);
       await startTaskChangeDelivery(ctx);
+      await refreshTeamFooter(ctx);
       return {
         content: [{ type: "text", text: `Team ${safeTeamName} created.` }],
         details: { config },
@@ -1044,19 +1063,24 @@ export default function (pi: ExtensionAPI) {
     description: "Create a team Task and return its post-state receipt; do not immediately task_read or task_list the same result.",
     parameters: Type.Object({
       team_name: Type.String(),
-      subject: Type.String(),
+      title: Type.String(),
       description: Type.String(),
-      active_form: Type.Optional(Type.String()),
-      metadata: Type.Optional(Type.Record(Type.String(), Type.Any())),
+      design: Type.Optional(Type.String()),
+      assignee: Type.Optional(Type.String()),
       idempotency_key: Type.Optional(Type.String()),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
       const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
-      const task = await tasks.createTask(params.team_name, params.subject, params.description, params.active_form || "", {
-        ...(params.metadata || {}),
-        ...(params.idempotency_key ? { pi_teams_idempotency_key: params.idempotency_key } : {}),
-      }, actorMembership.membershipId && actingSessionFile ? { actor: agentName, actingMembershipId: actorMembership.membershipId, actingSessionFile } : undefined);
+      const task = await tasks.createTask(params.team_name, {
+        title: params.title,
+        description: params.description,
+        design: params.design,
+        assignee: params.assignee,
+        idempotencyKey: params.idempotency_key,
+      }, actorMembership.membershipId && actingSessionFile
+        ? { actor: agentName, actingMembershipId: actorMembership.membershipId, actingSessionFile }
+        : undefined);
       return {
         content: [{ type: "text", text: taskMutationContent(task, ["create"]) }],
         details: { task },
@@ -1065,50 +1089,9 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "task_submit_plan",
-    label: "Submit Plan",
-    description: "Submit a Task plan and return its post-state receipt; do not immediately re-read it.",
-    parameters: Type.Object({
-      team_name: Type.String(),
-      task_id: Type.String(),
-      plan: Type.String(),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
-    }) as any,
-    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
-      const result = await tasks.submitPlanWithReceipt(params.team_name, params.task_id, params.plan, { actor: agentName, expectedVersion: params.expected_version, actingMembershipId: actorMembership.membershipId, actingSessionFile: ctx?.sessionManager?.getSessionFile?.() });
-      return {
-        content: [{ type: "text", text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "task_evaluate_plan",
-    label: "Evaluate Plan",
-    description: "Evaluate a submitted Task plan and return its post-state receipt; do not immediately re-read it.",
-    parameters: Type.Object({
-      team_name: Type.String(),
-      task_id: Type.String(),
-      action: StringEnum(["approve", "reject"]),
-      feedback: Type.Optional(Type.String({ description: "Required for rejection" })),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
-    }) as any,
-    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
-      const result = await tasks.evaluatePlanWithReceipt(params.team_name, params.task_id, params.action as any, params.feedback, { actor: agentName, expectedVersion: params.expected_version, actingMembershipId: actorMembership.membershipId, actingSessionFile: ctx?.sessionManager?.getSessionFile?.() });
-      return {
-        content: [{ type: "text", text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings) }],
-        details: result,
-      };
-    },
-  });
-
-  pi.registerTool({
     name: "task_list",
     label: "List Tasks",
-    description: "Query the current non-deleted Task projection on demand, not as follow-up to a mutation receipt.",
+    description: "Query the current compact Task projection on demand, not as follow-up to a mutation receipt.",
     parameters: Type.Object({
       team_name: Type.String(),
     }),
@@ -1129,30 +1112,64 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
-      status: Type.Optional(StringEnum(["pending", "planning", "in_progress", "blocked", "completed", "deleted"])),
-      owner: Type.Optional(Type.String()),
+      title: Type.Optional(Type.String()),
+      description: Type.Optional(Type.String()),
+      design: Type.Optional(Type.String()),
+      status: Type.Optional(StringEnum(["open", "in_progress", "blocked", "closed"])),
+      assignee: Type.Optional(Type.String()),
       claim: Type.Optional(Type.Boolean({ default: false, description: "Atomically claim the task for the current agent" })),
+      append_note: Type.Optional(Type.String({ description: "Append prose to the Task's native Beads notes" })),
       expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
-      blocked_by: Type.Optional(Type.Array(Type.String({ description: "Task IDs blocking this task" }))),
-      progress: Type.Optional(Type.String({ description: "Append a communicated progress entry" })),
-      pending_problem: Type.Optional(Type.String({ description: "Append an unresolved problem entry" })),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
       const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
       const result = await tasks.applySemanticTaskUpdate(params.team_name, params.task_id, {
+        title: params.title,
+        description: params.description,
+        design: params.design,
         status: params.status,
-        owner: params.owner,
+        assignee: params.assignee,
         claim: params.claim,
-        blockedBy: params.blocked_by,
-        progress: params.progress,
-        pendingProblem: params.pending_problem,
+        appendNote: params.append_note,
       }, { actor: agentName, expectedVersion: params.expected_version, actingSessionFile, actingMembershipId: actorMembership.membershipId });
       return {
         content: [{
           type: "text",
           text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings),
         }],
+        details: result,
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "task_link",
+    label: "Link Task",
+    description: "Add or remove one typed Task relation with graph and version validation.",
+    parameters: Type.Object({
+      team_name: Type.String(),
+      task_id: Type.String(),
+      relation: StringEnum(["blocked_by", "parent", "related"]),
+      target_id: Type.String(),
+      action: StringEnum(["add", "remove"]),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
+    }) as any,
+    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
+      const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      const result = await tasks.mutateTaskLink(params.team_name, params.task_id, {
+        relation: params.relation,
+        targetId: params.target_id,
+        action: params.action,
+      }, {
+        actor: agentName,
+        expectedVersion: params.expected_version,
+        actingSessionFile,
+        actingMembershipId: actorMembership.membershipId,
+      });
+      return {
+        content: [{ type: "text", text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings) }],
         details: result,
       };
     },
@@ -1213,6 +1230,7 @@ export default function (pi: ExtensionAPI) {
             windowId: member.windowId,
           })),
         };
+        await refreshTeamFooter(ctx);
         return {
           content: [{
             type: "text",
@@ -1482,6 +1500,7 @@ export default function (pi: ExtensionAPI) {
       currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
       await startDirectMessageDelivery(ctx);
       await startTaskChangeDelivery(ctx);
+      await refreshTeamFooter(ctx);
 
       const agentDefinitions = predefined.getAllAgentDefinitions(projectDir);
       const spawnResults: Array<{ name: string; status: string; error?: string }> = [];
@@ -1621,7 +1640,7 @@ export default function (pi: ExtensionAPI) {
       
       // Verify the team exists
       if (!teams.teamExists(teamName)) {
-        throw new Error(`Team "${teamName}" does not exist. Use list_runtime_teams to see available teams.`);
+        throw new Error(`Team "${teamName}" does not exist. Save only the Team currently bound to this exact Session.`);
       }
 
       // Read the team configuration
@@ -1670,36 +1689,4 @@ You can now use this template with:
     },
   });
 
-  pi.registerTool({
-    name: "list_runtime_teams",
-    label: "List Runtime Teams",
-    description: "List all runtime team configurations that can be saved as templates. These are active or saved teams from ~/.pi/teams/.",
-    parameters: Type.Object({}),
-    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      const runtimeTeams = predefined.listRuntimeTeams();
-      
-      if (runtimeTeams.length === 0) {
-        return {
-          content: [{ type: "text", text: "No runtime teams found. Create a team with team_create first." }],
-          details: { teams: [] },
-        };
-      }
-
-      const result = runtimeTeams.map(team => ({
-        name: team.name,
-        description: team.description,
-        memberCount: team.memberCount,
-        createdAt: team.createdAt ? new Date(team.createdAt).toISOString() : undefined,
-      }));
-
-      const summary = result.map(t => 
-        `- ${t.name}: ${t.memberCount} teammate(s)${t.description ? ` - ${t.description}` : ""}`
-      ).join("\n");
-
-      return {
-        content: [{ type: "text", text: `Runtime teams:\n${summary}` }],
-        details: { teams: result },
-      };
-    },
-  });
 }

@@ -44,9 +44,10 @@ function extensionHarness() {
 
 function sessionContext(sessionFile: string) {
   return {
+    mode: "tui",
     isIdle: vi.fn(() => false),
     sessionManager: { getSessionFile: vi.fn(() => sessionFile) },
-    ui: { setStatus: vi.fn(), notify: vi.fn() },
+    ui: { setStatus: vi.fn(), setFooter: vi.fn(), notify: vi.fn() },
   };
 }
 
@@ -141,7 +142,7 @@ describe("external current-binding contract", () => {
     const ctx = sessionContext(sessionFile);
     await handlers.get("session_start")!({ reason: "resume" }, ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith("pi-teams", `Lead @ ${name}`);
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(name), "utf8"))).toMatchObject({
       pid: process.pid,
       sessionFile,
@@ -186,7 +187,7 @@ describe("external current-binding contract", () => {
     const ctx = sessionContext(sessionFile);
     await handlers.get("session_start")!({ reason: "resume" }, ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith("pi-teams", `Lead @ ${intended}`);
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(intended), "utf8"))).toMatchObject({
       pid: process.pid,
       sessionFile,
@@ -215,7 +216,7 @@ describe("external current-binding contract", () => {
     await expect(handlers.get("session_start")!({ reason: "resume" }, ctx))
       .rejects.toThrow(/does not name a current team.*Refusing implicit fallback or team-state creation/s);
 
-    expect(ctx.ui.setStatus).not.toHaveBeenCalled();
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
     expect(fs.existsSync(paths.teamDir(selected))).toBe(false);
     expect(fs.existsSync(paths.taskDir(selected))).toBe(false);
     expect(fs.readFileSync(paths.leadSessionPath(historical), "utf8")).toBe(historicalBefore);

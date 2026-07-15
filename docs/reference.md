@@ -1,6 +1,6 @@
 # PiTeams tool reference
 
-PiTeams registers exactly 20 Pi tools. The names and schemas below are the
+PiTeams registers exactly 18 Pi tools. The names and schemas below are the
 public tool surface; examples are Pi tool calls, not shell commands.
 
 The runtime contract assumes one PiTeams version per live team. Upgrade by
@@ -26,10 +26,11 @@ team_create({ team_name: "audit", description: "Security review" })
 ```
 
 Creating a team does not itself spawn a teammate or require a terminal adapter.
-A terminal adapter is required by the spawn tools. The Pi process must have
-`PI_TEAMS_BEADS_WORKSPACE` set to an absolute, initialized Beads workspace;
-creation validates that authority and fails closed when it is absent or
-unhealthy.
+A terminal adapter is required by the spawn tools. By default, creation
+initializes the Team's own `~/.pi/teams/<team>` directory as its Beads authority
+and records its exact identity. `PI_TEAMS_BEADS_WORKSPACE` is an optional
+explicit override for an absolute, already initialized authority; creation
+validates an override and fails closed when it is unhealthy.
 
 ### `spawn_teammate`
 
@@ -152,7 +153,7 @@ Session. It is at-least-once until successful-turn acknowledgement. Delivery sta
 reconciles missing spool intent; periodic scans inspect only the local spool
 and never list Beads per Agent. `PI_TEAMS_TASK_POLL_MS` controls that local
 fallback scan and defaults to `30000`.
-An ambiguous prepared owner-transition intent remains durable and is rechecked
+An ambiguous prepared assignee-transition intent remains durable and is rechecked
 instead of being aged out: without a matching Beads operation marker, elapsed
 time cannot prove that an interrupted authority write will never commit. This
 preserves at-least-once recovery but can leave a retained record requiring
@@ -171,20 +172,20 @@ per-Agent Beads polling.
 
 ### `task_create`
 
-Creates a task in the team's configured Beads Task authority.
+Creates a Task in the team's configured Beads Task authority.
 
-Required: `team_name`, `subject`, and `description`.
+Required: `team_name`, `title`, and `description`.
 
-Optional: `active_form`, `metadata`, and `idempotency_key`. New tasks start as
-`pending`; ownership and status are changed later with `task_update`. The
-returned `id` is the backend task ID.
+Optional: `design`, `assignee`, and `idempotency_key`. New Tasks start `open`;
+Beads creates title, description, design, and assignee in one authority write.
+The returned `id` is the backend Task ID.
 The receipt contains post-state, so don't immediately `task_read` or
 `task_list` the same result.
 
 ```js
 task_create({
   team_name: "audit",
-  subject: "Review authentication",
+  title: "Review authentication",
   description: "Check the authentication handlers for unsafe input."
 })
 ```
@@ -194,15 +195,15 @@ task_create({
 Reads one complete task record.
 
 Required: `team_name` and `task_id`. The record can include its Beads ID,
-description, plan and feedback, owner, dependency fields, metadata, and a
-backend version token in `version`. Use the exact ID returned by `task_create`
-or `task_list`. For a subsequent Beads mutation, pass this `task_read`
-`version` value as `expected_version`.
+title, description, design, native notes, assignee, typed relations, provenance,
+and the exact backend version token in `version`. Use the ID returned by
+`task_create` or `task_list`. For a subsequent Beads mutation, pass this
+`task_read` `version` value as `expected_version`.
 Use this on demand, not merely to reconfirm a mutation receipt.
 
 ### `task_list`
 
-Lists the team's current non-deleted tasks.
+Lists the team's current compact Task projection.
 
 Required: `team_name`. Runtime Task IDs are Beads IDs. Historical numeric JSON
 IDs are accepted only by the explicit migration tool. This performant
@@ -211,10 +212,10 @@ authoritative token before a conditional write.
 
 ### `task_update`
 
-Performs one semantic update. Owner may be combined with a compatible
-nonterminal status because Beads applies both in one command. One dependency,
-progress entry, or pending problem remains a separate semantic class; unsafe
-multi-command combinations fail before mutation. The result includes complete
+Performs one semantic Task update. Compatible content, assignee, work-state,
+and note changes use one native Beads update. Atomic claim is deliberately
+standalone; closing may include its explanatory note in the same authority
+mutation. The result includes complete
 post-state plus an explicit applied-operation list.
 That receipt is sufficient confirmation; don't immediately re-read or list
 the same Task.
@@ -223,21 +224,19 @@ Required: `team_name` and `task_id`.
 
 Supported inputs are:
 
-- `status`: `pending`, `planning`, `in_progress`, `blocked`, `completed`, or `deleted`;
-- `owner`: an assignment name, or an empty string to clear it;
+- `title`: replace the concise Task title;
+- `description`: replace the durable intention, constraints, or criteria;
+- `design`: replace the current low-level execution design;
+- `status`: `open`, `in_progress`, `blocked`, or `closed`;
+- `assignee`: assignment name, or an empty string to clear it;
 - `claim`: atomically claim for the current agent where supported;
-- `blocked_by`: one dependency ID to add to this Task;
-- `progress`: append a communicated progress entry;
-- `pending_problem`: append an unresolved-problem entry.
+- `append_note`: append prose to the native Beads notes without replacing prior text;
+- `expected_version`: optional optimistic concurrency token from `task_read`.
 
-`expected_version` is an optional optimistic concurrency token from
-`task_read`. When supplied, a mismatch fails closed; PiTeams
-carries the canonical returned version for the operation.
-`blocked` is an explicit writable work state. It is independent of the
-`blocked_by` dependency edges, which identify the Tasks preventing progress.
-The public tool does not expose `blocks`, because that form would mutate
-another Task without a second version token; add `blocked_by` to the target
-Task instead.
+When `expected_version` is supplied, a mismatch fails closed; PiTeams carries
+the canonical returned version for the operation. That version covers every
+reviewable field and relation, including multiline notes. `blocked` is an
+explicit writable work state and is independent of graph relations.
 
 Beads 1.1.0 has no true CLI compare-and-swap, so a supplied token is a
 serialized preflight and another
@@ -245,35 +244,34 @@ writer can still race after the check. A failed Beads command, timeout,
 malformed response, scope failure, or conflict fails the tool; PiTeams never
 falls back to legacy files.
 
-Completion hooks run when a Task is completed. See [Hooks](#completion-hook).
-`deleted` is a closed, soft-deleted Beads record so history remains available;
-it is immutable through every agent-facing mutation. Create a new Task instead.
+Closing invokes the configured hook. See [Hooks](#closed-task-hook).
 
 Every Task mutation tool returns concise model-visible JSON with post-state
-`id`, `status`, `owner`, and `version`, plus `appliedOperations` and `warnings`.
-Large descriptions, plans, comments, and metadata stay out of that receipt.
+`id`, `status`, `assignee`, and `version`, plus `appliedOperations` and
+`warnings`. Large descriptions, design, notes, relations, and backend evidence
+stay in structured `details` rather than the concise mutation content.
 
-### `task_submit_plan`
+### `task_link`
 
-Submits a non-empty plan and sets the task to `planning`.
-It never implicitly reopens a completed Task: first use an explicit
-`task_update` transition to a nonterminal status, then submit the plan.
+Adds or removes one typed Task relation with graph and optimistic-version
+validation.
 
-Required: `team_name`, `task_id`, and `plan`. Optional:
-`expected_version`. A supplied version token is enforced.
+Required: `team_name`, `task_id`, `relation`, `target_id`, and `action`.
+`relation` is `blocked_by`, `parent`, or `related`; `action` is `add` or
+`remove`. Optional: `expected_version`.
 
-### `task_evaluate_plan`
+`blocked_by` and `parent` are directed and cycle-checked. `related` is
+bidirectional and may form cycles. A Task has at most one parent; adding a
+different parent fails rather than silently replacing the existing relation.
+Remove the old parent explicitly before adding another.
 
-Evaluates a submitted plan.
+Review is not a separate tool or entity. For complex work, the assigner asks
+the worker to supplement `design`; the worker sends a Message referencing the
+Task ID/version; approval is an exact-version `task_update` to `in_progress`;
+rejection appends feedback while status remains `open`. Simple Tasks may skip
+review and move directly to execution.
 
-Required: `team_name`, `task_id`, and `action` (`approve` or `reject`).
-Optional: `feedback` and `expected_version`; rejection requires non-empty
-feedback. A supplied version token is enforced. Approval sets
-`in_progress`. Rejection keeps the task in `planning` and stores the feedback;
-it does not move the task to `in_progress`. Rejection consumes that submitted
-plan, so call `task_submit_plan` with a revision before evaluating again.
-
-## Templates and runtime teams
+## Team templates
 
 ### `list_predefined_teams`
 
@@ -302,27 +300,23 @@ settings and tool allowlists from each definition are used when launching.
 ### `save_team_as_template`
 
 Saves a runtime team with at least one spawned teammate as reusable agent
-files plus a `teams.yaml` entry.
+files plus a `teams.yaml` entry. The caller must be the Team's current exact
+Session binding; persisted historical Team configs aren't exposed as a tool
+catalog.
 
 Required: `team_name` and `template_name`. Optional: `description` and `scope`
 (`user` or `project`, default `user`). User scope writes under `~/.pi`; project
 scope writes under the current project.
 
-### `list_runtime_teams`
+## Closed-Task hook
 
-Takes no parameters. Lists runtime team configurations under `~/.pi/teams/`
-that can be saved as templates. It reports name, description, member count,
-and creation time; it does not create or delete teams.
-
-## Completion hook
-
-The supported hook is `.pi/team-hooks/task_completed.sh`, resolved relative to
-the current Pi process working directory. When a completion write invokes it,
+The supported hook is `.pi/team-hooks/task_closed.sh`, resolved relative to
+the current Pi process working directory. When a close write invokes it,
 the task record is passed as a JSON string in the first argument and `PI_TEAM`
 is set to the team name.
 
 `BeadsTaskStore` invokes the hook when a Task transitions to closed through
-completion. Hook failure is logged and does not undo the Task mutation. A hook
+`task_update`. Hook failure is logged and does not undo the Task mutation. A hook
 is not a transactional quality gate.
 
 ## Task authority and Beads cutover
@@ -342,7 +336,7 @@ persists the non-secret backend, database, Dolt database name, and Beads
 project ID as a versioned fingerprint, then compares it before later reads or
 writes so an in-place database replacement also fails closed.
 The migration inventories and hashes legacy files, imports or reconciles by
-`pi_teams_legacy_id`, maps statuses, owners, plans, dependencies and metadata,
+`pi_teams_legacy_id`, maps superseded statuses, owners, plans, dependencies and metadata,
 reconciles before and after values, and only then records the cutover. An
 interrupted migration can be rerun safely. Pre-cutover drift blocks authority
 change until reviewed; an operator override is explicit and persisted.
@@ -358,12 +352,12 @@ writes and are never imported automatically. Mixed legacy/Beads writers are
 not a supported steady state. Beads IDs remain the task IDs; do not translate
 them back to local numbers.
 
-Beads mapping is explicit: subject and description become title and
-description; owner becomes assignee; `pending` and `planning` are open with a
-phase marker; `in_progress` maps directly; `completed` closes the issue;
-dependencies use `blocks` links; plans, progress, and problems use namespaced
-metadata/comments. PiTeams continues to own membership, panes, processes, and
-transient inboxes.
+That paragraph describes legacy migration only. The current public Task model
+maps title, description, native design/notes, assignee, and the four statuses
+`open`, `in_progress`, `blocked`, and `closed` directly. Relations are the
+typed `blocked_by`, `parent`, and `related` edges. A native Beads status outside
+that vocabulary fails explicitly instead of being silently projected. PiTeams
+continues to own membership, panes, processes, and transient inboxes.
 
 After `team_shutdown` on a Beads-cutover team, use the retained absolute
 `taskWorkspace` from the preserved team config:

@@ -12,7 +12,6 @@ import {
   getAgentDefinition,
   getPredefinedTeam,
   currentRuntimeTeammates,
-  listRuntimeTeams,
   saveTeamTemplate,
 } from "./predefined-teams";
 
@@ -538,29 +537,4 @@ describe("saveTeamTemplate", () => {
     expect(currentRuntimeTeammates(members)).toEqual([]);
   });
 
-  it("counts the current roster rather than historical Membership records", () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-runtime-list-"));
-    const homedir = vi.spyOn(os, "homedir").mockReturnValue(home);
-    try {
-      const dir = path.join(home, ".pi", "teams", "runtime-history");
-      fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
-        name: "runtime-history",
-        members: [
-          { name: "worker", agentType: "teammate", isActive: false },
-          { name: "worker", agentType: "teammate", isActive: true },
-          { name: "retired", agentType: "teammate", isActive: false },
-          { name: "team-lead", agentType: "lead", isActive: true },
-        ],
-      }));
-
-      expect(listRuntimeTeams()).toEqual([expect.objectContaining({
-        name: "runtime-history",
-        memberCount: 1,
-      })]);
-    } finally {
-      homedir.mockRestore();
-      fs.rmSync(home, { recursive: true, force: true });
-    }
-  });
 });

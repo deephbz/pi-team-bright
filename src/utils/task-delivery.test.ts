@@ -38,13 +38,13 @@ async function fixture(suffix: string) {
   });
   const task: TaskFile = {
     id: "1",
-    subject: "Investigate",
+    title: "Investigate",
     description: "Find the cause",
     status: "in_progress",
-    owner: "worker",
-    blocks: [],
-    blockedBy: [],
+    assignee: "worker",
+    relations: [],
     version: "v2",
+    provenance: { authority: "beads", teamName },
   };
   return { teamName, sessionFile, task, authorityId };
 }
@@ -267,19 +267,19 @@ describe("Task-native delivery", () => {
     delivery.stop();
   });
 
-  it("recovers a committed owner transition on a running recipient's fallback scan and acknowledges it once", async () => {
-    const { teamName, sessionFile, task } = await fixture("live-owner-outbox");
+  it("recovers a committed assignee transition on a running recipient's fallback scan and acknowledges it once", async () => {
+    const { teamName, sessionFile, task } = await fixture("live-assignee-outbox");
     const before = {
       ...task,
-      owner: "team-lead",
-      version: "owner-v1",
+      assignee: "team-lead",
+      version: "assignee-v1",
     };
     const committed = {
       ...before,
-      owner: "worker",
-      version: "owner-v2",
+      assignee: "worker",
+      version: "assignee-v2",
     };
-    const operationId = "owner-transition-after-mutator-crash";
+    const operationId = "assignee-transition-after-mutator-crash";
     let evidence = { task: before, operationId: undefined as string | undefined };
     const readEvidence = vi.fn(async () => evidence);
     const sendMessage = vi.fn();
@@ -334,8 +334,8 @@ describe("Task-native delivery", () => {
     delivery.stop();
   });
 
-  it("performs no authority read on fallback scans when no owner intent is prepared", async () => {
-    const { teamName, sessionFile } = await fixture("empty-owner-outbox");
+  it("performs no authority read on fallback scans when no assignee intent is prepared", async () => {
+    const { teamName, sessionFile } = await fixture("empty-assignee-outbox");
     const readEvidence = vi.fn(async () => {
       throw new Error("authority evidence must not be read without a prepared intent");
     });
@@ -354,7 +354,7 @@ describe("Task-native delivery", () => {
     delivery.stop();
   });
 
-  it("does not let owner-outbox recovery failure block an existing recipient spool", async () => {
+  it("does not let assignee-outbox recovery failure block an existing recipient spool", async () => {
     const { teamName, sessionFile, task } = await fixture("outbox-recovery-degraded");
     await enqueueTaskChange(teamName, task, "assigned");
     const sendMessage = vi.fn();

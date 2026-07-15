@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BeadsAuthorityFingerprint, TaskFile, TeamConfig } from "./models";
+import { BeadsAuthorityFingerprint, TaskFile, TaskStatus, TeamConfig } from "./models";
 import { taskDir, teamDir, sanitizeName } from "./paths";
 import { configureBeadsTaskBackend, readConfig, readLatestCutoverMarker } from "./teams";
 import {
@@ -20,12 +20,27 @@ const MIGRATION_SCHEMA = "pi-teams-task-migration/1";
 // generic five-second file-operation budget.
 const MIGRATION_LOCK_RETRIES = 3000;
 
+/** Exact historical JSON shape. It is migration evidence, never runtime Task API. */
+export interface LegacyTaskFile {
+  id: string;
+  subject: string;
+  description: string;
+  activeForm?: string;
+  status: "pending" | "planning" | "in_progress" | "blocked" | "completed" | "deleted";
+  plan?: string;
+  planFeedback?: string;
+  blocks: string[];
+  blockedBy: string[];
+  owner?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface MigrationInventoryTask {
   legacyId: string;
   fileName: string;
   sha256: string;
   raw: string;
-  task: TaskFile;
+  task: LegacyTaskFile;
 }
 
 export interface MigrationInventory {
@@ -130,7 +145,7 @@ function inventoryFromLegacy(teamName: string, sourceDir: string, now: Date): Mi
     .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
     .map(fileName => {
       const raw = fs.readFileSync(path.join(sourceDir, fileName), "utf8");
-      const task = JSON.parse(raw) as TaskFile;
+      const task = JSON.parse(raw) as LegacyTaskFile;
       return { legacyId: task.id, fileName, sha256: sha256(raw), raw, task };
     });
   const duplicateIds = duplicateValues(tasks.map(task => task.legacyId));
@@ -153,9 +168,9 @@ function readInventory(filePath: string): MigrationInventory {
     if (!item || typeof item.raw !== "string" || typeof item.sha256 !== "string" || item.sha256 !== sha256(item.raw)) {
       throw new Error(`Migration inventory raw bytes failed authentication: ${filePath}`);
     }
-    let parsed: TaskFile;
+    let parsed: LegacyTaskFile;
     try {
-      parsed = JSON.parse(item.raw) as TaskFile;
+      parsed = JSON.parse(item.raw) as LegacyTaskFile;
     } catch {
       throw new Error(`Migration inventory contains invalid task JSON: ${filePath}`);
     }
@@ -178,7 +193,7 @@ function duplicateValues(values: string[]): string[] {
   return [...duplicates].sort();
 }
 
-function assertDependencyTargets(tasks: TaskFile[]): void {
+function assertDependencyTargets(tasks: LegacyTaskFile[]): void {
   const ids = new Set(tasks.map(task => task.id));
   const missing = new Set<string>();
   for (const task of tasks) {
@@ -204,15 +219,6 @@ function hasDriftOverride(filePath: string, teamName: string, inventorySha256: s
   }
 }
 
-function duplicateLegacyMappings(tasks: TaskFile[]): string[] {
-  const counts = new Map<string, number>();
-  for (const task of tasks) {
-    const legacyId = task.metadata?.pi_teams_legacy_id;
-    if (typeof legacyId === "string") counts.set(legacyId, (counts.get(legacyId) || 0) + 1);
-  }
-  return [...counts.entries()].filter(([, count]) => count > 1).map(([id]) => id).sort();
-}
-
 function legacyOrphans(inventory: MigrationInventory, sourceDir: string): OrphanedLegacyWrite[] {
   const expected = new Map(inventory.tasks.map(task => [task.fileName, task.sha256]));
   return fs.readdirSync(sourceDir)
@@ -226,36 +232,33 @@ function legacyOrphans(inventory: MigrationInventory, sourceDir: string): Orphan
     }, []);
 }
 
-function beadsStatus(status: TaskFile["status"]): TaskFile["status"] {
-  return status === "completed" ? "completed" : status === "deleted" ? "deleted" : status === "planning" ? "planning" : status === "in_progress" ? "in_progress" : "pending";
+function beadsStatus(status: LegacyTaskFile["status"]): TaskStatus {
+  if (status === "completed" || status === "deleted") return "closed";
+  if (status === "in_progress") return "in_progress";
+  if (status === "blocked") return "blocked";
+  return "open";
 }
 
 function comparable(task: TaskFile): Record<string, unknown> {
   return {
-    subject: task.subject,
+    title: task.title,
     description: task.description,
     status: task.status,
-    activeForm: task.activeForm || "",
-    plan: task.plan || "",
-    planFeedback: task.planFeedback || "",
-    owner: task.owner || "",
-    blockedBy: [...task.blockedBy].sort(),
-    blocks: [...task.blocks].sort(),
+    design: task.design || "",
+    assignee: task.assignee || "",
+    blockedBy: task.relations.filter(relation => relation.relation === "blocked_by").map(relation => relation.targetId).sort(),
   };
 }
 
-function collectMismatches(legacy: TaskFile, actual: TaskFile, expectedBlockers: string[], expectedBlocks: string[]): MigrationMismatch[] {
-  const expectedMetadata = {
-    ...(legacy.metadata || {}),
-    pi_teams_legacy_id: legacy.id,
-    pi_teams_migration_schema: MIGRATION_SCHEMA,
-  };
-  const expected = comparable({
-    ...legacy,
+function collectMismatches(legacy: LegacyTaskFile, actual: TaskFile, expectedBlockers: string[]): MigrationMismatch[] {
+  const expected: Record<string, unknown> = {
+    title: legacy.subject,
+    description: legacy.description,
     status: beadsStatus(legacy.status),
-    blockedBy: expectedBlockers,
-    blocks: expectedBlocks,
-  });
+    design: legacy.plan || "",
+    assignee: legacy.owner || "",
+    blockedBy: [...expectedBlockers].sort(),
+  };
   const observed = comparable(actual);
   const fieldMismatches = Object.keys(expected).flatMap(field => JSON.stringify(expected[field]) === JSON.stringify(observed[field]) ? [] : [{
     legacyId: legacy.id,
@@ -263,15 +266,7 @@ function collectMismatches(legacy: TaskFile, actual: TaskFile, expectedBlockers:
     expected: expected[field],
     actual: observed[field],
   }]);
-  const metadataMatches = Object.entries(expectedMetadata).every(([key, value]) =>
-    JSON.stringify(value) === JSON.stringify(actual.metadata?.[key]));
-  const metadataMismatches: MigrationMismatch[] = metadataMatches ? [] : [{
-    legacyId: legacy.id,
-    field: "metadata",
-    expected: expectedMetadata,
-    actual: actual.metadata || {},
-  }];
-  return [...fieldMismatches, ...metadataMismatches];
+  return fieldMismatches;
 }
 
 function appendMarker(markerPath: string, event: Record<string, unknown>): void {
@@ -423,8 +418,6 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
 
   try {
     if (beads instanceof BeadsTaskStore) await beads.assertWorkspaceRoot(taskAuthorityFingerprint);
-    const initialDuplicates = duplicateLegacyMappings(await beads.list());
-    if (initialDuplicates.length > 0) throw new Error(`Duplicate Beads legacy mappings for ${initialDuplicates.join(", ")}; refusing cutover.`);
     for (const item of inventory.tasks) {
       const legacy = item.task;
       const existing = await beads.findByLegacyId(legacy.id);
@@ -433,10 +426,13 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
         ...(legacy.metadata || {}),
         pi_teams_legacy_id: legacy.id,
         pi_teams_migration_schema: MIGRATION_SCHEMA,
+        pi_teams_legacy_status: legacy.status,
+        ...(legacy.activeForm ? { pi_teams_legacy_active_form: legacy.activeForm } : {}),
+        ...(legacy.planFeedback ? { pi_teams_legacy_plan_feedback: legacy.planFeedback } : {}),
       };
       const desiredStatus = beadsStatus(legacy.status);
-      const terminalStatus = desiredStatus === "completed" || desiredStatus === "deleted"
-        ? desiredStatus
+      const terminalStatus = desiredStatus === "closed"
+        ? "closed" as const
         : undefined;
       // A Beads terminal transition is its own authority mutation. Reconcile
       // every non-terminal field first, then apply completion/deletion in a
@@ -444,22 +440,20 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       // the same contract enforced for normal runtime writes and lets a rerun
       // resume safely after any individual committed step.
       const fields: Partial<TaskFile> = {
-        subject: legacy.subject,
+        title: legacy.subject,
         description: legacy.description,
-        activeForm: legacy.activeForm,
-        plan: legacy.plan,
-        planFeedback: legacy.planFeedback,
-        owner: legacy.owner || "",
-        metadata,
+        design: legacy.plan,
+        assignee: legacy.owner || "",
         ...(!terminalStatus ? { status: desiredStatus } : {}),
       };
       let task = existing
         ? await beads.update(existing.id, fields, { ...writeOptions, expectedVersion: existingForWrite?.version })
         : await beads.create({
-            subject: legacy.subject,
+            title: legacy.subject,
             description: legacy.description,
-            activeForm: legacy.activeForm,
-            metadata,
+            design: legacy.plan,
+            assignee: legacy.owner,
+            internalMetadata: metadata,
             idempotencyKey: `migration:${inventory.inventorySha256}:${legacy.id}`,
           }, writeOptions);
       if (!existing) {
@@ -470,9 +464,6 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       baseReport.mapping[legacy.id] = task.id;
     }
 
-    const importedDuplicates = duplicateLegacyMappings(await beads.list());
-    if (importedDuplicates.length > 0) throw new Error(`Duplicate Beads legacy mappings for ${importedDuplicates.join(", ")}; refusing cutover.`);
-
     for (const item of inventory.tasks) {
       const taskId = idMap.get(item.legacyId);
       if (!taskId) continue;
@@ -480,21 +471,21 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
         const blockerId = idMap.get(legacyBlocker);
         if (blockerId && blockerId !== taskId) {
           const current = await beads.read(taskId);
-          await beads.addDependency(taskId, blockerId, { ...writeOptions, expectedVersion: current.version });
+          await beads.mutateLink(taskId, { relation: "blocked_by", targetId: blockerId, action: "add" }, { ...writeOptions, expectedVersion: current.version });
         }
       }
       for (const legacyBlocked of new Set(item.task.blocks)) {
         const blockedId = idMap.get(legacyBlocked);
         if (blockedId && blockedId !== taskId) {
           const current = await beads.read(blockedId);
-          await beads.addDependency(blockedId, taskId, { ...writeOptions, expectedVersion: current.version });
+          await beads.mutateLink(blockedId, { relation: "blocked_by", targetId: taskId, action: "add" }, { ...writeOptions, expectedVersion: current.version });
         }
       }
     }
 
     for (const item of inventory.tasks) {
       const desiredStatus = beadsStatus(item.task.status);
-      if (desiredStatus !== "completed" && desiredStatus !== "deleted") continue;
+      if (desiredStatus !== "closed") continue;
       const taskId = idMap.get(item.legacyId);
       if (!taskId) continue;
       const current = await beads.read(taskId);
@@ -517,8 +508,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
         continue;
       }
       const expectedBlockers = item.task.blockedBy.map(id => idMap.get(id)).filter((id): id is string => !!id);
-      const expectedBlocks = item.task.blocks.map(id => idMap.get(id)).filter((id): id is string => !!id);
-      baseReport.mismatches.push(...collectMismatches(item.task, actual, expectedBlockers, expectedBlocks));
+      baseReport.mismatches.push(...collectMismatches(item.task, actual, expectedBlockers));
     }
     // The migration report describes the imported inventory, not the normal
     // runtime list projection (which intentionally hides deleted Tasks).

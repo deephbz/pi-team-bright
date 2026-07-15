@@ -85,12 +85,12 @@ async function fixture(suffix: string): Promise<Fixture> {
 function task(id: string, version = "v1"): TaskFile {
   return {
     id,
-    subject: id,
+    title: id,
     description: "mutation lease contract task",
-    status: "pending",
-    blocks: [],
-    blockedBy: [],
+    status: "open",
+    relations: [],
     version,
+    provenance: { authority: "beads", teamName: "membership-lease-fixture" },
   };
 }
 

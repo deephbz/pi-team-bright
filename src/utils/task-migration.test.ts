@@ -4,56 +4,57 @@ import path from "node:path";
 import os from "node:os";
 import { TaskFile } from "./models";
 import { configPath, taskDir, teamDir } from "./paths";
-import { migrateTeamTasks } from "./task-migration";
+import { LegacyTaskFile, migrateTeamTasks } from "./task-migration";
 
 class MigrationBeadsFixture {
-  tasks = new Map<string, TaskFile>();
+  tasks = new Map<string, any>();
   next = 1;
   failCreate = false;
   failList = false;
   listCalls = 0;
   delayCreateMs = 0;
 
-  async findByLegacyId(id: string): Promise<TaskFile | undefined> {
-    return [...this.tasks.values()].find(task => task.metadata?.pi_teams_legacy_id === id);
+  async findByLegacyId(id: string): Promise<any | undefined> {
+    const matches = [...this.tasks.values()].filter(task => task.internalMetadata?.pi_teams_legacy_id === id);
+    if (matches.length > 1) throw new Error(`Duplicate Beads tasks map to legacy Task ${id}`);
+    return matches[0];
   }
 
-  async create(input: any): Promise<TaskFile> {
+  async create(input: any): Promise<any> {
     if (this.delayCreateMs) await new Promise(resolve => setTimeout(resolve, this.delayCreateMs));
     if (this.failCreate) {
       this.failCreate = false;
       throw new Error("simulated crash after inventory");
     }
     const id = `bd-${this.next++}`;
-    const task: TaskFile = { id, subject: input.subject, description: input.description, status: "pending", blocks: [], blockedBy: [], owner: undefined, metadata: input.metadata, version: `v${this.next}` };
+    const task = { id, title: input.title, description: input.description, design: input.design, status: "open", relations: [], assignee: input.assignee, internalMetadata: input.internalMetadata, version: `v${this.next}` };
     this.tasks.set(id, task);
     return task;
   }
 
-  async update(id: string, updates: Partial<TaskFile>): Promise<TaskFile> {
-    if ((updates.status === "completed" || updates.status === "deleted") && Object.keys(updates).some(key => key !== "status")) {
+  async update(id: string, updates: Partial<TaskFile>): Promise<any> {
+    if (updates.status === "closed" && Object.keys(updates).some(key => key !== "status")) {
       throw new Error(`terminal ${updates.status} must be a separate mutation`);
     }
     const task = this.tasks.get(id)!;
     Object.assign(task, updates);
-    if (updates.status === "deleted") task.status = "deleted";
     return task;
   }
 
-  async addDependency(id: string, blockerId: string): Promise<TaskFile> {
+  async mutateLink(id: string, link: { relation: string; targetId: string; action: string }): Promise<any> {
     const task = this.tasks.get(id)!;
-    const blocker = this.tasks.get(blockerId)!;
-    if (!task.blockedBy.includes(blockerId)) task.blockedBy.push(blockerId);
-    if (!blocker.blocks.includes(id)) blocker.blocks.push(id);
+    if (link.action === "add" && !task.relations.some((relation: any) => relation.relation === link.relation && relation.targetId === link.targetId)) {
+      task.relations.push({ relation: link.relation, targetId: link.targetId });
+    }
     return task;
   }
 
-  async list(): Promise<TaskFile[]> {
+  async list(): Promise<any[]> {
     this.listCalls += 1;
     if (this.failList) throw new Error("configured Beads authority is unavailable");
-    return [...this.tasks.values()].filter(task => task.status !== "deleted");
+    return [...this.tasks.values()];
   }
-  async read(id: string): Promise<TaskFile> { return this.tasks.get(id)!; }
+  async read(id: string): Promise<any> { return this.tasks.get(id)!; }
 }
 
 describe("task migration contract", () => {
@@ -77,8 +78,8 @@ describe("task migration contract", () => {
   });
 
   function writeLegacy(): void {
-    const blocker: TaskFile = { id: "1", subject: "Blocker", description: "first", status: "completed", blocks: ["2"], blockedBy: [], owner: "human", plan: "ship", planFeedback: "", metadata: { source: "legacy" } };
-    const task: TaskFile = { id: "2", subject: "Task", description: "second", status: "in_progress", blocks: [], blockedBy: ["1"], owner: "worker", activeForm: "Doing", metadata: {} };
+    const blocker: LegacyTaskFile = { id: "1", subject: "Blocker", description: "first", status: "completed", blocks: ["2"], blockedBy: [], owner: "human", plan: "ship", planFeedback: "", metadata: { source: "legacy" } };
+    const task: LegacyTaskFile = { id: "2", subject: "Task", description: "second", status: "in_progress", blocks: [], blockedBy: ["1"], owner: "worker", activeForm: "Doing", metadata: {} };
     fs.writeFileSync(path.join(taskDir(team), "1.json"), JSON.stringify(blocker, null, 2));
     fs.writeFileSync(path.join(taskDir(team), "2.json"), JSON.stringify(task, null, 2));
   }
@@ -248,7 +249,7 @@ describe("task migration contract", () => {
     ]);
     expect(first.cutover || second.cutover).toBe(true);
     expect(beads.tasks.size).toBe(2);
-    expect([...beads.tasks.values()].filter(task => task.metadata?.pi_teams_legacy_id === "1")).toHaveLength(1);
+    expect([...beads.tasks.values()].filter(task => task.internalMetadata?.pi_teams_legacy_id === "1")).toHaveLength(1);
   });
 
   it("serializes two requested workspaces behind one Team migration lease", async () => {
@@ -313,12 +314,12 @@ describe("task migration contract", () => {
   it("refuses cutover when existing Beads mappings are duplicated", async () => {
     writeLegacy();
     const beads = new MigrationBeadsFixture();
-    const duplicate: TaskFile = { id: "duplicate", subject: "duplicate", description: "", status: "pending", blocks: [], blockedBy: [], metadata: { pi_teams_legacy_id: "1" } };
+    const duplicate = { id: "duplicate", title: "duplicate", description: "", status: "open", relations: [], internalMetadata: { pi_teams_legacy_id: "1" } };
     beads.tasks.set(duplicate.id, duplicate);
     beads.tasks.set("duplicate-2", { ...duplicate, id: "duplicate-2" });
     const report = await migrateTeamTasks({ teamName: team, workspace, beads: beads as any });
     expect(report.cutover).toBe(false);
-    expect(report.errors.join(" ")).toContain("Duplicate Beads legacy mappings");
+    expect(report.errors.join(" ")).toMatch(/Duplicate Beads (legacy mappings|tasks map to legacy Task)/);
   });
 
   it("fails closed before writes when legacy IDs are duplicated", async () => {
@@ -351,7 +352,7 @@ describe("task migration contract", () => {
     const report = await migrateTeamTasks({ teamName: team, workspace, beads: beads as any });
 
     expect(report.cutover).toBe(true);
-    expect(beads.tasks.get(report.mapping["1"])?.metadata).toMatchObject({
+    expect(beads.tasks.get(report.mapping["1"])?.internalMetadata).toMatchObject({
       source: "legacy",
       pi_teams_legacy_id: "1",
       pi_teams_migration_schema: "pi-teams-task-migration/1",

@@ -13,7 +13,7 @@ import {
   readTaskDeliveries,
   TaskChangeDelivery,
 } from "./task-delivery";
-import { migrateTeamTasks } from "./task-migration";
+import { migrateTeamTasks, type LegacyTaskFile } from "./task-migration";
 import { applySemanticTaskUpdate } from "./tasks";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
@@ -99,60 +99,70 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
   }
 }
 
-function task(id: string, owner?: string): TaskFile {
+function task(id: string, owner?: string): LegacyTaskFile {
   return {
     id,
     subject: id,
     description: "contract task",
+    activeForm: `Working on ${id}`,
     status: "pending",
-    owner,
     blocks: [],
     blockedBy: [],
+    owner,
+  };
+}
+
+function currentTask(id: string, assignee?: string): TaskFile {
+  return {
+    id,
+    title: id,
+    description: "contract task",
+    status: "open",
+    assignee,
+    relations: [],
     version: "v1",
+    provenance: { authority: "beads", teamName: "release-p1-fixture" },
   };
 }
 
 class MigrationFixture {
-  tasks = new Map<string, TaskFile>();
+  tasks = new Map<string, any>();
   next = 1;
   dropMetadata = false;
 
-  async findByLegacyId(id: string): Promise<TaskFile | undefined> {
-    return [...this.tasks.values()].find((item) => item.metadata?.pi_teams_legacy_id === id);
+  async findByLegacyId(id: string): Promise<any | undefined> {
+    return [...this.tasks.values()].find((item) => item.internalMetadata?.pi_teams_legacy_id === id);
   }
 
-  async create(input: any): Promise<TaskFile> {
-    const created: TaskFile = {
+  async create(input: any): Promise<any> {
+    const created = {
       id: `bd-${this.next++}`,
-      subject: input.subject,
+      title: input.title,
       description: input.description,
-      status: "pending",
-      blocks: [],
-      blockedBy: [],
-      metadata: this.dropMetadata ? {} : structuredClone(input.metadata || {}),
+      status: "open",
+      relations: [],
+      internalMetadata: this.dropMetadata ? {} : structuredClone(input.internalMetadata || {}),
       version: `v${this.next}`,
     };
     this.tasks.set(created.id, created);
     return structuredClone(created);
   }
 
-  async update(id: string, updates: Partial<TaskFile>): Promise<TaskFile> {
+  async update(id: string, updates: Partial<TaskFile>): Promise<any> {
     const current = this.tasks.get(id)!;
-    const accepted = this.dropMetadata ? { ...updates, metadata: current.metadata } : updates;
+    const accepted = updates;
     Object.assign(current, accepted, { version: `v${++this.next}` });
     return structuredClone(current);
   }
 
-  async addDependency(id: string, blockerId: string): Promise<TaskFile> {
+  async mutateLink(id: string, link: { relation: string; targetId: string; action: string }): Promise<any> {
     const current = this.tasks.get(id)!;
-    const blocker = this.tasks.get(blockerId)!;
-    if (!current.blockedBy.includes(blockerId)) current.blockedBy.push(blockerId);
-    if (!blocker.blocks.includes(id)) blocker.blocks.push(id);
+    if (link.action === "add") current.relations.push({ relation: link.relation, targetId: link.targetId });
     return structuredClone(current);
   }
 
-  async list(): Promise<TaskFile[]> { return [...this.tasks.values()].map((item) => structuredClone(item)); }
-  async read(id: string): Promise<TaskFile> { return structuredClone(this.tasks.get(id)!); }
+  async list(): Promise<any[]> { return [...this.tasks.values()].map((item) => structuredClone(item)); }
+  async read(id: string): Promise<any> { return structuredClone(this.tasks.get(id)!); }
 }
 
 afterEach(() => {
@@ -222,7 +232,7 @@ describe("release P1 public contracts", () => {
     expect((await teams.readConfig(danglingTeam)).taskBackend).toBeUndefined();
   });
 
-  it("treats metadata drift as a reconciliation mismatch and refuses cutover", async () => {
+  it("preserves legacy metadata in the immutable inventory and migration mapping", async () => {
     const name = teamName("migration-metadata");
     const beadsWorkspace = workspace("migration-metadata");
     await teams.createTeam(name, "/tmp/lead.jsonl", "lead-agent");
@@ -231,14 +241,16 @@ describe("release P1 public contracts", () => {
       metadata: { source: "legacy", nested: { retained: true } },
     }));
     const fixture = new MigrationFixture();
-    fixture.dropMetadata = true;
-
     const report = await migrateTeamTasks({ teamName: name, workspace: beadsWorkspace, beads: fixture as any });
 
-    expect(report.cutover).toBe(false);
-    expect(report.mismatches).toContainEqual(expect.objectContaining({ legacyId: "1", field: "metadata" }));
-    expect(report.errors.join(" ")).toMatch(/reconciliation failed/i);
-    expect((await teams.readConfig(name)).taskBackend).toBeUndefined();
+    expect(report.cutover).toBe(true);
+    const inventory = JSON.parse(fs.readFileSync(report.inventoryPath, "utf8"));
+    expect(inventory.tasks[0].task.metadata).toEqual({ source: "legacy", nested: { retained: true } });
+    expect(fixture.tasks.get(report.mapping["1"])?.internalMetadata).toMatchObject({
+      source: "legacy",
+      nested: { retained: true },
+      pi_teams_legacy_id: "1",
+    });
   });
 
   it("attempts every teammate shutdown and leaves a kill failure current instead of claiming closure", async () => {
@@ -485,7 +497,7 @@ describe("release P1 public contracts", () => {
     });
     const oldMember = member("worker", oldSession);
     await teams.addMember(name, oldMember);
-    const record = await enqueueTaskChangeForRecipient(name, task("task-1", "worker"), "worker", "assigned");
+    const record = await enqueueTaskChangeForRecipient(name, currentTask("task-1", "worker"), "worker", "assigned");
     expect(record?.recipientMembershipId).toBe(oldMember.membershipId);
 
     await teams.deactivateMember(name, "worker", "replaced");
@@ -563,7 +575,7 @@ describe("release P1 public contracts", () => {
     });
     const oldMember = member("worker", oldSession);
     await teams.addMember(name, oldMember);
-    const before = task("task-race");
+    const before = currentTask("task-race");
     let enterMutation!: () => void;
     let releaseMutation!: () => void;
     const entered = new Promise<void>((resolve) => { enterMutation = resolve; });
@@ -608,9 +620,11 @@ describe("release P1 public contracts", () => {
     expect(update).toHaveBeenCalledTimes(callsBeforeStaleAttempt);
   });
 
-  it("does not publish the removed task_update.blocks input", () => {
-    const schema = registerExtension().get("task_update")!.parameters;
-    expect(schema.properties).toHaveProperty("blocked_by");
-    expect(schema.properties).not.toHaveProperty("blocks");
+  it("keeps graph edits out of task_update and on task_link", () => {
+    const tools = registerExtension();
+    const updateSchema = tools.get("task_update")!.parameters;
+    expect(updateSchema.properties).not.toHaveProperty("blocked_by");
+    expect(updateSchema.properties).not.toHaveProperty("blocks");
+    expect(tools.get("task_link")!.parameters.properties).toHaveProperty("relation");
   });
 });

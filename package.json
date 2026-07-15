@@ -38,6 +38,7 @@
     "LICENSE",
     "README.md",
     "docs/guide.md",
+    "docs/team-footer.md",
     "docs/reference.md"
   ],
   "dependencies": {
@@ -47,6 +48,7 @@
   "peerDependencies": {
     "@earendil-works/pi-ai": "^0.80.6",
     "@earendil-works/pi-coding-agent": "^0.80.6",
+    "@earendil-works/pi-tui": "^0.80.6",
     "typebox": "^1.1.38"
   },
   "pi": {
@@ -59,6 +61,7 @@
     ]
   },
   "devDependencies": {
+    "@earendil-works/pi-tui": "0.80.6",
     "@types/node": "^25.3.0",
     "vitest": "^4.1.10"
   }

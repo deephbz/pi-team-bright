@@ -13,6 +13,7 @@ type SessionContext = {
   isIdle: ReturnType<typeof vi.fn>;
   ui: {
     setStatus: ReturnType<typeof vi.fn>;
+    setFooter: ReturnType<typeof vi.fn>;
   };
 };
 
@@ -26,9 +27,10 @@ function testTeamName(suffix: string) {
 
 function lifecycleContext(sessionFile: string) {
   return {
+    mode: "tui",
     isIdle: vi.fn(() => false),
     sessionManager: { getSessionFile: vi.fn(() => sessionFile) },
-    ui: { setStatus: vi.fn(), notify: vi.fn() },
+    ui: { setStatus: vi.fn(), setFooter: vi.fn(), notify: vi.fn() },
   };
 }
 
@@ -243,7 +245,7 @@ describe("Pi session lifecycle", () => {
     });
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "source-only pending", "pending");
+    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "source-only pending", "open");
 
     const handlers = new Map<string, Handler>();
     const sendMessage = vi.fn();
@@ -289,7 +291,8 @@ describe("Pi session lifecycle", () => {
     const ctx = lifecycleContext(sessionFile);
     await handlers.get("session_start")?.({}, ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith("pi-teams", `Lead @ ${teamName}`);
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("pi-teams", undefined);
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect((await teams.readConfig(teamName)).members.find(member => member.name === "team-lead")?.tmuxPaneId).toBe("%resumed-lead");
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(teamName), "utf8"))).toMatchObject({
       pid: process.pid,
@@ -357,7 +360,8 @@ describe("Pi session lifecycle", () => {
     const ctx = lifecycleContext(sessionFile);
     await handlers.get("session_start")?.({}, ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith("00-pi-teams", "[REVIEWER]");
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("00-pi-teams", undefined);
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     const reviewer = (await teams.readConfig(teamName)).members.find(member => member.name === "reviewer");
     expect(reviewer?.tmuxPaneId).toBe("%envless-resume");
     expect(reviewer?.sessionFile).toBe(sessionFile);

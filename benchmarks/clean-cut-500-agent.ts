@@ -190,10 +190,10 @@ async function run(mode: Mode): Promise<Record<string, unknown>> {
     await phase("create", 5, async (lane, index) => {
       const task = await tasks.createTask(
         teamName,
-        `Benchmark task ${lane}-${index}`,
-        "Synthetic benchmark payload",
-        "",
-        undefined,
+        {
+          title: `Benchmark task ${lane}-${index}`,
+          description: "Synthetic benchmark payload",
+        },
         environment.laneBindings[lane],
       );
       taskIds[lane].push(task.id);
@@ -204,25 +204,25 @@ async function run(mode: Mode): Promise<Record<string, unknown>> {
     await phase("status_update", 25, (lane, index) => tasks.applySemanticTaskUpdate(
       teamName,
       taskIds[lane][index % 5],
-      { status: index % 2 === 0 ? "in_progress" : "pending" },
+      { status: index % 2 === 0 ? "in_progress" : "open" },
       environment.laneBindings[lane],
     ));
-    await phase("owner_status_update", 20, (lane, index) => tasks.applySemanticTaskUpdate(
+    await phase("assignee_status_update", 20, (lane, index) => tasks.applySemanticTaskUpdate(
       teamName,
       taskIds[lane][index % 5],
-      { owner: `worker-${lane}`, status: "in_progress" },
+      { assignee: `worker-${lane}`, status: "in_progress" },
       environment.laneBindings[lane],
     ));
-    await phase("progress", 12, (lane, index) => tasks.applySemanticTaskUpdate(
+    await phase("design_update", 12, (lane, index) => tasks.applySemanticTaskUpdate(
       teamName,
       taskIds[lane][index % 5],
-      { progress: `progress-${lane}-${index}` },
+      { design: `design-${lane}-${index}` },
       environment.laneBindings[lane],
     ));
-    await phase("pending_problem", 13, (lane, index) => tasks.applySemanticTaskUpdate(
+    await phase("append_note", 13, (lane, index) => tasks.applySemanticTaskUpdate(
       teamName,
       taskIds[lane][index % 5],
-      { pendingProblem: `problem-${lane}-${index}` },
+      { appendNote: `note-${lane}-${index}` },
       environment.laneBindings[lane],
     ));
 
@@ -250,16 +250,16 @@ async function run(mode: Mode): Promise<Record<string, unknown>> {
       const file = paths.taskDeliveryPath(teamName, `worker-${lane}`);
       return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
     });
-    const ownerOutboxFile = paths.taskOwnerTransitionOutboxPath(teamName);
-    const ownerOutboxRecords: Array<{
+    const assigneeOutboxFile = paths.taskOwnerTransitionOutboxPath(teamName);
+    const assigneeOutboxRecords: Array<{
       state?: string;
       targets?: unknown[];
       resolvedTargetKeys?: string[];
-    }> = fs.existsSync(ownerOutboxFile)
-      ? JSON.parse(fs.readFileSync(ownerOutboxFile, "utf8"))
+    }> = fs.existsSync(assigneeOutboxFile)
+      ? JSON.parse(fs.readFileSync(assigneeOutboxFile, "utf8"))
       : [];
-    const ownerOutboxTargets = ownerOutboxRecords.reduce((sum, record) => sum + (record.targets?.length || 0), 0);
-    const ownerOutboxResolvedTargets = ownerOutboxRecords.reduce((sum, record) => sum + (record.resolvedTargetKeys?.length || 0), 0);
+    const assigneeOutboxTargets = assigneeOutboxRecords.reduce((sum, record) => sum + (record.targets?.length || 0), 0);
+    const assigneeOutboxResolvedTargets = assigneeOutboxRecords.reduce((sum, record) => sum + (record.resolvedTargetKeys?.length || 0), 0);
     return {
       schemaVersion: 2,
       capturedAt: new Date().toISOString(),
@@ -270,6 +270,13 @@ async function run(mode: Mode): Promise<Record<string, unknown>> {
       wallMs,
       peakOutstandingIntents,
       errors: intentRecords.filter((record) => record.outcome === "error").length,
+      modelExecution: {
+        completions: 0,
+        turns: 0,
+        tokens: 0,
+        measured: false,
+        note: "This benchmark measures PiTeams plus Beads mechanics only; use a live Session trace for model-turn cost.",
+      },
       workload: {
         lanes: environment.laneBindings.map((binding, lane) => ({
           lane,
@@ -297,15 +304,15 @@ async function run(mode: Mode): Promise<Record<string, unknown>> {
         uniqueDeliveryIds: new Set(spoolRecords.map((record: any) => record.deliveryId)).size,
         measuredScope: "persisted Task delivery spool only; steer, echo, reconciliation, and prune behavior not instrumented",
       },
-      ownerTransitionOutboxMetrics: {
-        retainedIntents: ownerOutboxRecords.length,
-        preparedIntents: ownerOutboxRecords.filter((record) => record.state === "prepared").length,
-        committedIntents: ownerOutboxRecords.filter((record) => record.state === "committed").length,
-        abandonedIntents: ownerOutboxRecords.filter((record) => record.state === "abandoned").length,
-        targets: ownerOutboxTargets,
-        resolvedTargets: ownerOutboxResolvedTargets,
-        unresolvedTargets: ownerOutboxTargets - ownerOutboxResolvedTargets,
-        measuredScope: "retained authority-linked owner-transition outbox records after the 500-intent workload",
+      assigneeTransitionOutboxMetrics: {
+        retainedIntents: assigneeOutboxRecords.length,
+        preparedIntents: assigneeOutboxRecords.filter((record) => record.state === "prepared").length,
+        committedIntents: assigneeOutboxRecords.filter((record) => record.state === "committed").length,
+        abandonedIntents: assigneeOutboxRecords.filter((record) => record.state === "abandoned").length,
+        targets: assigneeOutboxTargets,
+        resolvedTargets: assigneeOutboxResolvedTargets,
+        unresolvedTargets: assigneeOutboxTargets - assigneeOutboxResolvedTargets,
+        measuredScope: "retained authority-linked assignee-transition outbox records after the 500-intent workload",
       },
       privacy: {
         workspacePathIncluded: false,

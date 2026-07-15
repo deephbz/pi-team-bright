@@ -25,6 +25,7 @@ import * as teams from "./teams";
 
 type RegisteredTool = {
   name: string;
+  parameters: { properties?: Record<string, unknown> };
   execute: (toolCallId: string, params: any, signal?: unknown, onUpdate?: unknown, ctx?: any) => Promise<any>;
 };
 
@@ -110,14 +111,14 @@ function harness() {
 function taskSnapshot(overrides: Partial<TaskFile> = {}): TaskFile {
   return {
     id: overrides.id || "task-1",
-    subject: overrides.subject || "Task",
+    title: overrides.title || "Task",
     description: overrides.description || "description",
     status: overrides.status || "in_progress",
-    blocks: overrides.blocks || [],
-    blockedBy: overrides.blockedBy || [],
-    owner: overrides.owner,
+    relations: overrides.relations || [],
+    assignee: overrides.assignee,
     version: overrides.version || "v1",
-    metadata: overrides.metadata,
+    notes: overrides.notes,
+    provenance: overrides.provenance || { authority: "beads", teamName: "round2-fixture" },
   };
 }
 
@@ -144,17 +145,17 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "worker", sourceSession),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "worker", requireExpectedVersion: false });
-    const created = await store.create({ subject: "self assignment", description: "same name is not identity" });
+    const created = await store.create({ title: "self assignment", description: "same name is not identity" });
 
     const selfAssigned = (await tasks.applySemanticTaskUpdate(teamName, created.id, {
-      owner: "worker",
+      assignee: "worker",
       status: "in_progress",
     }, {
       actor: "worker",
       actingSessionFile: sourceSession,
       expectedVersion: created.version,
     })).task;
-    expect(selfAssigned.owner).toBe("worker");
+    expect(selfAssigned.assignee).toBe("worker");
     expect(await readTaskDeliveries(teamName, "worker")).toEqual([]);
     expect(await reconcileTaskChanges(teamName, "worker")).toBe(0);
     expect(await readTaskDeliveries(teamName, "worker")).toEqual([]);
@@ -180,8 +181,8 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "worker", sessionFile),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "worker", requireExpectedVersion: false });
-    const created = await store.create({ subject: "post-state", description: "v0" });
-    const selfAssigned = (await tasks.applySemanticTaskUpdate(teamName, created.id, { owner: "worker" }, {
+    const created = await store.create({ title: "post-state", description: "v0" });
+    const selfAssigned = (await tasks.applySemanticTaskUpdate(teamName, created.id, { assignee: "worker" }, {
       actor: "worker",
       actingSessionFile: sessionFile,
       expectedVersion: created.version,
@@ -203,7 +204,7 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
     ]);
   }, 60_000);
 
-  it("notifies the prior owner on reassignment/unassignment and the new owner on assignment", async () => {
+  it("notifies the prior assignee on reassignment/unassignment and the new assignee on assignment", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("ownership");
     writeTeam(teamName, workspace, [
@@ -212,13 +213,13 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "bob", `/tmp/${teamName}-bob.jsonl`),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "team-lead", requireExpectedVersion: false });
-    const created = await store.create({ subject: "ownership", description: "handoff" });
-    const alice = (await tasks.applySemanticTaskUpdate(teamName, created.id, { owner: "alice" }, {
+    const created = await store.create({ title: "ownership", description: "handoff" });
+    const alice = (await tasks.applySemanticTaskUpdate(teamName, created.id, { assignee: "alice" }, {
       actor: "team-lead",
       actingSessionFile: `/tmp/${teamName}-lead.jsonl`,
       expectedVersion: created.version,
     })).task;
-    const bob = (await tasks.applySemanticTaskUpdate(teamName, created.id, { owner: "bob" }, {
+    const bob = (await tasks.applySemanticTaskUpdate(teamName, created.id, { assignee: "bob" }, {
       actor: "team-lead",
       actingSessionFile: `/tmp/${teamName}-lead.jsonl`,
       expectedVersion: alice.version,
@@ -227,18 +228,18 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
     expect(await readTaskDeliveries(teamName, "alice")).toEqual(expect.arrayContaining([
       expect.objectContaining({
         changeKind: "ownership_lost",
-        taskSnapshot: expect.objectContaining({ owner: "bob" }),
+        taskSnapshot: expect.objectContaining({ assignee: "bob" }),
         ref: expect.objectContaining({ version: bob.version }),
       }),
     ]));
     expect(await readTaskDeliveries(teamName, "bob")).toEqual(expect.arrayContaining([
       expect.objectContaining({
         changeKind: "assigned",
-        taskSnapshot: expect.objectContaining({ owner: "bob" }),
+        taskSnapshot: expect.objectContaining({ assignee: "bob" }),
       }),
     ]));
 
-    const unassigned = (await tasks.applySemanticTaskUpdate(teamName, created.id, { owner: "" }, {
+    const unassigned = (await tasks.applySemanticTaskUpdate(teamName, created.id, { assignee: "" }, {
       actor: "team-lead",
       actingSessionFile: `/tmp/${teamName}-lead.jsonl`,
       expectedVersion: bob.version,
@@ -247,7 +248,7 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
     const ownershipLost = bobDeliveries.find((delivery) =>
       delivery.changeKind === "ownership_lost" && delivery.ref.version === unassigned.version);
     expect(ownershipLost).toBeDefined();
-    expect(ownershipLost?.taskSnapshot.owner).toBeUndefined();
+    expect(ownershipLost?.taskSnapshot.assignee).toBeUndefined();
   }, 60_000);
 });
 
@@ -280,7 +281,7 @@ describe("delivery scheduling and exact Session scope", () => {
     const sourceSession = `/tmp/${teamName}-source.jsonl`;
     const forkSession = `/tmp/${teamName}-fork.jsonl`;
     writeTeam(teamName, workspace, [member(teamName, "worker", sourceSession)]);
-    const record = await enqueueTaskChange(teamName, taskSnapshot({ owner: "worker" }), "assigned", "team-lead");
+    const record = await enqueueTaskChange(teamName, taskSnapshot({ assignee: "worker" }), "assigned", "team-lead");
     expect(record).not.toBeNull();
 
     const sourceSend = vi.fn();
@@ -335,15 +336,15 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
 
     const createdResult = await tools.get("task_create")!.execute("create", {
       team_name: teamName,
-      subject: "Receipt contract",
+      title: "Receipt contract",
       description: "large descriptions stay out of model-visible mutation receipts",
     }, undefined, undefined, context);
     const created = receipt(createdResult);
     expect(created).toEqual({
       task: {
         id: expect.any(String),
-        status: "pending",
-        owner: null,
+        status: "open",
+        assignee: null,
         version: expect.stringMatching(/^beads_/),
       },
       appliedOperations: ["create"],
@@ -351,25 +352,27 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     });
     expect(createdResult.content[0].text).not.toContain("large descriptions");
 
-    const plannedResult = await tools.get("task_submit_plan")!.execute("plan", {
+    const designedResult = await tools.get("task_update")!.execute("design", {
       team_name: teamName,
       task_id: created.task.id,
-      plan: "inspect then test",
+      design: "inspect then test",
+      append_note: "Requesting review of this design.",
       expected_version: created.task.version,
     }, undefined, undefined, context);
-    const planned = receipt(plannedResult);
-    expect(planned.task).toMatchObject({
+    const designed = receipt(designedResult);
+    expect(designed.task).toMatchObject({
       id: created.task.id,
-      status: "planning",
+      status: "open",
       version: expect.stringMatching(/^beads_/),
     });
-    expect(planned.appliedOperations).toEqual(["submit_plan"]);
+    expect(designed.appliedOperations).toEqual(["set:design", "append:note"]);
 
-    const evaluatedResult = await tools.get("task_evaluate_plan")!.execute("approve", {
+    const evaluatedResult = await tools.get("task_update")!.execute("approve", {
       team_name: teamName,
       task_id: created.task.id,
-      action: "approve",
-      expected_version: planned.task.version,
+      status: "in_progress",
+      append_note: "Leader approved execution at this exact Task version.",
+      expected_version: designed.task.version,
     }, undefined, undefined, context);
     const evaluated = receipt(evaluatedResult);
     expect(evaluated.task).toMatchObject({
@@ -377,28 +380,28 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       status: "in_progress",
       version: expect.stringMatching(/^beads_/),
     });
-    expect(evaluated.appliedOperations).toEqual(["approve_plan"]);
+    expect(evaluated.appliedOperations).toEqual(["set:status", "append:note"]);
 
     const updatedResult = await tools.get("task_update")!.execute("assign", {
       team_name: teamName,
       task_id: created.task.id,
-      owner: "worker",
+      assignee: "worker",
       expected_version: evaluated.task.version,
     }, undefined, undefined, context);
     const updated = receipt(updatedResult);
     expect(updated.task).toMatchObject({
       id: created.task.id,
       status: "in_progress",
-      owner: "worker",
+      assignee: "worker",
       version: expect.stringMatching(/^beads_/),
     });
-    expect(updated.appliedOperations).toContain("set:owner");
+    expect(updated.appliedOperations).toContain("set:assignee");
     expect(updated.warnings).toEqual([]);
 
     const progressedResult = await tools.get("task_update")!.execute("progress", {
       team_name: teamName,
       task_id: created.task.id,
-      progress: "comment-backed revision",
+      append_note: "comment-backed revision",
       expected_version: updated.task.version,
     }, undefined, undefined, context);
     const progressed = receipt(progressedResult);
@@ -416,12 +419,12 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     await expect(tools.get("task_update")!.execute("safe-next-write", {
       team_name: teamName,
       task_id: created.task.id,
-      status: "pending",
+      status: "open",
       expected_version: readResult.details.task.version,
     }, undefined, undefined, context)).resolves.toBeDefined();
   }, 60_000);
 
-  it("combines owner plus nonterminal status in one native update and returns full post-state plus applied operations", async () => {
+  it("combines assignee plus nonterminal status in one native update and returns full post-state plus applied operations", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("semantic-update");
     writeTeam(teamName, workspace, [
@@ -432,12 +435,12 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     vi.stubEnv("PI_TEAM_NAME", teamName);
     const tool = harness().tools.get("task_update")!;
     const created = await new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false })
-      .create({ subject: "semantic", description: "one agent call" });
+      .create({ title: "semantic", description: "one agent call" });
 
     const result = await tool.execute("semantic", {
       team_name: teamName,
       task_id: created.id,
-      owner: "worker",
+      assignee: "worker",
       status: "in_progress",
       expected_version: created.version,
     }, undefined, undefined, {
@@ -446,12 +449,12 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
 
     expect(result.details.task).toMatchObject({
       id: created.id,
-      owner: "worker",
+      assignee: "worker",
       status: "in_progress",
       version: expect.any(String),
     });
     expect(Array.isArray(result.details.appliedOperations)).toBe(true);
-    expect(JSON.stringify(result.details.appliedOperations)).toMatch(/owner/i);
+    expect(JSON.stringify(result.details.appliedOperations)).toMatch(/assignee/i);
     expect(JSON.stringify(result.details.appliedOperations)).toMatch(/status/i);
     expect(JSON.stringify(result.details.appliedOperations)).not.toMatch(/progress/i);
     const traceFile = path.join(tempRoot("semantic-trace"), "trace.jsonl");
@@ -461,13 +464,13 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     const traced = await tool.execute("semantic-traced", {
       team_name: teamName,
       task_id: created.id,
-      owner: "worker",
-      status: "pending",
+      assignee: "worker",
+      status: "open",
       expected_version: result.details.task.version,
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` },
     });
-    expect(traced.details.task.status).toBe("pending");
+    expect(traced.details.task.status).toBe("open");
     const trace = fs.readFileSync(traceFile, "utf8").trim().split("\n").map((line) => JSON.parse(line)).at(-1);
     expect(trace.bdCalls.filter((call: any) => call.command === "update")).toHaveLength(1);
   }, 60_000);
@@ -480,7 +483,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     vi.stubEnv("PI_TEAM_NAME", teamName);
     const tool = harness().tools.get("task_update")!;
     const store = new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: "version", description: "v0" });
+    const created = await store.create({ title: "version", description: "v0" });
 
     const withoutToken = await tool.execute("without-token", {
       team_name: teamName,
@@ -493,7 +496,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     await expect(tool.execute("stale", {
       team_name: teamName,
       task_id: created.id,
-      status: "pending",
+      status: "open",
       expected_version: created.version,
     }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } }))
       .rejects.toThrow(/changed|stale|conflict|expected_version/i);
@@ -501,7 +504,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     expect((await store.read(created.id)).status).toBe("in_progress");
   }, 60_000);
 
-  it("rejects terminal, progress, and cross-Task mixed classes before applying anything", async () => {
+  it("rejects claim combined with another mutation and keeps graph edits on task_link", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("unsafe-composite");
     writeTeam(teamName, workspace, [member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`)]);
@@ -509,33 +512,22 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     vi.stubEnv("PI_TEAM_NAME", teamName);
     const tool = harness().tools.get("task_update")!;
     const store = new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false });
-    const target = await store.create({ subject: "target", description: "unchanged" });
-    const blocker = await store.create({ subject: "blocker", description: "other Task" });
-
+    const target = await store.create({ title: "target", description: "unchanged" });
     const ctx = { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } };
-    await expect(tool.execute("terminal", {
+    await expect(tool.execute("claim-plus-status", {
       team_name: teamName,
       task_id: target.id,
-      status: "completed",
-      progress: "must not partially land",
-    }, undefined, undefined, ctx)).rejects.toThrow(/terminal|atomic|combine|unsafe/i);
-    await expect(tool.execute("progress-mixed", {
-      team_name: teamName,
-      task_id: target.id,
+      claim: true,
       status: "in_progress",
-      progress: "separate semantic class",
-    }, undefined, undefined, ctx)).rejects.toThrow(/progress|atomic|combine|unsafe|semantic/i);
-    await expect(tool.execute("cross-task", {
-      team_name: teamName,
-      task_id: target.id,
-      status: "in_progress",
-      blocked_by: [blocker.id],
-    }, undefined, undefined, ctx)).rejects.toThrow(/dependency|atomic|combine|unsafe|cross.task|semantic/i);
+    }, undefined, undefined, ctx)).rejects.toThrow(/claim|atomic|combine/i);
+
+    expect(tool.parameters.properties).not.toHaveProperty("blocked_by");
+    expect(tool.parameters.properties).not.toHaveProperty("progress");
 
     expect(await store.read(target.id)).toMatchObject({
-      status: "pending",
-      blockedBy: [],
-      metadata: undefined,
+      status: "open",
+      relations: [],
+      assignee: undefined,
     });
   }, 60_000);
 });
@@ -579,7 +571,7 @@ describe("canonical Task versions", () => {
       requireExpectedVersion: false,
     });
 
-    const created = await store.create({ subject: "Version probe", description: "v0" });
+    const created = await store.create({ title: "Version probe", description: "v0" });
     const read = await store.read(created.id);
     expect(read.version).toBe(created.version);
     const updated = await store.update(created.id, { description: "v1" });
@@ -596,7 +588,7 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
     vi.stubEnv("PI_TEAMS_TRACE_JSONL", traceFile);
     const secret = "SECRET_PAYLOAD_NEVER_TRACE_9f6288";
     const store = new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: secret, description: secret });
+    const created = await store.create({ title: secret, description: secret });
     const lockFile = path.join(paths.teamDir(teamName), `.beads-task-${created.id}.lock`);
     fs.writeFileSync(lockFile, "external-holder", { flag: "wx" });
     setTimeout(() => fs.rmSync(lockFile, { force: true }), 150);
@@ -642,7 +634,7 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
       member(teamName, "worker", workerSession),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: "recovery", description: "commit wins" });
+    const created = await store.create({ title: "recovery", description: "commit wins" });
     const spool = paths.taskDeliveryPath(teamName, "worker");
     const originalRename = fs.renameSync;
     vi.spyOn(fs, "renameSync").mockImplementation((source, target) => {
@@ -650,13 +642,13 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
       return originalRename(source, target);
     });
 
-    const receipt = await tasks.applySemanticTaskUpdate(teamName, created.id, { owner: "worker" }, {
+    const receipt = await tasks.applySemanticTaskUpdate(teamName, created.id, { assignee: "worker" }, {
       actor: "team-lead",
       actingSessionFile: `/tmp/${teamName}-lead.jsonl`,
       expectedVersion: created.version,
     });
     const committed = receipt.task;
-    expect((await store.read(created.id)).owner).toBe("worker");
+    expect((await store.read(created.id)).assignee).toBe("worker");
     expect(fs.existsSync(spool)).toBe(false);
     expect(receipt.deliveryDegraded).toBe(true);
 
@@ -692,7 +684,7 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
       recipient,
       recipientSessionFile: sessionFile,
       targetAgentRef: { kind: "session-trace", nativeId: `session-${index}` },
-      taskSnapshot: taskSnapshot({ id: `task-${index}`, version: `v${index}`, owner: recipient, status }),
+      taskSnapshot: taskSnapshot({ id: `task-${index}`, version: `v${index}`, assignee: recipient, status }),
       queuedAt: new Date(index * 1000).toISOString(),
       attemptCount: observed ? 1 : 0,
       ...(observed ? { successfulTurnAckAt: new Date(index * 1000 + 1).toISOString() } : {}),
@@ -701,20 +693,20 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
       record(1, "task_changed", "in_progress", true),
       record(2, "ownership_lost", "in_progress", false),
       record(3, "status_changed", "blocked", false),
-      record(4, "status_changed", "completed", false),
+      record(4, "status_changed", "closed", false),
       record(5, "task_changed", "in_progress", true),
     ]);
     // Any spool mutation runs compaction: observed evidence is bounded while
     // every pending delivery remains durable.
-    await enqueueTaskChangeForRecipient(teamName, taskSnapshot({ id: "trigger", version: "v-trigger", owner: recipient }), recipient, "task_changed");
+    await enqueueTaskChangeForRecipient(teamName, taskSnapshot({ id: "trigger", version: "v-trigger", assignee: recipient }), recipient, "task_changed");
     expect((await readTaskDeliveries(teamName, recipient)).map((item) => item.deliveryId)).toEqual(expect.arrayContaining([
       "delivery-2", "delivery-3", "delivery-4",
     ]));
 
     const allCritical = Array.from({ length: 300 }, (_, index) =>
-      record(index + 100, index % 3 === 0 ? "ownership_lost" : "status_changed", index % 3 === 1 ? "blocked" : "completed", false));
+      record(index + 100, index % 3 === 0 ? "ownership_lost" : "status_changed", index % 3 === 1 ? "blocked" : "closed", false));
     writeJsonAtomic(file, allCritical);
-    await enqueueTaskChangeForRecipient(teamName, taskSnapshot({ id: "critical-trigger", version: "v-critical", owner: recipient }), recipient, "task_changed");
+    await enqueueTaskChangeForRecipient(teamName, taskSnapshot({ id: "critical-trigger", version: "v-critical", assignee: recipient }), recipient, "task_changed");
     // This design has no hard pending cap, so it doesn't need a lossy
     // `backpressure` branch: all 300 critical pending records survive.
     expect((await readTaskDeliveries(teamName, recipient)).filter((item) => item.deliveryId.startsWith("delivery-"))).toHaveLength(300);
@@ -734,7 +726,7 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
         changeKind: "task_changed",
         recordedAt: new Date().toISOString(),
         reason: "enqueue-failed",
-        taskSnapshot: taskSnapshot({ id: `task-${index}`, version: `v${index}`, owner: "worker" }),
+        taskSnapshot: taskSnapshot({ id: `task-${index}`, version: `v${index}`, assignee: "worker" }),
       });
     }
     expect(config.taskAuthorityId).toBeDefined();

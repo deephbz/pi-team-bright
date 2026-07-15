@@ -6,9 +6,10 @@ import path from "node:path";
 import piTeams, { buildPiArgv, inspectAgentSessionCleanup } from "../../extensions/index";
 import { BeadsTaskStore } from "./beads";
 import * as paths from "./paths";
-import { configureBeadsTaskBackend, createTeam, updateMember } from "./teams";
+import { addMember, configureBeadsTaskBackend, createTeam, updateMember } from "./teams";
 
 const source = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
+const predefinedSource = fs.readFileSync(path.join(process.cwd(), "src/utils/predefined-teams.ts"), "utf8");
 const skillPath = path.join(process.cwd(), "skills/pi-teams/SKILL.md");
 const skill = fs.readFileSync(skillPath, "utf8");
 const guide = fs.readFileSync(path.join(process.cwd(), "docs/guide.md"), "utf8");
@@ -34,10 +35,32 @@ describe("registered PiTeams tool surface", () => {
     expect(skill).toMatch(/^---\nname: pi-teams\ndescription: .+\n---\n/m);
   });
 
-  it("documents exactly the 20 registered tools", () => {
-    expect(shippedTools).toHaveLength(20);
-    expect(new Set(shippedTools).size).toBe(20);
+  it("documents exactly the 18 registered tools", () => {
+    expect(shippedTools).toHaveLength(18);
+    expect(new Set(shippedTools).size).toBe(18);
     for (const tool of shippedTools) expect(skill).toContain(`\`${tool}\``);
+  });
+
+  it("keeps one minimal five-verb Task surface", () => {
+    expect(shippedTools.filter((name) => name.startsWith("task_")).sort()).toEqual([
+      "task_create",
+      "task_link",
+      "task_list",
+      "task_read",
+      "task_update",
+    ]);
+    for (const removed of ["task_submit_plan", "task_evaluate_plan"]) {
+      expect(shippedTools).not.toContain(removed);
+      for (const artifact of [skill, ...publicDocs]) expect(artifact).not.toContain(removed);
+    }
+  });
+
+  it("does not expose or teach a historical runtime-Team catalog", () => {
+    expect(shippedTools).not.toContain("list_runtime_teams");
+    for (const artifact of [source, predefinedSource, skill, ...publicDocs]) {
+      expect(artifact).not.toContain("list_runtime_teams");
+      expect(artifact).not.toContain("listRuntimeTeams");
+    }
   });
 
   it("documents every registered parameter in its corresponding skill section", () => {
@@ -88,10 +111,12 @@ describe("registered PiTeams tool surface", () => {
     expect(description("check_teammate")).toMatch(/diagnos/i);
     expect(description("check_teammate")).toMatch(/not routinely poll/i);
     expect(description("send_message")).toMatch(/avoid ACK-only/i);
-    for (const name of ["task_create", "task_submit_plan", "task_evaluate_plan", "task_update"]) {
+    for (const name of ["task_create", "task_update"]) {
       expect(description(name), name).toMatch(/post-state receipt/i);
       expect(description(name), name).toMatch(/do not immediately|don't immediately/i);
     }
+    expect(description("task_link")).toMatch(/relation/i);
+    expect(description("task_link")).toMatch(/graph.*version|version.*graph/i);
   });
 
   it("exposes the blocked Task status through the registered agent tool schema", () => {
@@ -110,10 +135,12 @@ describe("registered PiTeams tool surface", () => {
     for (const doc of [...publicDocs, skill]) expect(doc).not.toContain("plan_mode_required");
   });
 
-  it("documents that a rejected plan must be revised and submitted again", () => {
+  it("documents optional prose review without a separate Plan API", () => {
     for (const doc of [...publicDocs, skill]) {
-      expect(doc).toMatch(/rejection[\s\S]{0,180}(consumes|revise|revision)/i);
-      expect(doc).toContain("task_submit_plan");
+      expect(doc).toMatch(/simple (?:Task|work)[\s\S]{0,260}(skip|direct)/i);
+      expect(doc).toMatch(/complex[\s\S]{0,500}design[\s\S]{0,500}(Message|message)[\s\S]{0,500}in_progress/i);
+      expect(doc).not.toContain("task_submit_plan");
+      expect(doc).not.toContain("task_evaluate_plan");
     }
   });
 
@@ -154,6 +181,53 @@ describe("registered PiTeams tool surface", () => {
     }
   });
 
+  it("saves the Team currently bound to the exact Session without a runtime-Team listing", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-save-current-"));
+    const team = `save-current-${process.pid}`;
+    const sessionFile = path.join(root, "lead.jsonl");
+    const teamRoot = path.join(root, "teams", team);
+    const projectDir = path.join(root, "project");
+    vi.spyOn(paths, "teamDir").mockReturnValue(teamRoot);
+    vi.spyOn(paths, "taskDir").mockReturnValue(path.join(root, "tasks", team));
+    vi.spyOn(paths, "configPath").mockReturnValue(path.join(teamRoot, "config.json"));
+
+    try {
+      await createTeam(team, sessionFile, "lead-agent");
+      await addMember(team, {
+        agentId: "worker-agent",
+        name: "worker",
+        agentType: "teammate",
+        joinedAt: Date.now(),
+        tmuxPaneId: "%test",
+        sessionFile: path.join(root, "worker.jsonl"),
+        cwd: projectDir,
+        subscriptions: [],
+        prompt: "Inspect the current Team.",
+        isActive: true,
+      });
+
+      const save = registeredTools.find(tool => tool.name === "save_team_as_template") as unknown as { execute: Function };
+      const result = await save.execute("save", {
+        team_name: team,
+        template_name: "current-team-template",
+        scope: "project",
+      }, undefined, undefined, {
+        cwd: projectDir,
+        sessionManager: { getSessionFile: () => sessionFile },
+      });
+
+      expect(result.details).toMatchObject({
+        teamName: team,
+        templateName: "current-team-template",
+      });
+      expect(fs.readFileSync(path.join(projectDir, ".pi", "teams.yaml"), "utf8")).toContain("current-team-template:");
+      expect(fs.readFileSync(path.join(projectDir, ".pi", "agents", "worker.md"), "utf8")).toContain("Inspect the current Team.");
+    } finally {
+      vi.restoreAllMocks();
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0)("retains Beads task authority for post-shutdown query and graph visualization", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-shutdown-"));
     const workspace = path.join(root, "workspace");
@@ -182,7 +256,7 @@ describe("registered PiTeams tool surface", () => {
         cutoverAt: new Date(0).toISOString(),
       });
       const store = new BeadsTaskStore({ teamName: team, workspace, requireExpectedVersion: false });
-      const task = await store.create({ subject: "Survives shutdown", description: "durable Beads task" });
+      const task = await store.create({ title: "Survives shutdown", description: "durable Beads task" });
       await updateMember(team, "team-lead", { sessionFile: "/tmp/tool-surface-lead.jsonl" });
 
       const shutdown = registeredTools.find(tool => tool.name === "team_shutdown") as unknown as { execute: Function };
@@ -193,7 +267,7 @@ describe("registered PiTeams tool surface", () => {
       expect(result.details.taskAuthorityRetained).toBe(true);
       expect(fs.existsSync(teamRoot)).toBe(true);
       expect(fs.existsSync(tasksRoot)).toBe(true);
-      expect((await new BeadsTaskStore({ teamName: team, workspace, requireExpectedVersion: false }).read(task.id)).subject).toBe("Survives shutdown");
+      expect((await new BeadsTaskStore({ teamName: team, workspace, requireExpectedVersion: false }).read(task.id)).title).toBe("Survives shutdown");
       const graph = execFileSync("bd", ["graph", "--dot", task.id], { cwd: workspace, encoding: "utf8" });
       expect(graph).toContain(task.id);
     } finally {

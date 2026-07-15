@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { BeadsAuthorityFingerprint, TaskFile } from "./models";
+import { BeadsAuthorityFingerprint, TaskFile, TaskRelation, TaskRelationType } from "./models";
 import { withLock } from "./lock";
 import { teamDir, sanitizeName } from "./paths";
 import { runHook } from "./hooks";
@@ -12,6 +12,7 @@ import { recordBdCall } from "./trace";
 const execFileAsync = promisify(execFile);
 
 export const DEFAULT_BD_TIMEOUT_MS = 10_000;
+export const DEFAULT_BD_INIT_TIMEOUT_MS = 30_000;
 export const PI_TEAMS_SCHEMA = "1";
 /** Internal adapter evidence. It is intentionally excluded from Task metadata. */
 export const OWNER_TRANSITION_OPERATION_METADATA = "pi_teams_owner_transition_operation";
@@ -119,6 +120,39 @@ class ExecBdRunner implements BdRunner {
 
 export const defaultBdRunner: BdRunner = new ExecBdRunner();
 
+/**
+ * Initialize a dedicated Beads authority root without generating agent files
+ * or repository hooks. A valid existing root is preserved, which lets a
+ * Team-creation retry recover after `bd init` succeeded but TeamConfig did not.
+ */
+export async function initializeBeadsWorkspace(
+  workspace: string,
+  runner: BdRunner = defaultBdRunner,
+): Promise<BeadsAuthorityFingerprint> {
+  if (!path.isAbsolute(workspace)) throw new Error(`Beads task workspace must be an absolute path: ${workspace}`);
+  fs.mkdirSync(workspace, { recursive: true, mode: 0o700 });
+
+  const metadataPath = path.join(workspace, ".beads", "metadata.json");
+  if (!fs.existsSync(metadataPath)) {
+    const args = ["init", "--quiet", "--non-interactive", "--skip-agents", "--skip-hooks", "--init-if-missing"];
+    const startedAt = Date.now();
+    const result = await runner.run(args, { cwd: workspace, timeoutMs: DEFAULT_BD_INIT_TIMEOUT_MS });
+    recordBdCall("init", Date.now() - startedAt, result.exitCode === 0 ? "ok" : "error");
+    if (result.exitCode !== 0) {
+      const stderr = result.stderr.trim();
+      const kind = result.exitCode === 127 ? "unavailable" : result.exitCode === 124 ? "timeout" : "command";
+      throw new BeadsError(
+        `Unable to initialize the Team-owned Beads workspace ${workspace}${stderr ? `: ${stderr}` : "."}`,
+        kind,
+        `bd ${args.join(" ")}`,
+        stderr || undefined,
+      );
+    }
+  }
+
+  return readBeadsAuthorityFingerprint(workspace);
+}
+
 export class BeadsError extends Error {
   readonly kind: "unavailable" | "timeout" | "command" | "malformed" | "scope" | "conflict";
   readonly command: string;
@@ -142,9 +176,11 @@ interface RawBead {
   id: string;
   title: string;
   description?: string;
+  design?: string;
+  notes?: string;
+  parent?: string;
   status: "open" | "in_progress" | "blocked" | "deferred" | "closed";
   assignee?: string;
-  owner?: string;
   labels?: string[];
   metadata?: Record<string, unknown>;
   updated_at?: string;
@@ -172,6 +208,8 @@ export interface TaskWriteOptions {
   actor?: string;
   expectedVersion?: string;
   idempotencyKey?: string;
+  /** Semantic payload combined into the same native Beads update command. */
+  appendNote?: string;
   retries?: number;
   /** Internal precommit hook; never part of the agent-facing Task contract. */
   internalOwnerTransition?: {
@@ -181,22 +219,19 @@ export interface TaskWriteOptions {
 }
 
 export interface CreateTaskInput {
-  subject: string;
+  title: string;
   description: string;
-  activeForm?: string;
-  metadata?: Record<string, any>;
+  design?: string;
+  assignee?: string;
   idempotencyKey?: string;
+  /** Migration-only metadata; never exposed by the agent-facing create tool. */
+  internalMetadata?: Record<string, unknown>;
 }
 
-export interface BeadsDependency {
-  taskId: string;
-  blockerId: string;
-}
-
-export interface BeadsProgressEntry {
-  kind: "progress" | "pending-problem";
-  text: string;
-  actor?: string;
+export interface BeadsTaskLink {
+  relation: TaskRelationType;
+  targetId: string;
+  action: "add" | "remove";
 }
 
 export interface TaskMutationResult {
@@ -218,34 +253,26 @@ function metadataValue(raw: RawBead, key: string): string | undefined {
   return typeof value === "string" ? value : value == null ? undefined : JSON.stringify(value);
 }
 
-function jsonMetadata(raw: RawBead): Record<string, any> {
-  const value = raw.metadata?.pi_teams_metadata;
-  if (!value) return {};
-  if (typeof value === "object") return value as Record<string, any>;
-  if (typeof value !== "string") return {};
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 function dependencyId(dependency: NonNullable<RawBead["dependencies"]>[number]): string | undefined {
   return dependency.id || dependency.depends_on_id || dependency.issue_id;
 }
 
-function isBlockingDependency(dependency: NonNullable<RawBead["dependencies"]>[number]): boolean {
-  return (dependency.dependency_type || dependency.type || "blocks") === "blocks";
+function dependencyType(dependency: NonNullable<RawBead["dependencies"]>[number]): string {
+  return dependency.dependency_type || dependency.type || "blocks";
 }
 
 function mapStatus(raw: RawBead): TaskFile["status"] {
-  if (metadataValue(raw, "pi_teams_deleted") === "true") return "deleted";
-  if (raw.status === "closed") return "completed";
+  if (raw.status === "closed") return "closed";
   if (raw.status === "in_progress") return "in_progress";
   if (raw.status === "blocked") return "blocked";
-  if (metadataValue(raw, "pi_teams_phase") === "planning") return "planning";
-  return "pending";
+  if (raw.status === "deferred") {
+    throw new BeadsError(
+      `Task ${raw.id} has unsupported authoritative Beads status 'deferred'; refusing to misreport it as open.`,
+      "scope",
+      `bd show ${raw.id}`,
+    );
+  }
+  return "open";
 }
 
 function stableValue(value: unknown): unknown {
@@ -257,10 +284,9 @@ function stableValue(value: unknown): unknown {
 }
 
 function authorityVersion(raw: RawBead): string {
-  // `bd list` exposes relation/comment counts while `bd show` additionally
-  // hydrates the corresponding arrays. Hash only their shared projection so
-  // one authority revision has one token regardless of the read path. The
-  // counts plus updated_at still advance for append-only comments and links.
+  // Conditional writes use hydrated `bd show` records, so include relation
+  // identities rather than only their counts. This makes review of Task@vN
+  // fail closed even if one edge is replaced by another in the same second.
   const count = (explicit: number | undefined, hydrated: unknown[] | undefined): number => {
     if (typeof explicit === "number" && Number.isSafeInteger(explicit) && explicit >= 0) return explicit;
     return hydrated?.length || 0;
@@ -269,6 +295,9 @@ function authorityVersion(raw: RawBead): string {
     id: raw.id,
     title: raw.title,
     description: raw.description || "",
+    design: raw.design || "",
+    notes: raw.notes || "",
+    parent: raw.parent || "",
     status: raw.status,
     revisionSecond: (() => {
       const parsed = Date.parse(raw.updated_at || "");
@@ -282,76 +311,54 @@ function authorityVersion(raw: RawBead): string {
     dependencyCount: count(raw.dependency_count, raw.dependencies),
     dependentCount: count(raw.dependent_count, raw.dependents),
     commentCount: count(raw.comment_count, raw.comments),
+    dependencies: stableValue(raw.dependencies || []),
+    dependents: stableValue(raw.dependents || []),
   };
   return `beads_${crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex")}`;
 }
 
 function mapTask(raw: RawBead): TaskFile {
-  const blockedBy = (raw.dependencies || [])
-    .filter(isBlockingDependency)
-    .map(dependencyId)
-    .filter((id): id is string => !!id);
-  const blocks = (raw.dependents || [])
-    .filter(isBlockingDependency)
-    .map(dependencyId)
-    .filter((id): id is string => !!id);
-  const metadata: Record<string, any> = {
-    ...jsonMetadata(raw),
-    ...(metadataValue(raw, "pi_teams_active_form") ? { activeForm: metadataValue(raw, "pi_teams_active_form") } : {}),
-    ...(metadataValue(raw, "pi_teams_plan_feedback") ? { planFeedback: metadataValue(raw, "pi_teams_plan_feedback") } : {}),
-    ...(metadataValue(raw, "pi_teams_progress") ? { progress: metadataValue(raw, "pi_teams_progress") } : {}),
-    ...(metadataValue(raw, "pi_teams_pending_problem") ? { pendingProblem: metadataValue(raw, "pi_teams_pending_problem") } : {}),
+  const relationFromDependency = (dependency: NonNullable<RawBead["dependencies"]>[number]): TaskRelation[] => {
+    const targetId = dependencyId(dependency);
+    if (!targetId) return [];
+    const type = dependencyType(dependency);
+    if (type === "blocks") return [{ relation: "blocked_by" as const, targetId }];
+    if (type === "parent-child") return [{ relation: "parent" as const, targetId }];
+    if (type === "relates-to" || type === "related" || type === "relates_to") return [{ relation: "related" as const, targetId }];
+    return [];
   };
-  const comments = raw.comments || [];
-  const progressComments = comments.filter(comment => comment.text.startsWith("[pi-teams progress]"));
-  const pendingComments = comments.filter(comment => comment.text.startsWith("[pi-teams pending-problem]"));
-  if (progressComments.length > 0) metadata.progressEntries = progressComments.map(comment => ({
-    text: comment.text.replace(/^\[pi-teams progress\]\s*/, ""),
-    actor: comment.author,
-    at: comment.created_at,
-  }));
-  if (pendingComments.length > 0) metadata.pendingProblemEntries = pendingComments.map(comment => ({
-    text: comment.text.replace(/^\[pi-teams pending-problem\]\s*/, ""),
-    actor: comment.author,
-    at: comment.created_at,
-  }));
-  const plan = metadataValue(raw, "pi_teams_plan");
+  const relations: TaskRelation[] = [
+    ...(raw.dependencies || []).flatMap(relationFromDependency),
+    ...(raw.dependents || []).flatMap((dependency) => {
+      const type = dependencyType(dependency);
+      return type === "relates-to" || type === "related" || type === "relates_to" ? relationFromDependency(dependency) : [];
+    }),
+  ].filter((relation, index, all) => all.findIndex((candidate) => candidate.relation === relation.relation && candidate.targetId === relation.targetId) === index);
+  if (raw.parent && !relations.some((relation) => relation.relation === "parent" && relation.targetId === raw.parent)) {
+    relations.push({ relation: "parent", targetId: raw.parent });
+  }
   return {
     id: raw.id,
-    subject: raw.title,
+    title: raw.title,
     description: raw.description || "",
-    activeForm: metadataValue(raw, "pi_teams_active_form") || undefined,
+    design: raw.design || undefined,
     status: mapStatus(raw),
-    plan: plan || undefined,
-    planFeedback: metadataValue(raw, "pi_teams_plan_feedback") || undefined,
-    blocks,
-    blockedBy,
-    owner: raw.assignee,
-    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    assignee: raw.assignee,
+    notes: raw.notes || undefined,
+    relations,
     version: authorityVersion(raw),
+    provenance: { authority: "beads", teamName: metadataValue(raw, "pi_teams_team") || "unknown" },
   };
 }
 
 function mapWithReverseDependencies(raws: RawBead[]): TaskFile[] {
-  const tasks = raws.map(mapTask);
-  const byId = new Map(tasks.map(task => [task.id, task]));
-  for (const raw of raws) {
-    const task = byId.get(raw.id);
-    if (!task) continue;
-    for (const dependency of raw.dependencies || []) {
-      if (!isBlockingDependency(dependency)) continue;
-      const blockerId = dependencyId(dependency);
-      if (!blockerId) continue;
-      const blocker = byId.get(blockerId);
-      if (blocker && !blocker.blocks.includes(task.id)) blocker.blocks.push(task.id);
-    }
-  }
-  return tasks;
+  return raws.map(mapTask);
 }
 
 function parseJson<T>(result: BdCommandResult, command: string): T {
   if (result.exitCode !== 0) {
     const stderr = result.stderr.trim();
+    const commandDetail = stderr || result.stdout.trim();
     const lower = `${stderr} ${result.stdout}`.toLowerCase();
     const kind = result.exitCode === 124 || lower.includes("timed out") || lower.includes("timeout")
       ? "timeout"
@@ -359,11 +366,11 @@ function parseJson<T>(result: BdCommandResult, command: string): T {
         ? "unavailable"
         : "command";
     throw new BeadsError(
-      `Beads command failed (${kind}): ${command}${stderr ? ` — ${stderr}` : ""}. ` +
+      `Beads command failed (${kind}): ${command}${commandDetail ? ` — ${commandDetail.slice(0, 500)}` : ""}. ` +
         "Check that bd is installed and the configured workspace contains an initialized Beads repository.",
       kind,
       command,
-      stderr || undefined,
+      commandDetail || undefined,
     );
   }
   try {
@@ -486,12 +493,19 @@ export class BeadsTaskStore {
   }
 
   async findByLegacyId(legacyId: string): Promise<TaskFile | undefined> {
-    const raw = (await this.listRaw()).find(raw => metadataValue(raw, "pi_teams_legacy_id") === legacyId);
-    return raw ? mapTask(raw) : undefined;
+    const matches = (await this.listRaw()).filter(raw => metadataValue(raw, "pi_teams_legacy_id") === legacyId);
+    if (matches.length > 1) {
+      throw new BeadsError(
+        `Duplicate Beads tasks map to legacy Task ${legacyId}; refusing to choose one.`,
+        "conflict",
+        `bd list legacy:${legacyId}`,
+      );
+    }
+    return matches[0] ? mapTask(matches[0]) : undefined;
   }
 
   async create(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    if (!input.subject || !input.subject.trim()) throw new Error("Task subject must not be empty");
+    if (!input.title || !input.title.trim()) throw new Error("Task title must not be empty");
     const idempotencyKey = input.idempotencyKey || options.idempotencyKey;
     const create = async (): Promise<TaskFile> => {
       if (idempotencyKey) {
@@ -500,22 +514,23 @@ export class BeadsTaskStore {
         if (existing[0]) return mapTask(existing[0]);
       }
       const metadata = {
-      ...(input.metadata || {}),
+      ...(input.internalMetadata || {}),
       pi_teams_team: this.teamName,
       pi_teams_source: "pi-teams",
       pi_teams_schema: PI_TEAMS_SCHEMA,
-      ...(input.activeForm ? { pi_teams_active_form: input.activeForm } : {}),
       ...(idempotencyKey ? { pi_teams_idempotency_key: idempotencyKey } : {}),
-      ...(input.metadata ? { pi_teams_metadata: JSON.stringify(input.metadata) } : {}),
       };
-      const raw = await this.command<RawBead | RawBead[]>([
+      const args = [
       "create",
-      "--title", input.subject,
+      "--title", input.title,
       "--description", input.description,
       "--labels", beadsLabel(this.teamName),
       "--metadata", JSON.stringify(metadata),
       "--actor", actorName(options.actor || this.actor),
-      ]);
+      ];
+      if (input.design) args.push("--design", input.design);
+      if (input.assignee) args.push("--assignee", input.assignee);
+      const raw = await this.command<RawBead | RawBead[]>(args);
       const created = Array.isArray(raw) ? raw[0] : raw;
       if (!created?.id) throw new BeadsError("Beads create returned no task ID.", "malformed", "bd create");
       this.verifyScope(created);
@@ -583,45 +598,37 @@ export class BeadsTaskStore {
     options: TaskWriteOptions,
     beforeRaw: RawBead,
   ): Promise<TaskMutationResult> {
-    if ((updates.status === "completed" || updates.status === "deleted") && Object.keys(updates).some((key) => key !== "status")) {
-      throw new Error(`Beads ${updates.status} is a terminal transition and cannot be combined with other fields; split the writes and re-read expected_version.`);
-    }
     const args: string[] = ["update", safeId, "--actor", actorName(options.actor || this.actor)];
-    if (updates.subject !== undefined) args.push("--title", updates.subject);
+    if (updates.title !== undefined) args.push("--title", updates.title);
     if (updates.description !== undefined) args.push("--description", updates.description);
-    if (updates.owner !== undefined) args.push("--assignee", updates.owner || "");
+    if (updates.design !== undefined) args.push("--design", updates.design);
+    if (updates.assignee !== undefined) args.push("--assignee", updates.assignee || "");
+    if (options.appendNote !== undefined) {
+      if (!options.appendNote.trim()) throw new Error("Task note must not be empty");
+      args.push("--append-notes", options.appendNote);
+    }
     if (options.internalOwnerTransition) {
       args.push("--set-metadata", `${OWNER_TRANSITION_OPERATION_METADATA}=${options.internalOwnerTransition.operationId}`);
     }
-    if (updates.activeForm !== undefined) args.push("--set-metadata", `pi_teams_active_form=${updates.activeForm}`);
-    if (updates.plan !== undefined) args.push("--set-metadata", `pi_teams_plan=${updates.plan}`);
-    if (updates.planFeedback !== undefined) args.push("--set-metadata", `pi_teams_plan_feedback=${updates.planFeedback}`);
-    if (updates.metadata !== undefined) args.push("--set-metadata", `pi_teams_metadata=${JSON.stringify(updates.metadata)}`);
-    if (updates.status === "planning") args.push("--status", "open", "--set-metadata", "pi_teams_phase=planning");
-    if (updates.status === "pending") args.push("--status", "open", "--unset-metadata", "pi_teams_phase");
-    if (updates.status === "in_progress") args.push("--status", "in_progress", "--unset-metadata", "pi_teams_phase");
-    if (updates.status === "blocked") args.push("--status", "blocked", "--unset-metadata", "pi_teams_phase");
-    if (updates.status === "completed") {
-      if (beforeRaw.status !== "closed") {
-        await this.command<RawBead | RawBead[]>(["close", safeId, "--reason", "completed by pi-teams", "--actor", actorName(options.actor || this.actor)]);
-      }
-    } else if (updates.status === "deleted") {
-      await this.command<RawBead | RawBead[]>(["update", safeId, "--actor", actorName(options.actor || this.actor), "--set-metadata", "pi_teams_deleted=true"]);
-      if (beforeRaw.status !== "closed") {
-        await this.command<RawBead | RawBead[]>(["close", safeId, "--reason", "deleted by pi-teams", "--actor", actorName(options.actor || this.actor)]);
-      }
-    } else if (args.length > 4) {
+    if (updates.status === "open") args.push("--status", "open");
+    if (updates.status === "in_progress") args.push("--status", "in_progress");
+    if (updates.status === "blocked") args.push("--status", "blocked");
+    if (updates.status === "closed") args.push("--status", "closed");
+    if (args.length > 4) {
       await this.command<RawBead | RawBead[]>(args);
     }
     // Beads command responses can expose a pre-commit updated_at. Only a
     // fresh show supplies a version token safe to advertise to callers.
     const after = await this.showRaw(safeId);
     const mapped = mapTask(after);
-    if (updates.status === "completed" && beforeRaw.status !== "closed") await runHook(this.teamName, "task_completed", mapped);
+    if (updates.status === "closed" && beforeRaw.status !== "closed") await runHook(this.teamName, "task_closed", mapped);
     return {
       before: mapTask(beforeRaw),
       after: mapped,
-      appliedOperations: Object.keys(updates).map((field) => `set:${field}`),
+      appliedOperations: [
+        ...Object.keys(updates).map((field) => `set:${field}`),
+        ...(options.appendNote !== undefined ? ["append:note"] : []),
+      ],
     };
   }
 
@@ -632,7 +639,7 @@ export class BeadsTaskStore {
       this.assertNotDeleted(beforeRaw, "update");
       this.assertExpectedVersion(beforeRaw, options, "update");
       const prepared = (
-        updates.owner !== undefined
+        updates.assignee !== undefined
         && options.internalOwnerTransition
         && await options.internalOwnerTransition.prepare(
           mapTask(beforeRaw),
@@ -650,55 +657,6 @@ export class BeadsTaskStore {
 
   async update(taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskFile> {
     return (await this.updateWithResult(taskId, updates, options)).after;
-  }
-
-  async submitPlan(taskId: string, plan: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    if (!plan || !plan.trim()) throw new Error("Plan must not be empty");
-    const safeId = sanitizeName(taskId);
-    return withLock(this.lockPath(safeId), async () => {
-      const beforeRaw = await this.showRaw(safeId);
-      this.assertNotDeleted(beforeRaw, "submit-plan");
-      this.assertNotImplicitCompletedReopen(beforeRaw, "task_submit_plan");
-      this.assertExpectedVersion(beforeRaw, options, "submit-plan");
-      return (await this.updateWithResultLocked(
-        safeId,
-        { status: "planning", plan, planFeedback: "" },
-        options,
-        beforeRaw,
-      )).after;
-    }, options.retries);
-  }
-
-  async evaluatePlan(taskId: string, action: "approve" | "reject", feedback?: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    if (action === "reject" && (!feedback || !feedback.trim())) throw new Error("Feedback is required when rejecting a plan.");
-    const safeId = sanitizeName(taskId);
-    return withLock(this.lockPath(safeId), async () => {
-      const beforeRaw = await this.showRaw(safeId);
-      this.assertNotDeleted(beforeRaw, "evaluate-plan");
-      this.assertExpectedVersion(beforeRaw, options, "evaluate-plan");
-      const task = mapTask(beforeRaw);
-      if (task.status !== "planning") {
-        throw new BeadsError(
-          `Cannot evaluate plan for task ${taskId} because its status is '${task.status}'. Tasks must be in 'planning' status to be evaluated.`,
-          "conflict",
-          `bd evaluate-plan ${safeId}`,
-        );
-      }
-      if (!task.plan || !task.plan.trim()) {
-        throw new BeadsError(`Cannot evaluate plan for task ${taskId} because no plan has been submitted.`, "conflict", `bd evaluate-plan ${safeId}`);
-      }
-      if (task.planFeedback?.trim()) {
-        throw new BeadsError(
-          `Cannot evaluate plan for task ${taskId} because the current plan was already rejected. Submit a revised plan before evaluating it again.`,
-          "conflict",
-          `bd evaluate-plan ${safeId}`,
-        );
-      }
-      const updates = action === "approve"
-        ? { status: "in_progress" as const, planFeedback: "" }
-        : { status: "planning" as const, planFeedback: feedback };
-      return (await this.updateWithResultLocked(safeId, updates, options, beforeRaw)).after;
-    }, options.retries);
   }
 
   async claimWithResult(taskId: string, actor?: string, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
@@ -734,47 +692,55 @@ export class BeadsTaskStore {
     return (await this.claimWithResult(taskId, actor, options)).after;
   }
 
-  async addDependencyWithResult(taskId: string, blockerId: string, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
+  async mutateLinkWithResult(taskId: string, link: BeadsTaskLink, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
     const safeTaskId = sanitizeName(taskId);
-    const safeBlockerId = sanitizeName(blockerId);
-    if (safeTaskId === safeBlockerId) throw new Error("A task cannot depend on itself");
+    const safeTargetId = sanitizeName(link.targetId);
+    if (safeTaskId === safeTargetId) throw new Error("A task cannot link to itself");
     let before!: TaskFile;
     let changed = false;
     await withLock(this.lockPath(safeTaskId), async () => {
       const taskRaw = await this.showRaw(safeTaskId);
-      this.assertNotDeleted(taskRaw, "link");
       this.assertExpectedVersion(taskRaw, options, "link");
-      await this.showRaw(safeBlockerId);
+      await this.showRaw(safeTargetId);
       const task = mapTask(taskRaw);
       before = task;
-      if (task.blockedBy.includes(safeBlockerId)) return;
-      await this.command(["link", safeTaskId, safeBlockerId, "--type", "blocks", "--actor", actorName(options.actor || this.actor)]);
+      const existingParent = task.relations.find((relation) => relation.relation === "parent");
+      if (link.relation === "parent") {
+        if (link.action === "add" && existingParent && existingParent.targetId !== safeTargetId) {
+          throw new BeadsError(
+            `Task ${safeTaskId} already has parent ${existingParent.targetId}; remove that parent explicitly before adding ${safeTargetId}.`,
+            "conflict",
+            `bd update ${safeTaskId} --parent ${safeTargetId}`,
+          );
+        }
+        if (link.action === "remove" && existingParent && existingParent.targetId !== safeTargetId) {
+          throw new BeadsError(
+            `Task ${safeTaskId} has parent ${existingParent.targetId}, not ${safeTargetId}; refusing to remove a different parent.`,
+            "conflict",
+            `bd update ${safeTaskId} --parent`,
+          );
+        }
+      }
+      const exists = task.relations.some((relation) => relation.relation === link.relation && relation.targetId === safeTargetId);
+      if ((link.action === "add") === exists) return;
+      const actor = actorName(options.actor || this.actor);
+      if (link.relation === "blocked_by") {
+        await this.command(link.action === "add"
+          ? ["dep", "add", safeTaskId, safeTargetId, "--type", "blocks", "--actor", actor]
+          : ["dep", "remove", safeTaskId, safeTargetId, "--actor", actor]);
+      } else if (link.relation === "related") {
+        await this.command(["dep", link.action === "add" ? "relate" : "unrelate", safeTaskId, safeTargetId, "--actor", actor]);
+      } else {
+        await this.command(["update", safeTaskId, "--parent", link.action === "add" ? safeTargetId : "", "--actor", actor]);
+      }
       changed = true;
     }, options.retries);
     const after = await this.read(safeTaskId);
-    return { before, after, appliedOperations: changed ? [`add:blocked_by:${safeBlockerId}`] : [] };
+    return { before, after, appliedOperations: changed ? [`${link.action}:${link.relation}:${safeTargetId}`] : [] };
   }
 
-  async addDependency(taskId: string, blockerId: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    return (await this.addDependencyWithResult(taskId, blockerId, options)).after;
-  }
-
-  async addProgressWithResult(taskId: string, entry: BeadsProgressEntry, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
-    const prefix = entry.kind === "pending-problem" ? "[pi-teams pending-problem]" : "[pi-teams progress]";
-    const safeId = sanitizeName(taskId);
-    let before!: TaskFile;
-    await withLock(this.lockPath(safeId), async () => {
-      const beforeRaw = await this.showRaw(safeId);
-      this.assertNotDeleted(beforeRaw, "comment");
-      this.assertExpectedVersion(beforeRaw, options, "comment");
-      before = mapTask(beforeRaw);
-      await this.command(["comment", safeId, `${prefix} ${entry.text}`, "--actor", actorName(entry.actor || options.actor || this.actor)]);
-    }, options.retries);
-    return { before, after: await this.read(safeId), appliedOperations: [`append:${entry.kind}`] };
-  }
-
-  async addProgress(taskId: string, entry: BeadsProgressEntry, options: TaskWriteOptions = {}): Promise<TaskFile> {
-    return (await this.addProgressWithResult(taskId, entry, options)).after;
+  async mutateLink(taskId: string, link: BeadsTaskLink, options: TaskWriteOptions = {}): Promise<TaskFile> {
+    return (await this.mutateLinkWithResult(taskId, link, options)).after;
   }
 
 }

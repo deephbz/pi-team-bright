@@ -50,6 +50,8 @@ export function taskDeliveryRecoveryPath(teamName: string) {
 
 /** Durable adapter intent for Task ownership-change delivery recovery. */
 export function taskOwnerTransitionOutboxPath(teamName: string) {
+  // Keep the historical filename: changing it would orphan unresolved durable
+  // recovery evidence during an otherwise agent-surface-only migration.
   return path.join(teamDir(teamName), "task-delivery", "owner-transitions.json");
 }
 

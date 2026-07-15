@@ -67,7 +67,7 @@ describe("Round 2 Task delivery contracts", () => {
     const { name, add } = await teamFixture("suppression");
     const firstSession = "/tmp/worker-first.jsonl";
     await add("worker", firstSession);
-    const task = { id: "t1", subject: "s", description: "d", status: "in_progress" as const, owner: "worker", blocks: [], blockedBy: [], version: "v1" };
+    const task = { id: "t1", title: "s", description: "d", status: "in_progress" as const, assignee: "worker", relations: [], version: "v1", provenance: { authority: "beads" as const, teamName: name } };
     await suppressTaskVersionForSession(name, "worker", firstSession, task);
     expect(await enqueueTaskChangeForRecipient(name, task, "worker", "status_changed")).toBeNull();
 
@@ -102,13 +102,13 @@ describe("Round 2 Task delivery contracts", () => {
     for (let index = 0; index < 150; index += 1) {
       await enqueueTaskChangeForRecipient(name, {
         id: `t${index}`,
-        subject: `task ${index}`,
+        title: `task ${index}`,
         description: "pending delivery",
         status: "in_progress",
-        owner: "worker",
-        blocks: [],
-        blockedBy: [],
+        assignee: "worker",
+        relations: [],
         version: `v${index}`,
+        provenance: { authority: "beads", teamName: name },
       }, "worker", "task_changed");
     }
     expect(await readTaskDeliveries(name, "worker")).toHaveLength(150);
@@ -134,13 +134,13 @@ describe("Round 2 Task delivery contracts", () => {
     await add("alice", "/tmp/alice.jsonl");
     await add("bob", "/tmp/bob.jsonl");
     const store = new BeadsTaskStore({ teamName: name, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: "handoff", description: "owner change" });
-    const owned = await store.update(created.id, { owner: "alice", status: "in_progress" });
-    const result = await applySemanticTaskUpdate(name, owned.id, { owner: "bob", status: "in_progress" }, { actor: "team-lead" });
+    const created = await store.create({ title: "handoff", description: "assignee change" });
+    const owned = await store.update(created.id, { assignee: "alice", status: "in_progress" });
+    const result = await applySemanticTaskUpdate(name, owned.id, { assignee: "bob", status: "in_progress" }, { actor: "team-lead" });
 
-    expect(result.before.owner).toBe("alice");
-    expect(result.task.owner).toBe("bob");
-    expect(result.appliedOperations).toEqual(expect.arrayContaining(["set:owner", "set:status"]));
+    expect(result.before.assignee).toBe("alice");
+    expect(result.task.assignee).toBe("bob");
+    expect(result.appliedOperations).toEqual(expect.arrayContaining(["set:assignee", "set:status"]));
     expect((await readTaskDeliveries(name, "alice"))[0]?.changeKind).toBe("ownership_lost");
     expect((await readTaskDeliveries(name, "bob"))[0]?.changeKind).toBe("assigned");
   }, 60_000);
@@ -150,9 +150,9 @@ describe("Round 2 Task delivery contracts", () => {
     const { name, add } = await teamFixture("stale-session", workspace);
     await add("worker", "/tmp/current-worker.jsonl");
     const store = new BeadsTaskStore({ teamName: name, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: "guard", description: "no post-commit identity failure" });
-    const owned = await store.update(created.id, { owner: "worker", status: "in_progress" });
-    await expect(applySemanticTaskUpdate(name, owned.id, { status: "pending" }, {
+    const created = await store.create({ title: "guard", description: "no post-commit identity failure" });
+    const owned = await store.update(created.id, { assignee: "worker", status: "in_progress" });
+    await expect(applySemanticTaskUpdate(name, owned.id, { status: "open" }, {
       actor: "worker",
       actingSessionFile: "/tmp/stale-worker.jsonl",
     })).rejects.toThrow(/not the current binding/);
@@ -163,22 +163,22 @@ describe("Round 2 Task delivery contracts", () => {
     const workspace = initBeads();
     const { name } = await teamFixture("canonical-version", workspace);
     const store = new BeadsTaskStore({ teamName: name, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: "version", description: "canonical" });
+    const created = await store.create({ title: "version", description: "canonical" });
     const reread = await store.read(created.id);
     expect(created.version).toMatch(/^beads_[a-f0-9]{64}$/);
     expect(reread.version).toBe(created.version);
   }, 60_000);
 
-  it.skipIf(!hasBd)("keeps agent-facing owner/status and progress updates at three Beads calls", async () => {
+  it.skipIf(!hasBd)("keeps agent-facing assignee/status and progress updates at three Beads calls", async () => {
     const workspace = initBeads();
     const { name } = await teamFixture("amplification", workspace);
     const store = new BeadsTaskStore({ teamName: name, workspace, requireExpectedVersion: false });
-    const created = await store.create({ subject: "amplification", description: "measure semantic tool cost" });
+    const created = await store.create({ title: "amplification", description: "measure semantic tool cost" });
     const trace = path.join(root("amplification-trace"), "trace.jsonl");
     process.env.PI_TEAMS_TRACE_JSONL = trace;
 
-    await applySemanticTaskUpdate(name, created.id, { owner: "offline-owner", status: "in_progress" }, { actor: "team-lead" });
-    await applySemanticTaskUpdate(name, created.id, { progress: "one journal intent" }, { actor: "team-lead" });
+    await applySemanticTaskUpdate(name, created.id, { assignee: "offline-assignee", status: "in_progress" }, { actor: "team-lead" });
+    await applySemanticTaskUpdate(name, created.id, { appendNote: "one journal intent" }, { actor: "team-lead" });
 
     const records = fs.readFileSync(trace, "utf8").trim().split("\n").map((line) => JSON.parse(line));
     expect(records).toHaveLength(2);

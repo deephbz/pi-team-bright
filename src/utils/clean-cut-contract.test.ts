@@ -235,13 +235,13 @@ describe("clean-cut public contract", () => {
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const task = {
       id: "task-1",
-      subject: "Act on the Task authority",
+      title: "Act on the Task authority",
       description: "complete payload",
       status: "in_progress" as const,
-      blocks: [],
-      blockedBy: [],
-      owner: "worker",
+      relations: [],
+      assignee: "worker",
       version: "v1",
+      provenance: { authority: "beads" as const, teamName: name },
     };
     await enqueueTaskChange(name, task, "assigned", "team-lead");
 
@@ -269,18 +269,26 @@ describe("clean-cut public contract", () => {
 });
 
 describe("Beads-only authority and migration boundary", () => {
-  it("fails closed when the operator default workspace is missing or unhealthy", async () => {
+  it.skipIf(!hasBd)("initializes a Team-owned Beads authority when no override is configured", async () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", "");
-    const missing = uniqueTeam("missing-workspace");
-    const missingCreate = extensionHarness().tools.get("team_create")!;
-    await expect(missingCreate.execute("create", { team_name: missing }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/missing-lead.jsonl", buildContextEntries: () => [] },
+    const name = uniqueTeam("team-owned-workspace");
+    const create = extensionHarness().tools.get("team_create")!;
+    const result = await create.execute("create", { team_name: name }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "/tmp/team-owned-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
-    })).rejects.toThrow(
-      /PI_TEAMS_BEADS_WORKSPACE|Beads workspace/i,
-    );
-    expect(fs.existsSync(paths.configPath(missing))).toBe(false);
+    });
+    const config = result.details.config as TeamConfig & { taskAuthorityId?: string };
 
+    expect(config).toMatchObject({
+      taskBackend: "beads",
+      taskWorkspace: paths.teamDir(name),
+    });
+    expect(config.taskAuthorityId).toMatch(/^task_authority_[0-9a-f-]+$/);
+    expect(readBeadsAuthorityFingerprint(paths.teamDir(name))).toEqual(config.taskAuthorityFingerprint);
+    expect(fs.existsSync(paths.taskDir(name))).toBe(false);
+  });
+
+  it("fails closed when an explicit workspace override is unhealthy", async () => {
     const unhealthyRoot = tempRoot("unhealthy-workspace");
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", unhealthyRoot);
     const unhealthy = uniqueTeam("unhealthy-workspace");
@@ -294,7 +302,7 @@ describe("Beads-only authority and migration boundary", () => {
     expect(fs.existsSync(paths.configPath(unhealthy))).toBe(false);
   });
 
-  it.skipIf(!hasBd)("creates every new Team against the operator-configured Beads authority", async () => {
+  it.skipIf(!hasBd)("honors an explicit initialized Beads authority override", async () => {
     const workspace = initBeadsWorkspace();
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
     const name = uniqueTeam("new-beads-team");
@@ -353,13 +361,13 @@ describe("Beads-only authority and migration boundary", () => {
     teams.writeConfigAtomic(paths.configPath(name), { ...rebound, taskWorkspace: alias });
     const record = await enqueueTaskChange(name, {
       id: "task-opaque",
-      subject: "opaque authority",
+      title: "opaque authority",
       description: "workspace path is adapter config",
       status: "in_progress",
-      owner: "worker",
-      blocks: [],
-      blockedBy: [],
+      assignee: "worker",
+      relations: [],
       version: "v1",
+      provenance: { authority: "beads", teamName: name },
     }, "assigned", "team-lead");
 
     expect(record?.ref.authorityId).toBe(created.taskAuthorityId);
@@ -372,11 +380,10 @@ describe("Beads-only authority and migration boundary", () => {
     writeTeam(name, { legacy: true });
     fs.writeFileSync(path.join(paths.taskDir(name), "1.json"), JSON.stringify({
       id: "1",
-      subject: "legacy",
+      title: "legacy",
       description: "must migrate",
-      status: "pending",
-      blocks: [],
-      blockedBy: [],
+      status: "open",
+      relations: [],
     }));
     const workspace = path.join(tempRoot("migration-target"), "workspace");
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
@@ -387,7 +394,7 @@ describe("Beads-only authority and migration boundary", () => {
       ui: { setStatus: vi.fn() },
     })).rejects.toThrow(new RegExp(`npm run migrate:tasks -- ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     expect(JSON.parse(fs.readFileSync(path.join(paths.taskDir(name), "1.json"), "utf8"))).toMatchObject({
-      subject: "legacy",
+      title: "legacy",
     });
   });
 });
@@ -417,13 +424,13 @@ describe("durability and recovery", () => {
     writeTeam(name, { workerSession: sessionFile });
     const base = {
       id: "task-1",
-      subject: "first",
+      title: "first",
       description: "first snapshot",
       status: "in_progress" as const,
-      blocks: [],
-      blockedBy: [],
-      owner: "worker",
+      relations: [],
+      assignee: "worker",
       version: "v1",
+      provenance: { authority: "beads" as const, teamName: name },
     };
     await enqueueTaskChange(name, base, "assigned", "team-lead");
     const file = paths.taskDeliveryPath(name, "worker");
@@ -454,8 +461,8 @@ describe("durability and recovery", () => {
       actor: "team-lead",
       requireExpectedVersion: false,
     });
-    const created = await store.create({ subject: "committed", description: "survives fault" });
-    const assigned = await store.update(created.id, { owner: "worker", status: "in_progress" });
+    const created = await store.create({ title: "committed", description: "survives fault" });
+    const assigned = await store.update(created.id, { assignee: "worker", status: "in_progress" });
     expect(await readTaskDeliveries(name, "worker")).toEqual([]);
 
     const harness = extensionHarness();
@@ -482,13 +489,13 @@ describe("durability and recovery", () => {
     writeTeam(name, { workerSession: sessionFile });
     const record = await enqueueTaskChange(name, {
       id: "task-once",
-      subject: "retry across crash",
+      title: "retry across crash",
       description: "same logical delivery may be attempted again",
       status: "in_progress",
-      owner: "worker",
-      blocks: [],
-      blockedBy: [],
+      assignee: "worker",
+      relations: [],
       version: "v1",
+      provenance: { authority: "beads", teamName: name },
     }, "assigned", "team-lead");
     expect(record).not.toBeNull();
 
@@ -545,19 +552,23 @@ describe("durability and recovery", () => {
     settled.stop();
   });
 
-  it("rejects completion/deletion combined with another mutation instead of claiming atomicity", async () => {
+  it.skipIf(!hasBd)("commits terminal status and its explanatory note in one Task mutation", async () => {
     const name = uniqueTeam("terminal-state-atomicity");
-    writeTeam(name);
+    const config = writeTeam(name);
+    const store = new BeadsTaskStore({ teamName: name, workspace: config.taskWorkspace!, requireExpectedVersion: false });
+    const created = await store.create({ title: "Terminal transition", description: "Close with durable context." });
     const update = extensionHarness().tools.get("task_update")!;
-    for (const status of ["completed", "deleted"]) {
-      await expect(update.execute("update", {
-        team_name: name,
-        task_id: "task-1",
-        status,
-        progress: "must not be half-applied",
-      }, undefined, undefined, {
-        sessionManager: { getSessionFile: () => "lead-session" },
-      })).rejects.toThrow(/atomic|combine|one.*mutation/i);
-    }
+    const result = await update.execute("update", {
+      team_name: name,
+      task_id: created.id,
+      status: "closed",
+      append_note: "Acceptance criteria verified; closing the Task.",
+      expected_version: created.version,
+    }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => "lead-session" },
+    });
+    expect(result.details.task).toMatchObject({ status: "closed" });
+    expect(result.details.task.notes).toContain("Acceptance criteria verified");
+    expect(result.details.appliedOperations).toEqual(["set:status", "append:note"]);
   });
 });

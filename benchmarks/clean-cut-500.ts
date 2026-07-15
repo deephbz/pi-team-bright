@@ -172,7 +172,7 @@ async function run(mode: Mode, intentCount: number): Promise<Record<string, unkn
       let ordinal = 0;
       for (let index = 0; index < 5; index++) {
         const task = await intent(laneId, ordinal++, "create", () => store.create({
-          subject: `Benchmark task ${laneId}-${index}`,
+          title: `Benchmark task ${laneId}-${index}`,
           description: "Synthetic release benchmark payload",
         }));
         taskIds.push(task.id);
@@ -185,28 +185,26 @@ async function run(mode: Mode, intentCount: number): Promise<Record<string, unkn
       }
       for (let index = 0; index < 25; index++) {
         await intent(laneId, ordinal++, "status_update", () => store.update(taskIds[index % taskIds.length], {
-          status: index % 2 === 0 ? "in_progress" : "pending",
+          status: index % 2 === 0 ? "in_progress" : "open",
         }));
       }
       for (let index = 0; index < 20; index++) {
-        await intent(laneId, ordinal++, "owner_status_update", () => store.update(taskIds[index % taskIds.length], {
-          owner: `worker-${laneId}`,
+        await intent(laneId, ordinal++, "assignee_status_update", () => store.update(taskIds[index % taskIds.length], {
+          assignee: `worker-${laneId}`,
           status: "in_progress",
         }));
       }
       for (let index = 0; index < 12; index++) {
-        await intent(laneId, ordinal++, "progress", () => store.addProgress(taskIds[index % taskIds.length], {
-          kind: "progress",
-          text: `progress-${laneId}-${index}`,
-          actor: `worker-${laneId}`,
+        await intent(laneId, ordinal++, "design_update", () => store.update(taskIds[index % taskIds.length], {
+          design: `design-${laneId}-${index}`,
         }));
       }
       for (let index = 0; index < 13; index++) {
-        await intent(laneId, ordinal++, "pending_problem", () => store.addProgress(taskIds[index % taskIds.length], {
-          kind: "pending-problem",
-          text: `problem-${laneId}-${index}`,
-          actor: `worker-${laneId}`,
-        }));
+        await intent(laneId, ordinal++, "append_note", () => store.update(
+          taskIds[index % taskIds.length],
+          {},
+          { appendNote: `note-${laneId}-${index}`, actor: `worker-${laneId}` },
+        ));
       }
       if (ordinal !== 125) throw new Error(`Lane ${laneId} produced ${ordinal}, expected 125 intents.`);
     }

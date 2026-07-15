@@ -49,7 +49,7 @@ describe("TeamConfig authority recovery", () => {
     fs.mkdirSync(tasksDir, { recursive: true });
     fs.writeFileSync(path.join(tasksDir, `.pi-teams-${teamName}-cutover.jsonl`), `${JSON.stringify(marker(state))}\n`);
 
-    await expect(createTeam(teamName, "new-session", "lead")).rejects.toThrow(/config is missing.*refusing to initialize legacy authority/i);
+    await expect(createTeam(teamName, "new-session", "lead")).rejects.toThrow(/config is missing.*refusing to initialize a new Task authority/i);
     expect(fs.existsSync(configFile)).toBe(false);
   });
 

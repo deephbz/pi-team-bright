@@ -34,9 +34,10 @@ function registerExtension() {
 
 function context(sessionFile: string) {
   return {
+    mode: "tui",
     isIdle: vi.fn(() => false),
     sessionManager: { getSessionFile: vi.fn(() => sessionFile) },
-    ui: { setStatus: vi.fn(), notify: vi.fn() },
+    ui: { setStatus: vi.fn(), setFooter: vi.fn(), notify: vi.fn() },
   };
 }
 
@@ -229,7 +230,7 @@ describe("current team binding correctness", () => {
     const ctx = context(sessionFile);
     await handlers.get("session_start")?.({ reason: "resume" }, ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith("pi-teams", `Lead @ ${intendedTeam}`);
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(intendedTeam), "utf8"))).toMatchObject({
       pid: process.pid,
       sessionFile,

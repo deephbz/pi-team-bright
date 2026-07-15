@@ -24,9 +24,8 @@ export type TaskChangeKind =
   | "assigned"
   | "ownership_lost"
   | "status_changed"
-  | "plan_changed"
-  | "dependency_changed"
-  | "progress_changed"
+  | "relation_changed"
+  | "note_appended"
   | "task_changed";
 
 export interface TaskChangeRef {
@@ -194,8 +193,8 @@ export async function enqueueTaskChange(
   changeKind: TaskChangeKind,
   actor?: string,
 ): Promise<TaskDeliveryRecord | null> {
-  if (!task.owner) return null;
-  return enqueueTaskChangeForRecipient(teamName, task, task.owner, changeKind);
+  if (!task.assignee) return null;
+  return enqueueTaskChangeForRecipient(teamName, task, task.assignee, changeKind);
 }
 
 export async function enqueueTaskChangeForRecipient(
@@ -322,9 +321,9 @@ function ownerTransitionTargets(
 }
 
 /**
- * Persist adapter delivery intent before the authoritative owner mutation.
+ * Persist adapter delivery intent before the authoritative assignee mutation.
  * The returned boolean controls whether the operation ID is embedded in the
- * same Beads command. A same-owner write is not an ownership transition.
+ * same Beads command. A same-assignee write is not an ownership transition.
  */
 export async function prepareOwnerTransitionIntent(input: {
   operationId: string;
@@ -334,7 +333,7 @@ export async function prepareOwnerTransitionIntent(input: {
   previousOperationId?: string;
 }): Promise<boolean> {
   const afterOwner = input.afterOwner || undefined;
-  if (input.before.owner === afterOwner) {
+  if (input.before.assignee === afterOwner) {
     if (!input.previousOperationId) return false;
     const file = taskOwnerTransitionOutboxPath(input.teamName);
     if (!fs.existsSync(file)) return false;
@@ -344,7 +343,7 @@ export async function prepareOwnerTransitionIntent(input: {
         record.taskId === input.before.id
         && record.state === "prepared"
         && record.operationId === input.previousOperationId
-        && record.afterOwner === input.before.owner
+        && record.afterOwner === input.before.assignee
       );
       if (prior) {
         prior.state = "committed";
@@ -365,13 +364,13 @@ export async function prepareOwnerTransitionIntent(input: {
       if (record.taskId !== input.before.id || record.state !== "prepared") continue;
       if (
         record.operationId === input.previousOperationId
-        && record.afterOwner === input.before.owner
+        && record.afterOwner === input.before.assignee
       ) {
         record.state = "committed";
         record.committedTaskSnapshot = structuredClone(input.before);
       } else if (
         record.beforeVersion === effectiveVersion(input.before)
-        && record.beforeOwner === input.before.owner
+        && record.beforeOwner === input.before.assignee
       ) {
         record.state = "abandoned";
       }
@@ -382,16 +381,16 @@ export async function prepareOwnerTransitionIntent(input: {
         teamName: input.teamName,
         taskId: input.before.id,
         beforeVersion: effectiveVersion(input.before),
-        beforeOwner: input.before.owner,
+        beforeOwner: input.before.assignee,
         afterOwner,
-        targets: ownerTransitionTargets(config, input.before.owner, afterOwner),
+        targets: ownerTransitionTargets(config, input.before.assignee, afterOwner),
         createdAt: new Date().toISOString(),
         state: "prepared",
       });
     }
     writeJsonAtomic(file, compactOwnerTransitionIntents(records));
   });
-  // A later owner mutation is the last safe point to settle the previous
+  // A later assignee mutation is the last safe point to settle the previous
   // marker before the authority overwrites it. Delivery failure stays pending.
   await deliverCommittedOwnerTransitionIntents(input.teamName);
   return true;
@@ -410,7 +409,7 @@ export async function completeOwnerTransitionIntent(
     const records = readOwnerTransitionIntentsUnsafe(file);
     const record = records.find((candidate) => candidate.operationId === operationId);
     if (!record) return;
-    if (record.taskId !== task.id || record.afterOwner !== task.owner) {
+    if (record.taskId !== task.id || record.afterOwner !== task.assignee) {
       throw new Error(`Owner transition ${operationId} post-state does not match its prepared intent.`);
     }
     record.state = "committed";
@@ -455,7 +454,7 @@ export async function reconcileOwnerTransitionOutbox(
       if (!current) continue;
       if (
         current.operationId === record.operationId
-        && current.task.owner === record.afterOwner
+        && current.task.assignee === record.afterOwner
       ) {
         record.state = "committed";
         record.committedTaskSnapshot = structuredClone(current.task);
@@ -513,7 +512,7 @@ export async function readOwnerTransitionIntents(teamName: string): Promise<Owne
   return withLock(file, async () => readOwnerTransitionIntentsUnsafe(file));
 }
 
-/** Rebuild latest owner-addressed delivery intent after a commit/spool crash gap. */
+/** Rebuild latest assignee-addressed delivery intent after a commit/spool crash gap. */
 export async function reconcileTaskChanges(teamName: string, recipient: string): Promise<number> {
   const config = await readConfig(teamName);
   if (config.taskBackend !== "beads" || !config.taskWorkspace) {
@@ -527,7 +526,7 @@ export async function reconcileTaskChanges(teamName: string, recipient: string):
   const known = new Set([...existing.map((record) => record.deliveryId), ...tombstones.map((record) => record.deliveryId)]);
   let reconciled = 0;
   for (const task of tasks) {
-    if (task.owner !== recipient) continue;
+    if (task.assignee !== recipient) continue;
     const record = await enqueueTaskChangeWithConfig(config, task, recipient, "task_changed");
     if (record && !known.has(record.deliveryId)) {
       known.add(record.deliveryId);
@@ -778,7 +777,7 @@ export class TaskChangeDelivery {
       reconcile?: () => Promise<number>;
       /**
        * Narrow periodic recovery seam. Unlike `reconcile`, this inspects only
-       * the local owner-transition outbox and reads individual Beads Tasks
+       * the local assignee-transition outbox and reads individual Beads Tasks
        * only when a prepared intent needs commit evidence.
        */
       reconcileOwnerOutbox?: () => Promise<string[]>;
@@ -924,7 +923,7 @@ export class TaskChangeDelivery {
       // delivery. A transient Beads/outbox failure must not head-of-line block
       // unrelated records that are ready in the local spool.
       console.error(
-        `[pi-teams] owner-transition recovery failed for team ${this.options.teamName}; continuing local Task delivery:`,
+        `[pi-teams] assignee-transition recovery failed for team ${this.options.teamName}; continuing local Task delivery:`,
         error,
       );
     }

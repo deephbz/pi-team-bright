@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 2,
+  "capturedAt": "2026-07-15T03:50:46.024Z",
+  "boundary": "agent-facing Task functions",
+  "mode": "server",
+  "semanticIntents": 500,
+  "traceRecords": 500,
+  "wallMs": 247267.663417,
+  "peakOutstandingIntents": 4,
+  "errors": 0,
+  "modelExecution": {
+    "completions": 0,
+    "turns": 0,
+    "tokens": 0,
+    "measured": false,
+    "note": "This benchmark measures PiTeams plus Beads mechanics only; use a live Session trace for model-turn cost."
+  },
+  "workload": {
+    "lanes": [
+      {
+        "lane": 0,
+        "actor": "worker-0",
+        "sessionFilePresent": true,
+        "membershipIdPresent": true,
+        "mutationIntents": 75,
+        "readOnlyIntents": 50
+      },
+      {
+        "lane": 1,
+        "actor": "worker-1",
+        "sessionFilePresent": true,
+        "membershipIdPresent": true,
+        "mutationIntents": 75,
+        "readOnlyIntents": 50
+      },
+      {
+        "lane": 2,
+        "actor": "worker-2",
+        "sessionFilePresent": true,
+        "membershipIdPresent": true,
+        "mutationIntents": 75,
+        "readOnlyIntents": 50
+      },
+      {
+        "lane": 3,
+        "actor": "worker-3",
+        "sessionFilePresent": true,
+        "membershipIdPresent": true,
+        "mutationIntents": 75,
+        "readOnlyIntents": 50
+      }
+    ],
+    "mutationAuthority": "exact per-lane Membership + Session"
+  },
+  "intentLatency": {
+    "count": 500,
+    "meanMs": 1959.0908911760005,
+    "p50Ms": 2211.51995799999,
+    "p95Ms": 3524.1642920000013,
+    "p99Ms": 3740.292417000004,
+    "maxMs": 4131.1917079999985
+  },
+  "bd": {
+    "version": "bd version 1.1.0 (8e4e59d39)",
+    "invocations": 1080,
+    "invocationsPerIntent": 2.16,
+    "totalInvocationMs": 970324,
+    "invocationLatency": {
+      "count": 1080,
+      "meanMs": 898.4481481481481,
+      "p50Ms": 893,
+      "p95Ms": 1244,
+      "p99Ms": 1427,
+      "maxMs": 1692
+    },
+    "commandCounts": {
+      "create": 20,
+      "list": 100,
+      "show": 680,
+      "update": 280
+    },
+    "errors": 0
+  },
+  "byVerb": {
+    "create": {
+      "intents": 20,
+      "latency": {
+        "count": 20,
+        "meanMs": 1200.9794000999998,
+        "p50Ms": 1168.8046250000007,
+        "p95Ms": 1497.6246249999995,
+        "p99Ms": 1537.5663749999994,
+        "maxMs": 1537.5663749999994
+      },
+      "bdCalls": 40,
+      "bdCallsPerIntent": 2,
+      "lockWaitMs": 80
+    },
+    "read": {
+      "intents": 100,
+      "latency": {
+        "count": 100,
+        "meanMs": 668.4317445800002,
+        "p50Ms": 688.2934169999971,
+        "p95Ms": 790.6811669999988,
+        "p99Ms": 834.0313749999987,
+        "maxMs": 845.077792
+      },
+      "bdCalls": 100,
+      "bdCallsPerIntent": 1,
+      "lockWaitMs": 139
+    },
+    "list": {
+      "intents": 100,
+      "latency": {
+        "count": 100,
+        "meanMs": 738.2717374999996,
+        "p50Ms": 738.6039170000004,
+        "p95Ms": 877.5566669999971,
+        "p99Ms": 908.3835420000032,
+        "maxMs": 963.9348339999997
+      },
+      "bdCalls": 100,
+      "bdCallsPerIntent": 1,
+      "lockWaitMs": 115
+    },
+    "status_update": {
+      "intents": 100,
+      "latency": {
+        "count": 100,
+        "meanMs": 3205.417983329999,
+        "p50Ms": 3211.8307910000003,
+        "p95Ms": 3740.292417000004,
+        "p99Ms": 3915.1871669999964,
+        "maxMs": 4131.1917079999985
+      },
+      "bdCalls": 300,
+      "bdCallsPerIntent": 3,
+      "lockWaitMs": 303
+    },
+    "assignee_status_update": {
+      "intents": 80,
+      "latency": {
+        "count": 80,
+        "meanMs": 3028.142871950001,
+        "p50Ms": 3022.503209000017,
+        "p95Ms": 3449.4647089999926,
+        "p99Ms": 3568.87408400001,
+        "maxMs": 3568.87408400001
+      },
+      "bdCalls": 240,
+      "bdCallsPerIntent": 3,
+      "lockWaitMs": 742
+    },
+    "design_update": {
+      "intents": 48,
+      "latency": {
+        "count": 48,
+        "meanMs": 2718.2683185833343,
+        "p50Ms": 2785.976291000028,
+        "p95Ms": 3151.377582999994,
+        "p99Ms": 3360.222915999999,
+        "maxMs": 3360.222915999999
+      },
+      "bdCalls": 144,
+      "bdCallsPerIntent": 3,
+      "lockWaitMs": 265
+    },
+    "append_note": {
+      "intents": 52,
+      "latency": {
+        "count": 52,
+        "meanMs": 2338.180807634614,
+        "p50Ms": 2290.3243749999965,
+        "p95Ms": 2804.698833000002,
+        "p99Ms": 2908.332999999984,
+        "maxMs": 2908.332999999984
+      },
+      "bdCalls": 156,
+      "bdCallsPerIntent": 3,
+      "lockWaitMs": 215
+    }
+  },
+  "deliveryMetrics": {
+    "deliveryRecords": 0,
+    "uniqueDeliveryIds": 0,
+    "measuredScope": "persisted Task delivery spool only; steer, echo, reconciliation, and prune behavior not instrumented"
+  },
+  "assigneeTransitionOutboxMetrics": {
+    "retainedIntents": 20,
+    "preparedIntents": 0,
+    "committedIntents": 20,
+    "abandonedIntents": 0,
+    "targets": 20,
+    "resolvedTargets": 20,
+    "unresolvedTargets": 0,
+    "measuredScope": "retained authority-linked assignee-transition outbox records after the 500-intent workload"
+  },
+  "privacy": {
+    "workspacePathIncluded": false,
+    "taskPayloadIncluded": false,
+    "userIdentityIncluded": false
+  }
+}

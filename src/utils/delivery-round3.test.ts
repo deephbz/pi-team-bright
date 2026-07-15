@@ -126,16 +126,16 @@ function messageHarness(messages = [inboxMessage()]) {
   return { delivery, sink, markRead };
 }
 
-function taskSnapshot(id: string, owner = "worker"): TaskFile {
+function taskSnapshot(id: string, assignee = "worker"): TaskFile {
   return {
     id,
-    subject: "Task delivery",
+    title: "Task delivery",
     description: "durable snapshot",
     status: "in_progress",
-    blocks: [],
-    blockedBy: [],
-    owner,
+    relations: [],
+    assignee,
     version: `version-${id}`,
+    provenance: { authority: "beads", teamName: "round3-fixture" },
   };
 }
 

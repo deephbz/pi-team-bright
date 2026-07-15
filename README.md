@@ -2,7 +2,7 @@
 
 **pi-teams** turns a Pi session into a coordinated software team. It manages
 team membership, terminal panes/windows, transient inboxes, runtime health, and
-a shared task workflow. The extension registers exactly 20 Pi tools; it does
+a shared task workflow. The extension registers exactly 18 Pi tools; it does
 not add slash commands.
 
 | iTerm2 | tmux | Zellij |
@@ -41,8 +41,9 @@ spawn_teammate({
 })
 task_create({
   team_name: "my-team",
-  subject: "Review authentication",
-  description: "Inspect authentication handlers for unsafe input."
+  title: "Review authentication",
+  description: "Inspect authentication handlers for unsafe input.",
+  assignee: "security-reviewer"
 })
 ```
 
@@ -58,16 +59,18 @@ Task authority state is actually needed.
 - **Parallel specialists:** `spawn_teammate` accepts per-agent model,
   thinking, working directory, and optional separate-window settings.
 - **Task coordination:** use `task_create` and `task_update`; query with
-  `task_list`/`task_read` when needed. Create starts at `pending`; one semantic `task_update` may
-  combine owner with a compatible nonterminal status and returns complete
-  post-state plus applied operations, so don't immediately re-read or list the
-  same result. Dependency or journal intent remains one
-  semantic class per call until transactional Beads batching is added.
-- **Plans:** `task_submit_plan` sets `planning`; approval sets
-  `in_progress`; rejection requires feedback and keeps `planning`. Rejection
-  consumes that submitted plan, so revise and call `task_submit_plan` again
-  before another evaluation. Deleted Tasks are immutable; completed Tasks need
-  an explicit nonterminal `task_update` before a new plan can be submitted.
+  `task_list`/`task_read` when needed. Create starts `open` and may include
+  prose `design` plus an `assignee`. `task_update` changes content, work state,
+  assignment, or appends native Beads notes; `task_link` owns the separate
+  `blocked_by`, `parent`, and `related` graph relations. Mutation receipts
+  contain concise post-state and applied operations, so don't immediately
+  re-read or list the same result.
+- **Optional review:** simple work can be claimed or moved directly to
+  `in_progress`. When the assigner judges a Task complex, the worker supplements
+  its `design`, sends a Message referencing the Task ID/version, and waits for
+  feedback. Approval is an exact-version transition to `in_progress`; rejection
+  appends feedback while the Task remains `open`. Review is a collaboration
+  convention, not a universal mechanical gate or a separate Plan object.
 - **Messaging:** `send_message` and `broadcast_message` manage substantive
   transient coordination; avoid ACK-only Messages unless semantic confirmation
   is required. `read_inbox` is explicit audit/history inspection only, never a
@@ -90,19 +93,25 @@ Task authority state is actually needed.
   one lead Session is recorded for multiple teams, resume fails closed until
   `PI_TEAM_NAME` explicitly selects the intended current team.
 - **Templates:** `list_predefined_teams`, `list_predefined_agents`,
-  `create_predefined_team`, `save_team_as_template`, and `list_runtime_teams`
-  support reusable team definitions.
+  `create_predefined_team`, and `save_team_as_template` support reusable team
+  definitions. Saving is restricted to the Team currently bound to the exact
+  Pi Session; persisted historical Team configs are not an agent-facing list.
 
 See [docs/guide.md](docs/guide.md) for workflows and
-[docs/reference.md](docs/reference.md) for every parameter.
+[docs/reference.md](docs/reference.md) for every parameter. The exact-binding
+Team/role footer projection and its Pi API limitation are documented in
+[docs/team-footer.md](docs/team-footer.md).
 
 ## Beads task authority
 
-Every new team requires an operator-configured, initialized Beads workspace in
-`PI_TEAMS_BEADS_WORKSPACE`; creation fails closed when it is absent or invalid.
-That exact directory must contain its own Beads 1.1 `.beads/metadata.json` and
-`bd where` must resolve back to it; PiTeams never accepts ancestor discovery as
-the Team's Task authority.
+Every new team's own directory, `~/.pi/teams/<team>`, is its default Beads
+workspace. `team_create` initializes it automatically, without
+generating Beads agent files or hooks, then records its exact authority
+identity before exposing the Team as created. `PI_TEAMS_BEADS_WORKSPACE` is an
+optional explicit override for an already initialized external workspace.
+An override must contain its own Beads 1.1 `.beads/metadata.json`, and `bd where`
+must resolve back to that exact directory; PiTeams never accepts ancestor
+discovery as the Team's Task authority.
 Historical teams that still have JSON files under `~/.pi/tasks/<team>/` are
 read only by the explicit one-time migration command:
 
@@ -139,10 +148,10 @@ duration, Beads verb timings/count, lock wait, and outcome/error class; Task
 descriptions, comments, metadata values, credentials, and command arguments are
 never written.
 
-## Completion hook
+## Closed-Task hook
 
-The Beads Task adapter supports `.pi/team-hooks/task_completed.sh`. On
-completion, PiTeams passes the task JSON as the first argument and sets
+The Beads Task adapter supports `.pi/team-hooks/task_closed.sh`. When a Task
+transitions to `closed`, PiTeams passes the Task JSON as the first argument and sets
 `PI_TEAM`. Hook failures are logged and do not roll back the Task mutation.
 
 ## Terminal support and limitations
@@ -168,7 +177,7 @@ recorded process has exited and allow Membership deactivation.
 
 ## Registered tool surface
 
-The 20 registered tools are:
+The 18 registered tools are:
 
 ```text
 team_create
@@ -177,10 +186,9 @@ send_message
 broadcast_message
 read_inbox
 task_create
-task_submit_plan
-task_evaluate_plan
 task_list
 task_update
+task_link
 team_shutdown
 cleanup_agent_sessions
 task_read
@@ -190,7 +198,6 @@ list_predefined_teams
 list_predefined_agents
 create_predefined_team
 save_team_as_template
-list_runtime_teams
 ```
 
 ## Credits and attribution

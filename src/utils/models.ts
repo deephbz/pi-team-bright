@@ -64,21 +64,40 @@ export interface TeamConfig {
   };
 }
 
+export type TaskStatus = "open" | "in_progress" | "blocked" | "closed";
+
+export type TaskRelationType = "parent" | "blocked_by" | "related";
+
+export interface TaskRelation {
+  relation: TaskRelationType;
+  targetId: string;
+}
+
+/**
+ * PiTeams' deliberately small Task projection. Beads owns persistence,
+ * history, graph validation, and concurrency; this type exposes only the
+ * coordinates an agent needs to collaborate safely.
+ */
 export interface TaskFile {
   id: string;
-  subject: string;
+  title: string;
   description: string;
-  activeForm?: string;
-  status: "pending" | "planning" | "in_progress" | "blocked" | "completed" | "deleted";
-  plan?: string;
-  planFeedback?: string;
-  blocks: string[];
-  blockedBy: string[];
-  owner?: string;
-  metadata?: Record<string, any>;
-  /** Store-native optimistic concurrency token, when the backend supplies one. */
-  version?: string;
+  design?: string;
+  status: TaskStatus;
+  assignee?: string;
+  notes?: string;
+  relations: TaskRelation[];
+  /** Exact authority revision used for optimistic concurrency and review. */
+  version: string;
+  /** Evidence identifying the authority that produced this projection. */
+  provenance: {
+    authority: "beads";
+    teamName: string;
+  };
 }
+
+/** Compact query projection; re-read the full Task before a conditional write. */
+export type TaskListItem = Omit<TaskFile, "version">;
 
 export interface InboxMessage {
   /** Communication-authority identity. Optional only for legacy on-disk records. */

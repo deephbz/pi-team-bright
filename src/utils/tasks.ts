@@ -1,18 +1,26 @@
 // Project: pi-teams
 import path from "node:path";
 import crypto from "node:crypto";
-import { BeadsAuthorityFingerprint, TaskFile, TeamConfig } from "./models";
-import { teamExists, readConfig, assertCurrentSessionBinding, withCurrentSessionBinding } from "./teams";
+import { BeadsAuthorityFingerprint, TaskFile, TaskListItem, TeamConfig } from "./models";
+import {
+  teamExists,
+  readConfig,
+  assertCurrentSessionBinding,
+  withCurrentSessionBinding,
+  assertNoOrphanedBeadsCutover,
+} from "./teams";
 import {
   BeadsTaskStore,
   CreateTaskInput,
   TaskWriteOptions,
   BeadsTaskStoreOptions,
-  BeadsProgressEntry,
+  BeadsTaskLink,
   TaskMutationResult,
   assertBeadsWorkspaceRoot,
+  initializeBeadsWorkspace,
   readBeadsAuthorityFingerprint,
 } from "./beads";
+import { teamDir } from "./paths";
 import {
   completeOwnerTransitionIntent,
   enqueueTaskChangeForRecipient,
@@ -31,16 +39,14 @@ export interface ResolvedTaskAuthority {
   fingerprint: BeadsAuthorityFingerprint;
 }
 
-export function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = process.env): string {
+export function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const workspace = env[BEADS_WORKSPACE_ENV]?.trim();
-  if (!workspace) {
-    throw new Error(`No default Beads workspace is configured. Set ${BEADS_WORKSPACE_ENV} to an absolute initialized Beads workspace.`);
-  }
+  if (!workspace) return undefined;
   if (!path.isAbsolute(workspace)) throw new Error(`${BEADS_WORKSPACE_ENV} must be an absolute path: ${workspace}`);
   return workspace;
 }
 
-/** Resolve one operator-owned Task authority for team creation/reconnect. */
+/** Resolve one Team-owned Task authority for creation/reconnect. */
 export async function resolveTeamTaskAuthority(teamName: string): Promise<ResolvedTaskAuthority> {
   if (teamExists(teamName)) {
     const existing = await readConfig(teamName);
@@ -62,25 +68,16 @@ export async function resolveTeamTaskAuthority(teamName: string): Promise<Resolv
     await store.list();
     return { workspace: existing.taskWorkspace, authorityId: existing.taskAuthorityId, fingerprint: existing.taskAuthorityFingerprint };
   }
-  const workspace = configuredBeadsWorkspace();
-  assertBeadsWorkspaceRoot(workspace);
-  const fingerprint = readBeadsAuthorityFingerprint(workspace);
+  assertNoOrphanedBeadsCutover(teamName);
+  const configuredWorkspace = configuredBeadsWorkspace();
+  const workspace = configuredWorkspace || teamDir(teamName);
+  const fingerprint = configuredWorkspace
+    ? readBeadsAuthorityFingerprint(workspace)
+    : await initializeBeadsWorkspace(workspace);
   const store = new BeadsTaskStore({ teamName, workspace, authorityFingerprint: fingerprint, requireExpectedVersion: true });
   await store.assertWorkspaceRoot();
   await store.list();
   return { workspace, authorityId: `task_authority_${crypto.randomUUID()}`, fingerprint };
-}
-
-export interface TaskStore {
-  create(input: CreateTaskInput, options?: TaskWriteOptions): Promise<TaskFile>;
-  update(taskId: string, updates: Partial<TaskFile>, options?: TaskWriteOptions): Promise<TaskFile>;
-  submitPlan(taskId: string, plan: string, options?: TaskWriteOptions): Promise<TaskFile>;
-  evaluatePlan(taskId: string, action: "approve" | "reject", feedback?: string, options?: TaskWriteOptions): Promise<TaskFile>;
-  read(taskId: string): Promise<TaskFile>;
-  list(): Promise<TaskFile[]>;
-  claim?(taskId: string, actor?: string, options?: TaskWriteOptions): Promise<TaskFile>;
-  addDependency?(taskId: string, blockerId: string, options?: TaskWriteOptions): Promise<TaskFile>;
-  addProgress?(taskId: string, entry: BeadsProgressEntry, options?: TaskWriteOptions): Promise<TaskFile>;
 }
 
 async function storeFor(teamName: string): Promise<BeadsTaskStore> {
@@ -135,12 +132,12 @@ async function withAgentMutationAuthority<T>(
 
 export interface SemanticTaskUpdate {
   status?: TaskFile["status"];
-  owner?: string;
+  title?: string;
+  description?: string;
+  design?: string;
+  assignee?: string;
   claim?: boolean;
-  blockedBy?: string[];
-  blocks?: string[];
-  progress?: string;
-  pendingProblem?: string;
+  appendNote?: string;
 }
 
 export interface SemanticTaskUpdateResult {
@@ -158,7 +155,7 @@ export interface TaskMutationReceipt {
   deliveryWarnings: string[];
 }
 
-function ownerTransitionOperation(teamName: string, afterOwner: string | undefined) {
+function assigneeTransitionOperation(teamName: string, afterAssignee: string | undefined) {
   const operationId = `task_owner_transition_${crypto.randomUUID()}`;
   return {
     operationId,
@@ -168,7 +165,7 @@ function ownerTransitionOperation(teamName: string, afterOwner: string | undefin
         operationId,
         teamName,
         before,
-        afterOwner: afterOwner || undefined,
+        afterOwner: afterAssignee || undefined,
         previousOperationId,
       }),
     },
@@ -182,85 +179,55 @@ export async function applySemanticTaskUpdate(
   options: TaskWriteOptions & AgentMutationBinding,
 ): Promise<SemanticTaskUpdateResult> {
   return withSemanticTrace("task_update", { teamName, taskId }, async () => {
-    const desiredOwner = update.claim ? options.actor : update.owner;
-    const ownerTransition = desiredOwner !== undefined
-      ? ownerTransitionOperation(teamName, desiredOwner)
-      : undefined;
-    const terminal = update.status === "completed" || update.status === "deleted";
-    const nonterminalOperations = update.owner !== undefined
-      || update.claim
-      || (update.blockedBy?.length ?? 0) > 0
-      || (update.blocks?.length ?? 0) > 0
-      || !!update.progress
-      || !!update.pendingProblem;
-    if (terminal && nonterminalOperations) {
-      throw new Error("A terminal status transition cannot be combined with owner, claim, dependency, progress, or pending-problem changes.");
+    const mutationFields = [update.title, update.description, update.design, update.status, update.assignee, update.appendNote]
+      .filter((value) => value !== undefined);
+    if (!update.claim && mutationFields.length === 0) {
+      throw new Error("task_update requires at least one field, append_note, or claim=true.");
     }
-    if (update.claim && (update.owner !== undefined || update.status !== undefined || (update.blockedBy?.length ?? 0) > 0 || !!update.progress || !!update.pendingProblem)) {
-      throw new Error("claim is an atomic ownership operation and cannot be combined with other task_update mutations.");
+    if (update.claim && mutationFields.length > 0) {
+      throw new Error("claim is an atomic assignment operation and cannot be combined with other task_update changes.");
     }
-    if ((update.blocks?.length ?? 0) > 0) {
-      throw new Error("task_update.blocks mutates another Task without its version; use blocked_by on the target Task.");
-    }
-    const fieldClass = update.status !== undefined || update.owner !== undefined;
-    const dependencyCount = update.blockedBy?.length ?? 0;
-    const progressClass = !!update.progress;
-    const problemClass = !!update.pendingProblem;
-    const semanticClasses = Number(fieldClass) + Number(dependencyCount > 0) + Number(progressClass) + Number(problemClass);
-    if (semanticClasses > 1) {
-      throw new Error("task_update cannot hide partial multi-command success: combine only owner with a nonterminal status; dependency, progress, and pending_problem are separate semantic operations.");
-    }
-    if (dependencyCount > 1) {
-      throw new Error("Multiple dependency links require a transactional Beads batch and are not yet supported in one task_update.");
-    }
-    const mutation = await withAgentMutationAuthority(teamName, options, async (store) => {
-      let firstBefore: TaskFile | undefined;
-      let current: TaskFile | undefined;
-      const appliedOperations: string[] = [];
-      let expectedVersion = options.expectedVersion;
-      const absorb = (result: TaskMutationResult) => {
-        firstBefore ||= result.before;
-        current = result.after;
-        appliedOperations.push(...result.appliedOperations);
-        expectedVersion = result.after.version;
-      };
 
+    const desiredAssignee = update.claim ? options.actor : update.assignee;
+    const assigneeTransition = desiredAssignee !== undefined
+      ? assigneeTransitionOperation(teamName, desiredAssignee)
+      : undefined;
+
+    const mutation = await withAgentMutationAuthority(teamName, options, async (store) => {
       if (update.claim) {
-        absorb(await store.claimWithResult(taskId, options.actor, {
+        return store.claimWithResult(taskId, options.actor, {
           ...options,
-          expectedVersion,
-          internalOwnerTransition: ownerTransition?.writeOption,
-        }));
-      } else {
-        const fields: Partial<TaskFile> = {};
-        if (update.status !== undefined) fields.status = update.status;
-        if (update.owner !== undefined) fields.owner = update.owner;
-        if (Object.keys(fields).length > 0) absorb(await store.updateWithResult(taskId, fields, {
-          ...options,
-          expectedVersion,
-          internalOwnerTransition: ownerTransition?.writeOption,
-        }));
-        for (const blockerId of update.blockedBy || []) absorb(await store.addDependencyWithResult(taskId, blockerId, { ...options, expectedVersion }));
-        if (update.progress) absorb(await store.addProgressWithResult(taskId, { kind: "progress", text: update.progress, actor: options.actor }, { ...options, expectedVersion }));
-        if (update.pendingProblem) absorb(await store.addProgressWithResult(taskId, { kind: "pending-problem", text: update.pendingProblem, actor: options.actor }, { ...options, expectedVersion }));
+          internalOwnerTransition: assigneeTransition?.writeOption,
+        });
       }
-      if (!current) current = await store.read(taskId);
-      firstBefore ||= current;
-      return { firstBefore, current, appliedOperations };
+      const fields: Partial<TaskFile> = {};
+      if (update.title !== undefined) fields.title = update.title;
+      if (update.description !== undefined) fields.description = update.description;
+      if (update.design !== undefined) fields.design = update.design;
+      if (update.status !== undefined) fields.status = update.status;
+      if (update.assignee !== undefined) fields.assignee = update.assignee;
+      return store.updateWithResult(taskId, fields, {
+        ...options,
+        appendNote: update.appendNote,
+        internalOwnerTransition: assigneeTransition?.writeOption,
+      });
     });
-    const { firstBefore, current, appliedOperations } = mutation;
+
+    const firstBefore = mutation.before;
+    const current = mutation.after;
+    const appliedOperations = mutation.appliedOperations;
     if (
       options.actingSessionFile
-      && (firstBefore.owner === options.actor || current.owner === options.actor)
+      && (firstBefore.assignee === options.actor || current.assignee === options.actor)
     ) {
       await suppressTaskVersionForSession(teamName, options.actor, options.actingSessionFile, current);
     }
-    const ownerChanged = firstBefore.owner !== current.owner;
+    const assigneeChanged = firstBefore.assignee !== current.assignee;
     const deliveryWarnings = appliedOperations.length === 0
       ? []
-      : ownerChanged && ownerTransition
-        ? await completeOwnerTransitionIntent(teamName, ownerTransition.operationId, current)
-        : await publishTaskMutation(teamName, firstBefore, current, changeKindForUpdate({ status: update.status, owner: update.owner }), options.actor);
+      : assigneeChanged && assigneeTransition
+        ? await completeOwnerTransitionIntent(teamName, assigneeTransition.operationId, current)
+        : await publishTaskMutation(teamName, firstBefore, current, changeKindForUpdate(update), options.actor);
     return {
       task: current,
       before: firstBefore,
@@ -271,62 +238,24 @@ export async function applySemanticTaskUpdate(
   });
 }
 
-export async function createTask(teamName: string, subject: string, description: string, activeForm = "", metadata?: Record<string, any>, binding?: AgentMutationBinding): Promise<TaskFile> {
+export async function createTask(
+  teamName: string,
+  input: CreateTaskInput,
+  binding?: AgentMutationBinding,
+): Promise<TaskFile> {
   return withSemanticTrace("task_create", { teamName }, async () => {
-    const idempotencyKey = typeof metadata?.pi_teams_idempotency_key === "string" ? metadata.pi_teams_idempotency_key : undefined;
-    const mutate = (store: BeadsTaskStore) => store.create({ subject, description, activeForm, metadata, idempotencyKey }, { idempotencyKey, actor: binding?.actor });
-    return binding ? withAgentMutationAuthority(teamName, binding, mutate) : mutate(await storeFor(teamName));
-  });
-}
-
-export async function updateTask(teamName: string, taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskFile> {
-  const store = await storeFor(teamName);
-  const transition = updates.owner !== undefined ? ownerTransitionOperation(teamName, updates.owner) : undefined;
-  const mutation = await store.updateWithResult(taskId, updates, {
-    ...options,
-    internalOwnerTransition: transition?.writeOption,
-  });
-  if (mutation.before.owner !== mutation.after.owner && transition) {
-    await completeOwnerTransitionIntent(teamName, transition.operationId, mutation.after);
-  } else {
-    await publishTaskMutation(teamName, mutation.before, mutation.after, changeKindForUpdate(updates), options.actor);
-  }
-  return mutation.after;
-}
-
-export async function submitPlan(teamName: string, taskId: string, plan: string, options?: TaskWriteOptions): Promise<TaskFile> {
-  return (await submitPlanWithReceipt(teamName, taskId, plan, options)).task;
-}
-
-export async function submitPlanWithReceipt(teamName: string, taskId: string, plan: string, options?: TaskWriteOptions & Partial<AgentMutationBinding>): Promise<TaskMutationReceipt> {
-  return withSemanticTrace("task_submit_plan", { teamName, taskId }, async () => {
-    const mutate = (store: BeadsTaskStore) => store.submitPlan(taskId, plan, options);
-    const updated = options?.actor ? await withAgentMutationAuthority(teamName, options as TaskWriteOptions & AgentMutationBinding, mutate) : await mutate(await storeFor(teamName));
-    const deliveryWarnings = await publishTaskChange(teamName, updated, "plan_changed", options?.actor);
-    return {
-      task: updated,
-      appliedOperations: ["submit_plan"],
-      deliveryDegraded: deliveryWarnings.length > 0,
-      deliveryWarnings,
-    };
-  });
-}
-
-export async function evaluatePlan(teamName: string, taskId: string, action: "approve" | "reject", feedback?: string, options?: TaskWriteOptions): Promise<TaskFile> {
-  return (await evaluatePlanWithReceipt(teamName, taskId, action, feedback, options)).task;
-}
-
-export async function evaluatePlanWithReceipt(teamName: string, taskId: string, action: "approve" | "reject", feedback?: string, options?: TaskWriteOptions & Partial<AgentMutationBinding>): Promise<TaskMutationReceipt> {
-  return withSemanticTrace("task_evaluate_plan", { teamName, taskId }, async () => {
-    const mutate = (store: BeadsTaskStore) => store.evaluatePlan(taskId, action, feedback, options);
-    const updated = options?.actor ? await withAgentMutationAuthority(teamName, options as TaskWriteOptions & AgentMutationBinding, mutate) : await mutate(await storeFor(teamName));
-    const deliveryWarnings = await publishTaskChange(teamName, updated, "plan_changed", options?.actor);
-    return {
-      task: updated,
-      appliedOperations: [`${action}_plan`],
-      deliveryDegraded: deliveryWarnings.length > 0,
-      deliveryWarnings,
-    };
+    const mutate = (store: BeadsTaskStore) => store.create(input, {
+      idempotencyKey: input.idempotencyKey,
+      actor: binding?.actor,
+    });
+    const task = binding
+      ? await withAgentMutationAuthority(teamName, binding, mutate)
+      : await mutate(await storeFor(teamName));
+    if (binding?.actingSessionFile && task.assignee === binding.actor) {
+      await suppressTaskVersionForSession(teamName, binding.actor, binding.actingSessionFile, task);
+    }
+    if (task.assignee) await publishTaskMutation(teamName, task, task, "assigned", binding?.actor);
+    return task;
   });
 }
 
@@ -334,56 +263,42 @@ export async function readTask(teamName: string, taskId: string): Promise<TaskFi
   return withSemanticTrace("task_read", { teamName, taskId }, async () => (await storeFor(teamName)).read(taskId));
 }
 
-export async function listTasks(teamName: string): Promise<TaskFile[]> {
+export async function listTasks(teamName: string): Promise<TaskListItem[]> {
   return withSemanticTrace("task_list", { teamName }, async () => {
     const tasks = await (await storeFor(teamName)).list();
     return tasks.map(({ version: _projectionRevision, ...task }) => task);
   });
 }
 
-export async function claimTask(teamName: string, taskId: string, actor: string, options?: TaskWriteOptions): Promise<TaskFile> {
-  const store = await storeFor(teamName);
-  const transition = ownerTransitionOperation(teamName, actor);
-  const mutation = await store.claimWithResult(taskId, actor, {
-    ...options,
-    internalOwnerTransition: transition.writeOption,
+export async function mutateTaskLink(
+  teamName: string,
+  taskId: string,
+  link: BeadsTaskLink,
+  options: TaskWriteOptions & AgentMutationBinding,
+): Promise<TaskMutationReceipt> {
+  return withSemanticTrace("task_link", { teamName, taskId }, async () => {
+    const mutation = await withAgentMutationAuthority(teamName, options, (store) =>
+      store.mutateLinkWithResult(taskId, link, options));
+    if (options.actingSessionFile && mutation.after.assignee === options.actor) {
+      await suppressTaskVersionForSession(teamName, options.actor, options.actingSessionFile, mutation.after);
+    }
+    const deliveryWarnings = mutation.appliedOperations.length === 0
+      ? []
+      : await publishTaskMutation(teamName, mutation.before, mutation.after, "relation_changed", options.actor);
+    return {
+      task: mutation.after,
+      appliedOperations: mutation.appliedOperations,
+      deliveryDegraded: deliveryWarnings.length > 0,
+      deliveryWarnings,
+    };
   });
-  if (mutation.before.owner !== mutation.after.owner) {
-    await completeOwnerTransitionIntent(teamName, transition.operationId, mutation.after);
-  } else {
-    await publishTaskMutation(teamName, mutation.before, mutation.after, "assigned", actor);
-  }
-  return mutation.after;
 }
 
-export async function addTaskDependency(teamName: string, taskId: string, blockerId: string, options?: TaskWriteOptions): Promise<TaskFile> {
-  const store = await storeFor(teamName);
-  if (!store.addDependency) throw new Error(`Task backend for team ${teamName} does not support dependencies.`);
-  const updated = await store.addDependency(taskId, blockerId, options);
-  await publishTaskChange(teamName, updated, "dependency_changed", options?.actor);
-  return updated;
-}
-
-export async function addTaskProgress(teamName: string, taskId: string, entry: BeadsProgressEntry, options?: TaskWriteOptions): Promise<TaskFile> {
-  const store = await storeFor(teamName);
-  if (!store.addProgress) throw new Error(`Task backend for team ${teamName} does not support progress entries.`);
-  const updated = await store.addProgress(taskId, entry, options);
-  await publishTaskChange(teamName, updated, "progress_changed", options?.actor);
-  return updated;
-}
-
-function changeKindForUpdate(updates: Partial<TaskFile>): TaskChangeKind {
-  if (updates.owner !== undefined) return "assigned";
+function changeKindForUpdate(updates: SemanticTaskUpdate): TaskChangeKind {
+  if (updates.assignee !== undefined || updates.claim) return "assigned";
   if (updates.status !== undefined) return "status_changed";
-  if (updates.plan !== undefined || updates.planFeedback !== undefined) return "plan_changed";
-  if (updates.blockedBy !== undefined || updates.blocks !== undefined) return "dependency_changed";
+  if (updates.appendNote !== undefined) return "note_appended";
   return "task_changed";
-}
-
-async function publishTaskChange(teamName: string, task: TaskFile, kind: TaskChangeKind, actor?: string): Promise<string[]> {
-  // Reuse the mutation publisher so post-commit delivery degradation is both
-  // recoverable and visible to the caller without making delivery transactional.
-  return publishTaskMutation(teamName, task, task, kind, actor);
 }
 
 async function publishTaskMutation(
@@ -394,10 +309,10 @@ async function publishTaskMutation(
   actor?: string,
 ): Promise<string[]> {
   const targets: Array<{ recipient: string; kind: TaskChangeKind }> = [];
-  if (before.owner && before.owner !== after.owner) {
-    targets.push({ recipient: before.owner, kind: "ownership_lost" });
+  if (before.assignee && before.assignee !== after.assignee) {
+    targets.push({ recipient: before.assignee, kind: "ownership_lost" });
   }
-  if (after.owner) targets.push({ recipient: after.owner, kind });
+  if (after.assignee) targets.push({ recipient: after.assignee, kind });
   const unique = [...new Map(targets.map((target) => [`${target.recipient}:${target.kind}`, target])).values()];
   const warnings: string[] = [];
   for (const target of unique) {
@@ -410,7 +325,7 @@ async function publishTaskMutation(
         await recordTaskDeliveryRecovery({
           teamName,
           taskId: after.id,
-          taskVersion: after.version || "unknown",
+          taskVersion: after.version,
           recipients: [target.recipient],
           changeKind: target.kind,
           recordedAt: new Date().toISOString(),
