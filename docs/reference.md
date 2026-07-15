@@ -26,6 +26,8 @@ team_create({ team_name: "audit", description: "Security review" })
 ```
 
 Creating a team does not itself spawn a teammate or require a terminal adapter.
+A teammate cannot call this lead-only topology mutation. The receipt identifies
+the durable Team, current lead Membership, and Task authority.
 A terminal adapter is required by the spawn tools. By default, creation
 initializes the Team's own `~/.pi/teams/<team>` directory as its Beads authority
 and records its exact identity. `PI_TEAMS_BEADS_WORKSPACE` is an optional
@@ -48,6 +50,10 @@ the roster stops and replaces that teammate.
 The initial `prompt` is written to the teammate's inbox and delivered as native
 custom context with its stable Message ID. No synthetic user message or
 model-issued `read_inbox` call is part of delivery.
+This is lead-only. The structured receipt keeps four facts separate: durable
+Membership persistence, terminal launch, Message-authority acceptance, and
+runtime/presentation observation. The first three can succeed while the latter
+two remain `not_observed`; the call never waits for agent runtime readiness.
 
 ### `check_teammate`
 
@@ -55,8 +61,11 @@ Inspects one roster member.
 
 Required: `team_name` and `agent_name`.
 
-The result includes `alive`, `unreadCount`, `health`, `agentLoopReady`,
-`hasRecentHeartbeat`, `startupStalled`, and runtime telemetry. Health is
+The concise result includes `alive`, `unreadCount`, `health`,
+`hasRecentHeartbeat`, and `startupStalled`. Machine details retain raw runtime
+telemetry for diagnosis. Its historical `ready` field only records observed
+post-start activity and must not be read as agent-loop readiness, progress, or
+Task completion. Health is
 terminal/process and inbox telemetry, not task status. The normal labels are
 `dead`, `stalled`, `healthy`, `idle`, and `starting`. A dead member's runtime
 status file is removed. A tmux teammate's first startup records its Pi session
@@ -67,7 +76,7 @@ This is an on-demand runtime diagnostic, not a routine progress/completion
 poll. Normal coordination should be driven by Task changes and substantive
 Messages.
 
-### `process_shutdown_approved`
+### `teammate_shutdown`
 
 Shuts down one teammate, removes its runtime status, and removes it from the
 current-roster projection while retaining its historical Membership record.
@@ -77,6 +86,7 @@ tool. PiTeams deactivates the Membership only after the adapter confirms its
 pane/window is gone, or an exact Membership-bound runtime record proves the
 recorded process already exited. It never kills a PID from durable state alone.
 If neither proof is available, the call fails and the Membership stays current.
+This lifecycle mutation is lead-only.
 
 ### `team_shutdown`
 
@@ -90,8 +100,9 @@ lead remain current so the lead can inspect and retry. Historical member/Session
 records, TeamConfig, Beads authority, and migration evidence are retained. The
 response reports stop evidence, per-recipient failures, deactivated members,
 stale/orphan terminal bindings, and retained Task authority.
+This lifecycle mutation is lead-only.
 
-### `cleanup_agent_sessions`
+### `report_stale_agent_sessions`
 
 Reports age-qualified folders under `~/.pi/agent/teams/` for operator review.
 Age isn't liveness evidence, so this Alpha tool deletes nothing; its receipt
@@ -131,8 +142,8 @@ Required: `team_name`. Optional: `agent_name` and `unread_only` (default
 inbox is communication-state inspection; it does not claim or update a task.
 Inspecting another Agent's inbox is non-consuming; explicitly reading one's
 own inbox may mark the returned Messages read.
-For a teammate reading its own inbox, PiTeams records that the agent loop is
-ready and updates heartbeat telemetry.
+For a teammate reading its own inbox, PiTeams records post-start activity and
+updates heartbeat telemetry; this is not a runtime-readiness assertion.
 
 Unread direct Messages are coalesced into a
 `pi-teams.direct-message` custom Message with full bodies and stable IDs. The
@@ -296,6 +307,7 @@ Required: `team_name`, `predefined_team`, and `cwd`.
 
 Optional: `default_model` and `separate_windows` (default `false`). Agent
 settings and tool allowlists from each definition are used when launching.
+This topology mutation is lead-only.
 
 ### `save_team_as_template`
 
@@ -304,9 +316,18 @@ files plus a `teams.yaml` entry. The caller must be the Team's current exact
 Session binding; persisted historical Team configs aren't exposed as a tool
 catalog.
 
-Required: `team_name` and `template_name`. Optional: `description` and `scope`
-(`user` or `project`, default `user`). User scope writes under `~/.pi`; project
-scope writes under the current project.
+Required: `team_name` and `template_name`. Optional: `description`, `scope`
+(`user` or `project`, default `user`), and `dry_run` (default `false`). User
+scope writes under `~/.pi`; project scope writes under the current project.
+This mutation is lead-only. `dry_run: true` performs no writes and returns the
+exact planned artifact paths, create/update actions, contents, and
+`written: false`; a normal call returns the same artifact shape with
+`written: true`.
+
+Topology, lifecycle, and template mutation tools return a small shared
+`receipt` envelope: `accepted`, `operation`, resource identity, durable
+`postState`, `warnings`, and an optional `nextAction`. Runtime or delivery
+readiness is never inferred from a durable write.
 
 ## Closed-Task hook
 

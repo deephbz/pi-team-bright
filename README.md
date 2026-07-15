@@ -57,7 +57,10 @@ Task authority state is actually needed.
 ## Core workflows
 
 - **Parallel specialists:** `spawn_teammate` accepts per-agent model,
-  thinking, working directory, and optional separate-window settings.
+  thinking, working directory, and optional separate-window settings. Its
+  receipt distinguishes durable Membership persistence, terminal launch,
+  initial Message acceptance, and runtime/presentation observations; spawn
+  doesn't wait for or claim runtime readiness.
 - **Task coordination:** use `task_create` and `task_update`; query with
   `task_list`/`task_read` when needed. Create starts `open` and may include
   prose `design` plus an `assignee`. `task_update` changes content, work state,
@@ -80,12 +83,14 @@ Task authority state is actually needed.
 - **Runtime health:** `check_teammate` reports terminal liveness, inbox state,
   startup status, and heartbeat telemetry. It is an on-demand diagnostic, not
   routine progress/completion polling.
-- **Shutdown:** `process_shutdown_approved` handles one teammate;
+- **Shutdown:** `teammate_shutdown` handles one teammate;
   `team_shutdown` handles the team without global age-based artifact deletion.
   A Membership is deactivated only after its terminal surface is confirmed gone,
   or an exact Membership-bound runtime record proves that its process already
   exited. Failed stops remain current and are reported for retry.
-  `cleanup_agent_sessions` only reports old Pi-core folders for review.
+  `report_stale_agent_sessions` only reports old Pi-core folders for review.
+- **Mutation authority:** Team topology, lifecycle, and template writes are
+  lead-only. Teammates keep the full Task and Communication surfaces.
 - **Process recovery:** after a killed Pi process, resume the same Pi session
   with `pi -r`. PiTeams records each member's durable Pi session file at first
   startup, so both leads and teammates reclaim their identity and refresh their
@@ -95,7 +100,8 @@ Task authority state is actually needed.
 - **Templates:** `list_predefined_teams`, `list_predefined_agents`,
   `create_predefined_team`, and `save_team_as_template` support reusable team
   definitions. Saving is restricted to the Team currently bound to the exact
-  Pi Session; persisted historical Team configs are not an agent-facing list.
+  Pi Session; `dry_run` returns exact paths and contents without writing.
+  Persisted historical Team configs are not an agent-facing list.
 
 See [docs/guide.md](docs/guide.md) for workflows and
 [docs/reference.md](docs/reference.md) for every parameter. The exact-binding
@@ -190,10 +196,10 @@ task_list
 task_update
 task_link
 team_shutdown
-cleanup_agent_sessions
+report_stale_agent_sessions
 task_read
 check_teammate
-process_shutdown_approved
+teammate_shutdown
 list_predefined_teams
 list_predefined_agents
 create_predefined_team

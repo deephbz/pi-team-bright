@@ -52,6 +52,11 @@ A team can be created without a terminal adapter, but `spawn_teammate` and
 `create_predefined_team` need one. A teammate's initial prompt is accepted into
 its transient inbox and delivered as native custom context; no model-issued
 `read_inbox` call or synthetic user-message bootstrap is required.
+Team topology, lifecycle, and template writes are lead-only; teammates retain
+all Task and Communication tools. A spawn receipt separately reports durable
+Membership persistence, terminal launch, Message acceptance, and whether
+runtime startup or Message presentation was observed. Spawn doesn't wait for
+readiness, so `not_observed` isn't a failure or a claim that the Agent is ready.
 
 Use `check_teammate` only when diagnosing suspected runtime trouble, not as a
 routine progress/completion poll:
@@ -263,7 +268,7 @@ push covers PiTeams-mediated writes only; there is no per-Agent Beads polling.
 When one teammate is finished, use:
 
 ```js
-process_shutdown_approved({ team_name: "my-team", agent_name: "reviewer" })
+teammate_shutdown({ team_name: "my-team", agent_name: "reviewer" })
 ```
 
 For the whole team:
@@ -279,7 +284,7 @@ stop and the lead remain current, and the receipt identifies the failure for
 retry. Shutdown never performs global age-based Pi-core session deletion. It
 retains the team configuration, Beads authority, and any legacy task files as
 migration evidence, so Task data remains queryable after the panes close.
-`cleanup_agent_sessions` reports old folders as review candidates but deletes
+`report_stale_agent_sessions` reports old folders as review candidates but deletes
 none because age alone cannot prove that another long-running team or process
 is inactive.
 
@@ -396,14 +401,18 @@ To reuse a runtime team:
 save_team_as_template({
   team_name: "my-team",
   template_name: "security-review",
-  scope: "project"
+  scope: "project",
+  dry_run: true
 })
 ```
 
 Saving requires at least one spawned teammate and an exact current Session
 binding to that Team. `scope: "user"` (the default) writes under `~/.pi`;
 `scope: "project"` writes project-local definitions. Historical Team configs
-are durable evidence, not an agent-facing catalog.
+are durable evidence, not an agent-facing catalog. Start with `dry_run: true`
+to receive exact artifact paths, create/update actions, and contents without
+creating directories or files; repeat with `dry_run: false` to write the same
+artifacts.
 
 ## Terminal adapters
 
@@ -440,6 +449,6 @@ supported adapter before spawning.
 `team_create`, `spawn_teammate`, `send_message`,
 `broadcast_message`, `read_inbox`, `task_create`, `task_list`, `task_update`,
 `task_link`, `team_shutdown`,
-`cleanup_agent_sessions`, `task_read`, `check_teammate`,
-`process_shutdown_approved`, `list_predefined_teams`, `list_predefined_agents`,
+`report_stale_agent_sessions`, `task_read`, `check_teammate`,
+`teammate_shutdown`, `list_predefined_teams`, `list_predefined_agents`,
 `create_predefined_team`, and `save_team_as_template`.

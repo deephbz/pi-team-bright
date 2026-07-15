@@ -174,7 +174,7 @@ describe("current team binding correctness", () => {
     });
     fs.writeFileSync(path.join(paths.teamDir(teamName), "worker.pid"), "424242");
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
-    const shutdown = registerExtension().toolsByName.get("process_shutdown_approved")!;
+    const shutdown = registerExtension().toolsByName.get("teammate_shutdown")!;
 
     await expect(shutdown.execute("shutdown", {
       team_name: teamName,

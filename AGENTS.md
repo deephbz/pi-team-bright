@@ -21,6 +21,10 @@ Agents spawned in separate panes. They are designed for:
 - **Parallelism**: Working on multiple parts of the project simultaneously.
 - **Autonomy**: Receiving native Message/Task delivery, enriching Task context, and executing understood work without constant hand-holding. Inbox reads are explicit audit/history only.
 
+Team topology, lifecycle, and template writes are lead-only. Teammates retain
+all Task and Communication tools; ask `team-lead` for spawn, shutdown, or
+template mutations rather than attempting them directly.
+
 ---
 
 ## 🛠 Capabilities

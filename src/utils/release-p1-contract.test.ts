@@ -196,7 +196,7 @@ describe("release P1 public contracts", () => {
     const name = teamName("lead-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
     const before = await teams.createTeam(name, leadSession, "lead-agent");
-    const tool = registerExtension().get("process_shutdown_approved")!;
+    const tool = registerExtension().get("teammate_shutdown")!;
 
     await expect(tool.execute("shutdown-lead", {
       team_name: name,
@@ -327,7 +327,7 @@ describe("release P1 public contracts", () => {
       startedAt: Date.now(),
       lastHeartbeatAt: Date.now(),
     }, worker.membershipId);
-    const tool = registerExtension().get("process_shutdown_approved")!;
+    const tool = registerExtension().get("teammate_shutdown")!;
 
     await expect(tool.execute("shutdown", {
       team_name: name,
@@ -358,7 +358,7 @@ describe("release P1 public contracts", () => {
       }
       return true;
     }) as typeof process.kill);
-    const tool = registerExtension().get("process_shutdown_approved")!;
+    const tool = registerExtension().get("teammate_shutdown")!;
 
     const result = await tool.execute("shutdown", {
       team_name: name,
@@ -398,7 +398,7 @@ describe("release P1 public contracts", () => {
       }
       return true;
     }) as typeof process.kill);
-    const tool = registerExtension().get("process_shutdown_approved")!;
+    const tool = registerExtension().get("teammate_shutdown")!;
 
     await expect(tool.execute("shutdown", {
       team_name: name,
@@ -477,7 +477,7 @@ describe("release P1 public contracts", () => {
     await teams.addMember(name, worker);
     await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: Date.now() }, "membership-from-an-older-generation");
     const killProbe = vi.spyOn(process, "kill");
-    const tool = registerExtension().get("process_shutdown_approved")!;
+    const tool = registerExtension().get("teammate_shutdown")!;
 
     await expect(tool.execute("shutdown", {
       team_name: name,

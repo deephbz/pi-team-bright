@@ -288,6 +288,7 @@ export interface SaveTeamTemplateOptions {
   description?: string;
   scope: "user" | "project";
   projectDir?: string;
+  dryRun?: boolean;
 }
 
 /**
@@ -303,6 +304,14 @@ export interface SaveTeamTemplateResult {
     existed: boolean;
   }>;
   templateExisted: boolean;
+  dryRun: boolean;
+  artifacts: Array<{
+    kind: "agent_definition" | "team_manifest";
+    path: string;
+    action: "create" | "update";
+    content: string;
+    written: boolean;
+  }>;
 }
 
 /**
@@ -423,8 +432,10 @@ export function saveTeamTemplate(
     ? path.join(options.projectDir || process.cwd(), ".pi", "teams.yaml")
     : path.join(os.homedir(), ".pi", "teams.yaml");
 
-  // Ensure agents directory exists
-  if (!fs.existsSync(agentsDir)) {
+  const dryRun = options.dryRun ?? false;
+
+  // Create parent storage only for an actual write. Dry-run is side-effect free.
+  if (!dryRun && !fs.existsSync(agentsDir)) {
     fs.mkdirSync(agentsDir, { recursive: true });
   }
 
@@ -433,6 +444,7 @@ export function saveTeamTemplate(
   const teammates = currentRuntimeTeammates(teamConfig.members as Member[]);
   const agentNames: string[] = [];
   const savedAgents: SaveTeamTemplateResult["savedAgents"] = [];
+  const artifacts: SaveTeamTemplateResult["artifacts"] = [];
 
   // Save each teammate as an agent definition
   for (const member of teammates) {
@@ -451,14 +463,22 @@ export function saveTeamTemplate(
       prompt: member.prompt,
     });
 
-    fs.writeFileSync(agentPath, content);
+    if (!dryRun) fs.writeFileSync(agentPath, content);
     agentNames.push(member.name);
     savedAgents.push({ name: member.name, path: agentPath, existed });
+    artifacts.push({
+      kind: "agent_definition",
+      path: agentPath,
+      action: existed ? "update" : "create",
+      content,
+      written: !dryRun,
+    });
   }
 
   // Update teams.yaml
   let teamsContent = "";
-  if (fs.existsSync(teamsYamlPath)) {
+  const teamsYamlExisted = fs.existsSync(teamsYamlPath);
+  if (teamsYamlExisted) {
     teamsContent = fs.readFileSync(teamsYamlPath, "utf-8");
   }
 
@@ -473,7 +493,17 @@ export function saveTeamTemplate(
     options.description || teamConfig.description
   );
 
-  fs.writeFileSync(teamsYamlPath, updatedContent);
+  if (!dryRun) {
+    fs.mkdirSync(path.dirname(teamsYamlPath), { recursive: true });
+    fs.writeFileSync(teamsYamlPath, updatedContent);
+  }
+  artifacts.push({
+    kind: "team_manifest",
+    path: teamsYamlPath,
+    action: teamsYamlExisted ? "update" : "create",
+    content: updatedContent,
+    written: !dryRun,
+  });
 
   return {
     templateName: options.templateName,
@@ -481,5 +511,7 @@ export function saveTeamTemplate(
     teamsYamlPath,
     savedAgents,
     templateExisted,
+    dryRun,
+    artifacts,
   };
 }

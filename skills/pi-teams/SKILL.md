@@ -31,7 +31,7 @@ is the only runtime Task authority; don't create or update legacy JSON Task file
    coordination. Avoid ACK-only Messages unless semantic confirmation is
    required; use `read_inbox` only for explicit audit/history inspection.
 5. Use `check_teammate` only to diagnose suspected runtime trouble, then
-   `process_shutdown_approved` for one teammate or `team_shutdown` for the
+   `teammate_shutdown` for one teammate or `team_shutdown` for the
    whole team.
 
 When a teammate is launched, PiTeams accepts its initial prompt into the inbox
@@ -71,6 +71,8 @@ Required: `team_name`.
 
 Optional: `description`, `default_model`, and `separate_windows` (default
 `false`). It creates the team and registers the current session as the lead.
+This is a lead-only topology mutation. Its structured receipt reports durable
+Team, lead Membership, and Task-authority identity.
 `separate_windows` asks the terminal adapter to use OS windows instead of
 panes when supported. Omit `default_model` unless the user explicitly requests
 an override; omission preserves Pi's configured default.
@@ -85,16 +87,22 @@ same name are stopped and replaced. The tool rejects missing teams, missing
 terminal adapters, and unsupported window mode. Omit `model` unless the user
 explicitly requests an override. When `name` matches a discovered agent
 definition, its `tools` allowlist is passed to Pi's `--tools` launch option.
+This is lead-only. The receipt separately reports the durable Membership,
+terminal launch, initial Message acceptance, and unobserved runtime/Message
+presentation state. It does not wait for startup readiness; use
+`check_teammate` only when trouble is suspected.
 
 ### `check_teammate`
 
-Required: `team_name` and `agent_name`. The result includes `alive`,
+Required: `team_name` and `agent_name`. The concise result includes `alive`,
 `unreadCount`, `health` (`dead`, `stalled`, `healthy`, `idle`, or `starting`),
-`agentLoopReady`, `hasRecentHeartbeat`, `startupStalled`, and raw `runtime`
-telemetry. Dead runtime status files are cleaned up.
+`hasRecentHeartbeat`, and `startupStalled`. Machine details retain raw `runtime`
+telemetry for diagnosis; its historical `ready` field means only that some
+post-start activity was observed, not agent-loop readiness, progress, or Task
+completion. Dead runtime status files are cleaned up.
 It is an on-demand diagnostic, not a progress/completion poll.
 
-### `process_shutdown_approved`
+### `teammate_shutdown`
 
 Required: `team_name` and `agent_name`. It deactivates the current Membership
 only after the pane/window is confirmed gone, or an exact Membership-bound
@@ -102,6 +110,7 @@ runtime record proves the recorded process already exited. It never kills a PID
 from durable state alone. If shutdown cannot be confirmed, escalate the manual
 close to the operator and retry; the Membership remains current. The lead is
 not removed by this tool.
+This lifecycle mutation is lead-only.
 
 ### `team_shutdown`
 
@@ -112,8 +121,9 @@ evidence. It retains the team configuration, Beads authority, and legacy task
 files as migration evidence; task truth is never deleted by shutdown.
 Historical teams without Beads authority have no runtime Task store and must
 use the explicit migration workflow before Task tools can run.
+This lifecycle mutation is lead-only.
 
-### `cleanup_agent_sessions`
+### `report_stale_agent_sessions`
 
 Optional: `max_age_hours` (default `24`, finite and non-negative). It reports
 old folders under `~/.pi/agent/teams/` as review candidates but deletes none;
@@ -234,15 +244,17 @@ Required: `team_name`, `predefined_team`, and `cwd`. Optional:
 and attempts to spawn every agent in the template, returning per-agent
 `spawned`, `skipped`, or `error` results. Omit `default_model` unless the user
 explicitly requests an override. Each definition's `tools` allowlist is passed
-to Pi's `--tools` launch option.
+to Pi's `--tools` launch option. This topology mutation is lead-only.
 
 ### `save_team_as_template`
 
-Required: `team_name` and `template_name`. Optional: `description` and `scope`
-(`user` or `project`, default `user`). It writes agent definition files and a
+Required: `team_name` and `template_name`. Optional: `description`, `scope`
+(`user` or `project`, default `user`), and `dry_run` (default `false`). It writes agent definition files and a
 `teams.yaml` template, requires at least one spawned teammate, and only accepts
 the Team currently bound to this exact Pi Session. Historical Team configs
-aren't an agent-facing catalog.
+aren't an agent-facing catalog. This mutation is lead-only. With `dry_run`, it
+returns every exact output path, action, and content with `written: false` and
+makes no directories or files.
 
 ## Task authority and migration
 
@@ -302,5 +314,5 @@ the retained PiTeams config provides the workspace and cutover provenance.
 Do not call or teach `team_delete`, `read_config`, `force_kill_teammate`, or
 `task_get`. They are not registered tools. Configuration is inspected through
 the runtime behavior above, individual teammate shutdown uses
-`process_shutdown_approved`, whole-team cleanup uses `team_shutdown`, and
+`teammate_shutdown`, whole-team cleanup uses `team_shutdown`, and
 individual task reads use `task_read`.

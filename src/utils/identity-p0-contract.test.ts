@@ -365,7 +365,8 @@ describe("identity P0: generation-scoped Communication and runtime projections",
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "lead-session" },
     });
-    expect(result.details.agentLoopReady).toBe(false);
+    expect(result.details).not.toHaveProperty("successfulTurnObserved");
+    expect(result.details.runtime).toBeNull();
     expect(result.details.runtime?.membershipId).not.toBe(oldMember.membershipId);
   });
 });

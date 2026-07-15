@@ -15,7 +15,7 @@ import {
 } from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
-import { Member, TaskFile } from "../src/utils/models";
+import { IdentifiedInboxMessage, Member, TaskFile } from "../src/utils/models";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
 import * as predefined from "../src/utils/predefined-teams";
@@ -337,6 +337,23 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
+  function mutationReceipt(
+    operation: string,
+    resource: { kind: string; id: string; [key: string]: unknown },
+    postState: Record<string, unknown>,
+    warnings: string[] = [],
+    nextAction?: string,
+  ) {
+    return {
+      accepted: true as const,
+      operation,
+      resource,
+      postState,
+      warnings,
+      ...(nextAction ? { nextAction } : {}),
+    };
+  }
+
   function stopDeliveries() {
     directMessageDelivery?.stop();
     directMessageDelivery = null;
@@ -348,6 +365,19 @@ export default function (pi: ExtensionAPI) {
     const sessionFile = ctx?.sessionManager?.getSessionFile?.();
     if (!sessionFile) throw new Error("A durable Pi Session is required for every team-scoped tool operation.");
     return teams.assertCurrentSessionBinding(requestedTeam, agentName, sessionFile);
+  }
+
+  /** Mutating Team topology/lifecycle/templates is a coordinator capability. */
+  async function assertLeadMutation(ctx: any, operation: string, requestedTeam?: string): Promise<Member | undefined> {
+    if (agentName !== "team-lead") {
+      throw new Error(`${operation} is lead-only; ask team-lead to perform this Team mutation.`);
+    }
+    if (!requestedTeam) return undefined;
+    const member = await assertCurrentSessionBinding(ctx, requestedTeam);
+    if (member.name !== "team-lead" || member.agentType !== "lead") {
+      throw new Error(`${operation} is lead-only; current Membership ${member.name} is not the Team lead.`);
+    }
+    return member;
   }
 
   async function writeCurrentTeammateRuntime(ctx: any, updates: Partial<runtime.AgentRuntimeStatus>) {
@@ -698,6 +728,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   type PreparedLaunchTarget = { terminalId: string; isWindow: boolean };
+  type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage: IdentifiedInboxMessage };
 
   async function compensatePreparedLaunch(
     targetTeamName: string,
@@ -730,12 +761,12 @@ export default function (pi: ExtensionAPI) {
   async function launchPreparedMembership(
     targetTeamName: string,
     prepared: Member,
-    initialMessage: () => Promise<unknown>,
+    initialMessage: () => Promise<IdentifiedInboxMessage>,
     spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>,
-  ): Promise<PreparedLaunchTarget> {
+  ): Promise<PreparedLaunchReceipt> {
     let target: PreparedLaunchTarget | null = null;
     try {
-      await initialMessage();
+      const acceptedMessage = await initialMessage();
       target = await spawn();
       if (!target.terminalId) throw new Error("terminal adapter returned an empty target ID");
       await teams.updateMembership(
@@ -743,7 +774,7 @@ export default function (pi: ExtensionAPI) {
         prepared.membershipId!,
         target.isWindow ? { windowId: target.terminalId } : { tmuxPaneId: target.terminalId },
       );
-      return target;
+      return { ...target, initialMessage: acceptedMessage };
     } catch (launchError) {
       try {
         await compensatePreparedLaunch(targetTeamName, prepared, target);
@@ -776,6 +807,7 @@ export default function (pi: ExtensionAPI) {
       separate_windows: Type.Optional(Type.Boolean({ default: false, description: "Open teammates in separate OS windows instead of panes" })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertLeadMutation(ctx, "team_create");
       const leadSessionFile = ctx?.sessionManager?.getSessionFile?.();
       if (!leadSessionFile) throw new Error("team_create requires a durable Pi Session file.");
       const safeTeamName = paths.sanitizeName(params.team_name);
@@ -804,8 +836,23 @@ export default function (pi: ExtensionAPI) {
       await startTaskChangeDelivery(ctx);
       await refreshTeamFooter(ctx);
       return {
-        content: [{ type: "text", text: `Team ${safeTeamName} created.` }],
-        details: { config },
+        content: [{
+          type: "text",
+          text: `Team ${safeTeamName} created with durable lead Membership ${currentMembershipId} and Task authority ${config.taskAuthorityId}.`,
+        }],
+        details: {
+          config,
+          receipt: mutationReceipt(
+            "team_create",
+            { kind: "team", id: safeTeamName },
+            {
+              teamName: safeTeamName,
+              leadMembershipId: currentMembershipId,
+              taskAuthorityId: config.taskAuthorityId,
+              membershipState: "current",
+            },
+          ),
+        },
       };
       });
     },
@@ -835,7 +882,7 @@ export default function (pi: ExtensionAPI) {
       return teams.withTeamTopologyLease(safeTeamName, async () => {
       // The caller may have become stale while waiting for another topology
       // transaction. Revalidate only after this Team's lease is held.
-      await assertCurrentSessionBinding(ctx, safeTeamName);
+      await assertLeadMutation(ctx, "spawn_teammate", safeTeamName);
 
       if (!teams.teamExists(safeTeamName)) {
         throw new Error(`Team ${params.team_name} does not exist`);
@@ -947,8 +994,49 @@ export default function (pi: ExtensionAPI) {
       );
 
       return {
-        content: [{ type: "text", text: `Teammate ${params.name} spawned in ${launch.isWindow ? 'window' : 'pane'} ${launch.terminalId}.` }],
-        details: { agentId: member.agentId, membershipId: member.membershipId, terminalId: launch.terminalId, isWindow: launch.isWindow },
+        content: [{
+          type: "text",
+          text: `Teammate ${safeName} has durable Membership ${member.membershipId} and terminal ${launch.isWindow ? "window" : "pane"} ${launch.terminalId}. Runtime startup and Message presentation haven't been observed yet.`,
+        }],
+        details: {
+          membership: {
+            persisted: true,
+            current: true,
+            teamName: safeTeamName,
+            agentName: safeName,
+            agentId: member.agentId,
+            membershipId: member.membershipId,
+          },
+          terminalLaunch: {
+            launched: true,
+            adapter: terminal.name,
+            kind: launch.isWindow ? "window" : "pane",
+            targetId: launch.terminalId,
+          },
+          runtimeObservation: {
+            checked: false,
+            state: "not_observed",
+          },
+          initialMessage: {
+            accepted: true,
+            messageId: launch.initialMessage.id,
+            recipientMembershipId: launch.initialMessage.recipientMembershipId,
+            presentationObserved: false,
+          },
+          receipt: mutationReceipt(
+            "spawn_teammate",
+            { kind: "membership", id: member.membershipId!, teamName: safeTeamName, agentName: safeName },
+            {
+              membershipState: "current",
+              terminalLaunched: true,
+              initialMessageAccepted: true,
+              runtimeObservation: "not_observed",
+              messagePresentation: "not_observed",
+            },
+            ["Runtime startup and Message presentation were not observed by this call."],
+            "Continue without polling; use check_teammate only if startup trouble is suspected.",
+          ),
+        },
       };
       });
     },
@@ -1185,7 +1273,7 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const teamName = paths.sanitizeName(params.team_name);
       return teams.withTeamTopologyLease(teamName, async () => {
-      await assertCurrentSessionBinding(ctx, teamName);
+      await assertLeadMutation(ctx, "team_shutdown", teamName);
       try {
         const config = await teams.readConfig(teamName);
         const current = config.members.filter((member) => member.isActive !== false);
@@ -1229,6 +1317,17 @@ export default function (pi: ExtensionAPI) {
             tmuxPaneId: member.tmuxPaneId,
             windowId: member.windowId,
           })),
+          receipt: mutationReceipt(
+            "team_shutdown",
+            { kind: "team", id: teamName },
+            {
+              state: failures.length === 0 ? "shut_down" : "partially_shut_down",
+              deactivatedMembershipIds: deactivated.map((member) => member.membershipId).filter(Boolean),
+              taskAuthorityRetained: true,
+            },
+            failures.map((failure) => `${failure.name}: ${failure.error}`),
+            failures.length > 0 ? "Resolve the reported stop failures, then retry team_shutdown." : undefined,
+          ),
         };
         await refreshTeamFooter(ctx);
         return {
@@ -1250,8 +1349,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "cleanup_agent_sessions",
-    label: "Cleanup Agent Sessions",
+    name: "report_stale_agent_sessions",
+    label: "Report Stale Agent Sessions",
     description: "Report old Pi-core agent session folders for review without deleting them.",
     parameters: Type.Object({
       max_age_hours: Type.Optional(Type.Number()),
@@ -1338,7 +1437,6 @@ export default function (pi: ExtensionAPI) {
         alive,
         unreadCount,
         health,
-        agentLoopReady: !!runtimeStatus?.ready,
         hasRecentHeartbeat,
         startupStalled,
         runtime: runtimeStatus,
@@ -1352,15 +1450,18 @@ export default function (pi: ExtensionAPI) {
       }
 
       return {
-        content: [{ type: "text", text: JSON.stringify(details, null, 2) }],
+        content: [{
+          type: "text",
+          text: JSON.stringify({ alive, unreadCount, health, hasRecentHeartbeat, startupStalled }, null, 2),
+        }],
         details,
       };
     },
   });
 
   pi.registerTool({
-    name: "process_shutdown_approved",
-    label: "Process Shutdown Approved",
+    name: "teammate_shutdown",
+    label: "Shutdown Teammate",
     description: "Stop one teammate and deactivate its current Membership only after shutdown is confirmed.",
     parameters: Type.Object({
       team_name: Type.String(),
@@ -1370,12 +1471,12 @@ export default function (pi: ExtensionAPI) {
       const safeTeamName = paths.sanitizeName(params.team_name);
       const safeAgentName = paths.sanitizeName(params.agent_name);
       return teams.withTeamTopologyLease(safeTeamName, async () => {
-        await assertCurrentSessionBinding(ctx, safeTeamName);
+        await assertLeadMutation(ctx, "teammate_shutdown", safeTeamName);
         const config = await teams.readConfig(safeTeamName);
         const member = [...config.members].reverse().find(m => m.name === safeAgentName && m.isActive !== false);
         if (!member) throw new Error(`Teammate ${safeAgentName} not found`);
         if (member.name === "team-lead" || member.agentType === "lead") {
-          throw new Error("process_shutdown_approved cannot shut down the team leader; use team_shutdown for whole-team lifecycle closure.");
+          throw new Error("teammate_shutdown cannot shut down the team leader; use team_shutdown for whole-team lifecycle closure.");
         }
 
         const changed = await transitionCurrentMembership(safeTeamName, member, "process_shutdown", true);
@@ -1384,6 +1485,14 @@ export default function (pi: ExtensionAPI) {
           details: {
             deactivatedMembershipId: changed.member?.membershipId,
             stopEvidence: changed.stopEvidence,
+            receipt: mutationReceipt(
+              "teammate_shutdown",
+              { kind: "membership", id: changed.member?.membershipId || member.membershipId!, teamName: safeTeamName, agentName: safeAgentName },
+              {
+                membershipState: "inactive",
+                stopEvidence: changed.stopEvidence,
+              },
+            ),
           },
         };
       });
@@ -1459,6 +1568,7 @@ export default function (pi: ExtensionAPI) {
       separate_windows: Type.Optional(Type.Boolean({ default: false, description: "Open teammates in separate OS windows instead of panes" })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertLeadMutation(ctx, "create_predefined_team");
       const projectDir = ctx.cwd;
       const leadSessionFile = ctx?.sessionManager?.getSessionFile?.();
       if (!leadSessionFile) throw new Error("create_predefined_team requires a durable Pi Session file.");
@@ -1618,7 +1728,20 @@ export default function (pi: ExtensionAPI) {
       
       return {
         content: [{ type: "text", text: `Team "${safeTeamName}" created from predefined team "${params.predefined_team}".\n\nAgent spawn results:\n${summary}` }],
-        details: { teamName: safeTeamName, predefinedTeam: params.predefined_team, results: spawnResults },
+        details: {
+          teamName: safeTeamName,
+          predefinedTeam: params.predefined_team,
+          results: spawnResults,
+          receipt: mutationReceipt(
+            "create_predefined_team",
+            { kind: "team", id: safeTeamName, template: params.predefined_team },
+            {
+              teamState: "current",
+              teammateResults: spawnResults,
+            },
+            [],
+          ),
+        },
       };
       });
     },
@@ -1633,9 +1756,10 @@ export default function (pi: ExtensionAPI) {
       template_name: Type.String({ description: "Name for the template (e.g., 'modularization', 'frontend-team')" }),
       description: Type.Optional(Type.String({ description: "Description for the template" })),
       scope: Type.Optional(StringEnum(["user", "project"], { description: "Where to save: 'user' for global (~/.pi), 'project' for project-local (.pi). Defaults to 'user'." })),
+      dry_run: Type.Optional(Type.Boolean({ default: false, description: "Preview exact output paths and contents without writing files." })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
-      await assertCurrentSessionBinding(ctx, params.team_name);
+      await assertLeadMutation(ctx, "save_team_as_template", params.team_name);
       const teamName = params.team_name;
       
       // Verify the team exists
@@ -1658,6 +1782,7 @@ export default function (pi: ExtensionAPI) {
         description: params.description,
         scope: params.scope || "user",
         projectDir: ctx.cwd,
+        dryRun: params.dry_run ?? false,
       });
 
       // Build summary message
@@ -1665,15 +1790,16 @@ export default function (pi: ExtensionAPI) {
         `  - ${a.name}: ${a.existed ? "updated" : "created"} at ${a.path}`
       ).join("\n");
       
-      const message = `Team "${teamName}" saved as template "${params.template_name}".
+      const message = `Template "${params.template_name}" ${result.dryRun ? "previewed from" : "saved from"} Team "${teamName}".
 
-Agents saved:
+Agent artifacts ${result.dryRun ? "planned" : "written"}:
 ${agentSummary}
 
 Template location: ${result.teamsYamlPath}
 
-You can now use this template with:
-  create_predefined_team({ team_name: "new-team", predefined_team: "${params.template_name}", cwd: "..." })`;
+${result.dryRun
+  ? "No files were written. Review the artifact plan, then repeat with dry_run: false."
+  : `You can now use this template with:\n  create_predefined_team({ team_name: "new-team", predefined_team: "${params.template_name}", cwd: "..." })`}`;
 
       return {
         content: [{ type: "text", text: message }],
@@ -1684,6 +1810,19 @@ You can now use this template with:
           teamsYamlPath: result.teamsYamlPath,
           savedAgents: result.savedAgents,
           templateExisted: result.templateExisted,
+          dryRun: result.dryRun,
+          artifacts: result.artifacts,
+          receipt: mutationReceipt(
+            "save_team_as_template",
+            { kind: "team_template", id: params.template_name, teamName },
+            {
+              state: result.dryRun ? "previewed" : "written",
+              dryRun: result.dryRun,
+              artifacts: result.artifacts,
+            },
+            [],
+            result.dryRun ? "Review artifacts, then call save_team_as_template with dry_run false to write them." : undefined,
+          ),
         },
       };
     },
