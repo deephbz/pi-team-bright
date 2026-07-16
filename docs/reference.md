@@ -3,6 +3,14 @@
 PiTeams registers exactly 18 Pi tools. The names and schemas below are the
 public tool surface; examples are Pi tool calls, not shell commands.
 
+## Scope
+
+PiTeams communication is limited to direct messages and broadcasts among
+current members of one Team. Leader-to-leader messaging across Teams and
+communication between agents outside a Team are out of scope. The extension
+does not provide a cross-Team roster, agent directory, or general-purpose
+communication router.
+
 The runtime contract assumes one PiTeams version per live team. Upgrade by
 stopping the whole team, completing any required out-of-band migration, and
 restarting the whole team; mixed-version rolling operation isn't supported.
@@ -43,7 +51,8 @@ Required: `team_name`, `name`, `prompt`, `cwd`.
 Optional: `model`, `thinking` (`off`, `minimal`, `low`, `medium`, `high`, or
 `xhigh`), and `separate_window` (default `false`). Omit `model` unless an
 explicit override is requested.
-`cwd` must be absolute. A discovered agent definition with the same name can
+`cwd` is passed to the selected terminal adapter; use an absolute path so the
+teammate's working location is unambiguous. A discovered agent definition with the same name can
 supply a Pi tool allowlist to the launched process. Spawning a name already in
 the roster stops and replaces that teammate.
 
@@ -110,6 +119,9 @@ returns `candidates`, `cleaned: 0`, and the safety reason. Optional:
 `max_age_hours` (default `24`), which must be finite and non-negative.
 
 ## Communication
+
+Every communication operation is scoped to the named Team and its current
+Membership roster. There is no inter-Team or no-Team communication operation.
 
 ### `send_message`
 

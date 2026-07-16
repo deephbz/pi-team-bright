@@ -10,6 +10,10 @@ terminal panes/windows, inbox messages, runtime health, and the task-tool
 workflow. It does not provide slash commands; every operation below is a Pi
 tool. The extension registers exactly 18 tools.
 
+Communication is limited to direct messages and broadcasts among current
+members of one Team. Leader-to-leader messaging across Teams and communication
+between agents outside a Team are out of scope.
+
 Use one PiTeams version per live team. For an Alpha upgrade, stop the whole
 team, run any required out-of-band Task migration, then restart every process
 on the same version; don't attempt a rolling mixed-version upgrade.

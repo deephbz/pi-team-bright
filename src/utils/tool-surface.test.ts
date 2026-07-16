@@ -13,12 +13,16 @@ const predefinedSource = fs.readFileSync(path.join(process.cwd(), "src/utils/pre
 const skillPath = path.join(process.cwd(), "skills/pi-teams/SKILL.md");
 const skill = fs.readFileSync(skillPath, "utf8");
 const guide = fs.readFileSync(path.join(process.cwd(), "docs/guide.md"), "utf8");
+const operations = fs.readFileSync(path.join(process.cwd(), "docs/current/operations.md"), "utf8");
+const product = fs.readFileSync(path.join(process.cwd(), "docs/current/product.md"), "utf8");
 const reference = fs.readFileSync(path.join(process.cwd(), "docs/reference.md"), "utf8");
 const publicDocs = [
   fs.readFileSync(path.join(process.cwd(), "README.md"), "utf8"),
   guide,
+  operations,
   reference,
 ];
+const workflowDocs = [operations, reference];
 const registeredTools: Array<{ name: string; description: string; parameters: { properties?: Record<string, unknown> } }> = [];
 piTeams({
   registerTool(tool: { name: string; description: string; parameters: { properties?: Record<string, unknown> } }) {
@@ -125,7 +129,7 @@ describe("registered PiTeams tool surface", () => {
     expect(JSON.stringify(statusSchema)).toContain('"blocked"');
     expect(reference).toMatch(/`status`:[^\n]*`blocked`/i);
     expect(skill).toMatch(/`status`:[^\n]*`blocked`/i);
-    expect(guide).toMatch(/status values[\s\S]{0,120}`blocked`/i);
+    expect(operations).toMatch(/status[\s\S]{0,120}`blocked`/i);
   });
 
   it("does not expose the inert spawn-time plan mode switch", () => {
@@ -136,11 +140,19 @@ describe("registered PiTeams tool surface", () => {
   });
 
   it("documents optional prose review without a separate Plan API", () => {
-    for (const doc of [...publicDocs, skill]) {
+    for (const doc of [...workflowDocs, skill]) {
       expect(doc).toMatch(/simple (?:Task|work)[\s\S]{0,260}(skip|direct)/i);
       expect(doc).toMatch(/complex[\s\S]{0,500}design[\s\S]{0,500}(Message|message)[\s\S]{0,500}in_progress/i);
       expect(doc).not.toContain("task_submit_plan");
       expect(doc).not.toContain("task_evaluate_plan");
+    }
+  });
+
+  it("states the Team-scoped communication boundary in maintained documentation", () => {
+    for (const doc of [product, operations, reference, skill]) {
+      expect(doc).toMatch(/communication[\s\S]{0,180}(one Team|same Team)/i);
+      expect(doc).toMatch(/Leader-to-leader[\s\S]{0,180}out of scope/i);
+      expect(doc).toMatch(/agents\s+outside a Team\s+are out of scope/i);
     }
   });
 
