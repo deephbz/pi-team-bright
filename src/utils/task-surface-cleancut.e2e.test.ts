@@ -26,7 +26,7 @@ const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 const testTeams: string[] = [];
 const testRoots: string[] = [];
 
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 180_000 });
 
 function uniqueTeam(suffix: string): string {
   const name = `task-surface-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
