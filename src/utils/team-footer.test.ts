@@ -7,6 +7,7 @@ import {
   resolveTeamFooterBinding,
   syncTeamFooter,
   teamFooterFactory,
+  latestMessageClock,
   type TeamFooterBinding,
 } from "./team-footer";
 import * as teams from "./teams";
@@ -28,7 +29,7 @@ function model() {
   } as any;
 }
 
-function context(sessionFile: string, cwd = "/tmp/footer-project") {
+function context(sessionFile: string, cwd = "/tmp/footer-project", entries: any[] = []) {
   const setFooter = vi.fn();
   const setStatus = vi.fn();
   return {
@@ -36,7 +37,7 @@ function context(sessionFile: string, cwd = "/tmp/footer-project") {
     ui: { setFooter, setStatus },
     sessionManager: {
       getSessionFile: vi.fn(() => sessionFile),
-      getEntries: vi.fn(() => []),
+      getEntries: vi.fn(() => entries),
       getBranch: vi.fn(() => []),
       getCwd: vi.fn(() => cwd),
       getSessionName: vi.fn(() => undefined),
@@ -120,9 +121,47 @@ describe("Team identity footer projection", () => {
     const component = factory({ requestRender: vi.fn() } as any, theme, footerData(statuses));
     const lines = component.render(140);
     expect(plain(lines[0])).toContain(`[${teamName} · reviewer] /tmp/footer-project (feature/footer)`);
+    expect(theme.fg).toHaveBeenCalledWith("dim", "reviewer");
     expect(lines[1]).toContain("gpt-test");
     expect(lines[2]).toBe("TPS: 60.6 tok/s");
-    component.dispose();
+    component.dispose?.();
+  });
+
+  it("keeps the lead role accent and shows the local time of the latest message", () => {
+    const latest = new Date(2026, 6, 17, 9, 4, 0).toISOString();
+    const older = new Date(2026, 6, 17, 8, 3, 0).toISOString();
+    const binding: TeamFooterBinding = {
+      teamName: "release-team",
+      role: "team-lead",
+      membershipId: "membership-lead",
+      sessionFile: "/tmp/lead.jsonl",
+    };
+    const ctx = context("/tmp/lead.jsonl", "/tmp/footer-project", [
+      { type: "message", timestamp: older, message: { role: "user", content: "older", timestamp: older } },
+      { type: "model_change", timestamp: new Date(2026, 6, 17, 10, 0, 0).toISOString() },
+      { type: "message", timestamp: latest, message: { role: "user", content: "latest", timestamp: latest } },
+    ]);
+    const factory = teamFooterFactory(pi(), ctx, binding, () => model());
+    const component = factory({ requestRender: vi.fn() } as any, theme, footerData());
+
+    const lines = component.render(140);
+
+    expect(plain(lines[0])).toContain("[release-team · team-lead · 09:04]");
+    expect(theme.fg).toHaveBeenCalledWith("accent", "team-lead");
+    expect(theme.fg).not.toHaveBeenCalledWith("dim", "team-lead");
+    component.dispose?.();
+  });
+
+  it("derives message time from message entries only", () => {
+    const first = new Date(2026, 6, 17, 7, 8, 0).toISOString();
+    const last = new Date(2026, 6, 17, 11, 12, 0).toISOString();
+    expect(latestMessageClock([
+      { type: "message", timestamp: first },
+      { type: "label", timestamp: new Date(2026, 6, 17, 12, 0, 0).toISOString() },
+      { type: "message", timestamp: "invalid" },
+      { type: "custom_message", timestamp: last },
+    ])).toBe("11:12");
+    expect(latestMessageClock([])).toBeUndefined();
   });
 
   it("shows no label for standalone, fork/unbound, stale-Session, or inactive Membership candidates", async () => {
