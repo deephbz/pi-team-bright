@@ -3,3 +3,6 @@ node_modules
 .pi
 dist
 *.log
+artifacts/tool-result-qa/
+agent-surface.json
+__pycache__/

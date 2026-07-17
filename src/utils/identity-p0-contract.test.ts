@@ -6,6 +6,7 @@ import { DIRECT_MESSAGE_CUSTOM_TYPE, DirectMessageDelivery } from "./message-del
 import type { InboxMessage, Member } from "./models";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
+import * as runtime from "./runtime";
 import * as teams from "./teams";
 
 type IdentityMember = Member & {
@@ -336,7 +337,7 @@ describe("identity P0: generation-scoped Communication and runtime projections",
     ]);
   });
 
-  it("ignores stale-generation runtime readiness in the current teammate projection", async () => {
+  it("never interprets stale-generation runtime readiness as current Membership evidence", async () => {
     const teamName = uniqueTeam("runtime-projection");
     await teams.createTeam(teamName, "lead-session", "lead");
     const oldMember = await addPrepared(teamName);
@@ -354,20 +355,43 @@ describe("identity P0: generation-scoped Communication and runtime projections",
       agentName: "worker",
       membershipId: oldMember.membershipId,
       sessionFile: oldSession,
+      pid: 4242,
+      startedAt: 10,
       ready: true,
       lastHeartbeatAt: Date.now(),
     }));
 
-    const { toolsByName } = registerExtension();
-    const result = await toolsByName.get("check_teammate")!.execute("check", {
-      team_name: teamName,
-      agent_name: "worker",
-    }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "lead-session" },
+    const current = await teams.assertCurrentSessionBinding(teamName, "worker", newSession);
+    const stored = await runtime.readRuntimeStatus(teamName, "worker");
+    expect(current).toMatchObject({
+      membershipId: newMember.membershipId,
+      sessionFile: newSession,
     });
-    expect(result.details).not.toHaveProperty("successfulTurnObserved");
-    expect(result.details.runtime).toBeNull();
-    expect(result.details.runtime?.membershipId).not.toBe(oldMember.membershipId);
+    expect(stored).toMatchObject({
+      membershipId: oldMember.membershipId,
+      ready: true,
+    });
+    expect(stored?.membershipId).not.toBe(current.membershipId);
+
+    // Runtime observations remain historical evidence, but the current join
+    // is exact-generation only. A stale "ready" bit cannot be projected onto
+    // the replacement Membership or authorize deletion as that generation.
+    const currentRuntime = stored?.membershipId === current.membershipId ? stored : null;
+    expect(currentRuntime).toBeNull();
+    expect(runtime.runtimeGeneration(stored)).toEqual({
+      membershipId: oldMember.membershipId,
+      pid: 4242,
+      startedAt: 10,
+    });
+    await expect(runtime.deleteRuntimeStatus(teamName, "worker", {
+      membershipId: newMember.membershipId,
+      pid: 4242,
+      startedAt: 10,
+    })).resolves.toBe(false);
+    expect(await runtime.readRuntimeStatus(teamName, "worker")).toMatchObject({
+      membershipId: oldMember.membershipId,
+      ready: true,
+    });
   });
 });
 

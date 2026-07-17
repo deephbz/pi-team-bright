@@ -1,6 +1,6 @@
 # Separate current context, decisions, and journal evidence
 
-Status: accepted
+Status: superseded in part by [decision 0004](0004-source-allocation.md)
 
 Date: 2026-07-16
 

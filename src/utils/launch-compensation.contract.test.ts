@@ -5,11 +5,8 @@ import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import * as messaging from "./messaging";
 import * as tasks from "./tasks";
-import * as predefined from "./predefined-teams";
-import { DirectMessageDelivery } from "./message-delivery";
-import { TaskChangeDelivery } from "./task-delivery";
+import { formatPiTeamsToolResult } from "./tool-result-renderer";
 
 type RegisteredTool = {
   name: string;
@@ -68,7 +65,32 @@ function register(terminal: TerminalAdapter): Map<string, RegisteredTool> {
 async function team(suffix: string) {
   const name = unique(suffix);
   const leadSession = `/tmp/${name}-lead.jsonl`;
-  await teams.createTeam(name, leadSession, "lead");
+  const taskWorkspace = paths.teamDir(name);
+  fs.mkdirSync(`${taskWorkspace}/.beads`, { recursive: true });
+  fs.writeFileSync(`${taskWorkspace}/.beads/metadata.json`, JSON.stringify({
+    database: "dolt",
+    backend: "dolt",
+    dolt_database: "launch_compensation_contract",
+    project_id: `launch-compensation-${name}`,
+  }));
+  vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
+  await teams.createTeam(
+    name,
+    leadSession,
+    "lead",
+    undefined,
+    undefined,
+    undefined,
+    taskWorkspace,
+    `task-authority-${name}`,
+    {
+      schema: "pi-teams-beads-authority/1",
+      backend: "dolt",
+      database: "dolt",
+      doltDatabase: "launch_compensation_contract",
+      projectId: `launch-compensation-${name}`,
+    },
+  );
   return { name, leadSession };
 }
 
@@ -82,22 +104,41 @@ afterEach(() => {
   }
 });
 
-describe("compensated teammate launch", () => {
-  it("deactivates the exact prepared Membership when the initial Message fails before spawn", async () => {
-    const f = await team("message-failure");
+describe("compensated Worker launch", () => {
+  it("does not create a Worker carrier when Membership preparation persistence fails", async () => {
+    const f = await team("preparation-failure");
     const a = adapter();
     const tools = register(a.terminal);
-    vi.spyOn(messaging, "sendPlainMessage").mockRejectedValueOnce(new Error("inbox unavailable"));
+    vi.spyOn(teams, "addMember").mockRejectedValueOnce(new Error("membership write failed"));
 
-    await expect(tools.get("spawn_teammate")!.execute(
-      "spawn",
-      { team_name: f.name, name: "worker", prompt: "do work", cwd: process.cwd() },
+    await expect(tools.get("worker_ensure")!.execute(
+      "ensure",
+      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
       undefined,
       undefined,
       context(f.leadSession),
-    )).rejects.toThrow(/inbox unavailable.*deactivated/i);
+    )).rejects.toThrow(/membership write failed/i);
 
     expect(a.spawn).not.toHaveBeenCalled();
+    const worker = (await teams.readConfig(f.name)).members.find((member) => member.name === "worker");
+    expect(worker).toBeUndefined();
+  });
+
+  it("deactivates the exact prepared Membership when terminal launch fails before binding", async () => {
+    const f = await team("terminal-launch-failure");
+    const a = adapter();
+    a.spawn.mockImplementationOnce(() => { throw new Error("terminal launch failed"); });
+    const tools = register(a.terminal);
+
+    await expect(tools.get("worker_ensure")!.execute(
+      "ensure",
+      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
+      undefined,
+      undefined,
+      context(f.leadSession),
+    )).rejects.toThrow(/terminal launch failed.*deactivated/i);
+
+    expect(a.kill).not.toHaveBeenCalled();
     const worker = (await teams.readConfig(f.name)).members.find((member) => member.name === "worker");
     expect(worker).toMatchObject({ isActive: false, deactivationReason: "replaced" });
   });
@@ -108,9 +149,9 @@ describe("compensated teammate launch", () => {
     const tools = register(a.terminal);
     vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("config write failed"));
 
-    await expect(tools.get("spawn_teammate")!.execute(
-      "spawn",
-      { team_name: f.name, name: "worker", prompt: "do work", cwd: process.cwd() },
+    await expect(tools.get("worker_ensure")!.execute(
+      "ensure",
+      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
       undefined,
       undefined,
       context(f.leadSession),
@@ -128,9 +169,9 @@ describe("compensated teammate launch", () => {
     const tools = register(a.terminal);
     vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("config write failed"));
 
-    await expect(tools.get("spawn_teammate")!.execute(
-      "spawn",
-      { team_name: f.name, name: "worker", prompt: "do work", cwd: process.cwd() },
+    await expect(tools.get("worker_ensure")!.execute(
+      "ensure",
+      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
       undefined,
       undefined,
       context(f.leadSession),
@@ -141,47 +182,8 @@ describe("compensated teammate launch", () => {
     expect(worker?.isActive).not.toBe(false);
   });
 
-  it("applies the same compensation to predefined members and rejects partial launch as an error", async () => {
-    const name = unique("predefined-message-failure");
-    const leadSession = `/tmp/${name}-lead.jsonl`;
-    const a = adapter();
-    vi.spyOn(tasks, "resolveTeamTaskAuthority").mockResolvedValue({
-      workspace: `/tmp/${name}-beads`,
-      authorityId: `authority-${name}`,
-      fingerprint: {
-        schema: "pi-teams-beads-authority/1",
-        backend: "dolt",
-        database: "dolt",
-        doltDatabase: `launch_${name}`,
-        projectId: `launch-${name}`,
-      },
-    });
-    vi.spyOn(predefined, "getPredefinedTeam").mockReturnValue({ name: "reviewers", agents: ["worker"] });
-    vi.spyOn(predefined, "getAllAgentDefinitions").mockReturnValue([{
-      name: "worker",
-      description: "worker",
-      prompt: "review",
-      filePath: "/tmp/worker.md",
-    }]);
-    vi.spyOn(messaging, "sendPlainMessage").mockRejectedValueOnce(new Error("inbox unavailable"));
-    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue();
-    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue();
-    const tools = register(a.terminal);
-
-    await expect(tools.get("create_predefined_team")!.execute(
-      "predefined",
-      { team_name: name, predefined_team: "reviewers", cwd: process.cwd() },
-      undefined,
-      undefined,
-      context(leadSession),
-    )).rejects.toThrow(/only partially launched[\s\S]*inbox unavailable/i);
-
-    expect(a.spawn).not.toHaveBeenCalled();
-    const worker = (await teams.readConfig(name)).members.find((member) => member.name === "worker");
-    expect(worker).toMatchObject({ isActive: false, deactivationReason: "replaced" });
-  });
-
-  it("puts the structured shutdown receipt in model-visible content", async () => {
+  it("keeps shutdown agent content concise and the structured receipt in the machine envelope", async () => {
+    vi.stubEnv("TMUX_PANE", "");
     const f = await team("shutdown-receipt");
     const a = adapter();
     const tools = register(a.terminal);
@@ -193,17 +195,101 @@ describe("compensated teammate launch", () => {
       undefined,
       context(f.leadSession),
     );
-    const visible = JSON.parse(result.content[0].text);
-
-    expect(visible).toMatchObject({
-      status: "shut_down",
-      teamName: f.name,
-      deactivatedMembers: ["team-lead"],
-      failures: [],
-      staleBindings: [],
-      stopEvidence: [],
-      taskAuthorityRetained: true,
+    expect(result.content[0].text).toMatch(new RegExp(`Team ${f.name} shut down`));
+    expect(() => JSON.parse(result.content[0].text)).toThrow();
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      operation: "team_shutdown",
+      outcome: "accepted",
+      postState: {
+        lifecycle: "shut_down",
+        stoppedWorkers: 0,
+        deactivatedMembers: ["team-lead"],
+        failures: [],
+        unfinishedTasks: [],
+        taskAuthorityRetained: true,
+      },
+      evidence: {
+        stop: [],
+      },
     });
-    expect(visible).toMatchObject(result.details);
+    expect(result.details.diagnostics).toMatchObject({
+      staleBindings: [],
+    });
+  });
+
+  it("reports partial shutdown once while preserving recovery evidence across projections", async () => {
+    const f = await team("shutdown-partial-projection");
+    const a = adapter({ alive: true });
+    const tools = register(a.terminal);
+    await teams.addMember(f.name, {
+      membershipId: teams.newMembershipId(),
+      agentId: `delivery-broken@${f.name}`,
+      name: "delivery-broken",
+      agentType: "teammate",
+      joinedAt: Date.now(),
+      tmuxPaneId: "pane-worker",
+      sessionFile: `/tmp/${f.name}-delivery-broken.jsonl`,
+      cwd: process.cwd(),
+      subscriptions: [],
+      isActive: true,
+    });
+    vi.mocked(tasks.listTasksWithVersions).mockResolvedValue([{
+      id: "task-open",
+      title: "Retained unfinished work",
+      description: "Keep this Task across partial shutdown.",
+      acceptanceCriteria: "The retry preserves the Task authority.",
+      status: "open",
+      relations: [],
+      version: "task-version-1",
+      provenance: { authority: "beads", teamName: f.name },
+    }]);
+
+    const result = await tools.get("team_shutdown")!.execute(
+      "shutdown-partial",
+      { team_name: f.name },
+      undefined,
+      undefined,
+      context(f.leadSession),
+    );
+    const agentText = result.content[0].text as string;
+
+    expect(agentText).toContain(`Team ${f.name} shutdown partially completed`);
+    expect(agentText).toContain("Team remains active with team-lead, delivery-broken current");
+    expect(agentText).toContain("stop wasn't confirmed for delivery-broken.");
+    expect(agentText).toContain("Task authority and 1 unfinished Task retained; resolve the failure and retry.");
+    expect(agentText).not.toContain("whose Membership remains current");
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "partial",
+      operation: "team_shutdown",
+      postState: {
+        lifecycle: "active",
+        shutdownOutcome: "partial",
+        currentMembers: ["team-lead", "delivery-broken"],
+        failures: [{
+          name: "delivery-broken",
+          reason: "stop_not_confirmed",
+          membershipRemainsCurrent: true,
+        }],
+        unfinishedTasks: [{ id: "task-open", status: "open", version: "task-version-1" }],
+        taskAuthorityRetained: true,
+      },
+      nextActions: [{ tool: "team_shutdown", args: { team_name: f.name } }],
+      evidence: { stopFailures: [{ name: "delivery-broken" }] },
+    });
+
+    const human = formatPiTeamsToolResult({
+      tool: "team_shutdown",
+      args: { team_name: f.name },
+      details: result.details,
+      content: result.content,
+      expanded: false,
+    }).map(line => line.text).join("\n");
+    expect(human).toContain(`Shut Down Team · partial · Team ${f.name} · active`);
+    expect(human).toContain("1 failed · 1 unfinished Tasks retained");
+    expect(human).toContain("Current members: team-lead, delivery-broken");
+    expect(human).toContain("delivery-broken: Worker stop couldn't be confirmed");
+    expect(human).toContain("→ team_shutdown — Resolve the named Worker stop failures, then retry.");
   });
 });

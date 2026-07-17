@@ -91,7 +91,15 @@ async function createWithTools(teamName: string, sessionFile = `/tmp/${teamName}
     ctx,
   );
   activeHarnesses.push({ handlers, ctx });
-  return { tools, ctx, config: result.details.config as TeamConfig };
+  expect(result.details).toMatchObject({
+    schema: "pi-teams-tool-result/1",
+    outcome: "accepted",
+    operation: "team_create",
+    resource: { kind: "team", id: teamName, teamName },
+    postState: { name: teamName, lifecycle: "active", taskAuthorityReady: true },
+    evidence: { taskAuthority: { backend: "beads" } },
+  });
+  return { tools, ctx, config: readPersistedConfig(teamName) };
 }
 
 afterEach(async () => {
@@ -147,10 +155,16 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
       undefined,
       ctx,
     );
-    expect(created.details.task).toMatchObject({
-      title: "Use the default private authority",
-      description: "The first Task must work without operator setup.",
+    expect(created.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "task_create",
+      postState: {
+        title: "Use the default private authority",
+        description: "The first Task must work without operator setup.",
+      },
     });
+    const createdTaskId = created.details.postState.id as string;
 
     const restartedStore = new BeadsTaskStore({
       teamName,
@@ -158,8 +172,8 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
       authorityFingerprint: config.taskAuthorityFingerprint,
       requireExpectedVersion: false,
     });
-    await expect(restartedStore.read(created.details.task.id)).resolves.toMatchObject({
-      id: created.details.task.id,
+    await expect(restartedStore.read(createdTaskId)).resolves.toMatchObject({
+      id: createdTaskId,
       title: "Use the default private authority",
     });
   });

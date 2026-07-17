@@ -82,6 +82,8 @@ export interface TaskFile {
   id: string;
   title: string;
   description: string;
+  /** Observable success criteria used by the assignee to self-verify the work. */
+  acceptanceCriteria: string;
   design?: string;
   status: TaskStatus;
   assignee?: string;
@@ -98,6 +100,59 @@ export interface TaskFile {
 
 /** Compact query projection; re-read the full Task before a conditional write. */
 export type TaskListItem = Omit<TaskFile, "version">;
+
+export type TeamEventType = "task" | "worker" | "alert";
+
+export type TaskEventChange = "created" | "assigned" | "design" | "note" | "status" | "relation";
+
+export interface TaskTeamEvent {
+  type: "task";
+  cursor: string;
+  ref: {
+    authorityId: string;
+    taskId: string;
+    version: string;
+  };
+  change: TaskEventChange;
+  actor: string;
+  at: string;
+}
+
+export type WorkerEventPhase = "prepared" | "session_bound" | "stopped" | "failed";
+
+export interface WorkerTeamEvent {
+  type: "worker";
+  cursor: string;
+  worker: string;
+  membershipId: string;
+  phase: WorkerEventPhase;
+  at: string;
+}
+
+export type AlertKind = "clarification" | "attention" | "announcement";
+
+export interface AlertTeamEvent {
+  type: "alert";
+  cursor: string;
+  alertId: string;
+  from: string;
+  to: string | "*";
+  taskRef?: {
+    taskId: string;
+    version?: string;
+  };
+  kind: AlertKind;
+  text: string;
+  at: string;
+}
+
+/** Ordered observation of committed state; it is not a second Task or Worker authority. */
+export type TeamEvent = TaskTeamEvent | WorkerTeamEvent | AlertTeamEvent;
+
+export type TeamEventInput =
+  | Omit<TaskTeamEvent, "cursor" | "at">
+  | Omit<WorkerTeamEvent, "cursor" | "at">
+  | Omit<AlertTeamEvent, "cursor" | "at">;
 
 export interface InboxMessage {
   /** Communication-authority identity. Optional only for legacy on-disk records. */

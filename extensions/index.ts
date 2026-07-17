@@ -4,7 +4,13 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import * as paths from "../src/utils/paths";
 import * as teams from "../src/utils/teams";
 import * as tasks from "../src/utils/tasks";
+import { BeadsError } from "../src/utils/beads";
 import * as messaging from "../src/utils/messaging";
+import * as alerts from "../src/utils/alerts";
+import * as teamEvents from "../src/utils/team-events";
+import { selectTeamSyncNextActions, summarizeTeamSyncNextActions } from "../src/utils/team-sync-actions";
+import { toolResultDetails, warning as toolResultWarning } from "../src/utils/tool-results";
+import { createPiTeamsResultRenderer, type PiTeamsPublicTool } from "../src/utils/tool-result-renderer";
 import {
   DirectMessageDelivery,
   messagePollMs,
@@ -23,6 +29,9 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
+
+// Public-interface intent and source allocation: docs/current/README.md and
+// docs/reference.md. Tool schemas and execution below are the contract source.
 
 /**
  * Build the command used to relaunch pi for teammate processes.
@@ -292,6 +301,24 @@ export function inspectAgentSessionCleanup(
 }
 
 export default function (pi: ExtensionAPI) {
+  // Keep the default agent-facing coordination surface intentionally small.
+  // Legacy implementations remain readable for migration and historical
+  // delivery recovery, but registration is filtered at this boundary.
+  const publicTools = new Set([
+    "team_create", "team_sync", "team_shutdown",
+    "worker_ensure", "worker_stop",
+    "task_create", "task_read", "task_update", "task_link",
+    "alert_send",
+  ]);
+  const registerPublicTool = pi.registerTool.bind(pi);
+  (pi as any).registerTool = (tool: { name: string }) => {
+    if (publicTools.has(tool.name)) {
+      registerPublicTool({
+        ...tool,
+        renderResult: createPiTeamsResultRenderer(tool.name as PiTeamsPublicTool),
+      } as any);
+    }
+  };
   let isTeammate = !!process.env.PI_AGENT_NAME;
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
@@ -325,16 +352,13 @@ export default function (pi: ExtensionAPI) {
     appliedOperations: string[],
     warnings: string[] = [],
   ): string {
-    return JSON.stringify({
-      task: {
-        id: task.id,
-        status: task.status,
-        assignee: task.assignee ?? null,
-        version: task.version,
-      },
-      appliedOperations,
-      warnings,
-    });
+    const owner = task.assignee ? `assigned to ${task.assignee}` : "unassigned";
+    const unchanged = appliedOperations.length === 0 ? " No Task state changed." : "";
+    const blocked = task.status === "blocked"
+      ? ` Blocker evidence is recorded${task.assignee ? "; the assignee remains responsible for the next update." : "; coordinator action is required before reassignment."}`
+      : "";
+    const warningText = warnings.length > 0 ? ` Delivery warnings: ${warnings.join("; ")}` : " Delivery warnings: none.";
+    return `Task ${task.id} is ${task.status}, ${owner}, version ${task.version}.${unchanged}${blocked}${warningText}`;
   }
 
   function mutationReceipt(
@@ -497,6 +521,9 @@ export default function (pi: ExtensionAPI) {
           return current;
         });
         currentMembershipId = bound.membershipId;
+        await teamEvents.appendTeamEvent(teamName, {
+          type: "worker", worker: agentName, membershipId: bound.membershipId!, phase: "session_bound",
+        }).catch(() => undefined);
       }
       ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
       if (terminal) {
@@ -549,7 +576,14 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("turn_end", async (event, ctx) => {
     const stopReason = event.message?.role === "assistant" ? event.message.stopReason : undefined;
-    if (stopReason === "error" || stopReason === "aborted") return;
+    if (stopReason === "error" || stopReason === "aborted") {
+      if (isTeammate && teamName && currentMembershipId) {
+        await teamEvents.appendTeamEvent(teamName, {
+          type: "worker", worker: agentName, membershipId: currentMembershipId, phase: "failed",
+        }).catch(() => undefined);
+      }
+      return;
+    }
     if (isTeammate && teamName) {
       await writeCurrentTeammateRuntime(ctx, {
         ready: true,
@@ -577,11 +611,8 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  let firstTurn = true;
   pi.on("before_agent_start", async (event, ctx) => {
-    if (isTeammate && firstTurn) {
-      firstTurn = false;
-
+    if (isTeammate) {
       if (teamName) {
         await writeCurrentTeammateRuntime(ctx, {
           lastHeartbeatAt: Date.now(),
@@ -589,10 +620,12 @@ export default function (pi: ExtensionAPI) {
       }
 
       let modelInfo = "";
+      let profileInfo = "";
       if (teamName) {
         try {
           const teamConfig = await teams.readConfig(teamName);
           const member = teamConfig.members.find(m => m.name === agentName);
+          if (member?.prompt) profileInfo = `\nYour standing Worker profile: ${member.prompt}`;
           if (member && member.model) {
             modelInfo = `\nYou are currently using model: ${member.model}`;
             if (member.thinking) {
@@ -605,14 +638,16 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      const inboxInstruction = directMessageSessionEligible
-        ? "Direct Messages are delivered in context by stable Message ID. Do not call read_inbox merely to discover or fetch them; read_inbox remains available for explicit inspection."
-        : "This fork is a new Session identity and is not bound to the source recipient inbox. Do not consume the source inbox.";
       const taskInstruction = taskChangeSessionEligible
-        ? "Assigned Task changes are delivered in context by authority-scoped TaskChangeRef. Treat the payload as a versioned snapshot and re-read the Task authority before a conflicting write."
+        ? "Assigned Tasks are your work contracts. Alerts and retained legacy delivery records are delivered in context, but presentation never changes Task state. Set an accepted Task in_progress when work starts. Before stopping, update it to closed with verification evidence or blocked with the concrete blocker and next action. A TUI reply or alert never completes work. Re-read Task authority before a conflicting write."
         : "This fork is a new Session identity and receives none of the source Agent's pending Task changes.";
       return {
-        systemPrompt: event.systemPrompt + `\n\nYou are teammate '${agentName}' on team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}\n${inboxInstruction}\n${taskInstruction}`,
+        systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,
+      };
+    }
+    if (teamName) {
+      return {
+        systemPrompt: event.systemPrompt + "\n\nDelegate executable work only through Task plus assignee and explicit acceptance criteria. Use alert_send only for exceptional clarification or attention. Wait through team_sync, reuse current Workers, and reconcile Workers and Tasks before finishing.",
       };
     }
   });
@@ -728,7 +763,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   type PreparedLaunchTarget = { terminalId: string; isWindow: boolean };
-  type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage: IdentifiedInboxMessage };
+  type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: IdentifiedInboxMessage };
 
   async function compensatePreparedLaunch(
     targetTeamName: string,
@@ -761,12 +796,12 @@ export default function (pi: ExtensionAPI) {
   async function launchPreparedMembership(
     targetTeamName: string,
     prepared: Member,
-    initialMessage: () => Promise<IdentifiedInboxMessage>,
+    initialMessage: (() => Promise<IdentifiedInboxMessage>) | null,
     spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>,
   ): Promise<PreparedLaunchReceipt> {
     let target: PreparedLaunchTarget | null = null;
     try {
-      const acceptedMessage = await initialMessage();
+      const acceptedMessage = initialMessage ? await initialMessage() : undefined;
       target = await spawn();
       if (!target.terminalId) throw new Error("terminal adapter returned an empty target ID");
       await teams.updateMembership(
@@ -774,7 +809,7 @@ export default function (pi: ExtensionAPI) {
         prepared.membershipId!,
         target.isWindow ? { windowId: target.terminalId } : { tmuxPaneId: target.terminalId },
       );
-      return { ...target, initialMessage: acceptedMessage };
+      return { ...target, ...(acceptedMessage ? { initialMessage: acceptedMessage } : {}) };
     } catch (launchError) {
       try {
         await compensatePreparedLaunch(targetTeamName, prepared, target);
@@ -813,18 +848,50 @@ export default function (pi: ExtensionAPI) {
       const safeTeamName = paths.sanitizeName(params.team_name);
       return teams.withTeamTopologyLease(safeTeamName, async (topologyLease) => {
       const taskAuthority = await tasks.resolveTeamTaskAuthority(safeTeamName);
-      const config = await teams.createTeam(
-        safeTeamName,
-        leadSessionFile,
-        "lead-agent",
-        params.description,
-        params.default_model,
-        params.separate_windows,
-        taskAuthority.workspace,
-        taskAuthority.authorityId,
-        taskAuthority.fingerprint,
-        topologyLease,
-      );
+      let config: Awaited<ReturnType<typeof teams.createTeam>>;
+      try {
+        config = await teams.createTeam(
+          safeTeamName,
+          leadSessionFile,
+          "lead-agent",
+          params.description,
+          params.default_model,
+          params.separate_windows,
+          taskAuthority.workspace,
+          taskAuthority.authorityId,
+          taskAuthority.fingerprint,
+          topologyLease,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("still has current Memberships")) throw error;
+        const current = await teams.readConfig(safeTeamName);
+        const members = current.members.filter((member) => member.isActive !== false).map((member) => member.name);
+        return {
+          content: [{
+            type: "text",
+            text: `Team ${safeTeamName} not recreated: current members ${members.join(", ")} must be shut down first. No Team identity was replaced.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "team_create",
+            resource: { kind: "team", id: safeTeamName, teamName: safeTeamName },
+            postState: {
+              name: safeTeamName,
+              changed: false,
+              lifecycle: "active",
+              taskBackend: current.taskBackend,
+              currentMembers: members,
+            },
+            warnings: [toolResultWarning("team_has_current_members", "Current Team membership prevents implicit recreation.", safeTeamName)],
+            nextActions: [{
+              tool: "team_shutdown",
+              reason: "Shut down the current Team before intentionally recreating it.",
+              args: { team_name: safeTeamName },
+            }],
+          }),
+        };
+      }
       // Register this session as the lead so it can receive inbox messages.
       registerLeadSession(safeTeamName, leadSessionFile);
       // Update teamName and start native custom delivery for the lead.
@@ -838,34 +905,41 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{
           type: "text",
-          text: `Team ${safeTeamName} created with durable lead Membership ${currentMembershipId} and Task authority ${config.taskAuthorityId}.`,
+          text: `Team ${safeTeamName} created; Task authority is ready. Next: ensure a Worker or create the first Task.`,
         }],
-        details: {
-          config,
-          receipt: mutationReceipt(
-            "team_create",
-            { kind: "team", id: safeTeamName },
-            {
-              teamName: safeTeamName,
-              leadMembershipId: currentMembershipId,
-              taskAuthorityId: config.taskAuthorityId,
-              membershipState: "current",
+        details: toolResultDetails({
+          operation: "team_create",
+          resource: { kind: "team", id: safeTeamName, teamName: safeTeamName },
+          postState: {
+            name: safeTeamName,
+            lifecycle: "active",
+            taskAuthorityReady: config.taskBackend === "beads",
+          },
+          nextActions: [
+            { tool: "worker_ensure", reason: "Create a stable Worker only when the Team needs another capability.", args: { team_name: safeTeamName } },
+            { tool: "task_create", reason: "Create the first durable work contract.", args: { team_name: safeTeamName } },
+          ],
+          evidence: {
+            leadMembershipId: currentMembershipId,
+            taskAuthority: {
+              backend: config.taskBackend,
+              authorityId: config.taskAuthorityId,
             },
-          ),
-        },
+          },
+        }),
       };
       });
     },
   });
 
   pi.registerTool({
-    name: "spawn_teammate",
-    label: "Spawn Teammate",
-    description: "Spawn a new teammate in a terminal pane or separate window.",
+    name: "worker_ensure",
+    label: "Ensure Worker",
+    description: "Ensure one stable named Worker exists. Reuse a current Worker instead of replacing it; assign executable work with a Task.",
     parameters: Type.Object({
       team_name: Type.String(),
       name: Type.String(),
-      prompt: Type.String(),
+      profile: Type.String({ description: "Standing role and capabilities, not a work item" }),
       cwd: Type.String(),
       model: Type.Optional(Type.String({ description: "Model for this teammate. Omit this parameter to use the team or Pi default; set it only when the user explicitly requests a specific model." })),
       thinking: Type.Optional(StringEnum(["off", "minimal", "low", "medium", "high", "xhigh"])),
@@ -876,13 +950,33 @@ export default function (pi: ExtensionAPI) {
       const safeTeamName = paths.sanitizeName(params.team_name);
 
       if (safeName === "team-lead") {
-        throw new Error("'team-lead' is reserved for the Team leader and cannot be used as a teammate name.");
+        await assertLeadMutation(ctx, "worker_ensure", safeTeamName);
+        const current = await teams.readConfig(safeTeamName);
+        return {
+          content: [{ type: "text", text: `Worker not created: team-lead is reserved. Choose a distinct Worker name; the current roster is unchanged.` }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "worker_ensure",
+            resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+            postState: {
+              changed: false,
+              reason: "reserved_worker_name",
+              currentWorkers: current.members.filter((member) => member.agentType === "teammate" && member.isActive !== false).map((member) => member.name),
+            },
+            warnings: [toolResultWarning("reserved_worker_name", "team-lead is reserved for the Team leader.", safeName)],
+            nextActions: [{
+              tool: "worker_ensure",
+              reason: "Choose a distinct stable Worker name.",
+              args: { team_name: safeTeamName },
+            }],
+          }),
+        };
       }
 
       return teams.withTeamTopologyLease(safeTeamName, async () => {
       // The caller may have become stale while waiting for another topology
       // transaction. Revalidate only after this Team's lease is held.
-      await assertLeadMutation(ctx, "spawn_teammate", safeTeamName);
+      await assertLeadMutation(ctx, "worker_ensure", safeTeamName);
 
       if (!teams.teamExists(safeTeamName)) {
         throw new Error(`Team ${params.team_name} does not exist`);
@@ -894,11 +988,41 @@ export default function (pi: ExtensionAPI) {
 
       const teamConfig = await teams.readConfig(safeTeamName);
       
-      // Check if a teammate with this name already exists - kill them first
-      // This handles the case where the user aborts mid-execution and restarts
       const existingMember = [...teamConfig.members].reverse().find(m => m.name === safeName && m.agentType === "teammate" && m.isActive !== false);
       if (existingMember) {
-        await transitionCurrentMembership(safeTeamName, existingMember, "replaced", true);
+        const nonterminalTasks = teamConfig.taskBackend === "beads"
+          ? (await tasks.listTasksWithVersions(safeTeamName))
+              .filter(task => task.assignee === safeName && task.status !== "closed")
+              .map(task => ({ id: task.id, status: task.status, version: task.version }))
+          : undefined;
+        return {
+          content: [{ type: "text", text: `Reused current Worker ${safeName}; no relaunch occurred. Assign its next work through a Task.` }],
+          details: toolResultDetails({
+            operation: "worker_ensure",
+            resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+            postState: {
+              name: safeName,
+              action: "reused",
+              membership: "current",
+              carrier: existingMember.sessionFile ? "session_bound" : "prepared",
+              ...(nonterminalTasks ? { nonterminalTasks } : {}),
+            },
+            nextActions: [{
+              tool: "task_create",
+              reason: "Assign the next durable work contract to this Worker.",
+              args: { team_name: safeTeamName, assignee: safeName },
+            }],
+            evidence: {
+              membershipId: existingMember.membershipId,
+              sessionBound: !!existingMember.sessionFile,
+              terminal: existingMember.windowId
+                ? { kind: "window", targetId: existingMember.windowId }
+                : existingMember.tmuxPaneId
+                  ? { kind: "pane", targetId: existingMember.tmuxPaneId }
+                  : undefined,
+            },
+          }),
+        };
       }
       
       let chosenModel = params.model || teamConfig.defaultModel;
@@ -935,12 +1059,15 @@ export default function (pi: ExtensionAPI) {
         cwd: params.cwd,
         subscriptions: [],
         isActive: true,
-        prompt: params.prompt,
+        prompt: params.profile,
         color: "blue",
         thinking: params.thinking,
       };
 
       await teams.addMember(safeTeamName, member);
+      await teamEvents.appendTeamEvent(safeTeamName, {
+        type: "worker", worker: safeName, membershipId: member.membershipId!, phase: "prepared",
+      });
 
       const agentDef = predefined.getAgentDefinition(safeName, params.cwd);
       const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, params.thinking, agentDef?.tools);
@@ -955,7 +1082,7 @@ export default function (pi: ExtensionAPI) {
       const launch = await launchPreparedMembership(
         safeTeamName,
         member,
-        () => messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, params.prompt, "Initial prompt"),
+        null,
         () => {
         if (useSeparateWindow) {
           const terminalId = terminal.spawnWindow({
@@ -996,47 +1123,40 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{
           type: "text",
-          text: `Teammate ${safeName} has durable Membership ${member.membershipId} and terminal ${launch.isWindow ? "window" : "pane"} ${launch.terminalId}. Runtime startup and Message presentation haven't been observed yet.`,
+          text: `Worker ${safeName} created with a prepared carrier. Runtime startup hasn't been observed, and no Task is assigned yet; assign one only when real work exists, without assuming readiness.`,
         }],
-        details: {
-          membership: {
-            persisted: true,
-            current: true,
-            teamName: safeTeamName,
-            agentName: safeName,
-            agentId: member.agentId,
+        details: toolResultDetails({
+          operation: "worker_ensure",
+          resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+          postState: {
+            name: safeName,
+            action: "created",
+            membership: "current",
+            carrier: "prepared",
+            terminalLaunched: true,
+            runtime: "not_observed",
+            assignedTasks: [],
+          },
+          warnings: [toolResultWarning(
+            "runtime_not_observed",
+            "Terminal launch succeeded, but this call did not observe the Worker runtime.",
+            safeName,
+          )],
+          nextActions: [{
+            tool: "task_create",
+            reason: "Assign a goal and independently verifiable acceptance criteria.",
+            args: { team_name: safeTeamName, assignee: safeName },
+          }],
+          evidence: {
             membershipId: member.membershipId,
-          },
-          terminalLaunch: {
-            launched: true,
-            adapter: terminal.name,
-            kind: launch.isWindow ? "window" : "pane",
-            targetId: launch.terminalId,
-          },
-          runtimeObservation: {
-            checked: false,
-            state: "not_observed",
-          },
-          initialMessage: {
-            accepted: true,
-            messageId: launch.initialMessage.id,
-            recipientMembershipId: launch.initialMessage.recipientMembershipId,
-            presentationObserved: false,
-          },
-          receipt: mutationReceipt(
-            "spawn_teammate",
-            { kind: "membership", id: member.membershipId!, teamName: safeTeamName, agentName: safeName },
-            {
-              membershipState: "current",
-              terminalLaunched: true,
-              initialMessageAccepted: true,
-              runtimeObservation: "not_observed",
-              messagePresentation: "not_observed",
+            agentId: member.agentId,
+            terminalLaunch: {
+              adapter: terminal.name,
+              kind: launch.isWindow ? "window" : "pane",
+              targetId: launch.terminalId,
             },
-            ["Runtime startup and Message presentation were not observed by this call."],
-            "Continue without polling; use check_teammate only if startup trouble is suspected.",
-          ),
-        },
+          },
+        }),
       };
       });
     },
@@ -1146,13 +1266,474 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "team_sync",
+    label: "Sync Team",
+    description: "Read the current compact Team projection or block on the next matching Task, Worker, or Alert event. This replaces polling and inbox reads.",
+    parameters: Type.Object({
+      team_name: Type.String(),
+      cursor: Type.Optional(Type.String()),
+      wait_ms: Type.Optional(Type.Number({ minimum: 0, maximum: 300000 })),
+      task_ids: Type.Optional(Type.Array(Type.String(), { maxItems: teamEvents.MAX_TEAM_SYNC_LIMIT })),
+      event_types: Type.Optional(Type.Array(StringEnum(["task", "worker", "alert"]))),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: teamEvents.MAX_TEAM_SYNC_LIMIT, description: "Maximum events per incremental page and Worker/Task records per projection page." })),
+      continuation: Type.Optional(Type.String({ description: "Opaque continuation returned for a truncated projection page. Omit cursor when using it." })),
+    }),
+    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      await assertCurrentSessionBinding(ctx, params.team_name);
+      if (params.cursor !== undefined && !/^(0|[1-9][0-9]*)$/.test(params.cursor)) {
+        return {
+          content: [{
+            type: "text",
+            text: `Team sync not started: cursor ${JSON.stringify(params.cursor)} is invalid. Cursors must be monotonic decimal strings. No Team or Task state changed; retry with your last valid returned cursor, or request a fresh snapshot if it is unavailable.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "team_sync",
+            resource: { kind: "team", id: params.team_name, teamName: params.team_name },
+            postState: { changed: false, waited: false, reason: "invalid_cursor" },
+            warnings: [toolResultWarning("invalid_event_cursor", "A cursor must be zero or a positive base-10 integer.", params.cursor)],
+            nextActions: [{
+              tool: "team_sync",
+              reason: "Reuse the last valid monotonic decimal cursor returned by team_sync; request a fresh snapshot only if it is unavailable.",
+            }],
+            evidence: { requestedCursor: params.cursor, eventJournalRead: false },
+          }),
+        };
+      }
+      if (params.continuation !== undefined && params.cursor !== undefined) {
+        return {
+          content: [{ type: "text", text: "Team sync not started: continuation and cursor are mutually exclusive. Echo the continuation alone to read the next projection page, or use cursor alone to read later events." }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "team_sync",
+            resource: { kind: "team", id: params.team_name, teamName: params.team_name },
+            postState: { changed: false, waited: false, reason: "ambiguous_continuation" },
+            warnings: [toolResultWarning("ambiguous_sync_position", "continuation and cursor cannot be combined.")],
+            nextActions: [{ tool: "team_sync", reason: "Echo exactly one returned continuation coordinate." }],
+          }),
+        };
+      }
+      let eventResult: teamEvents.TeamEventWaitResult;
+      try {
+        eventResult = await teamEvents.syncTeamEvents({
+          teamName: params.team_name,
+          cursor: params.continuation === undefined ? params.cursor : undefined,
+          waitMs: params.continuation === undefined ? (params.wait_ms ?? 0) : 0,
+          eventTypes: params.event_types,
+          taskIds: params.task_ids,
+          limit: params.limit,
+          signal,
+        });
+      } catch (error) {
+        if (!(error instanceof teamEvents.TeamEventCursorAheadError)) throw error;
+        return {
+          content: [{
+            type: "text",
+            text: `Team sync refused cursor ${error.requestedCursor}: the actual current journal head is ${error.headCursor}. Team, Worker, Task, and event state are unchanged; no events were consumed or lost, and no lower cursor was returned as successful progress. Request a fresh snapshot to establish a new coordinate.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "team_sync",
+            resource: { kind: "team", id: params.team_name, teamName: params.team_name },
+            postState: {
+              changed: false,
+              waited: false,
+              reason: "cursor_ahead_of_journal",
+              requestedCursor: error.requestedCursor,
+              journalHeadCursor: error.headCursor,
+              cursorCorrectionRequired: true,
+            },
+            warnings: [toolResultWarning("event_cursor_ahead", "The supplied cursor is ahead of the current Team event journal head.", error.requestedCursor)],
+            nextActions: [{
+              tool: "team_sync",
+              reason: "Request a fresh snapshot without a cursor; do not treat the lower journal head as continuation success.",
+              args: { team_name: params.team_name, limit: params.limit ?? teamEvents.DEFAULT_TEAM_SYNC_LIMIT },
+            }],
+            evidence: { requestedCursor: error.requestedCursor, journalHeadCursor: error.headCursor },
+          }),
+        };
+      }
+      const [config, taskList] = await Promise.all([
+        teams.readConfig(params.team_name),
+        tasks.listTasks(params.team_name),
+      ]);
+      const baseProjection = teamEvents.projectTeamCurrentState(config, taskList);
+      let projectionPage: teamEvents.TeamProjectionPage;
+      try {
+        projectionPage = teamEvents.pageTeamCurrentProjection(baseProjection, {
+          headCursor: eventResult.headCursor,
+          limit: params.limit,
+          continuation: params.continuation,
+        });
+      } catch (error) {
+        if (!(error instanceof teamEvents.InvalidTeamSnapshotContinuationError)) throw error;
+        return {
+          content: [{ type: "text", text: `${error.message} No Team or Task state changed.` }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "team_sync",
+            resource: { kind: "team", id: config.name, teamName: config.name },
+            postState: { changed: false, waited: false, reason: "invalid_or_stale_snapshot_continuation", journalHeadCursor: eventResult.headCursor },
+            warnings: [toolResultWarning("invalid_snapshot_continuation", error.message, params.continuation)],
+            nextActions: [{
+              tool: "team_sync",
+              reason: "Request a fresh bounded snapshot without a continuation.",
+              args: { team_name: config.name, limit: params.limit ?? teamEvents.DEFAULT_TEAM_SYNC_LIMIT },
+            }],
+          }),
+        };
+      }
+      const hydrationIds = [
+        ...(params.task_ids ?? []),
+        ...(params.cursor === undefined ? projectionPage.projection.tasks.map((task) => task.id) : []),
+      ];
+      const hydratedTasks = await teamEvents.hydrateTeamSyncTasks(
+        eventResult.events,
+        hydrationIds,
+        (taskId) => tasks.readTask(params.team_name, taskId),
+      );
+      const taskById = new Map(hydratedTasks.map((task) => [task.id, task]));
+      const projection = {
+        ...projectionPage.projection,
+        tasks: projectionPage.projection.tasks.map((task) => {
+          const authoritative = taskById.get(task.id);
+          return authoritative ? { ...task, version: authoritative.version } : task;
+        }),
+      };
+      const normalizedHydratedTasks = hydratedTasks.map((task) => ({
+        ...task,
+        assignee: task.assignee ?? null,
+        design: task.design ?? null,
+        notes: task.notes ?? null,
+      }));
+      const taskEventGroups = new Map<string, Array<{ change: string; actor: string }>>();
+      const workerEventGroups = new Map<string, { event: Extract<(typeof eventResult.events)[number], { type: "worker" }>; count: number }>();
+      const alertEventGroups = new Map<string, { event: Extract<(typeof eventResult.events)[number], { type: "alert" }>; count: number }>();
+      for (const event of eventResult.events) {
+        if (event.type === "task") {
+          const group = taskEventGroups.get(event.ref.taskId) ?? [];
+          group.push({ change: event.change, actor: event.actor });
+          taskEventGroups.set(event.ref.taskId, group);
+        } else if (event.type === "worker") {
+          const key = `${event.worker}\0${event.phase}`;
+          const group = workerEventGroups.get(key);
+          workerEventGroups.set(key, { event, count: (group?.count ?? 0) + 1 });
+        } else {
+          const key = `${event.from}\0${event.to}\0${event.kind}\0${event.taskRef?.taskId ?? ""}\0${event.taskRef?.version ?? ""}`;
+          const group = alertEventGroups.get(key);
+          alertEventGroups.set(key, { event, count: (group?.count ?? 0) + 1 });
+        }
+      }
+      const eventSummary = [...taskEventGroups.entries()].map(([taskId, changes]) => {
+        const current = taskById.get(taskId);
+        const relations = current?.relations.length
+          ? `, relations ${current.relations.map((relation) => `${relation.relation} ${relation.targetId}`).join(", ")}`
+          : "";
+        const blocker = current?.status === "blocked" && current.notes
+          ? ` Blocker: ${current.notes}`
+          : "";
+        const state = current
+          ? `${current.status}${current.assignee ? `, assigned to ${current.assignee}` : ", unassigned"}, version ${current.version}${relations}.${blocker}`
+          : "current state unavailable";
+        const semanticChanges = [...new Set(changes.map((change) => `${change.change} by ${change.actor}`))];
+        const requested = params.task_ids?.includes(taskId) ? "Requested Task" : "Task";
+        const taskLabel = `${requested} ${taskId}${current ? ` “${current.title}”` : ""}`;
+        const observation = semanticChanges.length === 1
+          ? `Observed ${changes[0].change} event for ${taskLabel} by ${changes[0].actor}`
+          : `Observed events for ${taskLabel} (${semanticChanges.join("; ")})`;
+        return `${observation}; authoritative current state: ${state}${current?.status === "blocked" ? " Resolve the blocker before continuing." : ""}`;
+      });
+      for (const { event, count } of workerEventGroups.values()) {
+        eventSummary.push(`Worker ${event.worker} ${event.phase}${count > 1 ? ` ×${count}` : ""}.`);
+      }
+      for (const { event, count } of alertEventGroups.values()) {
+        eventSummary.push(
+          `${event.kind} Alert from ${event.from} to ${event.to}${event.taskRef ? ` for Task ${event.taskRef.taskId}` : ""}`
+          + `${count > 1 ? ` repeated ${count} times` : ""}.`,
+        );
+      }
+      if (eventResult.events.length > 0) {
+        const idle = projection.workers.filter((worker) => worker.carrier !== "absent" && worker.nonterminalTasks.length === 0);
+        if (idle.length > 0) eventSummary.push(`Idle Workers with no nonterminal assigned Tasks: ${idle.map((worker) => worker.name).join(", ")}.`);
+      }
+      const workerSummary = projection.workers.length === 0
+        ? "Workers: none."
+        : `Workers: ${projection.workers.map(worker => `${worker.name} (${worker.carrier}; ${worker.nonterminalTasks.length} nonterminal Tasks)`).join(", ")}.`;
+      const taskSummary = projection.tasks.length === 0
+        ? "Tasks: none."
+        : `Tasks: ${projection.tasks.map(task => `${task.id} “${task.title}” ${task.status}${task.assignee ? `, assigned to ${task.assignee}` : ", unassigned"}, version ${task.version}`).join("; ")}.`;
+      const completion = params.cursor === undefined ? "snapshot" : eventResult.timedOut ? "timeout" : "events";
+      const projectionText = completion === "snapshot" ? [workerSummary, taskSummary] : [];
+      const lifecycleNextActions = selectTeamSyncNextActions({
+        teamName: config.name,
+        cursor: eventResult.cursor,
+        completion,
+        projection,
+        hydratedTasks,
+      });
+      const paginationNextActions = [
+        ...(eventResult.truncated ? [{
+          tool: "team_sync",
+          reason: `Continue unread events from cursor ${eventResult.cursor} before waiting at journal head ${eventResult.headCursor}.`,
+          args: { team_name: config.name, cursor: eventResult.cursor, limit: params.limit ?? teamEvents.DEFAULT_TEAM_SYNC_LIMIT },
+        }] : []),
+        ...(projectionPage.continuation ? [{
+          tool: "team_sync",
+          reason: `Continue the bounded current projection (${projectionPage.offset + projection.workers.length + projection.tasks.length} of ${projectionPage.totalItems} records returned).`,
+          args: { team_name: config.name, continuation: projectionPage.continuation, limit: params.limit ?? teamEvents.DEFAULT_TEAM_SYNC_LIMIT },
+        }] : []),
+      ];
+      const nextActions = [
+        ...paginationNextActions,
+        ...lifecycleNextActions.filter((action) => !(paginationNextActions.length > 0 && action.tool === "team_sync")),
+      ];
+      const lifecycleGuidance = summarizeTeamSyncNextActions(lifecycleNextActions);
+      return {
+        content: [{
+          type: "text",
+          text: [
+            `Team ${config.name} ${completion} at cursor ${eventResult.cursor}.`,
+            ...(eventResult.truncated
+              ? [`Event page truncated at ${eventResult.events.length} records with exactly ${eventResult.remaining} matching event${eventResult.remaining === 1 ? "" : "s"} remaining; journal head is ${eventResult.headCursor}. Continue from cursor ${eventResult.cursor} before waiting.`]
+              : []),
+            ...(projectionPage.continuation
+              ? [`Projection page truncated after ${projectionPage.offset + projection.workers.length + projection.tasks.length} of ${projectionPage.totalItems} Worker/Task records; echo the returned continuation.`]
+              : []),
+            ...(eventSummary.length > 0
+              ? eventSummary
+              : eventResult.events.length > 0
+                ? []
+                : [eventResult.timedOut ? "No matching changes before timeout; timeout is not evidence of Worker or runtime failure and changed no state." : "No new events."]),
+            ...projectionText,
+            ...(lifecycleGuidance ? [lifecycleGuidance] : []),
+          ].join("\n"),
+        }],
+        details: toolResultDetails({
+          operation: "team_sync",
+          resource: { kind: "team", id: config.name, teamName: config.name },
+          postState: {
+            completion,
+            cursor: eventResult.cursor,
+            journalHeadCursor: eventResult.headCursor,
+            projection,
+            hydratedTasks: normalizedHydratedTasks,
+            pagination: {
+              events: {
+                limit: params.limit ?? teamEvents.DEFAULT_TEAM_SYNC_LIMIT,
+                returned: eventResult.events.length,
+                truncated: eventResult.truncated,
+                remaining: eventResult.remaining,
+                continuationCursor: eventResult.truncated ? eventResult.cursor : null,
+              },
+              projection: {
+                limit: projectionPage.limit,
+                offset: projectionPage.offset,
+                returned: projection.workers.length + projection.tasks.length,
+                totalItems: projectionPage.totalItems,
+                truncated: projectionPage.truncated,
+                continuation: projectionPage.continuation ?? null,
+              },
+            },
+          },
+          nextActions,
+          evidence: {
+            events: eventResult.events,
+            wait: {
+              requestedCursor: params.cursor ?? null,
+              waitMs: params.wait_ms ?? 0,
+              taskIds: params.task_ids ?? [],
+              eventTypes: params.event_types ?? [],
+              timedOut: eventResult.timedOut,
+              journalHeadCursor: eventResult.headCursor,
+              eventPageTruncated: eventResult.truncated,
+              remainingMatchingEvents: eventResult.remaining,
+            },
+          },
+        }),
+      };
+    },
+  });
+
+  pi.registerTool({
+    name: "alert_send",
+    label: "Send Alert",
+    description: "Send exceptional clarification, attention, or a Team announcement. Alerts never assign or complete work; update the Task when durable intent changes.",
+    parameters: Type.Object({
+      team_name: Type.String(),
+      to: Type.String({ description: "Current Worker name, team-lead, or * for an announcement" }),
+      kind: StringEnum(["clarification", "attention", "announcement"]),
+      text: Type.String(),
+      task_id: Type.Optional(Type.String()),
+      task_version: Type.Optional(Type.String()),
+    }),
+    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      const actor = await assertCurrentSessionBinding(ctx, params.team_name);
+      if (params.to === "*" && params.kind !== "announcement") {
+        return {
+          content: [{
+            type: "text",
+            text: `${params.kind} Alert rejected: whole-Team fan-out requires kind announcement. No Alert, delivery, event, or Task change was created; change the kind or choose one current recipient.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "alert_send",
+            postState: {
+              attemptedKind: params.kind,
+              attemptedRecipient: params.to,
+              accepted: false,
+              alertCreated: false,
+              deliveryCreated: false,
+              eventCreated: false,
+              taskStateChanged: false,
+              reason: "whole_team_requires_announcement",
+            },
+            warnings: [toolResultWarning("invalid_alert_fanout", "Only announcement Alerts may target the whole Team.", "*")],
+            nextActions: [{
+              tool: "alert_send",
+              reason: "Use kind announcement for whole-Team fan-out, or address one current member.",
+              args: { team_name: params.team_name },
+            }],
+            evidence: { deliveryAttempts: 0, eventAppended: false },
+          }),
+        };
+      }
+      let result: Awaited<ReturnType<typeof alerts.sendAlert>>;
+      try {
+        result = await alerts.sendAlert({
+          teamName: params.team_name,
+          from: agentName,
+          to: params.to,
+          kind: params.kind,
+          text: params.text,
+          taskId: params.task_id,
+          taskVersion: params.task_version,
+          expectedSender: actor.membershipId && actor.sessionFile
+            ? { membershipId: actor.membershipId, sessionFile: actor.sessionFile }
+            : undefined,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.startsWith("Recipient '") && !message.includes("was not accepted by any current Team member")) throw error;
+        const current = await teams.readConfig(params.team_name);
+        const currentWorkers = current.members
+          .filter((member) => member.agentType === "teammate" && member.isActive !== false)
+          .map((member) => member.name);
+        const noEligibleBroadcastRecipients = params.to === "*"
+          && message.includes("was not accepted by any current Team member");
+        return {
+          content: [{
+            type: "text",
+            text: noEligibleBroadcastRecipients
+              ? `${params.kind} Alert wasn't sent: zero eligible Worker recipients, so nothing was delivered. Reconcile the roster with team_sync before deciding whether to retry.`
+              : `${params.kind} Alert not sent to ${params.to}: the recipient isn't a current Team member. Reconcile the current roster with team_sync before retrying.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "alert_send",
+            postState: {
+              attemptedKind: params.kind,
+              attemptedRecipient: params.to,
+              from: agentName,
+              accepted: false,
+              alertCreated: false,
+              deliveryCreated: false,
+              eventCreated: false,
+              taskStateChanged: false,
+              teamStateChanged: false,
+              reason: noEligibleBroadcastRecipients ? "no_eligible_recipients" : "recipient_not_current",
+              team: {
+                name: params.team_name,
+                lifecycle: current.members.some((member) => member.isActive !== false) ? "active" : "stopped",
+                taskBackend: current.taskBackend,
+              },
+              currentWorkers,
+              ...(params.task_id ? { taskRef: { taskId: params.task_id, ...(params.task_version ? { version: params.task_version } : {}) } } : {}),
+            },
+            warnings: [toolResultWarning(
+              noEligibleBroadcastRecipients ? "alert_no_eligible_recipients" : "alert_recipient_not_current",
+              noEligibleBroadcastRecipients
+                ? "No other current Team member accepted the announcement."
+                : message,
+              noEligibleBroadcastRecipients ? undefined : params.to,
+            )],
+            nextActions: noEligibleBroadcastRecipients
+              ? [{
+                  tool: "team_sync",
+                  reason: "Reconcile the current roster before deciding whether this announcement is still needed.",
+                  args: { team_name: params.team_name },
+                }, {
+                  tool: "worker_ensure",
+                  reason: "Only if actual work requires a Worker, ensure one stable Worker before retrying the still-needed announcement.",
+                  args: { team_name: params.team_name },
+                }]
+              : [{
+                  tool: "team_sync",
+                  reason: "Read current Workers before retrying exceptional coordination.",
+                  args: { team_name: params.team_name },
+                }],
+            evidence: {
+              eligibleRecipients: noEligibleBroadcastRecipients ? 0 : currentWorkers.length,
+              deliveryAttempts: 0,
+              acceptedDeliveries: 0,
+              eventAppended: false,
+              alertEventCursor: null,
+              taskStateChanged: false,
+              teamStateChanged: false,
+            },
+          }),
+        };
+      }
+      const outcome = result.failures.length > 0 ? "partial" : "accepted";
+      const recipients = result.accepted.map((delivery) => delivery.recipient);
+      const taskRef = params.task_id
+        ? { taskId: params.task_id, ...(params.task_version ? { version: params.task_version } : {}) }
+        : undefined;
+      const failureText = result.failures.length > 0
+        ? ` Delivery wasn't accepted for ${result.failures.map((failure) => failure.recipient).join(", ")}.`
+        : " No recipients failed.";
+      return {
+        content: [{
+          type: "text",
+          text: `${params.kind} Alert ${outcome === "partial" ? "partially accepted" : "accepted"} by ${recipients.join(", ")}${taskRef ? ` for Task ${taskRef.taskId}` : ""}. No Task state changed.${failureText}`,
+        }],
+        details: toolResultDetails({
+          outcome,
+          operation: "alert_send",
+          resource: { kind: "alert", id: result.alertId, teamName: params.team_name },
+          postState: {
+            kind: params.kind,
+            from: agentName,
+            to: params.to,
+            recipients,
+            ...(taskRef ? { taskRef } : {}),
+            taskStateChanged: false,
+          },
+          warnings: result.failures.map((failure) => toolResultWarning(
+            "alert_delivery_failed",
+            "Alert delivery wasn't accepted by this recipient.",
+            failure.recipient,
+          )),
+          evidence: {
+            alertId: result.alertId,
+            cursor: result.cursor,
+            alertText: params.text,
+            deliveries: result.accepted,
+            failures: result.failures,
+          },
+        }),
+      };
+    },
+  });
+
+  pi.registerTool({
     name: "task_create",
     label: "Create Task",
-    description: "Create a team Task and return its post-state receipt; do not immediately task_read or task_list the same result.",
+    description: "Create a Team Task. Its mutation receipt contains authoritative post-state; wait through team_sync for later changes.",
     parameters: Type.Object({
       team_name: Type.String(),
       title: Type.String(),
       description: Type.String(),
+      acceptance_criteria: Type.Optional(Type.String({ description: "Required when the Task is assigned; independently verifiable success criteria" })),
       design: Type.Optional(Type.String()),
       assignee: Type.Optional(Type.String()),
       idempotency_key: Type.Optional(Type.String()),
@@ -1160,18 +1741,88 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
       const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
-      const task = await tasks.createTask(params.team_name, {
-        title: params.title,
-        description: params.description,
-        design: params.design,
-        assignee: params.assignee,
-        idempotencyKey: params.idempotency_key,
-      }, actorMembership.membershipId && actingSessionFile
-        ? { actor: agentName, actingMembershipId: actorMembership.membershipId, actingSessionFile }
-        : undefined);
+      let result: Awaited<ReturnType<typeof tasks.createTask>>;
+      try {
+        result = await tasks.createTask(params.team_name, {
+          title: params.title,
+          description: params.description,
+          acceptanceCriteria: params.acceptance_criteria,
+          design: params.design,
+          assignee: params.assignee,
+          idempotencyKey: params.idempotency_key,
+        }, actorMembership.membershipId && actingSessionFile
+          ? { actor: agentName, actingMembershipId: actorMembership.membershipId, actingSessionFile }
+          : undefined);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message !== "Assigned Tasks require nonempty acceptance criteria") throw error;
+        return {
+          content: [{
+            type: "text",
+            text: `Task not created: assigned work requires nonempty, independently verifiable acceptance criteria. Add them and retry; Team Task state is unchanged.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "task_create",
+            postState: { created: false, taskStateChanged: false, reason: "acceptance_criteria_required" },
+            warnings: [toolResultWarning("acceptance_criteria_required", message, params.assignee)],
+            nextActions: [{
+              tool: "task_create",
+              reason: "Add independently verifiable acceptance criteria before retrying Task creation.",
+              args: {
+                team_name: params.team_name,
+                title: params.title,
+                assignee: params.assignee,
+              },
+            }],
+          }),
+        };
+      }
+      const task = result.task;
+      const publicWarnings = result.deliveryWarnings.map((message) => {
+        const committedPrefix = `Task ${task.id} committed but `;
+        return message.startsWith(committedPrefix)
+          ? `Task authority committed, but ${message.slice(committedPrefix.length)}`
+          : message;
+      });
+      const owner = task.assignee ? `assigned to ${task.assignee}` : "unassigned";
+      const degradedAreas = [
+        result.publication.teamEvent.appended ? undefined : "Team-event publication",
+        result.publication.delivery.failedRecipients.length > 0 ? "Worker delivery" : undefined,
+      ].filter((area): area is string => !!area);
+      const agentText = result.deliveryDegraded
+        ? `Created Task ${task.id} “${task.title}”: ${task.status}, ${owner}. Task authority committed, but ${degradedAreas.join(" and ") || "post-commit publication"} degraded. Do not recreate this Task; investigate delivery recovery with team_sync.`
+        : `Created Task ${task.id} “${task.title}”: ${task.status}${task.assignee ? `, assigned to ${task.assignee}` : ""}, version ${task.version}.`;
       return {
-        content: [{ type: "text", text: taskMutationContent(task, ["create"]) }],
-        details: { task },
+        content: [{
+          type: "text",
+          text: agentText,
+        }],
+        details: toolResultDetails({
+          outcome: result.deliveryDegraded ? "partial" : "accepted",
+          operation: "task_create",
+          resource: { kind: "task", id: task.id, teamName: params.team_name },
+          postState: { ...task, assignee: task.assignee ?? null, design: task.design ?? null, notes: task.notes ?? null },
+          warnings: publicWarnings.map((message) => toolResultWarning(
+            "task_delivery_degraded",
+            message,
+            task.id,
+          )),
+          nextActions: result.deliveryDegraded
+            ? [{
+                tool: "team_sync",
+                reason: `Reconcile committed Task ${task.id} and its delivery recovery; do not recreate the Task.`,
+                args: { team_name: params.team_name, task_ids: [task.id] },
+              }]
+            : [],
+          evidence: {
+            changed: result.changed,
+            appliedOperations: result.appliedOperations,
+            deliveryDegraded: result.deliveryDegraded,
+            teamEvent: result.publication.teamEvent,
+            delivery: result.publication.delivery,
+          },
+        }),
       };
     },
   });
@@ -1196,12 +1847,13 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "task_update",
     label: "Update Task",
-    description: "Apply one semantic Task mutation and return its post-state receipt; do not immediately task_read or task_list the same result.",
+    description: "Apply one semantic Task mutation. Its receipt contains authoritative post-state; wait through team_sync for later changes.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
       title: Type.Optional(Type.String()),
       description: Type.Optional(Type.String()),
+      acceptance_criteria: Type.Optional(Type.String()),
       design: Type.Optional(Type.String()),
       status: Type.Optional(StringEnum(["open", "in_progress", "blocked", "closed"])),
       assignee: Type.Optional(Type.String()),
@@ -1212,21 +1864,96 @@ export default function (pi: ExtensionAPI) {
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
       const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
-      const result = await tasks.applySemanticTaskUpdate(params.team_name, params.task_id, {
-        title: params.title,
-        description: params.description,
-        design: params.design,
-        status: params.status,
-        assignee: params.assignee,
-        claim: params.claim,
-        appendNote: params.append_note,
-      }, { actor: agentName, expectedVersion: params.expected_version, actingSessionFile, actingMembershipId: actorMembership.membershipId });
+      const requestedMutation = {
+        ...(params.title !== undefined ? { title: params.title } : {}),
+        ...(params.description !== undefined ? { description: params.description } : {}),
+        ...(params.acceptance_criteria !== undefined ? { acceptanceCriteria: params.acceptance_criteria } : {}),
+        ...(params.design !== undefined ? { design: params.design } : {}),
+        ...(params.status !== undefined ? { status: params.status } : {}),
+        ...(params.assignee !== undefined ? { assignee: params.assignee } : {}),
+        ...(params.claim !== undefined ? { claim: params.claim } : {}),
+        ...(params.append_note !== undefined ? { appendNote: params.append_note } : {}),
+      };
+      let result: Awaited<ReturnType<typeof tasks.applySemanticTaskUpdate>>;
+      try {
+        result = await tasks.applySemanticTaskUpdate(
+          params.team_name,
+          params.task_id,
+          requestedMutation,
+          { actor: agentName, expectedVersion: params.expected_version, actingSessionFile, actingMembershipId: actorMembership.membershipId },
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const isConflict = error instanceof BeadsError && error.kind === "conflict";
+        const isEvidenceGuard = message.startsWith("Transitioning a Task to ") && message.includes("requires a nonempty evidence note");
+        if (!isConflict && !isEvidenceGuard) throw error;
+        const current = await tasks.readTask(params.team_name, params.task_id);
+        const code = isConflict ? "task_version_conflict" : "terminal_evidence_required";
+        const recovery = isConflict
+          ? "Use the current version to review and retry the intended mutation."
+          : `Append verification or blocker evidence in the same update that sets ${params.status}.`;
+        return {
+          content: [{
+            type: "text",
+            text: isConflict
+              ? `Task ${current.id} not updated: expected version is stale. Re-read the Task, review its current ${current.status} state, then retry with version ${current.version}.`
+              : `Task ${current.id} not updated: changing it to ${params.status} requires a nonempty evidence note in the same call. Current version remains ${current.version}.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "task_update",
+            resource: { kind: "task", id: current.id, teamName: params.team_name },
+            postState: { ...current, assignee: current.assignee ?? null, design: current.design ?? null, notes: current.notes ?? null },
+            warnings: [toolResultWarning(
+              code,
+              isConflict
+                ? "The expected Task version is stale; no Task state changed."
+                : `A nonempty evidence note is required to set this Task to ${params.status}; no Task state changed.`,
+              current.id,
+            )],
+            nextActions: [{
+              tool: isConflict ? "task_read" : "task_update",
+              reason: recovery,
+              args: isConflict
+                ? { team_name: params.team_name, task_id: current.id }
+                : { team_name: params.team_name, task_id: current.id, expected_version: current.version },
+            }],
+            evidence: {
+              requestedVersion: params.expected_version,
+              currentVersion: current.version,
+              requestedMutation,
+              changed: false,
+            },
+          }),
+        };
+      }
       return {
         content: [{
           type: "text",
           text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings),
         }],
-        details: result,
+        details: toolResultDetails({
+          outcome: result.deliveryDegraded ? "partial" : "accepted",
+          operation: "task_update",
+          resource: { kind: "task", id: result.task.id, teamName: params.team_name },
+          postState: { ...result.task, assignee: result.task.assignee ?? null, design: result.task.design ?? null, notes: result.task.notes ?? null },
+          warnings: result.deliveryWarnings.map((message) => toolResultWarning(
+            "task_delivery_degraded",
+            message,
+            result.task.id,
+          )),
+          nextActions: [],
+          evidence: {
+            before: {
+              ...result.before,
+              assignee: result.before.assignee ?? null,
+              design: result.before.design ?? null,
+              notes: result.before.notes ?? null,
+            },
+            appliedOperations: result.appliedOperations,
+            deliveryDegraded: result.deliveryDegraded,
+          },
+        }),
       };
     },
   });
@@ -1244,21 +1971,114 @@ export default function (pi: ExtensionAPI) {
       expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+      const graphPostState = (task: TaskFile, includeBoundedSource = false) => ({
+        id: task.id,
+        version: task.version,
+        relations: task.relations,
+        ...(includeBoundedSource ? {
+          title: task.title,
+          status: task.status,
+          assignee: task.assignee ?? null,
+          relationCount: task.relations.length,
+        } : {}),
+      });
       const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
       const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
-      const result = await tasks.mutateTaskLink(params.team_name, params.task_id, {
-        relation: params.relation,
-        targetId: params.target_id,
-        action: params.action,
-      }, {
-        actor: agentName,
-        expectedVersion: params.expected_version,
-        actingSessionFile,
-        actingMembershipId: actorMembership.membershipId,
-      });
+      let result: Awaited<ReturnType<typeof tasks.mutateTaskLink>>;
+      try {
+        result = await tasks.mutateTaskLink(params.team_name, params.task_id, {
+          relation: params.relation,
+          targetId: params.target_id,
+          action: params.action,
+        }, {
+          actor: agentName,
+          expectedVersion: params.expected_version,
+          actingSessionFile,
+          actingMembershipId: actorMembership.membershipId,
+        });
+      } catch (error) {
+        if (!(error instanceof BeadsError) || error.kind !== "conflict") throw error;
+        const current = await tasks.readTask(params.team_name, params.task_id);
+        const staleVersion = /changed since version|expected(?: Task)? version|stale/i.test(error.message);
+        const conflictReason = staleVersion ? "stale_version" : "graph_invariant";
+        const requestedRelationExists = current.relations.some((relation) => (
+          relation.relation === params.relation && relation.targetId === params.target_id
+        ));
+        const currentRelationState = requestedRelationExists
+          ? `The current ${params.relation} relation ${current.id} → ${params.target_id} remains.`
+          : `The current graph still has no ${params.relation} relation ${current.id} → ${params.target_id}.`;
+        return {
+          content: [{
+            type: "text",
+            text: staleVersion
+              ? `The requested ${params.relation} relation change was not applied because the expected version is stale. ${currentRelationState} Read Task ${current.id} to review its current graph before retrying.`
+              : `Task relation not changed: the requested graph mutation conflicts with current relations. Review Task ${current.id} at version ${current.version} before retrying.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "task_link",
+            resource: { kind: "task", id: current.id, teamName: params.team_name },
+            postState: graphPostState(current),
+            warnings: [toolResultWarning(
+              staleVersion ? "task_relation_stale_version" : "task_relation_graph_conflict",
+              staleVersion
+                ? "The expected Task version is stale; no relation changed."
+                : "The requested mutation conflicts with the current Task graph; no relation changed.",
+              current.id,
+            )],
+            nextActions: [{
+              tool: "task_read",
+              reason: "Read current Task authority before deciding whether to retry the relation change.",
+              args: {
+                team_name: params.team_name,
+                task_id: current.id,
+              },
+            }],
+            evidence: {
+              requestedVersion: params.expected_version,
+              currentVersion: current.version,
+              relation: params.relation,
+              targetId: params.target_id,
+              action: params.action,
+              changed: false,
+              conflictReason,
+            },
+          }),
+        };
+      }
+      const noOpReason = params.action === "add" ? "already_present" : "already_absent";
+      const relationDescription = `${params.relation} relation ${params.task_id} → ${params.target_id}`;
+      const receiptText = result.changed
+        ? `${params.action === "add" ? "Added" : "Removed"} ${relationDescription}; source Task version is now ${result.task.version}.${result.deliveryWarnings.length ? ` Delivery warnings: ${result.deliveryWarnings.join("; ")}` : ""}`
+        : `Task relation unchanged: ${relationDescription} was ${params.action === "add" ? "already present" : "already absent"}. Source Task remains version ${result.task.version}.`;
       return {
-        content: [{ type: "text", text: taskMutationContent(result.task, result.appliedOperations, result.deliveryWarnings) }],
-        details: result,
+        content: [{
+          type: "text",
+          text: receiptText,
+        }],
+        details: toolResultDetails({
+          outcome: result.deliveryDegraded ? "partial" : "accepted",
+          operation: "task_link",
+          resource: { kind: "task", id: result.task.id, teamName: params.team_name },
+          postState: graphPostState(result.task, result.changed && params.action === "remove"),
+          warnings: result.deliveryWarnings.map((message) => toolResultWarning(
+            "task_delivery_degraded",
+            message,
+            result.task.id,
+          )),
+          nextActions: [],
+          evidence: {
+            relation: params.relation,
+            targetId: params.target_id,
+            action: params.action,
+            changed: result.changed,
+            ...(result.changed ? {} : { noOpReason }),
+            deliveryAttempted: result.changed && !!result.task.assignee,
+            expectedVersion: params.expected_version,
+            appliedOperations: result.appliedOperations,
+            deliveryDegraded: result.deliveryDegraded,
+          },
+        }),
       };
     },
   });
@@ -1305,39 +2125,65 @@ export default function (pi: ExtensionAPI) {
           }
         }
         const finalConfig = await teams.readConfig(teamName);
-        const details = {
-          taskAuthorityRetained: true,
-          agentSessionCleanupPerformed: false,
-          deactivatedMembers: deactivated.map((member) => member.name),
-          failures,
-          stopEvidence,
-          staleBindings: finalConfig.members.filter((member) => member.isActive === false && !!(member.tmuxPaneId || member.windowId)).map((member) => ({
-            name: member.name,
-            sessionFile: member.sessionFile,
-            tmuxPaneId: member.tmuxPaneId,
-            windowId: member.windowId,
-          })),
-          receipt: mutationReceipt(
-            "team_shutdown",
-            { kind: "team", id: teamName },
-            {
-              state: failures.length === 0 ? "shut_down" : "partially_shut_down",
-              deactivatedMembershipIds: deactivated.map((member) => member.membershipId).filter(Boolean),
-              taskAuthorityRetained: true,
-            },
-            failures.map((failure) => `${failure.name}: ${failure.error}`),
-            failures.length > 0 ? "Resolve the reported stop failures, then retry team_shutdown." : undefined,
-          ),
-        };
+        const unfinishedTasks = (await tasks.listTasksWithVersions(teamName))
+          .filter((task) => task.status !== "closed")
+          .map((task) => ({ id: task.id, title: task.title, status: task.status, assignee: task.assignee ?? null, version: task.version }));
+        const lifecycle = failures.length === 0 ? "shut_down" : "active";
+        const failureSummaries = failures.map((failure) => ({
+          name: failure.name,
+          reason: "stop_not_confirmed",
+          membershipRemainsCurrent: true,
+        }));
+        const stoppedWorkerNames = deactivated.filter((member) => member.agentType === "teammate").map((member) => member.name);
+        const currentMembers = finalConfig.members.filter((member) => member.isActive !== false).map((member) => member.name);
+        const details = toolResultDetails({
+          outcome: failures.length > 0 ? "partial" : "accepted",
+          operation: "team_shutdown",
+          resource: { kind: "team", id: teamName, teamName },
+          postState: {
+            lifecycle,
+            shutdownOutcome: failures.length === 0 ? "complete" : "partial",
+            stoppedWorkers: stopEvidence.length,
+            stoppedWorkerNames,
+            currentMembers,
+            deactivatedMembers: deactivated.map((member) => member.name),
+            failures: failureSummaries,
+            unfinishedTasks,
+            taskAuthorityRetained: true,
+          },
+          warnings: failures.map((failure) => toolResultWarning(
+            "worker_stop_failed",
+            "Worker stop couldn't be confirmed; its Membership remains current.",
+            failure.name,
+          )),
+          nextActions: failures.length > 0
+            ? [{ tool: "team_shutdown", reason: "Resolve the named Worker stop failures, then retry.", args: { team_name: teamName } }]
+            : [],
+          evidence: {
+            deactivatedMembershipIds: deactivated.map((member) => member.membershipId).filter(Boolean),
+            stop: stopEvidence,
+            stopFailures: failures,
+          },
+          diagnostics: {
+            staleBindings: finalConfig.members
+              .filter((member) => member.isActive === false && !!(member.tmuxPaneId || member.windowId))
+              .map((member) => ({
+                name: member.name,
+                membershipId: member.membershipId,
+                sessionBound: !!member.sessionFile,
+                terminal: member.windowId
+                  ? { kind: "window", targetId: member.windowId }
+                  : { kind: "pane", targetId: member.tmuxPaneId },
+              })),
+          },
+        });
         await refreshTeamFooter(ctx);
         return {
           content: [{
             type: "text",
-            text: JSON.stringify({
-              status: failures.length === 0 ? "shut_down" : "partially_shut_down",
-              teamName,
-              ...details,
-            }),
+            text: failures.length === 0
+              ? `Team ${teamName} shut down. Stopped ${stopEvidence.length} Workers; no Worker stops failed. Task authority and ${unfinishedTasks.length} unfinished ${unfinishedTasks.length === 1 ? "Task" : "Tasks"} retained. No further lifecycle action is required.`
+              : `Team ${teamName} shutdown partially completed, so the Team remains active with ${currentMembers.join(", ")} current. Stopped ${stoppedWorkerNames.join(", ") || "no Workers"}; stop wasn't confirmed for ${failures.map((failure) => failure.name).join(", ")}. Task authority and ${unfinishedTasks.length} unfinished ${unfinishedTasks.length === 1 ? "Task" : "Tasks"} retained; resolve the failure and retry.`,
           }],
           details,
         };
@@ -1379,10 +2225,60 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       await assertCurrentSessionBinding(ctx, params.team_name);
-      const task = await tasks.readTask(params.team_name, params.task_id);
+      let task: Awaited<ReturnType<typeof tasks.readTask>>;
+      try {
+        task = await tasks.readTask(params.team_name, params.task_id);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!(error instanceof BeadsError) || error.kind !== "command" || !/(not found|no issue found)/i.test(message)) throw error;
+        return {
+          content: [{
+            type: "text",
+            text: `Task ${params.task_id} wasn't found in Team ${params.team_name}; Task authority is unchanged. Use a team_sync snapshot to reconcile current Task IDs before retrying.`,
+          }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "task_read",
+            resource: { kind: "task", id: params.task_id, teamName: params.team_name },
+            postState: { found: false },
+            warnings: [toolResultWarning("task_not_found", `Task ${params.task_id} does not exist in this Team authority.`, params.task_id)],
+            nextActions: [{
+              tool: "team_sync",
+              reason: "Read the current compact Task projection to select a valid Task ID.",
+              args: { team_name: params.team_name },
+            }],
+            evidence: {
+              authority: { backend: "beads", teamName: params.team_name },
+              taskAuthorityChanged: false,
+            },
+          }),
+        };
+      }
+      const relations = task.relations.length > 0
+        ? task.relations.map((relation) => `${relation.relation} ${relation.targetId}`).join(", ")
+        : "none";
       return {
-        content: [{ type: "text", text: JSON.stringify(task, null, 2) }],
-        details: { task },
+        content: [{
+          type: "text",
+          text: [
+            `Task ${task.id}: ${task.title} — ${task.description || "not specified"}`,
+            `State: ${task.status}; ${task.assignee ? `assigned to ${task.assignee}` : "unassigned"}; version ${task.version}`,
+            `Acceptance criteria: ${task.acceptanceCriteria || "not specified"}`,
+            `Design: ${task.design || "not specified"}`,
+            `Relations: ${relations}`,
+            `Notes: ${task.notes || "none"}`,
+          ].join("\n"),
+        }],
+        details: toolResultDetails({
+          operation: "task_read",
+          resource: { kind: "task", id: task.id, teamName: params.team_name },
+          postState: { ...task, assignee: task.assignee ?? null, design: task.design ?? null, notes: task.notes ?? null },
+          nextActions: [{
+            tool: "task_update",
+            reason: "Use the returned exact version for a conditional mutation when one is needed.",
+            args: { team_name: params.team_name, task_id: task.id, expected_version: task.version },
+          }],
+        }),
       };
     },
   });
@@ -1460,40 +2356,108 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "teammate_shutdown",
-    label: "Shutdown Teammate",
-    description: "Stop one teammate and deactivate its current Membership only after shutdown is confirmed.",
+    name: "worker_stop",
+    label: "Stop Worker",
+    description: "Stop one Worker only when it has no assigned nonterminal Tasks, then deactivate its current Membership after shutdown is confirmed.",
     parameters: Type.Object({
       team_name: Type.String(),
-      agent_name: Type.String(),
+      worker: Type.String(),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const safeTeamName = paths.sanitizeName(params.team_name);
-      const safeAgentName = paths.sanitizeName(params.agent_name);
+      const safeAgentName = paths.sanitizeName(params.worker);
       return teams.withTeamTopologyLease(safeTeamName, async () => {
-        await assertLeadMutation(ctx, "teammate_shutdown", safeTeamName);
+        await assertLeadMutation(ctx, "worker_stop", safeTeamName);
         const config = await teams.readConfig(safeTeamName);
         const member = [...config.members].reverse().find(m => m.name === safeAgentName && m.isActive !== false);
-        if (!member) throw new Error(`Teammate ${safeAgentName} not found`);
+        if (!member) {
+          return {
+            content: [{ type: "text", text: `Worker ${safeAgentName} not stopped: no current Worker by that name exists. No state changed.` }],
+            details: toolResultDetails({
+              outcome: "refused",
+              operation: "worker_stop",
+              resource: { kind: "worker", id: safeAgentName, teamName: safeTeamName },
+              postState: {
+                worker: safeAgentName,
+                changed: false,
+                reason: "worker_not_found",
+                currentWorkers: config.members.filter((candidate) => candidate.agentType === "teammate" && candidate.isActive !== false).map((candidate) => candidate.name),
+              },
+              warnings: [toolResultWarning("worker_not_found", `No current Worker named ${safeAgentName} exists.`, safeAgentName)],
+              nextActions: [{
+                tool: "team_sync",
+                reason: "Read the current Worker projection before choosing a lifecycle action.",
+                args: { team_name: safeTeamName },
+              }],
+            }),
+          };
+        }
         if (member.name === "team-lead" || member.agentType === "lead") {
-          throw new Error("teammate_shutdown cannot shut down the team leader; use team_shutdown for whole-team lifecycle closure.");
+          throw new Error("worker_stop cannot shut down the team leader; use team_shutdown for whole-team lifecycle closure.");
+        }
+
+        const unfinished = (await tasks.listTasksWithVersions(safeTeamName)).filter(task =>
+          task.assignee === safeAgentName && task.status !== "closed",
+        );
+        if (unfinished.length > 0) {
+          const ids = unfinished.map((task) => task.id);
+          return {
+            content: [{
+              type: "text",
+              text: `Worker ${safeAgentName} not stopped: assigned nonterminal ${ids.length === 1 ? "Task" : "Tasks"} ${ids.join(", ")}. Close, reassign, or block and unassign ${ids.length === 1 ? "it" : "them"} first.`,
+            }],
+            details: toolResultDetails({
+              outcome: "refused",
+              operation: "worker_stop",
+              resource: { kind: "worker", id: safeAgentName, teamName: safeTeamName },
+              postState: {
+                worker: safeAgentName,
+                changed: false,
+                reason: "nonterminal_tasks_assigned",
+                membership: "current",
+                currentWorkers: config.members.filter((candidate) => candidate.agentType === "teammate" && candidate.isActive !== false).map((candidate) => candidate.name),
+                guardingTasks: unfinished.map((task) => ({
+                  id: task.id,
+                  title: task.title,
+                  status: task.status,
+                  version: task.version,
+                })),
+              },
+              warnings: unfinished.map((task) => toolResultWarning(
+                "worker_has_nonterminal_task",
+                `Task ${task.id} is ${task.status} and assigned to ${safeAgentName}.`,
+                task.id,
+              )),
+              nextActions: unfinished.map((task) => ({
+                tool: "task_update",
+                reason: "Close, reassign, or block and unassign this Task before retrying worker_stop.",
+                args: { team_name: safeTeamName, task_id: task.id, expected_version: task.version },
+              })),
+              evidence: { membershipId: member.membershipId },
+            }),
+          };
         }
 
         const changed = await transitionCurrentMembership(safeTeamName, member, "process_shutdown", true);
+        await teamEvents.appendTeamEvent(safeTeamName, {
+          type: "worker", worker: safeAgentName, membershipId: member.membershipId!, phase: "stopped",
+        });
         return {
-          content: [{ type: "text", text: `Teammate ${safeAgentName} stopped and its current Membership was deactivated.` }],
-          details: {
-            deactivatedMembershipId: changed.member?.membershipId,
-            stopEvidence: changed.stopEvidence,
-            receipt: mutationReceipt(
-              "teammate_shutdown",
-              { kind: "membership", id: changed.member?.membershipId || member.membershipId!, teamName: safeTeamName, agentName: safeAgentName },
-              {
-                membershipState: "inactive",
-                stopEvidence: changed.stopEvidence,
+          content: [{ type: "text", text: `Worker ${safeAgentName} stopped; no Task state changed.` }],
+          details: toolResultDetails({
+            operation: "worker_stop",
+            resource: { kind: "worker", id: safeAgentName, teamName: safeTeamName },
+            postState: { worker: safeAgentName, membership: "inactive", taskStateChanged: false },
+            evidence: {
+              deactivatedMembershipId: changed.member?.membershipId,
+              stop: changed.stopEvidence,
+              receipt: {
+                operation: "worker_stop",
+                worker: safeAgentName,
+                membershipId: changed.member?.membershipId || member.membershipId,
               },
-            ),
-          },
+            },
+          }),
         };
       });
     },

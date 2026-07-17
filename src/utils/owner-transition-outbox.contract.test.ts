@@ -45,6 +45,7 @@ async function fixture(suffix: string) {
     id: "bd-task",
     title: "Long work",
     description: "Exercise crash recovery",
+    acceptanceCriteria: "Crash recovery preserves ownership",
     status: "in_progress",
     assignee: "old-assignee",
     relations: [],

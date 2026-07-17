@@ -1,15 +1,12 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
-import * as messaging from "./messaging";
 import type { Member } from "./models";
 import * as paths from "./paths";
-import * as runtime from "./runtime";
 import * as teams from "./teams";
+import * as teamEvents from "./team-events";
 
 type RegisteredTool = {
   name: string;
@@ -17,19 +14,27 @@ type RegisteredTool = {
   execute: (toolCallId: string, params: any, signal?: unknown, onUpdate?: unknown, ctx?: unknown) => Promise<any>;
 };
 
+const PUBLIC_TOOLS = [
+  "alert_send",
+  "task_create",
+  "task_link",
+  "task_read",
+  "task_update",
+  "team_create",
+  "team_shutdown",
+  "team_sync",
+  "worker_ensure",
+  "worker_stop",
+];
+
 const createdTeams: string[] = [];
-const temporaryRoots: string[] = [];
+
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 function uniqueTeam(suffix: string): string {
   const team = `ergonomic-contract-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
   createdTeams.push(team);
   return team;
-}
-
-function temporaryRoot(suffix: string): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `pi-teams-ergonomic-${suffix}-`));
-  temporaryRoots.push(root);
-  return root;
 }
 
 function context(sessionFile: string, cwd = process.cwd()) {
@@ -82,17 +87,21 @@ function terminal(): TerminalAdapter {
   };
 }
 
-function expectDurableReceipt(receipt: any, operation: string, resourceKind: string) {
-  expect(receipt).toMatchObject({
-    accepted: true,
+function expectEnvelope(
+  details: any,
+  operation: string,
+  resourceKind: "team" | "worker" | "task" | "alert",
+  outcome: "accepted" | "partial" | "refused" = "accepted",
+) {
+  expect(details).toMatchObject({
+    schema: "pi-teams-tool-result/1",
+    outcome,
     operation,
     resource: { kind: resourceKind, id: expect.any(String) },
-    postState: expect.any(Object),
     warnings: expect.any(Array),
+    nextActions: expect.any(Array),
   });
-  // A mutation receipt may say that a runtime observation is absent, but it
-  // must never turn launch/acceptance into an unearned readiness claim.
-  expect(JSON.stringify(receipt)).not.toMatch(/agentLoopReady|successfulTurnObserved|deliveryReady/i);
+  expect(JSON.stringify(details)).not.toMatch(/agentLoopReady|successfulTurnObserved|deliveryReady/i);
 }
 
 afterEach(() => {
@@ -103,256 +112,406 @@ afterEach(() => {
     fs.rmSync(paths.teamDir(team), { recursive: true, force: true });
     fs.rmSync(paths.taskDir(team), { recursive: true, force: true });
   }
-  for (const root of temporaryRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
 describe("ergonomic agent-facing Team contracts", () => {
-  it("puts durable Team, lead Membership, and Task-authority identity in team_create content", async () => {
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", "");
-    const team = uniqueTeam("create-receipt");
-    const leadSession = `/tmp/${team}-lead.jsonl`;
+  it("exposes only the ten Task-first lifecycle tools", () => {
     const tools = registerTools();
 
-    const result = await tools.get("team_create")!.execute(
+    expect([...tools.keys()].sort()).toEqual(PUBLIC_TOOLS);
+    expect(tools.get("team_sync")!.description).toMatch(/block|wait|event/i);
+    expect(tools.get("worker_ensure")!.description).toMatch(/reuse/i);
+    expect(tools.get("alert_send")!.description).toMatch(/exceptional/i);
+    for (const retired of [
+      "spawn_teammate",
+      "teammate_shutdown",
+      "send_message",
+      "broadcast_message",
+      "read_inbox",
+      "check_teammate",
+      "report_stale_agent_sessions",
+      "save_team_as_template",
+    ]) {
+      expect(tools.has(retired)).toBe(false);
+    }
+  });
+
+  it("returns compact Team and sync envelopes without leaking persisted config into agent content", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const team = uniqueTeam("create-sync");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const tools = registerTools();
+    const leadContext = context(leadSession);
+
+    const created = await tools.get("team_create")!.execute(
       "create",
       { team_name: team },
       undefined,
       undefined,
-      context(leadSession),
+      leadContext,
     );
 
-    expectDurableReceipt(result.details.receipt, "team_create", "team");
-    expect(result.details.receipt.postState).toMatchObject({
-      teamName: team,
-      leadMembershipId: expect.any(String),
-      taskAuthorityId: expect.any(String),
-      membershipState: "current",
+    expectEnvelope(created.details, "team_create", "team");
+    expect(created.details.postState).toEqual({
+      name: team,
+      lifecycle: "active",
+      taskAuthorityReady: true,
     });
-    expect(result.content[0].text).toContain(team);
-    expect(result.content[0].text).toContain(result.details.receipt.postState.leadMembershipId);
-    expect(result.content[0].text).toContain(result.details.receipt.postState.taskAuthorityId);
-    expect(result.content[0].text).not.toMatch(/ready|runtime/i);
-  }, 30_000);
+    expect(created.details.evidence).toMatchObject({
+      leadMembershipId: expect.any(String),
+      taskAuthority: { backend: "beads", authorityId: expect.any(String) },
+    });
+    expect(created.details).not.toHaveProperty("config");
+    expect(created.content[0].text).toContain(team);
+    expect(created.content[0].text).not.toContain(created.details.evidence.leadMembershipId);
+    expect(created.content[0].text).not.toContain(created.details.evidence.taskAuthority.authorityId);
+    expect(JSON.stringify(created.details)).not.toContain(leadSession);
 
-  it("returns a nonblocking spawn receipt with only committed launch facts", async () => {
+    const snapshot = await tools.get("team_sync")!.execute(
+      "snapshot",
+      { team_name: team },
+      undefined,
+      undefined,
+      leadContext,
+    );
+    expectEnvelope(snapshot.details, "team_sync", "team");
+    expect(snapshot.details.postState).toMatchObject({
+      completion: "snapshot",
+      cursor: expect.stringMatching(/^[0-9]+$/),
+      projection: {
+        team: { name: team, lifecycle: "active" },
+        workers: [],
+        tasks: [],
+      },
+    });
+    expect(snapshot.content[0].text).toMatch(/Workers: none.*Tasks: none/s);
+    expect(snapshot.content[0].text).not.toContain(leadSession);
+
+    const cursorAhead = await tools.get("team_sync")!.execute("cursor-ahead", {
+      team_name: team,
+      cursor: (BigInt(snapshot.details.postState.cursor) + 100n).toString(),
+    }, undefined, undefined, leadContext);
+    expect(cursorAhead.details).toMatchObject({
+      outcome: "refused",
+      postState: {
+        reason: "cursor_ahead_of_journal",
+        journalHeadCursor: snapshot.details.postState.cursor,
+        cursorCorrectionRequired: true,
+      },
+    });
+    expect(cursorAhead.content[0].text).toMatch(/no lower cursor was returned as successful progress/i);
+    expect(cursorAhead.content[0].text).toMatch(/state are unchanged; no events were consumed or lost/i);
+
+    for (let index = 1; index <= 3; index++) {
+      const alert = await tools.get("alert_send")!.execute(`alert-${index}`, {
+        team_name: team,
+        to: "team-lead",
+        kind: "attention",
+        text: `Reconcile the current Team projection (${index}).`,
+      }, undefined, undefined, leadContext);
+      expectEnvelope(alert.details, "alert_send", "alert");
+    }
+
+    const changes = await tools.get("team_sync")!.execute("changes", {
+      team_name: team,
+      cursor: snapshot.details.postState.cursor,
+      wait_ms: 50,
+      event_types: ["alert"],
+      limit: 2,
+    }, undefined, undefined, leadContext);
+    expectEnvelope(changes.details, "team_sync", "team");
+    expect(changes.details.postState.completion).toBe("events");
+    expect(changes.details.evidence.events).toHaveLength(2);
+    expect(changes.details.postState.pagination.events).toMatchObject({ returned: 2, truncated: true, remaining: 1 });
+    expect(changes.details.postState.cursor).not.toBe(changes.details.postState.journalHeadCursor);
+    expect(changes.content[0].text).toMatch(/Event page truncated/);
+
+    const finalChanges = await tools.get("team_sync")!.execute("changes-final", {
+      team_name: team,
+      cursor: changes.details.postState.cursor,
+      event_types: ["alert"],
+      limit: 2,
+    }, undefined, undefined, leadContext);
+    expect(finalChanges.details.evidence.events).toEqual([
+      expect.objectContaining({ type: "alert", kind: "attention", to: "team-lead" }),
+    ]);
+    expect(finalChanges.details.postState.pagination.events).toMatchObject({ returned: 1, truncated: false, remaining: 0 });
+    expect(finalChanges.details.postState.cursor).toBe(finalChanges.details.postState.journalHeadCursor);
+
+    for (let index = 0; index < 3; index++) {
+      await teamEvents.appendTeamEvent(team, {
+        type: "worker",
+        worker: "reviewer",
+        membershipId: "membership-machine-evidence",
+        phase: "failed",
+      });
+    }
+    const overflow = await tools.get("team_sync")!.execute("worker-overflow", {
+      team_name: team,
+      cursor: finalChanges.details.postState.cursor,
+      event_types: ["worker"],
+      limit: 2,
+    }, undefined, undefined, leadContext);
+    expect(overflow.content[0].text.match(/Worker reviewer failed ×2/g)).toHaveLength(1);
+    expect(overflow.content[0].text).toMatch(/exactly 1 matching event remaining/);
+    expect(overflow.content[0].text).not.toMatch(/membership-machine-evidence|carrier/);
+
+    for (let index = 1; index <= 2; index++) {
+      await tools.get("task_create")!.execute(`page-task-${index}`, {
+        team_name: team,
+        title: `Paged Task ${index}`,
+        description: `Exercise bounded snapshot page ${index}.`,
+      }, undefined, undefined, leadContext);
+    }
+    const firstSnapshotPage = await tools.get("team_sync")!.execute("snapshot-page-1", {
+      team_name: team,
+      limit: 1,
+    }, undefined, undefined, leadContext);
+    expect(firstSnapshotPage.details.postState.pagination.projection).toMatchObject({
+      returned: 1,
+      totalItems: 2,
+      truncated: true,
+      continuation: expect.any(String),
+    });
+    expect(firstSnapshotPage.details.postState.projection.tasks).toHaveLength(1);
+
+    const secondSnapshotPage = await tools.get("team_sync")!.execute("snapshot-page-2", {
+      team_name: team,
+      limit: 1,
+      continuation: firstSnapshotPage.details.postState.pagination.projection.continuation,
+    }, undefined, undefined, leadContext);
+    expect(secondSnapshotPage.details.postState.pagination.projection).toMatchObject({
+      returned: 1,
+      totalItems: 2,
+      truncated: false,
+      continuation: null,
+    });
+    expect(secondSnapshotPage.details.postState.projection.tasks).toHaveLength(1);
+    expect(secondSnapshotPage.details.postState.projection.tasks[0].id)
+      .not.toBe(firstSnapshotPage.details.postState.projection.tasks[0].id);
+  }, 60_000);
+
+  it("creates or reuses one stable Worker without claiming runtime readiness", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     setAdapter(terminal());
-    const team = uniqueTeam("spawn");
+    const team = uniqueTeam("worker-reuse");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     await teams.createTeam(team, leadSession, "lead");
     const tools = registerTools();
-
-    const result = await tools.get("spawn_teammate")!.execute("spawn", {
-      team_name: team,
-      name: "worker",
-      prompt: "Inspect a long diff.",
-      cwd: process.cwd(),
-    }, undefined, undefined, context(leadSession));
-
-    expect(result.details).toMatchObject({
-      membership: {
-        persisted: true,
-        current: true,
-        teamName: team,
-        agentName: "worker",
-      },
-      terminalLaunch: {
-        launched: true,
-        adapter: "ergonomic-contract-terminal",
-        kind: "pane",
-        targetId: "pane-worker",
-      },
-      runtimeObservation: { checked: false, state: "not_observed" },
-      initialMessage: { accepted: true, presentationObserved: false },
-    });
-    expect(result.details.membership.membershipId).toEqual(expect.any(String));
-    expect(result.details.initialMessage.messageId).toEqual(expect.any(String));
-    expect(JSON.stringify(result.details)).not.toMatch(/agentLoopReady|successfulTurnObserved|ready/i);
-    expect(result.content[0].text).toMatch(/haven't been observed yet/i);
-    expectDurableReceipt(result.details.receipt, "spawn_teammate", "membership");
-    expect(result.details.receipt.postState).toMatchObject({
-      membershipState: "current",
-      terminalLaunched: true,
-      initialMessageAccepted: true,
-      runtimeObservation: "not_observed",
-      messagePresentation: "not_observed",
-    });
-    expect((await teams.readConfig(team)).members).toContainEqual(expect.objectContaining({
-      name: "worker",
-      membershipId: result.details.membership.membershipId,
-      isActive: true,
-    }));
-  });
-
-  it("ships truthful names for non-mutating session reports and teammate shutdown", () => {
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", "");
-    const tools = registerTools();
-    expect(tools.has("report_stale_agent_sessions")).toBe(true);
-    expect(tools.has("teammate_shutdown")).toBe(true);
-    expect(tools.has("cleanup_agent_sessions")).toBe(false);
-    expect(tools.has("process_shutdown_approved")).toBe(false);
-    expect(tools.get("report_stale_agent_sessions")!.description).toMatch(/without deleting/i);
-  });
-
-  it("previews exact template artifacts without mutation, then writes that exact projection", async () => {
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", "");
-    const team = uniqueTeam("template");
-    const root = temporaryRoot("template");
-    const leadSession = path.join(root, "lead.jsonl");
-    await teams.createTeam(team, leadSession, "lead");
-    await teams.addMember(team, member("worker", path.join(root, "worker.jsonl"), {
-      prompt: "Produce a durable result.",
-    }));
-    const tools = registerTools();
     const params = {
       team_name: team,
-      template_name: "ergonomic-template",
-      scope: "project",
+      name: "worker",
+      profile: "Review interfaces and verify contract tests.",
+      cwd: process.cwd(),
     };
 
-    const preview = await tools.get("save_team_as_template")!.execute(
-      "preview", { ...params, dry_run: true }, undefined, undefined, context(leadSession, root),
+    const created = await tools.get("worker_ensure")!.execute(
+      "ensure-created", params, undefined, undefined, context(leadSession),
     );
-    expect(preview.details.dryRun).toBe(true);
-    expectDurableReceipt(preview.details.receipt, "save_team_as_template", "team_template");
-    expect(preview.details.receipt.postState).toMatchObject({ state: "previewed", dryRun: true });
-    expect(preview.details.artifacts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "agent_definition", written: false, action: "create" }),
-      expect.objectContaining({ kind: "team_manifest", written: false, action: "create" }),
-    ]));
-    expect(fs.existsSync(path.join(root, ".pi"))).toBe(false);
+    expectEnvelope(created.details, "worker_ensure", "worker");
+    expect(created.details.postState).toMatchObject({
+      name: "worker",
+      action: "created",
+      membership: "current",
+      carrier: "prepared",
+      terminalLaunched: true,
+      runtime: "not_observed",
+      assignedTasks: [],
+    });
+    expect(created.details.evidence).toMatchObject({
+      membershipId: expect.any(String),
+      terminalLaunch: { adapter: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-worker" },
+    });
+    expect(created.content[0].text).not.toContain(created.details.evidence.membershipId);
+    expect(created.content[0].text).not.toContain("pane-worker");
 
-    const write = await tools.get("save_team_as_template")!.execute(
-      "write", { ...params, dry_run: false }, undefined, undefined, context(leadSession, root),
+    const reused = await tools.get("worker_ensure")!.execute(
+      "ensure-reused", params, undefined, undefined, context(leadSession),
     );
-    expect(write.details.dryRun).toBe(false);
-    expectDurableReceipt(write.details.receipt, "save_team_as_template", "team_template");
-    expect(write.details.receipt.postState).toMatchObject({ state: "written", dryRun: false });
-    expect(write.details.artifacts).toEqual(expect.arrayContaining(
-      preview.details.artifacts.map((artifact: { path: string; content: string }) =>
-        expect.objectContaining({ path: artifact.path, content: artifact.content, written: true }),
-      ),
-    ));
-    for (const artifact of write.details.artifacts as Array<{ path: string; content: string; written: boolean }>) {
-      expect(artifact.written).toBe(true);
-      expect(fs.readFileSync(artifact.path, "utf8")).toBe(artifact.content);
-    }
+    expectEnvelope(reused.details, "worker_ensure", "worker");
+    expect(reused.details.postState).toMatchObject({
+      name: "worker",
+      action: "reused",
+      membership: "current",
+    });
+    expect(reused.details.evidence.membershipId).toBe(created.details.evidence.membershipId);
+    const currentWorkers = (await teams.readConfig(team)).members.filter(
+      candidate => candidate.name === "worker" && candidate.isActive !== false,
+    );
+    expect(currentWorkers).toHaveLength(1);
   });
 
-  it("denies Team topology, lifecycle, and template writes to a worker but preserves Message inspection and send", async () => {
+  it("keeps lifecycle writes lead-only while workers use typed Alerts without an inbox inspection surface", async () => {
     const team = uniqueTeam("worker-authority");
-    const root = temporaryRoot("worker-authority");
-    const leadSession = path.join(root, "lead.jsonl");
-    const workerSession = path.join(root, "worker.jsonl");
-    const otherSession = path.join(root, "other.jsonl");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
     await teams.createTeam(team, leadSession, "lead");
     await teams.addMember(team, member("worker", workerSession));
-    const other = member("other", otherSession);
-    await teams.addMember(team, other);
     setAdapter(terminal());
     vi.stubEnv("PI_AGENT_NAME", "worker");
     vi.stubEnv("PI_TEAM_NAME", team);
     const tools = registerTools();
-    const workerContext = context(workerSession, root);
+    const workerContext = context(workerSession);
 
     for (const [tool, params] of [
-      ["spawn_teammate", { team_name: team, name: "new-worker", prompt: "x", cwd: root }],
-      ["teammate_shutdown", { team_name: team, agent_name: "other" }],
+      ["worker_ensure", { team_name: team, name: "other", profile: "x", cwd: process.cwd() }],
+      ["worker_stop", { team_name: team, worker: "worker" }],
       ["team_shutdown", { team_name: team }],
-      ["save_team_as_template", { team_name: team, template_name: "nope", scope: "project", dry_run: true }],
     ] as const) {
       await expect(tools.get(tool)!.execute(tool, params, undefined, undefined, workerContext))
         .rejects.toThrow(/lead-only/i);
     }
 
-    const sent = await tools.get("send_message")!.execute("send", {
+    const sent = await tools.get("alert_send")!.execute("send", {
       team_name: team,
-      recipient: "team-lead",
-      content: "I found a useful constraint.",
-      summary: "constraint",
+      to: "team-lead",
+      kind: "clarification",
+      text: "Does the acceptance criterion include the restart case?",
     }, undefined, undefined, workerContext);
-    expect(sent.details.messageId).toEqual(expect.any(String));
-
-    await messaging.sendPlainMessage(team, "team-lead", "other", "Please verify this.", "verify");
-    const own = await tools.get("read_inbox")!.execute("own", {
-      team_name: team,
-      unread_only: false,
-    }, undefined, undefined, workerContext);
-    expect(own.details.messages).toEqual([]);
-
-    const crossMember = await tools.get("read_inbox")!.execute("cross", {
-      team_name: team,
-      agent_name: "other",
-      unread_only: true,
-    }, undefined, undefined, workerContext);
-    expect(crossMember.details.messages).toEqual([
-      expect.objectContaining({ text: "Please verify this.", recipientMembershipId: other.membershipId, read: false }),
-    ]);
-    const after = await messaging.readInboxForMembership(team, "other", other.membershipId!, true, false);
-    expect(after).toEqual([
-      expect.objectContaining({ text: "Please verify this.", read: false }),
-    ]);
+    expectEnvelope(sent.details, "alert_send", "alert");
+    expect(sent.details.postState).toMatchObject({
+      kind: "clarification",
+      from: "worker",
+      to: "team-lead",
+      recipients: ["team-lead"],
+      taskStateChanged: false,
+    });
+    expect(sent.details.evidence.deliveries[0].messageId).toEqual(expect.any(String));
+    expect(sent.content[0].text).not.toContain(sent.details.resource.id);
+    expect(sent.content[0].text).not.toContain(sent.details.evidence.deliveries[0].messageId);
+    expect(JSON.stringify(sent.details)).not.toContain(workerSession);
+    expect(tools.has("read_inbox")).toBe(false);
   });
 
-  it("returns the same durable receipt vocabulary for teammate and whole-Team shutdown", async () => {
+  it("does not echo a rejected Task description into the acceptance-criteria retry", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     setAdapter(terminal());
-    const team = uniqueTeam("shutdown-receipts");
-    const root = temporaryRoot("shutdown-receipts");
-    const leadSession = path.join(root, "lead.jsonl");
-    await teams.createTeam(team, leadSession, "lead");
-    await teams.addMember(team, member("worker", path.join(root, "worker.jsonl"), { tmuxPaneId: "pane-worker" }));
+    const team = uniqueTeam("criteria-retry");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
     const tools = registerTools();
-    const leadContext = context(leadSession, root);
-
-    const teammate = await tools.get("teammate_shutdown")!.execute("stop-worker", {
+    const leadContext = context(leadSession);
+    await tools.get("team_create")!.execute(
+      "create", { team_name: team }, undefined, undefined, leadContext,
+    );
+    await tools.get("worker_ensure")!.execute("ensure", {
       team_name: team,
-      agent_name: "worker",
+      name: "worker",
+      profile: "Implement and independently verify assigned Tasks.",
+      cwd: process.cwd(),
     }, undefined, undefined, leadContext);
-    expectDurableReceipt(teammate.details.receipt, "teammate_shutdown", "membership");
-    expect(teammate.details.receipt.postState).toMatchObject({ membershipState: "inactive" });
 
-    const wholeTeam = await tools.get("team_shutdown")!.execute("stop-team", {
+    const rejectedDescription = "Do not copy this underspecified prompt body into retry arguments.";
+    const refused = await tools.get("task_create")!.execute("missing-criteria", {
       team_name: team,
+      title: "Underspecified assigned work",
+      description: rejectedDescription,
+      assignee: "worker",
     }, undefined, undefined, leadContext);
-    expectDurableReceipt(wholeTeam.details.receipt, "team_shutdown", "team");
-    expect(wholeTeam.details.receipt.postState).toMatchObject({
-      state: "shut_down",
-      taskAuthorityRetained: true,
+
+    expect(refused.details).toMatchObject({
+      outcome: "refused",
+      operation: "task_create",
+      postState: {
+        created: false,
+        taskStateChanged: false,
+        reason: "acceptance_criteria_required",
+      },
+      nextActions: [{
+        tool: "task_create",
+        reason: expect.stringMatching(/add independently verifiable acceptance criteria before retrying/i),
+        args: {
+          team_name: team,
+          title: "Underspecified assigned work",
+          assignee: "worker",
+        },
+      }],
     });
-  });
+    expect(refused.details.nextActions[0].args).not.toHaveProperty("description");
+    expect(JSON.stringify(refused.details.nextActions)).not.toContain(rejectedDescription);
+  }, 60_000);
 
-  it("does not mislabel legacy runtime ready evidence as successful work or delivery", async () => {
+  it("binds goal-driven Task state to Worker and Team lifecycle receipts", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const aliveTerminal: TerminalAdapter = { ...terminal(), isAlive: () => true };
-    setAdapter(aliveTerminal);
-    const team = uniqueTeam("runtime-projection");
-    const root = temporaryRoot("runtime-projection");
-    const leadSession = path.join(root, "lead.jsonl");
-    const worker = member("worker", path.join(root, "worker.jsonl"), { tmuxPaneId: "pane-worker" });
-    await teams.createTeam(team, leadSession, "lead");
-    await teams.addMember(team, worker);
-    await runtime.writeRuntimeStatus(team, "worker", {
-      ready: true,
-      lastHeartbeatAt: Date.now(),
-    }, worker.membershipId);
+    setAdapter(terminal());
+    const team = uniqueTeam("task-lifecycle");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
     const tools = registerTools();
-
-    const result = await tools.get("check_teammate")!.execute("check", {
+    const leadContext = context(leadSession);
+    await tools.get("team_create")!.execute(
+      "create", { team_name: team }, undefined, undefined, leadContext,
+    );
+    await tools.get("worker_ensure")!.execute("ensure", {
       team_name: team,
-      agent_name: "worker",
-    }, undefined, undefined, context(leadSession, root));
+      name: "worker",
+      profile: "Implement and independently verify the assigned goal.",
+      cwd: process.cwd(),
+    }, undefined, undefined, leadContext);
 
-    expect(result.details).not.toHaveProperty("agentLoopReady");
-    expect(result.details).not.toHaveProperty("successfulTurnObserved");
-    // The raw compatibility record remains inspectable, but has no promoted
-    // semantic interpretation in the agent-facing projection.
-    expect(result.details.runtime).toMatchObject({ ready: true, membershipId: worker.membershipId });
-  });
+    const task = await tools.get("task_create")!.execute("task", {
+      team_name: team,
+      title: "Verify restart persistence",
+      description: "Exercise the durable restart path and record evidence.",
+      acceptance_criteria: "A fresh store reads the committed terminal state.",
+      assignee: "worker",
+    }, undefined, undefined, leadContext);
+    expectEnvelope(task.details, "task_create", "task");
+    expect(task.details.postState).toMatchObject({
+      title: "Verify restart persistence",
+      acceptanceCriteria: "A fresh store reads the committed terminal state.",
+      assignee: "worker",
+      status: "open",
+      version: expect.any(String),
+    });
+
+    const guarded = await tools.get("worker_stop")!.execute("guarded-stop", {
+      team_name: team,
+      worker: "worker",
+    }, undefined, undefined, leadContext);
+    expectEnvelope(guarded.details, "worker_stop", "worker", "refused");
+    expect(guarded.details.postState).toMatchObject({
+      worker: "worker",
+      changed: false,
+      reason: "nonterminal_tasks_assigned",
+      membership: "current",
+      guardingTasks: [{ id: task.details.postState.id, status: "open" }],
+    });
+
+    const closed = await tools.get("task_update")!.execute("close", {
+      team_name: team,
+      task_id: task.details.postState.id,
+      status: "closed",
+      append_note: "Restarted the store and verified the committed terminal state.",
+      expected_version: task.details.postState.version,
+    }, undefined, undefined, leadContext);
+    expectEnvelope(closed.details, "task_update", "task");
+    expect(closed.details.postState).toMatchObject({ status: "closed", assignee: "worker" });
+    expect(closed.details.evidence.appliedOperations).toEqual(["set:status", "append:note"]);
+
+    const stopped = await tools.get("worker_stop")!.execute("stop", {
+      team_name: team,
+      worker: "worker",
+    }, undefined, undefined, leadContext);
+    expectEnvelope(stopped.details, "worker_stop", "worker");
+    expect(stopped.details.postState).toEqual({
+      worker: "worker",
+      membership: "inactive",
+      taskStateChanged: false,
+    });
+
+    const shutdown = await tools.get("team_shutdown")!.execute("shutdown", {
+      team_name: team,
+    }, undefined, undefined, leadContext);
+    expectEnvelope(shutdown.details, "team_shutdown", "team");
+    expect(shutdown.details.postState).toMatchObject({
+      lifecycle: "shut_down",
+      shutdownOutcome: "complete",
+      currentMembers: [],
+      unfinishedTasks: [],
+      taskAuthorityRetained: true,
+    });
+  }, 60_000);
 });

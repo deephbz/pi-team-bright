@@ -1,0 +1,556 @@
+{
+  "schema": "pi-teams-curated-tool-result-scenarios/2",
+  "scenarios": [
+    {
+      "id": "team-create-fresh",
+      "currentTool": "team_create",
+      "setup": "Create a fresh Team with an initialized Task authority.",
+      "judgeFocus": [
+        "Is the semantic creation outcome sufficient?",
+        "Are opaque authority and membership identifiers unnecessary in agent and TUI output?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "team-create-authority-unavailable",
+      "currentTool": "team_create",
+      "setup": "Create a Team when no usable Task authority can be resolved.",
+      "judgeFocus": [
+        "Is recovery actionable without exposing backend configuration?"
+      ],
+      "provenance": {
+        "basis": "legacy-analog"
+      }
+    },
+    {
+      "id": "worker-ensure-new-unobserved",
+      "currentTool": "worker_ensure",
+      "setup": "Create a Worker Membership and terminal before runtime startup is observed.",
+      "judgeFocus": [
+        "Does the receipt avoid implying readiness?",
+        "Which terminal and Membership identifiers belong only in machine evidence?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "worker-ensure-reuse",
+      "currentTool": "worker_ensure",
+      "setup": "Ensure a Worker that already has a current Membership.",
+      "judgeFocus": [
+        "Is idempotent reuse explicit?",
+        "Is profile or runtime configuration duplicated unnecessarily?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "worker-runtime-starting",
+      "currentTool": "worker_ensure",
+      "setup": "A Worker terminal is alive and heartbeating while its agent loop is not ready.",
+      "judgeFocus": [
+        "Does the result distinguish durable launch from runtime readiness?"
+      ],
+      "provenance": {
+        "basis": "legacy-analog"
+      }
+    },
+    {
+      "id": "worker-runtime-stalled",
+      "currentTool": "worker_ensure",
+      "setup": "A Worker terminal exists but startup is stalled and no recent heartbeat is present.",
+      "judgeFocus": [
+        "Is diagnosis actionable without returning the full runtime record?"
+      ],
+      "provenance": {
+        "basis": "legacy-analog"
+      }
+    },
+    {
+      "id": "worker-stop-busy",
+      "currentTool": "worker_stop",
+      "setup": "Stop a Worker that owns a nonterminal Task.",
+      "judgeFocus": [
+        "Are blocking Tasks and valid next actions clear?",
+        "Is the refusal preserved as structured machine evidence?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "worker-stop-success",
+      "currentTool": "worker_stop",
+      "setup": "Stop a Worker with no nonterminal assignment and deactivate its Membership.",
+      "judgeFocus": [
+        "Is semantic success concise while stop evidence remains machine-readable?"
+      ],
+      "provenance": {
+        "basis": "legacy-analog"
+      }
+    },
+    {
+      "id": "sync-empty-snapshot",
+      "currentTool": "team_sync",
+      "setup": "Read an initial Team snapshot with Workers and no Tasks or events.",
+      "judgeFocus": [
+        "Is the snapshot enough for the next coordination decision?",
+        "Are Membership identifiers unnecessary?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "sync-worker-failure-events",
+      "currentTool": "team_sync",
+      "setup": "Wake on several Worker failure events while the snapshot still carries older session-bound phases.",
+      "judgeFocus": [
+        "Can an agent distinguish wakeup evidence from current authority?",
+        "Is projection inconsistency represented honestly?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "sync-task-note-batch",
+      "currentTool": "team_sync",
+      "setup": "Wake on note changes to several Tasks.",
+      "judgeFocus": [
+        "Are Task references, change kinds, and actors sufficient?",
+        "Are full Task bodies avoided?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "sync-task-status-batch",
+      "currentTool": "team_sync",
+      "setup": "Wake on several Task status changes to blocked.",
+      "judgeFocus": [
+        "Are resulting statuses visible?",
+        "Are cursors and full versions excessive outside machine evidence?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "alert-direct-task-reference",
+      "currentTool": "alert_send",
+      "setup": "Send a clarification Alert to one Worker with an exact Task reference.",
+      "judgeFocus": [
+        "Is accepted recipient plus Task association enough?",
+        "Are transport identifiers and cursor unnecessary to the agent and human?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "alert-broadcast-many",
+      "currentTool": "alert_send",
+      "setup": "Broadcast an Alert accepted by several Workers.",
+      "judgeFocus": [
+        "Should agent and TUI receive recipient names or counts instead of transport identifiers?"
+      ],
+      "provenance": {
+        "basis": "legacy-analog"
+      }
+    },
+    {
+      "id": "alert-invalid-recipient",
+      "currentTool": "alert_send",
+      "setup": "Send an Alert to a recipient who is not a current Team member.",
+      "judgeFocus": [
+        "Is the failed recipient and recovery action clear?",
+        "Should failure be structured rather than thrown with empty details?"
+      ],
+      "provenance": {
+        "basis": "legacy-analog"
+      }
+    },
+    {
+      "id": "task-create-rich-assigned",
+      "currentTool": "task_create",
+      "setup": "Create an assigned Task with detailed success criteria.",
+      "judgeFocus": [
+        "Are identity, status, assignee, and version sufficient?",
+        "Should title be present while Task prose remains in machine details?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-create-unassigned-design",
+      "currentTool": "task_create",
+      "setup": "Create an unassigned Task carrying an initial design.",
+      "judgeFocus": [
+        "Does the receipt avoid echoing prose while making the unassigned state obvious?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-read-compact-open",
+      "currentTool": "task_read",
+      "setup": "Read a small open Task.",
+      "judgeFocus": [
+        "Is raw JSON the right agent projection?",
+        "Can the TUI emphasize semantic fields?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-read-rich-closed",
+      "currentTool": "task_read",
+      "setup": "Read a closed Task with long description, design, notes, and a relation.",
+      "judgeFocus": [
+        "Does the agent receive needed semantics without irrelevant provenance?",
+        "Does the TUI fold long sections instead of dumping JSON?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-read-rich-blocked",
+      "currentTool": "task_read",
+      "setup": "Read a blocked Task with long notes and several relations.",
+      "judgeFocus": [
+        "Are current blocker and recovery facts prioritized over history?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-read-not-found",
+      "currentTool": "task_read",
+      "setup": "Read a Task identifier that does not exist.",
+      "judgeFocus": [
+        "Does the error provide the valid next query or action without backend detail?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-update-note",
+      "currentTool": "task_update",
+      "setup": "Append a note to an open assigned Task.",
+      "judgeFocus": [
+        "Are applied operation, post-state, version, and warnings sufficient?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-update-status-note-blocked",
+      "currentTool": "task_update",
+      "setup": "Move a Task to blocked and append a note atomically.",
+      "judgeFocus": [
+        "Is the blocked outcome obvious without echoing the full Task?",
+        "Can the reason remain available?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-update-claim-success",
+      "currentTool": "task_update",
+      "setup": "Claim an unowned open Task.",
+      "judgeFocus": [
+        "Are ownership transition and new version explicit?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-update-stale-version",
+      "currentTool": "task_update",
+      "setup": "Update a Task with an obsolete expected version.",
+      "judgeFocus": [
+        "Is re-read and retry clear?",
+        "Is backend conditional-write commentary excessive?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-update-claim-race",
+      "currentTool": "task_update",
+      "setup": "A Task changes after read and before a claim attempt.",
+      "judgeFocus": [
+        "Can the agent distinguish a version race from an ownership conflict?",
+        "Is the retry flow bounded?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-update-already-claimed",
+      "currentTool": "task_update",
+      "setup": "Claim a Task already owned by another Worker.",
+      "judgeFocus": [
+        "Is the current owner clear enough to stop a retry loop?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-link-add-blocker",
+      "currentTool": "task_link",
+      "setup": "Add a blocked-by relation between two Tasks.",
+      "judgeFocus": [
+        "Are relation kind and target explicit instead of hidden in a generic Task receipt?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-link-add-related",
+      "currentTool": "task_link",
+      "setup": "Add a related relation between two Tasks.",
+      "judgeFocus": [
+        "Does the result preserve the weaker relation semantics?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-link-remove-blocker",
+      "currentTool": "task_link",
+      "setup": "Remove a blocked-by relation.",
+      "judgeFocus": [
+        "Are relation removal and the resulting unblocked possibility explicit?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "task-link-stale-version",
+      "currentTool": "task_link",
+      "setup": "Mutate a relation with an obsolete Task version.",
+      "judgeFocus": [
+        "Is the retry action concise without backend implementation commentary?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "team-shutdown-clean",
+      "currentTool": "team_shutdown",
+      "setup": "Shut down a Team after its assigned Tasks are blocked and stop several Worker panes.",
+      "judgeFocus": [
+        "Are status, counts, failures, and Task-authority retention enough?",
+        "Does stop evidence remain machine-only?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "team-shutdown-stale-bindings",
+      "currentTool": "team_shutdown",
+      "setup": "Shut down a Team whose Memberships have stale Session bindings but no stoppable panes.",
+      "judgeFocus": [
+        "Should the human see a warning while exact stale bindings remain machine evidence?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "team-shutdown-nonmember",
+      "currentTool": "team_shutdown",
+      "setup": "Attempt shutdown from a Session that is not a current Team member.",
+      "judgeFocus": [
+        "Is the authority failure and recovery path clear?"
+      ],
+      "provenance": {
+        "basis": "direct-observation"
+      }
+    },
+    {
+      "id": "team-create-existing-team",
+      "currentTool": "team_create",
+      "setup": "Create a Team whose durable Team record already exists.",
+      "judgeFocus": [
+        "Should the result distinguish reuse, conflict, and recovery?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "worker-ensure-launch-failure",
+      "currentTool": "worker_ensure",
+      "setup": "Terminal launch fails after durable Membership creation.",
+      "judgeFocus": [
+        "Are partial state and safe recovery explicit?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "worker-stop-missing-worker",
+      "currentTool": "worker_stop",
+      "setup": "Stop a Worker name with no current Membership.",
+      "judgeFocus": [
+        "Is missing versus already stopped distinguishable?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "sync-timeout",
+      "currentTool": "team_sync",
+      "setup": "Wait from a current cursor until the bounded wait expires with no event.",
+      "judgeFocus": [
+        "Is timeout normal and concise rather than treated as failure?",
+        "Is current cursor preserved?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "sync-future-cursor",
+      "currentTool": "team_sync",
+      "setup": "Request synchronization from a cursor beyond the current journal head.",
+      "judgeFocus": [
+        "Is cursor correction actionable without journal internals?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "sync-event-overflow",
+      "currentTool": "team_sync",
+      "setup": "Many Task and Worker events accumulate beyond a compact response budget.",
+      "judgeFocus": [
+        "Is truncation explicit?",
+        "Can the agent continue from a stable cursor without full bodies?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "alert-partial-delivery",
+      "currentTool": "alert_send",
+      "setup": "A broadcast Alert is accepted for some recipients and fails for others.",
+      "judgeFocus": [
+        "Are accepted and failed recipients distinguishable?",
+        "Are transport identifiers machine-only?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "alert-zero-recipients",
+      "currentTool": "alert_send",
+      "setup": "Broadcast an Alert when the Team has no eligible Worker recipients.",
+      "judgeFocus": [
+        "Is no-op success distinguishable from delivery failure?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "task-create-delivery-warning",
+      "currentTool": "task_create",
+      "setup": "Create and assign a Task successfully while native delivery to the assignee degrades.",
+      "judgeFocus": [
+        "Is authoritative creation separated from delivery warning?",
+        "Is the next action clear?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "task-update-delivery-warning",
+      "currentTool": "task_update",
+      "setup": "Commit a Task mutation successfully while native Task-change delivery degrades.",
+      "judgeFocus": [
+        "Does the receipt preserve committed post-state and separately flag delivery?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "task-link-duplicate",
+      "currentTool": "task_link",
+      "setup": "Add a relation that already exists.",
+      "judgeFocus": [
+        "Is idempotent no-op distinguishable from a new mutation?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "task-link-cycle-or-self",
+      "currentTool": "task_link",
+      "setup": "Attempt a self-link or a blocked-by edge that creates an invalid cycle.",
+      "judgeFocus": [
+        "Are invalid topology and corrective action clear without backend graph detail?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "team-shutdown-partial-stop-failure",
+      "currentTool": "team_shutdown",
+      "setup": "Deactivate Team Memberships while one or more Worker terminals fail to stop.",
+      "judgeFocus": [
+        "Are partial success and exact unresolved Workers clear?",
+        "Does machine evidence retain stop failures?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    },
+    {
+      "id": "team-shutdown-open-assigned-tasks",
+      "currentTool": "team_shutdown",
+      "setup": "Attempt shutdown while Workers still own open or in-progress Tasks.",
+      "judgeFocus": [
+        "Does the lifecycle policy produce an actionable refusal or explicit retained work?"
+      ],
+      "provenance": {
+        "basis": "synthetic-gap"
+      }
+    }
+  ],
+  "provenancePolicy": "Raw Session evidence remains local. This manifest retains only derivation basis; it contains no paths, Session, entry, tool-call or timestamp identifiers, prompts, arguments, result bodies, detail bodies, message or profile text, or runtime identifiers."
+}
