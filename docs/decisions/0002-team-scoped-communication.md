@@ -1,6 +1,6 @@
 # Keep communication inside one Team
 
-Status: accepted
+Status: superseded by [decision 0003](0003-task-first-coordination.md)
 
 Date: 2026-07-16
 
@@ -38,8 +38,7 @@ binding.
 
 ## Evidence
 
-- [Product scope](../current/product.md)
-- [Operating workflow](../current/operations.md#communicate-inside-the-team)
 - [`sendPlainMessage`](../../src/utils/messaging.ts)
 - [`broadcastMessage`](../../src/utils/messaging.ts)
-- [Tool reference](../reference.md#communication)
+- [Documentation state when this decision was accepted](../journal/2026-07-16-documentation-reorganization.md)
+- [Superseding Task-first decision](0003-task-first-coordination.md)

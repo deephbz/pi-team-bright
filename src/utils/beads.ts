@@ -176,6 +176,7 @@ interface RawBead {
   id: string;
   title: string;
   description?: string;
+  acceptance_criteria?: string;
   design?: string;
   notes?: string;
   parent?: string;
@@ -221,6 +222,7 @@ export interface TaskWriteOptions {
 export interface CreateTaskInput {
   title: string;
   description: string;
+  acceptanceCriteria?: string;
   design?: string;
   assignee?: string;
   idempotencyKey?: string;
@@ -295,6 +297,7 @@ function authorityVersion(raw: RawBead): string {
     id: raw.id,
     title: raw.title,
     description: raw.description || "",
+    acceptanceCriteria: raw.acceptance_criteria || "",
     design: raw.design || "",
     notes: raw.notes || "",
     parent: raw.parent || "",
@@ -341,6 +344,7 @@ function mapTask(raw: RawBead): TaskFile {
     id: raw.id,
     title: raw.title,
     description: raw.description || "",
+    acceptanceCriteria: raw.acceptance_criteria || "",
     design: raw.design || undefined,
     status: mapStatus(raw),
     assignee: raw.assignee,
@@ -506,6 +510,9 @@ export class BeadsTaskStore {
 
   async create(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskFile> {
     if (!input.title || !input.title.trim()) throw new Error("Task title must not be empty");
+    if (input.assignee && !input.acceptanceCriteria?.trim() && !input.internalMetadata) {
+      throw new Error("Assigned Tasks require nonempty acceptance criteria");
+    }
     const idempotencyKey = input.idempotencyKey || options.idempotencyKey;
     const create = async (): Promise<TaskFile> => {
       if (idempotencyKey) {
@@ -528,6 +535,7 @@ export class BeadsTaskStore {
       "--metadata", JSON.stringify(metadata),
       "--actor", actorName(options.actor || this.actor),
       ];
+      if (input.acceptanceCriteria) args.push("--acceptance", input.acceptanceCriteria);
       if (input.design) args.push("--design", input.design);
       if (input.assignee) args.push("--assignee", input.assignee);
       const raw = await this.command<RawBead | RawBead[]>(args);
@@ -601,6 +609,7 @@ export class BeadsTaskStore {
     const args: string[] = ["update", safeId, "--actor", actorName(options.actor || this.actor)];
     if (updates.title !== undefined) args.push("--title", updates.title);
     if (updates.description !== undefined) args.push("--description", updates.description);
+    if (updates.acceptanceCriteria !== undefined) args.push("--acceptance", updates.acceptanceCriteria);
     if (updates.design !== undefined) args.push("--design", updates.design);
     if (updates.assignee !== undefined) args.push("--assignee", updates.assignee || "");
     if (options.appendNote !== undefined) {
@@ -612,8 +621,12 @@ export class BeadsTaskStore {
     }
     if (updates.status === "open") args.push("--status", "open");
     if (updates.status === "in_progress") args.push("--status", "in_progress");
-    if (updates.status === "blocked") args.push("--status", "blocked");
-    if (updates.status === "closed") args.push("--status", "closed");
+    if (updates.status === "blocked" || updates.status === "closed") {
+      if (beforeRaw.status !== updates.status && !options.appendNote?.trim()) {
+        throw new Error(`Transitioning a Task to ${updates.status} requires a nonempty evidence note in the same update`);
+      }
+      args.push("--status", updates.status);
+    }
     if (args.length > 4) {
       await this.command<RawBead | RawBead[]>(args);
     }

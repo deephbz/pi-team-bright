@@ -67,7 +67,7 @@ describe("Round 2 Task delivery contracts", () => {
     const { name, add } = await teamFixture("suppression");
     const firstSession = "/tmp/worker-first.jsonl";
     await add("worker", firstSession);
-    const task = { id: "t1", title: "s", description: "d", status: "in_progress" as const, assignee: "worker", relations: [], version: "v1", provenance: { authority: "beads" as const, teamName: name } };
+    const task = { id: "t1", title: "s", description: "d", acceptanceCriteria: "verified", status: "in_progress" as const, assignee: "worker", relations: [], version: "v1", provenance: { authority: "beads" as const, teamName: name } };
     await suppressTaskVersionForSession(name, "worker", firstSession, task);
     expect(await enqueueTaskChangeForRecipient(name, task, "worker", "status_changed")).toBeNull();
 
@@ -104,6 +104,7 @@ describe("Round 2 Task delivery contracts", () => {
         id: `t${index}`,
         title: `task ${index}`,
         description: "pending delivery",
+        acceptanceCriteria: "The delivery remains pending",
         status: "in_progress",
         assignee: "worker",
         relations: [],

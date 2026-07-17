@@ -40,6 +40,7 @@ async function fixture(suffix: string) {
     id: "1",
     title: "Investigate",
     description: "Find the cause",
+    acceptanceCriteria: "The cause is identified",
     status: "in_progress",
     assignee: "worker",
     relations: [],

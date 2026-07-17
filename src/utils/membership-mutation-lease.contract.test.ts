@@ -87,6 +87,7 @@ function task(id: string, version = "v1"): TaskFile {
     id,
     title: id,
     description: "mutation lease contract task",
+    acceptanceCriteria: "The mutation contract holds",
     status: "open",
     relations: [],
     version,

@@ -55,6 +55,16 @@ export function taskOwnerTransitionOutboxPath(teamName: string) {
   return path.join(teamDir(teamName), "task-delivery", "owner-transitions.json");
 }
 
+/** Append-only, Team-scoped coordination evidence consumed by team_sync. */
+export function teamEventJournalPath(teamName: string) {
+  return path.join(teamDir(teamName), "events", "team-events.jsonl");
+}
+
+/** Disposable latest-cursor projection; the append-only journal remains authoritative. */
+export function teamEventCursorStatePath(teamName: string) {
+  return path.join(teamDir(teamName), "events", "cursor.json");
+}
+
 export function runtimeStatusPath(teamName: string, agentName: string) {
   return path.join(teamDir(teamName), "runtime", `${sanitizeName(agentName)}.json`);
 }

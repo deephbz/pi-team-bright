@@ -30,6 +30,7 @@ import {
   TaskChangeKind,
 } from "./task-delivery";
 import { withSemanticTrace } from "./trace";
+import { appendTeamEvent } from "./team-events";
 
 export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
 
@@ -134,6 +135,7 @@ export interface SemanticTaskUpdate {
   status?: TaskFile["status"];
   title?: string;
   description?: string;
+  acceptanceCriteria?: string;
   design?: string;
   assignee?: string;
   claim?: boolean;
@@ -150,9 +152,25 @@ export interface SemanticTaskUpdateResult {
 
 export interface TaskMutationReceipt {
   task: TaskFile;
+  /** True only when the requested authority mutation actually changed the graph. */
+  changed: boolean;
   appliedOperations: string[];
   deliveryDegraded: boolean;
   deliveryWarnings: string[];
+}
+
+export interface TaskPublicationEvidence {
+  teamEvent: { appended: boolean };
+  delivery: {
+    attemptedRecipients: string[];
+    failedRecipients: string[];
+    recoveryRecordedFor: string[];
+    recoveryRecordFailedFor: string[];
+  };
+}
+
+export interface TaskCreateReceipt extends TaskMutationReceipt {
+  publication: TaskPublicationEvidence;
 }
 
 function assigneeTransitionOperation(teamName: string, afterAssignee: string | undefined) {
@@ -179,7 +197,7 @@ export async function applySemanticTaskUpdate(
   options: TaskWriteOptions & AgentMutationBinding,
 ): Promise<SemanticTaskUpdateResult> {
   return withSemanticTrace("task_update", { teamName, taskId }, async () => {
-    const mutationFields = [update.title, update.description, update.design, update.status, update.assignee, update.appendNote]
+    const mutationFields = [update.title, update.description, update.acceptanceCriteria, update.design, update.status, update.assignee, update.appendNote]
       .filter((value) => value !== undefined);
     if (!update.claim && mutationFields.length === 0) {
       throw new Error("task_update requires at least one field, append_note, or claim=true.");
@@ -203,6 +221,7 @@ export async function applySemanticTaskUpdate(
       const fields: Partial<TaskFile> = {};
       if (update.title !== undefined) fields.title = update.title;
       if (update.description !== undefined) fields.description = update.description;
+      if (update.acceptanceCriteria !== undefined) fields.acceptanceCriteria = update.acceptanceCriteria;
       if (update.design !== undefined) fields.design = update.design;
       if (update.status !== undefined) fields.status = update.status;
       if (update.assignee !== undefined) fields.assignee = update.assignee;
@@ -227,7 +246,7 @@ export async function applySemanticTaskUpdate(
       ? []
       : assigneeChanged && assigneeTransition
         ? await completeOwnerTransitionIntent(teamName, assigneeTransition.operationId, current)
-        : await publishTaskMutation(teamName, firstBefore, current, changeKindForUpdate(update), options.actor);
+        : (await publishTaskMutation(teamName, firstBefore, current, changeKindForUpdate(update), options.actor)).warnings;
     return {
       task: current,
       before: firstBefore,
@@ -242,7 +261,7 @@ export async function createTask(
   teamName: string,
   input: CreateTaskInput,
   binding?: AgentMutationBinding,
-): Promise<TaskFile> {
+): Promise<TaskCreateReceipt> {
   return withSemanticTrace("task_create", { teamName }, async () => {
     const mutate = (store: BeadsTaskStore) => store.create(input, {
       idempotencyKey: input.idempotencyKey,
@@ -254,8 +273,21 @@ export async function createTask(
     if (binding?.actingSessionFile && task.assignee === binding.actor) {
       await suppressTaskVersionForSession(teamName, binding.actor, binding.actingSessionFile, task);
     }
-    if (task.assignee) await publishTaskMutation(teamName, task, task, "assigned", binding?.actor);
-    return task;
+    const publication = await publishTaskMutation(
+      teamName,
+      task,
+      task,
+      task.assignee ? "assigned" : "task_changed",
+      binding?.actor,
+    );
+    return {
+      task,
+      changed: true,
+      appliedOperations: ["create"],
+      deliveryDegraded: publication.warnings.length > 0,
+      deliveryWarnings: publication.warnings,
+      publication: publication.evidence,
+    };
   });
 }
 
@@ -267,6 +299,15 @@ export async function listTasks(teamName: string): Promise<TaskListItem[]> {
   return withSemanticTrace("task_list", { teamName }, async () => {
     const tasks = await (await storeFor(teamName)).list();
     return tasks.map(({ version: _projectionRevision, ...task }) => task);
+  });
+}
+
+/** Internal compact-sync source; unlike task_list it retains write versions. */
+export async function listTasksWithVersions(teamName: string): Promise<TaskFile[]> {
+  return withSemanticTrace("tasks_with_versions", { teamName }, async () => {
+    const store = await storeFor(teamName);
+    const listed = await store.list();
+    return Promise.all(listed.map((task) => store.read(task.id)));
   });
 }
 
@@ -284,9 +325,10 @@ export async function mutateTaskLink(
     }
     const deliveryWarnings = mutation.appliedOperations.length === 0
       ? []
-      : await publishTaskMutation(teamName, mutation.before, mutation.after, "relation_changed", options.actor);
+      : (await publishTaskMutation(teamName, mutation.before, mutation.after, "relation_changed", options.actor)).warnings;
     return {
       task: mutation.after,
+      changed: mutation.appliedOperations.length > 0,
       appliedOperations: mutation.appliedOperations,
       deliveryDegraded: deliveryWarnings.length > 0,
       deliveryWarnings,
@@ -307,7 +349,7 @@ async function publishTaskMutation(
   after: TaskFile,
   kind: TaskChangeKind,
   actor?: string,
-): Promise<string[]> {
+): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }> {
   const targets: Array<{ recipient: string; kind: TaskChangeKind }> = [];
   if (before.assignee && before.assignee !== after.assignee) {
     targets.push({ recipient: before.assignee, kind: "ownership_lost" });
@@ -315,12 +357,34 @@ async function publishTaskMutation(
   if (after.assignee) targets.push({ recipient: after.assignee, kind });
   const unique = [...new Map(targets.map((target) => [`${target.recipient}:${target.kind}`, target])).values()];
   const warnings: string[] = [];
+  let teamEventAppended = false;
+  const failedRecipients: string[] = [];
+  const recoveryRecordedFor: string[] = [];
+  const recoveryRecordFailedFor: string[] = [];
+  try {
+    const config = await readConfig(teamName);
+    const change = kind === "assigned" || kind === "ownership_lost" ? "assigned"
+      : kind === "status_changed" ? "status"
+      : kind === "note_appended" ? "note"
+      : kind === "relation_changed" ? "relation"
+      : "design";
+    await appendTeamEvent(teamName, {
+      type: "task",
+      ref: { authorityId: config.taskAuthorityId!, taskId: after.id, version: after.version },
+      change,
+      actor: actor ?? "external",
+    });
+    teamEventAppended = true;
+  } catch (error) {
+    warnings.push(`Task ${after.id} committed but its Team event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
+  }
   for (const target of unique) {
     try {
       await enqueueTaskChangeForRecipient(teamName, after, target.recipient, target.kind);
     } catch (error) {
       const warning = `Task ${after.id} committed but delivery enqueue for ${target.recipient} failed`;
       warnings.push(warning);
+      failedRecipients.push(target.recipient);
       try {
         await recordTaskDeliveryRecovery({
           teamName,
@@ -332,13 +396,26 @@ async function publishTaskMutation(
           reason: "enqueue-failed",
           taskSnapshot: structuredClone(after),
         });
+        recoveryRecordedFor.push(target.recipient);
       } catch {
         warnings.push(`${warning}; recovery evidence could not be persisted`);
+        recoveryRecordFailedFor.push(target.recipient);
       }
       console.warn(`[pi-teams] ${warning}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  return warnings;
+  return {
+    warnings,
+    evidence: {
+      teamEvent: { appended: teamEventAppended },
+      delivery: {
+        attemptedRecipients: [...new Set(unique.map((target) => target.recipient))],
+        failedRecipients: [...new Set(failedRecipients)],
+        recoveryRecordedFor: [...new Set(recoveryRecordedFor)],
+        recoveryRecordFailedFor: [...new Set(recoveryRecordFailedFor)],
+      },
+    },
+  };
 }
 
 export function createBeadsStore(options: BeadsTaskStoreOptions): BeadsTaskStore {

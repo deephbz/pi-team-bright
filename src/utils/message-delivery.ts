@@ -83,8 +83,8 @@ export function messagePollMs(env: NodeJS.ProcessEnv = process.env): number {
 
 export function formatDirectMessageBatch(messages: IdentifiedInboxMessage[]): string {
   return [
-    "[PiTeams direct Messages]",
-    "These Messages were already accepted by the Communication inbox. Act on their full contents; do not call read_inbox just to retrieve them.",
+    "[PiTeams native coordination delivery]",
+    "These accepted coordination records were delivered to this exact Session. Act on their full contents; presentation does not change Task state.",
     JSON.stringify({
       messages: messages.map((message) => ({
         id: message.id,
@@ -323,7 +323,7 @@ export class DirectMessageDelivery {
       const messageIds = [...presented];
       this.sink.sendMessage({
         customType: DIRECT_MESSAGE_RESUME_TYPE,
-        content: `Resume delivery of the already-recorded PiTeams direct Messages with IDs: ${messageIds.join(", ")}. Their full contents are in the preceding canonical custom Message entries. Treat each ID as one logical Message.`,
+        content: `Resume delivery of the already-recorded PiTeams coordination records with IDs: ${messageIds.join(", ")}. Their full contents are in the preceding canonical custom entries. Presentation does not change Task state.`,
         display: false,
         details: this.observation(messageIds),
       }, { triggerTurn: true, deliverAs: "steer" });

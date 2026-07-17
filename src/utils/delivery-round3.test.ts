@@ -131,6 +131,7 @@ function taskSnapshot(id: string, assignee = "worker"): TaskFile {
     id,
     title: "Task delivery",
     description: "durable snapshot",
+    acceptanceCriteria: "The durable snapshot is delivered",
     status: "in_progress",
     relations: [],
     assignee,
