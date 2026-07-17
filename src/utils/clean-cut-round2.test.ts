@@ -113,6 +113,7 @@ function taskSnapshot(overrides: Partial<TaskFile> = {}): TaskFile {
     id: overrides.id || "task-1",
     title: overrides.title || "Task",
     description: overrides.description || "description",
+    acceptanceCriteria: overrides.acceptanceCriteria || "verified",
     status: overrides.status || "in_progress",
     relations: overrides.relations || [],
     assignee: overrides.assignee,
@@ -320,6 +321,69 @@ describe("delivery scheduling and exact Session scope", () => {
 });
 
 describe.skipIf(!hasBd)("semantic task_update surface", () => {
+  it("preserves task_create post-commit delivery warnings in backend and public receipts", async () => {
+    const workspace = initWorkspace();
+    const teamName = uniqueTeam("create-delivery-warning");
+    const leadSession = `/tmp/${teamName}-lead.jsonl`;
+    writeTeam(teamName, workspace, [
+      member(teamName, "team-lead", leadSession),
+      member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
+    ]);
+    vi.stubEnv("PI_AGENT_NAME", "team-lead");
+    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    // A directory at the recipient spool path deterministically fails the
+    // post-commit enqueue while leaving Beads Task authority writable.
+    fs.mkdirSync(paths.taskDeliveryPath(teamName, "worker"), { recursive: true });
+    const result = await harness().tools.get("task_create")!.execute("create-degraded", {
+      team_name: teamName,
+      title: "Preserve delivery degradation",
+      description: "The Task commit must survive a recipient enqueue failure.",
+      acceptance_criteria: "The Task is readable and its receipt reports the failed delivery.",
+      assignee: "worker",
+    }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => leadSession },
+    });
+
+    const task = result.details.postState as TaskFile;
+    const warning = "Task authority committed, but delivery enqueue for worker failed";
+    expect(result.content[0].text).toContain(`Created Task ${task.id} “Preserve delivery degradation”`);
+    expect(result.content[0].text).toMatch(/Task authority committed, but Worker delivery degraded/i);
+    expect(result.content[0].text).toMatch(/Do not recreate this Task; investigate delivery recovery with team_sync/i);
+    expect(result.content[0].text).not.toContain(task.version);
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "partial",
+      operation: "task_create",
+      resource: { kind: "task", id: task.id, teamName },
+      postState: { id: task.id, status: "open", assignee: "worker", version: task.version },
+      warnings: [{ code: "task_delivery_degraded", message: warning, resourceId: task.id }],
+      evidence: {
+        changed: true,
+        appliedOperations: ["create"],
+        deliveryDegraded: true,
+        teamEvent: { appended: true },
+        delivery: {
+          attemptedRecipients: ["worker"],
+          failedRecipients: ["worker"],
+          recoveryRecordedFor: ["worker"],
+          recoveryRecordFailedFor: [],
+        },
+      },
+      nextActions: [{
+        tool: "team_sync",
+        args: { team_name: teamName, task_ids: [task.id] },
+      }],
+    });
+    await expect(tasks.readTask(teamName, task.id)).resolves.toMatchObject({
+      id: task.id,
+      title: "Preserve delivery degradation",
+      assignee: "worker",
+      version: task.version,
+    });
+  }, 60_000);
+
   it("returns concise model-visible post-state and version for every Task mutation tool", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("mutation-receipts");
@@ -332,95 +396,118 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     vi.stubEnv("PI_TEAM_NAME", teamName);
     const tools = harness().tools;
     const context = { sessionManager: { getSessionFile: () => leadSession } };
-    const receipt = (result: any) => JSON.parse(result.content[0].text);
 
     const createdResult = await tools.get("task_create")!.execute("create", {
       team_name: teamName,
       title: "Receipt contract",
       description: "large descriptions stay out of model-visible mutation receipts",
     }, undefined, undefined, context);
-    const created = receipt(createdResult);
-    expect(created).toEqual({
-      task: {
+    const created = createdResult.details.postState as TaskFile;
+    expect(createdResult.content[0].text).toBe(
+      `Created Task ${created.id} “Receipt contract”: open, version ${created.version}.`,
+    );
+    expect(createdResult.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "task_create",
+      resource: { kind: "task", id: created.id, teamName },
+      postState: {
         id: expect.any(String),
         status: "open",
-        assignee: null,
         version: expect.stringMatching(/^beads_/),
       },
-      appliedOperations: ["create"],
       warnings: [],
+      nextActions: [],
     });
     expect(createdResult.content[0].text).not.toContain("large descriptions");
 
     const designedResult = await tools.get("task_update")!.execute("design", {
       team_name: teamName,
-      task_id: created.task.id,
+      task_id: created.id,
       design: "inspect then test",
       append_note: "Requesting review of this design.",
-      expected_version: created.task.version,
+      expected_version: created.version,
     }, undefined, undefined, context);
-    const designed = receipt(designedResult);
-    expect(designed.task).toMatchObject({
-      id: created.task.id,
+    const designed = designedResult.details.postState as TaskFile;
+    expect(designedResult.content[0].text).toBe(
+      `Task ${created.id} is open, unassigned, version ${designed.version}. Delivery warnings: none.`,
+    );
+    expect(designed).toMatchObject({
+      id: created.id,
       status: "open",
       version: expect.stringMatching(/^beads_/),
     });
-    expect(designed.appliedOperations).toEqual(["set:design", "append:note"]);
+    expect(designedResult.details.evidence).toMatchObject({
+      before: { id: created.id, status: "open", version: created.version },
+      appliedOperations: ["set:design", "append:note"],
+      deliveryDegraded: false,
+    });
 
     const evaluatedResult = await tools.get("task_update")!.execute("approve", {
       team_name: teamName,
-      task_id: created.task.id,
+      task_id: created.id,
       status: "in_progress",
       append_note: "Leader approved execution at this exact Task version.",
-      expected_version: designed.task.version,
+      expected_version: designed.version,
     }, undefined, undefined, context);
-    const evaluated = receipt(evaluatedResult);
-    expect(evaluated.task).toMatchObject({
-      id: created.task.id,
+    const evaluated = evaluatedResult.details.postState as TaskFile;
+    expect(evaluatedResult.content[0].text).toBe(
+      `Task ${created.id} is in_progress, unassigned, version ${evaluated.version}. Delivery warnings: none.`,
+    );
+    expect(evaluated).toMatchObject({
+      id: created.id,
       status: "in_progress",
       version: expect.stringMatching(/^beads_/),
     });
-    expect(evaluated.appliedOperations).toEqual(["set:status", "append:note"]);
+    expect(evaluatedResult.details.evidence.appliedOperations).toEqual(["set:status", "append:note"]);
 
     const updatedResult = await tools.get("task_update")!.execute("assign", {
       team_name: teamName,
-      task_id: created.task.id,
+      task_id: created.id,
       assignee: "worker",
-      expected_version: evaluated.task.version,
+      expected_version: evaluated.version,
     }, undefined, undefined, context);
-    const updated = receipt(updatedResult);
-    expect(updated.task).toMatchObject({
-      id: created.task.id,
+    const updated = updatedResult.details.postState as TaskFile;
+    expect(updatedResult.content[0].text).toBe(
+      `Task ${created.id} is in_progress, assigned to worker, version ${updated.version}. Delivery warnings: none.`,
+    );
+    expect(updated).toMatchObject({
+      id: created.id,
       status: "in_progress",
       assignee: "worker",
       version: expect.stringMatching(/^beads_/),
     });
-    expect(updated.appliedOperations).toContain("set:assignee");
-    expect(updated.warnings).toEqual([]);
+    expect(updatedResult.details.evidence.appliedOperations).toContain("set:assignee");
+    expect(updatedResult.details.warnings).toEqual([]);
 
     const progressedResult = await tools.get("task_update")!.execute("progress", {
       team_name: teamName,
-      task_id: created.task.id,
+      task_id: created.id,
       append_note: "comment-backed revision",
-      expected_version: updated.task.version,
+      expected_version: updated.version,
     }, undefined, undefined, context);
-    const progressed = receipt(progressedResult);
-    const listedResult = await tools.get("task_list")!.execute("list", {
+    const progressed = progressedResult.details.postState as TaskFile;
+    expect(progressedResult.content[0].text).toBe(
+      `Task ${created.id} is in_progress, assigned to worker, version ${progressed.version}. Delivery warnings: none.`,
+    );
+    const syncResult = await tools.get("team_sync")!.execute("sync", {
       team_name: teamName,
     }, undefined, undefined, context);
-    const listed = JSON.parse(listedResult.content[0].text).find((task: any) => task.id === created.task.id);
-    expect(listed.version).toBeUndefined();
+    const projected = syncResult.details.postState.projection.tasks.find((task: any) => task.id === created.id);
+    expect(syncResult.content[0].text).toContain(`Tasks: ${created.id}`);
+    expect(projected.version).toBe(progressed.version);
 
     const readResult = await tools.get("task_read")!.execute("read", {
       team_name: teamName,
-      task_id: created.task.id,
+      task_id: created.id,
     }, undefined, undefined, context);
-    expect(readResult.details.task.version).toBe(progressed.task.version);
+    expect(readResult.content[0].text).toContain(`State: in_progress; assigned to worker; version ${progressed.version}`);
+    expect(readResult.details.postState.version).toBe(progressed.version);
     await expect(tools.get("task_update")!.execute("safe-next-write", {
       team_name: teamName,
-      task_id: created.task.id,
+      task_id: created.id,
       status: "open",
-      expected_version: readResult.details.task.version,
+      expected_version: readResult.details.postState.version,
     }, undefined, undefined, context)).resolves.toBeDefined();
   }, 60_000);
 
@@ -447,16 +534,18 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` },
     });
 
-    expect(result.details.task).toMatchObject({
+    expect(result.details.postState).toMatchObject({
       id: created.id,
       assignee: "worker",
       status: "in_progress",
       version: expect.any(String),
     });
-    expect(Array.isArray(result.details.appliedOperations)).toBe(true);
-    expect(JSON.stringify(result.details.appliedOperations)).toMatch(/assignee/i);
-    expect(JSON.stringify(result.details.appliedOperations)).toMatch(/status/i);
-    expect(JSON.stringify(result.details.appliedOperations)).not.toMatch(/progress/i);
+    expect(result.content[0].text).toMatch(/^Task .+ is in_progress, assigned to worker, version beads_.+ Delivery warnings: none\.$/);
+    expect(result.content[0].text).not.toMatch(/Changed:|set:|append:/);
+    expect(Array.isArray(result.details.evidence.appliedOperations)).toBe(true);
+    expect(JSON.stringify(result.details.evidence.appliedOperations)).toMatch(/assignee/i);
+    expect(JSON.stringify(result.details.evidence.appliedOperations)).toMatch(/status/i);
+    expect(JSON.stringify(result.details.evidence.appliedOperations)).not.toMatch(/progress/i);
     const traceFile = path.join(tempRoot("semantic-trace"), "trace.jsonl");
     // The public result needn't expose a redundant `atomic` flag; the trace
     // proves this compatible field group used one native mutation command.
@@ -466,11 +555,11 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       task_id: created.id,
       assignee: "worker",
       status: "open",
-      expected_version: result.details.task.version,
+      expected_version: result.details.postState.version,
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` },
     });
-    expect(traced.details.task.status).toBe("open");
+    expect(traced.details.postState.status).toBe("open");
     const trace = fs.readFileSync(traceFile, "utf8").trim().split("\n").map((line) => JSON.parse(line)).at(-1);
     expect(trace.bdCalls.filter((call: any) => call.command === "update")).toHaveLength(1);
   }, 60_000);
@@ -490,16 +579,23 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       task_id: created.id,
       status: "in_progress",
     }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    expect(withoutToken.details.task.status).toBe("in_progress");
-    const current = withoutToken.details.task as TaskFile;
+    expect(withoutToken.details.postState.status).toBe("in_progress");
+    const current = withoutToken.details.postState as TaskFile;
 
-    await expect(tool.execute("stale", {
+    const stale = await tool.execute("stale", {
       team_name: teamName,
       task_id: created.id,
       status: "open",
       expected_version: created.version,
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } }))
-      .rejects.toThrow(/changed|stale|conflict|expected_version/i);
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    expect(stale.content[0].text).toMatch(/not updated|stale|review it and retry/i);
+    expect(stale.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "refused",
+      operation: "task_update",
+      postState: { id: created.id, status: "in_progress", version: current.version },
+      evidence: { requestedVersion: created.version, currentVersion: current.version, changed: false },
+    });
     expect((await store.read(created.id)).version).toBe(current.version);
     expect((await store.read(created.id)).status).toBe("in_progress");
   }, 60_000);
@@ -761,9 +857,14 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
     const result = await shutdown.execute("shutdown", { team_name: teamName }, undefined, undefined, {
       sessionManager: { getSessionFile: () => lead.sessionFile },
     });
-    expect(result.details.staleBindings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "worker", sessionFile: worker.sessionFile, tmuxPaneId: "%historical" }),
+    expect(result.details.diagnostics.staleBindings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: "worker",
+        sessionBound: true,
+        terminal: { kind: "pane", targetId: "%historical" },
+      }),
     ]));
+    expect(JSON.stringify(result.details.diagnostics)).not.toContain(worker.sessionFile);
     const afterShutdown = await teams.readConfig(teamName);
     expect(afterShutdown.members).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "worker", sessionFile: worker.sessionFile, isActive: false }),

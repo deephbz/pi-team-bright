@@ -97,35 +97,54 @@ describe("external current-binding contract", () => {
       ready: false,
     });
     const runtimeBefore = fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8");
-    const send = extensionHarness().tools.get("send_message")!;
+    const send = extensionHarness().tools.get("alert_send")!;
     const ctx = { sessionManager: { getSessionFile: () => "lead-session" } };
 
-    await send.execute("current", {
+    const accepted: any = await send.execute("current", {
       team_name: name,
-      recipient: "worker",
-      content: "accepted while offline",
-      summary: "current member",
+      to: "worker",
+      kind: "attention",
+      text: "accepted while offline",
     }, undefined, undefined, ctx);
+    expect(accepted.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "alert_send",
+      postState: { to: "worker", recipients: ["worker"], taskStateChanged: false },
+    });
     expect(await messaging.readInbox(name, "worker", false, false)).toHaveLength(1);
     expect(fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8")).toBe(runtimeBefore);
 
     await teams.deactivateMember(name, "worker", "replaced");
     const inboxBefore = fs.readFileSync(paths.inboxPath(name, "worker"), "utf8");
-    await expect(send.execute("removed", {
+    const removed: any = await send.execute("removed", {
       team_name: name,
-      recipient: "worker",
-      content: "must not append",
-      summary: "removed member",
-    }, undefined, undefined, ctx)).rejects.toThrow(/not a current member.*Contact or escalate.*team-lead/s);
+      to: "worker",
+      kind: "attention",
+      text: "must not append",
+    }, undefined, undefined, ctx);
+    expect(removed.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "refused",
+      operation: "alert_send",
+      warnings: [{ code: "alert_recipient_not_current", resourceId: "worker" }],
+      postState: { accepted: false, attemptedRecipient: "worker", taskStateChanged: false },
+    });
     expect(fs.readFileSync(paths.inboxPath(name, "worker"), "utf8")).toBe(inboxBefore);
     expect(fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8")).toBe(runtimeBefore);
 
-    await expect(send.execute("unknown", {
+    const unknown: any = await send.execute("unknown", {
       team_name: name,
-      recipient: "ghost",
-      content: "must not create",
-      summary: "unknown member",
-    }, undefined, undefined, ctx)).rejects.toThrow(/not a current member.*Contact or escalate.*team-lead/s);
+      to: "ghost",
+      kind: "attention",
+      text: "must not create",
+    }, undefined, undefined, ctx);
+    expect(unknown.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "refused",
+      warnings: [{ code: "alert_recipient_not_current", resourceId: "ghost" }],
+      postState: { accepted: false, attemptedRecipient: "ghost" },
+    });
     expectNoInboxOrRuntime(name, "ghost");
   });
 

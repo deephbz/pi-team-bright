@@ -490,7 +490,11 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       if (!taskId) continue;
       const current = await beads.read(taskId);
       if (current.status !== desiredStatus) {
-        await beads.update(taskId, { status: desiredStatus }, { ...writeOptions, expectedVersion: current.version });
+        await beads.update(taskId, { status: desiredStatus }, {
+          ...writeOptions,
+          expectedVersion: current.version,
+          appendNote: `Imported terminal evidence from legacy Task ${item.legacyId} with status ${item.task.status}.`,
+        });
       }
     }
 

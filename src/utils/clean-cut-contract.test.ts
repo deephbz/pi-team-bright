@@ -174,7 +174,7 @@ describe("clean-cut public contract", () => {
     const messageDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/message-delivery.ts"), "utf8");
     const taskDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
     const tasks = fs.readFileSync(path.join(process.cwd(), "src/utils/tasks.ts"), "utf8");
-    const docs = ["README.md", "docs/guide.md", "docs/reference.md", "skills/pi-teams/SKILL.md"]
+    const docs = ["README.md", "docs/current/README.md", "docs/reference.md", "skills/pi-teams/SKILL.md"]
       .map((file) => fs.readFileSync(path.join(process.cwd(), file), "utf8"))
       .join("\n");
 
@@ -237,6 +237,7 @@ describe("clean-cut public contract", () => {
       id: "task-1",
       title: "Act on the Task authority",
       description: "complete payload",
+      acceptanceCriteria: "The authoritative change is applied",
       status: "in_progress" as const,
       relations: [],
       assignee: "worker",
@@ -277,7 +278,17 @@ describe("Beads-only authority and migration boundary", () => {
       sessionManager: { getSessionFile: () => "/tmp/team-owned-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
     });
-    const config = result.details.config as TeamConfig & { taskAuthorityId?: string };
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "team_create",
+      resource: { kind: "team", id: name, teamName: name },
+      postState: { name, lifecycle: "active", taskAuthorityReady: true },
+      evidence: {
+        taskAuthority: { backend: "beads" },
+      },
+    });
+    const config = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
 
     expect(config).toMatchObject({
       taskBackend: "beads",
@@ -311,7 +322,14 @@ describe("Beads-only authority and migration boundary", () => {
       sessionManager: { getSessionFile: () => "/tmp/new-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
     });
-    const config = result.details.config as TeamConfig & { taskAuthorityId?: string };
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "team_create",
+      postState: { name, lifecycle: "active", taskAuthorityReady: true },
+      evidence: { taskAuthority: { backend: "beads" } },
+    });
+    const config = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
 
     expect(config).toMatchObject({ taskBackend: "beads", taskWorkspace: workspace });
     expect(config.taskAuthorityId).toMatch(/^task_authority_[0-9a-f-]+$/);
@@ -345,7 +363,14 @@ describe("Beads-only authority and migration boundary", () => {
       sessionManager: { getSessionFile: () => "/tmp/opaque-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
     });
-    const created = result.details.config as TeamConfig & { taskAuthorityId?: string };
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "team_create",
+      postState: { name, lifecycle: "active", taskAuthorityReady: true },
+      evidence: { taskAuthority: { backend: "beads" } },
+    });
+    const created = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
     expect(created.taskAuthorityId).toEqual(expect.any(String));
     await teams.addMember(name, {
       agentId: `worker@${name}`,
@@ -363,6 +388,7 @@ describe("Beads-only authority and migration boundary", () => {
       id: "task-opaque",
       title: "opaque authority",
       description: "workspace path is adapter config",
+      acceptanceCriteria: "The authority reference stays opaque",
       status: "in_progress",
       assignee: "worker",
       relations: [],
@@ -426,6 +452,7 @@ describe("durability and recovery", () => {
       id: "task-1",
       title: "first",
       description: "first snapshot",
+      acceptanceCriteria: "The snapshot is delivered atomically",
       status: "in_progress" as const,
       relations: [],
       assignee: "worker",
@@ -491,6 +518,7 @@ describe("durability and recovery", () => {
       id: "task-once",
       title: "retry across crash",
       description: "same logical delivery may be attempted again",
+      acceptanceCriteria: "The delivery survives a retry",
       status: "in_progress",
       assignee: "worker",
       relations: [],
@@ -567,8 +595,14 @@ describe("durability and recovery", () => {
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "lead-session" },
     });
-    expect(result.details.task).toMatchObject({ status: "closed" });
-    expect(result.details.task.notes).toContain("Acceptance criteria verified");
-    expect(result.details.appliedOperations).toEqual(["set:status", "append:note"]);
+    expect(result.details).toMatchObject({
+      schema: "pi-teams-tool-result/1",
+      outcome: "accepted",
+      operation: "task_update",
+      resource: { kind: "task", id: created.id, teamName: name },
+      postState: { status: "closed" },
+      evidence: { appliedOperations: ["set:status", "append:note"] },
+    });
+    expect(result.details.postState.notes).toContain("Acceptance criteria verified");
   });
 });

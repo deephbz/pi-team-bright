@@ -1,291 +1,154 @@
-import { describe, expect, it, vi } from "vitest";
-import { execFileSync, spawnSync } from "node:child_process";
+import { describe, expect, it } from "vitest";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import piTeams, { buildPiArgv, inspectAgentSessionCleanup } from "../../extensions/index";
-import { BeadsTaskStore } from "./beads";
-import * as paths from "./paths";
-import { addMember, configureBeadsTaskBackend, createTeam, updateMember } from "./teams";
+import piTeams from "../../extensions/index";
 
-const source = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
-const predefinedSource = fs.readFileSync(path.join(process.cwd(), "src/utils/predefined-teams.ts"), "utf8");
-const skillPath = path.join(process.cwd(), "skills/pi-teams/SKILL.md");
-const skill = fs.readFileSync(skillPath, "utf8");
-const guide = fs.readFileSync(path.join(process.cwd(), "docs/guide.md"), "utf8");
-const operations = fs.readFileSync(path.join(process.cwd(), "docs/current/operations.md"), "utf8");
-const product = fs.readFileSync(path.join(process.cwd(), "docs/current/product.md"), "utf8");
-const reference = fs.readFileSync(path.join(process.cwd(), "docs/reference.md"), "utf8");
-const publicDocs = [
-  fs.readFileSync(path.join(process.cwd(), "README.md"), "utf8"),
-  guide,
-  operations,
-  reference,
-];
-const workflowDocs = [operations, reference];
-const registeredTools: Array<{ name: string; description: string; parameters: { properties?: Record<string, unknown> } }> = [];
+type RegisteredTool = {
+  name: string;
+  description: string;
+  parameters: {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+};
+
+const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
+const skill = read("skills/pi-teams/SKILL.md");
+const reference = read("docs/reference.md");
+const current = read("docs/current/README.md");
+const registeredTools: RegisteredTool[] = [];
+
 piTeams({
-  registerTool(tool: { name: string; description: string; parameters: { properties?: Record<string, unknown> } }) {
+  registerTool(tool: RegisteredTool) {
     registeredTools.push(tool);
   },
   on() {},
   sendUserMessage() {},
 } as never);
-const shippedTools = registeredTools.map(tool => tool.name);
 
-describe("registered PiTeams tool surface", () => {
-  it("ships a standards-compliant Agent Skill", () => {
-    expect(skillPath).toMatch(/skills\/pi-teams\/SKILL\.md$/);
-    expect(skill).toMatch(/^---\nname: pi-teams\ndescription: .+\n---\n/m);
+const expectedTools = [
+  "alert_send",
+  "task_create",
+  "task_link",
+  "task_read",
+  "task_update",
+  "team_create",
+  "team_shutdown",
+  "team_sync",
+  "worker_ensure",
+  "worker_stop",
+];
+
+function tool(name: string): RegisteredTool {
+  const found = registeredTools.find(candidate => candidate.name === name);
+  expect(found, `missing registered tool ${name}`).toBeDefined();
+  return found!;
+}
+
+describe("minimal PiTeams agent-facing surface", () => {
+  it("registers exactly ten composable tools", () => {
+    const names = registeredTools.map(candidate => candidate.name);
+    expect(names).toHaveLength(10);
+    expect(new Set(names).size).toBe(10);
+    expect([...names].sort()).toEqual(expectedTools);
   });
 
-  it("documents exactly the 18 registered tools", () => {
-    expect(shippedTools).toHaveLength(18);
-    expect(new Set(shippedTools).size).toBe(18);
-    for (const tool of shippedTools) expect(skill).toContain(`\`${tool}\``);
+  it("keeps executable schemas authoritative and docs as one-hop pointers", () => {
+    expect(reference).toMatch(/exact contract truth.+executable/is);
+    for (const source of [
+      "extensions/index.ts",
+      "src/utils/tool-result-renderer.ts",
+      "src/utils/tool-results.ts",
+      "src/utils/models.ts",
+      "src/utils/tasks.ts",
+      "src/utils/team-events.ts",
+      "src/utils/tool-surface.test.ts",
+    ]) {
+      expect(reference).toContain(source);
+    }
+    expect(reference).not.toMatch(/^### `[^`]+`$/m);
+    expect(reference).not.toMatch(/Required:|Optional:/);
+    expect(skill).toMatch(/executable schema.+source of truth/is);
+    expect(skill).not.toMatch(/^### `[^`]+`$/m);
+    expect(current).toMatch(/Lifecycle stage: \*\*hardening\*\*/);
+    expect(current).toMatch(/Sources of truth/);
   });
 
-  it("keeps one minimal five-verb Task surface", () => {
-    expect(shippedTools.filter((name) => name.startsWith("task_")).sort()).toEqual([
-      "task_create",
-      "task_link",
+  it("uses team_sync as the single projection and event-wait surface", () => {
+    const sync = tool("team_sync");
+    expect(sync.parameters.properties).toEqual(expect.objectContaining({
+      team_name: expect.anything(),
+      cursor: expect.anything(),
+      wait_ms: expect.anything(),
+      task_ids: expect.anything(),
+      event_types: expect.anything(),
+      limit: expect.anything(),
+      continuation: expect.anything(),
+    }));
+    expect(JSON.stringify(sync.parameters.properties?.event_types)).toMatch(/task/);
+    expect(JSON.stringify(sync.parameters.properties?.event_types)).toMatch(/worker/);
+    expect(JSON.stringify(sync.parameters.properties?.event_types)).toMatch(/alert/);
+    expect(sync.description).toMatch(/event|wait|block/i);
+    expect(skill).toMatch(/returned sync cursor.+positive wait/is);
+  });
+
+  it("binds goal-driven Tasks to Workers", () => {
+    const create = tool("task_create");
+    const update = tool("task_update");
+    expect(create.parameters.properties).toHaveProperty("acceptance_criteria");
+    expect(update.parameters.properties).toHaveProperty("acceptance_criteria");
+    expect(JSON.stringify(update.parameters.properties?.status)).toContain('"blocked"');
+    expect(JSON.stringify(update.parameters.properties?.status)).toContain('"closed"');
+    expect(update.parameters.properties).toHaveProperty("append_note");
+    expect(skill).toMatch(/acceptance criteria/);
+    expect(skill).toMatch(/closes with evidence|blocks with blocker evidence/);
+  });
+
+  it("separates stable Worker identity from assigned work", () => {
+    const ensure = tool("worker_ensure");
+    expect(ensure.parameters.properties).toHaveProperty("profile");
+    expect(ensure.parameters.properties).not.toHaveProperty("prompt");
+    expect(ensure.description).toMatch(/reuse|idempotent/i);
+
+    const stop = tool("worker_stop");
+    expect(stop.parameters.properties).toHaveProperty("worker");
+    expect(stop.parameters.properties).not.toHaveProperty("agent_name");
+    expect(stop.description).toMatch(/nonterminal|assigned/i);
+  });
+
+  it("keeps exceptional communication to one typed Alert tool", () => {
+    const alert = tool("alert_send");
+    expect(alert.parameters.properties).toEqual(expect.objectContaining({
+      team_name: expect.anything(),
+      to: expect.anything(),
+      kind: expect.anything(),
+      text: expect.anything(),
+      task_id: expect.anything(),
+      task_version: expect.anything(),
+    }));
+    const alertSchema = JSON.stringify(alert.parameters.properties);
+    for (const kind of ["clarification", "attention", "announcement"]) {
+      expect(alertSchema).toContain(kind);
+    }
+    expect(skill).toMatch(/Alerts only for clarification, attention, or announcements/);
+  });
+
+  it("does not re-expose alternate work, polling, catalog, or template tools", () => {
+    const names = registeredTools.map(candidate => candidate.name);
+    for (const removed of [
+      "send_message",
+      "broadcast_message",
+      "read_inbox",
       "task_list",
-      "task_read",
-      "task_update",
-    ]);
-    for (const removed of ["task_submit_plan", "task_evaluate_plan"]) {
-      expect(shippedTools).not.toContain(removed);
-      for (const artifact of [skill, ...publicDocs]) expect(artifact).not.toContain(removed);
-    }
-  });
-
-  it("does not expose or teach a historical runtime-Team catalog", () => {
-    expect(shippedTools).not.toContain("list_runtime_teams");
-    for (const artifact of [source, predefinedSource, skill, ...publicDocs]) {
-      expect(artifact).not.toContain("list_runtime_teams");
-      expect(artifact).not.toContain("listRuntimeTeams");
-    }
-  });
-
-  it("documents every registered parameter in its corresponding skill section", () => {
-    for (const tool of registeredTools) {
-      const escaped = tool.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const section = skill.match(new RegExp("^### `" + escaped + "`([\\s\\S]*?)(?=^### |^## |(?![\\s\\S]))", "m"))?.[1];
-      expect(section, `missing skill section for ${tool.name}`).toBeDefined();
-      for (const parameter of Object.keys(tool.parameters.properties || {})) {
-        expect(section, `${tool.name}.${parameter} is absent from the skill`).toContain(`\`${parameter}\``);
-      }
-    }
-  });
-
-  it("keeps the rebuilt reference surface and public call examples executable", () => {
-    const referenceTools = [...reference.matchAll(/^### `([^`]+)`$/gm)].map(match => match[1]);
-    expect(new Set(referenceTools)).toEqual(new Set(shippedTools));
-
-    for (const tool of registeredTools) {
-      const escaped = tool.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const section = reference.match(new RegExp("^### `" + escaped + "`([\\s\\S]*?)(?=^### |^## |(?![\\s\\S]))", "m"))?.[1];
-      expect(section, `missing reference section for ${tool.name}`).toBeDefined();
-      for (const parameter of Object.keys(tool.parameters.properties || {})) {
-        expect(section, `${tool.name}.${parameter} is absent from the reference`).toContain(`\`${parameter}\``);
-      }
-    }
-
-    for (const doc of publicDocs) {
-      const callNames = [...doc.matchAll(/\b([a-z][a-z0-9_]+)\s*\(/g)].map(match => match[1]);
-      for (const callName of callNames) {
-        expect(shippedTools, `public docs teach unregistered call ${callName}()`).toContain(callName);
-      }
-      for (const removed of ["team_delete", "read_config", "force_kill_teammate", "task_get", "spawn_lead_window"]) {
-        expect(doc, `public docs still teach removed tool ${removed}`).not.toContain(removed);
-      }
-    }
-  });
-
-  it("does not teach removed tool names", () => {
-    for (const removed of ["team_delete", "read_config", "force_kill_teammate", "task_get", "spawn_lead_window"]) {
+      "check_teammate",
+      "report_stale_agent_sessions",
+      "list_predefined_teams",
+      "list_predefined_agents",
+      "create_predefined_team",
+      "save_team_as_template",
+    ]) {
+      expect(names).not.toContain(removed);
       expect(skill).not.toMatch(new RegExp("^### `" + removed + "`$", "m"));
     }
   });
-
-  it("keeps non-polling hints in the agent-facing tool descriptions", () => {
-    const description = (name: string) => registeredTools.find(tool => tool.name === name)?.description || "";
-    expect(description("read_inbox")).toMatch(/audit|inspect/i);
-    expect(description("read_inbox")).toMatch(/never.*fetch|normal delivery/i);
-    expect(description("check_teammate")).toMatch(/diagnos/i);
-    expect(description("check_teammate")).toMatch(/not routinely poll/i);
-    expect(description("send_message")).toMatch(/avoid ACK-only/i);
-    for (const name of ["task_create", "task_update"]) {
-      expect(description(name), name).toMatch(/post-state receipt/i);
-      expect(description(name), name).toMatch(/do not immediately|don't immediately/i);
-    }
-    expect(description("task_link")).toMatch(/relation/i);
-    expect(description("task_link")).toMatch(/graph.*version|version.*graph/i);
-  });
-
-  it("exposes the blocked Task status through the registered agent tool schema", () => {
-    const taskUpdate = registeredTools.find(tool => tool.name === "task_update");
-    const statusSchema = taskUpdate?.parameters.properties?.status;
-    expect(JSON.stringify(statusSchema)).toContain('"blocked"');
-    expect(reference).toMatch(/`status`:[^\n]*`blocked`/i);
-    expect(skill).toMatch(/`status`:[^\n]*`blocked`/i);
-    expect(operations).toMatch(/status[\s\S]{0,120}`blocked`/i);
-  });
-
-  it("does not expose the inert spawn-time plan mode switch", () => {
-    const spawn = registeredTools.find(tool => tool.name === "spawn_teammate");
-    expect(spawn?.parameters.properties).not.toHaveProperty("plan_mode_required");
-    expect(source).not.toContain("planModeRequired");
-    for (const doc of [...publicDocs, skill]) expect(doc).not.toContain("plan_mode_required");
-  });
-
-  it("documents optional prose review without a separate Plan API", () => {
-    for (const doc of [...workflowDocs, skill]) {
-      expect(doc).toMatch(/simple (?:Task|work)[\s\S]{0,260}(skip|direct)/i);
-      expect(doc).toMatch(/complex[\s\S]{0,500}design[\s\S]{0,500}(Message|message)[\s\S]{0,500}in_progress/i);
-      expect(doc).not.toContain("task_submit_plan");
-      expect(doc).not.toContain("task_evaluate_plan");
-    }
-  });
-
-  it("states the Team-scoped communication boundary in maintained documentation", () => {
-    for (const doc of [product, operations, reference, skill]) {
-      expect(doc).toMatch(/communication[\s\S]{0,180}(one Team|same Team)/i);
-      expect(doc).toMatch(/Leader-to-leader[\s\S]{0,180}out of scope/i);
-      expect(doc).toMatch(/agents\s+outside a Team\s+are out of scope/i);
-    }
-  });
-
-  it("passes agent-definition tool allowlists through the argv-array launcher", () => {
-    expect(buildPiArgv(["pi"], "provider/model", "high", ["read", "grep"])).toEqual([
-      "pi", "--model", "provider/model:high", "--tools", "read,grep",
-    ]);
-    expect(source).toContain("params.thinking, agentDef?.tools");
-    expect(source).toContain("agentDef.thinking, agentDef.tools");
-  });
-
-  it("teaches the model schema to preserve configured defaults when omitted", () => {
-    expect(source.match(/Omit this parameter to use Pi's configured default model/g)).toHaveLength(2);
-    expect(source).toContain("Omit this parameter to use the team or Pi default");
-  });
-
-  it("reports old cross-team Pi-core session directories without deleting them", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-cleanup-inspect-"));
-    try {
-      for (const name of ["active-other-team", "unknown-old-session"]) {
-        const dir = path.join(root, name);
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, "config.json"), JSON.stringify({
-          createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-        }));
-      }
-
-      const report = inspectAgentSessionCleanup(24 * 60 * 60 * 1000, root);
-      expect(report).toMatchObject({
-        candidates: ["active-other-team", "unknown-old-session"],
-        cleaned: 0,
-      });
-      expect(fs.existsSync(path.join(root, "active-other-team"))).toBe(true);
-      expect(fs.existsSync(path.join(root, "unknown-old-session"))).toBe(true);
-      expect(() => inspectAgentSessionCleanup(-1, root)).toThrow(/non-negative/);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("saves the Team currently bound to the exact Session without a runtime-Team listing", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-save-current-"));
-    const team = `save-current-${process.pid}`;
-    const sessionFile = path.join(root, "lead.jsonl");
-    const teamRoot = path.join(root, "teams", team);
-    const projectDir = path.join(root, "project");
-    vi.spyOn(paths, "teamDir").mockReturnValue(teamRoot);
-    vi.spyOn(paths, "taskDir").mockReturnValue(path.join(root, "tasks", team));
-    vi.spyOn(paths, "configPath").mockReturnValue(path.join(teamRoot, "config.json"));
-
-    try {
-      await createTeam(team, sessionFile, "lead-agent");
-      await addMember(team, {
-        agentId: "worker-agent",
-        name: "worker",
-        agentType: "teammate",
-        joinedAt: Date.now(),
-        tmuxPaneId: "%test",
-        sessionFile: path.join(root, "worker.jsonl"),
-        cwd: projectDir,
-        subscriptions: [],
-        prompt: "Inspect the current Team.",
-        isActive: true,
-      });
-
-      const save = registeredTools.find(tool => tool.name === "save_team_as_template") as unknown as { execute: Function };
-      const result = await save.execute("save", {
-        team_name: team,
-        template_name: "current-team-template",
-        scope: "project",
-      }, undefined, undefined, {
-        cwd: projectDir,
-        sessionManager: { getSessionFile: () => sessionFile },
-      });
-
-      expect(result.details).toMatchObject({
-        teamName: team,
-        templateName: "current-team-template",
-      });
-      expect(fs.readFileSync(path.join(projectDir, ".pi", "teams.yaml"), "utf8")).toContain("current-team-template:");
-      expect(fs.readFileSync(path.join(projectDir, ".pi", "agents", "worker.md"), "utf8")).toContain("Inspect the current Team.");
-    } finally {
-      vi.restoreAllMocks();
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0)("retains Beads task authority for post-shutdown query and graph visualization", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-shutdown-"));
-    const workspace = path.join(root, "workspace");
-    const team = `shutdown-${process.pid}`;
-    const teamRoot = path.join(root, "teams", team);
-    const tasksRoot = path.join(root, "tasks", team);
-    const originalCwd = process.cwd();
-    vi.spyOn(paths, "teamDir").mockReturnValue(teamRoot);
-    vi.spyOn(paths, "taskDir").mockReturnValue(tasksRoot);
-    vi.spyOn(paths, "configPath").mockReturnValue(path.join(teamRoot, "config.json"));
-
-    try {
-      fs.mkdirSync(workspace, { recursive: true });
-      execFileSync("git", ["init", "-q"], { cwd: workspace });
-      execFileSync("bd", ["init", "--quiet", "--skip-agents", "--skip-hooks"], { cwd: workspace, stdio: "ignore" });
-      await createTeam(team, "session", "lead");
-      await configureBeadsTaskBackend(team, workspace, {
-        schema: "pi-teams-beads-authority/1",
-        backend: "dolt",
-        database: "dolt",
-        doltDatabase: JSON.parse(fs.readFileSync(path.join(workspace, ".beads", "metadata.json"), "utf8")).dolt_database,
-        projectId: JSON.parse(fs.readFileSync(path.join(workspace, ".beads", "metadata.json"), "utf8")).project_id,
-      }, {
-        inventoryPath: path.join(tasksRoot, "inventory.json"),
-        inventorySha256: "a".repeat(64),
-        cutoverAt: new Date(0).toISOString(),
-      });
-      const store = new BeadsTaskStore({ teamName: team, workspace, requireExpectedVersion: false });
-      const task = await store.create({ title: "Survives shutdown", description: "durable Beads task" });
-      await updateMember(team, "team-lead", { sessionFile: "/tmp/tool-surface-lead.jsonl" });
-
-      const shutdown = registeredTools.find(tool => tool.name === "team_shutdown") as unknown as { execute: Function };
-      const result = await shutdown.execute("test", { team_name: team }, undefined, undefined, {
-        sessionManager: { getSessionFile: () => "/tmp/tool-surface-lead.jsonl" },
-      });
-
-      expect(result.details.taskAuthorityRetained).toBe(true);
-      expect(fs.existsSync(teamRoot)).toBe(true);
-      expect(fs.existsSync(tasksRoot)).toBe(true);
-      expect((await new BeadsTaskStore({ teamName: team, workspace, requireExpectedVersion: false }).read(task.id)).title).toBe("Survives shutdown");
-      const graph = execFileSync("bd", ["graph", "--dot", task.id], { cwd: workspace, encoding: "utf8" });
-      expect(graph).toContain(task.id);
-    } finally {
-      process.chdir(originalCwd);
-      vi.restoreAllMocks();
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  }, 60_000);
 });

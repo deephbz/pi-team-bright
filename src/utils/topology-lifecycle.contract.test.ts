@@ -6,6 +6,7 @@ import type { TerminalAdapter } from "./terminal-adapter";
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
+import * as taskAuthority from "./tasks";
 import * as teams from "./teams";
 
 type RegisteredTool = {
@@ -53,6 +54,35 @@ function registerExtension(): Map<string, RegisteredTool> {
   return tools;
 }
 
+async function createBeadsTeam(name: string, leadSession: string) {
+  const taskWorkspace = paths.teamDir(name);
+  fs.mkdirSync(`${taskWorkspace}/.beads`, { recursive: true });
+  fs.writeFileSync(`${taskWorkspace}/.beads/metadata.json`, JSON.stringify({
+    database: "dolt",
+    backend: "dolt",
+    dolt_database: "topology_contract",
+    project_id: `topology-${name}`,
+  }));
+  vi.spyOn(taskAuthority, "listTasksWithVersions").mockResolvedValue([]);
+  return teams.createTeam(
+    name,
+    leadSession,
+    "lead",
+    undefined,
+    undefined,
+    undefined,
+    taskWorkspace,
+    `task-authority-${name}`,
+    {
+      schema: "pi-teams-beads-authority/1",
+      backend: "dolt",
+      database: "dolt",
+      doltDatabase: "topology_contract",
+      projectId: `topology-${name}`,
+    },
+  );
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -64,7 +94,7 @@ afterEach(() => {
 });
 
 describe("Team topology/lifecycle lease", () => {
-  it("prevents shutdown from reporting full closure while a concurrent spawn remains current or live", async () => {
+  it("prevents shutdown from reporting full closure while a concurrent worker_ensure remains current or live", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const spawned: string[] = [];
@@ -89,7 +119,7 @@ describe("Team topology/lifecycle lease", () => {
 
     const name = uniqueTeam("shutdown-spawn");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await teams.createTeam(name, leadSession, "lead");
+    await createBeadsTeam(name, leadSession);
     const old = member("old", `/tmp/${name}-old.jsonl`, "pane-old");
     await teams.addMember(name, old);
 
@@ -115,13 +145,13 @@ describe("Team topology/lifecycle lease", () => {
     );
     await didEnterRuntimeRead;
 
-    let spawnSettled = false;
-    const spawn = tools.get("spawn_teammate")!.execute(
-      "spawn",
+    let ensureSettled = false;
+    const ensured = tools.get("worker_ensure")!.execute(
+      "ensure",
       {
         team_name: name,
         name: "new",
-        prompt: "new work",
+        profile: "Standing capability for new work",
         cwd: process.cwd(),
       },
       undefined,
@@ -130,27 +160,27 @@ describe("Team topology/lifecycle lease", () => {
     ).then(
       (value) => ({ status: "fulfilled" as const, value }),
       (error) => ({ status: "rejected" as const, error }),
-    ).finally(() => { spawnSettled = true; });
+    ).finally(() => { ensureSettled = true; });
 
     await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(spawnSettled).toBe(false);
+    expect(ensureSettled).toBe(false);
     expect(spawned).toEqual([]);
     expect((await teams.readConfig(name)).members.some((candidate) => candidate.name === "new")).toBe(false);
 
     releaseRuntimeRead();
     const shutdownResult = await shutdown;
-    const spawnResult = await spawn;
+    const ensureResult = await ensured;
 
-    expect(shutdownResult.details.failures).toEqual([]);
-    expect(shutdownResult.details.deactivatedMembers).toEqual(expect.arrayContaining(["old", "team-lead"]));
-    expect(shutdownResult.details.stopEvidence).toContainEqual(expect.objectContaining({
+    expect(shutdownResult.details.postState.failures).toEqual([]);
+    expect(shutdownResult.details.postState.deactivatedMembers).toEqual(expect.arrayContaining(["old", "team-lead"]));
+    expect(shutdownResult.details.evidence.stop).toContainEqual(expect.objectContaining({
       kind: "terminal_pane_stopped",
       target: "pane-old",
       membershipId: old.membershipId,
     }));
-    expect(spawnResult.status).toBe("rejected");
-    if (spawnResult.status === "rejected") {
-      expect(String(spawnResult.error)).toMatch(/team-lead.*not a current member/i);
+    expect(ensureResult.status).toBe("rejected");
+    if (ensureResult.status === "rejected") {
+      expect(String(ensureResult.error)).toMatch(/team-lead.*not a current member/i);
     }
     expect(killed).toEqual(["pane-old"]);
     expect(spawned).toEqual([]);
@@ -212,9 +242,9 @@ describe("Team topology/lifecycle lease", () => {
       undefined,
       context("/tmp/empty-team-lead.jsonl"),
     )).rejects.toThrow(/must not be empty/i);
-    await expect(tools.get("spawn_teammate")!.execute(
-      "spawn-empty",
-      { team_name: "valid-team", name: "", prompt: "x", cwd: process.cwd() },
+    await expect(tools.get("worker_ensure")!.execute(
+      "ensure-empty",
+      { team_name: "valid-team", name: "", profile: "x", cwd: process.cwd() },
       undefined,
       undefined,
       context("/tmp/empty-member-lead.jsonl"),

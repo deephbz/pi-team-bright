@@ -15,6 +15,7 @@ import {
 } from "./task-delivery";
 import { migrateTeamTasks, type LegacyTaskFile } from "./task-migration";
 import { applySemanticTaskUpdate } from "./tasks";
+import * as taskAuthority from "./tasks";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
@@ -91,6 +92,29 @@ function registerSessionExtension(): Map<string, (...args: any[]) => any> {
   return handlers;
 }
 
+async function createBeadsTeam(name: string, leadSession: string) {
+  const suffix = `lifecycle-${testWorkspaces.length}`;
+  const taskWorkspace = workspace(suffix);
+  vi.spyOn(taskAuthority, "listTasksWithVersions").mockResolvedValue([]);
+  return teams.createTeam(
+    name,
+    leadSession,
+    "lead-agent",
+    undefined,
+    undefined,
+    undefined,
+    taskWorkspace,
+    `task-authority-${name}`,
+    {
+      schema: "pi-teams-beads-authority/1",
+      backend: "dolt",
+      database: "dolt",
+      doltDatabase: `release_p1_${suffix}`,
+      projectId: `release-p1-${suffix}`,
+    },
+  );
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
@@ -117,6 +141,7 @@ function currentTask(id: string, assignee?: string): TaskFile {
     id,
     title: id,
     description: "contract task",
+    acceptanceCriteria: "The contract is verified",
     status: "open",
     assignee,
     relations: [],
@@ -190,17 +215,17 @@ describe("release P1 public contracts", () => {
     expect((await teams.readConfig(name)).members.filter((item) => item.name === "worker" && item.isActive !== false)).toHaveLength(1);
   });
 
-  it("refuses the teammate shutdown tool for the current team lead without changing membership", async () => {
+  it("refuses worker_stop for the current team lead without changing membership", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("lead-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
     const before = await teams.createTeam(name, leadSession, "lead-agent");
-    const tool = registerExtension().get("teammate_shutdown")!;
+    const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown-lead", {
       team_name: name,
-      agent_name: "team-lead",
+      worker: "team-lead",
     }, undefined, undefined, context(leadSession))).rejects.toThrow(/cannot shut down the team leader/i);
 
     const after = await teams.readConfig(name);
@@ -253,7 +278,7 @@ describe("release P1 public contracts", () => {
     });
   });
 
-  it("attempts every teammate shutdown and leaves a kill failure current instead of claiming closure", async () => {
+  it("attempts every Worker stop and leaves a kill failure current instead of claiming closure", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const killed: string[] = [];
@@ -276,7 +301,7 @@ describe("release P1 public contracts", () => {
     setAdapter(adapter);
     const name = teamName("partial-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await teams.createTeam(name, leadSession, "lead-agent");
+    await createBeadsTeam(name, leadSession);
     await teams.addMember(name, member("fails", `/tmp/${name}-fails.jsonl`, { tmuxPaneId: "pane-fails" }));
     await teams.addMember(name, member("succeeds", `/tmp/${name}-succeeds.jsonl`, { tmuxPaneId: "pane-succeeds" }));
     const tool = registerExtension().get("team_shutdown")!;
@@ -289,10 +314,13 @@ describe("release P1 public contracts", () => {
     expect(config.members.find((item) => item.name === "succeeds")?.isActive).toBe(false);
     expect(config.members.find((item) => item.name === "team-lead")?.isActive).not.toBe(false);
     expect(config.members.find((item) => item.name === "team-lead")?.isActive).toBe(true);
-    expect(result.details.failures).toEqual([
+    expect(result.details.postState.failures).toEqual([
+      expect.objectContaining({ name: "fails", reason: "stop_not_confirmed", membershipRemainsCurrent: true }),
+    ]);
+    expect(result.details.evidence.stopFailures).toEqual([
       expect.objectContaining({ name: "fails", error: expect.stringContaining("simulated terminal kill failure") }),
     ]);
-    expect(result.details.stopEvidence).toEqual([
+    expect(result.details.evidence.stop).toEqual([
       expect.objectContaining({ kind: "terminal_pane_stopped", target: "pane-succeeds" }),
     ]);
   });
@@ -319,7 +347,7 @@ describe("release P1 public contracts", () => {
     setAdapter(adapter);
     const name = teamName(`unsupported-stop-${adapterName.replace(/[^a-z0-9]+/gi, "-")}`);
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await teams.createTeam(name, leadSession, "lead-agent");
+    await createBeadsTeam(name, leadSession);
     const worker = member("worker", `/tmp/${name}-worker.jsonl`, { tmuxPaneId: paneId });
     await teams.addMember(name, worker);
     await runtime.writeRuntimeStatus(name, "worker", {
@@ -327,11 +355,11 @@ describe("release P1 public contracts", () => {
       startedAt: Date.now(),
       lastHeartbeatAt: Date.now(),
     }, worker.membershipId);
-    const tool = registerExtension().get("teammate_shutdown")!;
+    const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown", {
       team_name: name,
-      agent_name: "worker",
+      worker: "worker",
     }, undefined, undefined, context(leadSession))).rejects.toThrow(/cannot confirm shutdown.*remains current/i);
 
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(true);
@@ -346,7 +374,7 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("already-exited");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await teams.createTeam(name, leadSession, "lead-agent");
+    await createBeadsTeam(name, leadSession);
     const worker = member("worker", `/tmp/${name}-worker.jsonl`, { tmuxPaneId: "zellij_worker" });
     await teams.addMember(name, worker);
     await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: Date.now() }, worker.membershipId);
@@ -358,14 +386,14 @@ describe("release P1 public contracts", () => {
       }
       return true;
     }) as typeof process.kill);
-    const tool = registerExtension().get("teammate_shutdown")!;
+    const tool = registerExtension().get("worker_stop")!;
 
     const result = await tool.execute("shutdown", {
       team_name: name,
-      agent_name: "worker",
+      worker: "worker",
     }, undefined, undefined, context(leadSession));
 
-    expect(result.details.stopEvidence).toMatchObject({
+    expect(result.details.evidence.stop).toMatchObject({
       kind: "bound_process_already_exited",
       membershipId: worker.membershipId,
     });
@@ -377,7 +405,7 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("manual-exit-generation-race");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await teams.createTeam(name, leadSession, "lead-agent");
+    await createBeadsTeam(name, leadSession);
     const worker = member("worker", `/tmp/${name}-worker.jsonl`);
     await teams.addMember(name, worker);
     const oldPid = 2_147_483_647;
@@ -398,11 +426,11 @@ describe("release P1 public contracts", () => {
       }
       return true;
     }) as typeof process.kill);
-    const tool = registerExtension().get("teammate_shutdown")!;
+    const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown", {
       team_name: name,
-      agent_name: "worker",
+      worker: "worker",
     }, undefined, undefined, context(leadSession))).rejects.toThrow(/runtime process generation changed.*remains current/i);
 
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(true);
@@ -472,16 +500,16 @@ describe("release P1 public contracts", () => {
     setAdapter(adapter);
     const name = teamName("wrong-generation-runtime");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await teams.createTeam(name, leadSession, "lead-agent");
+    await createBeadsTeam(name, leadSession);
     const worker = member("worker", `/tmp/${name}-worker.jsonl`, { tmuxPaneId: "zellij_worker" });
     await teams.addMember(name, worker);
     await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: Date.now() }, "membership-from-an-older-generation");
     const killProbe = vi.spyOn(process, "kill");
-    const tool = registerExtension().get("teammate_shutdown")!;
+    const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown", {
       team_name: name,
-      agent_name: "worker",
+      worker: "worker",
     }, undefined, undefined, context(leadSession))).rejects.toThrow(/cannot confirm shutdown.*remains current/i);
 
     expect(killProbe).not.toHaveBeenCalled();
