@@ -2,6 +2,7 @@ import {
   FooterComponent,
   type ExtensionAPI,
   type ExtensionContext,
+  type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { Member } from "./models";
@@ -56,8 +57,16 @@ export async function resolveTeamFooterBinding(
   }
 }
 
-function labelText(binding: TeamFooterBinding): string {
-  return `[${binding.teamName} · ${binding.role}] `;
+export function latestMessageClock(entries: readonly Pick<SessionEntry, "type" | "timestamp">[]): string | undefined {
+  let latest = Number.NEGATIVE_INFINITY;
+  for (const entry of entries) {
+    if (entry.type !== "message" && entry.type !== "custom_message") continue;
+    const timestamp = new Date(entry.timestamp).getTime();
+    if (Number.isFinite(timestamp) && timestamp > latest) latest = timestamp;
+  }
+  if (!Number.isFinite(latest)) return undefined;
+  const date = new Date(latest);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 /**
@@ -77,12 +86,20 @@ export function teamFooterFactory(
         return { model: getModel(), thinkingLevel: pi.getThinkingLevel() };
       },
       sessionManager: ctx.sessionManager,
+      // FooterComponent moved subscription detection from the extension-facing
+      // ModelRegistry to AgentSession.modelRuntime in Pi 0.80.8. Keep both
+      // projections so the package remains compatible across the transition.
       modelRegistry: ctx.modelRegistry,
+      modelRuntime: {
+        isUsingOAuth: (_provider: string) => {
+          const model = getModel();
+          return model ? ctx.modelRegistry.isUsingOAuth(model) : false;
+        },
+      },
       getContextUsage: () => ctx.getContextUsage(),
     };
     const base = new FooterComponent(sessionView as never, footerData);
     const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
-    const plainLabel = labelText(binding);
 
     return {
       invalidate() {
@@ -95,7 +112,14 @@ export function teamFooterFactory(
       render(width: number): string[] {
         const lines = base.render(width);
         if (lines.length === 0 || width <= 0) return lines;
-        const prefix = theme.fg("accent", plainLabel);
+        const clock = latestMessageClock(ctx.sessionManager.getEntries());
+        const roleTone = binding.role === "team-lead" ? "accent" : "dim";
+        const prefix = [
+          theme.fg("accent", `[${binding.teamName} · `),
+          theme.fg(roleTone, binding.role),
+          ...(clock ? [theme.fg("dim", ` · ${clock}`)] : []),
+          theme.fg("accent", "] "),
+        ].join("");
         lines[0] = truncateToWidth(prefix + lines[0], width, theme.fg("dim", "..."));
         return lines;
       },
