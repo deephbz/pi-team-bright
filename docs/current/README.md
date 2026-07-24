@@ -24,6 +24,15 @@ and terminal activity as Task evidence. Exact current Membership and Pi Session
 binding determine who may act; matching names, processes, panes, or environment
 variables do not.
 
+PiTeams also answers one private operation-specific Rarebit policy query. It
+inhibits automatic Summary synthesis only when locked TeamConfig evidence
+proves that the queried durable Pi Session is the exact active binding of one
+current teammate Membership generation. It abstains for leaders, standalone,
+forked, resumed-but-unbound, replaced, ambiguous, or unverifiable identities.
+Rarebit owns the versioned vocabulary, deadline, fail-open behavior, and
+receipt; this is not a general provider registry and does not affect manual
+Summary, deterministic Rarebits, Title, attention, health, or readiness.
+
 ## Current concept graph
 
 This milestone diagram is the high-density interface view. The concrete type,
@@ -56,6 +65,7 @@ Each fact has one authoritative home; other documents point to it.
 | Tool parameters, descriptions, guards, and execution | TypeBox registrations in [`extensions/index.ts`](../../extensions/index.ts) |
 | Machine result schema | [`PiTeamsToolResultDetails`](../../src/utils/tool-results.ts) |
 | Team, Membership, Task, Alert, and event types | [`src/utils/models.ts`](../../src/utils/models.ts) |
+| Exact-teammate automatic-Summary inhibition evidence | [`src/utils/automatic-summary-policy.ts`](../../src/utils/automatic-summary-policy.ts) and [`src/utils/teams.ts`](../../src/utils/teams.ts) |
 | Task authority and mutation semantics | [`src/utils/tasks.ts`](../../src/utils/tasks.ts) and [`src/utils/beads.ts`](../../src/utils/beads.ts) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Reuse-first lifecycle recommendations | [`src/utils/team-sync-actions.ts`](../../src/utils/team-sync-actions.ts) |

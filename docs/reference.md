@@ -36,6 +36,10 @@ exhaustive parameter reference.
   Alert, delivery, runtime, and event types.
 - [`src/utils/teams.ts`](../src/utils/teams.ts) owns Team configuration and
   current Membership generations.
+- [`src/utils/automatic-summary-policy.ts`](../src/utils/automatic-summary-policy.ts)
+  answers only Rarebit's versioned automatic-Summary inhibition query, using
+  the exact current teammate Membership-generation and durable-Session resolver
+  in `teams.ts`; it exposes no general policy registry.
 - [`src/utils/tasks.ts`](../src/utils/tasks.ts) and
   [`src/utils/beads.ts`](../src/utils/beads.ts) own Task reads, mutations,
   relations, versions, evidence guards, and Beads authority integration.

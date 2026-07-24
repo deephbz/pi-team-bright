@@ -29,6 +29,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
+import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 
 // Public-interface intent and source allocation: docs/current/README.md and
 // docs/reference.md. Tool schemas and execution below are the contract source.
@@ -301,6 +302,7 @@ export function inspectAgentSessionCleanup(
 }
 
 export default function (pi: ExtensionAPI) {
+  registerAutomaticSummaryPolicyProvider(pi);
   // Keep the default agent-facing coordination surface intentionally small.
   // Legacy implementations remain readable for migration and historical
   // delivery recovery, but registration is filtered at this boundary.

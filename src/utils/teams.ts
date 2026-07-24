@@ -396,6 +396,86 @@ export function findTeammateBySessionFile(sessionFile: string): { teamName: stri
   return matches[0] ?? null;
 }
 
+export type CurrentTeammateSessionBindingResolution =
+  | { status: "bound"; teamName: string; member: Member }
+  | {
+      status: "abstain";
+      reason:
+        | "not_bound"
+        | "leader_or_non_teammate"
+        | "unverified_generation"
+        | "ambiguous_binding"
+        | "runtime_metadata_unavailable"
+        | "stale_binding";
+    };
+
+/**
+ * Resolve an operation-specific exact teammate binding without using names,
+ * environment, process, pane, or launch metadata. A strict scan refuses to
+ * claim uniqueness when any TeamConfig is unreadable, then the winning
+ * Membership generation is revalidated under its mutation and config locks.
+ */
+export async function resolveCurrentTeammateSessionBinding(
+  sessionFile: string,
+): Promise<CurrentTeammateSessionBindingResolution> {
+  if (!sessionFile || !fs.existsSync(TEAMS_DIR))
+    return { status: "abstain", reason: "not_bound" };
+
+  const exact: Array<{ teamName: string; member: Member }> = [];
+  try {
+    for (const teamName of fs.readdirSync(TEAMS_DIR)) {
+      const file = configPath(teamName);
+      if (!fs.existsSync(file)) continue;
+      const config = readConfigRaw(file);
+      for (const member of config.members) {
+        if (member.isActive === false || member.sessionFile !== sessionFile)
+          continue;
+        exact.push({ teamName, member: structuredClone(member) });
+      }
+    }
+  } catch {
+    return { status: "abstain", reason: "runtime_metadata_unavailable" };
+  }
+  if (exact.length === 0) return { status: "abstain", reason: "not_bound" };
+  if (exact.length !== 1)
+    return { status: "abstain", reason: "ambiguous_binding" };
+  const candidate = exact[0];
+  if (
+    candidate.member.agentType !== "teammate" ||
+    candidate.member.name === "team-lead"
+  )
+    return { status: "abstain", reason: "leader_or_non_teammate" };
+  if (!candidate.member.membershipId)
+    return { status: "abstain", reason: "unverified_generation" };
+
+  try {
+    return await withMembershipMutationLease(
+      candidate.teamName,
+      candidate.member.membershipId,
+      async () =>
+        withCurrentConfig(candidate.teamName, async (config) => {
+          const current = config.members.find(
+            (member) =>
+              member.membershipId === candidate.member.membershipId &&
+              member.isActive !== false &&
+              member.agentType === "teammate" &&
+              member.name !== "team-lead" &&
+              member.sessionFile === sessionFile,
+          );
+          return current
+            ? {
+                status: "bound" as const,
+                teamName: candidate.teamName,
+                member: structuredClone(current),
+              }
+            : { status: "abstain" as const, reason: "stale_binding" as const };
+        }),
+    );
+  } catch {
+    return { status: "abstain", reason: "runtime_metadata_unavailable" };
+  }
+}
+
 export async function readConfig(teamName: string): Promise<TeamConfig> {
   const p = configPath(teamName);
   if (!fs.existsSync(p)) {
