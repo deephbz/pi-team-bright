@@ -222,6 +222,8 @@ describe("clean-cut public contract", () => {
       ctx,
     );
     expect(beforeStart?.systemPrompt).toContain("delivered in context");
+    expect(beforeStart?.systemPrompt).toContain("call task_update yourself to set it closed");
+    expect(beforeStart?.systemPrompt).toContain("Use alert_send only for exceptional clarification or escalation");
     expect(beforeStart?.systemPrompt).not.toContain("Start by calling read_inbox");
     await harness.handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
   });
