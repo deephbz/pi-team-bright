@@ -70,7 +70,7 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(reference).not.toMatch(/Required:|Optional:/);
     expect(skill).toMatch(/executable schema.+source of truth/is);
     expect(skill).not.toMatch(/^### `[^`]+`$/m);
-    expect(current).toMatch(/Lifecycle stage: \*\*hardening\*\*/);
+    expect(current).toMatch(/Lifecycle stage: \*\*sharing\*\*/);
     expect(current).toMatch(/Sources of truth/);
   });
 

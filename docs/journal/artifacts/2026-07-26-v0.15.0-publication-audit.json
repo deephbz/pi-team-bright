@@ -1,0 +1,94 @@
+{
+  "schema": "pi-teams-publication-audit/1",
+  "recordedAt": "2026-07-26T07:41:57+08:00",
+  "sourceBundle": {
+    "repository": "pi-teams",
+    "branch": "feat/terminal-backend-decoupling",
+    "baseCommit": "7828095",
+    "version": "0.15.0-hypercarrier.0",
+    "intendedTag": "v0.15.0-hypercarrier.0",
+    "containingReleaseCommit": "this artifact's git commit",
+    "implementationCommits": [
+      {
+        "hash": "a5d9445",
+        "subject": "feat(terminal): enforce direct backend carriers per Team epoch"
+      },
+      {
+        "hash": "9f5c869",
+        "subject": "fix(worker): require assigned Task completion mutation"
+      },
+      {
+        "hash": "03d6b85",
+        "subject": "fix(worker): make carrier recovery exact and Task-independent"
+      },
+      {
+        "hash": "3133439",
+        "subject": "feat(observation): publish Membership evidence protocol"
+      }
+    ]
+  },
+  "sanitization": {
+    "credentialScannerFindingsBeforeSanitization": 0,
+    "manualPublicationFindings": [
+      "personal absolute home paths and exact Pi Session locators",
+      "live Team and Task names",
+      "runtime Membership, launch, Session, pane, and process identifiers",
+      "configured model identifier in validation evidence",
+      "consumer coordination Session title"
+    ],
+    "action": "Removed or replaced findings inside the unpublished commits that introduced them; no sensitive values are reproduced in this artifact.",
+    "retainedEvidence": "Behavioral outcomes, timings, typed recovery modes, test counts, and consumer review verdict remain without operational identities."
+  },
+  "verification": [
+    {
+      "command": "gitleaks git . --log-opts=origin/main..HEAD against the five-commit release range",
+      "outcome": "passed",
+      "findings": 0,
+      "gitleaksVersion": "8.30.1"
+    },
+    {
+      "command": "git archive HEAD followed by gitleaks dir on the exported tracked tree",
+      "outcome": "passed",
+      "findings": 0
+    },
+    {
+      "command": "explicit credential, personal-path, runtime-identity, sensitive-filename, symlink, and gitlink checks",
+      "outcome": "passed",
+      "unapprovedFindings": 0
+    },
+    {
+      "command": "npm run verify:observation-package",
+      "outcome": "passed",
+      "anchor": "packed plain-Node import and TypeScript declaration probe"
+    },
+    {
+      "command": "env -u PI_AGENT_NAME -u PI_TEAM_NAME -u PI_AGENT_LAUNCH_ID npm test",
+      "outcome": "passed",
+      "testFiles": 53,
+      "tests": 431,
+      "note": "The first release run found and corrected one stale evergreen-stage assertion; the complete final run passed."
+    },
+    {
+      "command": "npm pack --dry-run --json plus sensitive package-filename check",
+      "outcome": "passed",
+      "package": "pi-teams@0.15.0-hypercarrier.0",
+      "entryCount": 132,
+      "sensitiveFilenames": 0
+    },
+    {
+      "command": "git diff --exit-code -- dist after package verification",
+      "outcome": "passed",
+      "anchor": "committed observation build matches regenerated output"
+    }
+  ],
+  "publication": {
+    "remote": "origin",
+    "branch": "feat/terminal-backend-decoupling",
+    "tag": "v0.15.0-hypercarrier.0",
+    "stateAtRecord": "validated locally; remote publication pending"
+  },
+  "openWork": [
+    "The separate intermittent Beads bd list timeout in team_sync remains unresolved.",
+    "Live Teams must restart rather than roll between PiTeams versions."
+  ]
+}
