@@ -1,0 +1,22 @@
+/* Verify the published artifact, not ts-node's source-loader behavior. */
+const { execFileSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const root = path.resolve(__dirname, "..");
+const work = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-package-"));
+try {
+  const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--ignore-scripts"], { cwd: root, encoding: "utf8" }))[0];
+  const tarball = path.join(root, packed.filename);
+  execFileSync("npm", ["init", "-y"], { cwd: work, stdio: "ignore" });
+  execFileSync("npm", ["install", "--ignore-scripts", tarball], { cwd: work, stdio: "ignore" });
+  const probe = "const o=require('pi-teams/observation'); if(o.OBSERVATION_SCHEMA !== 'pi-teams-observation/1' || typeof o.readObservationSnapshot !== 'function') process.exit(1); o.readObservationSnapshot({teamsRoot: process.cwd()}).then(x => { if (!x.schema) process.exit(1); });";
+  execFileSync(process.execPath, ["-e", probe], { cwd: work, stdio: "inherit" });
+  fs.writeFileSync(path.join(work, "probe.ts"), "import { OBSERVATION_SCHEMA, readObservationSnapshot } from 'pi-teams/observation'; void readObservationSnapshot; const schema: 'pi-teams-observation/1' = OBSERVATION_SCHEMA;\n");
+  execFileSync(path.join(root, "node_modules", ".bin", "tsc"), ["--noEmit", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ESNext", "probe.ts"], { cwd: work, stdio: "inherit" });
+  console.log("observation package probe passed");
+} finally {
+  for (const file of fs.readdirSync(root)) if (/^pi-teams-.*\.tgz$/.test(file)) fs.rmSync(path.join(root, file), { force: true });
+  fs.rmSync(work, { recursive: true, force: true });
+}

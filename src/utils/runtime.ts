@@ -89,7 +89,21 @@ export async function writeRuntimeStatus(
       ...(membershipId ? { membershipId } : {}),
     };
 
-    fs.writeFileSync(p, JSON.stringify(next, null, 2));
+    // Readers deliberately do not join producer locks. Publish a complete,
+    // restrictive replacement so they observe either generation, never JSON mid-write.
+    const temporary = path.join(dir, `.${path.basename(p)}.${process.pid}.${Date.now()}.tmp`);
+    let fd: number | undefined;
+    try {
+      fd = fs.openSync(temporary, "wx", 0o600);
+      fs.writeFileSync(fd, JSON.stringify(next, null, 2));
+      fs.fsyncSync(fd);
+      fs.closeSync(fd);
+      fd = undefined;
+      fs.renameSync(temporary, p);
+    } finally {
+      if (fd !== undefined) try { fs.closeSync(fd); } catch {}
+      try { fs.unlinkSync(temporary); } catch {}
+    }
     return next;
   });
 }

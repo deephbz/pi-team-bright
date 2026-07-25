@@ -1,7 +1,7 @@
 # Worker correctness and read-only observation protocol plan
 
 Date: 2026-07-26
-Status: accepted plan; Worker lifecycle implementation complete
+Status: implemented, independently consumer-reviewed, and publication-ready
 Target branch: `feat/terminal-backend-decoupling`
 
 ## Trigger and intent
@@ -164,6 +164,36 @@ Verification required:
    correctness, and the no-Task dependency budget;
 5. send Timeline the final export/schema/fixture paths and commit hash.
 
-The open Beads `bd list` contention remains separate. This work may add call-
-budget protection but must not disguise that timeout with broader retries or a
+The open Beads `bd list` contention remains separate. This work added call-
+budget protection but did not disguise that timeout with broader retries or a
 larger deadline.
+
+## Result and evidence
+
+The delegated implementation initially landed as two independently reviewable
+commits after its prerequisite terminal and recovery work. Before publication,
+the seven unpublished commits were reshaped without source-tree changes into
+four semantic release commits: direct terminal-carrier authority, Worker Task
+completion mutation, exact Task-independent carrier recovery, and the
+Membership observation protocol. Cross-review caught and corrected three
+interface defects before integration: public Worker receipt actions were not
+yet typed; the initial observation package export was not plain-Node executable
+and its JSON Schema was weaker than its TypeScript type; and the initial
+projector participated in producer locks, mutated read trees, and had
+multiplicative latency.
+
+The final observation boundary is operationally read-only. Runtime writers
+publish atomic old-or-new JSON records; the projector performs lock-free
+config-A/runtime/config-B sampling with one retry, one total deadline, and live
+AbortSignal checks. The shared fixture covers exact current lead and teammate
+joins, ended same-Session history, and invalid evidence with unsafe bindings
+omitted.
+
+Validation on the integrated tree passed the packed plain-Node/declaration
+consumer probe and the complete repository suite: 53 test files and 431 tests.
+A live read of the existing root projected 101 Teams, 259 Membership episodes,
+and 21 exact process bindings in 0.13 seconds under the one-second default
+budget. The Timeline owner independently reviewed the final producer contract
+through intercom and returned `NO BLOCKERS`. The machine-readable result summary
+is retained in
+[`artifacts/2026-07-26-worker-observation-hardening.json`](artifacts/2026-07-26-worker-observation-hardening.json).

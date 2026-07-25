@@ -254,15 +254,20 @@ function findLeadTeamForSession(piSessionFile?: string): string | null {
 }
 
 /** Register the current process and durable Pi session as a team's lead. */
-function registerLeadSession(teamName: string, piSessionFile?: string) {
+async function registerLeadSession(teamName: string, piSessionFile?: string) {
+  const config = await teams.readConfig(teamName);
+  const lead = [...config.members].reverse().find((member) =>
+    member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false,
+  );
+  if (!lead?.membershipId) throw new Error(`Current lead Membership for ${teamName} has no membershipId.`);
+  const startedAt = Date.now();
+  // runtime/team-lead.json is the normalized producer evidence. This file
+  // remains private compatibility evidence for older installations only.
+  await runtime.writeRuntimeStatus(teamName, "team-lead", { pid: process.pid, startedAt }, lead.membershipId);
   const recordPath = paths.leadSessionPath(teamName);
   const dir = path.dirname(recordPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(recordPath, JSON.stringify({
-    pid: process.pid,
-    sessionFile: piSessionFile,
-    startedAt: Date.now(),
-  }));
+  fs.writeFileSync(recordPath, JSON.stringify({ pid: process.pid, sessionFile: piSessionFile, startedAt }));
 }
 
 export interface AgentSessionCleanupInspection {
@@ -625,7 +630,7 @@ export default function (pi: ExtensionAPI) {
         }
         const lead = await teams.assertCurrentSessionBinding(teamName, "team-lead", piSessionFile);
         currentMembershipId = lead.membershipId;
-        registerLeadSession(teamName, piSessionFile);
+        await registerLeadSession(teamName, piSessionFile);
         if (admission.update) {
           await teams.updateMembership(teamName, lead.membershipId!, admission.update);
         }
@@ -1088,7 +1093,7 @@ export default function (pi: ExtensionAPI) {
         };
       }
       // Register this session as the lead so it can receive inbox messages.
-      registerLeadSession(safeTeamName, leadSessionFile);
+      await registerLeadSession(safeTeamName, leadSessionFile);
       // Update teamName and start native custom delivery for the lead.
       isTeammate = false;
       agentName = "team-lead";
@@ -2891,7 +2896,7 @@ export default function (pi: ExtensionAPI) {
             : {}),
         },
       );
-      registerLeadSession(safeTeamName, leadSessionFile);
+      await registerLeadSession(safeTeamName, leadSessionFile);
       // Update teamName and start native custom delivery for the lead.
       teamName = safeTeamName;
       currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;

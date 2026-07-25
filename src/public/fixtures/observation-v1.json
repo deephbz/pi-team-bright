@@ -1,0 +1,15 @@
+{
+  "schema": "pi-teams-observation/1",
+  "generatedAt": "2024-01-01T00:00:00.000Z",
+  "producerVersion": "fixture",
+  "availability": "partial",
+  "teams": [{
+    "teamName": "example",
+    "memberships": [
+      {"membershipId":"lead-current","teamName":"example","memberName":"team-lead","coordinationRole":"lead","lifecycle":{"state":"current","joinedAt":"2024-01-01T00:00:00.000Z"},"session":{"kind":"pi-jsonl-path","locator":"/sessions/shared.jsonl"},"terminalTarget":{"backend":"tmux","kind":"pane","targetId":"%1"},"processBinding":{"membershipId":"lead-current","pid":100,"processStartedAt":"2024-01-01T00:00:01.000Z"},"issues":[]},
+      {"membershipId":"worker-current","teamName":"example","memberName":"worker","coordinationRole":"teammate","lifecycle":{"state":"current","joinedAt":"2024-01-01T00:00:00.000Z"},"session":{"kind":"pi-jsonl-path","locator":"/sessions/worker.jsonl"},"terminalTarget":{"backend":"tmux","kind":"pane","targetId":"%2"},"processBinding":{"membershipId":"worker-current","pid":101,"processStartedAt":"2024-01-01T00:00:01.000Z"},"issues":[]},
+      {"membershipId":"worker-ended","teamName":"example","memberName":"worker","coordinationRole":"teammate","lifecycle":{"state":"ended","joinedAt":"2023-12-01T00:00:00.000Z","endedAt":"2023-12-31T00:00:00.000Z","reason":"replaced"},"session":{"kind":"pi-jsonl-path","locator":"/sessions/worker.jsonl"},"issues":[]},
+      {"membershipId":"worker-invalid","teamName":"example","memberName":"broken","coordinationRole":"teammate","lifecycle":{"state":"current","joinedAt":"2024-01-01T00:00:00.000Z"},"issues":[{"code":"runtime_generation_mismatch","scope":"membership","teamName":"example","memberName":"broken","membershipId":"worker-invalid"}]}
+    ], "issues": []
+  }], "issues": []
+}

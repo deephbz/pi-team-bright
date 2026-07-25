@@ -1,0 +1,88 @@
+{
+  "schema": "pi-teams-hardening-result/1",
+  "recordedAt": "2026-07-26T06:51:00+08:00",
+  "sourceBundle": {
+    "repository": "pi-teams",
+    "branch": "feat/terminal-backend-decoupling",
+    "baseCommit": "7828095",
+    "preSquashTip": "27f3b7d",
+    "containingCommit": "this artifact's git commit",
+    "commits": [
+      {
+        "hash": "a5d9445",
+        "subject": "feat(terminal): enforce direct backend carriers per Team epoch"
+      },
+      {
+        "hash": "9f5c869",
+        "subject": "fix(worker): require assigned Task completion mutation"
+      },
+      {
+        "hash": "03d6b85",
+        "subject": "fix(worker): make carrier recovery exact and Task-independent"
+      },
+      {
+        "subject": "feat(observation): publish Membership evidence protocol"
+      }
+    ]
+  },
+  "requirements": {
+    "workerItems": [
+      "discriminated carrier normalization",
+      "pure exhaustive ensure planner",
+      "typed Worker result actions",
+      "shared recovery executor",
+      "authority call-budget tests"
+    ],
+    "consumerArtifact": {
+      "repository": "HyperCarrier",
+      "commit": "2fda3bc",
+      "path": "docs/journal/2026-07-25-piteams-timeline-observation-contract.md"
+    }
+  },
+  "verification": {
+    "commands": [
+      {
+        "command": "git diff --exit-code backup/terminal-backend-decoupling-pre-squash-20260726 HEAD",
+        "outcome": "passed before provenance-only artifact correction",
+        "anchor": "release-history rewrite preserved the complete source tree"
+      },
+      {
+        "command": "npm run verify:observation-package",
+        "outcome": "passed",
+        "anchor": "packed plain-Node import and TypeScript declaration probe"
+      },
+      {
+        "command": "env -u PI_AGENT_NAME -u PI_TEAM_NAME -u PI_AGENT_LAUNCH_ID npm test",
+        "outcome": "passed",
+        "testFiles": 53,
+        "tests": 431
+      },
+      {
+        "command": "readObservationSnapshot({ deadlineMs: 1000 }) against the live default Teams root",
+        "outcome": "passed",
+        "durationSeconds": 0.13,
+        "teams": 101,
+        "membershipEpisodes": 259,
+        "processBindings": 21,
+        "availability": "partial"
+      }
+    ],
+    "consumerReview": {
+      "consumer": "HyperCarrier Timeline",
+      "reviewedPreSquashTip": "27f3b7d",
+      "verdict": "NO BLOCKERS",
+      "continuity": "The release-history rewrite preserved the reviewed protocol code and fixtures exactly."
+    }
+  },
+  "protocol": {
+    "schema": "pi-teams-observation/1",
+    "packageSubpath": "pi-teams/observation",
+    "canonicalSource": "src/public/observation.ts",
+    "fixture": "src/public/fixtures/observation-v1.json",
+    "operationalReadOnly": true,
+    "defaultDeadlineMs": 1000
+  },
+  "openWork": [
+    "The separate intermittent Beads bd list timeout in team_sync remains unresolved."
+  ]
+}

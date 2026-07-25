@@ -24,6 +24,9 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build:observation": "rm -rf dist && tsc -p tsconfig.observation.json",
+    "verify:observation-package": "npm run build:observation && node scripts/verify-observation-package.cjs",
+    "prepare": "npm run build:observation",
     "test": "npm run typecheck && vitest run",
     "qa:tool-results:history": "ts-node --transpile-only scripts/tool-result-qa/mine-history.ts",
     "qa:tool-results": "vitest run scripts/tool-result-qa/suite.test.ts",
@@ -31,6 +34,13 @@
     "migrate:tasks": "ts-node --transpile-only src/cli/migrate-tasks.ts"
   },
   "main": "extensions/index.ts",
+  "exports": {
+    ".": "./extensions/index.ts",
+    "./observation": {
+      "types": "./dist/public/observation.d.ts",
+      "default": "./dist/public/observation.js"
+    }
+  },
   "files": [
     "extensions",
     "skills",
@@ -43,7 +53,8 @@
     "docs/current/README.md",
     "docs/reference.md",
     "docs/decisions",
-    "docs/journal"
+    "docs/journal",
+    "dist"
   ],
   "dependencies": {
     "ts-node": "^10.9.2",
