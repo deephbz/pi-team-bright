@@ -2,9 +2,9 @@
 
 Updated: 2026-07-26
 
-Lifecycle stage: **sharing candidate** for the Task-first coordination and
-Membership-observation surfaces; the unresolved Beads list-contention path
-remains in **hardening**.
+Lifecycle stage: **sharing** for the Task-first coordination and Membership-
+observation surfaces; the unresolved Beads list-contention path remains in
+**hardening**.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
@@ -130,10 +130,11 @@ restating these executable definitions.
   final producer contract with no blockers; the integrated repository run
   passed all 53 files and 431 tests. Design and validation evidence is in the
   [combined hardening journal](../journal/2026-07-26-worker-contract-and-observation-protocol-plan.md).
-- The publication candidate contains four semantic implementation commits:
+- Version `0.15.0-hypercarrier.0` contains four semantic implementation commits:
   direct terminal authority, Worker Task completion, exact Task-independent
   carrier recovery, and Membership observation. Its packed-package probe plus
-  all 53 files and 431 tests pass.
+  all 53 files and 431 tests pass; the credential and publication-privacy audit
+  is recorded in the [release artifact](../journal/artifacts/2026-07-26-v0.15.0-publication-audit.json).
 
 ## Constraints and open work
 
@@ -153,18 +154,14 @@ Next steps:
 2. Make `team_sync` return a typed partial result when Task projection is
    unavailable, without misreporting zero Tasks or discarding valid Team and
    Worker carrier state.
-3. Prepare the next PiTeams version (the current package still identifies as
-   `0.14.0-hypercarrier.0`), then push a reviewed release commit before any
-   external repository records it as a submodule target.
-4. Human-review the Task-first interface, terminal direct-carrier contract, and
-   source allocation.
-5. Merge and release only after review; restart live Teams as one version epoch.
-   Any pre-change mixed-carrier Team must be stopped and recreated after
-   release.
-6. If HyperCarrier adopts a `packages/pi-teams` gitlink, explicitly revise its
+3. Downstream consumers must pin the exact `v0.15.0-hypercarrier.0` release
+   commit rather than an ambient sibling checkout or moving branch.
+4. Restart live Teams as one version epoch. Any pre-change mixed-carrier Team
+   must be stopped and recreated after release.
+5. If HyperCarrier adopts a `packages/pi-teams` gitlink, explicitly revise its
    prior no-submodule decision and update npm-workspace, clone, lockfile, and
    public-export semantics rather than introducing those effects implicitly.
-7. Reassess component stage at the next R&D kickoff. New experimental pieces
+6. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
 
 ## Historical trail
