@@ -63,6 +63,14 @@ function expectNoInboxOrRuntime(name: string, agent = "team-lead") {
   expect(fs.existsSync(paths.runtimeStatusPath(name, agent))).toBe(false);
 }
 
+async function expectLeadRuntime(name: string) {
+  const lead = (await teams.readConfig(name)).members.find((member) => member.name === "team-lead")!;
+  expect(await runtime.readRuntimeStatus(name, "team-lead")).toMatchObject({
+    membershipId: lead.membershipId,
+    pid: process.pid,
+  });
+}
+
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
@@ -148,7 +156,7 @@ describe("external current-binding contract", () => {
     expectNoInboxOrRuntime(name, "ghost");
   });
 
-  it("resumes the sole matching lead Session without creating inbox or runtime state", async () => {
+  it("resumes the sole matching lead Session and records Membership-bound lead runtime evidence", async () => {
     vi.useFakeTimers();
     vi.stubEnv("TMUX", "");
     vi.stubEnv("PI_TEAM_NAME", "");
@@ -166,7 +174,8 @@ describe("external current-binding contract", () => {
       pid: process.pid,
       sessionFile,
     });
-    expectNoInboxOrRuntime(name);
+    expect(fs.existsSync(paths.inboxPath(name, "team-lead"))).toBe(false);
+    await expectLeadRuntime(name);
     await handlers.get("session_shutdown")!({ reason: "quit" }, ctx);
   });
 
@@ -213,7 +222,8 @@ describe("external current-binding contract", () => {
     });
     expect(fs.readFileSync(paths.leadSessionPath(other), "utf8")).toBe(otherBefore);
     expectNoInboxOrRuntime(other);
-    expectNoInboxOrRuntime(intended);
+    expect(fs.existsSync(paths.inboxPath(intended, "team-lead"))).toBe(false);
+    await expectLeadRuntime(intended);
     await handlers.get("session_shutdown")!({ reason: "quit" }, ctx);
   });
 

@@ -34,6 +34,10 @@ exhaustive parameter reference.
 
 - [`src/utils/models.ts`](../src/utils/models.ts) owns Team, Membership, Task,
   Alert, delivery, runtime, and event types.
+- [`pi-teams/observation`](../src/public/observation.ts) exports the one
+  read-only `pi-teams-observation/1` projector, canonical types, and JSON
+  Schema; [decision 0006](decisions/0006-membership-observation-protocol.md)
+  records its authority and privacy boundary.
 - [`src/utils/teams.ts`](../src/utils/teams.ts) owns Team configuration and
   current Membership generations.
 - [`src/utils/automatic-summary-policy.ts`](../src/utils/automatic-summary-policy.ts)

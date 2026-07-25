@@ -1,9 +1,10 @@
 # PiTeams evergreen context
 
-Updated: 2026-07-25
+Updated: 2026-07-26
 
-Lifecycle stage: **hardening** for the Task-first coordination surface;
-**sharing** begins after human review, merge, and a stopped-Team release epoch.
+Lifecycle stage: **sharing candidate** for the Task-first coordination and
+Membership-observation surfaces; the unresolved Beads list-contention path
+remains in **hardening**.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
@@ -65,6 +66,7 @@ Each fact has one authoritative home; other documents point to it.
 | Tool parameters, descriptions, guards, and execution | TypeBox registrations in [`extensions/index.ts`](../../extensions/index.ts) |
 | Machine result schema | [`PiTeamsToolResultDetails`](../../src/utils/tool-results.ts) |
 | Team, Membership, Task, Alert, and event types | [`src/utils/models.ts`](../../src/utils/models.ts) |
+| Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `pi-teams/observation` |
 | Exact-teammate automatic-Summary inhibition evidence | [`src/utils/automatic-summary-policy.ts`](../../src/utils/automatic-summary-policy.ts) and [`src/utils/teams.ts`](../../src/utils/teams.ts) |
 | Task authority and mutation semantics | [`src/utils/tasks.ts`](../../src/utils/tasks.ts) and [`src/utils/beads.ts`](../../src/utils/beads.ts) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
@@ -86,7 +88,8 @@ restating these executable definitions.
   [decision 0004](../decisions/0004-source-allocation.md).
 - Task authority, Team/Membership authority, Pi Session identity, event
   evidence, delivery presentation, runtime observation, and terminal surfaces
-  remain distinct.
+  remain distinct. `pi-teams-observation/1` is recorded Membership evidence,
+  never OS liveness; see [decision 0006](../decisions/0006-membership-observation-protocol.md).
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
 - One live Team runs one PiTeams version; upgrades happen as a stopped and
@@ -115,6 +118,22 @@ restating these executable definitions.
   then delivered and closed post-recovery work; the complete full run passed
   all 50 files and 407 tests. Incident and validation evidence is retained in the
   [worker-recovery journal](../journal/2026-07-25-worker-recovery-and-task-hydration.md).
+- Worker ensure now normalizes persisted optionals into an exhaustive carrier
+  state and executes one typed plan; prepared and exact-Session recovery share
+  one effect/compensation path, while authority-budget tests keep Task reads out
+  of ensure and bound lifecycle projections.
+- `pi-teams/observation` publishes the minimal `pi-teams-observation/1`
+  Membership-evidence contract for read-only consumers. It exposes no Task or
+  private collaboration content, performs no filesystem writes or producer
+  locking, uses atomic runtime publication plus bounded coherent sampling, and
+  has a packed plain-Node/declaration probe. Timeline independently accepted the
+  final producer contract with no blockers; the integrated repository run
+  passed all 53 files and 431 tests. Design and validation evidence is in the
+  [combined hardening journal](../journal/2026-07-26-worker-contract-and-observation-protocol-plan.md).
+- The publication candidate contains four semantic implementation commits:
+  direct terminal authority, Worker Task completion, exact Task-independent
+  carrier recovery, and Membership observation. Its packed-package probe plus
+  all 53 files and 431 tests pass.
 
 ## Constraints and open work
 
@@ -134,12 +153,18 @@ Next steps:
 2. Make `team_sync` return a typed partial result when Task projection is
    unavailable, without misreporting zero Tasks or discarding valid Team and
    Worker carrier state.
-3. Human-review the Task-first interface, terminal direct-carrier contract, and
+3. Prepare the next PiTeams version (the current package still identifies as
+   `0.14.0-hypercarrier.0`), then push a reviewed release commit before any
+   external repository records it as a submodule target.
+4. Human-review the Task-first interface, terminal direct-carrier contract, and
    source allocation.
-4. Merge and release only after review; restart live Teams as one version epoch.
+5. Merge and release only after review; restart live Teams as one version epoch.
    Any pre-change mixed-carrier Team must be stopped and recreated after
    release.
-5. Reassess component stage at the next R&D kickoff. New experimental pieces
+6. If HyperCarrier adopts a `packages/pi-teams` gitlink, explicitly revise its
+   prior no-submodule decision and update npm-workspace, clone, lockfile, and
+   public-export semantics rather than introducing those effects implicitly.
+7. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
 
 ## Historical trail
