@@ -7,6 +7,7 @@ import type { Member } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as teamEvents from "./team-events";
+import * as taskAuthority from "./tasks";
 
 type RegisteredTool = {
   name: string;
@@ -318,7 +319,9 @@ describe("ergonomic agent-facing Team contracts", () => {
   it("creates or reuses one stable Worker without claiming runtime readiness", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    setAdapter(terminal());
+    const livePrepared = terminal();
+    livePrepared.isAlive = (paneId) => paneId === "pane-worker";
+    setAdapter(livePrepared);
     const team = uniqueTeam("worker-reuse");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     await createBoundTeam(team, leadSession);
@@ -330,6 +333,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       cwd: process.cwd(),
     };
 
+    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("worker_ensure must not read Task authority"));
     const created = await tools.get("worker_ensure")!.execute(
       "ensure-created", params, undefined, undefined, context(leadSession),
     );
@@ -364,6 +368,190 @@ describe("ergonomic agent-facing Team contracts", () => {
       candidate => candidate.name === "worker" && candidate.isActive !== false,
     );
     expect(currentWorkers).toHaveLength(1);
+    expect(taskReads).toHaveBeenCalledTimes(0);
+  });
+
+  it("retries a missing prepared carrier with the same unconsumed launch capability", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const spawn = vi.fn((_options: any) => "pane-retried");
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      spawn,
+      isAlive: (paneId) => paneId === "pane-retried",
+    };
+    setAdapter(adapter);
+    const team = uniqueTeam("worker-retry-prepared");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    await createBoundTeam(team, leadSession);
+    const pendingLaunchId = teams.newLaunchId();
+    const worker: Member = {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId,
+      agentId: `worker@${team}`,
+      name: "worker",
+      agentType: "teammate",
+      model: "openai-codex/example-model",
+      thinking: "medium",
+      joinedAt: Date.now(),
+      cwd: process.cwd(),
+      subscriptions: [],
+      prompt: "Review interfaces and verify contract tests.",
+      isActive: true,
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-missing" },
+    };
+    await teams.addMember(team, worker);
+    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate prepared relaunch"));
+
+    const result = await registerTools().get("worker_ensure")!.execute(
+      "ensure-prepared-retried",
+      {
+        team_name: team,
+        name: "worker",
+        profile: worker.prompt,
+        cwd: process.cwd(),
+      },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+
+    expect(result.details.postState).toMatchObject({
+      name: "worker",
+      action: "recovered",
+      recoveryMode: "first_binding_retry",
+      membership: "current",
+      carrier: "prepared",
+      taskStateChanged: false,
+    });
+    const spawnOptions = spawn.mock.calls[0][0];
+    expect(spawnOptions.argv).not.toContain("--session");
+    expect(spawnOptions.env).toMatchObject({
+      PI_TEAM_NAME: team,
+      PI_AGENT_NAME: "worker",
+      PI_AGENT_LAUNCH_ID: pendingLaunchId,
+    });
+    const current = await teams.currentMembership(team, "worker");
+    expect(current).toMatchObject({
+      membershipId: worker.membershipId,
+      pendingLaunchId,
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-retried" },
+    });
+    expect(taskReads).toHaveBeenCalledTimes(0);
+  });
+
+  it("recovers a missing carrier by resuming the exact bound Session without reading Task authority", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", "stale-parent-launch");
+    const spawn = vi.fn((_options: any) => "pane-recovered");
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      spawn,
+      isAlive: (paneId) => paneId === "pane-recovered",
+    };
+    setAdapter(adapter);
+    const team = uniqueTeam("worker-recover");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
+    await createBoundTeam(team, leadSession);
+    const worker = member("worker", workerSession, {
+      model: "openai-codex/example-model",
+      thinking: "medium",
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-missing" },
+    });
+    await teams.addMember(team, worker);
+    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
+
+    const result = await registerTools().get("worker_ensure")!.execute(
+      "ensure-recovered",
+      {
+        team_name: team,
+        name: "worker",
+        profile: "Review interfaces and verify contract tests.",
+        cwd: process.cwd(),
+      },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+
+    expect(result.details.postState).toMatchObject({
+      name: "worker",
+      action: "recovered",
+      recoveryMode: "exact_session_resume",
+      membership: "current",
+      carrier: "session_bound",
+      terminalLaunched: true,
+      runtime: "not_observed",
+      taskStateChanged: false,
+    });
+    expect(result.content[0].text).toContain("resuming its exact Session");
+    const spawnOptions = spawn.mock.calls[0][0];
+    expect(spawnOptions.argv).toEqual(expect.arrayContaining([
+      "--model", "openai-codex/example-model:medium", "--session", workerSession,
+    ]));
+    expect(spawnOptions.env).toMatchObject({ PI_TEAM_NAME: team, PI_AGENT_NAME: "worker" });
+    expect(spawnOptions.env).not.toHaveProperty("PI_AGENT_LAUNCH_ID");
+    const current = (await teams.readConfig(team)).members.filter(candidate =>
+      candidate.name === "worker" && candidate.isActive !== false);
+    expect(current).toHaveLength(1);
+    expect(current[0]).toMatchObject({
+      membershipId: worker.membershipId,
+      sessionFile: workerSession,
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-recovered" },
+    });
+    expect(taskReads).toHaveBeenCalledTimes(0);
+  });
+
+  it("compensates a failed exact-Session recovery without replacing the current Membership", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const live = new Set<string>();
+    const kill = vi.fn((paneId: string) => live.delete(paneId));
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      spawn: vi.fn(() => {
+        live.add("pane-recovery-attempt");
+        return "pane-recovery-attempt";
+      }),
+      kill,
+      isAlive: (paneId) => live.has(paneId),
+    };
+    setAdapter(adapter);
+    const team = uniqueTeam("worker-recover-compensate");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
+    await createBoundTeam(team, leadSession);
+    const worker = member("worker", workerSession, {
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-gone" },
+    });
+    await teams.addMember(team, worker);
+    vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("simulated stale recovery binding"));
+
+    await expect(registerTools().get("worker_ensure")!.execute(
+      "ensure-recovery-fails",
+      {
+        team_name: team,
+        name: "worker",
+        profile: "Review interfaces and verify contract tests.",
+        cwd: process.cwd(),
+      },
+      undefined,
+      undefined,
+      context(leadSession),
+    )).rejects.toThrow(/existing Membership and exact Session binding remain current/);
+
+    expect(kill).toHaveBeenCalledWith("pane-recovery-attempt");
+    expect(live.has("pane-recovery-attempt")).toBe(false);
+    const current = (await teams.readConfig(team)).members.filter(candidate =>
+      candidate.name === "worker" && candidate.isActive !== false);
+    expect(current).toHaveLength(1);
+    expect(current[0]).toMatchObject({
+      membershipId: worker.membershipId,
+      sessionFile: workerSession,
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-gone" },
+    });
   });
 
   it("keeps lifecycle writes lead-only while workers use typed Alerts without an inbox inspection surface", async () => {
@@ -490,6 +678,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       version: expect.any(String),
     });
 
+    const lifecycleTaskReads = vi.spyOn(taskAuthority, "listTasksWithVersions");
     const guarded = await tools.get("worker_stop")!.execute("guarded-stop", {
       team_name: team,
       worker: "worker",
@@ -502,6 +691,8 @@ describe("ergonomic agent-facing Team contracts", () => {
       membership: "current",
       guardingTasks: [{ id: task.details.postState.id, status: "open" }],
     });
+    expect(lifecycleTaskReads).toHaveBeenCalledTimes(1);
+    expect(lifecycleTaskReads).toHaveBeenCalledWith(team, { assignee: "worker", nonterminalOnly: true });
 
     const closed = await tools.get("task_update")!.execute("close", {
       team_name: team,

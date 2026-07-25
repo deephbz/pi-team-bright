@@ -9,7 +9,7 @@ import * as messaging from "../src/utils/messaging";
 import * as alerts from "../src/utils/alerts";
 import * as teamEvents from "../src/utils/team-events";
 import { selectTeamSyncNextActions, summarizeTeamSyncNextActions } from "../src/utils/team-sync-actions";
-import { toolResultDetails, warning as toolResultWarning } from "../src/utils/tool-results";
+import { toolResultDetails, warning as toolResultWarning, type WorkerEnsurePostState } from "../src/utils/tool-results";
 import { createPiTeamsResultRenderer, type PiTeamsPublicTool } from "../src/utils/tool-result-renderer";
 import {
   DirectMessageDelivery,
@@ -21,7 +21,13 @@ import {
 } from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
-import { IdentifiedInboxMessage, Member, TaskFile } from "../src/utils/models";
+import { IdentifiedInboxMessage, Member, TaskFile, TeamConfig } from "../src/utils/models";
+import {
+  normalizeWorkerCarrier,
+  planWorkerEnsure,
+  type WorkerEnsurePlan,
+  type WorkerRecoveryMode,
+} from "../src/utils/worker-ensure-lifecycle";
 import { getAdapterByName, getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { assertTeamTerminalTarget, hasPersistedTerminalTarget, memberTerminalTarget, terminalTarget } from "../src/utils/terminal-target";
 import { assertTargetSupportedByTerminal, currentTerminalForTeam, terminalForTeam } from "../src/utils/team-terminal";
@@ -837,6 +843,25 @@ export default function (pi: ExtensionAPI) {
   type PreparedLaunchTarget = { terminalId: string; isWindow: boolean; backend: string };
   type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: IdentifiedInboxMessage };
 
+  function stopLaunchTarget(target: PreparedLaunchTarget): void {
+    const launchTerminal = getAdapterByName(target.backend);
+    if (!launchTerminal) throw new Error(`cannot stop ${target.terminalId}: terminal backend ${target.backend} is unavailable`);
+    if (target.isWindow && !launchTerminal.supportsWindows()) {
+      throw new Error(`${launchTerminal.name} doesn't support window targets`);
+    }
+    if (target.isWindow) {
+      launchTerminal.killWindow(target.terminalId);
+      if (launchTerminal.isWindowAlive(target.terminalId)) {
+        throw new Error(`${launchTerminal.name} did not stop window ${target.terminalId}`);
+      }
+      return;
+    }
+    launchTerminal.kill(target.terminalId);
+    if (launchTerminal.isAlive(target.terminalId)) {
+      throw new Error(`${launchTerminal.name} did not stop pane ${target.terminalId}`);
+    }
+  }
+
   async function compensatePreparedLaunch(
     targetTeamName: string,
     prepared: Member,
@@ -845,28 +870,57 @@ export default function (pi: ExtensionAPI) {
     if (!prepared.membershipId) throw new Error(`Prepared Membership for ${prepared.name} has no stable identity.`);
     await teams.withCurrentMembershipLease(targetTeamName, prepared.membershipId, async (current) => {
       if (target) {
-        const launchTerminal = getAdapterByName(target.backend);
-        if (!launchTerminal) throw new Error(`cannot stop ${target.terminalId}: terminal backend ${target.backend} is unavailable`);
-        if (target.isWindow && !launchTerminal.supportsWindows()) {
-          throw new Error(`${launchTerminal.name} doesn't support window targets`);
-        }
-        if (target.isWindow) {
-          launchTerminal.killWindow(target.terminalId);
-          if (launchTerminal.isWindowAlive(target.terminalId)) {
-            throw new Error(`${launchTerminal.name} did not stop window ${target.terminalId}`);
-          }
-        } else {
-          launchTerminal.kill(target.terminalId);
-          if (launchTerminal.isAlive(target.terminalId)) {
-            throw new Error(`${launchTerminal.name} did not stop pane ${target.terminalId}`);
-          }
-        }
+        stopLaunchTarget(target);
         const status = await runtime.readRuntimeStatus(targetTeamName, current.name);
         const generation = exactRuntimeGeneration(current, status);
         if (generation) await runtime.deleteRuntimeStatus(targetTeamName, current.name, generation);
       }
       await teams.deactivateMembership(targetTeamName, prepared.membershipId!, "replaced");
     });
+  }
+
+  function spawnWorkerCarrier(
+    teamConfig: TeamConfig,
+    teamTerminal: ReturnType<typeof currentTerminalForTeam>,
+    member: Member,
+    argv: string[],
+    env: Record<string, string>,
+    useSeparateWindow: boolean,
+  ): PreparedLaunchTarget {
+    if (useSeparateWindow) {
+      const terminalId = teamTerminal.spawnWindow({
+        name: member.name,
+        cwd: member.cwd,
+        argv,
+        env,
+        teamName: teamConfig.name,
+      });
+      return { terminalId, isWindow: true, backend: teamTerminal.name };
+    }
+    if (teamTerminal instanceof Iterm2Adapter) {
+      const teammates = teamConfig.members.filter(candidate =>
+        candidate.agentType === "teammate" && candidate.tmuxPaneId?.startsWith("iterm_"));
+      const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
+      teamTerminal.setSpawnContext(lastTeammate?.tmuxPaneId
+        ? { lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") }
+        : {});
+    }
+
+    const leadMember = teamConfig.members.find(candidate => candidate.name === "team-lead");
+    const leadTarget = leadMember
+      ? memberTerminalTarget(leadMember, teamConfig.terminalBackend || teamTerminal.name)
+      : undefined;
+    const anchorPaneId = leadTarget?.kind === "pane"
+      ? leadTarget.targetId
+      : teamTerminal.currentTargetId?.() || undefined;
+    const terminalId = teamTerminal.spawn({
+      name: member.name,
+      cwd: member.cwd,
+      argv,
+      env,
+      anchorPaneId,
+    });
+    return { terminalId, isWindow: false, backend: teamTerminal.name };
   }
 
   async function launchPreparedMembership(
@@ -907,6 +961,59 @@ export default function (pi: ExtensionAPI) {
       throw new Error(
         `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
         + "The exact prepared Membership was deactivated after compensation.",
+      );
+    }
+  }
+
+  type WorkerRecoveryInput = {
+    teamName: string;
+    teamConfig: TeamConfig;
+    teamTerminal: ReturnType<typeof currentTerminalForTeam>;
+    member: Member;
+    mode: WorkerRecoveryMode;
+    argv: string[];
+    env: Record<string, string>;
+    useSeparateWindow: boolean;
+  };
+
+  /** Executes both recovery plans with one spawn, persistence, and compensation path. */
+  async function executeWorkerRecovery(input: WorkerRecoveryInput): Promise<PreparedLaunchTarget> {
+    const { teamName: targetTeamName, teamConfig, teamTerminal, member, mode, argv, env, useSeparateWindow } = input;
+    let recoveredTarget: PreparedLaunchTarget | null = null;
+    const action = mode === "first_binding_retry" ? "relaunch prepared Worker" : "recover";
+    const retained = mode === "first_binding_retry"
+      ? "The unconsumed Membership remains current for another exact retry."
+      : "The existing Membership and exact Session binding remain current.";
+    try {
+      recoveredTarget = spawnWorkerCarrier(teamConfig, teamTerminal, member, argv, env, useSeparateWindow);
+      const update = teamConfig.terminalBackend
+        ? { terminalTarget: terminalTarget(recoveredTarget.backend, recoveredTarget.isWindow ? "window" : "pane", recoveredTarget.terminalId) }
+        : recoveredTarget.isWindow
+          ? { windowId: recoveredTarget.terminalId }
+          : { tmuxPaneId: recoveredTarget.terminalId };
+      await teams.withMembershipMutationLease(targetTeamName, member.membershipId!, async () => {
+        if (mode === "first_binding_retry") {
+          await teams.updateMembership(targetTeamName, member.membershipId!, update);
+        } else {
+          await teams.bindMemberSession(targetTeamName, member.name, member.sessionFile!, undefined, update, member.membershipId);
+        }
+      });
+      return recoveredTarget;
+    } catch (error) {
+      if (recoveredTarget) {
+        try {
+          stopLaunchTarget(recoveredTarget);
+        } catch (cleanupError) {
+          throw new Error(
+            `Failed to ${action} ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
+            + `Compensation couldn't stop ${recoveredTarget.isWindow ? "window" : "pane"} ${recoveredTarget.terminalId}: `
+            + `${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
+            + "The Membership remains current; reconcile the live process before retrying.",
+          );
+        }
+      }
+      throw new Error(
+        `Failed to ${action} ${member.name}: ${error instanceof Error ? error.message : String(error)}. ${retained}`,
       );
     }
   }
@@ -1024,7 +1131,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "worker_ensure",
     label: "Ensure Worker",
-    description: "Ensure one stable named Worker exists. Reuse a current Worker instead of replacing it; assign executable work with a Task.",
+    description: "Ensure one stable named Worker exists. Reuse its live carrier, retry an unconsumed prepared launch, or resume the exact bound Session; assign executable work with a Task.",
     parameters: Type.Object({
       team_name: Type.String(),
       name: Type.String(),
@@ -1076,37 +1183,193 @@ export default function (pi: ExtensionAPI) {
 
       const existingMember = [...teamConfig.members].reverse().find(m => m.name === safeName && m.agentType === "teammate" && m.isActive !== false);
       if (existingMember) {
-        const nonterminalTasks = teamConfig.taskBackend === "beads"
-          ? (await tasks.listTasksWithVersions(safeTeamName))
-              .filter(task => task.assignee === safeName && task.status !== "closed")
-              .map(task => ({ id: task.id, status: task.status, version: task.version }))
-          : undefined;
+        const existingTarget = memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name);
+        if (existingTarget) assertTargetSupportedByTerminal(teamTerminal, existingTarget);
+        const carrierObservation = existingTarget?.kind === "window"
+          ? (teamTerminal.isWindowAlive(existingTarget.targetId) ? "live" : "missing")
+          : existingTarget?.kind === "pane"
+            ? (teamTerminal.isAlive(existingTarget.targetId) ? "live" : "missing")
+            : "missing";
+        const workerPlan: WorkerEnsurePlan = planWorkerEnsure(
+          normalizeWorkerCarrier(existingMember),
+          carrierObservation,
+        );
+
+        if (workerPlan.action === "refuse") {
+          throw new Error(
+            `Current Membership for ${safeName} has invalid carrier evidence: ${workerPlan.carrier.reason}.`,
+          );
+        }
+
+        if (workerPlan.action === "reuse") {
+          return {
+            content: [{ type: "text", text: `Reused current Worker ${safeName}; no relaunch occurred. Task state is unchanged; reconcile its current assignment before creating a Task for new work.` }],
+            details: toolResultDetails({
+              operation: "worker_ensure",
+              resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+              postState: {
+                name: safeName,
+                action: "reused",
+                membership: "current",
+                carrier: existingMember.sessionFile ? "session_bound" : "prepared",
+                taskStateChanged: false,
+              } satisfies WorkerEnsurePostState,
+              nextActions: [{
+                tool: "team_sync",
+                reason: "Reconcile this Worker's current Task assignment before creating more work.",
+                args: { team_name: safeTeamName },
+              }],
+              evidence: {
+                membershipId: existingMember.membershipId,
+                sessionBound: !!existingMember.sessionFile,
+                terminal: existingTarget,
+              },
+            }),
+          };
+        }
+
+        const agentDef = predefined.getAgentDefinition(safeName, existingMember.cwd);
+        if (workerPlan.action === "recover" && workerPlan.recoveryMode === "first_binding_retry") {
+          const prepared = workerPlan.carrier;
+          const retryArgv = buildPiArgv(
+            getPiLaunchArgv(), existingMember.model, existingMember.thinking, agentDef?.tools,
+          );
+          const retryEnv = {
+            ...process.env,
+            PI_TEAM_NAME: safeTeamName,
+            PI_AGENT_NAME: safeName,
+            PI_AGENT_LAUNCH_ID: prepared.pendingLaunchId,
+          } as Record<string, string>;
+          const retryInSeparateWindow = existingTarget?.kind === "window"
+            || (!existingTarget && (params.separate_window ?? teamConfig.separateWindows ?? false));
+          if (retryInSeparateWindow && !teamTerminal.supportsWindows()) {
+            throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
+          }
+
+          const retriedTarget = await executeWorkerRecovery({
+            teamName: safeTeamName,
+            teamConfig,
+            teamTerminal,
+            member: prepared.member,
+            mode: workerPlan.recoveryMode,
+            argv: retryArgv,
+            env: retryEnv,
+            useSeparateWindow: retryInSeparateWindow,
+          });
+
+          const retriedMember = await teams.currentMembership(safeTeamName, safeName);
+          return {
+            content: [{ type: "text", text: `Recovered prepared Worker ${safeName} by retrying its unconsumed first binding in a new carrier. Task state is unchanged.` }],
+            details: toolResultDetails({
+              operation: "worker_ensure",
+              resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+              postState: {
+                name: safeName,
+                action: "recovered",
+                recoveryMode: "first_binding_retry",
+                membership: "current",
+                carrier: retriedMember.sessionFile ? "session_bound" : "prepared",
+                terminalLaunched: true,
+                runtime: "not_observed",
+                taskStateChanged: false,
+              } satisfies WorkerEnsurePostState,
+              warnings: [toolResultWarning(
+                "runtime_not_observed",
+                "First-binding relaunch succeeded, but this call did not observe later Worker runtime heartbeats.",
+                safeName,
+              )],
+              nextActions: [{
+                tool: "team_sync",
+                reason: "Reconcile this Worker's binding event and current Task assignment.",
+                args: { team_name: safeTeamName },
+              }],
+              evidence: {
+                membershipId: existingMember.membershipId,
+                sessionBound: !!retriedMember.sessionFile,
+                terminalLaunch: {
+                  adapter: retriedTarget.backend,
+                  kind: retriedTarget.isWindow ? "window" : "pane",
+                  targetId: retriedTarget.terminalId,
+                },
+              },
+            }),
+          };
+        }
+
+        if (workerPlan.action !== "recover" || workerPlan.recoveryMode !== "exact_session_resume") {
+          throw new Error("Worker ensure planner returned no executable recovery action.");
+        }
+        const bound = workerPlan.carrier;
+        const resumeArgv = [
+          ...buildPiArgv(getPiLaunchArgv(), existingMember.model, existingMember.thinking, agentDef?.tools),
+          "--session", bound.sessionFile,
+        ];
+        const resumeEnv = {
+          ...process.env,
+          PI_TEAM_NAME: safeTeamName,
+          PI_AGENT_NAME: safeName,
+        } as Record<string, string>;
+        delete resumeEnv.PI_AGENT_LAUNCH_ID;
+        const recoverInSeparateWindow = existingTarget?.kind === "window"
+          || (!existingTarget && (params.separate_window ?? teamConfig.separateWindows ?? false));
+        if (recoverInSeparateWindow && !teamTerminal.supportsWindows()) {
+          throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
+        }
+
+        const recoveredTarget = await executeWorkerRecovery({
+          teamName: safeTeamName,
+          teamConfig,
+          teamTerminal,
+          member: bound.member,
+          mode: workerPlan.recoveryMode,
+          argv: resumeArgv,
+          env: resumeEnv,
+          useSeparateWindow: recoverInSeparateWindow,
+        });
+
         return {
-          content: [{ type: "text", text: `Reused current Worker ${safeName}; no relaunch occurred. Assign its next work through a Task.` }],
+          content: [{ type: "text", text: `Recovered Worker ${safeName} by resuming its exact Session in a new carrier. Task state is unchanged.` }],
           details: toolResultDetails({
             operation: "worker_ensure",
             resource: { kind: "worker", id: safeName, teamName: safeTeamName },
             postState: {
               name: safeName,
-              action: "reused",
+              action: "recovered",
+              recoveryMode: workerPlan.recoveryMode,
               membership: "current",
-              carrier: existingMember.sessionFile ? "session_bound" : "prepared",
-              ...(nonterminalTasks ? { nonterminalTasks } : {}),
-            },
+              carrier: "session_bound",
+              terminalLaunched: true,
+              runtime: "not_observed",
+              taskStateChanged: false,
+            } satisfies WorkerEnsurePostState,
+            warnings: [toolResultWarning(
+              "runtime_not_observed",
+              "Exact-Session relaunch succeeded, but this call did not observe later Worker runtime heartbeats.",
+              safeName,
+            )],
             nextActions: [{
-              tool: "task_create",
-              reason: "Assign the next durable work contract to this Worker.",
-              args: { team_name: safeTeamName, assignee: safeName },
+              tool: "team_sync",
+              reason: "Reconcile this Worker's current Task assignment and later lifecycle event.",
+              args: { team_name: safeTeamName },
             }],
             evidence: {
               membershipId: existingMember.membershipId,
-              sessionBound: !!existingMember.sessionFile,
-              terminal: memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name),
+              sessionBound: true,
+              terminalLaunch: {
+                adapter: recoveredTarget.backend,
+                kind: recoveredTarget.isWindow ? "window" : "pane",
+                targetId: recoveredTarget.terminalId,
+              },
             },
           }),
         };
       }
-      
+
+      const absentPlan: WorkerEnsurePlan = planWorkerEnsure(normalizeWorkerCarrier(undefined), "missing");
+      if (absentPlan.action !== "create") {
+        throw new Error("Worker ensure planner returned no executable create action.");
+      }
+
       let chosenModel = params.model || teamConfig.defaultModel;
 
       // Resolve model to provider/model format
@@ -1164,42 +1427,7 @@ export default function (pi: ExtensionAPI) {
         safeTeamName,
         member,
         null,
-        () => {
-        if (useSeparateWindow) {
-          const terminalId = teamTerminal.spawnWindow({
-            name: safeName,
-            cwd: params.cwd,
-            argv: piCmd,
-            env: env,
-            teamName: safeTeamName,
-          });
-          return { terminalId, isWindow: true, backend: teamTerminal.name };
-        }
-        if (teamTerminal instanceof Iterm2Adapter) {
-          const teammates = teamConfig.members.filter(m => m.agentType === "teammate" && m.tmuxPaneId?.startsWith("iterm_"));
-          const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
-          if (lastTeammate?.tmuxPaneId) {
-            teamTerminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
-          } else {
-            teamTerminal.setSpawnContext({});
-          }
-        }
-
-        const leadMember = teamConfig.members.find(m => m.name === "team-lead");
-        const leadTarget = leadMember
-          ? memberTerminalTarget(leadMember, teamConfig.terminalBackend || teamTerminal.name)
-          : undefined;
-        const anchorPaneId = leadTarget?.kind === "pane" ? leadTarget.targetId : teamTerminal.currentTargetId?.() || undefined;
-
-        const terminalId = teamTerminal.spawn({
-          name: safeName,
-          cwd: params.cwd,
-          argv: piCmd,
-          env: env,
-          anchorPaneId,
-        });
-        return { terminalId, isWindow: false, backend: teamTerminal.name };
-        },
+        () => spawnWorkerCarrier(teamConfig, teamTerminal, member, piCmd, env, useSeparateWindow),
       );
 
       return {
@@ -1218,7 +1446,7 @@ export default function (pi: ExtensionAPI) {
             terminalLaunched: true,
             runtime: "not_observed",
             assignedTasks: [],
-          },
+          } satisfies WorkerEnsurePostState,
           warnings: [toolResultWarning(
             "runtime_not_observed",
             "Terminal launch succeeded, but this call did not observe the Worker runtime.",
@@ -1472,7 +1700,7 @@ export default function (pi: ExtensionAPI) {
       const hydratedTasks = await teamEvents.hydrateTeamSyncTasks(
         eventResult.events,
         hydrationIds,
-        (taskId) => tasks.readTask(params.team_name, taskId),
+        (taskIds) => tasks.readTasks(params.team_name, taskIds),
       );
       const taskById = new Map(hydratedTasks.map((task) => [task.id, task]));
       const projection = {
@@ -2207,8 +2435,7 @@ export default function (pi: ExtensionAPI) {
           }
         }
         const finalConfig = await teams.readConfig(teamName);
-        const unfinishedTasks = (await tasks.listTasksWithVersions(teamName))
-          .filter((task) => task.status !== "closed")
+        const unfinishedTasks = (await tasks.listTasksWithVersions(teamName, { nonterminalOnly: true }))
           .map((task) => ({ id: task.id, title: task.title, status: task.status, assignee: task.assignee ?? null, version: task.version }));
         const lifecycle = failures.length === 0 ? "shut_down" : "active";
         const failureSummaries = failures.map((failure) => ({
@@ -2485,9 +2712,10 @@ export default function (pi: ExtensionAPI) {
           throw new Error("worker_stop cannot shut down the team leader; use team_shutdown for whole-team lifecycle closure.");
         }
 
-        const unfinished = (await tasks.listTasksWithVersions(safeTeamName)).filter(task =>
-          task.assignee === safeAgentName && task.status !== "closed",
-        );
+        const unfinished = await tasks.listTasksWithVersions(safeTeamName, {
+          assignee: safeAgentName,
+          nonterminalOnly: true,
+        });
         if (unfinished.length > 0) {
           const ids = unfinished.map((task) => task.id);
           return {

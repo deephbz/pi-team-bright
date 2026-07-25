@@ -295,6 +295,11 @@ export async function readTask(teamName: string, taskId: string): Promise<TaskFi
   return withSemanticTrace("task_read", { teamName, taskId }, async () => (await storeFor(teamName)).read(taskId));
 }
 
+export async function readTasks(teamName: string, taskIds: readonly string[]): Promise<TaskFile[]> {
+  return withSemanticTrace("task_read_many", { teamName }, async () =>
+    (await storeFor(teamName)).readMany(taskIds));
+}
+
 export async function listTasks(teamName: string): Promise<TaskListItem[]> {
   return withSemanticTrace("task_list", { teamName }, async () => {
     const tasks = await (await storeFor(teamName)).list();
@@ -302,12 +307,26 @@ export async function listTasks(teamName: string): Promise<TaskListItem[]> {
   });
 }
 
-/** Internal compact-sync source; unlike task_list it retains write versions. */
-export async function listTasksWithVersions(teamName: string): Promise<TaskFile[]> {
+type TaskVersionFilter = {
+  assignee?: string;
+  nonterminalOnly?: boolean;
+};
+
+/**
+ * Internal lifecycle source. The compact list chooses candidates first, then
+ * one batched show hydrates only the exact revisions the caller needs.
+ */
+export async function listTasksWithVersions(
+  teamName: string,
+  filter: TaskVersionFilter = {},
+): Promise<TaskFile[]> {
   return withSemanticTrace("tasks_with_versions", { teamName }, async () => {
     const store = await storeFor(teamName);
-    const listed = await store.list();
-    return Promise.all(listed.map((task) => store.read(task.id)));
+    const matches = (task: Pick<TaskFile, "assignee" | "status">) =>
+      (filter.assignee === undefined || task.assignee === filter.assignee)
+      && (!filter.nonterminalOnly || task.status !== "closed");
+    const listed = (await store.list()).filter(matches);
+    return (await store.readMany(listed.map((task) => task.id))).filter(matches);
   });
 }
 

@@ -91,6 +91,18 @@ describe("HerdrAdapter", () => {
     ]);
   });
 
+  it("retries the transient split-to-shell readiness race before starting Pi", () => {
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(failure("agent_pane_busy", "agent target pane is not an available shell"))
+      .mockReturnValueOnce(success({ type: "agent_info", agent: { pane_id: "pane-worker" } }));
+
+    expect(adapter.spawn({ name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
+      .toBe("pane-worker");
+    expect(exec).toHaveBeenCalledTimes(3);
+    expect(exec.mock.calls[1]).toEqual(exec.mock.calls[2]);
+  });
+
   it("rejects legacy shell commands and malformed or incomplete start envelopes", () => {
     expect(() => adapter.spawn({
       name: "worker", cwd: "/repo", command: "pi --model unsafe", env: {},
