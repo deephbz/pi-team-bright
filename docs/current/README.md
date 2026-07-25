@@ -91,14 +91,20 @@ restating these executable definitions.
   Membership only after exact stop evidence. Task history and authority remain.
 - One live Team runs one PiTeams version; upgrades happen as a stopped and
   restarted epoch, not a rolling deployment.
+- A Team epoch owns one direct terminal carrier. An inherited outer terminal
+  identity cannot validate a Worker running inside a nested multiplexer; see
+  [decision 0005](../decisions/0005-direct-terminal-carriers.md).
 
 ## Current status and anchors
 
 - The public surface has ten tools and one versioned result envelope.
 - The headless suite emits 39 immutable cases across all public tools without
   launching Pi, a model, tmux, or the foreground TUI.
-- The last full repository run passed 44 test files and 349 tests. The final
-  affected projections also passed focused tests and the 39-case capture.
+- The last baseline full repository run passed 44 test files and 349 tests. The
+  direct-carrier hardening change passed `npm run typecheck`, 121 focused
+  adapter/lifecycle/contract tests, and the isolated agent-surface snapshot;
+  its concurrent full-suite run reached 401 passing tests before the
+  5-second snapshot-test timeout, while that snapshot passes alone in 2.46s.
 
 ## Constraints and open work
 
@@ -106,8 +112,11 @@ No known product-code blocker remains in the implemented milestone.
 
 Next steps:
 
-1. Human-review the Task-first interface and this source allocation.
+1. Human-review the Task-first interface, terminal direct-carrier contract, and
+   source allocation.
 2. Merge and release only after review; restart live Teams as one version epoch.
+   Any pre-change mixed-carrier Team must be stopped and recreated after
+   release.
 3. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
 

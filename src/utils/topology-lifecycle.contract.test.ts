@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
+import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import type { Member } from "./models";
 import * as paths from "./paths";
@@ -80,7 +80,19 @@ async function createBeadsTeam(name: string, leadSession: string) {
       doltDatabase: "topology_contract",
       projectId: `topology-${name}`,
     },
+    undefined,
+    terminalBinding(),
   );
+}
+
+/**
+ * Mirror team_create: a Team binds the detected terminal backend at creation,
+ * so lifecycle operations resolve it from durable authority instead of ambient
+ * detection. Members keep legacy pane IDs to retain legacy-read coverage.
+ */
+function terminalBinding(): teams.TeamTerminalBinding | undefined {
+  const detected = getTerminalAdapter();
+  return detected ? { backend: detected.name } : undefined;
 }
 
 afterEach(() => {
@@ -101,6 +113,7 @@ describe("Team topology/lifecycle lease", () => {
     const killed: string[] = [];
     const terminal: TerminalAdapter = {
       name: "topology-contract-terminal",
+      isDirectCarrier: () => true,
       detect: () => true,
       spawn: (options) => {
         spawned.push(options.name);
@@ -223,6 +236,7 @@ describe("Team topology/lifecycle lease", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     setAdapter({
       name: "unused",
+      isDirectCarrier: () => true,
       detect: () => true,
       spawn: () => "unused",
       kill() {},

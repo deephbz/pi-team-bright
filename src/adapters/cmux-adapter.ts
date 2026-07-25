@@ -19,6 +19,10 @@ const SURFACE_POLL_DELAY_MS = 150;
 export class CmuxAdapter implements TerminalAdapter {
   readonly name = "cmux";
 
+  isDirectCarrier(): boolean {
+    return true;
+  }
+
   detect(): boolean {
     // Defensive: Don't detect cmux if we're inside tmux or Zellij
     // This prevents false positives in nested terminal scenarios

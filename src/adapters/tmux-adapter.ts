@@ -10,12 +10,16 @@ import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../uti
 export class TmuxAdapter implements TerminalAdapter {
   readonly name = "tmux";
 
+  isDirectCarrier(): boolean {
+    return true;
+  }
+
   detect(): boolean {
     // tmux is available if TMUX environment variable is set
     return !!process.env.TMUX;
   }
 
-  private getCurrentPaneId(): string | null {
+  currentTargetId(): string | null {
     const paneId = process.env.TMUX_PANE?.trim();
     return paneId ? paneId : null;
   }
@@ -50,7 +54,7 @@ export class TmuxAdapter implements TerminalAdapter {
       return preferredPaneId;
     }
 
-    const currentPaneId = this.getCurrentPaneId();
+    const currentPaneId = this.currentTargetId();
     if (this.isPaneUsable(currentPaneId)) {
       return currentPaneId;
     }
@@ -130,7 +134,7 @@ export class TmuxAdapter implements TerminalAdapter {
 
   setTitle(title: string): void {
     try {
-      const paneId = this.getCurrentPaneId();
+      const paneId = this.currentTargetId();
       const args = paneId
         ? ["select-pane", "-t", paneId, "-T", title]
         : ["select-pane", "-T", title];

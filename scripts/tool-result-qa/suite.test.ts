@@ -64,6 +64,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     terminalRegistry.setAdapter({
       name: "qa-memory-terminal",
       detect: () => true,
+      isDirectCarrier: () => true,
       spawn: (options: { name: string }) => {
         const id = `qa-pane-${options.name}`;
         livePanes.set(id, true);

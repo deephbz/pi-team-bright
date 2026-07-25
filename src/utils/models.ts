@@ -2,6 +2,13 @@ export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhig
 
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
+export interface TerminalTarget {
+  /** Stable registry ID of the backend that owns this target. */
+  backend: string;
+  kind: "pane" | "window";
+  targetId: string;
+}
+
 export interface Member {
   /** Unique identity for this one Team membership generation. */
   membershipId?: string;
@@ -13,16 +20,19 @@ export interface Member {
   agentType: string;
   model?: string;
   joinedAt: number;
-  tmuxPaneId: string;
+  /** Backend-qualified terminal carrier for this Membership generation. */
+  terminalTarget?: TerminalTarget;
+  /** Legacy unqualified pane field; new writes use terminalTarget. */
+  tmuxPaneId?: string;
   /** Durable Pi session identity, recorded after the teammate's first start. */
   sessionFile?: string;
+  /** Legacy unqualified window field; new writes use terminalTarget. */
   windowId?: string;
   cwd: string;
   subscriptions: any[];
   prompt?: string;
   color?: string;
   thinking?: ThinkingLevel;
-  backendType?: string;
   isActive?: boolean;
   /** Durable lifecycle evidence; inactive members remain historical identities. */
   deactivatedAt?: string;
@@ -47,6 +57,8 @@ export interface TeamConfig {
   members: Member[];
   defaultModel?: string;
   separateWindows?: boolean;
+  /** One terminal backend owns every current Member target in this Team epoch. */
+  terminalBackend?: string;
   /** Task authority. Omitted means the historical local JSON store. */
   taskBackend?: "legacy" | "beads";
   /** Stable opaque authority identity; independent of workspace path spelling. */

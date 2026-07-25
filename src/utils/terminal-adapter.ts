@@ -33,8 +33,21 @@ export interface SpawnOptions {
  * Implementations provide terminal-specific logic for pane management.
  */
 export interface TerminalAdapter {
-  /** Unique name identifier for this terminal type */
+  /** Stable backend identifier persisted by a Team epoch. */
   readonly name: string;
+
+  /**
+   * Return the pane that contains this Pi process, when the backend exposes it.
+   * This is environmental evidence for Team creation/resume, not Team authority.
+   */
+  currentTargetId?(): string | null;
+
+  /**
+   * Whether this process is directly carried by this backend rather than by a
+   * nested terminal multiplexer. Each backend owns this evidence so future
+   * adapters cannot silently accept a nested carrier.
+   */
+  isDirectCarrier(): boolean;
 
   /**
    * Detect if this terminal is currently available/active.
