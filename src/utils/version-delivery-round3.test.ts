@@ -90,6 +90,31 @@ describe("Round 3 canonical Task revision and delivery dedupe", () => {
     expect(microseconds.version).toBe(wholeSecond.version);
   });
 
+  it("hydrates several Task revisions with one Beads show command in requested order", async () => {
+    const first = { ...raw("first", "2026-07-15T01:02:03Z"), id: "task-first" };
+    const second = { ...raw("second", "2026-07-15T01:02:04Z"), id: "task-second" };
+    const run = vi.fn(async (args: string[]) => ({
+      stdout: JSON.stringify([first, second]),
+      stderr: "",
+      exitCode: 0,
+    }));
+    const store = new BeadsTaskStore({
+      teamName: "version-round3",
+      workspace: "/tmp/version-round3",
+      runner: { run },
+      requireExpectedVersion: false,
+    });
+
+    const tasks = await store.readMany(["task-first", "task-second", "task-first"]);
+
+    expect(tasks.map((task) => task.id)).toEqual(["task-first", "task-second"]);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0]).toEqual([
+      "--directory", "/tmp/version-round3", "--json",
+      "show", "task-first", "task-second", "--long", "--include-comments", "--include-dependents",
+    ]);
+  });
+
   it("distinguishes A to B to later A and enqueues the second A as a new Task revision", async () => {
     const store = new BeadsTaskStore({
       teamName: "version-round3",

@@ -12,6 +12,9 @@ type HerdrEnvelope = {
 };
 
 const FORWARDED_ENV = /^(?:PI_[A-Z0-9_]+|HTTP_PROXY|HTTPS_PROXY|WSS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|wss_proxy|all_proxy|no_proxy)$/;
+const SHELL_READY_RETRY_MS = 50;
+const SHELL_READY_TIMEOUT_MS = 5_000;
+const retryWait = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 
 function currentHerdrPane(): string | null {
   const paneId = process.env.HERDR_PANE_ID?.trim();
@@ -53,6 +56,10 @@ function resultRecord(envelope: HerdrEnvelope): Record<string, unknown> {
 
 function isPaneNotFound(error: unknown): boolean {
   return error instanceof Error && /(?:^|\W)pane_not_found(?:\W|$)/.test(error.message);
+}
+
+function isAgentPaneBusy(error: unknown): boolean {
+  return error instanceof Error && /(?:^|\W)agent_pane_busy(?:\W|$)/.test(error.message);
 }
 
 /** Herdr owns the `pi` executable for its named Pi agent kind; it receives only Pi CLI arguments. */
@@ -127,13 +134,25 @@ export class HerdrAdapter implements TerminalAdapter {
     }
 
     try {
-      this.invoke([
+      const startArgs = [
         "agent", "start", options.name,
         "--kind", "pi",
         "--pane", paneId,
         "--",
         ...piAgentArgs(argv),
-      ]);
+      ];
+      const deadline = Date.now() + SHELL_READY_TIMEOUT_MS;
+      while (true) {
+        try {
+          this.invoke(startArgs);
+          break;
+        } catch (error) {
+          if (!isAgentPaneBusy(error) || Date.now() >= deadline) throw error;
+          // pane split returns before the new interactive shell always reaches
+          // its prompt. Retry only that explicit transient Herdr state.
+          Atomics.wait(retryWait, 0, 0, SHELL_READY_RETRY_MS);
+        }
+      }
     } catch (error) {
       try {
         this.invoke(["pane", "close", paneId]);

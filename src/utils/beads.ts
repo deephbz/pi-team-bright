@@ -480,13 +480,33 @@ export class BeadsTaskStore {
     }
   }
 
+  private async showManyRaw(taskIds: readonly string[]): Promise<RawBead[]> {
+    const safeIds = [...new Set(taskIds.map((taskId) => sanitizeName(taskId)))];
+    if (safeIds.length === 0) return [];
+    const result = await this.command<RawBead[]>([
+      "show", ...safeIds, "--long", "--include-comments", "--include-dependents",
+    ]);
+    if (!Array.isArray(result)) {
+      throw new BeadsError("Beads show returned a non-array JSON value.", "malformed", `bd show ${safeIds.join(" ")}`);
+    }
+    const byId = new Map<string, RawBead>();
+    for (const raw of result) {
+      if (!raw?.id) continue;
+      this.verifyScope(raw);
+      if (byId.has(raw.id)) {
+        throw new BeadsError(`Beads show returned duplicate task ${raw.id}.`, "conflict", `bd show ${safeIds.join(" ")}`);
+      }
+      byId.set(raw.id, raw);
+    }
+    return safeIds.map((taskId) => {
+      const raw = byId.get(taskId);
+      if (!raw) throw new BeadsError(`Beads task ${taskId} was not found.`, "command", `bd show ${taskId}`);
+      return raw;
+    });
+  }
+
   private async showRaw(taskId: string): Promise<RawBead> {
-    const safeId = sanitizeName(taskId);
-    const result = await this.command<RawBead[]>(["show", safeId, "--long", "--include-comments", "--include-dependents"]);
-    const raw = Array.isArray(result) ? result[0] : undefined;
-    if (!raw || !raw.id) throw new BeadsError(`Beads task ${taskId} was not found.`, "command", `bd show ${taskId}`);
-    this.verifyScope(raw);
-    return raw;
+    return (await this.showManyRaw([taskId]))[0];
   }
 
   private async listRaw(): Promise<RawBead[]> {
@@ -583,6 +603,11 @@ export class BeadsTaskStore {
 
   async read(taskId: string): Promise<TaskFile> {
     return mapTask(await this.showRaw(taskId));
+  }
+
+  /** Hydrate several exact Task revisions with one Beads authority query. */
+  async readMany(taskIds: readonly string[]): Promise<TaskFile[]> {
+    return (await this.showManyRaw(taskIds)).map(mapTask);
   }
 
   /** Read authority evidence used only to settle the delivery outbox. */

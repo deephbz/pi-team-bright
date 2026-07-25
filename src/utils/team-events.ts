@@ -467,12 +467,12 @@ export function pageTeamCurrentProjection(
 export async function hydrateTeamSyncTasks(
   events: readonly TeamEvent[],
   requestedTaskIds: readonly string[] | undefined,
-  readTask: (taskId: string) => Promise<TaskFile>,
+  readTasks: (taskIds: readonly string[]) => Promise<TaskFile[]>,
 ): Promise<TaskFile[]> {
   const ids = new Set(requestedTaskIds ?? []);
   for (const event of events) {
     if (event.type === "task") ids.add(event.ref.taskId);
     if (event.type === "alert" && event.taskRef) ids.add(event.taskRef.taskId);
   }
-  return Promise.all([...ids].map((taskId) => readTask(taskId)));
+  return readTasks([...ids]);
 }

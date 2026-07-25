@@ -1,6 +1,6 @@
 # PiTeams evergreen context
 
-Updated: 2026-07-17
+Updated: 2026-07-25
 
 Lifecycle stage: **hardening** for the Task-first coordination surface;
 **sharing** begins after human review, merge, and a stopped-Team release epoch.
@@ -105,19 +105,41 @@ restating these executable definitions.
   adapter/lifecycle/contract tests, and the isolated agent-surface snapshot;
   its concurrent full-suite run reached 401 passing tests before the
   5-second snapshot-test timeout, while that snapshot passes alone in 2.46s.
+- `worker_ensure` now keeps carrier lifecycle independent of Task authority: it
+  reuses a live carrier, retries the same unconsumed capability when a prepared
+  carrier disappeared, or resumes the exact bound Session when a later carrier
+  disappeared. Multi-Task projections use one batched Beads read, lifecycle
+  guards hydrate only relevant nonterminal candidates, and direct Herdr launch
+  tolerates the bounded split-to-shell readiness race. Live smokes preserved
+  identities across both the prepared retry and exact-Session recovery paths,
+  then delivered and closed post-recovery work; the complete full run passed
+  all 50 files and 407 tests. Incident and validation evidence is retained in the
+  [worker-recovery journal](../journal/2026-07-25-worker-recovery-and-task-hydration.md).
 
 ## Constraints and open work
 
-No known product-code blocker remains in the implemented milestone.
+One live blocker remains below the recovered Worker lifecycle: ordinary
+`team_sync` intermittently times out in the single underlying Beads `list`
+command while live Workers settle Tasks. The prior N+1 hydration defect is no
+longer involved. Task projection availability must be isolated from valid
+Team/Worker carrier state, and any read retry must be bounded, read-only,
+traceable, and tested under concurrent Beads/Dolt activity rather than hidden by
+a larger timeout.
 
 Next steps:
 
-1. Human-review the Task-first interface, terminal direct-carrier contract, and
+1. Reproduce the `bd list` contention with semantic traces and concurrent Task
+   writes; determine whether Beads read-only mode, one bounded retry deadline,
+   or both are supported by external evidence.
+2. Make `team_sync` return a typed partial result when Task projection is
+   unavailable, without misreporting zero Tasks or discarding valid Team and
+   Worker carrier state.
+3. Human-review the Task-first interface, terminal direct-carrier contract, and
    source allocation.
-2. Merge and release only after review; restart live Teams as one version epoch.
+4. Merge and release only after review; restart live Teams as one version epoch.
    Any pre-change mixed-carrier Team must be stopped and recreated after
    release.
-3. Reassess component stage at the next R&D kickoff. New experimental pieces
+5. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
 
 ## Historical trail

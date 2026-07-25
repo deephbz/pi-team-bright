@@ -20,6 +20,38 @@ export interface ToolResultNextAction {
   args?: Record<string, unknown>;
 }
 
+/** Public machine post-state for successful `worker_ensure` outcomes. */
+export type WorkerEnsurePostState =
+  | {
+    name: string;
+    action: "created";
+    membership: "current";
+    carrier: "prepared";
+    terminalLaunched: true;
+    runtime: "not_observed";
+    assignedTasks: [];
+  }
+  | {
+    name: string;
+    action: "reused";
+    membership: "current";
+    carrier: "prepared" | "session_bound";
+    taskStateChanged: false;
+  }
+  | {
+    name: string;
+    action: "recovered";
+    recoveryMode: "first_binding_retry" | "exact_session_resume";
+    membership: "current";
+    carrier: "prepared" | "session_bound";
+    terminalLaunched: true;
+    runtime: "not_observed";
+    taskStateChanged: false;
+  };
+
+export type WorkerEnsureAction = WorkerEnsurePostState["action"];
+export type WorkerEnsureRecoveryMode = Extract<WorkerEnsurePostState, { action: "recovered" }>["recoveryMode"];
+
 /**
  * The Session/machine record for every public PiTeams tool.
  *

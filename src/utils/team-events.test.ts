@@ -1,11 +1,12 @@
 import fs from "node:fs";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TaskFile, TeamConfig } from "./models";
 import { configPath, teamDir } from "./paths";
 import {
   InvalidTeamSnapshotContinuationError,
   TeamEventCursorAheadError,
   appendTeamEvent,
+  hydrateTeamSyncTasks,
   pageTeamCurrentProjection,
   projectTeamCurrentState,
   readTeamEvents,
@@ -33,6 +34,17 @@ describe("Team event cursor and pagination contract", () => {
       text: `alert ${index}`,
     });
   }
+
+  it("batches requested and event-referenced Task hydration into one authority read", async () => {
+    const readTasks = vi.fn(async () => []);
+    await hydrateTeamSyncTasks([
+      { type: "task", cursor: "1", ref: { authorityId: "beads", taskId: "event-task", version: "v1" }, change: "created", actor: "team-lead", at: "2026-01-01T00:00:00.000Z" },
+      { type: "alert", cursor: "2", alertId: "alert-1", from: "team-lead", to: "worker", kind: "attention", text: "Review", taskRef: { taskId: "alert-task" }, at: "2026-01-01T00:00:00.000Z" },
+    ], ["requested-task", "event-task"], readTasks);
+
+    expect(readTasks).toHaveBeenCalledTimes(1);
+    expect(readTasks).toHaveBeenCalledWith(["requested-task", "event-task", "alert-task"]);
+  });
 
   it("refuses a cursor beyond journal head instead of returning a lower cursor", async () => {
     await appendAlert(1);
