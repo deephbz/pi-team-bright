@@ -709,7 +709,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       const taskInstruction = taskChangeSessionEligible
-        ? "Assigned Tasks are your work contracts. Alerts and retained legacy delivery records are delivered in context, but presentation never changes Task state. Set an accepted Task in_progress when work starts. Before stopping, update it to closed with verification evidence or blocked with the concrete blocker and next action. A TUI reply or alert never completes work. Re-read Task authority before a conflicting write."
+        ? "Assigned Tasks are your work contracts. Alerts and retained legacy delivery records are delivered in context, but presentation never changes Task state. Set an accepted Task in_progress when work starts. When you finish, call task_update yourself to set it closed and append verification evidence; never leave completion only in a TUI reply. If the work is blocked, call task_update with status blocked, concrete blocker evidence, and the next action. Use alert_send only for exceptional clarification or escalation; an alert never completes or blocks a Task. Re-read Task authority before a conflicting write."
         : "This fork is a new Session identity and receives none of the source Agent's pending Task changes.";
       return {
         systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,
