@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TerminalAdapter } from "./terminal-adapter";
-import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
+import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
@@ -74,6 +74,7 @@ function registerTools(): Map<string, RegisteredTool> {
 function terminal(): TerminalAdapter {
   return {
     name: "ergonomic-contract-terminal",
+    isDirectCarrier: () => true,
     detect: () => true,
     spawn: (options: { name: string }) => `pane-${options.name}`,
     kill() {},
@@ -85,6 +86,28 @@ function terminal(): TerminalAdapter {
     killWindow() {},
     isWindowAlive: () => false,
   };
+}
+
+/**
+ * Mirror team_create: a Team binds the detected terminal backend at creation,
+ * so lifecycle operations resolve it from durable authority instead of ambient
+ * detection. Members still carry legacy pane IDs to keep that read covered.
+ */
+function createBoundTeam(name: string, leadSession: string) {
+  const detected = getTerminalAdapter();
+  return teams.createTeam(
+    name,
+    leadSession,
+    "lead",
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    detected ? { backend: detected.name } : undefined,
+  );
 }
 
 function expectEnvelope(
@@ -298,7 +321,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     setAdapter(terminal());
     const team = uniqueTeam("worker-reuse");
     const leadSession = `/tmp/${team}-lead.jsonl`;
-    await teams.createTeam(team, leadSession, "lead");
+    await createBoundTeam(team, leadSession);
     const tools = registerTools();
     const params = {
       team_name: team,

@@ -20,6 +20,11 @@ export interface Iterm2SpawnContext {
 
 export class Iterm2Adapter implements TerminalAdapter {
   readonly name = "iTerm2";
+
+  isDirectCarrier(): boolean {
+    return true;
+  }
+
   private spawnContext: Iterm2SpawnContext = {};
   /** Cached iTerm2 session ID for this process (looked up from team config) */
   private cachedOwnSessionId: string | null | undefined = undefined;

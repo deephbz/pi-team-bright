@@ -16,7 +16,7 @@ import {
 import { migrateTeamTasks, type LegacyTaskFile } from "./task-migration";
 import { applySemanticTaskUpdate } from "./tasks";
 import * as taskAuthority from "./tasks";
-import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
+import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
 
@@ -112,7 +112,19 @@ async function createBeadsTeam(name: string, leadSession: string) {
       doltDatabase: `release_p1_${suffix}`,
       projectId: `release-p1-${suffix}`,
     },
+    undefined,
+    terminalBinding(),
   );
+}
+
+/**
+ * Mirror team_create: a Team binds the detected terminal backend at creation,
+ * so lifecycle operations resolve it from durable authority instead of ambient
+ * detection. Members keep legacy pane IDs to retain legacy-read coverage.
+ */
+function terminalBinding(): teams.TeamTerminalBinding | undefined {
+  const detected = getTerminalAdapter();
+  return detected ? { backend: detected.name } : undefined;
 }
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
@@ -284,6 +296,7 @@ describe("release P1 public contracts", () => {
     const killed: string[] = [];
     const adapter: TerminalAdapter = {
       name: "contract-terminal",
+      isDirectCarrier: () => true,
       detect: () => true,
       spawn: () => "unused",
       kill: (paneId) => {
@@ -333,6 +346,7 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const adapter: TerminalAdapter = {
       name: adapterName,
+      isDirectCarrier: () => true,
       detect: () => true,
       spawn: () => "unused",
       kill() {},
@@ -486,6 +500,7 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const adapter: TerminalAdapter = {
       name: "Zellij",
+      isDirectCarrier: () => true,
       detect: () => true,
       spawn: () => "unused",
       kill() {},

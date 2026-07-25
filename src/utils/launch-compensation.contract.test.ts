@@ -37,6 +37,7 @@ function adapter(options: { alive?: boolean } = {}) {
   const kill = vi.fn();
   const terminal: TerminalAdapter = {
     name: "launch-contract-terminal",
+    isDirectCarrier: () => true,
     detect: () => true,
     spawn,
     kill,

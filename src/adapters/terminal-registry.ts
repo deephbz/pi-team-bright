@@ -6,6 +6,7 @@
  */
 
 import { TerminalAdapter } from "../utils/terminal-adapter";
+import { HerdrAdapter } from "./herdr-adapter";
 import { TmuxAdapter } from "./tmux-adapter";
 import { ZellijAdapter } from "./zellij-adapter";
 import { CmuxAdapter } from "./cmux-adapter";
@@ -17,14 +18,18 @@ import { WindowsAdapter } from "./windows-adapter";
  * Available terminal adapters, ordered by priority
  *
  * Detection order (first match wins):
- * 1. tmux - if TMUX env is set
- * 2. Zellij - if ZELLIJ env is set and not in tmux
- * 3. cmux - if CMUX_SOCKET_PATH or CMUX_WORKSPACE_ID env is set
- * 4. iTerm2 - if TERM_PROGRAM=iTerm.app and not in tmux/zellij/cmux
- * 5. WezTerm - if WEZTERM_PANE env is set and not in tmux/zellij/cmux
- * 6. Windows - if platform is win32 and not in tmux/zellij/cmux/iTerm2/WezTerm
+ * 1. Herdr - if this process has a live Herdr pane identity
+ * 2. tmux - if TMUX env is set
+ * 3. Zellij - if ZELLIJ env is set and not in tmux
+ * 4. cmux - if CMUX_SOCKET_PATH or CMUX_WORKSPACE_ID env is set
+ * 5. iTerm2 - if TERM_PROGRAM=iTerm.app and not in tmux/zellij/cmux
+ * 6. WezTerm - if WEZTERM_PANE env is set and not in tmux/zellij/cmux
+ * 7. Windows - if platform is win32 and not in tmux/zellij/cmux/iTerm2/WezTerm
  */
 const adapters: TerminalAdapter[] = [
+  // Herdr can intentionally carry nested TMUX variables, so pane-local Herdr
+  // identity must win before tmux detection.
+  new HerdrAdapter(),
   new TmuxAdapter(),
   new ZellijAdapter(),
   new CmuxAdapter(),
@@ -41,13 +46,9 @@ let cachedAdapter: TerminalAdapter | null = null;
 /**
  * Detect and return the appropriate terminal adapter for the current environment.
  *
- * Detection order (first match wins):
- * 1. tmux - if TMUX env is set
- * 2. Zellij - if ZELLIJ env is set and not in tmux
- * 3. cmux - if CMUX_SOCKET_PATH or CMUX_WORKSPACE_ID env is set
- * 4. iTerm2 - if TERM_PROGRAM=iTerm.app and not in tmux/zellij/cmux
- * 5. WezTerm - if WEZTERM_PANE env is set and not in tmux/zellij/cmux
- * 6. Windows - if platform is win32 and not in tmux/zellij/cmux/iTerm2/WezTerm
+ * Detection order (first match wins): Herdr, tmux, Zellij, cmux, iTerm2,
+ * WezTerm, then Windows. Herdr deliberately wins over inherited nested tmux
+ * identity.
  *
  * @returns The detected terminal adapter, or null if none detected
  */
@@ -73,6 +74,7 @@ export function getTerminalAdapter(): TerminalAdapter | null {
  * @returns The adapter instance, or undefined if not found
  */
 export function getAdapterByName(name: string): TerminalAdapter | undefined {
+  if (cachedAdapter?.name === name) return cachedAdapter;
   return adapters.find(a => a.name === name);
 }
 

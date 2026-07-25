@@ -10,6 +10,10 @@ import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, powershellCom
 export class WezTermAdapter implements TerminalAdapter {
   readonly name = "WezTerm";
 
+  isDirectCarrier(): boolean {
+    return true;
+  }
+
   // Common paths where wezterm CLI might be found
   private possiblePaths = [
     "wezterm",  // In PATH

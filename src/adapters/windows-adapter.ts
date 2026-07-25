@@ -10,6 +10,10 @@ import { TerminalAdapter, SpawnOptions, execCommand, powershellCommand } from ".
 export class WindowsAdapter implements TerminalAdapter {
   readonly name = "Windows";
 
+  isDirectCarrier(): boolean {
+    return true;
+  }
+
   // Common paths where wt CLI might be found on Windows
   private possiblePaths = [
     "wt",  // In PATH

@@ -22,7 +22,15 @@ import {
 import * as runtime from "../src/utils/runtime";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { IdentifiedInboxMessage, Member, TaskFile } from "../src/utils/models";
-import { getTerminalAdapter } from "../src/adapters/terminal-registry";
+import { getAdapterByName, getTerminalAdapter } from "../src/adapters/terminal-registry";
+import { assertTeamTerminalTarget, hasPersistedTerminalTarget, memberTerminalTarget, terminalTarget } from "../src/utils/terminal-target";
+import { assertTargetSupportedByTerminal, currentTerminalForTeam, terminalForTeam } from "../src/utils/team-terminal";
+import {
+  admitTeamSession,
+  placeSessionTerminal,
+  type TeamIdentitySource,
+  type TeamSessionAdmission,
+} from "../src/utils/session-terminal";
 import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
 import * as predefined from "../src/utils/predefined-teams";
 import * as path from "node:path";
@@ -453,6 +461,44 @@ export default function (pi: ExtensionAPI) {
     await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
   }
 
+  /**
+   * A launcher that sets the teammate environment owns the contract it broke;
+   * a Session recognized from its own file belongs to the operator's terminal.
+   */
+  const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
+
+  /**
+   * Apply a refused admission. The process must end up unmistakably outside the
+   * Team rather than live-but-unbound: it records durable evidence, drops every
+   * Team identity so no tool can act as a Member, reports the remedy, and closes
+   * a launcher-spawned process instead of leaving it idling in its pane.
+   */
+  async function refuseTeamSession(
+    ctx: any,
+    refusedTeam: string,
+    role: string,
+    admission: Extract<TeamSessionAdmission, { kind: "refused" }>,
+  ) {
+    await teams.currentMembership(refusedTeam, role)
+      .then((candidate) => (candidate.membershipId
+        ? teamEvents.appendTeamEvent(refusedTeam, {
+          type: "worker",
+          worker: role,
+          membershipId: candidate.membershipId,
+          phase: "failed",
+        })
+        : undefined))
+      .catch(() => undefined);
+    stopDeliveries();
+    isTeammate = false;
+    teamName = null;
+    currentMembershipId = undefined;
+    ctx?.ui?.notify?.(admission.reason, "error");
+    ctx?.ui?.setStatus?.("pi-teams", "terminal backend mismatch");
+    clearTeamFooter(ctx);
+    if (admission.exitProcess) ctx?.shutdown?.();
+  }
+
   pi.on("session_start", async (event, ctx) => {
     paths.ensureDirs();
     stopDeliveries();
@@ -500,6 +546,17 @@ export default function (pi: ExtensionAPI) {
     if (isTeammate) {
       if (teamName) {
         if (!piSessionFile) throw new Error("Teammate startup requires a durable Pi Session file.");
+        const teamConfig = await teams.readConfig(teamName);
+        const admission = admitTeamSession(
+          teamConfig,
+          agentName,
+          placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
+          identitySource,
+        );
+        if (admission.kind === "refused") {
+          await refuseTeamSession(ctx, teamName, agentName, admission);
+          return;
+        }
         const candidate = await teams.currentMembership(teamName, agentName);
         const bound = await teams.withMembershipMutationLease(teamName, candidate.membershipId!, async () => {
           const current = await teams.bindMemberSession(
@@ -507,7 +564,7 @@ export default function (pi: ExtensionAPI) {
             agentName,
             piSessionFile,
             envLaunchId,
-            process.env.TMUX_PANE ? { tmuxPaneId: process.env.TMUX_PANE } : {},
+            admission.update ?? {},
             candidate.membershipId,
           );
           // Process-generation publication is part of the lifecycle transition:
@@ -547,13 +604,24 @@ export default function (pi: ExtensionAPI) {
     } else if (teamName) {
       if (!piSessionFile) throw new Error("Lead resume requires a durable Pi Session file.");
       // Lead reconnecting to an existing team, including a new `pi -r`
-      // process. Refresh both volatile process identity and tmux location.
+      // process. Refresh both volatile process identity and terminal location.
       if (teams.teamExists(teamName)) {
+        const teamConfig = await teams.readConfig(teamName);
+        const admission = admitTeamSession(
+          teamConfig,
+          "team-lead",
+          placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
+          identitySource,
+        );
+        if (admission.kind === "refused") {
+          await refuseTeamSession(ctx, teamName, "team-lead", admission);
+          return;
+        }
         const lead = await teams.assertCurrentSessionBinding(teamName, "team-lead", piSessionFile);
         currentMembershipId = lead.membershipId;
         registerLeadSession(teamName, piSessionFile);
-        if (process.env.TMUX_PANE) {
-          await teams.updateMembership(teamName, lead.membershipId!, { tmuxPaneId: process.env.TMUX_PANE });
+        if (admission.update) {
+          await teams.updateMembership(teamName, lead.membershipId!, admission.update);
         }
       }
       await startDirectMessageDelivery(ctx);
@@ -702,48 +770,50 @@ export default function (pi: ExtensionAPI) {
       };
     }
 
-    if (!terminal) {
-      throw new Error(`Cannot stop ${member.name}: no terminal adapter is available and no exact Membership-bound runtime record proves the process exited.`);
+    const teamConfig = await teams.readConfig(teamName);
+    const teamTerminal = terminalForTeam(teamConfig);
+    const target = teamConfig.terminalBackend
+      ? assertTeamTerminalTarget(teamConfig, member)
+      : memberTerminalTarget(member, teamTerminal.name);
+    if (!target) {
+      throw new Error(
+        `Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. ` +
+        "The Membership remains current.",
+      );
     }
+    assertTargetSupportedByTerminal(teamTerminal, target);
 
-    if (member.windowId) {
-      terminal.killWindow(member.windowId);
-      if (terminal.isWindowAlive(member.windowId)) {
+    if (target.kind === "window") {
+      teamTerminal.killWindow(target.targetId);
+      if (teamTerminal.isWindowAlive(target.targetId)) {
         throw new Error(
-          `Cannot confirm shutdown of ${member.name}: ${terminal.name} did not stop window ${member.windowId}. ` +
+          `Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop window ${target.targetId}. ` +
           "The Membership remains current; close the process manually and retry.",
         );
       }
       if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
       return {
         kind: "terminal_window_stopped",
-        adapter: terminal.name,
-        target: member.windowId,
+        adapter: target.backend,
+        target: target.targetId,
         membershipId: member.membershipId,
       };
     }
 
-    if (member.tmuxPaneId) {
-      terminal.kill(member.tmuxPaneId);
-      if (terminal.isAlive(member.tmuxPaneId)) {
-        throw new Error(
-          `Cannot confirm shutdown of ${member.name}: ${terminal.name} did not stop pane ${member.tmuxPaneId}. ` +
-          "The Membership remains current; close the process manually and retry.",
-        );
-      }
-      if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
-      return {
-        kind: "terminal_pane_stopped",
-        adapter: terminal.name,
-        target: member.tmuxPaneId,
-        membershipId: member.membershipId,
-      };
+    teamTerminal.kill(target.targetId);
+    if (teamTerminal.isAlive(target.targetId)) {
+      throw new Error(
+        `Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop pane ${target.targetId}. ` +
+        "The Membership remains current; close the process manually and retry.",
+      );
     }
-
-    throw new Error(
-      `Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. ` +
-      "The Membership remains current.",
-    );
+    if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
+    return {
+      kind: "terminal_pane_stopped",
+      adapter: target.backend,
+      target: target.targetId,
+      membershipId: member.membershipId,
+    };
   }
 
   async function transitionCurrentMembership(
@@ -764,7 +834,7 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  type PreparedLaunchTarget = { terminalId: string; isWindow: boolean };
+  type PreparedLaunchTarget = { terminalId: string; isWindow: boolean; backend: string };
   type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: IdentifiedInboxMessage };
 
   async function compensatePreparedLaunch(
@@ -775,16 +845,20 @@ export default function (pi: ExtensionAPI) {
     if (!prepared.membershipId) throw new Error(`Prepared Membership for ${prepared.name} has no stable identity.`);
     await teams.withCurrentMembershipLease(targetTeamName, prepared.membershipId, async (current) => {
       if (target) {
-        if (!terminal) throw new Error(`cannot stop ${target.terminalId}: no terminal adapter is available`);
+        const launchTerminal = getAdapterByName(target.backend);
+        if (!launchTerminal) throw new Error(`cannot stop ${target.terminalId}: terminal backend ${target.backend} is unavailable`);
+        if (target.isWindow && !launchTerminal.supportsWindows()) {
+          throw new Error(`${launchTerminal.name} doesn't support window targets`);
+        }
         if (target.isWindow) {
-          terminal.killWindow(target.terminalId);
-          if (terminal.isWindowAlive(target.terminalId)) {
-            throw new Error(`${terminal.name} did not stop window ${target.terminalId}`);
+          launchTerminal.killWindow(target.terminalId);
+          if (launchTerminal.isWindowAlive(target.terminalId)) {
+            throw new Error(`${launchTerminal.name} did not stop window ${target.terminalId}`);
           }
         } else {
-          terminal.kill(target.terminalId);
-          if (terminal.isAlive(target.terminalId)) {
-            throw new Error(`${terminal.name} did not stop pane ${target.terminalId}`);
+          launchTerminal.kill(target.terminalId);
+          if (launchTerminal.isAlive(target.terminalId)) {
+            throw new Error(`${launchTerminal.name} did not stop pane ${target.terminalId}`);
           }
         }
         const status = await runtime.readRuntimeStatus(targetTeamName, current.name);
@@ -806,10 +880,15 @@ export default function (pi: ExtensionAPI) {
       const acceptedMessage = initialMessage ? await initialMessage() : undefined;
       target = await spawn();
       if (!target.terminalId) throw new Error("terminal adapter returned an empty target ID");
+      const teamConfig = await teams.readConfig(targetTeamName);
       await teams.updateMembership(
         targetTeamName,
         prepared.membershipId!,
-        target.isWindow ? { windowId: target.terminalId } : { tmuxPaneId: target.terminalId },
+        teamConfig.terminalBackend
+          ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) }
+          : target.isWindow
+            ? { windowId: target.terminalId }
+            : { tmuxPaneId: target.terminalId },
       );
       return { ...target, ...(acceptedMessage ? { initialMessage: acceptedMessage } : {}) };
     } catch (launchError) {
@@ -847,6 +926,7 @@ export default function (pi: ExtensionAPI) {
       await assertLeadMutation(ctx, "team_create");
       const leadSessionFile = ctx?.sessionManager?.getSessionFile?.();
       if (!leadSessionFile) throw new Error("team_create requires a durable Pi Session file.");
+      if (!terminal) throw new Error("No terminal adapter detected.");
       const safeTeamName = paths.sanitizeName(params.team_name);
       return teams.withTeamTopologyLease(safeTeamName, async (topologyLease) => {
       const taskAuthority = await tasks.resolveTeamTaskAuthority(safeTeamName);
@@ -863,6 +943,12 @@ export default function (pi: ExtensionAPI) {
           taskAuthority.authorityId,
           taskAuthority.fingerprint,
           topologyLease,
+          {
+            backend: terminal.name,
+            ...(terminal.currentTargetId?.()
+              ? { leadTarget: terminalTarget(terminal.name, "pane", terminal.currentTargetId()!) }
+              : {}),
+          },
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -927,6 +1013,7 @@ export default function (pi: ExtensionAPI) {
               backend: config.taskBackend,
               authorityId: config.taskAuthorityId,
             },
+            terminalBackend: config.terminalBackend,
           },
         }),
       };
@@ -984,12 +1071,9 @@ export default function (pi: ExtensionAPI) {
         throw new Error(`Team ${params.team_name} does not exist`);
       }
 
-      if (!terminal) {
-        throw new Error("No terminal adapter detected.");
-      }
-
       const teamConfig = await teams.readConfig(safeTeamName);
-      
+      const teamTerminal = currentTerminalForTeam(teamConfig);
+
       const existingMember = [...teamConfig.members].reverse().find(m => m.name === safeName && m.agentType === "teammate" && m.isActive !== false);
       if (existingMember) {
         const nonterminalTasks = teamConfig.taskBackend === "beads"
@@ -1017,11 +1101,7 @@ export default function (pi: ExtensionAPI) {
             evidence: {
               membershipId: existingMember.membershipId,
               sessionBound: !!existingMember.sessionFile,
-              terminal: existingMember.windowId
-                ? { kind: "window", targetId: existingMember.windowId }
-                : existingMember.tmuxPaneId
-                  ? { kind: "pane", targetId: existingMember.tmuxPaneId }
-                  : undefined,
+              terminal: memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name),
             },
           }),
         };
@@ -1045,8 +1125,8 @@ export default function (pi: ExtensionAPI) {
       }
 
       const useSeparateWindow = params.separate_window ?? teamConfig.separateWindows ?? false;
-      if (useSeparateWindow && !terminal.supportsWindows()) {
-        throw new Error(`Separate windows mode is not supported in ${terminal.name}.`);
+      if (useSeparateWindow && !teamTerminal.supportsWindows()) {
+        throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
       }
 
       const member: Member = {
@@ -1057,7 +1137,6 @@ export default function (pi: ExtensionAPI) {
         agentType: "teammate",
         model: chosenModel,
         joinedAt: Date.now(),
-        tmuxPaneId: "",
         cwd: params.cwd,
         subscriptions: [],
         isActive: true,
@@ -1087,38 +1166,39 @@ export default function (pi: ExtensionAPI) {
         null,
         () => {
         if (useSeparateWindow) {
-          const terminalId = terminal.spawnWindow({
+          const terminalId = teamTerminal.spawnWindow({
             name: safeName,
             cwd: params.cwd,
             argv: piCmd,
             env: env,
             teamName: safeTeamName,
           });
-          return { terminalId, isWindow: true };
+          return { terminalId, isWindow: true, backend: teamTerminal.name };
         }
-        if (terminal instanceof Iterm2Adapter) {
-          const teammates = teamConfig.members.filter(m => m.agentType === "teammate" && m.tmuxPaneId.startsWith("iterm_"));
+        if (teamTerminal instanceof Iterm2Adapter) {
+          const teammates = teamConfig.members.filter(m => m.agentType === "teammate" && m.tmuxPaneId?.startsWith("iterm_"));
           const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
           if (lastTeammate?.tmuxPaneId) {
-            terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
+            teamTerminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
           } else {
-            terminal.setSpawnContext({});
+            teamTerminal.setSpawnContext({});
           }
         }
 
         const leadMember = teamConfig.members.find(m => m.name === "team-lead");
-        const anchorPaneId = terminal.name === "tmux"
-          ? leadMember?.tmuxPaneId || process.env.TMUX_PANE || undefined
+        const leadTarget = leadMember
+          ? memberTerminalTarget(leadMember, teamConfig.terminalBackend || teamTerminal.name)
           : undefined;
+        const anchorPaneId = leadTarget?.kind === "pane" ? leadTarget.targetId : teamTerminal.currentTargetId?.() || undefined;
 
-        const terminalId = terminal.spawn({
+        const terminalId = teamTerminal.spawn({
           name: safeName,
           cwd: params.cwd,
           argv: piCmd,
           env: env,
           anchorPaneId,
         });
-        return { terminalId, isWindow: false };
+        return { terminalId, isWindow: false, backend: teamTerminal.name };
         },
       );
 
@@ -1153,7 +1233,7 @@ export default function (pi: ExtensionAPI) {
             membershipId: member.membershipId,
             agentId: member.agentId,
             terminalLaunch: {
-              adapter: terminal.name,
+              adapter: launch.backend,
               kind: launch.isWindow ? "window" : "pane",
               targetId: launch.terminalId,
             },
@@ -2168,14 +2248,16 @@ export default function (pi: ExtensionAPI) {
           },
           diagnostics: {
             staleBindings: finalConfig.members
-              .filter((member) => member.isActive === false && !!(member.tmuxPaneId || member.windowId))
+              .filter((member) => member.isActive === false && hasPersistedTerminalTarget(member))
               .map((member) => ({
                 name: member.name,
                 membershipId: member.membershipId,
                 sessionBound: !!member.sessionFile,
-                terminal: member.windowId
-                  ? { kind: "window", targetId: member.windowId }
-                  : { kind: "pane", targetId: member.tmuxPaneId },
+                terminal: member.terminalTarget
+                  ? { backend: member.terminalTarget.backend, kind: member.terminalTarget.kind, targetId: member.terminalTarget.targetId }
+                  : member.windowId
+                    ? { kind: "window", targetId: member.windowId }
+                    : { kind: "pane", targetId: member.tmuxPaneId },
               })),
           },
         });
@@ -2301,10 +2383,15 @@ export default function (pi: ExtensionAPI) {
       if (!member.membershipId) throw new Error(`Current Membership for ${params.agent_name} has no membershipId.`);
 
       let alive = false;
-      if (member.windowId && terminal) {
-        alive = terminal.isWindowAlive(member.windowId);
-      } else if (member.tmuxPaneId && terminal) {
-        alive = terminal.isAlive(member.tmuxPaneId);
+      const healthTerminal = terminalForTeam(config);
+      const healthTarget = config.terminalBackend
+        ? assertTeamTerminalTarget(config, member)
+        : memberTerminalTarget(member, healthTerminal.name);
+      if (healthTarget) assertTargetSupportedByTerminal(healthTerminal, healthTarget);
+      if (healthTarget?.kind === "window") {
+        alive = healthTerminal.isWindowAlive(healthTarget.targetId);
+      } else if (healthTarget?.kind === "pane") {
+        alive = healthTerminal.isAlive(healthTarget.targetId);
       }
 
       const unreadCount = (await messaging.readInboxForMembership(
@@ -2569,6 +2656,12 @@ export default function (pi: ExtensionAPI) {
         taskAuthority.authorityId,
         taskAuthority.fingerprint,
         topologyLease,
+        {
+          backend: terminal.name,
+          ...(terminal.currentTargetId?.()
+            ? { leadTarget: terminalTarget(terminal.name, "pane", terminal.currentTargetId()!) }
+            : {}),
+        },
       );
       registerLeadSession(safeTeamName, leadSessionFile);
       // Update teamName and start native custom delivery for the lead.
@@ -2618,7 +2711,6 @@ export default function (pi: ExtensionAPI) {
             agentType: "teammate",
             model: chosenModel,
             joinedAt: Date.now(),
-            tmuxPaneId: "",
             cwd: params.cwd,
             subscriptions: [],
             prompt: agentDef.prompt,
@@ -2650,10 +2742,10 @@ export default function (pi: ExtensionAPI) {
                 env: env,
                 teamName: safeTeamName,
               });
-              return { terminalId, isWindow: true };
+              return { terminalId, isWindow: true, backend: terminal.name };
             }
             if (terminal instanceof Iterm2Adapter) {
-              const teammates = (await teams.readConfig(safeTeamName)).members.filter(m => m.agentType === "teammate" && m.tmuxPaneId.startsWith("iterm_"));
+              const teammates = (await teams.readConfig(safeTeamName)).members.filter(m => m.agentType === "teammate" && m.tmuxPaneId?.startsWith("iterm_"));
               const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
               if (lastTeammate?.tmuxPaneId) {
                 terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
@@ -2663,9 +2755,10 @@ export default function (pi: ExtensionAPI) {
             }
 
             const leadMember = (await teams.readConfig(safeTeamName)).members.find(m => m.name === "team-lead");
-            const anchorPaneId = terminal.name === "tmux"
-              ? leadMember?.tmuxPaneId || process.env.TMUX_PANE || undefined
-              : undefined;
+            const leadTarget = leadMember ? memberTerminalTarget(leadMember, config.terminalBackend || terminal.name) : undefined;
+            const anchorPaneId = leadTarget?.kind === "pane"
+              ? leadTarget.targetId
+              : (terminal as import("../src/utils/terminal-adapter").TerminalAdapter).currentTargetId?.() || undefined;
 
             const terminalId = terminal.spawn({
               name: safeName,
@@ -2674,7 +2767,7 @@ export default function (pi: ExtensionAPI) {
               env: env,
               anchorPaneId,
             });
-            return { terminalId, isWindow: false };
+            return { terminalId, isWindow: false, backend: terminal.name };
             },
           );
 

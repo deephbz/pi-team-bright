@@ -10,6 +10,10 @@ import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../uti
 export class ZellijAdapter implements TerminalAdapter {
   readonly name = "zellij";
 
+  isDirectCarrier(): boolean {
+    return true;
+  }
+
   detect(): boolean {
     // Zellij is available if ZELLIJ env is set and not in tmux
     return !!process.env.ZELLIJ && !process.env.TMUX;

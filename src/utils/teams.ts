@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BeadsAuthorityFingerprint, TeamConfig, Member } from "./models";
+import { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget } from "./models";
+import { assertTerminalTargetShape } from "./terminal-target";
 import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
 import { withLock } from "./lock";
 
@@ -88,6 +89,36 @@ function malformedConfigError(configFile: string, detail: string): Error {
 function validateConfigShape(value: Record<string, unknown>, configFile: string): void {
   if (value.name !== undefined && typeof value.name !== "string") throw malformedConfigError(configFile, "name must be a string");
   if (value.members !== undefined && !Array.isArray(value.members)) throw malformedConfigError(configFile, "members must be an array");
+  if (value.terminalBackend !== undefined && (typeof value.terminalBackend !== "string" || !value.terminalBackend)) {
+    throw malformedConfigError(configFile, "terminalBackend must be a non-empty string");
+  }
+  if (Array.isArray(value.members)) {
+    for (const [index, rawMember] of value.members.entries()) {
+      if (!rawMember || typeof rawMember !== "object" || Array.isArray(rawMember)) {
+        throw malformedConfigError(configFile, `members[${index}] must be an object`);
+      }
+      const member = rawMember as Partial<Member>;
+      if (member.terminalTarget !== undefined) {
+        try {
+          assertTerminalTargetShape(member.terminalTarget, `members[${index}].terminalTarget`);
+        } catch (error) {
+          throw malformedConfigError(configFile, error instanceof Error ? error.message : String(error));
+        }
+        if (member.tmuxPaneId || member.windowId) {
+          throw malformedConfigError(configFile, `members[${index}] cannot combine terminalTarget with legacy terminal fields`);
+        }
+        if (member.isActive !== false && !value.terminalBackend) {
+          throw malformedConfigError(configFile, `current members[${index}].terminalTarget requires terminalBackend`);
+        }
+        if (member.isActive !== false && member.terminalTarget.backend !== value.terminalBackend) {
+          throw malformedConfigError(configFile, `current members[${index}].terminalTarget backend must match terminalBackend`);
+        }
+      }
+      if (member.tmuxPaneId && member.windowId) {
+        throw malformedConfigError(configFile, `members[${index}] cannot contain both legacy pane and window targets`);
+      }
+    }
+  }
   if (value.taskBackend !== undefined && value.taskBackend !== "legacy" && value.taskBackend !== "beads") {
     throw malformedConfigError(configFile, "taskBackend must be legacy or beads");
   }
@@ -182,6 +213,11 @@ function assertTopologyLease(teamName: string, lease: TeamTopologyLease): void {
   }
 }
 
+export interface TeamTerminalBinding {
+  backend: string;
+  leadTarget?: TerminalTarget;
+}
+
 export async function createTeam(
   name: string,
   sessionId: string,
@@ -193,6 +229,7 @@ export async function createTeam(
   taskAuthorityId?: string,
   taskAuthorityFingerprint?: BeadsAuthorityFingerprint,
   topologyLease?: TeamTopologyLease,
+  terminalBinding?: TeamTerminalBinding,
 ): Promise<TeamConfig> {
   if (!topologyLease) {
     return withTeamTopologyLease(name, (lease) => createTeam(
@@ -206,9 +243,17 @@ export async function createTeam(
       taskAuthorityId,
       taskAuthorityFingerprint,
       lease,
+      terminalBinding,
     ));
   }
   assertTopologyLease(name, topologyLease);
+  if (terminalBinding && (!terminalBinding.backend || typeof terminalBinding.backend !== "string")) {
+    throw new Error("Team terminal binding requires a non-empty backend.");
+  }
+  if (terminalBinding?.leadTarget && terminalBinding.leadTarget.backend !== terminalBinding.backend) {
+    throw new Error(`Lead terminal target uses ${terminalBinding.leadTarget.backend}, but Team ${name} is being bound to ${terminalBinding.backend}.`);
+  }
+  if (terminalBinding?.leadTarget) assertTerminalTargetShape(terminalBinding.leadTarget, "Lead terminal target");
   if ([taskWorkspace, taskAuthorityId, taskAuthorityFingerprint].filter(Boolean).length !== 0
     && [taskWorkspace, taskAuthorityId, taskAuthorityFingerprint].filter(Boolean).length !== 3) {
     throw new Error("Beads taskWorkspace, taskAuthorityId, and taskAuthorityFingerprint must be configured together.");
@@ -275,7 +320,7 @@ export async function createTeam(
     name: "team-lead",
     agentType: "lead",
     joinedAt: Date.now(),
-    tmuxPaneId: process.env.TMUX_PANE || "",
+    ...(terminalBinding?.leadTarget ? { terminalTarget: structuredClone(terminalBinding.leadTarget) } : {}),
     cwd: process.cwd(),
     subscriptions: [],
     isActive: true,
@@ -289,6 +334,7 @@ export async function createTeam(
     leadAgentId,
     leadSessionId: sessionId,
     members: [...priorMembers, leadMember],
+    ...(terminalBinding ? { terminalBackend: terminalBinding.backend } : {}),
     defaultModel,
     separateWindows,
     ...(taskWorkspace ? { taskBackend: "beads" as const, taskWorkspace, taskAuthorityId, taskAuthorityFingerprint } : {}),
@@ -591,7 +637,7 @@ export async function bindMemberSession(
   agentName: string,
   sessionFile: string,
   launchId?: string,
-  updates: Pick<Partial<Member>, "tmuxPaneId" | "windowId"> = {},
+  updates: Pick<Partial<Member>, "terminalTarget" | "tmuxPaneId" | "windowId"> = {},
   expectedMembershipId?: string,
 ): Promise<Member> {
   if (!sessionFile) throw new Error("A durable Pi Session file is required for Membership binding.");
@@ -621,6 +667,12 @@ export async function bindMemberSession(
       member.sessionFile = sessionFile;
       member.pendingLaunchId = undefined;
       member.launchConsumedAt = new Date().toISOString();
+    }
+    if (updates.terminalTarget) {
+      assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
+      if (!config.terminalBackend || updates.terminalTarget.backend !== config.terminalBackend) {
+        throw new Error(`Terminal target backend ${updates.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
+      }
     }
     Object.assign(member, updates);
     writeConfigAtomic(p, config);
@@ -652,6 +704,12 @@ export async function addMember(teamName: string, member: Member) {
     if (next.isActive !== false && next.agentType === "teammate") {
       if (!!next.sessionFile === !!next.pendingLaunchId) {
         throw new Error(`Current teammate Membership ${next.membershipId} must be exactly one of launch-prepared or Session-bound.`);
+      }
+    }
+    if (next.terminalTarget) {
+      assertTerminalTargetShape(next.terminalTarget, "Membership terminal target");
+      if (!config.terminalBackend || next.terminalTarget.backend !== config.terminalBackend) {
+        throw new Error(`Terminal target backend ${next.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
       }
     }
     if (config.members.some((candidate) => candidate.membershipId === next.membershipId)) {
@@ -710,7 +768,7 @@ export async function deactivateCurrentMembers(
   return withLock(p, async () => {
     const config = readConfigRaw(p);
     const current = config.members.filter((member) => member.isActive !== false);
-    const staleBindings = config.members.filter((member) => member.isActive === false && !!(member.tmuxPaneId || member.windowId));
+    const staleBindings = config.members.filter((member) => member.isActive === false && !!(member.terminalTarget || member.tmuxPaneId || member.windowId));
     const at = new Date().toISOString();
     for (const member of current) {
       member.isActive = false;
@@ -728,6 +786,12 @@ export async function updateMember(teamName: string, agentName: string, updates:
     const config = readConfigRaw(p);
     const m = [...config.members].reverse().find(m => m.name === agentName && m.isActive !== false);
     if (m) {
+      if (updates.terminalTarget) {
+        assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
+        if (!config.terminalBackend || updates.terminalTarget.backend !== config.terminalBackend) {
+          throw new Error(`Terminal target backend ${updates.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
+        }
+      }
       Object.assign(m, updates);
       writeConfigAtomic(p, config);
     }
@@ -740,6 +804,12 @@ export async function updateMembership(teamName: string, membershipId: string, u
     const config = readConfigRaw(p);
     const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
     if (!member) throw new Error(`Membership ${membershipId} is not current in team ${teamName}.`);
+    if (updates.terminalTarget) {
+      assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
+      if (!config.terminalBackend || updates.terminalTarget.backend !== config.terminalBackend) {
+        throw new Error(`Terminal target backend ${updates.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
+      }
+    }
     Object.assign(member, updates);
     writeConfigAtomic(p, config);
     return structuredClone(member);
