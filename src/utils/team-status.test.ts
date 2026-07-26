@@ -105,6 +105,7 @@ describe("Team status diagnosis", () => {
     expect(rendered).toContain(`Team workspace: ${paths.teamDir(teamName)}`);
     expect(rendered).toContain(`Beads workspace: ${workspace}`);
     expect(rendered).toContain(`Beads database: db_${teamName}`);
+    expect(rendered).toContain("Worker memberships: none");
     expect(rendered).toContain(`bd --directory '${workspace}' list --all`);
     expect(rendered).toContain("Beads writes there are authoritative");
   });
