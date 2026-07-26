@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises";
 import type { TeamEventWaitResult } from "./team-events";
 import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "./models";
 
@@ -49,11 +50,9 @@ export async function observeWorkerStartup(
   }
 
   const now = input.now ?? performance.now.bind(performance);
-  const waitForRetry = input.waitForRetry ?? ((delayMs: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) return reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
-    const timer = setTimeout(resolve, delayMs);
-    signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason ?? new DOMException("Aborted", "AbortError")); }, { once: true });
-  }));
+  const waitForRetry = input.waitForRetry ?? (async (delayMs: number, signal?: AbortSignal) => {
+    await delay(delayMs, undefined, { signal });
+  });
   const deadline = now() + timeoutMs;
   let cursor = input.afterCursor;
 
