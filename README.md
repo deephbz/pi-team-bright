@@ -27,6 +27,14 @@ Use `-l` with either command to install it for the current project. Pi packages
 run with full system access, so review an unfamiliar release before installing
 it.
 
+## Terminal carrier contract
+
+Pi Team Bright detects one direct terminal carrier by first match: Herdr, tmux,
+Zellij, cmux, iTerm2, WezTerm, then native Windows. Start or restart Pi inside
+one of those carriers before creating a Team if none is detected. Terminal panes
+carry Workers, but pane activity is never Task truth: the Task authority and
+its accepted state remain the work record.
+
 ## First use
 
 Create a Team, ensure a Worker with an absolute working directory, then assign

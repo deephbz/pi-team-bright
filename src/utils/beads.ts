@@ -111,35 +111,44 @@ export class OwnedBdBinaryError extends Error {
  * @beads/bd postinstall (or deliberately materialized by CI).
  */
 export function resolveBdExecutable(): string {
-  const manifestPath = require.resolve("@beads/bd/package.json");
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as { bin?: { bd?: unknown } | unknown };
-  const bin = typeof manifest.bin === "object" && manifest.bin !== null
-    ? (manifest.bin as { bd?: unknown }).bd
-    : undefined;
-  if (typeof bin !== "string" || !bin) throw new OwnedBdBinaryError(
-    "BEADS_OWNED_BINARY_MISSING",
-    "owned @beads/bd package does not declare the bd launcher",
-  );
+  try {
+    const manifestPath = require.resolve("@beads/bd/package.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as { bin?: { bd?: unknown } | unknown };
+    const bin = typeof manifest.bin === "object" && manifest.bin !== null
+      ? (manifest.bin as { bd?: unknown }).bd
+      : undefined;
+    if (typeof bin !== "string" || !bin) throw new OwnedBdBinaryError(
+      "BEADS_OWNED_BINARY_MISSING",
+      "owned @beads/bd package does not declare the bd launcher",
+    );
 
-  const packageRoot = path.dirname(manifestPath);
-  const executable = path.resolve(packageRoot, bin);
-  if (!fs.statSync(executable).isFile()) throw new OwnedBdBinaryError(
-    "BEADS_OWNED_BINARY_MISSING",
-    `owned @beads/bd launcher is missing at ${executable}`,
-  );
+    const packageRoot = path.dirname(manifestPath);
+    const executable = path.resolve(packageRoot, bin);
+    if (!fs.statSync(executable).isFile()) throw new OwnedBdBinaryError(
+      "BEADS_OWNED_BINARY_MISSING",
+      `owned @beads/bd launcher is missing at ${executable}`,
+    );
 
-  if (!["darwin", "linux", "win32", "android"].includes(process.platform) || !["x64", "arm64"].includes(process.arch)) {
+    if (!["darwin", "linux", "win32", "android"].includes(process.platform) || !["x64", "arm64"].includes(process.arch)) {
+      throw new OwnedBdBinaryError(
+        "BEADS_OWNED_BINARY_UNSUPPORTED",
+        `owned @beads/bd binary is unsupported on ${process.platform}-${process.arch}`,
+      );
+    }
+    const nativeBinary = path.join(packageRoot, "bin", process.platform === "win32" ? "bd.exe" : "bd");
+    if (!fs.statSync(nativeBinary).isFile()) throw new OwnedBdBinaryError(
+      "BEADS_OWNED_BINARY_MISSING",
+      `owned @beads/bd binary is missing at ${nativeBinary}; reinstall @beads/bd@1.1.0 for ${process.platform}-${process.arch}`,
+    );
+    return executable;
+  } catch (error) {
+    if (error instanceof OwnedBdBinaryError) throw error;
+    const reason = error instanceof Error ? error.message : String(error);
     throw new OwnedBdBinaryError(
-      "BEADS_OWNED_BINARY_UNSUPPORTED",
-      `owned @beads/bd binary is unsupported on ${process.platform}-${process.arch}`,
+      "BEADS_OWNED_BINARY_MISSING",
+      `unable to resolve owned @beads/bd launcher; reinstall @beads/bd@1.1.0 (${reason})`,
     );
   }
-  const nativeBinary = path.join(packageRoot, "bin", process.platform === "win32" ? "bd.exe" : "bd");
-  if (!fs.existsSync(nativeBinary)) throw new OwnedBdBinaryError(
-    "BEADS_OWNED_BINARY_MISSING",
-    `owned @beads/bd binary is missing at ${nativeBinary}; reinstall @beads/bd@1.1.0 for ${process.platform}-${process.arch}`,
-  );
-  return executable;
 }
 
 export function bdExecFailure(error: any): BdCommandResult {

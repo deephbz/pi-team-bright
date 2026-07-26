@@ -12,10 +12,12 @@ token.
    public operator/agent docs are present.
 4. Create and push the release tag through the normal repository release
    process, then create the matching GitHub Release with user-visible notes.
-5. From that exact release commit, dispatch **Publish npm package** and choose
-   the explicit npm dist-tag (`next` for release candidates, `latest` for a
-   stable release). The workflow verifies first, then publishes with OIDC
-   provenance.
+5. From that exact release commit, dispatch **Publish npm package** first with
+   its default `dry_run: true` to exercise the complete clean-install,
+   package-local Beads, test, and pack gates without an npm mutation. After
+   review, dispatch again with `dry_run: false` and choose the explicit npm
+   dist-tag (`next` for release candidates, `latest` for a stable release). The
+   workflow verifies first, then publishes with OIDC provenance.
 6. Confirm the registry metadata and a clean `pi install
    npm:@hypercarrier/pi-team-bright@<version>` before announcing it.
 
