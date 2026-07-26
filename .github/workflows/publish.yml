@@ -37,7 +37,8 @@ jobs:
       - run: npm ci
       - run: node scripts/materialize-beads-linux-amd64.cjs
       # Keep the same deterministic carrier surface as CI.
-      - run: TERM_PROGRAM=iTerm.app npm test
+      - run: TERM_PROGRAM=iTerm.app npm run test:full
+      - run: npm run test:lanes
       - run: npm run verify:package
       - if: inputs.dry_run == false
         run: npm publish --access public --provenance --tag "${{ inputs.tag }}"

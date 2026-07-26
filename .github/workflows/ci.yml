@@ -25,4 +25,6 @@ jobs:
       # Contract tests exercise a terminal carrier; use the deterministic
       # adapter surface rather than depending on a hosted runner's terminal.
       - run: TERM_PROGRAM=iTerm.app npm test
+      - run: TERM_PROGRAM=iTerm.app npm run test:exhaustive-only
+      - run: npm run test:lanes
       - run: npm run verify:package

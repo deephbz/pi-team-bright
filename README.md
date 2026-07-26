@@ -120,3 +120,8 @@ intentionally kept separate from private maintainer history.
 ## License
 
 [MIT](LICENSE)
+
+
+## Test lanes
+
+`npm test` is the fast deterministic lane, not exhaustive. Use `npm run test:exhaustive-only` for excluded integration/contract/e2e and QA tests, `npm run test:full` for all tests, and `npm run test:lanes` to verify lane closure.
