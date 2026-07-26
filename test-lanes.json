@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "exhaustiveOnly": [
+    "scripts/snapshot-agent-surface.test.ts", "scripts/tool-result-qa/suite.test.ts", "src/utils/binding-correctness.external.test.ts", "src/utils/clean-cut-contract.test.ts", "src/utils/clean-cut-round2.test.ts", "src/utils/ergonomic-tool-contract.test.ts", "src/utils/identity-p0-contract.test.ts", "src/utils/launch-compensation.contract.test.ts", "src/utils/membership-mutation-lease.contract.test.ts", "src/utils/owner-transition-outbox.contract.test.ts", "src/utils/release-p1-contract.test.ts", "src/utils/round2-contract.test.ts", "src/utils/task-surface-cleancut.e2e.test.ts", "src/utils/team-owned-beads-authority.contract.test.ts", "src/utils/team-recreation.contract.test.ts", "src/utils/terminal-backend.contract.test.ts", "src/utils/topology-lifecycle.contract.test.ts"
+  ]
+}

@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-const fs=require('fs'),path=require('path');
-const root=path.resolve(__dirname,'..');
+const fs=require('fs'),path=require('path');const root=path.resolve(__dirname,'..');
+const manifest=JSON.parse(fs.readFileSync(path.join(root,'test-lanes.json')));if(manifest.version!==1||!Array.isArray(manifest.exhaustiveOnly))throw Error('invalid lane manifest');
 function walk(d){return fs.readdirSync(d,{withFileTypes:true}).flatMap(e=>e.isDirectory()?e.name==='node_modules'?[]:walk(path.join(d,e.name)):[path.join(d,e.name)]);}
-const tests=walk(root).map(p=>path.relative(root,p).replaceAll('\\','/')).filter(p=>/\.(test|spec)\.[cm]?[jt]sx?$/.test(p));
-const exhaustive=p=>/contract\.test\.ts$|\.external\.test\.ts$|\.e2e\.test\.ts$|src\/utils\/clean-cut-round2\.test\.ts$|scripts\/snapshot-agent-surface\.test\.ts$|scripts\/tool-result-qa\/suite\.test\.ts$/.test(p);
-const fast=tests.filter(p=>!exhaustive(p)), slow=tests.filter(exhaustive);
-if(!tests.length||fast.some(exhaustive)||new Set([...fast,...slow]).size!==tests.length) throw Error('test lane closure failed');
-console.log(JSON.stringify({tests:tests.length,fast:fast.length,exhaustive:slow.length}));
+const tests=walk(root).map(p=>path.relative(root,p).replaceAll('\\','/')).filter(p=>/\.(test|spec)\.[cm]?[jt]sx?$/.test(p));const slow=new Set(manifest.exhaustiveOnly);
+for(const p of slow)if(!tests.includes(p))throw Error(`manifest test missing: ${p}`);for(const p of tests)if(/contract\.test\.ts$|\.external\.test\.ts$|\.e2e\.test\.ts$|snapshot-agent-surface|tool-result-qa\/suite/.test(p)&&!slow.has(p))throw Error(`unclassified exhaustive test: ${p}`);
+const fast=tests.filter(p=>!slow.has(p));if(new Set([...fast,...slow]).size!==tests.length)throw Error('lane closure failed');
+for(const p of ['vitest.config.ts','vitest.exhaustive.config.ts'])if(!fs.readFileSync(path.join(root,p),'utf8').includes('test-lanes.json'))throw Error(`${p} does not consume manifest`);
+const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json')));for(const s of ['test','test:full','test:exhaustive-only','test:lanes'])if(!pkg.scripts[s])throw Error(`missing script ${s}`);
+for(const [file,need] of [['.github/workflows/ci.yml',['materialize-beads','npm test','test:exhaustive-only','test:lanes','verify:package']],['.github/workflows/publish.yml',['materialize-beads','test:full','test:lanes','verify:package']]]){const s=fs.readFileSync(path.join(root,file),'utf8');for(const x of need)if(!s.includes(x))throw Error(`${file} missing ${x}`)}
+console.log(JSON.stringify({tests:tests.length,fast:fast.length,exhaustive:slow.size}));
