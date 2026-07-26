@@ -159,6 +159,8 @@ describe("Pi extension command integration", () => {
   });
 
   it("has no pi-teams alias and reads no Team when unbound", async () => {
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
     const commands = new Map<string, RegisteredCommand>();
     piTeams({
       registerTool() {},

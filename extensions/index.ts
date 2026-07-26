@@ -1156,6 +1156,9 @@ export default function (pi: ExtensionAPI) {
             name: safeTeamName,
             lifecycle: "active",
             taskAuthorityReady: config.taskBackend === "beads",
+            teamDirectory: paths.teamDir(safeTeamName),
+            taskWorkspace: config.taskWorkspace,
+            beadsDatabase: config.taskAuthorityFingerprint?.doltDatabase,
           },
           nextActions: [
             { tool: "worker_ensure", reason: "Create a stable Worker only when the Team needs another capability.", args: { team_name: safeTeamName } },
