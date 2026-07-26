@@ -9,7 +9,7 @@ export const PI_TEAMS_COMMAND_USAGE = "Usage: /pi-team-bright [status|help]";
 
 const COMMANDS = [
   { value: "status", label: "status", description: "Diagnose the current Team and its Beads authority" },
-  { value: "help", label: "help", description: "Show Pi Team Bright command usage" }
+  { value: "help", label: "help", description: "Show Pi Team Bright command usage" },
 ] as const;
 
 export type PiTeamsCommand =
@@ -174,7 +174,7 @@ export function formatTeamStatus(report: TeamStatusReport): string {
   const lines = [
     `Pi Team Bright · ${report.team.name} · ${report.team.lifecycle}`,
     `Session: ${report.session.role} · binding ${report.session.binding}${report.session.detail ? ` · ${report.session.detail}` : ""}`,
-    `Members: ${list(report.team.currentMembers)} · Workers: ${list(report.team.currentWorkers)} · Historical memberships: ${report.team.historicalMemberships}`,
+    `Members: ${list(report.team.currentMembers)} · Worker memberships: ${list(report.team.currentWorkers)} · Historical memberships: ${report.team.historicalMemberships}`,
     `Terminal backend: ${report.team.terminalBackend}`,
     `Team workspace: ${report.storage.teamDirectory}`,
     `Team config: ${report.storage.configPath}`,
