@@ -1,6 +1,6 @@
 {
   "name": "@hypercarrier/pi-team-bright",
-  "version": "0.15.0-rc.1",
+  "version": "0.16.0-rc.1",
   "description": "Task-first Pi teams, visible in terminal panes.",
   "repository": {
     "type": "git",
@@ -34,9 +34,14 @@
     "prepare": "npm run build:observation",
     "test": "npm run typecheck && vitest run",
     "qa:tool-results:history": "ts-node --transpile-only scripts/tool-result-qa/mine-history.ts",
-    "qa:tool-results": "vitest run scripts/tool-result-qa/suite.test.ts",
+    "qa:tool-results": "vitest run --config vitest.full.config.ts scripts/tool-result-qa/suite.test.ts",
     "qa:tool-results:iterate": "npm run qa:tool-results:history && npm run qa:tool-results",
-    "migrate:tasks": "ts-node --transpile-only src/cli/migrate-tasks.ts"
+    "migrate:tasks": "ts-node --transpile-only src/cli/migrate-tasks.ts",
+    "test:full": "npm run typecheck && vitest run --config vitest.full.config.ts",
+    "test:exhaustive-only": "vitest run --config vitest.exhaustive.config.ts",
+    "test:external": "vitest run --config vitest.exhaustive.config.ts src/utils/binding-correctness.external.test.ts src/utils/clean-cut-contract.test.ts src/utils/clean-cut-round2.test.ts src/utils/round2-contract.test.ts src/utils/task-surface-cleancut.e2e.test.ts src/utils/team-owned-beads-authority.contract.test.ts",
+    "qa:agent-surface": "vitest run --config vitest.full.config.ts scripts/snapshot-agent-surface.test.ts",
+    "test:lanes": "node scripts/verify-test-lanes.cjs"
   },
   "main": "extensions/index.ts",
   "exports": {

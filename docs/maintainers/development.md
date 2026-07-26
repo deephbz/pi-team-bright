@@ -21,7 +21,7 @@ so [`materialize-beads-linux-amd64.cjs`](../../scripts/materialize-beads-linux-a
 fetches the official v1.1.0 linux-amd64 archive, verifies its pinned SHA-256,
 and materializes it at the owned package path before tests. Both CI and the
 manual publish workflow invoke that one script after `npm ci`; neither relies
-on ambient PATH. `npm test` type-checks and runs the suite. `npm run verify:package` builds the
+on ambient PATH. `npm test` type-checks and runs only the fast, non-exhaustive lane. `npm run verify:package` builds the
 observation entry point, packs the artifact, installs that tarball in a clean
 temporary project, and runs CommonJS and TypeScript probes against
 `@hypercarrier/pi-team-bright/observation`. Keep `pi-teams-observation/1`
@@ -32,3 +32,8 @@ artifact intentionally contains runtime sources, assets, and public operator /
 agent documentation, but excludes tests, private maintainer history, and
 release-process files. Do not add credentials, generated local state, or
 private journal evidence to the artifact.
+
+
+## Test lanes
+
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.

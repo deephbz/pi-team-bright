@@ -3,6 +3,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   createPiTeamsResultRenderer,
   formatPiTeamsToolResult,
+  PI_TEAMS_PUBLIC_TOOLS,
 } from "./tool-result-renderer";
 import { toolResultDetails, warning } from "./tool-results";
 
@@ -13,35 +14,125 @@ function text(lines: ReturnType<typeof formatPiTeamsToolResult>): string {
 describe("shared PiTeams tool-result renderer", () => {
   it("covers the exact ten-tool surface with one envelope renderer family", () => {
     const cases = [
-      ["team_create", "Create Team", { kind: "team", id: "dogfood", teamName: "dogfood" }, {}],
-      ["team_sync", "Sync Team", { kind: "team", id: "dogfood", teamName: "dogfood" }, {}],
-      ["team_shutdown", "Shut Down Team", { kind: "team", id: "dogfood", teamName: "dogfood" }, {}],
-      ["worker_ensure", "Ensure Worker", { kind: "worker", id: "auditor", teamName: "dogfood" }, {}],
-      ["worker_stop", "Stop Worker", { kind: "worker", id: "auditor", teamName: "dogfood" }, {}],
-      ["task_create", "Create Task", { kind: "task", id: "pt-42", teamName: "dogfood" }, {}],
-      ["task_read", "Read Task", { kind: "task", id: "pt-42", teamName: "dogfood" }, {}],
-      ["task_update", "Update Task", { kind: "task", id: "pt-42", teamName: "dogfood" }, {}],
-      ["task_link", "Link Task", { kind: "task", id: "pt-42", teamName: "dogfood" }, {
+      ["team_create", { kind: "team", id: "dogfood", teamName: "dogfood" }, {}],
+      ["team_sync", { kind: "team", id: "dogfood", teamName: "dogfood" }, {}],
+      ["team_shutdown", { kind: "team", id: "dogfood", teamName: "dogfood" }, {}],
+      ["worker_ensure", { kind: "worker", id: "auditor", teamName: "dogfood" }, {}],
+      ["worker_stop", { kind: "worker", id: "auditor", teamName: "dogfood" }, {}],
+      ["task_create", { kind: "task", id: "pt-42", teamName: "dogfood" }, {}],
+      ["task_read", { kind: "task", id: "pt-42", teamName: "dogfood" }, {}],
+      ["task_update", { kind: "task", id: "pt-42", teamName: "dogfood" }, {}],
+      ["task_link", { kind: "task", id: "pt-42", teamName: "dogfood" }, {
         team_name: "dogfood", task_id: "pt-42", action: "add", relation: "blocked_by", target_id: "pt-41",
       }],
-      ["alert_send", "Send Alert", { kind: "alert", id: "alert_opaque", teamName: "dogfood" }, {
+      ["alert_send", { kind: "alert", id: "alert_opaque", teamName: "dogfood" }, {
         team_name: "dogfood", kind: "attention", to: "auditor", task_id: "pt-42",
       }],
     ] as const;
 
-    for (const [tool, label, resource, args] of cases) {
+    for (const [tool, resource, args] of cases) {
       const first = formatPiTeamsToolResult({
         tool,
         args,
         expanded: false,
         details: toolResultDetails({ operation: tool, resource }),
       })[0].text;
-      expect(first).toContain(`${label} · accepted`);
-      expect(first).not.toMatch(/[{}\[\]"]/);
+      expect(first).toMatch(/^✓ Accepted:/);
+      expect(first).not.toMatch(/Create|Sync|Shut Down|Ensure|Stop|Read|Update|Link|Send/);
+      if (tool === "alert_send") expect(first).not.toContain("alert_opaque");
     }
   });
 
-  it("keeps operation, outcome, semantic Task identity, warnings, and the next decision collapsed", () => {
+  it("keeps creation compact and quotes the exact model-facing hints", () => {
+    const modelContent = [
+      "Team dogfood created; Task authority is ready.",
+      "Next: use worker_ensure when another capability is needed, or task_create to create the first work contract.",
+    ].join("\n");
+    const lines = formatPiTeamsToolResult({
+      tool: "team_create",
+      args: { team_name: "dogfood" },
+      content: [{ type: "text", text: modelContent }],
+      expanded: false,
+      details: toolResultDetails({
+        operation: "team_create",
+        resource: { kind: "team", id: "dogfood", teamName: "dogfood" },
+        postState: {
+          lifecycle: "active",
+          taskAuthorityReady: true,
+          teamDirectory: "/home/user/.pi/teams/dogfood",
+          taskWorkspace: "/home/user/.pi/teams/dogfood",
+          beadsDatabase: "pi_teams_dogfood",
+        },
+        nextActions: [
+          { tool: "worker_ensure", reason: "Create a stable Worker." },
+          { tool: "task_create", reason: "Create the first work contract." },
+        ],
+      }),
+    });
+    const rendered = text(lines);
+
+    expect(lines[0].text).toBe('✓ Accepted: team "dogfood" · active');
+    expect(rendered).toContain("Task engine: Beads · workspace: /home/user/.pi/teams/dogfood · external view/edit: bd --directory <workspace> …");
+    expect(rendered).toContain("Hints sent to agent:\n" + modelContent);
+    expect(lines.filter((line) => line.italic).map((line) => line.text)).toEqual(modelContent.split("\n"));
+    expect(rendered).not.toContain("→ worker_ensure");
+    expect(rendered).not.toContain("→ task_create");
+    expect(rendered).not.toContain("Beads database");
+  });
+
+  it("shows short model content exactly and defers long model content behind expansion", () => {
+    const shortContent = "Worker reviewer prepared.\nNext: observe binding changes with team_sync.";
+    const shortLines = formatPiTeamsToolResult({
+      tool: "worker_ensure",
+      args: { team_name: "dogfood", name: "reviewer" },
+      content: [{ type: "text", text: shortContent }],
+      expanded: false,
+      details: toolResultDetails({
+        operation: "worker_ensure",
+        resource: { kind: "worker", id: "reviewer", teamName: "dogfood" },
+        postState: { action: "created", carrier: "prepared" },
+      }),
+    });
+    expect(text(shortLines)).toContain("Hints sent to agent:\n" + shortContent);
+    expect(shortLines.filter((line) => line.italic).map((line) => line.text)).toEqual(shortContent.split("\n"));
+
+    const longContent = [
+      "Team dogfood events at cursor 42.",
+      "Observed a long authoritative Task change with enough detail to keep the collapsed human receipt focused on the current decision.",
+      "Next: reconcile the Task and Worker state before making another mutation.",
+    ].join("\n");
+    const compact = text(formatPiTeamsToolResult({
+      tool: "team_sync",
+      args: { team_name: "dogfood" },
+      content: [{ type: "text", text: longContent }],
+      expanded: false,
+      details: toolResultDetails({ operation: "team_sync", resource: { kind: "team", id: "dogfood", teamName: "dogfood" } }),
+    }));
+    const expanded = text(formatPiTeamsToolResult({
+      tool: "team_sync",
+      args: { team_name: "dogfood" },
+      content: [{ type: "text", text: longContent }],
+      expanded: true,
+      details: toolResultDetails({ operation: "team_sync", resource: { kind: "team", id: "dogfood", teamName: "dogfood" } }),
+    }));
+    expect(compact).toContain("Hints sent to agent: 3 lines");
+    expect(compact).toContain("expand for exact text");
+    expect(compact).not.toContain("Observed a long authoritative Task change");
+    expect(expanded).toContain("Hints sent to agent:\n" + longContent);
+
+    const whitespaceContent = "  leading spaces\n\ntrailing spaces  \n";
+    const whitespaceLines = formatPiTeamsToolResult({
+      tool: "team_sync",
+      args: { team_name: "dogfood" },
+      content: [{ type: "text", text: whitespaceContent }],
+      expanded: true,
+      details: toolResultDetails({ operation: "team_sync", resource: { kind: "team", id: "dogfood", teamName: "dogfood" } }),
+    });
+    expect(whitespaceLines.filter((line) => line.italic).map((line) => line.text).join("\n"))
+      .toBe(whitespaceContent);
+  });
+
+  it("keeps outcome, semantic Task identity, and warnings collapsed without machine-only actions", () => {
     const rendered = text(formatPiTeamsToolResult({
       tool: "task_update",
       args: { team_name: "dogfood", task_id: "pt-42" },
@@ -66,10 +157,11 @@ describe("shared PiTeams tool-result renderer", () => {
       }),
     }));
 
-    expect(rendered).toContain("Update Task · accepted · Task pt-42 · Team dogfood");
+    expect(rendered).toContain('Accepted: task "pt-42" · team "dogfood"');
     expect(rendered).toContain("blocked · event-auditor");
-    expect(rendered).toContain("event-auditor: Worker delivery is pending.");
-    expect(rendered).toContain("→ team_sync — Wait for the next authoritative Task change.");
+    expect(rendered).toContain("Worker delivery is pending.");
+    expect(rendered).not.toContain("event-auditor: Worker delivery");
+    expect(rendered).not.toContain("team_sync");
     expect(rendered).not.toContain("sha256:opaque-version");
     expect(rendered).not.toContain("authority-secret");
     expect(rendered).not.toContain("session.jsonl");
@@ -107,8 +199,8 @@ describe("shared PiTeams tool-result renderer", () => {
 
     for (const rendered of [compact, expanded]) {
       const header = rendered.split("\n")[0];
-      expect(header).toBe("! Shut Down Team · partial · Team dogfood · active");
-      expect(header.match(/\bpartial\b/g)).toHaveLength(1);
+      expect(header).toBe('! Partial: team "dogfood" · active');
+      expect(header.match(/\bPartial\b/g)).toHaveLength(1);
       expect(rendered).toContain("1 Workers stopped: reviewer · 1 failed · 1 unfinished Tasks retained");
       expect(rendered).toContain("Current members: team-lead, delivery-broken");
       expect(rendered).toContain("Task authority retained");
@@ -133,7 +225,7 @@ describe("shared PiTeams tool-result renderer", () => {
       }),
     }));
 
-    expect(rendered).toContain("Create Task · partial · Task pt-42 · Team dogfood");
+    expect(rendered).toContain('Partial: task "pt-42" · team "dogfood"');
     expect(rendered).toContain("! Task authority committed, but delivery enqueue for auditor failed");
     expect(rendered.match(/pt-42/g)).toHaveLength(1);
   });
@@ -167,10 +259,11 @@ describe("shared PiTeams tool-result renderer", () => {
       details,
     }));
 
-    expect(compact).toContain("Attention to missing-worker · Team dogfood");
+    expect(compact).toContain('attention alert to "missing-worker" · team "dogfood"');
     expect(compact).toContain("! Recipient is not a current Team member.");
     expect(compact.match(/missing-worker/g)).toHaveLength(1);
-    expect(expanded).toContain("missing-worker: Recipient 'missing-worker'");
+    expect(expanded).toContain("Recipient 'missing-worker'");
+    expect(expanded).not.toContain("missing-worker: Recipient");
   });
 
   it("reveals labelled post-state, evidence, diagnostics, and action arguments only when expanded", () => {
@@ -192,15 +285,56 @@ describe("shared PiTeams tool-result renderer", () => {
       }),
     }));
 
-    expect(rendered).toContain("Ensure Worker · accepted · Worker event-auditor · Team dogfood · reused");
+    expect(rendered).toContain('Accepted: worker "event-auditor" · team "dogfood" · reused');
     expect(rendered).toContain("Post-state");
     expect(rendered).toContain("Action: reused");
     expect(rendered).toContain("Evidence");
-    expect(rendered).toContain("Membership Id: membership-17");
     expect(rendered).toContain("Diagnostics");
-    expect(rendered).toContain("Terminal · Target Id: %91");
-    expect(rendered).toContain("task_create · Assignee: event-auditor");
-    expect(rendered).not.toMatch(/[{}\[\]"]/);
+    expect(rendered).not.toContain("membership-17");
+    expect(rendered).not.toContain("Target Id: %91");
+    expect(rendered).toContain("Machine next actions (not sent to agent)");
+    expect(rendered).toContain("task_create — Bind executable work to this Worker.");
+    expect(rendered).toContain("Assignee: event-auditor");
+  });
+
+  it("never projects warning resource IDs", () => {
+    const rendered = text(formatPiTeamsToolResult({
+      tool: "task_update",
+      expanded: true,
+      details: toolResultDetails({
+        operation: "task_update",
+        resource: { kind: "task", id: "semantic-task" },
+        warnings: [
+          { code: "opaque", message: "Authority warning", resourceId: "membership-opaque-17" },
+          { code: "path", message: "Path warning", resourceId: "/private/operator/path" },
+        ],
+      }),
+    }));
+    expect(rendered).toContain("Authority warning");
+    expect(rendered).toContain("Path warning");
+    expect(rendered).not.toContain("membership-opaque-17");
+    expect(rendered).not.toContain("/private/operator/path");
+  });
+
+  it("redacts opaque and private injected fields across every public tool", () => {
+    const leaks = ["membership-secret", "session-secret", "terminal-secret", "authority-secret", "version-secret", "/private/operator/path"];
+    for (const tool of PI_TEAMS_PUBLIC_TOOLS) {
+      const rendered = text(formatPiTeamsToolResult({
+        tool,
+        expanded: true,
+        details: toolResultDetails({
+          operation: tool,
+          resource: { kind: "team", id: "semantic-team" },
+          postState: { membershipId: leaks[0], sessionId: leaks[1], terminalTarget: leaks[2], authorityFingerprint: leaks[3], authorityVersion: leaks[4], privatePath: leaks[5], taskId: "semantic-task" },
+          evidence: { provenanceId: leaks[3], runtimePid: 4242, path: leaks[5], relation: "blocked_by" },
+          diagnostics: { sessionFile: leaks[1], terminalId: leaks[2] },
+          nextActions: [{ tool: "task_read", reason: "semantic follow-up", args: { task_id: "semantic-task", membershipId: leaks[0], path: leaks[5] } }],
+        }),
+      }));
+      for (const leak of leaks) expect(rendered).not.toContain(leak);
+      expect(rendered).toContain("semantic-task");
+      expect(rendered).toContain("blocked_by");
+    }
   });
 
   it("shows a reused idle Worker without irrelevant launch-readiness diagnostics", () => {
@@ -226,9 +360,9 @@ describe("shared PiTeams tool-result renderer", () => {
       }),
     }));
 
-    expect(rendered).toContain("Ensure Worker · accepted · Worker event-auditor · Team dogfood · reused");
+    expect(rendered).toContain('Accepted: worker "event-auditor" · team "dogfood" · reused');
     expect(rendered).toContain("Carrier: session_bound · State: idle · no nonterminal Task");
-    expect(rendered).toContain("→ task_create — Assign the next durable work contract to this Worker.");
+    expect(rendered).not.toContain("task_create");
     expect(rendered).not.toMatch(/Runtime|not observed/i);
   });
 
@@ -250,7 +384,7 @@ describe("shared PiTeams tool-result renderer", () => {
       }),
     }));
 
-    expect(rendered).toContain("Clarification to team-lead · Task pt-42 · Team dogfood");
+    expect(rendered).toContain('clarification alert to "team-lead" · task "pt-42" · team "dogfood"');
     expect(rendered).not.toContain("alert_opaque");
     expect(rendered).not.toContain("message_opaque");
   });
@@ -278,9 +412,9 @@ describe("shared PiTeams tool-result renderer", () => {
     }));
 
     expect(applied).toContain("Relation change applied");
-    expect(applied.match(/blocked_by → pt-41/g)).toHaveLength(1);
+    expect(applied.match(/blocked_by → "pt-41"/g)).toHaveLength(1);
     expect(unchanged).toContain("Task unchanged · relation already present · delivery not attempted");
-    expect(unchanged.match(/blocked_by → pt-41/g)).toHaveLength(1);
+    expect(unchanged.match(/blocked_by → "pt-41"/g)).toHaveLength(1);
     expect(unchanged.match(/pt-42/g)).toHaveLength(1);
     expect(unchanged.match(/pt-41/g)).toHaveLength(1);
     expect(unchanged).not.toContain("opaque-version-id");
@@ -320,10 +454,11 @@ describe("shared PiTeams tool-result renderer", () => {
       details,
     }));
 
-    expect(rendered).toContain("requested remove parent → pt-40");
+    expect(rendered).toContain('requested remove parent → "pt-40"');
     expect(rendered).toContain("No relation change · stale version conflict");
     expect(rendered).not.toMatch(/already present|already absent|already held/i);
-    expect(expanded).toContain("→ task_read");
+    expect(expanded).toContain("Machine next actions (not sent to agent)");
+    expect(expanded).toContain("task_read — Read current Task authority");
     expect(expanded).toContain("Current Version: current-version");
     expect(expanded).toContain("Requested Version: stale-version");
     expect(expanded).not.toContain("Expected Version");
@@ -338,7 +473,7 @@ describe("shared PiTeams tool-result renderer", () => {
       details: undefined,
       content: [{ type: "text", text: "Cannot stop Worker: assigned Task pt-42 is still open." }],
     }));
-    expect(errored).toContain("Stop Worker · refused · Worker event-auditor · Team dogfood");
+    expect(errored).toContain('Refused: worker "event-auditor" · team "dogfood"');
     expect(errored).toContain("assigned Task pt-42 is still open");
 
     const missing = text(formatPiTeamsToolResult({
@@ -348,11 +483,10 @@ describe("shared PiTeams tool-result renderer", () => {
       details: undefined,
       content: [{ type: "text", text: JSON.stringify({ cursor: "19", events: [{ type: "task" }] }) }],
     }));
-    expect(missing).toContain("Sync Team · accepted · Team dogfood");
+    expect(missing).toContain('Accepted: team "dogfood"');
     expect(missing).toContain("Structured result evidence is unavailable.");
-    expect(missing).not.toContain("cursor");
-    expect(missing).not.toContain("events");
-    expect(missing).not.toContain("{");
+    expect(missing).toContain("Hints sent to agent:");
+    expect(missing).toContain('{\"cursor\":\"19\",\"events\"');
   });
 
   it("renders future-cursor refusal without inventing empty Team state", () => {
@@ -510,8 +644,8 @@ describe("shared PiTeams tool-result renderer", () => {
 
     expect(rendered).toContain("task-active");
     expect(rendered).toContain("task-blocked “Blocked work” blocked · unassigned");
-    expect(rendered.match(/task-blocked/g)).toHaveLength(2);
-    expect(rendered).toContain("task_update");
+    expect(rendered.match(/task-blocked/g)).toHaveLength(1);
+    expect(rendered).not.toContain("task_update");
   });
 
   it("hides opaque Worker Membership IDs only from expanded sync event rendering", () => {
@@ -553,6 +687,7 @@ describe("shared PiTeams tool-result renderer", () => {
     const renderer = createPiTeamsResultRenderer("team_create");
     const theme = {
       fg(_tone: string, value: string) { return value; },
+      italic(value: string) { return `<i>${value}</i>`; },
     } as Theme;
     const component = renderer(
       {
@@ -567,6 +702,8 @@ describe("shared PiTeams tool-result renderer", () => {
       theme,
       { args: { team_name: "dogfood" }, isError: false } as never,
     );
-    expect(component.render(160).join("\n")).toContain("Create Team · accepted · Team dogfood · active");
+    const rendered = component.render(160).join("\n");
+    expect(rendered).toContain('Accepted: team "dogfood" · active');
+    expect(rendered).toContain("<i>model projection</i>");
   });
 });
