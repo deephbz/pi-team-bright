@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-26",
+  "sourceCommit": "e8d136c438240a79c562b8ed953b65952666c38d",
+  "purpose": "Verify the current Pi 0.82 minor line before widening immutable npm peer metadata.",
+  "matrix": [
+    {
+      "piPackages": {
+        "@earendil-works/pi-ai": "0.82.1",
+        "@earendil-works/pi-coding-agent": "0.82.1",
+        "@earendil-works/pi-tui": "0.82.1",
+        "typebox": "1.1.38"
+      },
+      "checks": [
+        {
+          "command": "npm test",
+          "result": "passed: typecheck plus 40 files / 335 tests"
+        },
+        {
+          "command": "npm run verify:observation-package",
+          "result": "passed: generated observation build and packed CommonJS/TypeScript probe"
+        }
+      ]
+    }
+  ],
+  "decision": {
+    "peerRange": "^0.80.10 || ^0.82.0",
+    "rationale": "Keep the previously hosted 0.80.10 line and add only the independently tested current 0.82 line; don't imply untested 0.81 compatibility.",
+    "reversal": "A failing exact-version runtime canary or upstream breaking-change evidence requires a corrected higher package version and narrower range."
+  }
+}

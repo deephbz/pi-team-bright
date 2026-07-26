@@ -59,8 +59,7 @@ export type WorkerEnsureRecoveryMode = Extract<WorkerEnsurePostState, { action: 
  * projections. This envelope retains typed post-state and evidence without
  * forcing either audience to parse backend records or transport identifiers.
  *
- * Design context: docs/current/README.md and
- * docs/journal/2026-07-17-task-first-agent-coordination-design.md
+ * Design context: docs/current/README.md and docs/reference.md
  */
 export interface PiTeamsToolResultDetails<TPostState = unknown, TEvidence = unknown, TDiagnostics = unknown> {
   schema: typeof PI_TEAMS_TOOL_RESULT_SCHEMA;
