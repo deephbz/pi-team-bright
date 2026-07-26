@@ -19,6 +19,11 @@ exhaustive parameter reference.
   verifies the ten-tool selection and the irreducible Task, Worker, sync, and
   Alert distinctions.
 
+## Read-only status diagnosis
+
+- [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.
+- [`extensions/index.ts`](../extensions/index.ts) registers `/pi-team-bright [status|help]`; it has no `/pi-teams` alias.
+
 ## Result and projection contract
 
 - [`PiTeamsToolResultDetails`](../src/utils/tool-results.ts) is the versioned
