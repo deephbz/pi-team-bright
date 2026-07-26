@@ -66,7 +66,10 @@ restating executable definitions.
   matching native binary for supported x64 and arm64 Node platforms. Missing or
   unsupported owned binaries report typed unavailable `bd` errors. CI verifies
   and materializes the pinned official linux-amd64 binary because upstream
-  postinstall deliberately skips binary download when `CI` is set.
+  postinstall deliberately skips binary download when `CI` is set. One
+  source-controlled materializer verifies and installs the official linux-amd64
+  archive for both CI and the manual publish workflow; publishing defaults to a
+  non-mutating dry run.
 - `npm test` type-checks and runs the contract, lifecycle, identity, and
   integration suites. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS

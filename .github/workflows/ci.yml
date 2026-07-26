@@ -21,18 +21,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - name: Materialize verified owned Beads CLI (linux-x64)
-        run: |
-          set -euo pipefail
-          archive="$(mktemp)"
-          trap 'rm -f "$archive"' EXIT
-          curl --fail --location --retry 3 --output "$archive" \
-            https://github.com/gastownhall/beads/releases/download/v1.1.0/beads_1.1.0_linux_amd64.tar.gz
-          echo "b0f3dd607c3fb989ee08d0a6854fba80d0402971eb108f9af6170bc14d491a34  $archive" | sha256sum --check -
-          bin="$(node -e "const path=require('node:path'),manifestPath=require.resolve('@beads/bd/package.json'),manifest=require(manifestPath);if(manifest.version!=='1.1.0')throw new Error('expected @beads/bd@1.1.0');process.stdout.write(path.join(path.dirname(manifestPath),'bin','bd'))")"
-          tar --extract --gzip --file "$archive" --directory "$(dirname "$bin")" bd
-          chmod +x "$bin"
-          "$bin" --version
+      - run: node scripts/materialize-beads-linux-amd64.cjs
       # Contract tests exercise a terminal carrier; use the deterministic
       # adapter surface rather than depending on a hosted runner's terminal.
       - run: TERM_PROGRAM=iTerm.app npm test

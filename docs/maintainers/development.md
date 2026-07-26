@@ -17,9 +17,11 @@ package acquires a platform-native binary during a normal npm/Git install; if
 that binary is missing or unsupported, the adapter reports a typed unavailable
 `bd` error rather than falling back to an ambient executable. GitHub CI sets
 `CI`, which makes the upstream postinstall intentionally skip that acquisition,
-so [`ci.yml`](../../.github/workflows/ci.yml) fetches the official v1.1.0
-linux-amd64 archive, verifies its pinned SHA-256, and materializes it at the
-owned package path before tests. `npm test` type-checks and runs the suite. `npm run verify:package` builds the
+so [`materialize-beads-linux-amd64.cjs`](../../scripts/materialize-beads-linux-amd64.cjs)
+fetches the official v1.1.0 linux-amd64 archive, verifies its pinned SHA-256,
+and materializes it at the owned package path before tests. Both CI and the
+manual publish workflow invoke that one script after `npm ci`; neither relies
+on ambient PATH. `npm test` type-checks and runs the suite. `npm run verify:package` builds the
 observation entry point, packs the artifact, installs that tarball in a clean
 temporary project, and runs CommonJS and TypeScript probes against
 `@hypercarrier/pi-team-bright/observation`. Keep `pi-teams-observation/1`
