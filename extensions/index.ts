@@ -44,6 +44,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
+import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 
 // Public-interface intent and source allocation: docs/current/README.md and
 // docs/reference.md. Tool schemas and execution below are the contract source.
@@ -357,6 +358,39 @@ export default function (pi: ExtensionAPI) {
   let directMessageSessionEligible = true;
   let taskChangeSessionEligible = true;
   let footerModel: any;
+
+  const registerCommand = (pi as any).registerCommand?.bind(pi);
+  registerCommand?.("pi-team-bright", {
+    description: "Pi Team Bright status/help — read-only Team and Beads authority diagnosis",
+    getArgumentCompletions: getPiTeamsArgumentCompletions,
+    handler: async (args: string, ctx: any) => {
+      const command = parsePiTeamsCommand(args);
+      const present = (text: string, level: "info" | "warning" | "error" = "info") => {
+        if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
+        else process.stderr.write(`${text}\n`);
+      };
+      if (!command.ok) { present(command.usage, "warning"); return; }
+      if (command.subcommand === "help") {
+        present(`${PI_TEAMS_COMMAND_USAGE}\nstatus is the default and reads TeamConfig plus exact Beads-root diagnostics.`); return;
+      }
+      if (!teamName) {
+        const known = knownTeamNames();
+        present(`No current Team is bound to this Pi Session.${known.length ? ` Known Teams: ${known.slice(0, 8).join(", ")}.` : " Create a Team first with team_create."}`, "warning"); return;
+      }
+      const sessionFile = ctx.sessionManager?.getSessionFile?.();
+      let sessionBinding: TeamSessionBindingStatus = sessionFile ? "stale" : "unavailable";
+      let sessionDetail = sessionFile ? undefined : "durable Pi Session file unavailable";
+      if (sessionFile) try {
+        const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+        if (currentMembershipId && member.membershipId !== currentMembershipId) sessionDetail = "current Team membership differs from this runtime generation";
+        else sessionBinding = "current";
+      } catch (error) { sessionDetail = error instanceof Error ? error.message : String(error); }
+      try {
+        const report = await diagnoseTeam(teamName, { role: agentName, sessionBinding, sessionDetail });
+        present(formatTeamStatus(report), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
+      } catch (error) { present(`Pi Team Bright status failed for ${teamName}. ${error instanceof Error ? error.message : String(error)}`, "error"); }
+    },
+  });
 
   async function refreshTeamFooter(ctx: any) {
     if (!ctx?.ui) return undefined;
