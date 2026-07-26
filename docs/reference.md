@@ -74,3 +74,8 @@ exhaustive parameter reference.
 For human setup and a minimal example, start at the [repository README](../README.md).
 For current stage, decisions, constraints, and next steps, read the
 [evergreen context](current/README.md).
+
+
+## Test lanes
+
+`npm test` is the fast deterministic lane, not exhaustive. Use `npm run test:exhaustive-only` for excluded integration/contract/e2e and QA tests, `npm run test:full` for all tests, and `npm run test:lanes` to verify lane closure.

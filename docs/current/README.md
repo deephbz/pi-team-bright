@@ -103,3 +103,8 @@ Next steps:
 3. Restart live Teams as one version epoch after an upgrade or rollback.
 4. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
+
+
+## Test lanes
+
+`npm test` is the fast deterministic lane, not exhaustive. Use `npm run test:exhaustive-only` for excluded integration/contract/e2e and QA tests, `npm run test:full` for all tests, and `npm run test:lanes` to verify lane closure.

@@ -32,3 +32,8 @@ artifact intentionally contains runtime sources, assets, and public operator /
 agent documentation, but excludes tests, private maintainer history, and
 release-process files. Do not add credentials, generated local state, or
 private journal evidence to the artifact.
+
+
+## Test lanes
+
+`npm test` is the fast deterministic lane, not exhaustive. Use `npm run test:exhaustive-only` for excluded integration/contract/e2e and QA tests, `npm run test:full` for all tests, and `npm run test:lanes` to verify lane closure.
