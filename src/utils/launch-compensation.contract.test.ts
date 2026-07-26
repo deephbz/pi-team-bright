@@ -287,10 +287,20 @@ describe("compensated Worker launch", () => {
       content: result.content,
       expanded: false,
     }).map(line => line.text).join("\n");
-    expect(human).toContain(`Shut Down Team · partial · Team ${f.name} · active`);
+    expect(human).toContain(`Partial: team "${f.name}" · active`);
     expect(human).toContain("1 failed · 1 unfinished Tasks retained");
     expect(human).toContain("Current members: team-lead, delivery-broken");
     expect(human).toContain("delivery-broken: Worker stop couldn't be confirmed");
-    expect(human).toContain("→ team_shutdown — Resolve the named Worker stop failures, then retry.");
+    expect(human).not.toContain("team_shutdown");
+
+    const expanded = formatPiTeamsToolResult({
+      tool: "team_shutdown",
+      args: { team_name: f.name },
+      details: result.details,
+      content: result.content,
+      expanded: true,
+    }).map(line => line.text).join("\n");
+    expect(expanded).toContain("Machine next actions (not sent to agent)");
+    expect(expanded).toContain("team_shutdown — Resolve the named Worker stop failures, then retry.");
   });
 });
