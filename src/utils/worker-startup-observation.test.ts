@@ -82,6 +82,25 @@ describe("bounded Worker startup observation", () => {
     expect(result).toMatchObject({ observed: false, carrier: "session_bound", reason: "timeout" });
   });
 
+  it("retries authority visibility at bounded cadence until the exact tuple appears", async () => {
+    let now = 0; let checks = 0;
+    const waitForRetry = vi.fn(async () => { now += 50; });
+    const result = await observeWorkerStartup({
+      ...base, timeoutMs: 150, now: () => now, waitForRetry,
+      waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
+      verifyAuthority: async () => (++checks < 3 ? { sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 99 } } : { sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } }),
+    });
+    expect(result.observed).toBe(true); expect(waitForRetry).toHaveBeenCalledTimes(2); expect(checks).toBe(3);
+  });
+
+  it("zero deadline checks exact authority once and legacy events cannot prove startup", async () => {
+    const exact = await observeWorkerStartup({ ...base, timeoutMs: 0, waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]), verifyAuthority: async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } }) });
+    expect(exact.observed).toBe(true);
+    const legacy = workerEvent("2", "reviewer", "membership-reviewer", "session_bound") as any; delete legacy.generation;
+    const old = await observeWorkerStartup({ ...base, timeoutMs: 0, waitForEvents: async () => batch("2", [legacy], true), verifyAuthority: async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } }) });
+    expect(old).toMatchObject({ observed: false, reason: "timeout" });
+  });
+
   it("propagates cancellation instead of converting it to a timeout", async () => {
     const aborted = Object.assign(new Error("aborted"), { name: "AbortError" });
     await expect(observeWorkerStartup({
