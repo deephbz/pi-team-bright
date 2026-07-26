@@ -57,7 +57,9 @@ restating executable definitions.
   `0.16.0-rc.1`, `worker_ensure.separate_window` was deliberately removed:
   durable Team configuration exclusively owns placement policy. A launch receipt
   may report exact bounded startup observation, but never Worker readiness or
-  progress.
+  progress. Existing absent/false settings mean panes; stop the Team and create
+  a new epoch with `team_create.separate_windows=true` to adopt windows—never
+  edit config or pass a Worker override, and unsupported carriers refuse.
 
 ## Current status and anchors
 

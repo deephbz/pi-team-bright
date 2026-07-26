@@ -145,6 +145,12 @@ function parseEvent(line: string, lineNumber: number): TeamEvent {
     if (!["prepared", "session_bound", "stopped", "failed"].includes(String(event.phase))) {
       throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid worker phase.`);
     }
+    if (event.generation !== undefined) {
+      if (!event.generation || typeof event.generation !== "object" || Array.isArray(event.generation)) throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid worker generation.`);
+      const generation = event.generation as Record<string, unknown>;
+      assertString(generation.membershipId, "generation.membershipId");
+      if (generation.membershipId !== event.membershipId || !Number.isSafeInteger(generation.pid) || Number(generation.pid) <= 1 || !Number.isFinite(generation.startedAt) || Number(generation.startedAt) <= 0) throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid worker generation.`);
+    }
   } else if (event.type === "alert") {
     assertString(event.alertId, "alertId");
     assertString(event.from, "from");

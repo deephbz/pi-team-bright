@@ -1,4 +1,5 @@
 import type { TeamEventWaitResult } from "./team-events";
+import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "./models";
 
 export const WORKER_STARTUP_OBSERVATION_MS = 3_000;
 
@@ -29,7 +30,7 @@ export interface WorkerStartupObservationInput {
     signal?: AbortSignal;
   }) => Promise<TeamEventWaitResult>;
   /** Verify durable Membership plus exact runtime generation after the binding event. */
-  verifyAuthority: () => Promise<{ sessionBound: boolean; runtimeObserved: boolean }>;
+  verifyAuthority: () => Promise<{ sessionBound: boolean; generation?: WorkerRuntimeGenerationEvidence }>;
   now?: () => number;
 }
 
@@ -61,33 +62,29 @@ export async function observeWorkerStartup(
     });
     cursor = batch.cursor;
 
-    const bound = batch.events.some((event) => event.type === "worker"
+    const bound = batch.events.find((event): event is WorkerTeamEvent => event.type === "worker"
       && event.worker === input.workerName
       && event.membershipId === input.membershipId
-      && event.phase === "session_bound");
-    if (bound) {
-      const authority = await input.verifyAuthority();
-      if (authority.sessionBound && authority.runtimeObserved) {
-        return { observed: true, carrier: "session_bound", runtime: "observed", cursor };
+      && event.phase === "session_bound"
+      && !!event.generation);
+    if (bound?.generation) {
+      const expected = bound.generation;
+      while (true) {
+        const authority = await input.verifyAuthority();
+        const generation = authority.generation;
+        const exact = authority.sessionBound && generation?.membershipId === expected.membershipId
+          && generation?.pid === expected.pid && generation?.startedAt === expected.startedAt;
+        if (exact) return { observed: true, carrier: "session_bound", runtime: "observed", cursor };
+        if (now() >= deadline) return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "timeout" };
+        // Wait through the same cancellable event authority: it owns the single deadline.
+        const retry = await input.waitForEvents({ teamName: input.teamName, afterCursor: cursor, eventTypes: ["worker"], limit: 100, waitMs: Math.max(0, deadline - now()), ...(input.signal ? { signal: input.signal } : {}) });
+        cursor = retry.cursor;
       }
-      return {
-        observed: false,
-        carrier: authority.sessionBound ? "session_bound" : "prepared",
-        runtime: "not_observed",
-        cursor,
-        reason: "authority_mismatch",
-      };
     }
 
     if (batch.timedOut || now() >= deadline) {
       const authority = await input.verifyAuthority();
-      return {
-        observed: false,
-        carrier: authority.sessionBound ? "session_bound" : "prepared",
-        runtime: "not_observed",
-        cursor,
-        reason: "timeout",
-      };
+      return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "timeout" };
     }
   }
 }
