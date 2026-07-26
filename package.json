@@ -30,7 +30,7 @@
     "typecheck": "tsc --noEmit",
     "build:observation": "rm -rf dist && tsc -p tsconfig.observation.json",
     "verify:observation-package": "npm run build:observation && node scripts/verify-observation-package.cjs",
-    "verify:package": "npm run verify:observation-package && git diff --exit-code -- dist",
+    "verify:package": "npm run verify:observation-package && node scripts/verify-generated-dist.cjs",
     "prepare": "npm run build:observation",
     "test": "npm run typecheck && vitest run",
     "qa:tool-results:history": "ts-node --transpile-only scripts/tool-result-qa/mine-history.ts",
