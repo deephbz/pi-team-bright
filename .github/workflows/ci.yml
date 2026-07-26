@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22.x, 24.x]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: node scripts/materialize-beads-linux-amd64.cjs
+      # Contract tests exercise a terminal carrier; use the deterministic
+      # adapter surface rather than depending on a hosted runner's terminal.
+      - run: TERM_PROGRAM=iTerm.app npm test
+      - run: npm run verify:package
