@@ -5,7 +5,7 @@ import type { Member, TaskFile, TeamConfig, TeamEvent, TeamEventInput, TeamEvent
 import { configPath, teamEventCursorStatePath, teamEventJournalPath } from "./paths";
 
 // Event/wait intent and authority boundaries: docs/current/README.md and
-// docs/journal/2026-07-17-task-first-agent-coordination-design.md.
+// docs/reference.md.
 
 const EVENT_SCHEMA = "pi-teams-event-journal/1" as const;
 const ZERO_CURSOR = "0";
