@@ -159,7 +159,8 @@ describe("shared PiTeams tool-result renderer", () => {
 
     expect(rendered).toContain('Accepted: task "pt-42" · team "dogfood"');
     expect(rendered).toContain("blocked · event-auditor");
-    expect(rendered).toContain("event-auditor: Worker delivery is pending.");
+    expect(rendered).toContain("Worker delivery is pending.");
+    expect(rendered).not.toContain("event-auditor: Worker delivery");
     expect(rendered).not.toContain("team_sync");
     expect(rendered).not.toContain("sha256:opaque-version");
     expect(rendered).not.toContain("authority-secret");
@@ -261,7 +262,8 @@ describe("shared PiTeams tool-result renderer", () => {
     expect(compact).toContain('attention alert to "missing-worker" · team "dogfood"');
     expect(compact).toContain("! Recipient is not a current Team member.");
     expect(compact.match(/missing-worker/g)).toHaveLength(1);
-    expect(expanded).toContain("missing-worker: Recipient 'missing-worker'");
+    expect(expanded).toContain("Recipient 'missing-worker'");
+    expect(expanded).not.toContain("missing-worker: Recipient");
   });
 
   it("reveals labelled post-state, evidence, diagnostics, and action arguments only when expanded", () => {
@@ -293,6 +295,25 @@ describe("shared PiTeams tool-result renderer", () => {
     expect(rendered).toContain("Machine next actions (not sent to agent)");
     expect(rendered).toContain("task_create — Bind executable work to this Worker.");
     expect(rendered).toContain("Assignee: event-auditor");
+  });
+
+  it("never projects warning resource IDs", () => {
+    const rendered = text(formatPiTeamsToolResult({
+      tool: "task_update",
+      expanded: true,
+      details: toolResultDetails({
+        operation: "task_update",
+        resource: { kind: "task", id: "semantic-task" },
+        warnings: [
+          { code: "opaque", message: "Authority warning", resourceId: "membership-opaque-17" },
+          { code: "path", message: "Path warning", resourceId: "/private/operator/path" },
+        ],
+      }),
+    }));
+    expect(rendered).toContain("Authority warning");
+    expect(rendered).toContain("Path warning");
+    expect(rendered).not.toContain("membership-opaque-17");
+    expect(rendered).not.toContain("/private/operator/path");
   });
 
   it("redacts opaque and private injected fields across every public tool", () => {
