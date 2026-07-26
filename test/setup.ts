@@ -20,3 +20,5 @@ process.env.HOME = home;
 process.env.USERPROFILE = home;
 process.env.PI_TEAMS_VITEST_HOME = home;
 for (const key of ["PI_TEAM_NAME", "PI_AGENT_NAME", "PI_AGENT_LAUNCH_ID", "PI_TEAMS_SESSION_ROOT", "PI_TEAMS_TRACE_JSONL", "PI_TEAMS_WORKER_STARTUP_WAIT_MS"]) delete process.env[key];
+// Synthetic extension lifecycle fixtures must never inherit production's 3s wait.
+process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS = "0";
