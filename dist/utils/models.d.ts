@@ -117,12 +117,19 @@ export interface TaskTeamEvent {
     at: string;
 }
 export type WorkerEventPhase = "prepared" | "session_bound" | "stopped" | "failed";
+export interface WorkerRuntimeGenerationEvidence {
+    membershipId: string;
+    pid: number;
+    startedAt: number;
+}
 export interface WorkerTeamEvent {
     type: "worker";
     cursor: string;
     worker: string;
     membershipId: string;
     phase: WorkerEventPhase;
+    /** Absent on legacy journal records; required for new session_bound evidence. */
+    generation?: WorkerRuntimeGenerationEvidence;
     at: string;
 }
 export type AlertKind = "clarification" | "attention" | "announcement";
