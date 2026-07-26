@@ -32,6 +32,8 @@ export interface WorkerStartupObservationInput {
   /** Verify durable Membership plus exact runtime generation after the binding event. */
   verifyAuthority: () => Promise<{ sessionBound: boolean; generation?: WorkerRuntimeGenerationEvidence }>;
   now?: () => number;
+  /** Cancellable bounded authority-visibility cadence; injected for deterministic tests. */
+  waitForRetry?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
 }
 
 /**
@@ -46,7 +48,12 @@ export async function observeWorkerStartup(
     throw new Error("Worker startup observation timeout must be a nonnegative finite number.");
   }
 
-  const now = input.now ?? Date.now;
+  const now = input.now ?? performance.now.bind(performance);
+  const waitForRetry = input.waitForRetry ?? ((delayMs: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    const timer = setTimeout(resolve, delayMs);
+    signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason ?? new DOMException("Aborted", "AbortError")); }, { once: true });
+  }));
   const deadline = now() + timeoutMs;
   let cursor = input.afterCursor;
 
@@ -76,9 +83,7 @@ export async function observeWorkerStartup(
           && generation?.pid === expected.pid && generation?.startedAt === expected.startedAt;
         if (exact) return { observed: true, carrier: "session_bound", runtime: "observed", cursor };
         if (now() >= deadline) return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "timeout" };
-        // Wait through the same cancellable event authority: it owns the single deadline.
-        const retry = await input.waitForEvents({ teamName: input.teamName, afterCursor: cursor, eventTypes: ["worker"], limit: 100, waitMs: Math.max(0, deadline - now()), ...(input.signal ? { signal: input.signal } : {}) });
-        cursor = retry.cursor;
+        await waitForRetry(Math.min(50, Math.max(0, deadline - now())), input.signal);
       }
     }
 

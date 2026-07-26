@@ -398,9 +398,10 @@ describe("ergonomic agent-facing Team contracts", () => {
             {},
             prepared.membershipId,
           );
+          const startedAt = Date.now();
           await runtime.writeRuntimeStatus(team, "worker", {
             pid: 4242,
-            startedAt: Date.now(),
+            startedAt,
             ready: false,
           }, bound.membershipId);
           await teamEvents.appendTeamEvent(team, {
@@ -408,6 +409,7 @@ describe("ergonomic agent-facing Team contracts", () => {
             worker: "worker",
             membershipId: bound.membershipId!,
             phase: "session_bound",
+            generation: { membershipId: bound.membershipId!, pid: 4242, startedAt },
           });
         });
         return "pane-worker";
