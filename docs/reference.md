@@ -67,7 +67,10 @@ exhaustive parameter reference.
 ## Verification and reproduction
 
 - `npm run typecheck` checks the executable type contract.
-- `npm test` runs unit, contract, lifecycle, identity, and integration tests.
+- `npm test` runs only the fast deterministic lane; `test:exhaustive-only` is
+  its CI complement, `test:full` runs all tests, `test:external` is the real
+  Beads/Dolt diagnostic subset, `qa:agent-surface` is the artifact lane,
+  `qa:tool-results` is receipt QA, and `test:lanes` checks closure.
 - `npm run verify:package` packs the public artifact and probes the scoped
   observation import from a clean temporary project.
 

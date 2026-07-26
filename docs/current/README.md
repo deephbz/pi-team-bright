@@ -78,8 +78,10 @@ restating executable definitions.
   source-controlled materializer verifies and installs the official linux-amd64
   archive for both CI and the manual publish workflow; publishing defaults to a
   non-mutating dry run.
-- `npm test` type-checks and runs the contract, lifecycle, identity, and
-  integration suites. `npm run verify:package` installs the packed artifact in
+- `npm test` type-checks and runs the fast deterministic lane, not the full
+  contract/lifecycle/integration suite. CI on Node 22/24 runs it plus
+  `test:exhaustive-only` and package verification; publish on Node 24 runs
+  `test:full` and package verification. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
 
