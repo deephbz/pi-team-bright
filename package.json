@@ -61,10 +61,6 @@
     "package.json",
     "LICENSE",
     "README.md",
-    "iTerm2.png",
-    "pi-team-in-action.png",
-    "tmux.png",
-    "zellij.png",
     "docs/current/README.md",
     "docs/reference.md",
     "dist"
@@ -78,13 +74,13 @@
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@earendil-works/pi-ai": "^0.80.10",
-    "@earendil-works/pi-coding-agent": "^0.80.10",
-    "@earendil-works/pi-tui": "^0.80.10",
+    "@earendil-works/pi-ai": "^0.80.10 || ^0.82.0",
+    "@earendil-works/pi-coding-agent": "^0.80.10 || ^0.82.0",
+    "@earendil-works/pi-tui": "^0.80.10 || ^0.82.0",
     "typebox": "^1.1.38"
   },
   "pi": {
-    "image": "https://raw.githubusercontent.com/deephbz/pi-team-bright/main/pi-team-in-action.png",
+    "image": "https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.16.0-rc.1/pi-team-in-action.png",
     "extensions": [
       "extensions/index.ts"
     ],
