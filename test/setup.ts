@@ -19,3 +19,4 @@ fs.mkdirSync(home, { recursive: true });
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 process.env.PI_TEAMS_VITEST_HOME = home;
+for (const key of ["PI_TEAM_NAME", "PI_AGENT_NAME", "PI_AGENT_LAUNCH_ID", "PI_TEAMS_WORKER_STARTUP_WAIT_MS"]) delete process.env[key];
