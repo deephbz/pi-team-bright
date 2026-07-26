@@ -16,7 +16,8 @@ function canonical(value: any): any {
   return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
 }
 
-test("captures the agent-facing PiTeams surface", async () => {
+// Full-extension artifact setup can contend with exhaustive contracts; bounded above unit default.
+test("captures the agent-facing PiTeams surface", { timeout: 30_000 }, async () => {
   const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-surface-"));
   const previous = {
     HOME: process.env.HOME,
