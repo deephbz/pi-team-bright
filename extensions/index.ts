@@ -9,7 +9,8 @@ import * as messaging from "../src/utils/messaging";
 import * as alerts from "../src/utils/alerts";
 import * as teamEvents from "../src/utils/team-events";
 import { selectTeamSyncNextActions, summarizeTeamSyncNextActions } from "../src/utils/team-sync-actions";
-import { toolResultDetails, warning as toolResultWarning, type WorkerEnsurePostState } from "../src/utils/tool-results";
+import { toolResultDetails, warning as toolResultWarning, type WorkerEnsurePostState, type WorkerLaunchObservationState } from "../src/utils/tool-results";
+import { observeWorkerStartup, WORKER_STARTUP_OBSERVATION_MS, type WorkerStartupObservation } from "../src/utils/worker-startup-observation";
 import { createPiTeamsResultRenderer, type PiTeamsPublicTool } from "../src/utils/tool-result-renderer";
 import {
   DirectMessageDelivery,
@@ -44,6 +45,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
+import {
+  diagnoseTeam,
+  formatTeamStatus,
+  getPiTeamsArgumentCompletions,
+  knownTeamNames,
+  parsePiTeamsCommand,
+  PI_TEAMS_COMMAND_USAGE,
+  type TeamSessionBindingStatus,
+} from "../src/utils/team-status";
 
 // Public-interface intent and source allocation: docs/current/README.md and
 // docs/reference.md. Tool schemas and execution below are the contract source.
@@ -358,6 +368,39 @@ export default function (pi: ExtensionAPI) {
   let taskChangeSessionEligible = true;
   let footerModel: any;
 
+  const registerCommand = (pi as any).registerCommand?.bind(pi);
+  registerCommand?.("pi-team-bright", {
+    description: "Pi Team Bright status/help — read-only Team and Beads authority diagnosis",
+    getArgumentCompletions: getPiTeamsArgumentCompletions,
+    handler: async (args: string, ctx: any) => {
+      const command = parsePiTeamsCommand(args);
+      const present = (text: string, level: "info" | "warning" | "error" = "info") => {
+        if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
+        else process.stderr.write(`${text}\n`);
+      };
+      if (!command.ok) { present(command.usage, "warning"); return; }
+      if (command.subcommand === "help") {
+        present(`${PI_TEAMS_COMMAND_USAGE}\nstatus is the default and reads TeamConfig plus exact Beads-root diagnostics.`); return;
+      }
+      if (!teamName) {
+        const known = knownTeamNames();
+        present(`No current Team is bound to this Pi Session.${known.length ? ` Known Teams: ${known.slice(0, 8).join(", ")}.` : " Create a Team first with team_create."}`, "warning"); return;
+      }
+      const sessionFile = ctx.sessionManager?.getSessionFile?.();
+      let sessionBinding: TeamSessionBindingStatus = sessionFile ? "stale" : "unavailable";
+      let sessionDetail = sessionFile ? undefined : "durable Pi Session file unavailable";
+      if (sessionFile) try {
+        const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+        if (currentMembershipId && member.membershipId !== currentMembershipId) sessionDetail = "current Team membership differs from this runtime generation";
+        else sessionBinding = "current";
+      } catch (error) { sessionDetail = error instanceof Error ? error.message : String(error); }
+      try {
+        const report = await diagnoseTeam(teamName, { role: agentName, sessionBinding, sessionDetail });
+        present(formatTeamStatus(report), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
+      } catch (error) { present(`Pi Team Bright status failed for ${teamName}. ${error instanceof Error ? error.message : String(error)}`, "error"); }
+    },
+  });
+
   async function refreshTeamFooter(ctx: any) {
     if (!ctx?.ui) return undefined;
     footerModel = ctx?.model ?? footerModel;
@@ -569,6 +612,7 @@ export default function (pi: ExtensionAPI) {
           return;
         }
         const candidate = await teams.currentMembership(teamName, agentName);
+        const startedAt = Date.now();
         const bound = await teams.withMembershipMutationLease(teamName, candidate.membershipId!, async () => {
           const current = await teams.bindMemberSession(
             teamName!,
@@ -583,17 +627,18 @@ export default function (pi: ExtensionAPI) {
           // the old generation or this complete replacement, never an interleave.
           await runtime.writeRuntimeStatus(teamName!, agentName, {
             pid: process.pid,
-            startedAt: Date.now(),
-            lastHeartbeatAt: Date.now(),
+            startedAt,
+            lastHeartbeatAt: startedAt,
             ready: false,
             lastError: undefined,
           }, current.membershipId);
+          await teamEvents.appendTeamEvent(teamName!, {
+            type: "worker", worker: agentName, membershipId: current.membershipId!, phase: "session_bound",
+            generation: { membershipId: current.membershipId!, pid: process.pid, startedAt },
+          });
           return current;
         });
         currentMembershipId = bound.membershipId;
-        await teamEvents.appendTeamEvent(teamName, {
-          type: "worker", worker: agentName, membershipId: bound.membershipId!, phase: "session_bound",
-        }).catch(() => undefined);
       }
       ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
       if (terminal) {
@@ -1023,6 +1068,46 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  function launchObservationState(observation: WorkerStartupObservation): WorkerLaunchObservationState {
+    return observation.observed
+      ? { carrier: "session_bound", runtime: "observed" }
+      : { carrier: observation.carrier, runtime: "not_observed" };
+  }
+
+  async function observeLaunchedWorker(
+    targetTeamName: string,
+    workerName: string,
+    membershipId: string,
+    afterCursor: string,
+    signal?: AbortSignal,
+  ) {
+    const configuredWait = process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS;
+    const timeoutMs = configuredWait === undefined
+      ? WORKER_STARTUP_OBSERVATION_MS
+      : Number(configuredWait);
+    return observeWorkerStartup({
+      teamName: targetTeamName,
+      workerName,
+      membershipId,
+      afterCursor,
+      timeoutMs,
+      ...(signal ? { signal } : {}),
+      waitForEvents: (options) => teamEvents.waitForTeamEvents(options),
+      verifyAuthority: async () => {
+        try {
+          const current = await teams.currentMembership(targetTeamName, workerName);
+          const status = await runtime.readRuntimeStatus(targetTeamName, workerName);
+          return {
+            sessionBound: current.membershipId === membershipId && !!current.sessionFile,
+            generation: runtime.runtimeGeneration(status) ?? undefined,
+          };
+        } catch {
+          return { sessionBound: false, runtimeObserved: false };
+        }
+      },
+    });
+  }
+
   // Tools
   pi.registerTool({
     name: "team_create",
@@ -1105,7 +1190,7 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{
           type: "text",
-          text: `Team ${safeTeamName} created; Task authority is ready. Next: ensure a Worker or create the first Task.`,
+          text: `Team ${safeTeamName} created; Task authority is ready.\nNext: use worker_ensure when another capability is needed, or task_create to create the first work contract.`,
         }],
         details: toolResultDetails({
           operation: "team_create",
@@ -1114,6 +1199,9 @@ export default function (pi: ExtensionAPI) {
             name: safeTeamName,
             lifecycle: "active",
             taskAuthorityReady: config.taskBackend === "beads",
+            teamDirectory: paths.teamDir(safeTeamName),
+            taskWorkspace: config.taskWorkspace,
+            beadsDatabase: config.taskAuthorityFingerprint?.doltDatabase,
           },
           nextActions: [
             { tool: "worker_ensure", reason: "Create a stable Worker only when the Team needs another capability.", args: { team_name: safeTeamName } },
@@ -1144,7 +1232,6 @@ export default function (pi: ExtensionAPI) {
       cwd: Type.String(),
       model: Type.Optional(Type.String({ description: "Model for this teammate. Omit this parameter to use the team or Pi default; set it only when the user explicitly requests a specific model." })),
       thinking: Type.Optional(StringEnum(["off", "minimal", "low", "medium", "high", "xhigh"])),
-      separate_window: Type.Optional(Type.Boolean({ default: false })),
     }),
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const safeName = paths.sanitizeName(params.name);
@@ -1245,12 +1332,12 @@ export default function (pi: ExtensionAPI) {
             PI_AGENT_NAME: safeName,
             PI_AGENT_LAUNCH_ID: prepared.pendingLaunchId,
           } as Record<string, string>;
-          const retryInSeparateWindow = existingTarget?.kind === "window"
-            || (!existingTarget && (params.separate_window ?? teamConfig.separateWindows ?? false));
+          const retryInSeparateWindow = teamConfig.separateWindows ?? false;
           if (retryInSeparateWindow && !teamTerminal.supportsWindows()) {
             throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
           }
 
+          const recoveryCursor = teamEvents.readTeamEventCursor(safeTeamName);
           const retriedTarget = await executeWorkerRecovery({
             teamName: safeTeamName,
             teamConfig,
@@ -1262,9 +1349,21 @@ export default function (pi: ExtensionAPI) {
             useSeparateWindow: retryInSeparateWindow,
           });
 
+          const startup = await observeLaunchedWorker(
+            safeTeamName,
+            safeName,
+            existingMember.membershipId!,
+            recoveryCursor,
+            signal,
+          );
           const retriedMember = await teams.currentMembership(safeTeamName, safeName);
           return {
-            content: [{ type: "text", text: `Recovered prepared Worker ${safeName} by retrying its unconsumed first binding in a new carrier. Task state is unchanged.` }],
+            content: [{
+              type: "text",
+              text: startup.observed
+                ? `Recovered prepared Worker ${safeName}; its exact Session binding and runtime startup were observed. Task state is unchanged.`
+                : `Recovered prepared Worker ${safeName} by retrying its unconsumed first binding in a new carrier, but runtime startup wasn't observed. Task state is unchanged.`,
+            }],
             details: toolResultDetails({
               operation: "worker_ensure",
               resource: { kind: "worker", id: safeName, teamName: safeTeamName },
@@ -1273,14 +1372,13 @@ export default function (pi: ExtensionAPI) {
                 action: "recovered",
                 recoveryMode: "first_binding_retry",
                 membership: "current",
-                carrier: retriedMember.sessionFile ? "session_bound" : "prepared",
+                ...launchObservationState(startup),
                 terminalLaunched: true,
-                runtime: "not_observed",
                 taskStateChanged: false,
               } satisfies WorkerEnsurePostState,
-              warnings: [toolResultWarning(
+              warnings: startup.observed ? [] : [toolResultWarning(
                 "runtime_not_observed",
-                "First-binding relaunch succeeded, but this call did not observe later Worker runtime heartbeats.",
+                "First-binding relaunch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
                 safeName,
               )],
               nextActions: [{
@@ -1315,12 +1413,12 @@ export default function (pi: ExtensionAPI) {
           PI_AGENT_NAME: safeName,
         } as Record<string, string>;
         delete resumeEnv.PI_AGENT_LAUNCH_ID;
-        const recoverInSeparateWindow = existingTarget?.kind === "window"
-          || (!existingTarget && (params.separate_window ?? teamConfig.separateWindows ?? false));
+        const recoverInSeparateWindow = teamConfig.separateWindows ?? false;
         if (recoverInSeparateWindow && !teamTerminal.supportsWindows()) {
           throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
         }
 
+        const recoveryCursor = teamEvents.readTeamEventCursor(safeTeamName);
         const recoveredTarget = await executeWorkerRecovery({
           teamName: safeTeamName,
           teamConfig,
@@ -1332,8 +1430,20 @@ export default function (pi: ExtensionAPI) {
           useSeparateWindow: recoverInSeparateWindow,
         });
 
+        const startup = await observeLaunchedWorker(
+          safeTeamName,
+          safeName,
+          existingMember.membershipId!,
+          recoveryCursor,
+          signal,
+        );
         return {
-          content: [{ type: "text", text: `Recovered Worker ${safeName} by resuming its exact Session in a new carrier. Task state is unchanged.` }],
+          content: [{
+            type: "text",
+            text: startup.observed
+              ? `Recovered Worker ${safeName} by resuming its exact Session; runtime startup was observed. Task state is unchanged.`
+              : `Recovered Worker ${safeName} by resuming its exact Session, but runtime startup wasn't observed. Task state is unchanged.`,
+          }],
           details: toolResultDetails({
             operation: "worker_ensure",
             resource: { kind: "worker", id: safeName, teamName: safeTeamName },
@@ -1342,14 +1452,13 @@ export default function (pi: ExtensionAPI) {
               action: "recovered",
               recoveryMode: workerPlan.recoveryMode,
               membership: "current",
-              carrier: "session_bound",
+              ...launchObservationState(startup),
               terminalLaunched: true,
-              runtime: "not_observed",
               taskStateChanged: false,
             } satisfies WorkerEnsurePostState,
-            warnings: [toolResultWarning(
+            warnings: startup.observed ? [] : [toolResultWarning(
               "runtime_not_observed",
-              "Exact-Session relaunch succeeded, but this call did not observe later Worker runtime heartbeats.",
+              "Exact-Session relaunch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
               safeName,
             )],
             nextActions: [{
@@ -1392,7 +1501,7 @@ export default function (pi: ExtensionAPI) {
         }
       }
 
-      const useSeparateWindow = params.separate_window ?? teamConfig.separateWindows ?? false;
+      const useSeparateWindow = teamConfig.separateWindows ?? false;
       if (useSeparateWindow && !teamTerminal.supportsWindows()) {
         throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
       }
@@ -1414,7 +1523,7 @@ export default function (pi: ExtensionAPI) {
       };
 
       await teams.addMember(safeTeamName, member);
-      await teamEvents.appendTeamEvent(safeTeamName, {
+      const preparedEvent = await teamEvents.appendTeamEvent(safeTeamName, {
         type: "worker", worker: safeName, membershipId: member.membershipId!, phase: "prepared",
       });
 
@@ -1435,10 +1544,20 @@ export default function (pi: ExtensionAPI) {
         () => spawnWorkerCarrier(teamConfig, teamTerminal, member, piCmd, env, useSeparateWindow),
       );
 
+      const startup = await observeLaunchedWorker(
+        safeTeamName,
+        safeName,
+        member.membershipId!,
+        preparedEvent.cursor,
+        signal,
+      );
+
       return {
         content: [{
           type: "text",
-          text: `Worker ${safeName} created with a prepared carrier. Runtime startup hasn't been observed, and no Task is assigned yet; assign one only when real work exists, without assuming readiness.`,
+          text: startup.observed
+            ? `Worker ${safeName} created; its exact Session binding and runtime startup were observed, and no Task is assigned.\nNext: create a Task only when real work exists.`
+            : `Worker ${safeName} was launched, but its exact runtime startup wasn't observed within the bounded wait; no Task is assigned.\nNext: use team_sync to observe binding changes; create a Task only when real work exists.`,
         }],
         details: toolResultDetails({
           operation: "worker_ensure",
@@ -1447,20 +1566,23 @@ export default function (pi: ExtensionAPI) {
             name: safeName,
             action: "created",
             membership: "current",
-            carrier: "prepared",
+            ...launchObservationState(startup),
             terminalLaunched: true,
-            runtime: "not_observed",
             assignedTasks: [],
           } satisfies WorkerEnsurePostState,
-          warnings: [toolResultWarning(
+          warnings: startup.observed ? [] : [toolResultWarning(
             "runtime_not_observed",
-            "Terminal launch succeeded, but this call did not observe the Worker runtime.",
+            "Terminal launch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
             safeName,
           )],
-          nextActions: [{
+          nextActions: startup.observed ? [{
             tool: "task_create",
             reason: "Assign a goal and independently verifiable acceptance criteria.",
             args: { team_name: safeTeamName, assignee: safeName },
+          }] : [{
+            tool: "team_sync",
+            reason: "Observe the exact Worker binding before assigning executable work.",
+            args: { team_name: safeTeamName },
           }],
           evidence: {
             membershipId: member.membershipId,

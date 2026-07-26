@@ -53,13 +53,21 @@ restating executable definitions.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
 - One live Team runs one Pi Team Bright version; upgrades happen as a stopped
-  and restarted epoch, not a rolling deployment.
+  and restarted epoch, not a rolling deployment. In unpublished pre-1.0
+  `0.16.0-rc.1`, `worker_ensure.separate_window` was deliberately removed:
+  durable Team configuration exclusively owns placement policy. A launch receipt
+  may report exact bounded startup observation, but never Worker readiness or
+  progress. Existing absent/false settings mean panes; stop the Team and create
+  a new epoch with `team_create.separate_windows=true` to adopt windows—never
+  edit config or pass a Worker override, and unsupported carriers refuse.
 
 ## Current status and anchors
 
-- The public surface has ten tools and one versioned result envelope.
-- `@hypercarrier/pi-team-bright@0.15.0-rc.1` is prepared for public npm
-  publication through the manually dispatched OIDC workflow.
+- The public surface has ten tools, one versioned result envelope, and a read-only `/pi-team-bright [status|help]` command. Its internal diagnostic schema remains `pi-teams-status/1`; it reports Team/Membership, exact Session binding, configured storage, and Beads authority state without claiming Task, Worker, runtime, or progress state. The shared TUI receipt is a human projection: Accepted/Partial/Refused facts are separate from bounded italic model hints, while machine next actions remain expanded-only evidence.
+- `@hypercarrier/pi-team-bright@0.16.0-rc.1` remains npm-unpublished. Its
+  first public release requires the explicit human/2FA bootstrap; bind the
+  trusted publisher immediately after that successful bootstrap, then later
+  releases use the manually dispatched OIDC workflow.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -70,8 +78,10 @@ restating executable definitions.
   source-controlled materializer verifies and installs the official linux-amd64
   archive for both CI and the manual publish workflow; publishing defaults to a
   non-mutating dry run.
-- `npm test` type-checks and runs the contract, lifecycle, identity, and
-  integration suites. `npm run verify:package` installs the packed artifact in
+- `npm test` type-checks and runs the fast deterministic lane, not the full
+  contract/lifecycle/integration suite. CI on Node 22/24 runs it plus
+  `test:exhaustive-only` and package verification; publish on Node 24 runs
+  `test:full` and package verification. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
 
@@ -95,3 +105,8 @@ Next steps:
 3. Restart live Teams as one version epoch after an upgrade or rollback.
 4. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
+
+
+## Test lanes
+
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.

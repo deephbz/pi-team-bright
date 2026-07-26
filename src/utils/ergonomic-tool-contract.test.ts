@@ -8,6 +8,7 @@ import * as paths from "./paths";
 import * as teams from "./teams";
 import * as teamEvents from "./team-events";
 import * as taskAuthority from "./tasks";
+import * as runtime from "./runtime";
 
 type RegisteredTool = {
   name: string;
@@ -94,7 +95,7 @@ function terminal(): TerminalAdapter {
  * so lifecycle operations resolve it from durable authority instead of ambient
  * detection. Members still carry legacy pane IDs to keep that read covered.
  */
-function createBoundTeam(name: string, leadSession: string) {
+function createBoundTeam(name: string, leadSession: string, separateWindows?: boolean) {
   const detected = getTerminalAdapter();
   return teams.createTeam(
     name,
@@ -102,7 +103,7 @@ function createBoundTeam(name: string, leadSession: string) {
     "lead",
     undefined,
     undefined,
-    undefined,
+    separateWindows,
     undefined,
     undefined,
     undefined,
@@ -181,13 +182,19 @@ describe("ergonomic agent-facing Team contracts", () => {
       name: team,
       lifecycle: "active",
       taskAuthorityReady: true,
+      teamDirectory: paths.teamDir(team),
+      taskWorkspace: paths.teamDir(team),
+      beadsDatabase: expect.any(String),
     });
     expect(created.details.evidence).toMatchObject({
       leadMembershipId: expect.any(String),
       taskAuthority: { backend: "beads", authorityId: expect.any(String) },
     });
     expect(created.details).not.toHaveProperty("config");
-    expect(created.content[0].text).toContain(team);
+    expect(created.content[0].text).toBe(
+      `Team ${team} created; Task authority is ready.\n` +
+      "Next: use worker_ensure when another capability is needed, or task_create to create the first work contract.",
+    );
     expect(created.content[0].text).not.toContain(created.details.evidence.leadMembershipId);
     expect(created.content[0].text).not.toContain(created.details.evidence.taskAuthority.authorityId);
     expect(JSON.stringify(created.details)).not.toContain(leadSession);
@@ -369,6 +376,91 @@ describe("ergonomic agent-facing Team contracts", () => {
     );
     expect(currentWorkers).toHaveLength(1);
     expect(taskReads).toHaveBeenCalledTimes(0);
+  });
+
+  it("observes the exact Worker binding and runtime during the bounded launch wait", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "1000");
+    const team = uniqueTeam("worker-startup-observed");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      spawn: () => {
+        queueMicrotask(async () => {
+          const prepared = await teams.currentMembership(team, "worker");
+          const bound = await teams.bindMemberSession(
+            team,
+            "worker",
+            workerSession,
+            prepared.pendingLaunchId,
+            {},
+            prepared.membershipId,
+          );
+          const startedAt = Date.now();
+          await runtime.writeRuntimeStatus(team, "worker", {
+            pid: 4242,
+            startedAt,
+            ready: false,
+          }, bound.membershipId);
+          await teamEvents.appendTeamEvent(team, {
+            type: "worker",
+            worker: "worker",
+            membershipId: bound.membershipId!,
+            phase: "session_bound",
+            generation: { membershipId: bound.membershipId!, pid: 4242, startedAt },
+          });
+        });
+        return "pane-worker";
+      },
+      isAlive: (paneId) => paneId === "pane-worker",
+    };
+    setAdapter(adapter);
+    await createBoundTeam(team, leadSession);
+
+    const result = await registerTools().get("worker_ensure")!.execute(
+      "ensure-observed",
+      { team_name: team, name: "worker", profile: "Review interfaces.", cwd: process.cwd() },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+
+    expect(result.details.postState).toMatchObject({
+      action: "created",
+      carrier: "session_bound",
+      runtime: "observed",
+    });
+    expect(result.details.warnings).toEqual([]);
+    expect(result.content[0].text).toMatch(/runtime startup (?:was|were) observed/i);
+  });
+
+  it("uses the Team window policy for every new Worker", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const spawnWindow = vi.fn(() => "window-worker");
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      supportsWindows: () => true,
+      spawn: () => { throw new Error("Team window policy was ignored"); },
+      spawnWindow,
+      isWindowAlive: (windowId) => windowId === "window-worker",
+    };
+    setAdapter(adapter);
+    const team = uniqueTeam("worker-team-window-policy");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    await createBoundTeam(team, leadSession, true);
+
+    await registerTools().get("worker_ensure")!.execute(
+      "ensure-window",
+      { team_name: team, name: "worker", profile: "Review interfaces.", cwd: process.cwd() },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+
+    expect(spawnWindow).toHaveBeenCalledOnce();
   });
 
   it("retries a missing prepared carrier with the same unconsumed launch capability", async () => {

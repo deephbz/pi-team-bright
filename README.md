@@ -2,7 +2,7 @@
 
 Pi Team Bright makes **Task-first teams visible in terminal panes**. One Pi
 Session leads stable Workers; the Task plus its assignee is the only executable
-work contract. The extension registers ten Pi tools and adds no slash commands.
+work contract. The extension registers ten Pi tools plus the read-only `/pi-team-bright [status|help]` command; `status` is the default.
 
 | iTerm2 | tmux | Zellij |
 | :---: | :---: | :---: |
@@ -14,13 +14,13 @@ Install the published npm package, preferably pinning the release for every
 member of a live Team:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.15.0-rc.1
+pi install npm:@hypercarrier/pi-team-bright@0.16.0-rc.1
 ```
 
 Or install the future GitHub repository at a tag or exact commit:
 
 ```sh
-pi install git:github.com/deephbz/pi-team-bright@v0.15.0-rc.1
+pi install git:github.com/deephbz/pi-team-bright@v0.16.0-rc.1
 ```
 
 Use `-l` with either command to install it for the current project. Pi packages
@@ -58,9 +58,21 @@ task_create({
 ```
 
 A Worker receipt separates durable Membership creation, terminal launch, and
-runtime observation without implying readiness. A Task mutation receipt carries
-its resulting authority version. Use `team_sync` to wait for Team and Task
-events instead of polling runtime state or terminal output.
+bounded exact-Membership runtime-startup observation without implying readiness
+or progress. Window placement is a Team-wide durable configuration, not a
+per-call `worker_ensure` option. Existing Teams without `separate_windows` use
+panes. To adopt windows, stop the Team and create a new Team epoch with
+`team_create({ separate_windows: true })`; never edit Team config or pass a
+per-Worker override. Unsupported terminal carriers refuse the Team policy. A Task mutation receipt carries
+its resulting authority version. Pi renders concise Accepted, Partial, or
+Refused receipts separately from short italic `Hints sent to agent`; machine
+next actions appear only in expanded evidence and aren't sent as hints. Use
+`team_sync` to wait for Team and Task events instead of polling runtime state or
+terminal output.
+
+## Status diagnosis
+
+`/pi-team-bright` (or `/pi-team-bright status`) reads the current Team configuration and exact Beads authority binding. It reports Team and Membership facts, Session-binding evidence, configured storage, and Beads verification state. It does not report Task emptiness, Worker readiness, runtime health, or progress.
 
 ## Update and rollback
 
@@ -74,9 +86,9 @@ pi update npm:@hypercarrier/pi-team-bright
 To pin or roll back, reinstall the exact known-good version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.15.0-rc.1
+pi install npm:@hypercarrier/pi-team-bright@0.16.0-rc.1
 # or a GitHub tag / commit:
-pi install git:github.com/deephbz/pi-team-bright@v0.15.0-rc.1
+pi install git:github.com/deephbz/pi-team-bright@v0.16.0-rc.1
 ```
 
 Pinned versions are intentionally skipped by bulk package updates. Verify the
@@ -108,3 +120,8 @@ intentionally kept separate from private maintainer history.
 ## License
 
 [MIT](LICENSE)
+
+
+## Test lanes
+
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.

@@ -19,6 +19,11 @@ exhaustive parameter reference.
   verifies the ten-tool selection and the irreducible Task, Worker, sync, and
   Alert distinctions.
 
+## Read-only status diagnosis
+
+- [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.
+- [`extensions/index.ts`](../extensions/index.ts) registers `/pi-team-bright [status|help]`; it has no `/pi-teams` alias.
+
 ## Result and projection contract
 
 - [`PiTeamsToolResultDetails`](../src/utils/tool-results.ts) is the versioned
@@ -27,7 +32,8 @@ exhaustive parameter reference.
   compact and expanded human projections without serializing machine state as
   UI text.
 - Agent content, machine details, and human rendering are projections of the
-  same authoritative operation.
+  same authoritative operation. The renderer keeps bounded model hints distinct
+  from receipt facts and exposes `nextActions` only in expanded machine evidence.
 
 ## Domain and authority
 
@@ -48,6 +54,10 @@ exhaustive parameter reference.
   relations, versions, evidence guards, and Beads authority integration.
 - [`src/utils/team-events.ts`](../src/utils/team-events.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
+- [`src/utils/worker-startup-observation.ts`](../src/utils/worker-startup-observation.ts)
+  owns the bounded exact-Membership startup observation used after a new or
+  recovered carrier launch; `session_bound` generation evidence correlates the
+  exact runtime process tuple, and it is not a readiness or progress protocol.
 - [`src/utils/alerts.ts`](../src/utils/alerts.ts) owns typed exceptional Alert
   acceptance and event publication.
 - [`src/adapters/terminal-registry.ts`](../src/adapters/terminal-registry.ts)
@@ -57,10 +67,18 @@ exhaustive parameter reference.
 ## Verification and reproduction
 
 - `npm run typecheck` checks the executable type contract.
-- `npm test` runs unit, contract, lifecycle, identity, and integration tests.
+- `npm test` runs only the fast deterministic lane; `test:exhaustive-only` is
+  its CI complement, `test:full` runs all tests, `test:external` is the real
+  Beads/Dolt diagnostic subset, `qa:agent-surface` is the artifact lane,
+  `qa:tool-results` is receipt QA, and `test:lanes` checks closure.
 - `npm run verify:package` packs the public artifact and probes the scoped
   observation import from a clean temporary project.
 
 For human setup and a minimal example, start at the [repository README](../README.md).
 For current stage, decisions, constraints, and next steps, read the
 [evergreen context](current/README.md).
+
+
+## Test lanes
+
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.

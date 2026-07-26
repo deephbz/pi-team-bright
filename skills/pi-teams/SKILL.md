@@ -37,6 +37,10 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
   next action instead of treating them as infrastructure crashes.
 - Reconcile pagination or continuation before waiting again; never silently
   regress a cursor.
+- Team window placement is epoch policy: absent/false `separate_windows` means
+  panes. Stop a Team before creating a new windows epoch with
+  `team_create({ separate_windows: true })`; never edit config or supply a
+  per-Worker window override. Unsupported carriers refuse the policy.
 
 ## Contract lookup
 
