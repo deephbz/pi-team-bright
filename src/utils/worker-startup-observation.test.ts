@@ -101,6 +101,27 @@ describe("bounded Worker startup observation", () => {
     expect(old).toMatchObject({ observed: false, reason: "timeout" });
   });
 
+  it("rejects wrong pid then wrong startedAt through the cadence deadline", async () => {
+    let now = 0; let checks = 0; const waits: number[] = [];
+    const result = await observeWorkerStartup({ ...base, timeoutMs: 100, now: () => now,
+      waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
+      waitForRetry: async (ms) => { waits.push(ms); now += ms; },
+      verifyAuthority: async () => (++checks === 1 ? { sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 99, startedAt: 100 } } : { sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 99 } }),
+    });
+    expect(result).toMatchObject({ observed: false, reason: "timeout" }); expect(checks).toBe(3); expect(waits.every((ms) => ms <= 50)).toBe(true);
+  });
+
+  it("propagates AbortError from post-event cadence", async () => {
+    const aborted = Object.assign(new Error("aborted"), { name: "AbortError" });
+    await expect(observeWorkerStartup({ ...base, waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]), verifyAuthority: async () => ({ sessionBound: false }), waitForRetry: async () => { throw aborted; } })).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("zero deadline wrong tuple checks authority once", async () => {
+    const verifyAuthority = vi.fn(async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 99, startedAt: 100 } }));
+    const result = await observeWorkerStartup({ ...base, timeoutMs: 0, waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]), verifyAuthority });
+    expect(result).toMatchObject({ observed: false, reason: "timeout" }); expect(verifyAuthority).toHaveBeenCalledOnce();
+  });
+
   it("propagates cancellation instead of converting it to a timeout", async () => {
     const aborted = Object.assign(new Error("aborted"), { name: "AbortError" });
     await expect(observeWorkerStartup({
