@@ -273,6 +273,20 @@ function scalar(value: unknown): string | undefined {
   return undefined;
 }
 
+const HUMAN_PRIVATE_KEY = /(?:membership|session|terminal(?:target|id)?|authority(?:fingerprint|id|version)?|runtime(?:pid|id)?|provenance|\bpid\b|(?:private)?path|taskWorkspace|teamDirectory)/i;
+
+/** One boundary for every human receipt surface; raw agent content is separate. */
+function humanSafe(value: unknown, key = ""): unknown {
+  if (HUMAN_PRIVATE_KEY.test(key)) return undefined;
+  if (typeof value === "string") return value.startsWith("/") ? "[redacted]" : value;
+  if (Array.isArray(value)) return value.map((item) => humanSafe(item)).filter((item) => item !== undefined);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).flatMap(([childKey, child]) => {
+    const safe = humanSafe(child, childKey);
+    return safe === undefined ? [] : [[childKey, safe]];
+  }));
+}
+
 function structuredLines(value: unknown, prefix = "", depth = 0): string[] {
   if (depth > 3) return [`${prefix || "Value"}: …`];
   const direct = scalar(value);
@@ -293,16 +307,8 @@ function structuredLines(value: unknown, prefix = "", depth = 0): string[] {
   }).concat(entries.length > 24 ? [`${prefix || "Fields"}: ${entries.length - 24} more`] : []);
 }
 
-function humanExpandedEvidence(tool: PiTeamsPublicTool, value: unknown): unknown {
-  if (tool !== "team_sync" || !isRecord(value) || !Array.isArray(value.events)) return value;
-  return {
-    ...value,
-    events: value.events.map((event) => {
-      if (!isRecord(event) || event.type !== "worker") return event;
-      const { membershipId: _opaqueMembershipId, ...semanticEvent } = event;
-      return semanticEvent;
-    }),
-  };
+function humanExpandedEvidence(_tool: PiTeamsPublicTool, value: unknown): unknown {
+  return humanSafe(value);
 }
 
 function receiptIdentity(
@@ -357,12 +363,11 @@ function compactFacts(tool: PiTeamsPublicTool, normalized: NormalizedResult): st
 
   if (tool === "team_create") {
     if (state.changed === false) return [`Current members: ${Array.isArray(state.currentMembers) ? state.currentMembers.join(", ") : "unchanged"}`];
-    const taskWorkspace = firstString(state, "taskWorkspace") ?? firstString(state, "teamDirectory");
-    return [
-      taskWorkspace
-        ? `Task engine: Beads · workspace: ${taskWorkspace} · external view/edit: bd --directory <workspace> …`
-        : state.taskAuthorityReady === true ? "Task engine: Beads · ready" : "",
-    ].filter(Boolean);
+    const taskWorkspace = firstString(state, "taskWorkspace");
+    if (state.taskAuthorityReady === true && taskWorkspace) {
+      return [`Task engine: Beads · workspace: ${taskWorkspace} · external view/edit: bd --directory <workspace> …`];
+    }
+    return [state.taskAuthorityReady === true ? "Task authority is configured, but its Beads workspace is unavailable." : "Task authority is not ready."];
   }
   if (tool === "worker_ensure") {
     if (state.changed === false) return ["Worker not created · current roster unchanged"];
@@ -585,8 +590,9 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
       && isRecord(normalized.postState)
       && normalized.postState.reason === "recipient_not_current"
       && item.code === "alert_recipient_not_current";
-    const resourcePrefix = !compactMissingAlertRecipient && item.resourceId && item.resourceId !== normalized.resource?.id
-      ? `${item.resourceId}: `
+    const safeResourceId = humanSafe(item.resourceId, "resourceId");
+    const resourcePrefix = !compactMissingAlertRecipient && typeof safeResourceId === "string" && safeResourceId !== normalized.resource?.id
+      ? `${safeResourceId}: `
       : "";
     const message = compactMissingAlertRecipient
       ? "Recipient is not a current Team member."
@@ -624,7 +630,7 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
     for (const [label, value] of sections) {
       if (value === undefined) continue;
       lines.push({ tone: "muted", text: label });
-      const humanValue = label === "Evidence" ? humanExpandedEvidence(input.tool, value) : value;
+      const humanValue = humanExpandedEvidence(input.tool, value);
       for (const evidenceLine of structuredLines(humanValue)) {
         lines.push({ tone: "dim", text: `  ${evidenceLine}` });
       }
@@ -634,7 +640,7 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
       for (const action of normalized.nextActions) {
         lines.push({ tone: "accent", text: `  ${action.tool} — ${action.reason}` });
         if (!action.args) continue;
-        for (const argumentLine of structuredLines(action.args)) {
+        for (const argumentLine of structuredLines(humanSafe(action.args))) {
           lines.push({ tone: "dim", text: `    ${argumentLine}` });
         }
       }

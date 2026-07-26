@@ -3,6 +3,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   createPiTeamsResultRenderer,
   formatPiTeamsToolResult,
+  PI_TEAMS_PUBLIC_TOOLS,
 } from "./tool-result-renderer";
 import { toolResultDetails, warning } from "./tool-results";
 
@@ -286,12 +287,33 @@ describe("shared PiTeams tool-result renderer", () => {
     expect(rendered).toContain("Post-state");
     expect(rendered).toContain("Action: reused");
     expect(rendered).toContain("Evidence");
-    expect(rendered).toContain("Membership Id: membership-17");
     expect(rendered).toContain("Diagnostics");
-    expect(rendered).toContain("Terminal · Target Id: %91");
+    expect(rendered).not.toContain("membership-17");
+    expect(rendered).not.toContain("Target Id: %91");
     expect(rendered).toContain("Machine next actions (not sent to agent)");
     expect(rendered).toContain("task_create — Bind executable work to this Worker.");
     expect(rendered).toContain("Assignee: event-auditor");
+  });
+
+  it("redacts opaque and private injected fields across every public tool", () => {
+    const leaks = ["membership-secret", "session-secret", "terminal-secret", "authority-secret", "version-secret", "/private/operator/path"];
+    for (const tool of PI_TEAMS_PUBLIC_TOOLS) {
+      const rendered = text(formatPiTeamsToolResult({
+        tool,
+        expanded: true,
+        details: toolResultDetails({
+          operation: tool,
+          resource: { kind: "team", id: "semantic-team" },
+          postState: { membershipId: leaks[0], sessionId: leaks[1], terminalTarget: leaks[2], authorityFingerprint: leaks[3], authorityVersion: leaks[4], privatePath: leaks[5], taskId: "semantic-task" },
+          evidence: { provenanceId: leaks[3], runtimePid: 4242, path: leaks[5], relation: "blocked_by" },
+          diagnostics: { sessionFile: leaks[1], terminalId: leaks[2] },
+          nextActions: [{ tool: "task_read", reason: "semantic follow-up", args: { task_id: "semantic-task", membershipId: leaks[0], path: leaks[5] } }],
+        }),
+      }));
+      for (const leak of leaks) expect(rendered).not.toContain(leak);
+      expect(rendered).toContain("semantic-task");
+      expect(rendered).toContain("blocked_by");
+    }
   });
 
   it("shows a reused idle Worker without irrelevant launch-readiness diagnostics", () => {
