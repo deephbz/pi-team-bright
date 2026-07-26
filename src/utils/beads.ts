@@ -89,23 +89,79 @@ export interface BdRunner {
   run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult>;
 }
 
+export class OwnedBdBinaryError extends Error {
+  readonly code: "BEADS_OWNED_BINARY_MISSING" | "BEADS_OWNED_BINARY_UNSUPPORTED";
+
+  constructor(
+    code: OwnedBdBinaryError["code"],
+    message: string,
+  ) {
+    super(message);
+    this.name = "OwnedBdBinaryError";
+    this.code = code;
+  }
+}
+
+/**
+ * Resolve the owned Beads CLI directly from this package's dependency graph.
+ * Pi launches extensions from a parent process whose PATH need not include the
+ * package's `node_modules/.bin`; invoking the package bin avoids silently
+ * binding Task authority to an unrelated global `bd` version. The wrapper is
+ * present in every npm install, but its platform-native sibling is acquired by
+ * @beads/bd postinstall (or deliberately materialized by CI).
+ */
+export function resolveBdExecutable(): string {
+  const manifestPath = require.resolve("@beads/bd/package.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as { bin?: { bd?: unknown } | unknown };
+  const bin = typeof manifest.bin === "object" && manifest.bin !== null
+    ? (manifest.bin as { bd?: unknown }).bd
+    : undefined;
+  if (typeof bin !== "string" || !bin) throw new OwnedBdBinaryError(
+    "BEADS_OWNED_BINARY_MISSING",
+    "owned @beads/bd package does not declare the bd launcher",
+  );
+
+  const packageRoot = path.dirname(manifestPath);
+  const executable = path.resolve(packageRoot, bin);
+  if (!fs.statSync(executable).isFile()) throw new OwnedBdBinaryError(
+    "BEADS_OWNED_BINARY_MISSING",
+    `owned @beads/bd launcher is missing at ${executable}`,
+  );
+
+  if (!["darwin", "linux", "win32", "android"].includes(process.platform) || !["x64", "arm64"].includes(process.arch)) {
+    throw new OwnedBdBinaryError(
+      "BEADS_OWNED_BINARY_UNSUPPORTED",
+      `owned @beads/bd binary is unsupported on ${process.platform}-${process.arch}`,
+    );
+  }
+  const nativeBinary = path.join(packageRoot, "bin", process.platform === "win32" ? "bd.exe" : "bd");
+  if (!fs.existsSync(nativeBinary)) throw new OwnedBdBinaryError(
+    "BEADS_OWNED_BINARY_MISSING",
+    `owned @beads/bd binary is missing at ${nativeBinary}; reinstall @beads/bd@1.1.0 for ${process.platform}-${process.arch}`,
+  );
+  return executable;
+}
+
 export function bdExecFailure(error: any): BdCommandResult {
   const stdout = typeof error?.stdout === "string" ? error.stdout : "";
+  const ownedBinaryMissing = error?.code === "BEADS_OWNED_BINARY_MISSING" || error?.code === "BEADS_OWNED_BINARY_UNSUPPORTED";
   const commandMissing = error?.code === "ENOENT";
   const stderr = typeof error?.stderr === "string" && error.stderr
     ? error.stderr
-    : commandMissing
-      ? "bd: command not found"
-      : "";
+    : ownedBinaryMissing
+      ? `bd: ${error.message}`
+      : commandMissing
+        ? "bd: command not found"
+        : "";
   const timedOut = error?.killed || error?.code === "ETIMEDOUT";
-  const exitCode = commandMissing ? 127 : typeof error?.code === "number" ? error.code : timedOut ? 124 : 1;
+  const exitCode = ownedBinaryMissing || commandMissing ? 127 : typeof error?.code === "number" ? error.code : timedOut ? 124 : 1;
   return { stdout, stderr, exitCode };
 }
 
 class ExecBdRunner implements BdRunner {
   async run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult> {
     try {
-      const result = await execFileAsync("bd", args, {
+      const result = await execFileAsync(resolveBdExecutable(), args, {
         cwd: options.cwd,
         timeout: options.timeoutMs,
         maxBuffer: 8 * 1024 * 1024,

@@ -79,7 +79,10 @@ installed source with `pi list` before restarting a Team.
 Tasks plus exact assignees are the work protocol. Typed Alerts only handle
 exceptional clarification, attention, and lead announcements among current
 Team members; they never assign, advance, or complete work. Beads is the sole
-runtime Task authority.
+runtime Task authority. Pi Team Bright installs the pinned `@beads/bd@1.1.0`
+CLI as a runtime dependency, so npm and Git installs don't require a separate
+global `bd` installation. Its installer acquires the matching native binary for
+supported x64 and arm64 macOS, Linux, Windows, and Android Node platforms.
 
 Pi Team Bright deliberately does not provide a general agent directory,
 cross-Team routing, freeform work by message, inbox polling, runtime polling as

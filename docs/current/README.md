@@ -60,9 +60,16 @@ restating executable definitions.
 - The public surface has ten tools and one versioned result envelope.
 - `@hypercarrier/pi-team-bright@0.15.0-rc.1` is prepared for public npm
   publication through the manually dispatched OIDC workflow.
+- `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
+  its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
+  or a separately installed `bd`; normal npm/Git installation acquires the
+  matching native binary for supported x64 and arm64 Node platforms. Missing or
+  unsupported owned binaries report typed unavailable `bd` errors. CI verifies
+  and materializes the pinned official linux-amd64 binary because upstream
+  postinstall deliberately skips binary download when `CI` is set.
 - `npm test` type-checks and runs the contract, lifecycle, identity, and
   integration suites. `npm run verify:package` installs the packed artifact in
-a clean temporary project and probes the scoped observation import in CommonJS
+  a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
 
 ## Constraints and open work
