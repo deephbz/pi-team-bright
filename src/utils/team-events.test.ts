@@ -24,6 +24,18 @@ describe("Team event cursor and pagination contract", () => {
     fs.rmSync(teamDir(teamName), { recursive: true, force: true });
   });
 
+  it("accepts legacy worker events, round-trips valid generation, and rejects invalid generation tuples", async () => {
+    await appendTeamEvent(teamName, { type: "worker", worker: "legacy", membershipId: "m1", phase: "session_bound" });
+    await appendTeamEvent(teamName, { type: "worker", worker: "valid", membershipId: "m2", phase: "session_bound", generation: { membershipId: "m2", pid: 42, startedAt: 100 } });
+    const events = readTeamEvents(teamName).events;
+    expect((events[0] as any).generation).toBeUndefined();
+    expect((events[1] as any).generation).toEqual({ membershipId: "m2", pid: 42, startedAt: 100 });
+    for (const generation of [{ membershipId: "wrong", pid: 42, startedAt: 100 }, { membershipId: "m3", pid: 1, startedAt: 100 }, { membershipId: "m3", pid: 2.5, startedAt: 100 }, { membershipId: "m3", pid: 42, startedAt: 0 }, { membershipId: "m3", pid: 42, startedAt: 1.5 }]) {
+      await expect(appendTeamEvent(teamName, { type: "worker", worker: "bad", membershipId: "m3", phase: "session_bound", generation } as any)).rejects.toThrow(/invalid worker generation/);
+    }
+    await expect(appendTeamEvent(teamName, { type: "worker", worker: "bad", membershipId: "m3", phase: "prepared", generation: { membershipId: "m3", pid: 42, startedAt: 100 } } as any)).rejects.toThrow(/session_bound-only/);
+  });
+
   async function appendAlert(index: number) {
     return appendTeamEvent(teamName, {
       type: "alert",
