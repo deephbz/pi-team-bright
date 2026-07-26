@@ -9,7 +9,7 @@ export const PI_TEAMS_COMMAND_USAGE = "Usage: /pi-team-bright [status|help]";
 
 const COMMANDS = [
   { value: "status", label: "status", description: "Diagnose the current Team and its Beads authority" },
-  { value: "help", label: "help", description: "Show pi-teams command usage" },
+  { value: "help", label: "help", description: "Show Pi Team Bright command usage" }
 ] as const;
 
 export type PiTeamsCommand =
