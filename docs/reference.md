@@ -56,7 +56,8 @@ exhaustive parameter reference.
   waits, filters, bounded pages, and snapshot continuations.
 - [`src/utils/worker-startup-observation.ts`](../src/utils/worker-startup-observation.ts)
   owns the bounded exact-Membership startup observation used after a new or
-  recovered carrier launch; it is not a readiness or progress protocol.
+  recovered carrier launch; `session_bound` generation evidence correlates the
+  exact runtime process tuple, and it is not a readiness or progress protocol.
 - [`src/utils/alerts.ts`](../src/utils/alerts.ts) owns typed exceptional Alert
   acceptance and event publication.
 - [`src/adapters/terminal-registry.ts`](../src/adapters/terminal-registry.ts)

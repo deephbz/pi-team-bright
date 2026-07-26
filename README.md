@@ -60,7 +60,10 @@ task_create({
 A Worker receipt separates durable Membership creation, terminal launch, and
 bounded exact-Membership runtime-startup observation without implying readiness
 or progress. Window placement is a Team-wide durable configuration, not a
-per-call `worker_ensure` option. A Task mutation receipt carries
+per-call `worker_ensure` option. Existing Teams without `separate_windows` use
+panes. To adopt windows, stop the Team and create a new Team epoch with
+`team_create({ separate_windows: true })`; never edit Team config or pass a
+per-Worker override. Unsupported terminal carriers refuse the Team policy. A Task mutation receipt carries
 its resulting authority version. Pi renders concise Accepted, Partial, or
 Refused receipts separately from short italic `Hints sent to agent`; machine
 next actions appear only in expanded evidence and aren't sent as hints. Use

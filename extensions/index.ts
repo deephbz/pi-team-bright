@@ -612,6 +612,7 @@ export default function (pi: ExtensionAPI) {
           return;
         }
         const candidate = await teams.currentMembership(teamName, agentName);
+        const startedAt = Date.now();
         const bound = await teams.withMembershipMutationLease(teamName, candidate.membershipId!, async () => {
           const current = await teams.bindMemberSession(
             teamName!,
@@ -626,17 +627,18 @@ export default function (pi: ExtensionAPI) {
           // the old generation or this complete replacement, never an interleave.
           await runtime.writeRuntimeStatus(teamName!, agentName, {
             pid: process.pid,
-            startedAt: Date.now(),
-            lastHeartbeatAt: Date.now(),
+            startedAt,
+            lastHeartbeatAt: startedAt,
             ready: false,
             lastError: undefined,
           }, current.membershipId);
+          await teamEvents.appendTeamEvent(teamName!, {
+            type: "worker", worker: agentName, membershipId: current.membershipId!, phase: "session_bound",
+            generation: { membershipId: current.membershipId!, pid: process.pid, startedAt },
+          });
           return current;
         });
         currentMembershipId = bound.membershipId;
-        await teamEvents.appendTeamEvent(teamName, {
-          type: "worker", worker: agentName, membershipId: bound.membershipId!, phase: "session_bound",
-        }).catch(() => undefined);
       }
       ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
       if (terminal) {
@@ -1097,7 +1099,7 @@ export default function (pi: ExtensionAPI) {
           const status = await runtime.readRuntimeStatus(targetTeamName, workerName);
           return {
             sessionBound: current.membershipId === membershipId && !!current.sessionFile,
-            runtimeObserved: runtime.runtimeGeneration(status)?.membershipId === membershipId,
+            generation: runtime.runtimeGeneration(status) ?? undefined,
           };
         } catch {
           return { sessionBound: false, runtimeObserved: false };

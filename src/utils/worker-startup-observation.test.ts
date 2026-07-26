@@ -8,7 +8,7 @@ function batch(cursor: string, events: TeamEvent[], timedOut = false): TeamEvent
 }
 
 function workerEvent(cursor: string, worker: string, membershipId: string, phase: "prepared" | "session_bound"): TeamEvent {
-  return { type: "worker", cursor, worker, membershipId, phase, at: "2026-07-26T00:00:00.000Z" };
+  return { type: "worker", cursor, worker, membershipId, phase, generation: phase === "session_bound" ? { membershipId, pid: 42, startedAt: 100 } : undefined, at: "2026-07-26T00:00:00.000Z" };
 }
 
 const base = {
@@ -25,7 +25,7 @@ describe("bounded Worker startup observation", () => {
       ...base,
       timeoutMs: 3_000,
       waitForEvents,
-      verifyAuthority: async () => ({ sessionBound: true, runtimeObserved: true }),
+      verifyAuthority: async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } }),
     });
 
     expect(result).toEqual({ observed: true, carrier: "session_bound", runtime: "observed", cursor: "2" });
@@ -50,7 +50,7 @@ describe("bounded Worker startup observation", () => {
       timeoutMs: 3_000,
       now: () => time,
       waitForEvents,
-      verifyAuthority: async () => ({ sessionBound: true, runtimeObserved: true }),
+      verifyAuthority: async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } }),
     });
 
     expect(result.observed).toBe(true);
@@ -62,7 +62,7 @@ describe("bounded Worker startup observation", () => {
       ...base,
       timeoutMs: 0,
       waitForEvents: async () => batch("1", [], true),
-      verifyAuthority: async () => ({ sessionBound: false, runtimeObserved: false }),
+      verifyAuthority: async () => ({ sessionBound: false }),
     });
     expect(result).toEqual({
       observed: false,
@@ -77,9 +77,9 @@ describe("bounded Worker startup observation", () => {
     const result = await observeWorkerStartup({
       ...base,
       waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
-      verifyAuthority: async () => ({ sessionBound: true, runtimeObserved: false }),
+      verifyAuthority: async () => ({ sessionBound: true }),
     });
-    expect(result).toMatchObject({ observed: false, carrier: "session_bound", reason: "authority_mismatch" });
+    expect(result).toMatchObject({ observed: false, carrier: "session_bound", reason: "timeout" });
   });
 
   it("propagates cancellation instead of converting it to a timeout", async () => {
@@ -87,7 +87,7 @@ describe("bounded Worker startup observation", () => {
     await expect(observeWorkerStartup({
       ...base,
       waitForEvents: async () => { throw aborted; },
-      verifyAuthority: async () => ({ sessionBound: false, runtimeObserved: false }),
+      verifyAuthority: async () => ({ sessionBound: false }),
     })).rejects.toMatchObject({ name: "AbortError" });
   });
 });
