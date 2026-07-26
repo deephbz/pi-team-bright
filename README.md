@@ -59,8 +59,11 @@ task_create({
 
 A Worker receipt separates durable Membership creation, terminal launch, and
 runtime observation without implying readiness. A Task mutation receipt carries
-its resulting authority version. Use `team_sync` to wait for Team and Task
-events instead of polling runtime state or terminal output.
+its resulting authority version. Pi renders concise Accepted, Partial, or
+Refused receipts separately from short italic `Hints sent to agent`; machine
+next actions appear only in expanded evidence and aren't sent as hints. Use
+`team_sync` to wait for Team and Task events instead of polling runtime state or
+terminal output.
 
 ## Status diagnosis
 

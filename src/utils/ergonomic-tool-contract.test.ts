@@ -177,10 +177,13 @@ describe("ergonomic agent-facing Team contracts", () => {
     );
 
     expectEnvelope(created.details, "team_create", "team");
-    expect(created.details.postState).toEqual({
+    expect(created.details.postState).toMatchObject({
       name: team,
       lifecycle: "active",
       taskAuthorityReady: true,
+      teamDirectory: paths.teamDir(team),
+      taskWorkspace: paths.teamDir(team),
+      beadsDatabase: expect.any(String),
     });
     expect(created.details.evidence).toMatchObject({
       leadMembershipId: expect.any(String),

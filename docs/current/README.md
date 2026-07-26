@@ -57,7 +57,7 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The public surface has ten tools, one versioned result envelope, and a read-only `/pi-team-bright [status|help]` command. Its internal diagnostic schema remains `pi-teams-status/1`; it reports Team/Membership, exact Session binding, configured storage, and Beads authority state without claiming Task, Worker, runtime, or progress state.
+- The public surface has ten tools, one versioned result envelope, and a read-only `/pi-team-bright [status|help]` command. Its internal diagnostic schema remains `pi-teams-status/1`; it reports Team/Membership, exact Session binding, configured storage, and Beads authority state without claiming Task, Worker, runtime, or progress state. The shared TUI receipt is a human projection: Accepted/Partial/Refused facts are separate from bounded italic model hints, while machine next actions remain expanded-only evidence.
 - `@hypercarrier/pi-team-bright@0.16.0-rc.1` remains npm-unpublished. Its
   first public release requires the explicit human/2FA bootstrap; bind the
   trusted publisher immediately after that successful bootstrap, then later

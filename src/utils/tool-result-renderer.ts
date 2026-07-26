@@ -29,6 +29,7 @@ type LineTone = "success" | "warning" | "error" | "accent" | "muted" | "dim";
 export interface ToolResultRenderLine {
   tone: LineTone;
   text: string;
+  italic?: boolean;
 }
 
 export interface FormatPiTeamsToolResultInput {
@@ -53,19 +54,6 @@ interface NormalizedResult {
   legacy: boolean;
 }
 
-const OPERATION_LABELS: Record<PiTeamsPublicTool, string> = {
-  team_create: "Create Team",
-  team_sync: "Sync Team",
-  team_shutdown: "Shut Down Team",
-  worker_ensure: "Ensure Worker",
-  worker_stop: "Stop Worker",
-  task_create: "Create Task",
-  task_read: "Read Task",
-  task_update: "Update Task",
-  task_link: "Link Task",
-  alert_send: "Send Alert",
-};
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -85,6 +73,13 @@ function firstString(record: Record<string, unknown> | undefined, ...keys: strin
 function bounded(value: string, limit = 180): string {
   const compact = value.replace(/\s+/g, " ").trim();
   return compact.length <= limit ? compact : `${compact.slice(0, limit - 1)}…`;
+}
+
+function modelContentLines(content: unknown): string[] {
+  if (!Array.isArray(content)) return [];
+  const text = content.find((item) => isRecord(item) && item.type === "text");
+  if (!isRecord(text) || typeof text.text !== "string" || text.text.length === 0) return [];
+  return text.text.split("\n");
 }
 
 function contentText(content: unknown): string | undefined {
@@ -310,7 +305,7 @@ function humanExpandedEvidence(tool: PiTeamsPublicTool, value: unknown): unknown
   };
 }
 
-function semanticIdentity(
+function receiptIdentity(
   tool: PiTeamsPublicTool,
   normalized: NormalizedResult,
   argsValue: unknown,
@@ -318,28 +313,32 @@ function semanticIdentity(
   const args = isRecord(argsValue) ? argsValue : {};
   const postState = isRecord(normalized.postState) ? normalized.postState : undefined;
   const teamName = normalized.resource?.teamName ?? firstString(args, "team_name");
+  const teamSuffix = teamName && normalized.resource?.id !== teamName ? ` · team ${JSON.stringify(teamName)}` : "";
 
   if (tool === "alert_send") {
     const kind = firstString(postState, "kind") ?? firstString(args, "kind") ?? "alert";
     const to = firstString(postState, "to", "recipient") ?? firstString(args, "to") ?? "recipient";
     const taskId = firstString(postState, "taskId", "task_id") ?? firstString(args, "task_id");
-    return `${humanizeKey(kind)} to ${to}${taskId ? ` · Task ${taskId}` : ""}${teamName ? ` · Team ${teamName}` : ""}`;
+    return `${kind} alert to ${JSON.stringify(to)}${taskId ? ` · task ${JSON.stringify(taskId)}` : ""}${teamName ? ` · team ${JSON.stringify(teamName)}` : ""}`;
   }
   if (tool === "task_link") {
-    const taskId = normalized.resource?.id ?? firstString(args, "task_id") ?? "Task";
+    const taskId = normalized.resource?.id ?? firstString(args, "task_id") ?? "unknown";
     const relation = firstString(args, "relation") ?? "relation";
     const target = firstString(args, "target_id") ?? "target";
     const action = firstString(args, "action") ?? "change";
     const evidence = isRecord(normalized.evidence) ? normalized.evidence : {};
     const prefix = normalized.outcome === "refused" && evidence.changed === false ? "requested " : "";
-    return `Task ${taskId} · ${prefix}${action} ${relation} → ${target}`;
+    return `task ${JSON.stringify(taskId)} · ${prefix}${action} ${relation} → ${JSON.stringify(target)}${teamSuffix}`;
   }
   if (normalized.resource) {
-    const kind = humanizeKey(normalized.resource.kind);
-    return `${kind} ${normalized.resource.id}${teamName && normalized.resource.id !== teamName ? ` · Team ${teamName}` : ""}`;
+    return `${normalized.resource.kind} ${JSON.stringify(normalized.resource.id)}${teamSuffix}`;
   }
-  if (teamName) return `Team ${teamName}`;
-  return "Result";
+  if (teamName) return `team ${JSON.stringify(teamName)}`;
+  return "result";
+}
+
+function capitalize(value: string): string {
+  return value.length > 0 ? value[0].toUpperCase() + value.slice(1) : value;
 }
 
 function semanticState(tool: PiTeamsPublicTool, postState: unknown): string | undefined {
@@ -358,7 +357,12 @@ function compactFacts(tool: PiTeamsPublicTool, normalized: NormalizedResult): st
 
   if (tool === "team_create") {
     if (state.changed === false) return [`Current members: ${Array.isArray(state.currentMembers) ? state.currentMembers.join(", ") : "unchanged"}`];
-    return state.taskAuthorityReady === true ? ["Task authority ready"] : [];
+    const taskWorkspace = firstString(state, "taskWorkspace") ?? firstString(state, "teamDirectory");
+    return [
+      taskWorkspace
+        ? `Task engine: Beads · workspace: ${taskWorkspace} · external view/edit: bd --directory <workspace> …`
+        : state.taskAuthorityReady === true ? "Task engine: Beads · ready" : "",
+    ].filter(Boolean);
   }
   if (tool === "worker_ensure") {
     if (state.changed === false) return ["Worker not created · current roster unchanged"];
@@ -555,11 +559,11 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
       ? "warning"
       : "success";
   const icon = tone === "error" ? "✗" : tone === "warning" ? "!" : "✓";
-  const identity = semanticIdentity(input.tool, normalized, input.args);
+  const identity = receiptIdentity(input.tool, normalized, input.args);
   const state = input.tool.startsWith("task_") ? undefined : semanticState(input.tool, normalized.postState);
   const lines: ToolResultRenderLine[] = [{
     tone,
-    text: `${icon} ${OPERATION_LABELS[input.tool]} · ${outcome} · ${identity}${state ? ` · ${state}` : ""}`,
+    text: `${icon} ${capitalize(outcome)}: ${identity}${state ? ` · ${state}` : ""}`,
   }];
 
   if (!input.isError) {
@@ -596,11 +600,19 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
     lines.push({ tone: "warning", text: `! ${normalized.warnings.length - displayedWarnings.length} more warning(s)` });
   }
 
-  const displayedActions = input.expanded
-    ? normalized.nextActions
-    : normalized.nextActions.slice(0, input.tool === "team_create" ? 2 : input.tool === "team_sync" ? 3 : 1);
-  for (const action of displayedActions) {
-    lines.push({ tone: "accent", text: `→ ${action.tool} — ${action.reason}` });
+  const modelLines = modelContentLines(input.content);
+  if (modelLines.length > 0) {
+    const modelCharacters = modelLines.join("\n").length;
+    const showExactModelContent = input.expanded || (modelLines.length <= 2 && modelCharacters <= 240);
+    lines.push({
+      tone: "muted",
+      text: showExactModelContent
+        ? "Hints sent to agent:"
+        : `Hints sent to agent: ${modelLines.length} ${modelLines.length === 1 ? "line" : "lines"} · ${modelCharacters} characters · expand for exact text`,
+    });
+    if (showExactModelContent) {
+      for (const modelLine of modelLines) lines.push({ tone: "dim", text: modelLine, italic: true });
+    }
   }
 
   if (input.expanded) {
@@ -617,10 +629,14 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
         lines.push({ tone: "dim", text: `  ${evidenceLine}` });
       }
     }
-    for (const action of normalized.nextActions) {
-      if (!action.args) continue;
-      for (const argumentLine of structuredLines(action.args)) {
-        lines.push({ tone: "dim", text: `  ${action.tool} · ${argumentLine}` });
+    if (normalized.nextActions.length > 0) {
+      lines.push({ tone: "accent", text: "Machine next actions (not sent to agent)" });
+      for (const action of normalized.nextActions) {
+        lines.push({ tone: "accent", text: `  ${action.tool} — ${action.reason}` });
+        if (!action.args) continue;
+        for (const argumentLine of structuredLines(action.args)) {
+          lines.push({ tone: "dim", text: `    ${argumentLine}` });
+        }
       }
     }
     if (normalized.legacy) {
@@ -649,7 +665,10 @@ export function createPiTeamsResultRenderer(tool: PiTeamsPublicTool): PiTeamsRen
       isPartial: options.isPartial,
       isError: context.isError,
     });
-    const text = lines.map((line) => theme.fg(line.tone, line.text)).join("\n");
+    const text = lines.map((line) => {
+      const styled = theme.fg(line.tone, line.text);
+      return line.italic ? theme.italic(styled) : styled;
+    }).join("\n");
     return new Text(text, 0, 0);
   };
 }

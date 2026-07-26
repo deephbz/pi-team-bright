@@ -32,7 +32,8 @@ exhaustive parameter reference.
   compact and expanded human projections without serializing machine state as
   UI text.
 - Agent content, machine details, and human rendering are projections of the
-  same authoritative operation.
+  same authoritative operation. The renderer keeps bounded model hints distinct
+  from receipt facts and exposes `nextActions` only in expanded machine evidence.
 
 ## Domain and authority
 
