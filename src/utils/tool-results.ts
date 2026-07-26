@@ -20,17 +20,19 @@ export interface ToolResultNextAction {
   args?: Record<string, unknown>;
 }
 
+export type WorkerLaunchObservationState =
+  | { carrier: "session_bound"; runtime: "observed" }
+  | { carrier: "prepared" | "session_bound"; runtime: "not_observed" };
+
 /** Public machine post-state for successful `worker_ensure` outcomes. */
 export type WorkerEnsurePostState =
-  | {
+  | ({
     name: string;
     action: "created";
     membership: "current";
-    carrier: "prepared";
     terminalLaunched: true;
-    runtime: "not_observed";
     assignedTasks: [];
-  }
+  } & WorkerLaunchObservationState)
   | {
     name: string;
     action: "reused";
@@ -38,16 +40,14 @@ export type WorkerEnsurePostState =
     carrier: "prepared" | "session_bound";
     taskStateChanged: false;
   }
-  | {
+  | ({
     name: string;
     action: "recovered";
     recoveryMode: "first_binding_retry" | "exact_session_resume";
     membership: "current";
-    carrier: "prepared" | "session_bound";
     terminalLaunched: true;
-    runtime: "not_observed";
     taskStateChanged: false;
-  };
+  } & WorkerLaunchObservationState);
 
 export type WorkerEnsureAction = WorkerEnsurePostState["action"];
 export type WorkerEnsureRecoveryMode = Extract<WorkerEnsurePostState, { action: "recovered" }>["recoveryMode"];

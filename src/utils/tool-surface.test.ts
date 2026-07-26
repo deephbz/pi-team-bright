@@ -92,6 +92,11 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(skill).toMatch(/returned sync cursor.+positive wait/is);
   });
 
+  it("keeps terminal window placement as Team policy", () => {
+    expect(tool("team_create").parameters.properties).toHaveProperty("separate_windows");
+    expect(tool("worker_ensure").parameters.properties).not.toHaveProperty("separate_window");
+  });
+
   it("binds goal-driven Tasks to Workers", () => {
     const create = tool("task_create");
     const update = tool("task_update");

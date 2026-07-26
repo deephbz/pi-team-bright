@@ -58,7 +58,9 @@ task_create({
 ```
 
 A Worker receipt separates durable Membership creation, terminal launch, and
-runtime observation without implying readiness. A Task mutation receipt carries
+bounded exact-Membership runtime-startup observation without implying readiness
+or progress. Window placement is a Team-wide durable configuration, not a
+per-call `worker_ensure` option. A Task mutation receipt carries
 its resulting authority version. Pi renders concise Accepted, Partial, or
 Refused receipts separately from short italic `Hints sent to agent`; machine
 next actions appear only in expanded evidence and aren't sent as hints. Use

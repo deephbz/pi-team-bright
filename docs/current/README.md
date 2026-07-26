@@ -53,7 +53,11 @@ restating executable definitions.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
 - One live Team runs one Pi Team Bright version; upgrades happen as a stopped
-  and restarted epoch, not a rolling deployment.
+  and restarted epoch, not a rolling deployment. In unpublished pre-1.0
+  `0.16.0-rc.1`, `worker_ensure.separate_window` was deliberately removed:
+  durable Team configuration exclusively owns placement policy. A launch receipt
+  may report exact bounded startup observation, but never Worker readiness or
+  progress.
 
 ## Current status and anchors
 

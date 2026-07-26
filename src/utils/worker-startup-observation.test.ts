@@ -1,0 +1,93 @@
+import { describe, expect, it, vi } from "vitest";
+import type { TeamEventWaitResult } from "./team-events";
+import type { TeamEvent } from "./models";
+import { observeWorkerStartup } from "./worker-startup-observation";
+
+function batch(cursor: string, events: TeamEvent[], timedOut = false): TeamEventWaitResult {
+  return { cursor, headCursor: cursor, events, truncated: false, remaining: 0, timedOut };
+}
+
+function workerEvent(cursor: string, worker: string, membershipId: string, phase: "prepared" | "session_bound"): TeamEvent {
+  return { type: "worker", cursor, worker, membershipId, phase, at: "2026-07-26T00:00:00.000Z" };
+}
+
+const base = {
+  teamName: "dogfood",
+  workerName: "reviewer",
+  membershipId: "membership-reviewer",
+  afterCursor: "1",
+};
+
+describe("bounded Worker startup observation", () => {
+  it("accepts the exact Membership binding only after durable authority verifies it", async () => {
+    const waitForEvents = vi.fn(async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]));
+    const result = await observeWorkerStartup({
+      ...base,
+      timeoutMs: 3_000,
+      waitForEvents,
+      verifyAuthority: async () => ({ sessionBound: true, runtimeObserved: true }),
+    });
+
+    expect(result).toEqual({ observed: true, carrier: "session_bound", runtime: "observed", cursor: "2" });
+    expect(waitForEvents).toHaveBeenCalledWith(expect.objectContaining({
+      afterCursor: "1",
+      eventTypes: ["worker"],
+      waitMs: expect.any(Number),
+    }));
+  });
+
+  it("advances past unrelated Worker events and waits within one deadline", async () => {
+    let time = 1_000;
+    const waitForEvents = vi.fn()
+      .mockImplementationOnce(async () => {
+        time = 1_400;
+        return batch("2", [workerEvent("2", "other", "membership-other", "session_bound")]);
+      })
+      .mockImplementationOnce(async () => batch("3", [workerEvent("3", "reviewer", "membership-reviewer", "session_bound")]));
+
+    const result = await observeWorkerStartup({
+      ...base,
+      timeoutMs: 3_000,
+      now: () => time,
+      waitForEvents,
+      verifyAuthority: async () => ({ sessionBound: true, runtimeObserved: true }),
+    });
+
+    expect(result.observed).toBe(true);
+    expect(waitForEvents).toHaveBeenNthCalledWith(2, expect.objectContaining({ afterCursor: "2", waitMs: 2_600 }));
+  });
+
+  it("returns the verified carrier state when the deadline expires", async () => {
+    const result = await observeWorkerStartup({
+      ...base,
+      timeoutMs: 0,
+      waitForEvents: async () => batch("1", [], true),
+      verifyAuthority: async () => ({ sessionBound: false, runtimeObserved: false }),
+    });
+    expect(result).toEqual({
+      observed: false,
+      carrier: "prepared",
+      runtime: "not_observed",
+      cursor: "1",
+      reason: "timeout",
+    });
+  });
+
+  it("refuses to infer runtime observation from an event when exact authority mismatches", async () => {
+    const result = await observeWorkerStartup({
+      ...base,
+      waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
+      verifyAuthority: async () => ({ sessionBound: true, runtimeObserved: false }),
+    });
+    expect(result).toMatchObject({ observed: false, carrier: "session_bound", reason: "authority_mismatch" });
+  });
+
+  it("propagates cancellation instead of converting it to a timeout", async () => {
+    const aborted = Object.assign(new Error("aborted"), { name: "AbortError" });
+    await expect(observeWorkerStartup({
+      ...base,
+      waitForEvents: async () => { throw aborted; },
+      verifyAuthority: async () => ({ sessionBound: false, runtimeObserved: false }),
+    })).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
