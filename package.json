@@ -1,10 +1,14 @@
 {
-  "name": "pi-teams",
-  "version": "0.15.0-hypercarrier.0",
-  "description": "Agent teams for pi, ported from claude-code-teams-mcp",
+  "name": "@hypercarrier/pi-team-bright",
+  "version": "0.15.0-rc.1",
+  "description": "Task-first Pi teams, visible in terminal panes.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/deephbz/pi-teams.git"
+    "url": "git+https://github.com/deephbz/pi-team-bright.git"
+  },
+  "homepage": "https://github.com/deephbz/pi-team-bright#readme",
+  "bugs": {
+    "url": "https://github.com/deephbz/pi-team-bright/issues"
   },
   "author": "Mark Burggraf",
   "license": "MIT",
@@ -26,6 +30,7 @@
     "typecheck": "tsc --noEmit",
     "build:observation": "rm -rf dist && tsc -p tsconfig.observation.json",
     "verify:observation-package": "npm run build:observation && node scripts/verify-observation-package.cjs",
+    "verify:package": "npm run verify:observation-package",
     "prepare": "npm run build:observation",
     "test": "npm run typecheck && vitest run",
     "qa:tool-results:history": "ts-node --transpile-only scripts/tool-result-qa/mine-history.ts",
@@ -45,18 +50,25 @@
     "extensions",
     "skills",
     "src",
-    "scripts",
+    "!src/**/*.test.ts",
+    "!src/**/fixtures",
     "tsconfig.json",
     "package.json",
     "LICENSE",
     "README.md",
+    "iTerm2.png",
+    "pi-team-in-action.png",
+    "tmux.png",
+    "zellij.png",
     "docs/current/README.md",
     "docs/reference.md",
-    "docs/decisions",
-    "docs/journal",
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
+    "@beads/bd": "1.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
@@ -67,7 +79,7 @@
     "typebox": "^1.1.38"
   },
   "pi": {
-    "image": "https://raw.githubusercontent.com/deephbz/pi-teams/main/pi-team-in-action.png",
+    "image": "https://raw.githubusercontent.com/deephbz/pi-team-bright/main/pi-team-in-action.png",
     "extensions": [
       "extensions/index.ts"
     ],

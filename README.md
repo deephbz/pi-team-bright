@@ -1,28 +1,43 @@
-# pi-teams
+# Pi Team Bright
 
-PiTeams turns a Pi session into the lead of a coordinated software team. It
-manages Team Membership, Worker terminal surfaces, exact-Session delivery,
-event-driven coordination, and a shared Task workflow. The extension registers ten Pi tools and
-adds no slash commands.
-
-Tasks plus exact assignees are the work protocol. Typed Alerts are limited to
-exceptional clarification, attention, and lead announcements among current
-members of one Team; they never assign, advance, or complete work.
+Pi Team Bright makes **Task-first teams visible in terminal panes**. One Pi
+Session leads stable Workers; the Task plus its assignee is the only executable
+work contract. The extension registers ten Pi tools and adds no slash commands.
 
 | iTerm2 | tmux | Zellij |
 | :---: | :---: | :---: |
-| <a href="https://raw.githubusercontent.com/deephbz/pi-teams/main/iTerm2.png"><img src="https://raw.githubusercontent.com/deephbz/pi-teams/main/iTerm2.png" width="300" alt="PiTeams in iTerm2"></a> | <a href="https://raw.githubusercontent.com/deephbz/pi-teams/main/tmux.png"><img src="https://raw.githubusercontent.com/deephbz/pi-teams/main/tmux.png" width="300" alt="PiTeams in tmux"></a> | <a href="https://raw.githubusercontent.com/deephbz/pi-teams/main/zellij.png"><img src="https://raw.githubusercontent.com/deephbz/pi-teams/main/zellij.png" width="300" alt="PiTeams in Zellij"></a> |
+| <a href="https://raw.githubusercontent.com/deephbz/pi-team-bright/main/iTerm2.png"><img src="https://raw.githubusercontent.com/deephbz/pi-team-bright/main/iTerm2.png" width="300" alt="Pi Team Bright in iTerm2"></a> | <a href="https://raw.githubusercontent.com/deephbz/pi-team-bright/main/tmux.png"><img src="https://raw.githubusercontent.com/deephbz/pi-team-bright/main/tmux.png" width="300" alt="Pi Team Bright in tmux"></a> | <a href="https://raw.githubusercontent.com/deephbz/pi-team-bright/main/zellij.png"><img src="https://raw.githubusercontent.com/deephbz/pi-team-bright/main/zellij.png" width="300" alt="Pi Team Bright in Zellij"></a> |
 
 ## Install
 
-Install a release of this repository with Pi's Git installer, using the
-repository release URL and tag that your Team will run. Keep every live member
-of a Team on the same PiTeams version; upgrade a Team as one stopped-and-restarted
-epoch rather than a rolling deployment.
+Install the published npm package, preferably pinning the release for every
+member of a live Team:
 
-## Quick start
+```sh
+pi install npm:@hypercarrier/pi-team-bright@0.15.0-rc.1
+```
 
-Create a Team, ensure a Worker with an absolute working directory, and assign
+Or install the future GitHub repository at a tag or exact commit:
+
+```sh
+pi install git:github.com/deephbz/pi-team-bright@v0.15.0-rc.1
+```
+
+Use `-l` with either command to install it for the current project. Pi packages
+run with full system access, so review an unfamiliar release before installing
+it.
+
+## Terminal carrier contract
+
+Pi Team Bright detects one direct terminal carrier by first match: Herdr, tmux,
+Zellij, cmux, iTerm2, WezTerm, then native Windows. Start or restart Pi inside
+one of those carriers before creating a Team if none is detected. Terminal panes
+carry Workers, but pane activity is never Task truth: the Task authority and
+its accepted state remain the work record.
+
+## First use
+
+Create a Team, ensure a Worker with an absolute working directory, then assign
 one goal-driven Task:
 
 ```js
@@ -43,46 +58,52 @@ task_create({
 ```
 
 A Worker receipt separates durable Membership creation, terminal launch, and
-runtime observation without implying readiness. A Task mutation receipt
-contains its resulting authority version. Use `team_sync` to block on Team and
-Task events rather than polling runtime state or terminal output.
+runtime observation without implying readiness. A Task mutation receipt carries
+its resulting authority version. Use `team_sync` to wait for Team and Task
+events instead of polling runtime state or terminal output.
+
+## Update and rollback
+
+Stop every live Team before changing its Pi Team Bright version, then restart
+the Team as one version epoch. To update an unpinned npm install, run:
+
+```sh
+pi update npm:@hypercarrier/pi-team-bright
+```
+
+To pin or roll back, reinstall the exact known-good version:
+
+```sh
+pi install npm:@hypercarrier/pi-team-bright@0.15.0-rc.1
+# or a GitHub tag / commit:
+pi install git:github.com/deephbz/pi-team-bright@v0.15.0-rc.1
+```
+
+Pinned versions are intentionally skipped by bulk package updates. Verify the
+installed source with `pi list` before restarting a Team.
+
+## Authority and non-goals
+
+Tasks plus exact assignees are the work protocol. Typed Alerts only handle
+exceptional clarification, attention, and lead announcements among current
+Team members; they never assign, advance, or complete work. Beads is the sole
+runtime Task authority. Pi Team Bright installs the pinned `@beads/bd@1.1.0`
+CLI as a runtime dependency, so npm and Git installs don't require a separate
+global `bd` installation. Its installer acquires the matching native binary for
+supported x64 and arm64 macOS, Linux, Windows, and Android Node platforms.
+
+Pi Team Bright deliberately does not provide a general agent directory,
+cross-Team routing, freeform work by message, inbox polling, runtime polling as
+progress, or terminal activity as Task evidence. Team topology and lifecycle
+writes are lead-only; Worker and Team shutdown fail closed unless
+Membership-bound stop evidence confirms the stop.
 
 ## Documentation
 
-Start with the maintained [evergreen context](docs/current/README.md) for the
-declared lifecycle stage, decisions still in force, current status,
-constraints, and next steps. The [contract source map](docs/reference.md)
-routes to executable schemas, types, implementations, and tests instead of
-duplicating them in prose. [Decisions](docs/decisions/) preserve durable
-rationale; the [journal](docs/journal/) preserves dated plans, observations,
-and evidence.
-
-## Core behavior
-
-- New Teams initialize a Team-owned Beads workspace unless an explicit,
-  already-initialized workspace override is supplied. Beads is the sole runtime
-  Task authority; historical JSON Task files require explicit one-way
-  migration.
-- Assignee-addressed Task changes and typed Alerts are delivered to the exact
-  recipient Pi Session after their owning authority accepts them. Delivery
-  acknowledgement never means work completion; the Task remains authoritative.
-- Team topology and lifecycle writes are lead-only. Workers can read and update
-  Tasks, send Alerts, and block on `team_sync` events.
-- Worker and Team shutdown fail closed unless the terminal surface or
-  Membership-bound exit evidence confirms the stop.
-
-### External Task projections
-
-Task state remains directly queryable from the Team's Beads authority, so an
-external service can build dashboards, reports, or alerts without adding to
-the PiTeams agent-facing tool surface. Read `taskWorkspace` from the Team's
-`config.json`, then use Beads' machine-readable CLI output:
-
-```sh
-bd --directory /path/from-taskWorkspace list --json
-```
-
-External views are recomputable projections; Beads remains the Task authority.
+Start with the maintained [evergreen context](docs/current/README.md). The
+[contract source map](docs/reference.md) routes to executable schemas, types,
+and implementations. The packaged operator and agent documentation is
+intentionally kept separate from private maintainer history.
 
 ## License
 

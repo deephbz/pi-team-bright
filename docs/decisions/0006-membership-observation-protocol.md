@@ -2,8 +2,8 @@
 
 Status: accepted
 
-PiTeams publishes `pi-teams-observation/1` as the read-only package subpath
-`pi-teams/observation`. Its executable contract is
+Pi Team Bright publishes `pi-teams-observation/1` as the read-only package subpath
+`@hypercarrier/pi-team-bright/observation`. Its executable contract is
 [`src/public/observation.ts`](../../src/public/observation.ts): canonical
 TypeScript, JSON Schema, and `readObservationSnapshot` are the sole API spec.
 
