@@ -590,10 +590,9 @@ export function formatPiTeamsToolResult(input: FormatPiTeamsToolResultInput): To
       && isRecord(normalized.postState)
       && normalized.postState.reason === "recipient_not_current"
       && item.code === "alert_recipient_not_current";
-    const safeResourceId = humanSafe(item.resourceId, "resourceId");
-    const resourcePrefix = !compactMissingAlertRecipient && typeof safeResourceId === "string" && safeResourceId !== normalized.resource?.id
-      ? `${safeResourceId}: `
-      : "";
+    // Receipt identity already names the semantic resource. Warning resource IDs
+    // may be opaque authority references, so never project them to humans.
+    const resourcePrefix = "";
     const message = compactMissingAlertRecipient
       ? "Recipient is not a current Team member."
       : item.message;
