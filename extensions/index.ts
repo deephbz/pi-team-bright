@@ -44,7 +44,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
-import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
+import {
+  diagnoseTeam,
+  formatTeamStatus,
+  getPiTeamsArgumentCompletions,
+  knownTeamNames,
+  parsePiTeamsCommand,
+  PI_TEAMS_COMMAND_USAGE,
+  type TeamSessionBindingStatus,
+} from "../src/utils/team-status";
 
 // Public-interface intent and source allocation: docs/current/README.md and
 // docs/reference.md. Tool schemas and execution below are the contract source.
