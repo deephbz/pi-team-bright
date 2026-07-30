@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
 import { runtimeStatusPath, teamDir } from "./paths";
+import type { Member } from "./models";
 
 /**
  * Runtime constants for health checking.
@@ -51,6 +52,63 @@ export function runtimeGeneration(status: AgentRuntimeStatus | null): RuntimeGen
     pid: status.pid!,
     startedAt: status.startedAt!,
   };
+}
+
+/** One current Membership admits one live Pi process generation. */
+export type RuntimeStartupAdmission =
+  | { kind: "admitted"; action: "claim" | "already_current"; replaces?: RuntimeGeneration }
+  | { kind: "refused"; reason: string };
+
+/** ESRCH is the only bounded proof that a recorded PID is absent. */
+export function probePidPresence(pid: number): "absent" | "occupied" {
+  try {
+    process.kill(pid, 0);
+    return "occupied";
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ESRCH" ? "absent" : "occupied";
+  }
+}
+
+/**
+ * Decide startup admission under the exact Membership mutation lease. Runtime
+ * status is authoritative only for this bounded process-generation decision.
+ */
+export function admitRuntimeStartup(
+  member: Pick<Member, "name" | "membershipId" | "sessionFile" | "pendingLaunchId">,
+  sessionFile: string,
+  status: AgentRuntimeStatus | null,
+  pid: number = process.pid,
+  probe: (pid: number) => "absent" | "occupied" = probePidPresence,
+  launchId?: string,
+): RuntimeStartupAdmission {
+  if (!member.membershipId) return { kind: "refused", reason: `Current Membership for ${member.name} has no stable identity.` };
+  if (!member.sessionFile) {
+    if (!member.pendingLaunchId || launchId !== member.pendingLaunchId) {
+      return { kind: "refused", reason: `Prepared Membership for ${member.name} has no matching launch capability.` };
+    }
+    const generation = runtimeGeneration(status);
+    if (!generation) return status === null
+      ? { kind: "admitted", action: "claim" }
+      : { kind: "refused", reason: `Runtime evidence for prepared ${member.name} is malformed.` };
+    if (generation.membershipId !== member.membershipId) {
+      return { kind: "refused", reason: `Runtime evidence for prepared ${member.name} belongs to another Membership.` };
+    }
+    // A prepared Membership has no completed Session binding. A same-PID
+    // record can only be a prior claim whose bind failed, not an idempotent
+    // Session re-entry. Keep it fenced until exact exit evidence exists.
+    if (probe(generation.pid) === "absent") return { kind: "admitted", action: "claim", replaces: generation };
+    return { kind: "refused", reason: `Prepared Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
+  }
+  if (member.sessionFile !== sessionFile) {
+    return { kind: "refused", reason: `Session ${sessionFile} is not the current binding for ${member.name}.` };
+  }
+  const generation = runtimeGeneration(status);
+  if (!generation || generation.membershipId !== member.membershipId) {
+    return { kind: "refused", reason: `Runtime evidence for already Session-bound ${member.name} is missing, malformed, or belongs to another Membership.` };
+  }
+  if (generation.pid === pid) return { kind: "admitted", action: "already_current" };
+  if (probe(generation.pid) === "absent") return { kind: "admitted", action: "claim", replaces: generation };
+  return { kind: "refused", reason: `Current Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
 }
 
 /**

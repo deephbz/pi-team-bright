@@ -1,0 +1,64 @@
+{
+  "schema": "pi-teams-hardening-result/1",
+  "recordedAt": "2026-07-30",
+  "sourceBundle": {
+    "repository": "pi-team-bright",
+    "baseCommit": "7b722c2",
+    "reviewedImplementationDiffSha256": "ba6e3bf444730c9b78ff3290f800151e45668601651802e564716861e5a6db5b",
+    "containingCommit": "this artifact's git commit"
+  },
+  "decision": {
+    "record": "docs/decisions/0007-one-live-process-binding.md",
+    "intent": "One current Membership admits at most one live Pi process generation."
+  },
+  "executableAnchors": {
+    "admission": "src/utils/runtime.ts",
+    "lifecycle": "extensions/index.ts",
+    "tests": [
+      "src/utils/runtime-startup-admission.test.ts",
+      "src/utils/session-lifecycle.test.ts",
+      "src/utils/ergonomic-tool-contract.test.ts"
+    ]
+  },
+  "verification": {
+    "independentTests": {
+      "focused": 46,
+      "fast": 347,
+      "full": 471
+    },
+    "liveCanary": {
+      "processBoundary": "separate incumbent and candidate OS processes",
+      "incumbent": {
+        "membershipIdentitySha256": "38efa81b39fbc17b02db6d2e61d8251ff7325e9f8b669749ff01d5a2342e237e",
+        "sessionLocatorSha256": "38991ced6edcb0dd167ee2855a80c0fbc1c98c32b4eb47379376def8a98bd139"
+      },
+      "candidate": {
+        "exitCode": 0,
+        "terminalTargetAbsentAfterExit": true
+      },
+      "unchangedStateHashes": {
+        "events": "fe06ec1bcbf4467a072891ee7ba9a3211d1711ffca0c578d8b893919452dd116",
+        "member": "7a0d389c1f1687732ddaa9c3768ae8dc91378a6e4f680a11f93de9e86919e693",
+        "runtime": "da819fd36df959188db6226b4966ec0e4000f2821c4b29d62fdf218b8b478f30",
+        "process": "08acfead4219ebf043d42bc57a6a001eb7b9bc21459265376b43a89d1b2259d5"
+      },
+      "exactSessionOccurrenceCount": 1,
+      "challenge": {
+        "taskIdentitySha256": "1ae1b8f427a7ed196b4fc3b6680c4195cbbf720f1119e72c9ffba737747e6399",
+        "challengeValueSha256": "8ae0b0bd36edc0083f5455834a3ae2c2d7da9f7fa6437eff394cab96b1c41b6c",
+        "shellCommandUsed": false,
+        "incumbentRuntimeIdentityUnchanged": true
+      },
+      "correctedSubprocessEvidence": {
+        "taskIdentitySha256": "e7f84179feedfb11be69431e6a772fee3783c9e24f6a9a59df81fb1e8c983998",
+        "classification": "tool subprocess; excluded from ProcessBinding evidence",
+        "authoritativeProcessMatchedRuntime": true
+      }
+    }
+  },
+  "limitations": [
+    "The deterministic contender test uses synthetic PID identities in one Node process.",
+    "The live canary is separate-process but does not test simultaneous first claim.",
+    "A reserved recovery target remains pending until runtime observation; not-observed does not claim readiness or progress."
+  ]
+}
