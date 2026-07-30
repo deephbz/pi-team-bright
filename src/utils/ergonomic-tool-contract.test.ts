@@ -553,6 +553,8 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-missing" },
     });
     await teams.addMember(team, worker);
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
+    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
     const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
 
     const result = await registerTools().get("worker_ensure")!.execute(
@@ -593,6 +595,15 @@ describe("ergonomic agent-facing Team contracts", () => {
       sessionFile: workerSession,
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-recovered" },
     });
+    const reused = await registerTools().get("worker_ensure")!.execute(
+      "ensure-recovered-again",
+      { team_name: team, name: "worker", profile: "Review interfaces and verify contract tests.", cwd: process.cwd() },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+    expect(reused.details.postState).toMatchObject({ action: "reused" });
+    expect(spawn).toHaveBeenCalledOnce();
     expect(taskReads).toHaveBeenCalledTimes(0);
   });
 
@@ -619,6 +630,8 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-gone" },
     });
     await teams.addMember(team, worker);
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
+    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
     vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("simulated stale recovery binding"));
 
     await expect(registerTools().get("worker_ensure")!.execute(

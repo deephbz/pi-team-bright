@@ -164,6 +164,8 @@ describe("external current-binding contract", () => {
     const name = teamName("single-lead");
     const sessionFile = `/tmp/${name}.jsonl`;
     await configureLeadRecord(name, sessionFile);
+    const lead = await teams.currentMembership(name, "team-lead");
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
 
     const { handlers } = extensionHarness();
     const ctx = sessionContext(sessionFile);
@@ -171,7 +173,7 @@ describe("external current-binding contract", () => {
 
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(name), "utf8"))).toMatchObject({
-      pid: process.pid,
+      pid: -1,
       sessionFile,
     });
     expect(fs.existsSync(paths.inboxPath(name, "team-lead"))).toBe(false);
@@ -209,6 +211,8 @@ describe("external current-binding contract", () => {
     const sessionFile = `/tmp/binding-external-explicit-${process.pid}.jsonl`;
     const otherBefore = await configureLeadRecord(other, sessionFile);
     await configureLeadRecord(intended, sessionFile);
+    const intendedLead = await teams.currentMembership(intended, "team-lead");
+    await runtime.writeRuntimeStatus(intended, "team-lead", { pid: process.pid, startedAt: Date.now() }, intendedLead.membershipId);
     vi.stubEnv("PI_TEAM_NAME", intended);
 
     const { handlers } = extensionHarness();
@@ -217,7 +221,7 @@ describe("external current-binding contract", () => {
 
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(intended), "utf8"))).toMatchObject({
-      pid: process.pid,
+      pid: -1,
       sessionFile,
     });
     expect(fs.readFileSync(paths.leadSessionPath(other), "utf8")).toBe(otherBefore);

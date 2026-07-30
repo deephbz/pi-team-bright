@@ -32,7 +32,7 @@ through `team_sync`.
 Pin the release for every member of a live Team:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.16.0-rc.1
+pi install npm:@hypercarrier/pi-team-bright@0.16.0-rc.2
 ```
 
 Pi packages run with full system access, so review a release before installing
