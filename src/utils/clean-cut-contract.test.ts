@@ -8,6 +8,7 @@ import piTeams from "../../extensions/index";
 import type { TeamConfig } from "./models";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
+import * as runtime from "./runtime";
 import {
   DIRECT_MESSAGE_CUSTOM_TYPE,
 } from "./message-delivery";
@@ -192,6 +193,8 @@ describe("clean-cut public contract", () => {
     const name = uniqueTeam("message-default");
     const sessionFile = `/tmp/${name}.jsonl`;
     writeTeam(name, { workerSession: sessionFile });
+    const worker = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: Date.now() }, worker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", name);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const accepted = await messaging.sendPlainMessage(
@@ -233,6 +236,8 @@ describe("clean-cut public contract", () => {
     const name = uniqueTeam("task-default");
     const sessionFile = `/tmp/${name}.jsonl`;
     writeTeam(name, { workerSession: sessionFile });
+    const worker = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: Date.now() }, worker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", name);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const task = {
@@ -482,6 +487,8 @@ describe("durability and recovery", () => {
     const name = uniqueTeam("task-reconcile");
     const sessionFile = `/tmp/${name}.jsonl`;
     writeTeam(name, { workerSession: sessionFile, taskWorkspace: workspace });
+    const worker = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: Date.now() }, worker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", name);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const store = new BeadsTaskStore({

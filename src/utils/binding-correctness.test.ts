@@ -6,6 +6,7 @@ import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
+import * as runtime from "./runtime";
 
 type RegisteredTool = {
   name: string;
@@ -325,6 +326,8 @@ describe("current team binding correctness", () => {
       }));
     }
     vi.stubEnv("PI_TEAM_NAME", intendedTeam);
+    const intendedLead = await teams.currentMembership(intendedTeam, "team-lead");
+    await runtime.writeRuntimeStatus(intendedTeam, "team-lead", { pid: process.pid, startedAt: Date.now() }, intendedLead.membershipId);
 
     const { handlers } = registerExtension();
     const ctx = context(sessionFile);
@@ -332,7 +335,7 @@ describe("current team binding correctness", () => {
 
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(intendedTeam), "utf8"))).toMatchObject({
-      pid: process.pid,
+      pid: -1,
       sessionFile,
     });
     await handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);

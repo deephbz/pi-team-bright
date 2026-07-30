@@ -263,21 +263,36 @@ function findLeadTeamForSession(piSessionFile?: string): string | null {
   return null;
 }
 
-/** Register the current process and durable Pi session as a team's lead. */
-async function registerLeadSession(teamName: string, piSessionFile?: string) {
-  const config = await teams.readConfig(teamName);
-  const lead = [...config.members].reverse().find((member) =>
-    member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false,
-  );
-  if (!lead?.membershipId) throw new Error(`Current lead Membership for ${teamName} has no membershipId.`);
-  const startedAt = Date.now();
-  // runtime/team-lead.json is the normalized producer evidence. This file
-  // remains private compatibility evidence for older installations only.
-  await runtime.writeRuntimeStatus(teamName, "team-lead", { pid: process.pid, startedAt }, lead.membershipId);
-  const recordPath = paths.leadSessionPath(teamName);
-  const dir = path.dirname(recordPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(recordPath, JSON.stringify({ pid: process.pid, sessionFile: piSessionFile, startedAt }));
+/** Admit and publish the lead process under its exact Membership lease. */
+async function registerLeadSession(
+  teamName: string,
+  piSessionFile: string,
+  update?: Pick<Partial<Member>, "terminalTarget" | "tmuxPaneId">,
+  allowFirstRuntimeGeneration = false,
+  expectedMembershipId?: string,
+): Promise<runtime.RuntimeStartupAdmission> {
+  const initial = expectedMembershipId
+    ? undefined
+    : await teams.currentMembership(teamName, "team-lead");
+  return teams.withCurrentMembershipLease(teamName, expectedMembershipId ?? initial!.membershipId!, async (lead) => {
+    const status = await runtime.readRuntimeStatus(teamName, "team-lead");
+    const admission = allowFirstRuntimeGeneration && status === null
+      ? { kind: "admitted" as const, action: "claim" as const }
+      : runtime.admitRuntimeStartup(lead, piSessionFile, status);
+    if (admission.kind === "refused" || admission.action === "already_current") return admission;
+    const membershipId = lead.membershipId;
+    if (!membershipId) throw new Error(`Current lead Membership for ${teamName} has no stable identity.`);
+    const startedAt = Date.now();
+    // Claim the candidate generation before every durable terminal/binding write.
+    // If a later write fails, this fence remains until the candidate exits.
+    await runtime.writeRuntimeStatus(teamName, "team-lead", { pid: process.pid, startedAt }, membershipId);
+    if (update) await teams.updateMembership(teamName, membershipId, update);
+    const recordPath = paths.leadSessionPath(teamName);
+    const dir = path.dirname(recordPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(recordPath, JSON.stringify({ pid: process.pid, sessionFile: piSessionFile, startedAt }));
+    return admission;
+  });
 }
 
 export interface AgentSessionCleanupInspection {
@@ -532,25 +547,23 @@ export default function (pi: ExtensionAPI) {
     refusedTeam: string,
     role: string,
     admission: Extract<TeamSessionAdmission, { kind: "refused" }>,
+    shutdownCandidate = false,
   ) {
-    await teams.currentMembership(refusedTeam, role)
-      .then((candidate) => (candidate.membershipId
-        ? teamEvents.appendTeamEvent(refusedTeam, {
-          type: "worker",
-          worker: role,
-          membershipId: candidate.membershipId,
-          phase: "failed",
-        })
-        : undefined))
-      .catch(() => undefined);
+    if (!shutdownCandidate) {
+      await teams.currentMembership(refusedTeam, role)
+        .then((candidate) => candidate.membershipId ? teamEvents.appendTeamEvent(refusedTeam, {
+          type: "worker", worker: role, membershipId: candidate.membershipId, phase: "failed",
+        }) : undefined)
+        .catch(() => undefined);
+    }
     stopDeliveries();
     isTeammate = false;
     teamName = null;
     currentMembershipId = undefined;
     ctx?.ui?.notify?.(admission.reason, "error");
-    ctx?.ui?.setStatus?.("pi-teams", "terminal backend mismatch");
+    ctx?.ui?.setStatus?.("pi-teams", shutdownCandidate ? "startup admission refused" : "terminal backend mismatch");
     clearTeamFooter(ctx);
-    if (admission.exitProcess) ctx?.shutdown?.();
+    if (admission.exitProcess || shutdownCandidate) ctx?.shutdown?.();
   }
 
   pi.on("session_start", async (event, ctx) => {
@@ -612,33 +625,44 @@ export default function (pi: ExtensionAPI) {
           return;
         }
         const candidate = await teams.currentMembership(teamName, agentName);
-        const startedAt = Date.now();
-        const bound = await teams.withMembershipMutationLease(teamName, candidate.membershipId!, async () => {
-          const current = await teams.bindMemberSession(
-            teamName!,
-            agentName,
+        let startup: runtime.RuntimeStartupAdmission & { member?: Member };
+        try {
+          startup = await teams.withCurrentMembershipLease(teamName, candidate.membershipId!, async (current) => {
+          const runtimeAdmission = runtime.admitRuntimeStartup(
+            current,
             piSessionFile,
-            envLaunchId,
-            admission.update ?? {},
-            candidate.membershipId,
+            await runtime.readRuntimeStatus(teamName!, agentName), process.pid, runtime.probePidPresence, envLaunchId,
           );
-          // Process-generation publication is part of the lifecycle transition:
-          // shutdown uses the same exact-Membership lease, so it observes either
-          // the old generation or this complete replacement, never an interleave.
+          if (runtimeAdmission.kind === "refused") return runtimeAdmission;
+          if (runtimeAdmission.action === "already_current") return { kind: "admitted" as const, action: "already_current" as const, member: current };
+          const startedAt = Date.now();
+          // Claim the candidate before bindMemberSession can write a terminal
+          // target. A failed later write leaves this exact PID fenced.
           await runtime.writeRuntimeStatus(teamName!, agentName, {
-            pid: process.pid,
-            startedAt,
-            lastHeartbeatAt: startedAt,
-            ready: false,
-            lastError: undefined,
+            pid: process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined,
           }, current.membershipId);
+          const bound = await teams.bindMemberSession(
+            teamName!, agentName, piSessionFile, envLaunchId, admission.update ?? {}, current.membershipId,
+          );
           await teamEvents.appendTeamEvent(teamName!, {
-            type: "worker", worker: agentName, membershipId: current.membershipId!, phase: "session_bound",
-            generation: { membershipId: current.membershipId!, pid: process.pid, startedAt },
+            type: "worker", worker: agentName, membershipId: bound.membershipId!, phase: "session_bound",
+            generation: { membershipId: bound.membershipId!, pid: process.pid, startedAt },
           });
-          return current;
-        });
-        currentMembershipId = bound.membershipId;
+          return { kind: "admitted" as const, action: "claim" as const, member: bound };
+          });
+        } catch (error) {
+          await refuseTeamSession(ctx, teamName, agentName, {
+            kind: "refused",
+            reason: `Startup for ${agentName} failed after candidate admission: ${error instanceof Error ? error.message : String(error)}. The candidate process was stopped; its runtime fence remains until PID exit.`,
+            exitProcess: true,
+          }, true);
+          return;
+        }
+        if (startup.kind === "refused") {
+          await refuseTeamSession(ctx, teamName, agentName, { kind: "refused", reason: startup.reason, exitProcess: true }, true);
+          return;
+        }
+        currentMembershipId = startup.member!.membershipId;
       }
       ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
       if (terminal) {
@@ -674,11 +698,22 @@ export default function (pi: ExtensionAPI) {
           return;
         }
         const lead = await teams.assertCurrentSessionBinding(teamName, "team-lead", piSessionFile);
-        currentMembershipId = lead.membershipId;
-        await registerLeadSession(teamName, piSessionFile);
-        if (admission.update) {
-          await teams.updateMembership(teamName, lead.membershipId!, admission.update);
+        let runtimeAdmission: runtime.RuntimeStartupAdmission;
+        try {
+          runtimeAdmission = await registerLeadSession(teamName, piSessionFile, admission.update, false, lead.membershipId);
+        } catch (error) {
+          await refuseTeamSession(ctx, teamName, "team-lead", {
+            kind: "refused",
+            reason: `Lead startup failed after candidate admission: ${error instanceof Error ? error.message : String(error)}. The candidate process was stopped; its runtime fence remains until PID exit.`,
+            exitProcess: true,
+          }, true);
+          return;
         }
+        if (runtimeAdmission.kind === "refused") {
+          await refuseTeamSession(ctx, teamName, "team-lead", { kind: "refused", reason: runtimeAdmission.reason, exitProcess: true }, true);
+          return;
+        }
+        currentMembershipId = lead.membershipId;
       }
       await startDirectMessageDelivery(ctx);
       await startTaskChangeDelivery(ctx);
@@ -1041,7 +1076,20 @@ export default function (pi: ExtensionAPI) {
         : recoveredTarget.isWindow
           ? { windowId: recoveredTarget.terminalId }
           : { tmuxPaneId: recoveredTarget.terminalId };
-      await teams.withMembershipMutationLease(targetTeamName, member.membershipId!, async () => {
+      // Reserve the spawned carrier under the same exact Membership lease.
+      // A competing ensure sees this target as alive and reuses it. This
+      // parent has no child PID, so it only repeats admission as a bounded
+      // pre-persistence check; the child makes the durable PID claim.
+      await teams.withCurrentMembershipLease(targetTeamName, member.membershipId!, async (current) => {
+        const admission = runtime.admitRuntimeStartup(
+          current,
+          member.sessionFile || "",
+          await runtime.readRuntimeStatus(targetTeamName, member.name),
+          -1,
+          runtime.probePidPresence,
+          member.pendingLaunchId,
+        );
+        if (admission.kind === "refused") throw new Error(admission.reason);
         if (mode === "first_binding_retry") {
           await teams.updateMembership(targetTeamName, member.membershipId!, update);
         } else {
@@ -1178,7 +1226,7 @@ export default function (pi: ExtensionAPI) {
         };
       }
       // Register this session as the lead so it can receive inbox messages.
-      await registerLeadSession(safeTeamName, leadSessionFile);
+      await registerLeadSession(safeTeamName, leadSessionFile, undefined, true);
       // Update teamName and start native custom delivery for the lead.
       isTeammate = false;
       agentName = "team-lead";
@@ -1418,6 +1466,15 @@ export default function (pi: ExtensionAPI) {
           throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
         }
 
+        const runtimeAdmission = await teams.withMembershipMutationLease(safeTeamName, bound.membershipId, async () => {
+          const current = await teams.currentMembership(safeTeamName, safeName);
+          // worker_ensure is not the candidate process. It may only spawn after
+          // ESRCH proves the prior exact runtime PID absent.
+          return runtime.admitRuntimeStartup(current, bound.sessionFile, await runtime.readRuntimeStatus(safeTeamName, safeName), -1);
+        });
+        if (runtimeAdmission.kind === "refused") {
+          throw new Error(`Cannot resume ${safeName}: ${runtimeAdmission.reason} No terminal target changed and no candidate was spawned.`);
+        }
         const recoveryCursor = teamEvents.readTeamEventCursor(safeTeamName);
         const recoveredTarget = await executeWorkerRecovery({
           teamName: safeTeamName,
@@ -3018,7 +3075,7 @@ export default function (pi: ExtensionAPI) {
             : {}),
         },
       );
-      await registerLeadSession(safeTeamName, leadSessionFile);
+      await registerLeadSession(safeTeamName, leadSessionFile, undefined, true);
       // Update teamName and start native custom delivery for the lead.
       teamName = safeTeamName;
       currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;

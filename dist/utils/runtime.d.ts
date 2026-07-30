@@ -1,3 +1,4 @@
+import type { Member } from "./models";
 /**
  * Runtime constants for health checking.
  * Exported for configurability and testing.
@@ -30,6 +31,22 @@ export interface RuntimeGeneration {
     startedAt: number;
 }
 export declare function runtimeGeneration(status: AgentRuntimeStatus | null): RuntimeGeneration | null;
+/** One current Membership admits one live Pi process generation. */
+export type RuntimeStartupAdmission = {
+    kind: "admitted";
+    action: "claim" | "already_current";
+    replaces?: RuntimeGeneration;
+} | {
+    kind: "refused";
+    reason: string;
+};
+/** ESRCH is the only bounded proof that a recorded PID is absent. */
+export declare function probePidPresence(pid: number): "absent" | "occupied";
+/**
+ * Decide startup admission under the exact Membership mutation lease. Runtime
+ * status is authoritative only for this bounded process-generation decision.
+ */
+export declare function admitRuntimeStartup(member: Pick<Member, "name" | "membershipId" | "sessionFile" | "pendingLaunchId">, sessionFile: string, status: AgentRuntimeStatus | null, pid?: number, probe?: (pid: number) => "absent" | "occupied", launchId?: string): RuntimeStartupAdmission;
 /**
  * Write runtime status for an agent. Merges with existing status.
  */

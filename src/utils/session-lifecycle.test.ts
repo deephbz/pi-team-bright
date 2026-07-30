@@ -5,6 +5,7 @@ import * as paths from "./paths";
 import * as teams from "./teams";
 import * as messaging from "./messaging";
 import * as runtime from "./runtime";
+import * as teamEvents from "./team-events";
 import { DIRECT_MESSAGE_CUSTOM_TYPE } from "./message-delivery";
 
 type Handler = (event: unknown, ctx: SessionContext) => Promise<void>;
@@ -58,6 +59,123 @@ afterEach(() => {
 });
 
 describe("Pi session lifecycle", () => {
+  it("does not mutate lifecycle evidence on same-process exact-Session re-entry", async () => {
+    vi.stubEnv("TMUX", "");
+    const teamName = testTeamName("same-process-reentry");
+    const sessionFile = "/tmp/pi-teams-same-process-reentry.jsonl";
+    await teams.createTeam(teamName, "lead-session", "lead-agent");
+    const worker = {
+      membershipId: teams.newMembershipId(),
+      agentId: `worker@${teamName}`,
+      name: "worker",
+      agentType: "teammate" as const,
+      joinedAt: Date.now(),
+      tmuxPaneId: "%existing",
+      sessionFile,
+      cwd: process.cwd(),
+      subscriptions: [],
+    };
+    await teams.addMember(teamName, worker);
+    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, startedAt: 1, ready: true }, worker.membershipId);
+    const beforeRuntime = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
+    const beforeMember = (await teams.currentMembership(teamName, "worker"));
+    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const writeRuntime = vi.spyOn(runtime, "writeRuntimeStatus");
+    const bind = vi.spyOn(teams, "bindMemberSession");
+    const update = vi.spyOn(teams, "updateMembership");
+    const event = vi.spyOn(teamEvents, "appendTeamEvent");
+
+    const handlers = registeredHandlers();
+    await handlers.get("session_start")?.({ reason: "resume" }, lifecycleContext(sessionFile));
+
+    expect(fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8")).toBe(beforeRuntime);
+    expect(await teams.currentMembership(teamName, "worker")).toEqual(beforeMember);
+    expect(writeRuntime).not.toHaveBeenCalled();
+    expect(bind).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(event).not.toHaveBeenCalled();
+  });
+
+  it("refuses a prepared same-PID retry after its bind claim failed", async () => {
+    vi.stubEnv("TMUX", "");
+    const teamName = testTeamName("prepared-claim-bind-failure");
+    const sessionFile = "/tmp/pi-teams-prepared-claim-bind-failure.jsonl";
+    await teams.createTeam(teamName, "lead-session", "lead-agent");
+    const launchId = teams.newLaunchId();
+    const worker = {
+      membershipId: teams.newMembershipId(), pendingLaunchId: launchId,
+      agentId: `worker@${teamName}`, name: "worker", agentType: "teammate" as const,
+      joinedAt: Date.now(), tmuxPaneId: "%prepared", cwd: process.cwd(), subscriptions: [],
+    };
+    await teams.addMember(teamName, worker);
+    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
+    const bind = vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("injected bind failure"));
+    const writeRuntime = vi.spyOn(runtime, "writeRuntimeStatus");
+    const handlers = registeredHandlers();
+    const first = lifecycleContext(sessionFile) as any;
+    first.shutdown = vi.fn();
+    await handlers.get("session_start")?.({ reason: "startup" }, first);
+    const runtimeAfterFailure = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
+    const second = lifecycleContext(sessionFile) as any;
+    second.shutdown = vi.fn();
+    const repeatedHandlers = registeredHandlers();
+    await repeatedHandlers.get("session_start")?.({ reason: "startup" }, second);
+
+    expect(fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8")).toBe(runtimeAfterFailure);
+    const current = await teams.currentMembership(teamName, "worker");
+    expect(current).toMatchObject({ membershipId: worker.membershipId, pendingLaunchId: launchId });
+    expect(current.sessionFile).toBeUndefined();
+    expect(writeRuntime).toHaveBeenCalledOnce();
+    expect(bind).toHaveBeenCalledOnce();
+    expect(first.shutdown).toHaveBeenCalledOnce();
+    expect(second.shutdown).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a teammate replaced while its exact Membership lease waits", async () => {
+    vi.stubEnv("TMUX", "");
+    const teamName = testTeamName("replaced-while-waiting");
+    const sessionFile = "/tmp/pi-teams-replaced-while-waiting.jsonl";
+    await teams.createTeam(teamName, "lead-session", "lead-agent");
+    const oldWorker = {
+      membershipId: teams.newMembershipId(), agentId: `old-worker@${teamName}`, name: "worker",
+      agentType: "teammate" as const, joinedAt: Date.now(), tmuxPaneId: "%old", sessionFile,
+      cwd: process.cwd(), subscriptions: [],
+    };
+    await teams.addMember(teamName, oldWorker);
+    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const enteredLease = new Promise<void>((resolve) => { entered = resolve; });
+    const holder = teams.withMembershipMutationLease(teamName, oldWorker.membershipId, async () => {
+      entered();
+      await waiting;
+    });
+    await enteredLease;
+    const handlers = registeredHandlers();
+    const ctx = lifecycleContext(sessionFile) as any;
+    ctx.shutdown = vi.fn();
+    const startup = handlers.get("session_start")?.({ reason: "resume" }, ctx);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await teams.deactivateMember(teamName, "worker", "replaced");
+    const replacement = { ...oldWorker, membershipId: teams.newMembershipId(), agentId: `replacement-worker@${teamName}`, tmuxPaneId: "%replacement" };
+    await teams.addMember(teamName, replacement);
+    release();
+    await holder;
+    await startup;
+
+    expect(await teams.currentMembership(teamName, "worker")).toMatchObject({
+      membershipId: replacement.membershipId,
+      tmuxPaneId: "%replacement",
+    });
+    expect(await runtime.readRuntimeStatus(teamName, "worker")).toBeNull();
+    expect(ctx.shutdown).toHaveBeenCalledOnce();
+  });
+
   it("never injects a synthetic inbox bootstrap on first binding or same-Session resume", async () => {
     vi.useFakeTimers();
     vi.stubEnv("TMUX", "");
@@ -126,6 +244,8 @@ describe("Pi session lifecycle", () => {
       cwd: process.cwd(),
       subscriptions: [],
     });
+    const boundWorker = await teams.currentMembership(teamName, "worker");
+    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, startedAt: Date.now() }, boundWorker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const first = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "first full body", "first");
@@ -166,7 +286,7 @@ describe("Pi session lifecycle", () => {
     }, ctx);
     expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(2);
     await handlers.get("turn_end")?.({ message: { role: "assistant", stopReason: "error" } }, ctx);
-    expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(false);
+    expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBeUndefined();
     expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(2);
     await handlers.get("turn_end")?.({ message: { role: "assistant", stopReason: "toolUse" } }, ctx);
     expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(true);
@@ -194,6 +314,8 @@ describe("Pi session lifecycle", () => {
       cwd: process.cwd(),
       subscriptions: [],
     });
+    const boundWorker = await teams.currentMembership(teamName, "worker");
+    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, startedAt: Date.now() }, boundWorker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     await messaging.sendPlainMessage(teamName, "team-lead", "worker", "must remain recoverable", "ack fault");
@@ -281,6 +403,8 @@ describe("Pi session lifecycle", () => {
     const sessionFile = "/tmp/pi-teams-resumed-lead.jsonl";
     paths.ensureDirs();
     await teams.createTeam(teamName, sessionFile, "lead-agent");
+    const lead = await teams.currentMembership(teamName, "team-lead");
+    await runtime.writeRuntimeStatus(teamName, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
     fs.writeFileSync(paths.leadSessionPath(teamName), JSON.stringify({
       pid: -1,
       sessionFile,
@@ -293,9 +417,9 @@ describe("Pi session lifecycle", () => {
 
     expect(ctx.ui.setStatus).toHaveBeenCalledWith("pi-teams", undefined);
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
-    expect((await teams.readConfig(teamName)).members.find(member => member.name === "team-lead")?.tmuxPaneId).toBe("%resumed-lead");
+    expect((await teams.readConfig(teamName)).members.find(member => member.name === "team-lead")?.tmuxPaneId).toBeUndefined();
     expect(JSON.parse(fs.readFileSync(paths.leadSessionPath(teamName), "utf8"))).toMatchObject({
-      pid: process.pid,
+      pid: -1,
       sessionFile,
     });
 
@@ -356,6 +480,8 @@ describe("Pi session lifecycle", () => {
       subscriptions: [],
     });
 
+    const boundReviewer = await teams.currentMembership(teamName, "reviewer");
+    await runtime.writeRuntimeStatus(teamName, "reviewer", { pid: process.pid, startedAt: Date.now() }, boundReviewer.membershipId);
     const handlers = registeredHandlers();
     const ctx = lifecycleContext(sessionFile);
     await handlers.get("session_start")?.({}, ctx);
@@ -363,7 +489,7 @@ describe("Pi session lifecycle", () => {
     expect(ctx.ui.setStatus).toHaveBeenCalledWith("00-pi-teams", undefined);
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
     const reviewer = (await teams.readConfig(teamName)).members.find(member => member.name === "reviewer");
-    expect(reviewer?.tmuxPaneId).toBe("%envless-resume");
+    expect(reviewer?.tmuxPaneId).toBe("%dead-pane");
     expect(reviewer?.sessionFile).toBe(sessionFile);
     await handlers.get("session_shutdown")?.({}, ctx);
   });
@@ -372,6 +498,8 @@ describe("Pi session lifecycle", () => {
     vi.useFakeTimers();
     const teamName = testTeamName("polling-context");
     await teams.createTeam(teamName, "session", "lead-agent");
+    const lead = await teams.currentMembership(teamName, "team-lead");
+    await runtime.writeRuntimeStatus(teamName, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
     vi.spyOn(paths, "ensureDirs").mockImplementation(() => undefined);
     vi.stubEnv("PI_TEAM_NAME", teamName);
 
