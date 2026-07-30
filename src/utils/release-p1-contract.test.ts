@@ -464,6 +464,12 @@ describe("release P1 public contracts", () => {
     await teams.createTeam(name, leadSession, "lead-agent");
     const worker = member("worker", workerSession);
     await teams.addMember(name, worker);
+    await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
+    vi.spyOn(process, "kill").mockImplementationOnce(() => {
+      const error = new Error("gone") as NodeJS.ErrnoException;
+      error.code = "ESRCH";
+      throw error;
+    });
     const handlers = registerSessionExtension();
 
     let releaseLease!: () => void;
@@ -482,7 +488,11 @@ describe("release P1 public contracts", () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(startupSettled).toBe(false);
-    expect(await runtime.readRuntimeStatus(name, "worker")).toBeNull();
+    expect(await runtime.readRuntimeStatus(name, "worker")).toMatchObject({
+      membershipId: worker.membershipId,
+      pid: 2_147_483_647,
+      startedAt: 1,
+    });
 
     releaseLease();
     await holder;

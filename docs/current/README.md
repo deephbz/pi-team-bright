@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-07-26
+Updated: 2026-07-30
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -53,8 +53,8 @@ restating executable definitions.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
 - One live Team runs one Pi Team Bright version; upgrades happen as a stopped
-  and restarted epoch, not a rolling deployment. In unpublished pre-1.0
-  `0.16.0-rc.1`, `worker_ensure.separate_window` was deliberately removed:
+  and restarted epoch, not a rolling deployment. Since `0.16.0-rc.1`,
+  `worker_ensure.separate_window` is deliberately absent:
   durable Team configuration exclusively owns placement policy. A launch receipt
   may report exact bounded startup observation, but never Worker readiness or
   progress. Existing absent/false settings mean panes; stop the Team and create
@@ -64,12 +64,11 @@ restating executable definitions.
 ## Current status and anchors
 
 - The public surface has ten tools, one versioned result envelope, and a read-only `/pi-team-bright [status|help]` command. Its internal diagnostic schema remains `pi-teams-status/1`; it reports Team/Membership, exact Session binding, configured storage, and Beads authority state without claiming Task, Worker, runtime, or progress state. The shared TUI receipt is a human projection: Accepted/Partial/Refused facts are separate from bounded italic model hints, while machine next actions remain expanded-only evidence.
-- `@hypercarrier/pi-team-bright@0.16.0-rc.1` is the first public release
-  candidate. Its compatibility metadata covers the tested Pi 0.80.10 and
-  0.82.x minor lines. The first publication may use the explicit human/2FA
-  bootstrap only while npm cannot pre-bind the absent package; bind the trusted
-  publisher immediately afterward, then later releases use the manually
-  dispatched OIDC workflow.
+- `@hypercarrier/pi-team-bright@0.16.0-rc.2` is the next public release
+  candidate. It adds one-live-process startup admission to the `0.16.0-rc.1`
+  Task-first surface. Compatibility metadata covers the tested Pi 0.80.10 and
+  0.82.x minor lines. Publication uses the manually dispatched GitHub Actions
+  OIDC workflow and the npm `next` dist-tag.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -86,6 +85,14 @@ restating executable definitions.
   `test:full` and package verification. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
+- One current Membership admits one live Pi process generation. The executable
+  rule is [`src/utils/runtime.ts`](../../src/utils/runtime.ts), lifecycle wiring
+  is [`extensions/index.ts`](../../extensions/index.ts), and focused evidence is
+  in [`src/utils/runtime-startup-admission.test.ts`](../../src/utils/runtime-startup-admission.test.ts)
+  and [`src/utils/session-lifecycle.test.ts`](../../src/utils/session-lifecycle.test.ts).
+  Intent is in [decision 0007](../decisions/0007-one-live-process-binding.md);
+  the independent receipt is
+  [`2026-07-30-one-live-process-binding.json`](../journal/artifacts/2026-07-30-one-live-process-binding.json).
 
 ## Constraints and open work
 
@@ -105,7 +112,9 @@ Next steps:
    unavailable, without misreporting zero Tasks or discarding valid Team and
    Worker carrier state.
 3. Restart live Teams as one version epoch after an upgrade or rollback.
-4. Reassess component stage at the next R&D kickoff. New experimental pieces
+4. Define observation and cleanup for a reserved recovery carrier that never
+   publishes runtime evidence. Keep it pending; do not infer readiness or work.
+5. Reassess component stage at the next R&D kickoff. New experimental pieces
    may return to exploration without weakening anchors for the hardened core.
 
 
