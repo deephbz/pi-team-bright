@@ -23,7 +23,11 @@ function testTeamName(suffix: string): string {
   return name;
 }
 
-function registerExtension() {
+function registerExtension(legacyLeader = false) {
+  if (legacyLeader) {
+    vi.stubEnv("PI_TEAM_NAME", "legacy-test");
+    vi.stubEnv("PI_AGENT_NAME", "team-lead");
+  }
   const toolsByName = new Map<string, RegisteredTool>();
   const handlers = new Map<string, Handler>();
   piTeams({
@@ -57,7 +61,7 @@ afterEach(() => {
 describe("current team binding correctness", () => {
   it("alert_send rejects a nonexistent team without creating any state", async () => {
     const missingTeam = testTeamName("alert-missing-team");
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     await expect(sendAlert.execute("rejected", {
       team_name: missingTeam,
@@ -83,7 +87,7 @@ describe("current team binding correctness", () => {
       cwd: process.cwd(),
       subscriptions: [],
     });
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const accepted: any = await sendAlert.execute("accepted", {
       team_name: teamName,
@@ -184,7 +188,7 @@ describe("current team binding correctness", () => {
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
     });
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("partial", {
       team_name: teamName,
@@ -209,7 +213,7 @@ describe("current team binding correctness", () => {
   it("distinguishes an announcement with no eligible recipients from a bad recipient name", async () => {
     const teamName = testTeamName("zero-recipient-alert");
     await teams.createTeam(teamName, "lead-session", "lead-agent");
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("zero", {
       team_name: teamName,
@@ -277,11 +281,10 @@ describe("current team binding correctness", () => {
     vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
     const shutdown = registerExtension().toolsByName.get("worker_stop")!;
 
-    await expect(shutdown.execute("shutdown", {
-      team_name: teamName,
+    const result: any = await shutdown.execute("shutdown", {
       worker: "worker",
-    }, undefined, undefined, context(leadSession))).rejects.toThrow(/no terminal binding.*no exact Membership-bound runtime record/i);
-
+    }, undefined, undefined, context(leadSession));
+    expect(result.details).toMatchObject({ kind: "unavailable", state_changed: false });
     expect(kill).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(paths.teamDir(teamName), "worker.pid"))).toBe(true);
     expect((await teams.readConfig(teamName)).members.find((member) => member.name === "worker")?.isActive).not.toBe(false);

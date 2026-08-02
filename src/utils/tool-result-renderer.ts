@@ -13,7 +13,7 @@ export const PI_TEAMS_PUBLIC_TOOLS = [
   "team_create",
   "team_sync",
   "team_shutdown",
-  "worker_ensure",
+  "ensure_worker",
   "worker_stop",
   "task_create",
   "task_read",
@@ -22,7 +22,8 @@ export const PI_TEAMS_PUBLIC_TOOLS = [
   "alert_send",
 ] as const;
 
-export type PiTeamsPublicTool = (typeof PI_TEAMS_PUBLIC_TOOLS)[number];
+/** Legacy Worker registration remains renderable but is not in the leader surface. */
+export type PiTeamsPublicTool = (typeof PI_TEAMS_PUBLIC_TOOLS)[number] | "worker_ensure";
 
 type LineTone = "success" | "warning" | "error" | "accent" | "muted" | "dim";
 

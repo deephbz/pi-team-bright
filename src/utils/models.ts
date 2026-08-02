@@ -48,12 +48,25 @@ export interface BeadsAuthorityFingerprint {
   projectId: string;
 }
 
+export interface LogicalWorker {
+  /** Stable Worker identity within one Team, independent of carrier generations. */
+  name: string;
+  /** Durable semantic area owned by this Worker, not its current Task. */
+  scope: string;
+}
+
 export interface TeamConfig {
   name: string;
   description: string;
   createdAt: number;
   leadAgentId: string;
   leadSessionId: string;
+  /** Opaque identity for this stopped/restarted Team epoch. Absent on legacy records. */
+  epochId?: string;
+  /** Public coordination implementation fence. Absent on legacy records. */
+  implementationVersion?: string;
+  /** Stable logical Workers. Absent on legacy records; Memberships remain carriers. */
+  logicalWorkers?: LogicalWorker[];
   members: Member[];
   defaultModel?: string;
   separateWindows?: boolean;

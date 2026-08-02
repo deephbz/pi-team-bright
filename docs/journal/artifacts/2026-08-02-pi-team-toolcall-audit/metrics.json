@@ -1,0 +1,1701 @@
+{
+  "schema": "pi-team-toolcall-audit/1",
+  "generatedAt": "2026-08-02T05:35:00.634294Z",
+  "scope": {
+    "teams": [
+      "rarebit-public-release-e2e",
+      "worker-resource-projection-review"
+    ],
+    "includedTools": [
+      "alert_send",
+      "task_create",
+      "task_link",
+      "task_read",
+      "task_update",
+      "team_create",
+      "team_shutdown",
+      "team_sync",
+      "worker_ensure",
+      "worker_stop"
+    ],
+    "selection": "Calls from configured lead and Worker Session files whose team_name equals the configured Team. Non-PiTeams calls and calls to other Teams are excluded.",
+    "snapshot": "/tmp/pi-team-audit-snapshot-20260802T052359Z"
+  },
+  "sources": [
+    {
+      "kind": "team_config",
+      "originalPath": "<home>/.pi/teams/rarebit-public-release-e2e/config.json",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/teams/rarebit-public-release-e2e-config.json",
+      "sha256": "3730863fc6d3e7f757a5a1a12d294e8acc5e90395daeb062445dad742c4438da"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+      "prefixLines": 2421,
+      "sha256": "342bf952bc65d232dc0ef804748c0a8d5225431cc67ee043a5f8a7261b7386bb"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-55-739Z_019fbfe1-84fb-79ca-a2d8-3125dee2d875.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-30-55-739Z_019fbfe1-84fb-79ca-a2d8-3125dee2d875.jsonl",
+      "prefixLines": 174,
+      "sha256": "484f25aebcf0561fe99aafd7aa1e78744f7a74664d7e55374cd09feedf000360"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+      "prefixLines": 190,
+      "sha256": "e28a94dbe7ccb0671745ba63912d78ba76b9946f945367fcc080c54ebaed97ae"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+      "prefixLines": 619,
+      "sha256": "d51f7627f38f22496e73bbe049116d0505953a252504d240e53eb98ae922d464"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-24-765Z_019fbfe6-8a3d-7de1-94a5-58c011b3b48f.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-36-24-765Z_019fbfe6-8a3d-7de1-94a5-58c011b3b48f.jsonl",
+      "prefixLines": 295,
+      "sha256": "0a989a88a20f50e3946e499ae36fd8ff66b50129681e4bba1fe600b06bab3e47"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--private-tmp-hypercarrier-rarebit-alpha2-composition--/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+      "prefixLines": 315,
+      "sha256": "594d6ae451a81333d249c8cae2c4787fc908fa572cb3d78a4cfcab1b45f2ea82"
+    },
+    {
+      "kind": "team_config",
+      "originalPath": "<home>/.pi/teams/worker-resource-projection-review/config.json",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/teams/worker-resource-projection-review-config.json",
+      "sha256": "f9f60cd092fa7d6a396438e7d2adc8cdfc1e9492514203e5f09677ed4e2efb0b"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+      "prefixLines": 654,
+      "sha256": "2781486a1b6b41a7a74e27df9138e78c56f91252b0d77205ba1540a632f832bf"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T00-37-15-281Z_019fbfe7-4f91-7b2a-8e2a-36b384b952bf.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-37-15-281Z_019fbfe7-4f91-7b2a-8e2a-36b384b952bf.jsonl",
+      "prefixLines": 137,
+      "sha256": "5440c37cfc495fa1b809771634a7a83cb32549aeb0b50c8395e083f83176a27b"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T00-37-18-372Z_019fbfe7-5ba4-71ab-aa5e-72e81b593f8d.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-37-18-372Z_019fbfe7-5ba4-71ab-aa5e-72e81b593f8d.jsonl",
+      "prefixLines": 430,
+      "sha256": "5e58bd7f2bebe6e049f28b1ec2594af5cb5d9887e2334ba569399022c543bc70"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+      "prefixLines": 309,
+      "sha256": "61710869cd1b79fa28657e92120aa6cf158d1e857f9de369a9fbb8f993e6ecf4"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+      "prefixLines": 80,
+      "sha256": "6119d8b67e8065a4374905719dfcb0b2b3e27eef5bcfa8745cc4efa50f62e829"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T05-12-42-001Z_019fc0e3-7d11-7a2e-8a70-3b1d5a300991.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T05-12-42-001Z_019fc0e3-7d11-7a2e-8a70-3b1d5a300991.jsonl",
+      "prefixLines": 102,
+      "sha256": "21cf8aebe48b4bf15c632c8f451fbebad670721f03cab1432f5edfd53a1499fa"
+    }
+  ],
+  "totals": {
+    "calls": 646,
+    "errors": 14,
+    "refused": 2,
+    "modelContentMiB": 0.8364,
+    "sessionRecordMiB": 5.8879
+  },
+  "teams": {
+    "rarebit-public-release-e2e": {
+      "calls": 440,
+      "actors": {
+        "independent-verifier": 45,
+        "parent-docs-implementer": 9,
+        "product-observer": 24,
+        "release-implementer": 45,
+        "systems-observer": 28,
+        "team-lead": 289
+      },
+      "outcomes": {
+        "accepted": 431,
+        "missing": 9
+      },
+      "errors": {
+        "count": 8,
+        "classes": {
+          "beads_timeout": 2,
+          "invalid_compound_claim": 3,
+          "wait_aborted": 3
+        },
+        "evidence": [
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T04:45:21.889Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 2354,
+            "resultLine": 2355,
+            "cursor": "163",
+            "wait_ms": 300000,
+            "limit": 20,
+            "result": "Team event wait aborted"
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T05:00:40.887Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 2379,
+            "resultLine": 2380,
+            "cursor": "167",
+            "wait_ms": 300000,
+            "limit": 20,
+            "result": "Team event wait aborted"
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T05:05:51.209Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 2398,
+            "resultLine": 2399,
+            "cursor": "171",
+            "wait_ms": 300000,
+            "limit": 20,
+            "result": "Team event wait aborted"
+          },
+          {
+            "actor": "release-implementer",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T00:37:38.009Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+            "callLine": 20,
+            "resultLine": 21,
+            "task_id": "rarebit-public-release-e2e-okx",
+            "result": "claim is an atomic assignment operation and cannot be combined with other task_update changes."
+          },
+          {
+            "actor": "release-implementer",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T02:20:11.313Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+            "callLine": 372,
+            "resultLine": 373,
+            "wait_ms": 0,
+            "limit": 100,
+            "result": "Beads command failed (timeout): bd --directory <home>/.pi/teams/rarebit-public-release-e2e --json show rarebit-public-release-e2e-063 rarebit-public-release-e2e-1nf rarebit-public-release-e2e-1yo rarebit-public-release-e2e-2c9 rarebit-public-release-e2e-3kb rarebit-public-release-e2e-5ea rarebit-public-release-e2e-6ay rarebit-public-release-e2e-6vb rarebit-public-release-e2e-6y6 rarebit-public-release-e2e-6zx rarebit-public-release-e2e-7wt rarebit-public-release-e2e-8lx rarebit-public-releas"
+          },
+          {
+            "actor": "independent-verifier",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T00:45:36.615Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-24-765Z_019fbfe6-8a3d-7de1-94a5-58c011b3b48f.jsonl",
+            "callLine": 18,
+            "resultLine": 19,
+            "task_id": "rarebit-public-release-e2e-3kb",
+            "result": "claim is an atomic assignment operation and cannot be combined with other task_update changes."
+          },
+          {
+            "actor": "parent-docs-implementer",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T04:45:47.176Z",
+            "source": "<home>/.pi/agent/sessions/--private-tmp-hypercarrier-rarebit-alpha2-composition--/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+            "callLine": 28,
+            "resultLine": 29,
+            "limit": 100,
+            "result": "Beads command failed (timeout): bd --directory <home>/.pi/teams/rarebit-public-release-e2e --json show rarebit-public-release-e2e-063 rarebit-public-release-e2e-0bn rarebit-public-release-e2e-1nf rarebit-public-release-e2e-1yo rarebit-public-release-e2e-2c9 rarebit-public-release-e2e-3kb rarebit-public-release-e2e-4ud rarebit-public-release-e2e-5ea rarebit-public-release-e2e-5qy rarebit-public-release-e2e-6ay rarebit-public-release-e2e-6vb rarebit-public-release-e2e-6y6 rarebit-public-releas"
+          },
+          {
+            "actor": "parent-docs-implementer",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T05:00:22.830Z",
+            "source": "<home>/.pi/agent/sessions/--private-tmp-hypercarrier-rarebit-alpha2-composition--/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+            "callLine": 64,
+            "resultLine": 65,
+            "task_id": "rarebit-public-release-e2e-a8d",
+            "result": "claim is an atomic assignment operation and cannot be combined with other task_update changes."
+          }
+        ]
+      },
+      "refused": {
+        "count": 0,
+        "evidence": []
+      },
+      "tools": {
+        "alert_send": {
+          "calls": 11,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0014,
+          "sessionRecordMiB": 0.0153,
+          "latency": {
+            "sumSeconds": 0.258,
+            "medianMs": 19.0,
+            "p95Ms": 23.0,
+            "maxMs": 64.0
+          }
+        },
+        "task_create": {
+          "calls": 57,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.012,
+          "sessionRecordMiB": 0.1425,
+          "latency": {
+            "sumSeconds": 169.72,
+            "medianMs": 2601.0,
+            "p95Ms": 4000.0,
+            "maxMs": 7842.0
+          }
+        },
+        "task_read": {
+          "calls": 107,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.2903,
+          "sessionRecordMiB": 0.6807,
+          "latency": {
+            "sumSeconds": 269.123,
+            "medianMs": 518.0,
+            "p95Ms": 8665.0,
+            "maxMs": 64834.0
+          }
+        },
+        "task_update": {
+          "calls": 99,
+          "errors": 3,
+          "refused": 0,
+          "modelContentMiB": 0.0176,
+          "sessionRecordMiB": 0.5617,
+          "latency": {
+            "sumSeconds": 156.688,
+            "medianMs": 1402.0,
+            "p95Ms": 2301.0,
+            "maxMs": 4231.0
+          }
+        },
+        "team_create": {
+          "calls": 1,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0002,
+          "sessionRecordMiB": 0.0014,
+          "latency": {
+            "sumSeconds": 3.312,
+            "medianMs": 3312.0,
+            "p95Ms": 3312.0,
+            "maxMs": 3312.0
+          }
+        },
+        "team_sync": {
+          "calls": 160,
+          "errors": 5,
+          "refused": 0,
+          "modelContentMiB": 0.1407,
+          "sessionRecordMiB": 1.6121,
+          "latency": {
+            "sumSeconds": 11224.787,
+            "medianMs": 4644.0,
+            "p95Ms": 300905.0,
+            "maxMs": 301741.0
+          }
+        },
+        "worker_ensure": {
+          "calls": 5,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0008,
+          "sessionRecordMiB": 0.0061,
+          "latency": {
+            "sumSeconds": 27.569,
+            "medianMs": 6097.0,
+            "p95Ms": 6138.0,
+            "maxMs": 6139.0
+          }
+        }
+      },
+      "sync": {
+        "calls": 160,
+        "completion": {
+          "events": 113,
+          "missing": 6,
+          "snapshot": 3,
+          "timeout": 38
+        },
+        "requestedWaitMs": {
+          "0": 3,
+          "1000": 20,
+          "120000": 10,
+          "30000": 12,
+          "300000": 105,
+          "60000": 8,
+          "absent": 2
+        },
+        "actualLatencySumSeconds": 11224.787,
+        "modelContentMiB": 0.1407,
+        "sessionRecordMiB": 1.6121,
+        "modelContentMiBByCompletion": {
+          "events": 0.108,
+          "missing": 0.0034,
+          "snapshot": 0.0052,
+          "timeout": 0.0242
+        },
+        "projectionTruncatedCalls": 105,
+        "continuationCalls": 0,
+        "taskFilteredCallsReturningBroaderProjection": 151,
+        "workerStopHints": {
+          "independent-verifier": 119,
+          "parent-docs-implementer": 2,
+          "product-observer": 135,
+          "release-implementer": 68,
+          "systems-observer": 127
+        },
+        "truncationEvidence": [
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T01:58:31.271Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 1968,
+            "resultLine": 1969,
+            "cursor": "73",
+            "wait_ms": 1000,
+            "limit": 20
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T01:59:05.668Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 1976,
+            "resultLine": 1977,
+            "cursor": "76",
+            "wait_ms": 300000,
+            "limit": 20
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T01:59:09.906Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 1978,
+            "resultLine": 1979,
+            "cursor": "77",
+            "wait_ms": 300000,
+            "limit": 20
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T01:59:13.644Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 1980,
+            "resultLine": 1981,
+            "cursor": "78",
+            "wait_ms": 300000,
+            "limit": 20
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T02:02:16.310Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 1988,
+            "resultLine": 1989,
+            "cursor": "79",
+            "wait_ms": 300000,
+            "limit": 20
+          }
+        ]
+      },
+      "readsWithin30SecondsOfStructuredHydration": [
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:35:39.263Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1469,
+          "resultLine": 1470,
+          "task_id": "rarebit-public-release-e2e-1yo",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1467,
+          "ageSeconds": 5.546
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:35:39.263Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1469,
+          "resultLine": 1471,
+          "task_id": "rarebit-public-release-e2e-rt5",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1467,
+          "ageSeconds": 5.546
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:45:02.417Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1517,
+          "resultLine": 1518,
+          "task_id": "rarebit-public-release-e2e-okx",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1515,
+          "ageSeconds": 5.663
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:48:02.177Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1580,
+          "resultLine": 1581,
+          "task_id": "rarebit-public-release-e2e-xci",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1578,
+          "ageSeconds": 2.549
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:49:08.706Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1591,
+          "resultLine": 1592,
+          "task_id": "rarebit-public-release-e2e-3kb",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1589,
+          "ageSeconds": 5.962
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:49:08.706Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1591,
+          "resultLine": 1593,
+          "task_id": "rarebit-public-release-e2e-xgd",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1589,
+          "ageSeconds": 5.962
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:53:37.133Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1611,
+          "resultLine": 1612,
+          "task_id": "rarebit-public-release-e2e-pe0",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1609,
+          "ageSeconds": 4.595
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:57:13.710Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1619,
+          "resultLine": 1620,
+          "task_id": "rarebit-public-release-e2e-pe0",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1617,
+          "ageSeconds": 4.695
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:59:21.660Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1647,
+          "resultLine": 1648,
+          "task_id": "rarebit-public-release-e2e-ghy",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1644,
+          "ageSeconds": 3.212
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:01:09.028Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1657,
+          "resultLine": 1658,
+          "task_id": "rarebit-public-release-e2e-2c9",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1655,
+          "ageSeconds": 3.544
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:02:17.192Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1671,
+          "resultLine": 1672,
+          "task_id": "rarebit-public-release-e2e-jp8",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1669,
+          "ageSeconds": 8.683
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:02:31.090Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1675,
+          "resultLine": 1676,
+          "task_id": "rarebit-public-release-e2e-063",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1673,
+          "ageSeconds": 4.869
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:04:35.298Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1686,
+          "resultLine": 1687,
+          "task_id": "rarebit-public-release-e2e-u62",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1683,
+          "ageSeconds": 3.134
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:05:32.061Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1700,
+          "resultLine": 1701,
+          "task_id": "rarebit-public-release-e2e-1nf",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1698,
+          "ageSeconds": 7.862
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:05:45.572Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1704,
+          "resultLine": 1705,
+          "task_id": "rarebit-public-release-e2e-mew",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1702,
+          "ageSeconds": 3.022
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:06:17.238Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1708,
+          "resultLine": 1709,
+          "task_id": "rarebit-public-release-e2e-7wt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1706,
+          "ageSeconds": 3.386
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:10:07.680Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1741,
+          "resultLine": 1742,
+          "task_id": "rarebit-public-release-e2e-6y6",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1739,
+          "ageSeconds": 8.205
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:13:45.112Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1771,
+          "resultLine": 1772,
+          "task_id": "rarebit-public-release-e2e-lwx",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1769,
+          "ageSeconds": 4.777
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:42:26.816Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1904,
+          "resultLine": 1905,
+          "task_id": "rarebit-public-release-e2e-cpe",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1902,
+          "ageSeconds": 6.046
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:44:08.970Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1919,
+          "resultLine": 1920,
+          "task_id": "rarebit-public-release-e2e-dne",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1917,
+          "ageSeconds": 6.559
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:44:40.892Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1923,
+          "resultLine": 1924,
+          "task_id": "rarebit-public-release-e2e-qjw",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1921,
+          "ageSeconds": 5.698
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:49:35.246Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1947,
+          "resultLine": 1948,
+          "task_id": "rarebit-public-release-e2e-8lx",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1945,
+          "ageSeconds": 6.61
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:58:37.294Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1970,
+          "resultLine": 1971,
+          "task_id": "rarebit-public-release-e2e-djr",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1968,
+          "ageSeconds": 4.565
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:58:37.294Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1970,
+          "resultLine": 1972,
+          "task_id": "rarebit-public-release-e2e-h1n",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1968,
+          "ageSeconds": 4.565
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:58:37.294Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1970,
+          "resultLine": 1973,
+          "task_id": "rarebit-public-release-e2e-dyy",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1968,
+          "ageSeconds": 4.565
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:01:40.344Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1982,
+          "resultLine": 1983,
+          "task_id": "rarebit-public-release-e2e-wtj",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1980,
+          "ageSeconds": 2.836
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:03:39.471Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 1998,
+          "resultLine": 1999,
+          "task_id": "rarebit-public-release-e2e-sl9",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 1996,
+          "ageSeconds": 4.577
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:06:11.698Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2010,
+          "resultLine": 2011,
+          "task_id": "rarebit-public-release-e2e-mj2",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2008,
+          "ageSeconds": 3.801
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:08:16.894Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2026,
+          "resultLine": 2027,
+          "task_id": "rarebit-public-release-e2e-l5j",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2024,
+          "ageSeconds": 3.82
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:08:16.894Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2026,
+          "resultLine": 2029,
+          "task_id": "rarebit-public-release-e2e-uso",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2022,
+          "ageSeconds": 17.806
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:10:41.136Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2038,
+          "resultLine": 2039,
+          "task_id": "rarebit-public-release-e2e-6ay",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2036,
+          "ageSeconds": 5.825
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:12:43.200Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2098,
+          "resultLine": 2099,
+          "task_id": "rarebit-public-release-e2e-jyr",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2096,
+          "ageSeconds": 3.868
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:12:43.200Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2098,
+          "resultLine": 2100,
+          "task_id": "rarebit-public-release-e2e-6vb",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2096,
+          "ageSeconds": 3.868
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:12:43.200Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2098,
+          "resultLine": 2101,
+          "task_id": "rarebit-public-release-e2e-pj6",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2096,
+          "ageSeconds": 3.868
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:18:15.048Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2122,
+          "resultLine": 2124,
+          "task_id": "rarebit-public-release-e2e-b1t",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2120,
+          "ageSeconds": 3.814
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:24:46.966Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2139,
+          "resultLine": 2140,
+          "task_id": "rarebit-public-release-e2e-d3f",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2137,
+          "ageSeconds": 4.241
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:25:05.375Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2143,
+          "resultLine": 2144,
+          "task_id": "rarebit-public-release-e2e-d3f",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2141,
+          "ageSeconds": 7.912
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:40:04.289Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2151,
+          "resultLine": 2152,
+          "task_id": "rarebit-public-release-e2e-d3f",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2149,
+          "ageSeconds": 7.447
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:43:09.831Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2167,
+          "resultLine": 2168,
+          "task_id": "rarebit-public-release-e2e-c4f",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2165,
+          "ageSeconds": 4.314
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:47:18.943Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2188,
+          "resultLine": 2189,
+          "task_id": "rarebit-public-release-e2e-qgq",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2186,
+          "ageSeconds": 4.81
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:49:27.053Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2204,
+          "resultLine": 2205,
+          "task_id": "rarebit-public-release-e2e-i5a",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2202,
+          "ageSeconds": 4.956
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:12:33.867Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2230,
+          "resultLine": 2231,
+          "task_id": "rarebit-public-release-e2e-7jm",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2228,
+          "ageSeconds": 3.983
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:14:34.203Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2243,
+          "resultLine": 2244,
+          "task_id": "rarebit-public-release-e2e-4ud",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2241,
+          "ageSeconds": 3.684
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:14:34.203Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2243,
+          "resultLine": 2245,
+          "task_id": "rarebit-public-release-e2e-yex",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2239,
+          "ageSeconds": 10.072
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:35:52.375Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2266,
+          "resultLine": 2267,
+          "task_id": "rarebit-public-release-e2e-0bn",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2264,
+          "ageSeconds": 3.127
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:37:29.789Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2274,
+          "resultLine": 2275,
+          "task_id": "rarebit-public-release-e2e-vne",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2272,
+          "ageSeconds": 3.329
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:40:02.010Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2284,
+          "resultLine": 2286,
+          "task_id": "rarebit-public-release-e2e-5qy",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2282,
+          "ageSeconds": 11.963
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:01:32.414Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2305,
+          "resultLine": 2306,
+          "task_id": "rarebit-public-release-e2e-5qy",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2303,
+          "ageSeconds": 5.725
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:59:48.094Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2371,
+          "resultLine": 2372,
+          "task_id": "rarebit-public-release-e2e-a8d",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2369,
+          "ageSeconds": 7.545
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T05:03:25.514Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2385,
+          "resultLine": 2386,
+          "task_id": "rarebit-public-release-e2e-a8d",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2383,
+          "ageSeconds": 4.484
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T05:12:21.254Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+          "callLine": 2406,
+          "resultLine": 2407,
+          "task_id": "rarebit-public-release-e2e-jo3",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 2404,
+          "ageSeconds": 2.896
+        },
+        {
+          "actor": "release-implementer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:37:38.009Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+          "callLine": 20,
+          "resultLine": 22,
+          "task_id": "rarebit-public-release-e2e-1yo",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 16,
+          "ageSeconds": 11.959
+        },
+        {
+          "actor": "release-implementer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:37:38.009Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+          "callLine": 20,
+          "resultLine": 23,
+          "task_id": "rarebit-public-release-e2e-rt5",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 16,
+          "ageSeconds": 11.959
+        },
+        {
+          "actor": "independent-verifier",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:02:56.760Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-24-765Z_019fbfe6-8a3d-7de1-94a5-58c011b3b48f.jsonl",
+          "callLine": 99,
+          "resultLine": 100,
+          "task_id": "rarebit-public-release-e2e-5ea",
+          "reason": "same Task was present in preceding task_update machine details",
+          "priorCallLine": 95,
+          "ageSeconds": 12.309
+        },
+        {
+          "actor": "parent-docs-implementer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T05:10:32.836Z",
+          "source": "<home>/.pi/agent/sessions/--private-tmp-hypercarrier-rarebit-alpha2-composition--/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+          "callLine": 173,
+          "resultLine": 174,
+          "task_id": "rarebit-public-release-e2e-5qy",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 170,
+          "ageSeconds": 7.399
+        }
+      ],
+      "slowNonWaitCalls": [
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:43:22.524Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 79,
+          "resultLine": 80,
+          "task_id": "rarebit-public-release-e2e-qjw",
+          "durationMs": 10770.0
+        },
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:47:53.041Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 155,
+          "resultLine": 156,
+          "task_id": "rarebit-public-release-e2e-ooj",
+          "durationMs": 15720.0
+        },
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:12:59.583Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 166,
+          "resultLine": 167,
+          "task_id": "rarebit-public-release-e2e-4ud",
+          "durationMs": 63004.0
+        },
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:36:09.829Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 180,
+          "resultLine": 181,
+          "task_id": "rarebit-public-release-e2e-vne",
+          "durationMs": 64834.0
+        }
+      ],
+      "modelContentMiB": 0.4631,
+      "sessionRecordMiB": 3.0197
+    },
+    "worker-resource-projection-review": {
+      "calls": 206,
+      "actors": {
+        "role-config-product-observer": 11,
+        "role-config-systems-observer": 13,
+        "team-lead": 148,
+        "worker-resource-implementer": 24,
+        "worker-resource-repairer": 3,
+        "worker-resource-test-reviewer": 7
+      },
+      "outcomes": {
+        "accepted": 197,
+        "missing": 7,
+        "refused": 2
+      },
+      "errors": {
+        "count": 6,
+        "classes": {
+          "invalid_compound_claim": 3,
+          "wait_aborted": 3
+        },
+        "evidence": [
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T01:50:47.942Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+            "callLine": 384,
+            "resultLine": 385,
+            "cursor": "33",
+            "wait_ms": 300000,
+            "limit": 100,
+            "result": "Team event wait aborted"
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T05:02:58.549Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+            "callLine": 623,
+            "resultLine": 624,
+            "cursor": "65",
+            "wait_ms": 300000,
+            "limit": 100,
+            "result": "Team event wait aborted"
+          },
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T05:07:45.997Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+            "callLine": 634,
+            "resultLine": 635,
+            "cursor": "65",
+            "wait_ms": 300000,
+            "limit": 100,
+            "result": "Team event wait aborted"
+          },
+          {
+            "actor": "role-config-product-observer",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T00:49:35.807Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T00-37-15-281Z_019fbfe7-4f91-7b2a-8e2a-36b384b952bf.jsonl",
+            "callLine": 55,
+            "resultLine": 56,
+            "task_id": "worker-resource-projection-review-8lo",
+            "result": "claim is an atomic assignment operation and cannot be combined with other task_update changes."
+          },
+          {
+            "actor": "worker-resource-implementer",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T01:09:33.425Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+            "callLine": 18,
+            "resultLine": 19,
+            "task_id": "worker-resource-projection-review-upt",
+            "result": "claim is an atomic assignment operation and cannot be combined with other task_update changes."
+          },
+          {
+            "actor": "worker-resource-test-reviewer",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T04:01:49.019Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+            "callLine": 14,
+            "resultLine": 15,
+            "task_id": "worker-resource-projection-review-3p1",
+            "result": "claim is an atomic assignment operation and cannot be combined with other task_update changes."
+          }
+        ]
+      },
+      "refused": {
+        "count": 2,
+        "evidence": [
+          {
+            "actor": "team-lead",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T01:43:07.211Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+            "callLine": 360,
+            "resultLine": 361,
+            "task_id": "worker-resource-projection-review-upt",
+            "result": "Task worker-resource-projection-review-upt not updated: expected version is stale. Re-read the Task, review its current blocked state, then retry with version beads_dc83449522b0ea60968ad9b18bedca160a55bc696ae7fee108b48eae59756ad2."
+          },
+          {
+            "actor": "team-lead",
+            "tool": "task_update",
+            "timestamp": "2026-08-02T04:09:10.866Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+            "callLine": 571,
+            "resultLine": 572,
+            "task_id": "worker-resource-projection-review-upt",
+            "result": "Task worker-resource-projection-review-upt not updated: expected version is stale. Re-read the Task, review its current closed state, then retry with version beads_f516ac39bd147eb760d615fde6d40142e1be8e75505b28f1a8dab36a1d657b1d."
+          }
+        ]
+      },
+      "tools": {
+        "alert_send": {
+          "calls": 15,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0021,
+          "sessionRecordMiB": 0.0218,
+          "latency": {
+            "sumSeconds": 0.361,
+            "medianMs": 21.0,
+            "p95Ms": 25.0,
+            "maxMs": 65.0
+          }
+        },
+        "task_create": {
+          "calls": 6,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0014,
+          "sessionRecordMiB": 0.0171,
+          "latency": {
+            "sumSeconds": 16.719,
+            "medianMs": 2433.0,
+            "p95Ms": 2787.0,
+            "maxMs": 5458.0
+          }
+        },
+        "task_link": {
+          "calls": 1,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0002,
+          "sessionRecordMiB": 0.0013,
+          "latency": {
+            "sumSeconds": 1.849,
+            "medianMs": 1849.0,
+            "p95Ms": 1849.0,
+            "maxMs": 1849.0
+          }
+        },
+        "task_read": {
+          "calls": 35,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.2902,
+          "sessionRecordMiB": 0.6151,
+          "latency": {
+            "sumSeconds": 33.28,
+            "medianMs": 583.0,
+            "p95Ms": 2353.0,
+            "maxMs": 2354.0
+          }
+        },
+        "task_update": {
+          "calls": 42,
+          "errors": 3,
+          "refused": 2,
+          "modelContentMiB": 0.0084,
+          "sessionRecordMiB": 0.6692,
+          "latency": {
+            "sumSeconds": 79.546,
+            "medianMs": 1703.5,
+            "p95Ms": 3872.0,
+            "maxMs": 5459.0
+          }
+        },
+        "team_create": {
+          "calls": 1,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0002,
+          "sessionRecordMiB": 0.0015,
+          "latency": {
+            "sumSeconds": 3.106,
+            "medianMs": 3106.0,
+            "p95Ms": 3106.0,
+            "maxMs": 3106.0
+          }
+        },
+        "team_sync": {
+          "calls": 96,
+          "errors": 3,
+          "refused": 0,
+          "modelContentMiB": 0.0697,
+          "sessionRecordMiB": 1.5303,
+          "latency": {
+            "sumSeconds": 14228.861,
+            "medianMs": 134421.0,
+            "p95Ms": 301373.0,
+            "maxMs": 305126.0
+          }
+        },
+        "worker_ensure": {
+          "calls": 6,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.001,
+          "sessionRecordMiB": 0.0076,
+          "latency": {
+            "sumSeconds": 27.739,
+            "medianMs": 6130.0,
+            "p95Ms": 6139.0,
+            "maxMs": 6139.0
+          }
+        },
+        "worker_stop": {
+          "calls": 4,
+          "errors": 0,
+          "refused": 0,
+          "modelContentMiB": 0.0003,
+          "sessionRecordMiB": 0.0042,
+          "latency": {
+            "sumSeconds": 12.824,
+            "medianMs": 4101.0,
+            "p95Ms": 4101.0,
+            "maxMs": 4101.0
+          }
+        }
+      },
+      "sync": {
+        "calls": 96,
+        "completion": {
+          "events": 40,
+          "missing": 4,
+          "snapshot": 11,
+          "timeout": 41
+        },
+        "requestedWaitMs": {
+          "0": 12,
+          "120000": 1,
+          "300000": 83
+        },
+        "actualLatencySumSeconds": 14228.861,
+        "modelContentMiB": 0.0697,
+        "sessionRecordMiB": 1.5303,
+        "modelContentMiBByCompletion": {
+          "events": 0.0367,
+          "missing": 0.0001,
+          "snapshot": 0.015,
+          "timeout": 0.0179
+        },
+        "projectionTruncatedCalls": 0,
+        "continuationCalls": 0,
+        "taskFilteredCallsReturningBroaderProjection": 77,
+        "workerStopHints": {
+          "role-config-product-observer": 24,
+          "role-config-systems-observer": 26,
+          "worker-resource-implementer": 4,
+          "worker-resource-test-reviewer": 20
+        },
+        "truncationEvidence": []
+      },
+      "readsWithin30SecondsOfStructuredHydration": [
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T00:52:05.335Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 228,
+          "resultLine": 229,
+          "task_id": "worker-resource-projection-review-8lo",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 226,
+          "ageSeconds": 3.417
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:23:59.900Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 318,
+          "resultLine": 319,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 316,
+          "ageSeconds": 10.7
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:44:56.471Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 372,
+          "resultLine": 373,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 370,
+          "ageSeconds": 5.72
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:44:56.471Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 372,
+          "resultLine": 374,
+          "task_id": "worker-resource-projection-review-7rf",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 370,
+          "ageSeconds": 5.72
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:44:56.471Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 372,
+          "resultLine": 375,
+          "task_id": "worker-resource-projection-review-3p1",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 370,
+          "ageSeconds": 5.72
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:54:53.685Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 400,
+          "resultLine": 401,
+          "task_id": "worker-resource-projection-review-d8f",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 398,
+          "ageSeconds": 4.149
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:55:47.285Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 408,
+          "resultLine": 409,
+          "task_id": "worker-resource-projection-review-7rf",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 406,
+          "ageSeconds": 3.598
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:01:30.783Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 429,
+          "resultLine": 430,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 427,
+          "ageSeconds": 5.367
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:43:06.929Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 465,
+          "resultLine": 466,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 463,
+          "ageSeconds": 3.193
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:14:35.206Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 492,
+          "resultLine": 493,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 490,
+          "ageSeconds": 4.856
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:36:30.480Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 512,
+          "resultLine": 513,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 510,
+          "ageSeconds": 4.757
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:01:07.439Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 536,
+          "resultLine": 537,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 534,
+          "ageSeconds": 12.76
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:08:35.106Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 568,
+          "resultLine": 569,
+          "task_id": "worker-resource-projection-review-3p1",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 565,
+          "ageSeconds": 3.816
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:09:17.217Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 573,
+          "resultLine": 574,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in preceding task_update machine details",
+          "priorCallLine": 571,
+          "ageSeconds": 5.131
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:09:50.183Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 581,
+          "resultLine": 582,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 579,
+          "ageSeconds": 5.129
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:31:29.174Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 599,
+          "resultLine": 600,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 597,
+          "ageSeconds": 9.964
+        },
+        {
+          "actor": "team-lead",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:52:40.344Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+          "callLine": 617,
+          "resultLine": 618,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 615,
+          "ageSeconds": 4.776
+        },
+        {
+          "actor": "worker-resource-implementer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:23:24.187Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+          "callLine": 140,
+          "resultLine": 141,
+          "task_id": "worker-resource-projection-review-8lo",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 136,
+          "ageSeconds": 4.286
+        },
+        {
+          "actor": "worker-resource-implementer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:23:24.187Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+          "callLine": 140,
+          "resultLine": 142,
+          "task_id": "worker-resource-projection-review-wgb",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 136,
+          "ageSeconds": 4.286
+        },
+        {
+          "actor": "worker-resource-implementer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:23:24.187Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+          "callLine": 140,
+          "resultLine": 143,
+          "task_id": "worker-resource-projection-review-3p1",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 136,
+          "ageSeconds": 4.286
+        },
+        {
+          "actor": "worker-resource-test-reviewer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:02:00.445Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+          "callLine": 18,
+          "resultLine": 19,
+          "task_id": "worker-resource-projection-review-upt",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 12,
+          "ageSeconds": 15.732
+        },
+        {
+          "actor": "worker-resource-test-reviewer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T04:02:00.445Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+          "callLine": 18,
+          "resultLine": 20,
+          "task_id": "worker-resource-projection-review-7rf",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 12,
+          "ageSeconds": 15.732
+        },
+        {
+          "actor": "worker-resource-repairer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T05:13:33.669Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T05-12-42-001Z_019fc0e3-7d11-7a2e-8a70-3b1d5a300991.jsonl",
+          "callLine": 26,
+          "resultLine": 27,
+          "task_id": "worker-resource-projection-review-3p1",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 12,
+          "ageSeconds": 22.802
+        },
+        {
+          "actor": "worker-resource-repairer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T05:13:33.669Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T05-12-42-001Z_019fc0e3-7d11-7a2e-8a70-3b1d5a300991.jsonl",
+          "callLine": 26,
+          "resultLine": 28,
+          "task_id": "worker-resource-projection-review-7rf",
+          "reason": "same Task was present in the preceding team_sync machine-details hydration",
+          "priorCallLine": 12,
+          "ageSeconds": 22.802
+        }
+      ],
+      "slowNonWaitCalls": [],
+      "modelContentMiB": 0.3733,
+      "sessionRecordMiB": 2.8682
+    }
+  }
+}

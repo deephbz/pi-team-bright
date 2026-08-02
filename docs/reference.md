@@ -7,8 +7,11 @@ exhaustive parameter reference.
 
 ## Public agent interface
 
-- [`PI_TEAMS_PUBLIC_TOOLS`](../src/utils/tool-result-renderer.ts) is the exact
-  public tool selection and the shared TUI-renderer boundary.
+- The release candidate leader surface is the ten-tool catalog in
+  [`src/model-tool-contract/catalog.ts`](../src/model-tool-contract/catalog.ts),
+  registered by [`pi-registration.ts`](../src/model-tool-contract/pi-registration.ts).
+  [`PI_TEAMS_PUBLIC_TOOLS`](../src/utils/tool-result-renderer.ts) remains the
+  shared TUI-renderer boundary for the candidate and legacy Worker names.
 - [`extensions/index.ts`](../extensions/index.ts) owns each tool's TypeBox
   parameter schema, agent-facing description, authorization, execution, and
   semantic result content.
@@ -54,6 +57,10 @@ exhaustive parameter reference.
   relations, versions, evidence guards, and Beads authority integration.
 - [`src/utils/team-events.ts`](../src/utils/team-events.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
+- [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)
+  owns Worker-only Pi settings parsing plus context and model-tool projection;
+  its focused executable anchors are `worker-resource-projection.test.ts` and
+  `worker-resource-extension.contract.test.ts`.
 - [`src/utils/worker-startup-observation.ts`](../src/utils/worker-startup-observation.ts)
   owns the bounded exact-Membership startup observation used after a new or
   recovered carrier launch; `session_bound` generation evidence correlates the

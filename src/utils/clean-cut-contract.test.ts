@@ -21,6 +21,7 @@ import {
 } from "./task-delivery";
 import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
 import * as teams from "./teams";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
 
 type RegisteredTool = {
   name: string;
@@ -71,7 +72,9 @@ function writeTeam(
   const config: TeamConfig = {
     name,
     description: "clean-cut evaluator fixture",
+    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
     createdAt: Date.now(),
+    epochId: teams.newTeamEpochId(),
     leadAgentId: "lead-agent",
     leadSessionId: "lead-session",
     members: [
@@ -100,6 +103,7 @@ function writeTeam(
           }]
         : []),
     ],
+    logicalWorkers: options.workerSession ? [{ name: "worker", scope: "clean-cut worker capability" }] : [],
     ...(options.legacy
       ? {}
       : {
@@ -281,19 +285,13 @@ describe("Beads-only authority and migration boundary", () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", "");
     const name = uniqueTeam("team-owned-workspace");
     const create = extensionHarness().tools.get("team_create")!;
-    const result = await create.execute("create", { team_name: name }, undefined, undefined, {
+    const result = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "/tmp/team-owned-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
     });
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "team_create",
-      resource: { kind: "team", id: name, teamName: name },
-      postState: { name, lifecycle: "active", taskAuthorityReady: true },
-      evidence: {
-        taskAuthority: { backend: "beads" },
-      },
+      kind: "team_created",
+      team: { name, lifecycle: "active", purpose: "clean-cut evaluator fixture" },
     });
     const config = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
 
@@ -311,12 +309,12 @@ describe("Beads-only authority and migration boundary", () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", unhealthyRoot);
     const unhealthy = uniqueTeam("unhealthy-workspace");
     const unhealthyCreate = extensionHarness().tools.get("team_create")!;
-    await expect(unhealthyCreate.execute("create", { team_name: unhealthy }, undefined, undefined, {
+    const unhealthyResult = await unhealthyCreate.execute("create", { name: unhealthy, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "/tmp/unhealthy-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
-    })).rejects.toThrow(
-      /initialized Beads|Beads workspace|bd/i,
-    );
+    });
+    expect(unhealthyResult.details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+    expect(unhealthyResult.details.message).toMatch(/initialized Beads|Beads workspace|bd/i);
     expect(fs.existsSync(paths.configPath(unhealthy))).toBe(false);
   });
 
@@ -325,16 +323,13 @@ describe("Beads-only authority and migration boundary", () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
     const name = uniqueTeam("new-beads-team");
     const create = extensionHarness().tools.get("team_create")!;
-    const result = await create.execute("create", { team_name: name }, undefined, undefined, {
+    const result = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "/tmp/new-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
     });
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "team_create",
-      postState: { name, lifecycle: "active", taskAuthorityReady: true },
-      evidence: { taskAuthority: { backend: "beads" } },
+      kind: "team_created",
+      team: { name, lifecycle: "active", purpose: "clean-cut evaluator fixture" },
     });
     const config = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
 
@@ -351,10 +346,12 @@ describe("Beads-only authority and migration boundary", () => {
     const name = uniqueTeam("nested-wrong-authority");
     const create = extensionHarness().tools.get("team_create")!;
 
-    await expect(create.execute("create", { team_name: name }, undefined, undefined, {
+    const nestedResult = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "/tmp/nested-wrong-authority-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
-    })).rejects.toThrow(/not an initialized authority root|exact workspace/i);
+    });
+    expect(nestedResult.details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+    expect(nestedResult.details.message).toMatch(/not an initialized authority root|exact workspace/i);
     expect(fs.existsSync(paths.configPath(name))).toBe(false);
   });
 
@@ -366,16 +363,13 @@ describe("Beads-only authority and migration boundary", () => {
     const name = uniqueTeam("opaque-authority");
     const sessionFile = `/tmp/${name}.jsonl`;
     const create = extensionHarness().tools.get("team_create")!;
-    const result = await create.execute("create", { team_name: name }, undefined, undefined, {
+    const result = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "/tmp/opaque-lead.jsonl", buildContextEntries: () => [] },
       ui: { setStatus: vi.fn() },
     });
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "team_create",
-      postState: { name, lifecycle: "active", taskAuthorityReady: true },
-      evidence: { taskAuthority: { backend: "beads" } },
+      kind: "team_created",
+      team: { name, lifecycle: "active", purpose: "clean-cut evaluator fixture" },
     });
     const created = await teams.readConfig(name) as TeamConfig & { taskAuthorityId?: string };
     expect(created.taskAuthorityId).toEqual(expect.any(String));
@@ -422,10 +416,12 @@ describe("Beads-only authority and migration boundary", () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
     const create = extensionHarness().tools.get("team_create")!;
 
-    await expect(create.execute("create", { team_name: name }, undefined, undefined, {
+    const migrationResult = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "/tmp/lead.jsonl" },
       ui: { setStatus: vi.fn() },
-    })).rejects.toThrow(new RegExp(`npm run migrate:tasks -- ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+    });
+    expect(migrationResult.details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+    expect(migrationResult.details.message).toMatch(new RegExp(`npm run migrate:tasks -- ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     expect(JSON.parse(fs.readFileSync(path.join(paths.taskDir(name), "1.json"), "utf8"))).toMatchObject({
       title: "legacy",
     });
@@ -593,25 +589,30 @@ describe("durability and recovery", () => {
     const name = uniqueTeam("terminal-state-atomicity");
     const config = writeTeam(name);
     const store = new BeadsTaskStore({ teamName: name, workspace: config.taskWorkspace!, requireExpectedVersion: false });
-    const created = await store.create({ title: "Terminal transition", description: "Close with durable context." });
+    const createResult = await extensionHarness().tools.get("task_create")!.execute("create", { tasks: [{ title: "Terminal transition", goal: "Close with durable context." }] }, undefined, undefined, { sessionManager: { getSessionFile: () => "lead-session" } });
+    const created = createResult.details.outcomes[0].task;
     const update = extensionHarness().tools.get("task_update")!;
     const result = await update.execute("update", {
-      team_name: name,
-      task_id: created.id,
-      status: "closed",
-      append_note: "Acceptance criteria verified; closing the Task.",
-      expected_version: created.version,
+      updates: [{
+        task_id: created.id,
+        operation_id: "terminal-close",
+        status: "closed",
+        current_context: "Acceptance criteria verified; closing the Task.",
+        journal_entries: [{ kind: "result", text: "Acceptance criteria verified; closing the Task." }],
+        expected_version: created.version,
+      }],
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "lead-session" },
     });
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "task_update",
-      resource: { kind: "task", id: created.id, teamName: name },
-      postState: { status: "closed" },
-      evidence: { appliedOperations: ["set:status", "append:note"] },
+      kind: "task_update_batch",
+      outcomes: [{
+        kind: "updated",
+        task_id: created.id,
+        operation_id: "terminal-close",
+        task: { status: "closed", current_context: "Acceptance criteria verified; closing the Task." },
+        journal_entries: [expect.objectContaining({ kind: "result", text: "Acceptance criteria verified; closing the Task." })],
+      }],
     });
-    expect(result.details.postState.notes).toContain("Acceptance criteria verified");
   });
 });

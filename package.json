@@ -1,6 +1,6 @@
 {
   "name": "@hypercarrier/pi-team-bright",
-  "version": "0.16.0-rc.2",
+  "version": "0.17.0-rc.1",
   "description": "Task-first Pi teams, visible in terminal panes.",
   "repository": {
     "type": "git",
@@ -41,6 +41,8 @@
     "test:exhaustive-only": "vitest run --config vitest.exhaustive.config.ts",
     "test:external": "vitest run --config vitest.exhaustive.config.ts src/utils/binding-correctness.external.test.ts src/utils/clean-cut-contract.test.ts src/utils/clean-cut-round2.test.ts src/utils/round2-contract.test.ts src/utils/task-surface-cleancut.e2e.test.ts src/utils/team-owned-beads-authority.contract.test.ts",
     "qa:agent-surface": "vitest run --config vitest.full.config.ts scripts/snapshot-agent-surface.test.ts",
+    "docs:model-tools": "ts-node --transpile-only src/cli/render-model-tool-contract.ts",
+    "probe:model-tools": "ts-node --transpile-only scripts/probe-model-tool-vertical-slice.ts",
     "test:lanes": "node scripts/verify-test-lanes.cjs"
   },
   "main": "extensions/index.ts",

@@ -85,20 +85,16 @@ async function createWithTools(teamName: string, sessionFile = `/tmp/${teamName}
   const ctx = context(sessionFile);
   const result = await tools.get("team_create")!.execute(
     "create",
-    { team_name: teamName },
+    { name: teamName, purpose: "Exercise Team-owned Beads authority." },
     undefined,
     undefined,
     ctx,
   );
   activeHarnesses.push({ handlers, ctx });
-  expect(result.details).toMatchObject({
-    schema: "pi-teams-tool-result/1",
-    outcome: "accepted",
-    operation: "team_create",
-    resource: { kind: "team", id: teamName, teamName },
-    postState: { name: teamName, lifecycle: "active", taskAuthorityReady: true },
-    evidence: { taskAuthority: { backend: "beads" } },
-  });
+  if (result.details.kind !== "team_created") {
+    throw new Error(result.details.message || result.details.reason || "Team creation was not accepted.");
+  }
+  expect(result.details).toMatchObject({ kind: "team_created", team: { name: teamName, lifecycle: "active" } });
   return { tools, ctx, config: readPersistedConfig(teamName) };
 }
 
@@ -147,24 +143,23 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
     const created = await tools.get("task_create")!.execute(
       "create-task",
       {
-        team_name: teamName,
-        title: "Use the default private authority",
-        description: "The first Task must work without operator setup.",
+        tasks: [{
+          title: "Use the default private authority",
+          goal: "The first Task must work without operator setup.",
+        }],
       },
       undefined,
       undefined,
       ctx,
     );
     expect(created.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "task_create",
-      postState: {
+      kind: "task_create_batch",
+      outcomes: [{ kind: "created", task: {
         title: "Use the default private authority",
-        description: "The first Task must work without operator setup.",
-      },
+        goal: "The first Task must work without operator setup.",
+      } }],
     });
-    const createdTaskId = created.details.postState.id as string;
+    const createdTaskId = created.details.outcomes[0].task.id as string;
 
     const restartedStore = new BeadsTaskStore({
       teamName,
