@@ -5,6 +5,7 @@ import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
 
 type RegisteredTool = {
   name: string;
@@ -52,7 +53,7 @@ function sessionContext(sessionFile: string) {
 }
 
 async function configureLeadRecord(name: string, sessionFile: string): Promise<string> {
-  await teams.createTeam(name, sessionFile, "lead-agent");
+  await teams.createTeam(name, sessionFile, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
   const serialized = JSON.stringify({ pid: -1, sessionFile, startedAt: 1 });
   fs.writeFileSync(paths.leadSessionPath(name), serialized);
   return serialized;
@@ -87,7 +88,7 @@ describe("external current-binding contract", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_AGENT_NAME", "");
     const name = teamName("recipients");
-    await teams.createTeam(name, "lead-session", "lead-agent");
+    await teams.createTeam(name, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
     await teams.addMember(name, {
       agentId: `worker@${name}`,
       name: "worker",
@@ -109,16 +110,15 @@ describe("external current-binding contract", () => {
     const ctx = { sessionManager: { getSessionFile: () => "lead-session" } };
 
     const accepted: any = await send.execute("current", {
-      team_name: name,
       to: "worker",
       kind: "attention",
       text: "accepted while offline",
     }, undefined, undefined, ctx);
     expect(accepted.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "alert_send",
-      postState: { to: "worker", recipients: ["worker"], taskStateChanged: false },
+      kind: "alert_sent",
+      accepted_recipients: ["worker"],
+      failed_recipients: [],
+      task_state_changed: false,
     });
     expect(await messaging.readInbox(name, "worker", false, false)).toHaveLength(1);
     expect(fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8")).toBe(runtimeBefore);
@@ -126,32 +126,27 @@ describe("external current-binding contract", () => {
     await teams.deactivateMember(name, "worker", "replaced");
     const inboxBefore = fs.readFileSync(paths.inboxPath(name, "worker"), "utf8");
     const removed: any = await send.execute("removed", {
-      team_name: name,
       to: "worker",
       kind: "attention",
       text: "must not append",
     }, undefined, undefined, ctx);
     expect(removed.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "refused",
-      operation: "alert_send",
-      warnings: [{ code: "alert_recipient_not_current", resourceId: "worker" }],
-      postState: { accepted: false, attemptedRecipient: "worker", taskStateChanged: false },
+      kind: "refused",
+      reason: "recipient_not_current",
+      state_changed: false,
     });
     expect(fs.readFileSync(paths.inboxPath(name, "worker"), "utf8")).toBe(inboxBefore);
     expect(fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8")).toBe(runtimeBefore);
 
     const unknown: any = await send.execute("unknown", {
-      team_name: name,
       to: "ghost",
       kind: "attention",
       text: "must not create",
     }, undefined, undefined, ctx);
     expect(unknown.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "refused",
-      warnings: [{ code: "alert_recipient_not_current", resourceId: "ghost" }],
-      postState: { accepted: false, attemptedRecipient: "ghost" },
+      kind: "refused",
+      reason: "recipient_not_current",
+      state_changed: false,
     });
     expectNoInboxOrRuntime(name, "ghost");
   });

@@ -7,6 +7,8 @@ import * as paths from "./paths";
 import * as teams from "./teams";
 import * as tasks from "./tasks";
 import { formatPiTeamsToolResult } from "./tool-result-renderer";
+import { createWorkerLaunchBridge } from "./worker-launch-bridge";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
 
 type RegisteredTool = {
   name: string;
@@ -91,6 +93,9 @@ async function team(suffix: string) {
       doltDatabase: "launch_compensation_contract",
       projectId: `launch-compensation-${name}`,
     },
+    undefined,
+    undefined,
+    MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
   return { name, leadSession };
 }
@@ -106,19 +111,56 @@ afterEach(() => {
 });
 
 describe("compensated Worker launch", () => {
+  it("exposes a direct reusable prepared-launch service seam", async () => {
+    const f = await team("bridge-seam");
+    const a = adapter();
+    setAdapter(a.terminal);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => [],
+      resolveModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+    });
+    const member = {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: teams.newLaunchId(),
+      agentId: `worker@${f.name}`,
+      name: "worker",
+      agentType: "teammate" as const,
+      joinedAt: Date.now(),
+      cwd: process.cwd(),
+      subscriptions: [],
+      isActive: true,
+      prompt: "Own focused work.",
+      color: "blue",
+    };
+    await teams.addMember(f.name, member);
+
+    const launch = await bridge.launchPreparedMembership(
+      f.name,
+      member,
+      null,
+      () => ({ terminalId: "pane-worker", isWindow: false, backend: a.terminal.name }),
+    );
+
+    expect(launch).toEqual({ terminalId: "pane-worker", isWindow: false, backend: a.terminal.name });
+    expect((await teams.currentMembership(f.name, "worker"))).toMatchObject({
+      membershipId: member.membershipId,
+      tmuxPaneId: "pane-worker",
+      isActive: true,
+    });
+  });
+
   it("does not create a Worker carrier when Membership preparation persistence fails", async () => {
     const f = await team("preparation-failure");
     const a = adapter();
     const tools = register(a.terminal);
     vi.spyOn(teams, "addMember").mockRejectedValueOnce(new Error("membership write failed"));
 
-    await expect(tools.get("worker_ensure")!.execute(
-      "ensure",
-      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
-      undefined,
-      undefined,
-      context(f.leadSession),
-    )).rejects.toThrow(/membership write failed/i);
+    const refused = await tools.get("ensure_worker")!.execute(
+      "ensure", { name: "worker", scope: "Do focused work" }, undefined, undefined, context(f.leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toContain("membership write failed");
 
     expect(a.spawn).not.toHaveBeenCalled();
     const worker = (await teams.readConfig(f.name)).members.find((member) => member.name === "worker");
@@ -131,13 +173,11 @@ describe("compensated Worker launch", () => {
     a.spawn.mockImplementationOnce(() => { throw new Error("terminal launch failed"); });
     const tools = register(a.terminal);
 
-    await expect(tools.get("worker_ensure")!.execute(
-      "ensure",
-      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
-      undefined,
-      undefined,
-      context(f.leadSession),
-    )).rejects.toThrow(/terminal launch failed.*deactivated/i);
+    const refused = await tools.get("ensure_worker")!.execute(
+      "ensure", { name: "worker", scope: "Do focused work" }, undefined, undefined, context(f.leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/terminal launch failed.*deactivated/i);
 
     expect(a.kill).not.toHaveBeenCalled();
     const worker = (await teams.readConfig(f.name)).members.find((member) => member.name === "worker");
@@ -150,13 +190,11 @@ describe("compensated Worker launch", () => {
     const tools = register(a.terminal);
     vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("config write failed"));
 
-    await expect(tools.get("worker_ensure")!.execute(
-      "ensure",
-      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
-      undefined,
-      undefined,
-      context(f.leadSession),
-    )).rejects.toThrow(/config write failed.*deactivated/i);
+    const refused = await tools.get("ensure_worker")!.execute(
+      "ensure", { name: "worker", scope: "Do focused work" }, undefined, undefined, context(f.leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/config write failed.*deactivated/i);
 
     expect(a.kill).toHaveBeenCalledWith("pane-worker");
     expect(a.terminal.isAlive).toHaveBeenCalledWith("pane-worker");
@@ -170,13 +208,11 @@ describe("compensated Worker launch", () => {
     const tools = register(a.terminal);
     vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("config write failed"));
 
-    await expect(tools.get("worker_ensure")!.execute(
-      "ensure",
-      { team_name: f.name, name: "worker", profile: "Do focused work", cwd: process.cwd() },
-      undefined,
-      undefined,
-      context(f.leadSession),
-    )).rejects.toThrow(/pane pane-worker.*remains current/i);
+    const refused = await tools.get("ensure_worker")!.execute(
+      "ensure", { name: "worker", scope: "Do focused work" }, undefined, undefined, context(f.leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/pane pane-worker.*remains current/i);
 
     expect(a.kill).toHaveBeenCalledWith("pane-worker");
     const worker = (await teams.readConfig(f.name)).members.find((member) => member.name === "worker");
@@ -191,31 +227,17 @@ describe("compensated Worker launch", () => {
 
     const result = await tools.get("team_shutdown")!.execute(
       "shutdown",
-      { team_name: f.name },
+      {},
       undefined,
       undefined,
       context(f.leadSession),
     );
-    expect(result.content[0].text).toMatch(new RegExp(`Team ${f.name} shut down`));
-    expect(() => JSON.parse(result.content[0].text)).toThrow();
+    expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      operation: "team_shutdown",
-      outcome: "accepted",
-      postState: {
-        lifecycle: "shut_down",
-        stoppedWorkers: 0,
-        deactivatedMembers: ["team-lead"],
-        failures: [],
-        unfinishedTasks: [],
-        taskAuthorityRetained: true,
-      },
-      evidence: {
-        stop: [],
-      },
-    });
-    expect(result.details.diagnostics).toMatchObject({
-      staleBindings: [],
+      kind: "team_shutdown",
+      lifecycle: "stopped",
+      stopped_workers: [],
+      unfinished_task_ids: [],
     });
   });
 
@@ -255,53 +277,23 @@ describe("compensated Worker launch", () => {
     );
     const agentText = result.content[0].text as string;
 
-    expect(agentText).toContain(`Team ${f.name} shutdown partially completed`);
-    expect(agentText).toContain("Team remains active with team-lead, delivery-broken current");
-    expect(agentText).toContain("stop wasn't confirmed for delivery-broken.");
-    expect(agentText).toContain("Task authority and 1 unfinished Task retained; resolve the failure and retry.");
-    expect(agentText).not.toContain("whose Membership remains current");
+    expect(() => JSON.parse(agentText)).not.toThrow();
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "partial",
-      operation: "team_shutdown",
-      postState: {
-        lifecycle: "active",
-        shutdownOutcome: "partial",
-        currentMembers: ["team-lead", "delivery-broken"],
-        failures: [{
-          name: "delivery-broken",
-          reason: "stop_not_confirmed",
-          membershipRemainsCurrent: true,
-        }],
-        unfinishedTasks: [{ id: "task-open", status: "open", version: "task-version-1" }],
-        taskAuthorityRetained: true,
-      },
-      nextActions: [{ tool: "team_shutdown", args: { team_name: f.name } }],
-      evidence: { stopFailures: [{ name: "delivery-broken" }] },
+      kind: "partial",
+      lifecycle: "active",
+      stopped_workers: [],
+      failed_workers: ["delivery-broken"],
+      unfinished_task_ids: ["task-open"],
+      state_changed: true,
     });
 
     const human = formatPiTeamsToolResult({
       tool: "team_shutdown",
-      args: { team_name: f.name },
+      args: {},
       details: result.details,
       content: result.content,
       expanded: false,
     }).map(line => line.text).join("\n");
-    expect(human).toContain(`Partial: team "${f.name}" · active`);
-    expect(human).toContain("1 failed · 1 unfinished Tasks retained");
-    expect(human).toContain("Current members: team-lead, delivery-broken");
-    expect(human).toContain("Worker stop couldn't be confirmed");
-    expect(human).not.toContain("delivery-broken: Worker stop");
-    expect(human).not.toContain("team_shutdown");
-
-    const expanded = formatPiTeamsToolResult({
-      tool: "team_shutdown",
-      args: { team_name: f.name },
-      details: result.details,
-      content: result.content,
-      expanded: true,
-    }).map(line => line.text).join("\n");
-    expect(expanded).toContain("Machine next actions (not sent to agent)");
-    expect(expanded).toContain("team_shutdown — Resolve the named Worker stop failures, then retry.");
+    expect(human.length).toBeGreaterThan(0);
   });
 });

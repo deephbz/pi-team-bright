@@ -28,6 +28,7 @@ piTeams({
 
 const expectedTools = [
   "alert_send",
+  "ensure_worker",
   "task_create",
   "task_link",
   "task_read",
@@ -35,7 +36,6 @@ const expectedTools = [
   "team_create",
   "team_shutdown",
   "team_sync",
-  "worker_ensure",
   "worker_stop",
 ];
 
@@ -76,42 +76,33 @@ describe("minimal PiTeams agent-facing surface", () => {
 
   it("uses team_sync as the single projection and event-wait surface", () => {
     const sync = tool("team_sync");
-    expect(sync.parameters.properties).toEqual(expect.objectContaining({
-      team_name: expect.anything(),
-      cursor: expect.anything(),
-      wait_ms: expect.anything(),
-      task_ids: expect.anything(),
-      event_types: expect.anything(),
-      limit: expect.anything(),
-      continuation: expect.anything(),
-    }));
-    expect(JSON.stringify(sync.parameters.properties?.event_types)).toMatch(/task/);
-    expect(JSON.stringify(sync.parameters.properties?.event_types)).toMatch(/worker/);
-    expect(JSON.stringify(sync.parameters.properties?.event_types)).toMatch(/alert/);
-    expect(sync.description).toMatch(/event|wait|block/i);
-    expect(skill).toMatch(/returned sync cursor.+positive wait/is);
+    expect(sync.parameters.properties).toEqual(expect.objectContaining({ view: expect.anything() }));
+    expect(sync.parameters.properties).not.toHaveProperty("team_name");
+    expect(sync.parameters.properties).not.toHaveProperty("cursor");
+    expect(sync.description).toMatch(/current|incremental|supervision/i);
+    expect(skill).toMatch(/snapshot|updates/);
   });
 
   it("keeps terminal window placement as Team policy", () => {
-    expect(tool("team_create").parameters.properties).toHaveProperty("separate_windows");
-    expect(tool("worker_ensure").parameters.properties).not.toHaveProperty("separate_window");
+    expect(tool("team_create").parameters.properties).toEqual(expect.objectContaining({ name: expect.anything(), purpose: expect.anything() }));
+    expect(tool("team_create").parameters.properties).not.toHaveProperty("separate_windows");
+    expect(tool("ensure_worker").parameters.properties).not.toHaveProperty("separate_window");
   });
 
   it("binds goal-driven Tasks to Workers", () => {
     const create = tool("task_create");
     const update = tool("task_update");
-    expect(create.parameters.properties).toHaveProperty("acceptance_criteria");
-    expect(update.parameters.properties).toHaveProperty("acceptance_criteria");
-    expect(JSON.stringify(update.parameters.properties?.status)).toContain('"blocked"');
-    expect(JSON.stringify(update.parameters.properties?.status)).toContain('"closed"');
-    expect(update.parameters.properties).toHaveProperty("append_note");
-    expect(skill).toMatch(/acceptance criteria/);
+    expect(create.parameters.properties).toHaveProperty("tasks");
+    expect(update.parameters.properties).toHaveProperty("updates");
+    expect(JSON.stringify(update.parameters.properties?.updates)).toContain("expected_version");
+    expect(JSON.stringify(update.parameters.properties?.updates)).toContain("journal_entries");
+    expect(skill).toMatch(/success signals|acceptance criteria/);
     expect(skill).toMatch(/closes with evidence|blocks with blocker evidence/);
   });
 
   it("separates stable Worker identity from assigned work", () => {
-    const ensure = tool("worker_ensure");
-    expect(ensure.parameters.properties).toHaveProperty("profile");
+    const ensure = tool("ensure_worker");
+    expect(ensure.parameters.properties).toHaveProperty("scope");
     expect(ensure.parameters.properties).not.toHaveProperty("prompt");
     expect(ensure.description).toMatch(/reuse|idempotent/i);
 
@@ -124,7 +115,6 @@ describe("minimal PiTeams agent-facing surface", () => {
   it("keeps exceptional communication to one typed Alert tool", () => {
     const alert = tool("alert_send");
     expect(alert.parameters.properties).toEqual(expect.objectContaining({
-      team_name: expect.anything(),
       to: expect.anything(),
       kind: expect.anything(),
       text: expect.anything(),
@@ -135,7 +125,7 @@ describe("minimal PiTeams agent-facing surface", () => {
     for (const kind of ["clarification", "attention", "announcement"]) {
       expect(alertSchema).toContain(kind);
     }
-    expect(skill).toMatch(/Alerts only for clarification, attention, or announcements/);
+    expect(skill).toMatch(/clarification, attention, or announcements/);
   });
 
   it("does not re-expose alternate work, polling, catalog, or template tools", () => {
