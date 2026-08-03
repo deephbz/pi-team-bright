@@ -101,9 +101,11 @@ describe("minimal PiTeams agent-facing surface", () => {
     const workerUpdate = workerTools.find(candidate => candidate.name === "task_update");
     expect(workerUpdate?.description).toMatch(/claim=true.+atomic claim.+no status/is);
     expect(JSON.stringify(workerUpdate?.parameters.properties?.claim)).toMatch(/do not include.+status/i);
+    expect(tool("task_link").description).toMatch(/latest Task version.+closure does not freeze/is);
     expect(skill).toMatch(/claim=true.+alone/is);
     expect(skill).toMatch(/Beads timeout.+unknown authority outcome/is);
     expect(skill).toMatch(/same operation ID and identical/i);
+    expect(skill).toMatch(/Closed is a work state.+latest receipt or read/is);
   });
 
   it("keeps terminal window placement as Team policy", () => {

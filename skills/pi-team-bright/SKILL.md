@@ -47,6 +47,9 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
   it only after Pi persists the model-visible result.
 - Task updates require the exact opaque Task version ref and an operation ID.
   Identical retries replay the durable receipt; stale or conflicting writes refuse.
+- Closed is a work state, not an immutable Task. Later evidence or relation
+  writes can advance its version. Use the latest receipt or read before another
+  conditional mutation.
 - Provide `current_context` only when still-relevant Task meaning changes. Provide
   `journal_entries` for evidence or rationale. A status-only update is valid only
   when neither information class changes.
