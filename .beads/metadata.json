@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "pi_team_bright",
+  "project_id": "c6505f25-8400-41b0-be1a-931a84e99b71"
+}
