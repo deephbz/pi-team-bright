@@ -32,22 +32,45 @@ describe("raw semantic result projections", () => {
     const task = {
       id: "task-1",
       title: "Verify",
-      goal: "Verify the release.",
+      goal: "g".repeat(1_000),
       status: "open" as const,
       current_context: "Not started.",
       version: "v1",
     };
-    const singleton = { kind: "task_create_batch" as const, outcomes: [{ kind: "created" as const, input_index: 0, task }] };
+    const singleton = { kind: "task_create_batch" as const, outcomes: [{ kind: "created" as const, input_index: 0, operation_id: "create-task-1", task }] };
     const projected = projectCandidateToolResult("task_create", singleton) as any;
-    expect(projected).toEqual({ kind: "created", task: { id: "task-1", status: "open", version: taskVersionRef("v1") } });
+    expect(projected).toEqual({ kind: "created", operation_id: "create-task-1", task: { id: "task-1", status: "open", version: taskVersionRef("v1") } });
     expect(Check(CandidateTaskCreateResultSchema, singleton)).toBe(true);
 
     const read = { kind: "task_read_batch" as const, outcomes: [
       { kind: "found" as const, input_index: 0, task_id: task.id, task },
       { kind: "missing" as const, input_index: 1, task_id: "missing", reason: "task_not_found" as const, state_changed: false as const },
     ] };
-    expect((projectCandidateToolResult("task_read", read) as any).outcomes).toHaveLength(2);
+    const projectedRead = projectCandidateToolResult("task_read", read) as any;
+    expect(projectedRead.outcomes).toHaveLength(2);
+    expect(projectedRead.outcomes[0].task.goal).toHaveLength(1_000);
     expect(Check(CandidateTaskReadResultSchema, read)).toBe(true);
+    expect(Check(CandidateModelResultSchemas.task_read, projectedRead)).toBe(true);
+  });
+
+  it("keeps unknown create outcomes retryable with the same operation", () => {
+    const unknown = {
+      kind: "task_create_batch" as const,
+      outcomes: [{
+        kind: "unknown_outcome" as const,
+        input_index: 0,
+        operation_id: "create-retry-1",
+        message: "Authority may have committed before transport ended.",
+      }],
+    };
+    const model = projectCandidateToolResult("task_create", unknown) as any;
+    expect(model).toEqual({
+      kind: "unknown_outcome",
+      operation_id: "create-retry-1",
+      message: unknown.outcomes[0].message,
+      recovery: { action: "retry_same_operation", operation_id: "create-retry-1" },
+    });
+    expect(projectCandidateTui({ tool: "task_create", details: unknown, expanded: false }).join("\n")).toMatch(/retry create operation.*create-retry-1/i);
   });
 
   it("keeps exact conflict and sync recovery coordinates", () => {
@@ -120,6 +143,40 @@ describe("raw semantic result projections", () => {
       message: refusal.message,
       recovery: { action: "read_before_retry", task_id: "task-1" },
     });
+  });
+
+  it("keeps successful TUI results semantic and renders errors as raw reports", () => {
+    const success = projectCandidateTui({
+      tool: "team_create",
+      content: [{ type: "text", text: "model content" }],
+      details: { kind: "team_created", team: { name: "review", purpose: "Review the release.", lifecycle: "active" } },
+      expanded: false,
+    }).join("\n");
+    expect(success).toContain('Team "review" is active.');
+    expect(success).not.toContain("Raw report follows");
+
+    const executionError = projectCandidateTui({
+      tool: "task_create",
+      content: [{ type: "text", text: "Invalid semantic result for task_create." }],
+      details: { operation_id: "create-release" },
+      expanded: false,
+      isError: true,
+    }).join("\n");
+    expect(executionError).toContain("task_create execution error");
+    expect(executionError).toContain("Raw report follows");
+    expect(executionError).toContain("Invalid semantic result for task_create.");
+    expect(executionError).toContain('"operation_id": "create-release"');
+    expect(executionError).not.toContain("did not produce a semantic result");
+
+    const malformedResult = projectCandidateTui({
+      tool: "task_read",
+      content: [{ type: "text", text: "unprojected content" }],
+      details: { malformed: true },
+      expanded: true,
+    }).join("\n");
+    expect(malformedResult).toContain("task_read result projection error");
+    expect(malformedResult).toContain('"malformed": true');
+    expect(malformedResult).toContain("unprojected content");
   });
 
   it("rejects invalid Alert target combinations before execution", () => {

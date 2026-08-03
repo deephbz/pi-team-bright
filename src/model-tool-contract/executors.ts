@@ -102,21 +102,37 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     async taskCreate(leaderSessionId, parameters) {
       const outcomes: CandidateTaskCreateResult["outcomes"] = [];
       for (const [inputIndex, input] of parameters.tasks.entries()) {
-        const outcome = await port.createTask(leaderSessionId, input);
+        const outcome = await port.createTask(leaderSessionId, {
+          operationId: input.operation_id,
+          title: input.title,
+          goal: input.goal,
+          ...(input.assignee ? { assignee: input.assignee } : {}),
+        });
         if (outcome.kind === "created") {
-          outcomes.push({ kind: "created", input_index: inputIndex, task: outcome.task, ...(outcome.deliveryWarnings?.length ? { delivery_warnings: outcome.deliveryWarnings } : {}) });
-        } else if (outcome.kind === "worker_unavailable") {
+          outcomes.push({ kind: "created", input_index: inputIndex, operation_id: outcome.operationId, task: outcome.task, ...(outcome.deliveryWarnings?.length ? { delivery_warnings: outcome.deliveryWarnings } : {}) });
+        } else if (outcome.kind === "worker_unavailable" || outcome.kind === "operation_conflict") {
           outcomes.push({
             kind: "refused",
             input_index: inputIndex,
-            reason: "worker_unavailable",
-            message: `The assigned Worker ${input.assignee} is not present in the active Team.`,
+            operation_id: outcome.operationId,
+            reason: outcome.kind === "worker_unavailable" ? "worker_unavailable" : "operation_conflict",
+            message: outcome.kind === "worker_unavailable"
+              ? `The assigned Worker ${input.assignee} is not present in the active Team.`
+              : outcome.message,
             state_changed: false,
+          });
+        } else if (outcome.kind === "unknown_outcome") {
+          outcomes.push({
+            kind: "unknown_outcome",
+            input_index: inputIndex,
+            operation_id: outcome.operationId,
+            message: outcome.message,
           });
         } else {
           outcomes.push({
             kind: "unavailable",
             input_index: inputIndex,
+            operation_id: outcome.operationId,
             reason: outcome.kind === "unavailable" ? outcome.reason : "no_active_team",
             message: outcome.kind === "unavailable" ? outcome.message : "The exact leader Session is not bound to an active Team.",
             state_changed: false,

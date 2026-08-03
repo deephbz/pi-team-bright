@@ -3,6 +3,7 @@ import { Check } from "typebox/value";
 import {
   CandidateEnsureWorkerParametersSchema,
   CandidateEnsureWorkerResultSchema,
+  CandidateTaskCardSchema,
   CandidateTaskCreateParametersSchema,
   CandidateTaskCreateResultSchema,
   CandidateTaskReadParametersSchema,
@@ -85,6 +86,52 @@ describe("candidate model-tool catalog", () => {
     }
   });
 
+  it("uses the shared standard TypeBox 2,000-string-unit limit", () => {
+    const base = {
+      task_id: "task-1",
+      operation_id: "context-boundary",
+      expected_version: "v_0123456789abcdef",
+    };
+    expect(Check(CandidateTaskUpdateParametersSchema, {
+      updates: [{ ...base, current_context: "a".repeat(2_000) }],
+    })).toBe(true);
+    expect(Check(CandidateTaskUpdateParametersSchema, {
+      updates: [{ ...base, current_context: "a".repeat(2_001) }],
+    })).toBe(false);
+    const multiCodeUnit = "👩🏽‍🚀".repeat(1_001);
+    expect([...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(multiCodeUnit)]).toHaveLength(1_001);
+    expect(Check(CandidateTaskUpdateParametersSchema, {
+      updates: [{ ...base, current_context: multiCodeUnit }],
+    })).toBe(false);
+  });
+
+  it("accepts Task goals through 1,000 string units across calls and Task cards", () => {
+    const createItem = { operation_id: "goal-boundary", title: "Goal boundary" };
+    for (const length of [160, 161, 1_000]) {
+      const goal = "g".repeat(length);
+      expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
+      expect(Check(CandidateTaskCardSchema, {
+        id: "task-1",
+        title: createItem.title,
+        goal,
+        status: "open",
+        current_context: "Not started.",
+        version: "raw-version",
+      }), String(length)).toBe(true);
+    }
+
+    const goal = "g".repeat(1_001);
+    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] })).toBe(false);
+    expect(Check(CandidateTaskCardSchema, {
+      id: "task-1",
+      title: createItem.title,
+      goal,
+      status: "open",
+      current_context: "Not started.",
+      version: "raw-version",
+    })).toBe(false);
+  });
+
   it("keeps observation outcomes distinct from authority unavailability", () => {
     const common = {
       message: "No observation was committed.",
@@ -95,6 +142,13 @@ describe("candidate model-tool catalog", () => {
     expect(Check(CandidateTeamSyncResultSchema, { kind: "cancelled", ...common })).toBe(true);
     expect(Check(CandidateTeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "snapshot_required", ...common })).toBe(false);
     expect(Check(CandidateTeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "cancelled", ...common })).toBe(false);
+  });
+
+  it("requires a caller-chosen create operation ID", () => {
+    const task = { operation_id: "create-release", title: "Verify", goal: "Verify the release." };
+    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [task] })).toBe(true);
+    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
+    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ ...task, operation_id: "" }] })).toBe(false);
   });
 
   it("keeps Team identity implicit in both team_sync call forms", () => {
@@ -203,7 +257,7 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("team_create({ name, purpose })");
     expect(html).toContain("team_sync({ view })");
     expect(html).toContain("ensure_worker({ name, scope })");
-    expect(html).toContain("task_create({ tasks })");
+    expect(html).toContain("task_create({ tasks: [{ operation_id, … }] })");
     expect(html).toContain("task_read({ task_ids })");
     expect(html).toContain("task_update({ updates })");
     expect(html).toContain("worker_stop({ worker })");
@@ -218,8 +272,8 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("No candidate limit is placed on Team Workers, nonterminal Tasks, or journal entries.");
     expect(html).toContain("Paging is not part of this contract.");
     expect(html).toContain("<strong>80</strong>");
-    expect(html).toContain("<strong>160</strong>");
-    expect(html).toContain("<strong>640</strong>");
+    expect(html).toContain("<strong>1000</strong>");
+    expect(html).toContain("<strong>2000</strong>");
     expect(html).not.toContain("team_sync({ team_name, view })");
     expect(html).toContain("Parameter JSON Schema");
   });

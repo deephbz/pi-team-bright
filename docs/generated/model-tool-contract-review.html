@@ -7,14 +7,14 @@
   <meta name="document-kind" content="evergreen-shaping-contract">
   <meta name="lifecycle-stage" content="hardening">
   <meta name="scope" content="Model-facing Pi Team Bright coordination tools under the current one-leader and multiple-Worker topology.">
-  <meta name="responsibility" content="Own current use cases, candidate call and result shapes, information semantics, and acceptance tests until the executable interface is accepted.">
+  <meta name="responsibility" content="Own current use cases, call and result intent, information semantics, and acceptance tests for the shipped executable interface.">
   <meta name="authority" content="Shaping intent only; registered TypeBox schemas, implementations, and tests own current shipped behavior.">
   <meta name="excludes" content="Generic Team ontology, backend performance decisions, concrete Task-engine selection, and dated evidence.">
   <meta name="maintenance" content="Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.">
   <meta name="catalog-schema" content="pi-team-bright-model-tool-catalog/1">
   <meta name="catalog-status" content="candidate">
-  <meta name="catalog-sha256" content="af34fd5d38214ad07e8afd4f70253ef3ae201314998eb0874f0ab3d189d61db4">
-  <meta name="design-sha256" content="fdfad39745af86239458da9344380ec80e509ae04a8c00f5ab67326f2ddb608c">
+  <meta name="catalog-sha256" content="bfce9659681ac76016bb2bc0ce6463f63b591d84456a163a79b3bfa3366448cd">
+  <meta name="design-sha256" content="b44642fdbddcdddadff1d419dfba9d0e08452460662f915a095502062039b2d6">
   <title>Pi Team Bright — Candidate Model Tool Contract</title>
   <style>
     :root { color-scheme: light dark; --bg:#f5f3ed; --panel:#fffdf8; --ink:#1f2a2a; --muted:#66706c; --line:#d8d5ca; --accent:#176b5b; --accent-soft:#dff1eb; --warn:#8c4f12; --warn-soft:#fff0d8; --code:#152422; --code-ink:#e9f7f2; }
@@ -61,7 +61,7 @@
     </header>
     <section class="governance" id="scope">
     <div class="section-heading"><span class="eyebrow">Document contract</span><h2>Scope and responsibility</h2></div>
-    <dl><div><dt>Scope</dt><dd>Model-facing Pi Team Bright coordination tools under the current one-leader and multiple-Worker topology.</dd></div><div><dt>Responsibility</dt><dd>Own current use cases, candidate call and result shapes, information semantics, and acceptance tests until the executable interface is accepted.</dd></div><div><dt>Authority</dt><dd>Shaping intent only; registered TypeBox schemas, implementations, and tests own current shipped behavior.</dd></div><div><dt>Excludes</dt><dd>Generic Team ontology, backend performance decisions, concrete Task-engine selection, and dated evidence.</dd></div><div><dt>Maintenance</dt><dd>Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.</dd></div></dl>
+    <dl><div><dt>Scope</dt><dd>Model-facing Pi Team Bright coordination tools under the current one-leader and multiple-Worker topology.</dd></div><div><dt>Responsibility</dt><dd>Own current use cases, call and result intent, information semantics, and acceptance tests for the shipped executable interface.</dd></div><div><dt>Authority</dt><dd>Shaping intent only; registered TypeBox schemas, implementations, and tests own current shipped behavior.</dd></div><div><dt>Excludes</dt><dd>Generic Team ontology, backend performance decisions, concrete Task-engine selection, and dated evidence.</dd></div><div><dt>Maintenance</dt><dd>Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.</dd></div></dl>
   </section>
     <section id="scenarios"><div class="section-heading"><span class="eyebrow">Decision review</span><h2>Leader scenarios first</h2></div><article class="scenario" id="scenario-start-team">
     <header>
@@ -288,7 +288,7 @@
     <span class="eyebrow">Candidate function 2 of 10</span>
     <h3><code>task_create</code></h3>
     <p>Create independent executable Task contracts and assign each one to an existing Worker.</p>
-    <div class="call-signature">task_create({ tasks })</div>
+    <div class="call-signature">task_create({ tasks: [{ operation_id, … }] })</div>
     <div class="two-col">
       <section><h4>Use it for</h4><ul><li>Create one or more concrete work contracts after Worker areas exist.</li><li>Bind each Task to an existing Worker without claiming carrier readiness.</li></ul></section>
       <section><h4>Do not use it for</h4><ul><li>Do not include Team, backend, paging, relation, read, or update controls.</li><li>Do not create a Task for a Worker that is not in the active Team.</li></ul></section>
@@ -569,7 +569,7 @@
       <p>The raw semantic result is validated once, then projected into decision-relevant model JSON. Human TUI and QA records remain separate projections of the same raw truth.</p>
       <p>Raw semantic results remain machine truth. The validated model projection, allowlisted TUI, and QA record may omit or reorganize facts, but cannot invent state or change the semantic outcome.</p>
     </section>
-    <section id="limits"><div class="section-heading"><span class="eyebrow">Accepted starting budgets</span><h2>Concise Task fields</h2></div><p>No candidate limit is placed on Team Workers, nonterminal Tasks, or journal entries. Paging is not part of this contract.</p><div class="limit-grid"><div class="limit"><strong>80</strong>task title chars</div><div class="limit"><strong>160</strong>task goal chars</div><div class="limit"><strong>640</strong>task current context chars</div></div></section>
+    <section id="limits"><div class="section-heading"><span class="eyebrow">Accepted starting budgets</span><h2>Concise Task fields</h2></div><p>No candidate limit is placed on Team Workers, nonterminal Tasks, or journal entries. Paging is not part of this contract.</p><div class="limit-grid"><div class="limit"><strong>80</strong>task title chars</div><div class="limit"><strong>1000</strong>task goal chars</div><div class="limit"><strong>2000</strong>task current context chars</div></div></section>
     <section id="schemas"><div class="section-heading"><span class="eyebrow">Executable candidate</span><h2>Exact schemas and examples</h2></div>
       <h3><code>team_create</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
   &quot;type&quot;: &quot;object&quot;,
@@ -717,10 +717,17 @@
       &quot;items&quot;: {
         &quot;type&quot;: &quot;object&quot;,
         &quot;required&quot;: [
+          &quot;operation_id&quot;,
           &quot;title&quot;,
           &quot;goal&quot;
         ],
         &quot;properties&quot;: {
+          &quot;operation_id&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 128,
+            &quot;description&quot;: &quot;Opaque caller-chosen create operation identity. Reuse it only to reconcile an unknown create outcome.&quot;
+          },
           &quot;title&quot;: {
             &quot;type&quot;: &quot;string&quot;,
             &quot;minLength&quot;: 1,
@@ -729,7 +736,7 @@
           &quot;goal&quot;: {
             &quot;type&quot;: &quot;string&quot;,
             &quot;minLength&quot;: 1,
-            &quot;maxLength&quot;: 160,
+            &quot;maxLength&quot;: 1000,
             &quot;description&quot;: &quot;Desired outcome, relevant boundary, and external success signal in one field.&quot;
           },
           &quot;assignee&quot;: {
@@ -764,6 +771,7 @@
             &quot;type&quot;: &quot;object&quot;,
             &quot;required&quot;: [
               &quot;input_index&quot;,
+              &quot;operation_id&quot;,
               &quot;kind&quot;,
               &quot;task&quot;
             ],
@@ -771,6 +779,11 @@
               &quot;input_index&quot;: {
                 &quot;type&quot;: &quot;integer&quot;,
                 &quot;minimum&quot;: 0
+              },
+              &quot;operation_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
               },
               &quot;kind&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
@@ -800,7 +813,7 @@
                   &quot;goal&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
                     &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 160,
+                    &quot;maxLength&quot;: 1000,
                     &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
                   },
                   &quot;status&quot;: {
@@ -820,7 +833,7 @@
                   &quot;current_context&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
                     &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 640
+                    &quot;maxLength&quot;: 2000
                   },
                   &quot;version&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
@@ -845,6 +858,7 @@
             &quot;type&quot;: &quot;object&quot;,
             &quot;required&quot;: [
               &quot;input_index&quot;,
+              &quot;operation_id&quot;,
               &quot;kind&quot;,
               &quot;reason&quot;,
               &quot;message&quot;,
@@ -855,13 +869,20 @@
                 &quot;type&quot;: &quot;integer&quot;,
                 &quot;minimum&quot;: 0
               },
+              &quot;operation_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
               &quot;kind&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
                 &quot;const&quot;: &quot;refused&quot;
               },
               &quot;reason&quot;: {
-                &quot;type&quot;: &quot;string&quot;,
-                &quot;const&quot;: &quot;worker_unavailable&quot;
+                &quot;enum&quot;: [
+                  &quot;worker_unavailable&quot;,
+                  &quot;operation_conflict&quot;
+                ]
               },
               &quot;message&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
@@ -878,6 +899,36 @@
             &quot;type&quot;: &quot;object&quot;,
             &quot;required&quot;: [
               &quot;input_index&quot;,
+              &quot;operation_id&quot;,
+              &quot;kind&quot;,
+              &quot;message&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;input_index&quot;: {
+                &quot;type&quot;: &quot;integer&quot;,
+                &quot;minimum&quot;: 0
+              },
+              &quot;operation_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
+              &quot;kind&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;const&quot;: &quot;unknown_outcome&quot;
+              },
+              &quot;message&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          },
+          {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;input_index&quot;,
+              &quot;operation_id&quot;,
               &quot;kind&quot;,
               &quot;reason&quot;,
               &quot;message&quot;,
@@ -887,6 +938,11 @@
               &quot;input_index&quot;: {
                 &quot;type&quot;: &quot;integer&quot;,
                 &quot;minimum&quot;: 0
+              },
+              &quot;operation_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
               },
               &quot;kind&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
@@ -918,17 +974,19 @@
 }</pre></details><details><summary>Assign one verification Task</summary><div class="code-grid"><section><h4>Call</h4><pre>{
   &quot;tasks&quot;: [
     {
+      &quot;operation_id&quot;: &quot;create-release-candidate&quot;,
       &quot;title&quot;: &quot;Verify release candidate&quot;,
       &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
       &quot;assignee&quot;: &quot;release-verifier&quot;
     }
   ]
-}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;created&quot;,&quot;task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;created&quot;,&quot;operation_id&quot;:&quot;create-release-candidate&quot;,&quot;task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
   &quot;kind&quot;: &quot;task_create_batch&quot;,
   &quot;outcomes&quot;: [
     {
       &quot;kind&quot;: &quot;created&quot;,
       &quot;input_index&quot;: 0,
+      &quot;operation_id&quot;: &quot;create-release-candidate&quot;,
       &quot;task&quot;: {
         &quot;id&quot;: &quot;task-23&quot;,
         &quot;title&quot;: &quot;Verify release candidate&quot;,
@@ -943,17 +1001,19 @@
 }</pre></details></details><details><summary>Refuse a missing Worker</summary><div class="code-grid"><section><h4>Call</h4><pre>{
   &quot;tasks&quot;: [
     {
+      &quot;operation_id&quot;: &quot;create-release-candidate&quot;,
       &quot;title&quot;: &quot;Verify release candidate&quot;,
       &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
       &quot;assignee&quot;: &quot;release-verifier&quot;
     }
   ]
-}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;reason&quot;:&quot;worker_unavailable&quot;,&quot;message&quot;:&quot;The assigned Worker is not present in the active Team.&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;operation_id&quot;:&quot;create-release-candidate&quot;,&quot;reason&quot;:&quot;worker_unavailable&quot;,&quot;message&quot;:&quot;The assigned Worker is not present in the active Team.&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
   &quot;kind&quot;: &quot;task_create_batch&quot;,
   &quot;outcomes&quot;: [
     {
       &quot;kind&quot;: &quot;refused&quot;,
       &quot;input_index&quot;: 0,
+      &quot;operation_id&quot;: &quot;create-release-candidate&quot;,
       &quot;reason&quot;: &quot;worker_unavailable&quot;,
       &quot;message&quot;: &quot;The assigned Worker is not present in the active Team.&quot;,
       &quot;state_changed&quot;: false
@@ -1040,7 +1100,7 @@
                       &quot;goal&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 160,
+                        &quot;maxLength&quot;: 1000,
                         &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
                       },
                       &quot;status&quot;: {
@@ -1060,7 +1120,7 @@
                       &quot;current_context&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 640
+                        &quot;maxLength&quot;: 2000
                       },
                       &quot;version&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
@@ -1273,7 +1333,7 @@
           &quot;current_context&quot;: {
             &quot;type&quot;: &quot;string&quot;,
             &quot;minLength&quot;: 1,
-            &quot;maxLength&quot;: 640
+            &quot;maxLength&quot;: 2000
           },
           &quot;journal_entries&quot;: {
             &quot;type&quot;: &quot;array&quot;,
@@ -1390,7 +1450,7 @@
                       &quot;goal&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 160,
+                        &quot;maxLength&quot;: 1000,
                         &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
                       },
                       &quot;status&quot;: {
@@ -1410,7 +1470,7 @@
                       &quot;current_context&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 640
+                        &quot;maxLength&quot;: 2000
                       },
                       &quot;version&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
@@ -1541,7 +1601,7 @@
                       &quot;goal&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 160,
+                        &quot;maxLength&quot;: 1000,
                         &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
                       },
                       &quot;status&quot;: {
@@ -1561,7 +1621,7 @@
                       &quot;current_context&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 640
+                        &quot;maxLength&quot;: 2000
                       },
                       &quot;version&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
@@ -1641,7 +1701,7 @@
                       &quot;goal&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 160,
+                        &quot;maxLength&quot;: 1000,
                         &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
                       },
                       &quot;status&quot;: {
@@ -1661,7 +1721,7 @@
                       &quot;current_context&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
                         &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 640
+                        &quot;maxLength&quot;: 2000
                       },
                       &quot;version&quot;: {
                         &quot;type&quot;: &quot;string&quot;,
@@ -1859,7 +1919,7 @@
       ]
     }
   ]
-}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;task_id&quot;:&quot;task-23&quot;,&quot;reason&quot;:&quot;version_conflict&quot;,&quot;message&quot;:&quot;The Task version does not match the expected version.&quot;,&quot;current_task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release candidate&quot;,&quot;goal&quot;:&quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Work has not started.&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;},&quot;recovery&quot;:{&quot;action&quot;:&quot;reconcile_and_retry&quot;,&quot;expected_version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;reason&quot;:&quot;version_conflict&quot;,&quot;message&quot;:&quot;The supplied Task version is stale.&quot;,&quot;task_id&quot;:&quot;task-23&quot;,&quot;current_task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release candidate&quot;,&quot;goal&quot;:&quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Work has not started.&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;},&quot;recovery&quot;:{&quot;action&quot;:&quot;reconcile_and_retry&quot;,&quot;expected_version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
   &quot;kind&quot;: &quot;task_update_batch&quot;,
   &quot;outcomes&quot;: [
     {
@@ -2005,7 +2065,7 @@
               &quot;goal&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
                 &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 160,
+                &quot;maxLength&quot;: 1000,
                 &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
               },
               &quot;status&quot;: {
@@ -2025,7 +2085,7 @@
               &quot;current_context&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
                 &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 640
+                &quot;maxLength&quot;: 2000
               },
               &quot;version&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
@@ -2215,7 +2275,7 @@
                   &quot;current_context&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
                     &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 640
+                    &quot;maxLength&quot;: 2000
                   },
                   &quot;version&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
@@ -3309,7 +3369,7 @@
   ]
 }</pre></details>
     </section>
-    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 3f6e4d6cd5e48ff219e5430d250f0a1195d18a0b</div><div>Catalog SHA-256: af34fd5d38214ad07e8afd4f70253ef3ae201314998eb0874f0ab3d189d61db4</div><div>Design SHA-256: fdfad39745af86239458da9344380ec80e509ae04a8c00f5ab67326f2ddb608c</div></footer>
+    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 54016c82730744125c2d492a6f53313acabb806f</div><div>Catalog SHA-256: bfce9659681ac76016bb2bc0ce6463f63b591d84456a163a79b3bfa3366448cd</div><div>Design SHA-256: b44642fdbddcdddadff1d419dfba9d0e08452460662f915a095502062039b2d6</div></footer>
   </main>
 </div>
 </body>

@@ -7,6 +7,7 @@ import * as paths from "./paths";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
 import * as runtime from "./runtime";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;
@@ -59,16 +60,16 @@ afterEach(() => {
 });
 
 describe("current team binding correctness", () => {
-  it("alert_send rejects a nonexistent team without creating any state", async () => {
+  it("alert_send reports an unbound leader without creating any state", async () => {
     const missingTeam = testTeamName("alert-missing-team");
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
-    await expect(sendAlert.execute("rejected", {
-      team_name: missingTeam,
-      to: "worker",
+    const refused: any = await sendAlert.execute("rejected", {
+      target: { kind: "worker", name: "worker" },
       kind: "attention",
       text: "must not be written",
-    }, undefined, undefined, context("/tmp/missing-session.jsonl"))).rejects.toThrow(/not found|does not exist/);
+    }, undefined, undefined, context("/tmp/missing-session.jsonl"));
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "no_active_team", state_changed: false });
 
     expect(fs.existsSync(paths.teamDir(missingTeam))).toBe(false);
     expect(fs.existsSync(paths.inboxPath(missingTeam, "worker"))).toBe(false);
@@ -76,7 +77,7 @@ describe("current team binding correctness", () => {
 
   it("alert_send binds native delivery to the exact current recipient generation", async () => {
     const teamName = testTeamName("recipient");
-    await teams.createTeam(teamName, "session", "lead-agent");
+    await teams.createTeam(teamName, "session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
       name: "worker",
@@ -90,8 +91,7 @@ describe("current team binding correctness", () => {
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const accepted: any = await sendAlert.execute("accepted", {
-      team_name: teamName,
-      to: "worker",
+      target: { kind: "worker", name: "worker" },
       kind: "attention",
       text: "before removal",
     }, undefined, undefined, context("session"));
@@ -107,8 +107,7 @@ describe("current team binding correctness", () => {
     await teams.deactivateMember(teamName, "worker", "replaced");
 
     const refused: any = await sendAlert.execute("rejected", {
-      team_name: teamName,
-      to: "worker",
+      target: { kind: "worker", name: "worker" },
       kind: "attention",
       text: "after removal",
     }, undefined, undefined, context("session"));
@@ -175,7 +174,7 @@ describe("current team binding correctness", () => {
 
   it("alert_send exposes a partial announcement without claiming every native delivery succeeded", async () => {
     const teamName = testTeamName("partial-alert");
-    await teams.createTeam(teamName, "receipt-session", "lead-agent");
+    await teams.createTeam(teamName, "receipt-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
     vi.spyOn(messaging, "broadcastMessage").mockResolvedValue({
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
@@ -183,8 +182,7 @@ describe("current team binding correctness", () => {
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("partial", {
-      team_name: teamName,
-      to: "*",
+      target: { kind: "team" },
       kind: "announcement",
       text: "body",
     }, undefined, undefined, context("receipt-session"));
@@ -201,12 +199,11 @@ describe("current team binding correctness", () => {
 
   it("distinguishes an announcement with no eligible recipients from a bad recipient name", async () => {
     const teamName = testTeamName("zero-recipient-alert");
-    await teams.createTeam(teamName, "lead-session", "lead-agent");
+    await teams.createTeam(teamName, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("zero", {
-      team_name: teamName,
-      to: "*",
+      target: { kind: "team" },
       kind: "announcement",
       text: "nobody else is here",
     }, undefined, undefined, context("lead-session"));

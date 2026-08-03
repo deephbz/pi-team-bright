@@ -24,87 +24,65 @@ export class TmuxAdapter implements TerminalAdapter {
     return paneId ? paneId : null;
   }
 
-  private getWindowIdForPane(paneId: string | null | undefined): string | null {
+  private paneGeometry(paneId: string | null | undefined): { windowId: string; left: number; width: number } | null {
     if (!paneId) return null;
-
     try {
-      const result = execCommand("tmux", ["display-message", "-p", "-t", paneId, "#{window_id}"]);
+      const result = execCommand("tmux", ["display-message", "-p", "-t", paneId, "#{window_id}\t#{pane_left}\t#{pane_width}"]);
       if (result.status !== 0) return null;
-
-      const windowId = result.stdout.trim();
-      return windowId || null;
+      const [windowId, left, width] = result.stdout.trim().split("\t");
+      const numericLeft = Number(left);
+      const numericWidth = Number(width);
+      return windowId && Number.isInteger(numericLeft) && Number.isInteger(numericWidth) && numericWidth > 0
+        ? { windowId, left: numericLeft, width: numericWidth }
+        : null;
     } catch {
       return null;
     }
   }
 
-  private isPaneUsable(paneId: string | null | undefined): paneId is string {
-    if (!paneId) return false;
-
-    try {
-      const result = execCommand("tmux", ["display-message", "-p", "-t", paneId, "#{pane_id}"]);
-      return result.status === 0 && result.stdout.trim() === paneId;
-    } catch {
-      return false;
-    }
-  }
-
-  private getOriginPaneId(preferredPaneId?: string | null): string | null {
-    if (this.isPaneUsable(preferredPaneId)) {
-      return preferredPaneId;
-    }
-
-    const currentPaneId = this.currentTargetId();
-    if (this.isPaneUsable(currentPaneId)) {
-      return currentPaneId;
-    }
-
-    return null;
-  }
-
   spawn(options: SpawnOptions): string {
+    if (!options.panePlacement) throw new Error("tmux Worker spawn requires exact Team pane placement.");
     const command = options.argv ? shellCommand(options) : options.command!;
     const legacyEnvArgs = options.argv ? [] : Object.entries(options.env)
       .filter(([k]) => k.startsWith("PI_"))
       .map(([k, v]) => `${k}=${v}`);
+    const { leaderPaneId, workerPaneIds } = options.panePlacement;
+    const workerPaneId = workerPaneIds.at(-1);
+    const targetPaneId = workerPaneId ?? leaderPaneId;
 
-    const originPaneId = this.getOriginPaneId(options.anchorPaneId);
-    const tmuxArgs = [
-      "split-window",
-      "-h", "-dP",
-      "-F", "#{pane_id}",
-    ];
-
-    if (originPaneId) {
-      tmuxArgs.push("-t", originPaneId);
+    if (!targetPaneId || workerPaneIds.some((paneId) => !paneId || paneId === leaderPaneId)) {
+      throw new Error("tmux Worker spawn requires distinct exact Team pane targets.");
+    }
+    const targetGeometry = this.paneGeometry(targetPaneId);
+    if (!targetGeometry) {
+      throw new Error(`tmux Team pane ${targetPaneId} is unavailable; refusing to use an ambient pane.`);
+    }
+    if (workerPaneId) {
+      const leaderGeometry = this.paneGeometry(leaderPaneId);
+      if (!leaderGeometry || leaderGeometry.windowId !== targetGeometry.windowId
+        || targetGeometry.left < leaderGeometry.left + leaderGeometry.width) {
+        throw new Error(`tmux Team Worker pane ${workerPaneId} is outside the leader Worker region; refusing to split it.`);
+      }
     }
 
-    tmuxArgs.push(
+    const tmuxArgs = [
+      "split-window",
+      workerPaneId ? "-v" : "-h",
+      ...(workerPaneId ? [] : ["-l", "40%"]),
+      "-dP",
+      "-F", "#{pane_id}",
+      "-t", targetPaneId,
       "-c", options.cwd,
       ...(legacyEnvArgs.length > 0 ? ["env", ...legacyEnvArgs] : []),
-      "sh", "-c", command
-    );
+      "sh", "-c", command,
+    ];
 
     const result = execCommand("tmux", tmuxArgs);
-    
     if (result.status !== 0) {
       throw new Error(`tmux spawn failed with status ${result.status}: ${result.stderr}`);
     }
 
-    const newPaneId = result.stdout.trim();
-    const layoutTarget = this.getWindowIdForPane(originPaneId) ?? this.getWindowIdForPane(newPaneId);
-
-    // Apply layout to the exact window that contains the spawned pane so the
-    // split always stays anchored to the intended tmux window.
-    if (layoutTarget) {
-      execCommand("tmux", ["set-window-option", "-t", layoutTarget, "main-pane-width", "60%"]);
-      execCommand("tmux", ["select-layout", "-t", layoutTarget, "main-vertical"]);
-    } else {
-      execCommand("tmux", ["set-window-option", "main-pane-width", "60%"]);
-      execCommand("tmux", ["select-layout", "main-vertical"]);
-    }
-
-    return newPaneId;
+    return result.stdout.trim();
   }
 
   kill(paneId: string): void {

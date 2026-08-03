@@ -2,11 +2,19 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { ProjectTrustStore } from "@earendil-works/pi-coding-agent";
+
+export type WorkerDefaultModelOverride = {
+  scope: "global" | "project";
+  value?: string;
+  error?: string;
+};
 
 export interface WorkerResourcePolicy {
   replaceGlobal?: { path: string; content: string };
   appendGlobal?: { path: string; content: string };
+  defaultModel?: WorkerDefaultModelOverride;
   enable: string[];
   disable: string[];
   diagnostics: string[];
@@ -42,6 +50,33 @@ function worker(root?: JsonRecord): JsonRecord | undefined {
   return isRecord(namespace) && isRecord(namespace.worker) ? namespace.worker : undefined;
 }
 
+function workerDefaultModel(root: JsonRecord | undefined, scope: WorkerDefaultModelOverride["scope"]): WorkerDefaultModelOverride | undefined {
+  if (!root || !Object.hasOwn(root, "default_model")) return undefined;
+  const value = root.default_model;
+  if (typeof value !== "string" || !value.trim()) {
+    return { scope, error: "must be a nonempty qualified provider/model string" };
+  }
+  return { scope, value: value.trim() };
+}
+
+function activeAgentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
+}
+
+/** Confirm an exact provider/model setting from Pi's current available-model list. */
+export function resolveQualifiedWorkerDefaultModel(modelName: string): string | null {
+  try {
+    const result = spawnSync("pi", ["--list-models"], { encoding: "utf8", timeout: 10_000 });
+    if (result.status !== 0 || !result.stdout) return null;
+    return result.stdout.split("\n").some((line) => {
+      const [provider, model] = line.trim().split(/\s+/, 3);
+      return `${provider}/${model}` === modelName;
+    }) ? modelName : null;
+  } catch {
+    return null;
+  }
+}
+
 function names(value: unknown, policy: WorkerResourcePolicy, label: string): string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some(item => typeof item !== "string")) {
@@ -67,7 +102,7 @@ function file(value: unknown, policy: WorkerResourcePolicy, label: string): { pa
 }
 
 /** Pi's public saved-trust lookup, including its nearest parent decision. */
-export function savedProjectTrust(cwd: string, agentDir = path.join(os.homedir(), ".pi", "agent")): boolean | undefined {
+export function savedProjectTrust(cwd: string, agentDir = activeAgentDir()): boolean | undefined {
   try {
     const decision = new ProjectTrustStore(agentDir).get(cwd);
     return decision === null ? undefined : decision;
@@ -78,7 +113,7 @@ export function savedProjectTrust(cwd: string, agentDir = path.join(os.homedir()
 
 export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: boolean; agentDir?: string }): WorkerResourcePolicy {
   const policy: WorkerResourcePolicy = { enable: [], disable: [], diagnostics: [] };
-  const agentDir = input.agentDir ?? path.join(os.homedir(), ".pi", "agent");
+  const agentDir = input.agentDir ?? activeAgentDir();
   const global = worker(json(path.join(agentDir, "settings.json"), policy));
   const project = input.projectTrusted ? worker(json(path.join(input.cwd, ".pi", "settings.json"), policy)) : undefined;
   const globalTools = isRecord(global?.tools) ? global.tools : undefined;
@@ -87,6 +122,7 @@ export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: b
   const projectAgents = isRecord(project?.agents) ? project.agents : undefined;
   const agents = { ...globalAgents, ...projectAgents };
 
+  policy.defaultModel = workerDefaultModel(project, "project") ?? workerDefaultModel(global, "global");
   policy.enable = names(projectTools?.enable ?? globalTools?.enable, policy, "worker.tools.enable");
   policy.disable = names(projectTools?.disable ?? globalTools?.disable, policy, "worker.tools.disable");
   policy.replaceGlobal = file(agents.replace_global, policy, "worker.agents.replace_global");
@@ -164,7 +200,7 @@ export function materializeWorkerAggregate(input: {
   const { policy } = input;
   if (!policy.replaceGlobal && !policy.appendGlobal && !input.force) return undefined;
 
-  const agentDir = input.agentDir ?? path.join(os.homedir(), ".pi", "agent");
+  const agentDir = input.agentDir ?? activeAgentDir();
   const sections: string[] = [];
   const global = contextFile(agentDir);
   const seenPaths = new Set<string>();

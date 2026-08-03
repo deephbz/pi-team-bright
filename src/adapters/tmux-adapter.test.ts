@@ -21,211 +21,99 @@ describe("TmuxAdapter", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-
     if (originalTmux === undefined) delete process.env.TMUX;
     else process.env.TMUX = originalTmux;
-
     if (originalTmuxPane === undefined) delete process.env.TMUX_PANE;
     else process.env.TMUX_PANE = originalTmuxPane;
   });
 
-  it("should have the correct name", () => {
+  it("has the correct name", () => {
     expect(adapter.name).toBe("tmux");
   });
 
-  it("should detect tmux when TMUX is set", () => {
+  it("detects tmux when TMUX is set", () => {
     expect(adapter.detect()).toBe(true);
   });
 
-  it("should target the originating pane and its window when spawning", () => {
+  it("splits the exact leader right and preserves its 60% width", () => {
     mockExecCommand.mockImplementation((_bin: string, args: string[]) => {
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%16" &&
-        args[4] === "#{pane_id}"
-      ) {
-        return { stdout: "%16", stderr: "", status: 0 };
-      }
-
-      if (args[0] === "split-window") {
-        return { stdout: "%42", stderr: "", status: 0 };
-      }
-
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%16" &&
-        args[4] === "#{window_id}"
-      ) {
-        return { stdout: "@7", stderr: "", status: 0 };
-      }
-
+      if (args[0] === "display-message") return { stdout: "@7\t0\t60", stderr: "", status: 0 };
+      if (args[0] === "split-window") return { stdout: "%worker-1", stderr: "", status: 0 };
       return { stdout: "", stderr: "", status: 0 };
     });
 
-    const paneId = adapter.spawn({
-      name: "agent-1",
+    expect(adapter.spawn({
+      name: "worker-1",
       cwd: "/tmp/project",
       command: "pi",
-      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "agent-1", OTHER: "ignored" },
-    });
+      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "worker-1", OTHER: "ignored" },
+      panePlacement: { leaderPaneId: "%leader", workerPaneIds: [] },
+    })).toBe("%worker-1");
 
-    expect(paneId).toBe("%42");
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      [
-        "split-window",
-        "-h", "-dP",
-        "-F", "#{pane_id}",
-        "-t", "%16",
-        "-c", "/tmp/project",
-        "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=agent-1",
-        "sh", "-c", "pi",
-      ]
-    );
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      ["set-window-option", "-t", "@7", "main-pane-width", "60%"]
-    );
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      ["select-layout", "-t", "@7", "main-vertical"]
-    );
+    expect(mockExecCommand).toHaveBeenCalledWith("tmux", [
+      "split-window", "-h", "-l", "40%", "-dP", "-F", "#{pane_id}", "-t", "%leader",
+      "-c", "/tmp/project", "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=worker-1", "sh", "-c", "pi",
+    ]);
+    expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["select-layout"]));
   });
 
-  it("should prefer an explicit anchor pane when spawning", () => {
+  it("splits the exact current Worker downward", () => {
     mockExecCommand.mockImplementation((_bin: string, args: string[]) => {
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%3" &&
-        args[4] === "#{pane_id}"
-      ) {
-        return { stdout: "%3", stderr: "", status: 0 };
-      }
-
-      if (args[0] === "split-window") {
-        return { stdout: "%42", stderr: "", status: 0 };
-      }
-
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%3" &&
-        args[4] === "#{window_id}"
-      ) {
-        return { stdout: "@9", stderr: "", status: 0 };
-      }
-
+      if (args[0] === "display-message" && args[3] === "%worker-1") return { stdout: "@7\t60\t40", stderr: "", status: 0 };
+      if (args[0] === "display-message" && args[3] === "%leader") return { stdout: "@7\t0\t60", stderr: "", status: 0 };
+      if (args[0] === "split-window") return { stdout: "%worker-2", stderr: "", status: 0 };
       return { stdout: "", stderr: "", status: 0 };
     });
 
-    const paneId = adapter.spawn({
-      name: "agent-1",
+    expect(adapter.spawn({
+      name: "worker-2",
       cwd: "/tmp/project",
       command: "pi",
-      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "agent-1" },
-      anchorPaneId: "%3",
-    });
+      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "worker-2" },
+      panePlacement: { leaderPaneId: "%leader", workerPaneIds: ["%worker-1"] },
+    })).toBe("%worker-2");
 
-    expect(paneId).toBe("%42");
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      [
-        "split-window",
-        "-h", "-dP",
-        "-F", "#{pane_id}",
-        "-t", "%3",
-        "-c", "/tmp/project",
-        "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=agent-1",
-        "sh", "-c", "pi",
-      ]
-    );
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      ["set-window-option", "-t", "@9", "main-pane-width", "60%"]
-    );
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      ["select-layout", "-t", "@9", "main-vertical"]
-    );
+    expect(mockExecCommand).toHaveBeenCalledWith("tmux", [
+      "split-window", "-v", "-dP", "-F", "#{pane_id}", "-t", "%worker-1",
+      "-c", "/tmp/project", "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=worker-2", "sh", "-c", "pi",
+    ]);
+    expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["select-layout"]));
   });
 
-  it("should fall back to the current pane when the explicit anchor is stale", () => {
+  it("refuses a stale exact Team target instead of using the current pane", () => {
+    mockExecCommand.mockReturnValue({ stdout: "", stderr: "no such pane", status: 1 });
+
+    expect(() => adapter.spawn({
+      name: "worker-2",
+      cwd: "/tmp/project",
+      command: "pi",
+      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "worker-2" },
+      panePlacement: { leaderPaneId: "%leader", workerPaneIds: ["%stale"] },
+    })).toThrow(/unavailable.*ambient/i);
+    expect(mockExecCommand).toHaveBeenCalledWith("tmux", ["display-message", "-p", "-t", "%stale", "#{window_id}\t#{pane_left}\t#{pane_width}"]);
+    expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["split-window"]));
+  });
+
+  it("refuses a valid Worker pane moved outside the leader Worker region", () => {
     mockExecCommand.mockImplementation((_bin: string, args: string[]) => {
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%3" &&
-        args[4] === "#{pane_id}"
-      ) {
-        return { stdout: "", stderr: "no such pane", status: 1 };
-      }
-
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%16" &&
-        args[4] === "#{pane_id}"
-      ) {
-        return { stdout: "%16", stderr: "", status: 0 };
-      }
-
-      if (args[0] === "split-window") {
-        return { stdout: "%42", stderr: "", status: 0 };
-      }
-
-      if (
-        args[0] === "display-message" &&
-        args[1] === "-p" &&
-        args[2] === "-t" &&
-        args[3] === "%16" &&
-        args[4] === "#{window_id}"
-      ) {
-        return { stdout: "@7", stderr: "", status: 0 };
-      }
-
+      if (args[0] === "display-message" && args[3] === "%worker-moved") return { stdout: "@8\t0\t40", stderr: "", status: 0 };
+      if (args[0] === "display-message" && args[3] === "%leader") return { stdout: "@7\t0\t60", stderr: "", status: 0 };
       return { stdout: "", stderr: "", status: 0 };
     });
 
-    const paneId = adapter.spawn({
-      name: "agent-1",
+    expect(() => adapter.spawn({
+      name: "worker-2",
       cwd: "/tmp/project",
       command: "pi",
-      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "agent-1" },
-      anchorPaneId: "%3",
-    });
-
-    expect(paneId).toBe("%42");
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      [
-        "split-window",
-        "-h", "-dP",
-        "-F", "#{pane_id}",
-        "-t", "%16",
-        "-c", "/tmp/project",
-        "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=agent-1",
-        "sh", "-c", "pi",
-      ]
-    );
+      env: { PI_TEAM_NAME: "team-1", PI_AGENT_NAME: "worker-2" },
+      panePlacement: { leaderPaneId: "%leader", workerPaneIds: ["%worker-moved"] },
+    })).toThrow(/outside the leader Worker region/i);
+    expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["split-window"]));
   });
 
-  it("should target the current pane when setting the title", () => {
+  it("targets the current pane when setting the title", () => {
     mockExecCommand.mockReturnValue({ stdout: "", stderr: "", status: 0 });
-
-    adapter.setTitle("team: agent-1");
-
-    expect(mockExecCommand).toHaveBeenCalledWith(
-      "tmux",
-      ["select-pane", "-t", "%16", "-T", "team: agent-1"]
-    );
+    adapter.setTitle("team: worker-1");
+    expect(mockExecCommand).toHaveBeenCalledWith("tmux", ["select-pane", "-t", "%16", "-T", "team: worker-1"]);
   });
 });

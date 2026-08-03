@@ -3,7 +3,7 @@ import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
 import type { IdentifiedInboxMessage } from "./models";
 import type { Member, TeamConfig, TerminalTarget } from "./models";
-import { removeWorkerAggregate } from "./worker-resource-projection";
+import { removeWorkerAggregate, type WorkerDefaultModelOverride } from "./worker-resource-projection";
 import {
   normalizeWorkerCarrier,
   planWorkerEnsure,
@@ -13,6 +13,7 @@ import {
 import { getAdapterByName } from "../adapters/terminal-registry";
 import { Iterm2Adapter } from "../adapters/iterm2-adapter";
 import { memberTerminalTarget, terminalTarget } from "./terminal-target";
+import { teamPanePlacement } from "./team-pane-placement";
 import { assertTargetSupportedByTerminal, currentTerminalForTeam } from "./team-terminal";
 import { observeWorkerStartup, WORKER_STARTUP_OBSERVATION_MS, type WorkerStartupObservation } from "./worker-startup-observation";
 import type { WorkerLaunchObservationState } from "./receipt-types";
@@ -23,6 +24,7 @@ export type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: Id
 export interface WorkerAggregate {
   path?: string;
   projectTrusted: boolean;
+  defaultModel?: WorkerDefaultModelOverride;
 }
 
 export interface WorkerLaunchBridgeDependencies {
@@ -30,8 +32,18 @@ export interface WorkerLaunchBridgeDependencies {
   buildWorkerArgv(model: string | undefined, thinking: Member["thinking"], aggregatePath: string | undefined, projectTrusted: boolean): string[];
   /** Resolve a model name to provider/model form when the caller requests one. */
   resolveModel(modelName: string): string | null;
+  /** Confirm that a qualified Worker setting is available without provider selection. */
+  resolveSettingsModel(modelName: string): string | null;
   /** Resolve the Worker-process resource projection for one launch. */
   workerAggregate(cwd: string): WorkerAggregate;
+}
+
+export class WorkerDefaultModelConfigurationError extends Error {
+  constructor(readonly scope: WorkerDefaultModelOverride["scope"], reason: string) {
+    const location = scope === "project" ? "trusted project Pi settings" : "global Pi settings";
+    super(`Worker default_model in ${location} ${reason}. Edit pi_team_bright.worker.default_model, then retry before creating a Worker carrier.`);
+    this.name = "WorkerDefaultModelConfigurationError";
+  }
 }
 
 export interface WorkerLaunchRequest {
@@ -44,6 +56,7 @@ export interface WorkerLaunchRequest {
   thinking?: Member["thinking"];
   signal?: AbortSignal;
   workerAggregate?: (cwd: string) => WorkerAggregate;
+  initialMessage?: () => Promise<IdentifiedInboxMessage>;
   launchEnvironment?: Record<string, string>;
 }
 
@@ -257,15 +270,13 @@ export class WorkerLaunchBridge {
     const absentPlan: WorkerEnsurePlan = planWorkerEnsure(normalizeWorkerCarrier(undefined), "missing");
     if (absentPlan.action !== "create") throw new Error("Worker ensure planner returned no executable create action.");
 
-    let chosenModel = request.model || teamConfig.defaultModel;
-    if (chosenModel && !chosenModel.includes("/")) {
-      const resolved = this.dependencies.resolveModel(chosenModel);
-      if (resolved) {
-        chosenModel = resolved;
-      } else if (teamConfig.defaultModel && teamConfig.defaultModel.includes("/")) {
-        const [provider] = teamConfig.defaultModel.split("/");
-        chosenModel = `${provider}/${chosenModel}`;
-      }
+    const aggregate = this.resolveWorkerAggregate(request, cwd);
+    let chosenModel: string | undefined;
+    try {
+      chosenModel = this.resolveNewWorkerModel(request, teamConfig, aggregate);
+    } catch (error) {
+      removeWorkerAggregate(aggregate.path);
+      throw error;
     }
 
     const useSeparateWindow = teamConfig.separateWindows ?? false;
@@ -289,12 +300,17 @@ export class WorkerLaunchBridge {
       thinking: request.thinking,
     };
 
-    await teams.addMember(teamName, member);
-    const preparedEvent = await teamEvents.appendTeamEvent(teamName, {
-      type: "worker", worker: workerName, membershipId: member.membershipId!, phase: "prepared",
-    });
+    let preparedEvent: { cursor: string };
+    try {
+      await teams.addMember(teamName, member);
+      preparedEvent = await teamEvents.appendTeamEvent(teamName, {
+        type: "worker", worker: workerName, membershipId: member.membershipId!, phase: "prepared",
+      });
+    } catch (error) {
+      removeWorkerAggregate(aggregate.path);
+      throw error;
+    }
 
-    const aggregate = this.resolveWorkerAggregate(request, cwd);
     const piCmd = this.dependencies.buildWorkerArgv(chosenModel, request.thinking, aggregate.path, aggregate.projectTrusted);
     const env: Record<string, string> = {
       ...process.env,
@@ -308,7 +324,7 @@ export class WorkerLaunchBridge {
     const launch = await this.launchPreparedMembership(
       teamName,
       member,
-      null,
+      request.initialMessage ?? null,
       () => this.spawnWorkerCarrier(teamConfig, teamTerminal, member, piCmd, env, useSeparateWindow),
       aggregate.path,
     );
@@ -324,6 +340,33 @@ export class WorkerLaunchBridge {
 
   private resolveWorkerAggregate(request: WorkerLaunchRequest, cwd: string): WorkerAggregate {
     return request.workerAggregate?.(cwd) ?? this.dependencies.workerAggregate(cwd);
+  }
+
+  private resolveNewWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): string | undefined {
+    let model = request.model || teamConfig.defaultModel;
+    if (model) {
+      if (!model.includes("/")) {
+        const resolved = this.dependencies.resolveModel(model);
+        if (resolved) {
+          model = resolved;
+        } else if (teamConfig.defaultModel && teamConfig.defaultModel.includes("/")) {
+          const [provider] = teamConfig.defaultModel.split("/");
+          model = `${provider}/${model}`;
+        }
+      }
+      return model;
+    }
+
+    const configured = aggregate.defaultModel;
+    if (!configured) return undefined;
+    if (configured.error) throw new WorkerDefaultModelConfigurationError(configured.scope, configured.error);
+    const separator = configured.value?.indexOf("/") ?? -1;
+    if (separator <= 0 || separator === configured.value!.length - 1 || /\s/.test(configured.value!)) {
+      throw new WorkerDefaultModelConfigurationError(configured.scope, "must be a qualified provider/model string");
+    }
+    const resolved = this.dependencies.resolveSettingsModel(configured.value!);
+    if (!resolved) throw new WorkerDefaultModelConfigurationError(configured.scope, `'${configured.value}' is unavailable from Pi`);
+    return resolved;
   }
 
   async launchPreparedMembership(
@@ -418,15 +461,14 @@ export class WorkerLaunchBridge {
       const terminalId = teamTerminal.spawnWindow({ name: member.name, cwd: member.cwd, argv, env, teamName: teamConfig.name });
       return { terminalId, isWindow: true, backend: teamTerminal.name };
     }
+    const panePlacement = teamPanePlacement(teamConfig, teamTerminal.name, member.membershipId);
     if (teamTerminal instanceof Iterm2Adapter) {
-      const teammates = teamConfig.members.filter((candidate) => candidate.agentType === "teammate" && candidate.tmuxPaneId?.startsWith("iterm_"));
-      const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
-      teamTerminal.setSpawnContext(lastTeammate?.tmuxPaneId ? { lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") } : {});
+      const lastWorkerPaneId = panePlacement.workerPaneIds.at(-1);
+      teamTerminal.setSpawnContext(lastWorkerPaneId?.startsWith("iterm_")
+        ? { lastSessionId: lastWorkerPaneId.replace("iterm_", "") }
+        : {});
     }
-    const leadMember = teamConfig.members.find((candidate) => candidate.name === "team-lead");
-    const leadTarget = leadMember ? memberTerminalTarget(leadMember, teamConfig.terminalBackend || teamTerminal.name) : undefined;
-    const anchorPaneId = leadTarget?.kind === "pane" ? leadTarget.targetId : teamTerminal.currentTargetId?.() || undefined;
-    const terminalId = teamTerminal.spawn({ name: member.name, cwd: member.cwd, argv, env, anchorPaneId });
+    const terminalId = teamTerminal.spawn({ name: member.name, cwd: member.cwd, argv, env, panePlacement });
     return { terminalId, isWindow: false, backend: teamTerminal.name };
   }
 

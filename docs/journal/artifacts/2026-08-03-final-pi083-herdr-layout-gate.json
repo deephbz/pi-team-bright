@@ -1,0 +1,56 @@
+{
+  "schema": "pi-teams-final-real-lifecycle-gate/1",
+  "recordedAt": "2026-08-03T10:12:00Z",
+  "sourceBundle": {
+    "repository": "pi-team-bright",
+    "baseCommit": "7ccad1d1f7c1693822502e2aad7683b5fe981b52",
+    "workingTreeDiffSha256": "1556b05d9e554bd1fdd7f2092064e5b6f69592655cca8c26e05fb78fe36dcc64",
+    "workingTreeExtension": "<home>/repos/HyperCarrier/packages/pi-team-bright/extensions/index.ts"
+  },
+  "versions": { "pi": "0.83.0", "herdr": "0.7.5" },
+  "isolation": {
+    "team": "ptb-layout-final-20260803T100412Z-57421",
+    "dedicatedHerdrTab": "w4:t4S",
+    "dedicatedAgentDirectory": "/tmp/ptb-layout-final-20260803T100412Z-57421/agent",
+    "resourceComposition": {
+      "explicitPiTeamBright": "working-tree source only",
+      "normalExtension": "unrelated_probe returned unrelated_extension_ok",
+      "normalSkill": "unrelated-skill returned unrelated_skill_ok"
+    }
+  },
+  "successfulEvidence": {
+    "taskCreate": {
+      "normalSemanticResult": "task_create_batch with two created outcomes",
+      "tasks": [
+        { "operationId": "final-create-a", "taskId": "ptb-layout-final-20260803T100412Z-57421-f3p", "version": "v_fd7f32584569e5a6" },
+        { "operationId": "final-create-b", "taskId": "ptb-layout-final-20260803T100412Z-57421-zmn", "version": "v_1f1de24fec36c0d2" }
+      ],
+      "identicalReplay": "returned the same two created semantic projections; task row count, event count, and delivery count stayed unchanged",
+      "changedInputReuse": "refused operation_conflict with no effects"
+    },
+    "workerMemberships": [
+      { "name": "final-a", "model": "openrouter/openai/gpt-5.1", "sessionBound": true, "terminalTarget": "w4:pR1" },
+      { "name": "final-b", "model": "openrouter/openai/gpt-5.1", "sessionBound": true, "terminalTarget": "w4:pR2" }
+    ],
+    "layout": {
+      "afterFirstWorker": { "leaderWidth": 33, "totalWidth": 55, "leaderWidthFraction": 0.6, "split": "right ratio 0.6" },
+      "afterSecondWorker": { "leaderWidth": 33, "totalWidth": 55, "leaderWidthFraction": 0.6, "workerRegion": "right-side column split down" },
+      "afterFirstWorkerStop": { "leaderWidth": 33, "totalWidth": 55, "leaderWidthFraction": 0.6, "leaderTopologyUnchanged": true },
+      "afterSecondWorkerStop": { "leaderWidth": 55, "totalWidth": 55, "splits": 0 }
+    },
+    "counts": { "taskRows": 2, "teamEvents": 14, "taskDeliveries": 2 },
+    "cleanup": { "finalAStopped": true, "finalBStopped": true, "teamShutdown": true, "unfinishedTasks": 0, "unrelatedPanesChanged": false }
+  },
+  "blockingEvidence": {
+    "workerExecution": "Both Workers received their assigned Task delivery but their first provider request for configured openrouter/openai/gpt-5.1 failed before task_read or task_update.",
+    "providerResult": { "status": 403, "message": "The request is prohibited due to a violation of provider Terms Of Service." },
+    "unprovenRequirements": [
+      "Worker task_read of a public v_ version",
+      "first Worker task_update with that v_ version and no conflict",
+      "Worker Task closure",
+      "Worker-side unrelated extension and Skill execution"
+    ]
+  },
+  "result": "blocked",
+  "nextAction": "Do not claim the release-critical Worker version-ref gate passed. Restore an authorized configured Worker provider or obtain an explicit alternate-model test decision, then rerun this exact isolated lifecycle once. Close the dedicated Herdr tab and remove the disposable agent directory after preserving required non-secret evidence."
+}

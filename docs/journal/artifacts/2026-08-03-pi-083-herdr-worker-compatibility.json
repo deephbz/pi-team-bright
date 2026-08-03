@@ -1,0 +1,82 @@
+{
+  "schema": "pi-teams-pi-herdr-compatibility/1",
+  "recordedAt": "2026-08-03T08:04:41Z",
+  "sourceBundle": {
+    "repository": "pi-team-bright",
+    "baseCommit": "7ccad1d1f7c1693822502e2aad7683b5fe981b52",
+    "workingTreeCompatibilityDiffSha256": "5f99e8d638c5cef6aceb53307804b2644f735d66154033484ae18fbfdd6dc43d",
+    "sourcePaths": [
+      "extensions/index.ts",
+      "src/adapters/herdr-adapter.ts",
+      "src/adapters/herdr-adapter.test.ts",
+      "src/utils/ergonomic-tool-contract.test.ts",
+      "src/model-tool-contract/durable-model-tool-port.ts",
+      "package.json",
+      "package-lock.json"
+    ]
+  },
+  "versions": {
+    "pi": "0.83.0",
+    "herdr": "0.7.5",
+    "beads": "1.1.0"
+  },
+  "rootCause": {
+    "observation": "A Worker launched with an explicit working-tree Pi Team Bright extension also discovered a distinct installed Pi Team Bright extension. Pi reported conflicts for task_read, task_update, and alert_send. The launched Pi exited, and Herdr returned agent_name_not_found.",
+    "owningInvariant": "One Worker process loads exactly one Pi Team Bright extension source. Ambient Skills and proxy environment are not Worker-launch inputs.",
+    "repair": "Worker argv uses -ns -ne -e <exact-source>. Herdr forwards only PI_* identity variables. The first Herdr split rounds the requested leader share up from the measured pane width."
+  },
+  "directCurrentPiProbe": {
+    "commandShape": "Pi 0.83.0 with cleared proxy environment, -ns, -ne, and the working-tree extension",
+    "result": "OK",
+    "meaning": "The current Pi and working-tree extension ran without proxy environment or duplicate-extension diagnostics."
+  },
+  "realHerdrTeam": {
+    "teamName": "pi83-herdr-final-080025",
+    "leader": "team-lead",
+    "workers": ["pi83-final-a", "pi83-final-b"],
+    "lifecycle": {
+      "created": true,
+      "workersSessionBound": 2,
+      "workerTaskEvents": [
+        "pi83-final-a read and updated its assigned Task",
+        "pi83-final-b updated and closed its assigned Task"
+      ],
+      "workerStops": ["pi83-final-a", "pi83-final-b"],
+      "teamShutdown": true,
+      "unfinishedTasks": 0
+    },
+    "exactBindings": {
+      "membershipSessionRecords": 2,
+      "sessionBoundEvents": 2,
+      "workerTerminalTargets": 2,
+      "meaning": "Each current Worker Membership persisted a different exact Session file and Herdr pane target."
+    },
+    "layout": {
+      "twoWorkers": {
+        "leaderWidth": 50,
+        "totalWidth": 82,
+        "leaderWidthFraction": 0.6097560976,
+        "workerRegion": "one right-side column split down"
+      },
+      "afterFirstWorkerStop": {
+        "leaderWidth": 50,
+        "totalWidth": 82,
+        "leaderWidthFraction": 0.6097560976,
+        "workerRegion": "one right-side pane"
+      },
+      "afterSecondWorkerStop": {
+        "leaderWidth": 82,
+        "totalWidth": 82,
+        "splits": 0
+      },
+      "meaning": "The leader exceeded 60% after the second spawn and kept the same width after the first exact Worker stop."
+    },
+    "cleanup": "The disposable Team shut down before its explicit Herdr tab was closed."
+  },
+  "focusedChecks": {
+    "currentPi083": "typecheck and 20 focused terminal, launch, and Worker-argv tests passed",
+    "pi08010": "isolated typecheck and the same 20 focused tests passed",
+    "pi0821": "isolated typecheck and the same 20 focused tests passed"
+  },
+  "architectureImpact": "changed: Worker launch composition and the Herdr terminal-adapter contract changed; component ownership, dependencies, and deployment topology did not, so Structurizr DSL remains unchanged."
+}

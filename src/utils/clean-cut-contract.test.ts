@@ -21,7 +21,7 @@ import {
 } from "./task-delivery";
 import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
@@ -175,6 +175,52 @@ afterEach(() => {
 });
 
 describe("clean-cut public contract", () => {
+  it("gives standalone and exact leader Sessions the leader surface without a prompt injection", async () => {
+    const leaderName = uniqueTeam("leader-surface");
+    writeTeam(leaderName);
+    const expectedLeaderTools = [
+      "alert_send", "ensure_worker", "task_create", "task_link", "task_read",
+      "task_update", "team_create", "team_shutdown", "team_sync", "worker_stop",
+    ];
+
+    for (const [teamName, sessionFile] of [
+      ["", "/tmp/standalone.jsonl"],
+      [leaderName, "lead-session"],
+    ]) {
+      vi.stubEnv("PI_AGENT_NAME", "");
+      vi.stubEnv("PI_TEAM_NAME", teamName);
+      const harness = extensionHarness();
+      expect([...harness.tools.keys()].sort()).toEqual(expectedLeaderTools);
+      await expect(harness.handlers.get("before_agent_start")?.(
+        { systemPrompt: "base" },
+        sessionContext(sessionFile),
+      )).resolves.toBeUndefined();
+    }
+  });
+
+  it("gives a Worker only its Task and Alert tools and its Worker prompt", async () => {
+    const workerName = uniqueTeam("worker-surface");
+    const workerSession = `/tmp/${workerName}-worker.jsonl`;
+    writeTeam(workerName, { workerSession });
+    vi.stubEnv("PI_TEAM_NAME", workerName);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const harness = extensionHarness();
+
+    expect([...harness.tools.keys()].sort()).toEqual(["alert_send", "task_read", "task_update"]);
+    const beforeStart = await harness.handlers.get("before_agent_start")?.(
+      { systemPrompt: "base" },
+      sessionContext(workerSession),
+    );
+    expect(beforeStart?.systemPrompt).toContain("You are Worker 'worker' on Team");
+    expect(beforeStart?.systemPrompt).toContain("Assigned Tasks are your work contracts");
+    expect(beforeStart?.systemPrompt).not.toContain("Use the ten-tool release candidate as the Team leader");
+
+    const extension = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
+    expect(extension).not.toContain("leaderPreviewProcess");
+    expect(extension).not.toContain("previewJourney");
+    expect(extension).not.toContain("(pi as any).registerTool =");
+  });
+
   it("removes delivery feature flags and the synthetic inbox bootstrap from the shipped surface", () => {
     const extension = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
     const messageDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/message-delivery.ts"), "utf8");
@@ -590,7 +636,7 @@ describe("durability and recovery", () => {
     const name = uniqueTeam("terminal-state-atomicity");
     const config = writeTeam(name);
     const store = new BeadsTaskStore({ teamName: name, workspace: config.taskWorkspace!, requireExpectedVersion: false });
-    const createResult = await extensionHarness().tools.get("task_create")!.execute("create", { tasks: [{ title: "Terminal transition", goal: "Close with durable context." }] }, undefined, undefined, { sessionManager: { getSessionFile: () => "lead-session" } });
+    const createResult = await extensionHarness().tools.get("task_create")!.execute("create", { tasks: [{ operation_id: "create-terminal-transition", title: "Terminal transition", goal: "Close with durable context." }] }, undefined, undefined, { sessionManager: { getSessionFile: () => "lead-session" } });
     const created = createResult.details.outcomes[0].task;
     const update = extensionHarness().tools.get("task_update")!;
     const result = await update.execute("update", {

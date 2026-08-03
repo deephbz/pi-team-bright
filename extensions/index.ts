@@ -1,10 +1,15 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Type, type TSchema } from "typebox";
+import { Check } from "typebox/value";
 import { StringEnum } from "@earendil-works/pi-ai";
 import * as paths from "../src/utils/paths";
 import * as teams from "../src/utils/teams";
 import * as tasks from "../src/utils/tasks";
-import { BeadsError } from "../src/utils/beads";
+import {
+  BeadsError,
+  CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
+  isCandidateTaskCurrentContext,
+} from "../src/utils/beads";
 import * as messaging from "../src/utils/messaging";
 import * as alerts from "../src/utils/alerts";
 import * as teamEvents from "../src/utils/team-events";
@@ -20,7 +25,7 @@ import {
   taskPollMs,
 } from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
-import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, resolveWorkerLaunchResources, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
+import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { IdentifiedInboxMessage, Member, TaskFile, TeamConfig } from "../src/utils/models";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
@@ -32,7 +37,6 @@ import {
   type TeamIdentitySource,
   type TeamSessionAdmission,
 } from "../src/utils/session-terminal";
-import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
 import * as predefined from "../src/utils/predefined-teams";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -40,11 +44,13 @@ import * as os from "node:os";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
-import { createWorkerLaunchBridge, launchObservationState } from "../src/utils/worker-launch-bridge";
-import { parseCandidateTaskMetadata, refreshCandidateTaskMetadata } from "../src/model-tool-contract/beads-task-adapter";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_PREVIEW_WORKER_MARKER } from "../src/model-tool-contract/preview-constants";
-import type { CandidateTaskMetadata } from "../src/utils/beads";
-import { DurablePreviewTeamPort, type DurablePreviewLifecycle } from "../src/model-tool-contract/durable-preview-port";
+import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/utils/worker-launch-bridge";
+import { parseCandidateTaskMetadata, refreshCandidateTaskMetadata, type CandidateTaskProjectionGap } from "../src/model-tool-contract/beads-task-adapter";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../src/model-tool-contract/model-tool-constants";
+import type { CandidateTaskAuthorityRecord, CandidateTaskMetadata } from "../src/utils/beads";
+import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
+import { taskVersionRef } from "../src/model-tool-contract/task-version-ref";
+import { DurableModelToolTeamPort, type ModelToolLifecycle } from "../src/model-tool-contract/durable-model-tool-port";
 import { exactLeaderSessionId, registerModelToolJourney } from "../src/model-tool-contract/runtime";
 import { assembleCandidateToolResult } from "../src/model-tool-contract/result-projection";
 import {
@@ -372,26 +378,27 @@ function requiredString(value: unknown, field: string): string {
   return value;
 }
 
-function workerTaskCard(value: unknown): WorkerTaskCard {
-  const task = asRecord(value);
-  if (!task) throw new Error("Unsupported legacy Worker receipt: Task post-state is missing.");
-  const status = task.status;
-  if (status !== "open" && status !== "in_progress" && status !== "blocked" && status !== "closed") {
-    throw new Error("Unsupported legacy Worker receipt: Task status is invalid.");
-  }
-  const id = requiredString(task.id, "postState.id");
-  const title = typeof task.title === "string" && task.title.length > 0 ? task.title : id;
-  const goal = [task.description, task.acceptanceCriteria, task.title, task.id]
-    .find((candidate): candidate is string => typeof candidate === "string" && candidate.length > 0) ?? id;
+function workerTaskCardFromRecord(record: CandidateTaskAuthorityRecord): WorkerTaskCard | CandidateTaskProjectionGap {
+  const metadata = parseCandidateTaskMetadata(record);
+  if ("kind" in metadata) return metadata;
+  const task = record.task;
   return {
-    id,
-    title,
-    goal,
-    status,
-    ...(typeof task.assignee === "string" && task.assignee.length > 0 ? { assignee: task.assignee } : {}),
-    current_context: typeof task.notes === "string" && task.notes.length > 0 ? task.notes : "No current Task context is recorded.",
-    version: requiredString(task.version, "postState.version"),
+    id: task.id,
+    title: task.title || task.id,
+    goal: metadata.goal,
+    status: task.status,
+    ...(task.assignee ? { assignee: task.assignee } : {}),
+    current_context: metadata.current_context,
+    version: task.version,
   };
+}
+
+async function workerTaskCard(teamName: string, taskId: string): Promise<WorkerTaskCard | CandidateTaskProjectionGap> {
+  return workerTaskCardFromRecord(await tasks.readCandidateTaskAuthorityRecord(teamName, taskId));
+}
+
+function isCandidateTaskProjectionGap(value: WorkerTaskCard | CandidateTaskProjectionGap): value is CandidateTaskProjectionGap {
+  return "kind" in value && value.kind === "contract_gap";
 }
 
 function receiptWarnings(details: UnknownRecord): UnknownRecord[] {
@@ -418,7 +425,7 @@ function reasonFromReceipt(
 }
 
 /** Adapt only known legacy Worker receipts. Unknown data fails before model projection. */
-function projectWorkerReceipt(tool: WorkerProjectedTool, result: unknown, args: Record<string, unknown>, toolCallId: string): unknown {
+async function projectWorkerReceipt(tool: WorkerProjectedTool, result: unknown, args: Record<string, unknown>, toolCallId: string): Promise<unknown> {
   const receipt = asRecord(result);
   const details = receipt && asRecord(receipt.details);
   if (details?.kind !== undefined) return result;
@@ -436,9 +443,12 @@ function projectWorkerReceipt(tool: WorkerProjectedTool, result: unknown, args: 
         outcomes: [{ kind: "missing", input_index: 0, task_id: taskId, reason: "task_not_found", state_changed: false }],
       });
     }
+    const task = await workerTaskCard(requiredString(args.team_name, "team_name"), taskId);
     return assembleCandidateToolResult("task_read", {
       kind: "task_read_batch",
-      outcomes: [{ kind: "found", input_index: 0, task_id: workerTaskCard(postState).id, task: workerTaskCard(postState) }],
+      outcomes: [isCandidateTaskProjectionGap(task)
+        ? { kind: "contract_gap", input_index: 0, task_id: task.taskId, reason: task.reason, authority_version: task.authorityVersion, message: task.message, state_changed: false }
+        : { kind: "found", input_index: 0, task_id: task.id, task }],
     });
   }
 
@@ -455,14 +465,46 @@ function projectWorkerReceipt(tool: WorkerProjectedTool, result: unknown, args: 
           terminal_evidence_required: "terminal_evidence_required",
         });
       if (!reason) throw new Error("Unsupported legacy task_update refusal receipt.");
-      const current = postState?.id ? workerTaskCard(postState) : undefined;
+      const current = postState?.id
+        ? await workerTaskCard(requiredString(args.team_name, "team_name"), requiredString(postState.id, "postState.id"))
+        : undefined;
+      if (current && isCandidateTaskProjectionGap(current)) {
+        return assembleCandidateToolResult("task_update", {
+          kind: "task_update_batch",
+          outcomes: [{
+            kind: "contract_gap",
+            input_index: 0,
+            task_id: current.taskId,
+            operation_id: operationId,
+            reason: current.reason,
+            unsupported: ["candidate_metadata"],
+            message: current.message,
+            state_changed: false,
+          }],
+        });
+      }
       return assembleCandidateToolResult("task_update", {
         kind: "task_update_batch",
         outcomes: [{ kind: "refused", input_index: 0, task_id: current?.id ?? taskId, operation_id: operationId, reason: reason as "task_not_found" | "version_conflict" | "operation_conflict" | "terminal_evidence_required", message, ...(current ? { current_task: current } : {}), state_changed: false }],
       });
     }
     if (details.outcome !== "accepted" && details.outcome !== "partial") throw new Error("Unsupported legacy task_update receipt outcome.");
-    const current = workerTaskCard(postState);
+    const current = await workerTaskCard(requiredString(args.team_name, "team_name"), requiredString(postState?.id, "postState.id"));
+    if (isCandidateTaskProjectionGap(current)) {
+      return assembleCandidateToolResult("task_update", {
+        kind: "task_update_batch",
+        outcomes: [{
+          kind: "contract_gap",
+          input_index: 0,
+          task_id: current.taskId,
+          operation_id: operationId,
+          reason: current.reason,
+          unsupported: ["candidate_metadata"],
+          message: current.message,
+          state_changed: false,
+        }],
+      });
+    }
     const evidence = asRecord(details.evidence);
     const evidenceEntries = evidence?.journalEntries ?? evidence?.journal_entries;
     const journalEntries = Array.isArray(evidenceEntries) ? evidenceEntries : [];
@@ -519,52 +561,44 @@ function projectWorkerReceipt(tool: WorkerProjectedTool, result: unknown, args: 
 
 export default function (pi: ExtensionAPI) {
   registerAutomaticSummaryPolicyProvider(pi);
-  // Keep the default agent-facing coordination surface intentionally small.
-  // Legacy implementations remain readable for migration and historical
-  // delivery recovery, but registration is filtered at this boundary.
-  const candidateLeaderTools = new Set([
+  // Leader and Worker tools are separate role projections. The leader owns
+  // the current model-tool journey; Workers own the three Task/Alert tools.
+  const leaderToolNames = new Set([
     "team_create", "ensure_worker", "task_create", "task_read", "task_update", "team_sync",
     "worker_stop", "team_shutdown", "task_link", "alert_send",
   ]);
-  const currentWorkerTools = new Set(["task_read", "task_update", "alert_send"]);
-  // An envless process is provisionally a leader. Session-start recovery
-  // replaces the provisional Alert registration when it proves a Worker
-  // Membership, so a lead resumed with PI_TEAM_NAME keeps the new surface.
-  const leaderPreviewProcess = !process.env.PI_AGENT_NAME;
-  let registeringCandidateLeaderTools = false;
-  let allowRecoveredWorkerRegistration = false;
+  const workerToolNames = new Set(["task_read", "task_update", "alert_send"]);
+  // `team-lead` is a reserved leader identity, even when explicitly supplied
+  // through the Worker launch environment.
+  let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
+  const workerToolDefinitions = new Map<string, ToolDefinition<any, any>>();
   const registerPublicTool = pi.registerTool.bind(pi);
-  (pi as any).registerTool = (tool: { name: string }) => {
-    if (leaderPreviewProcess) {
-      if (registeringCandidateLeaderTools && candidateLeaderTools.has(tool.name)) registerPublicTool(tool as any);
-      else if (allowRecoveredWorkerRegistration && currentWorkerTools.has(tool.name)) {
-        registerPublicTool({
-          ...tool,
-          execute: async (...callArgs: any[]) => projectWorkerReceipt(
-            tool.name as WorkerProjectedTool,
-            await (tool as any).execute(...callArgs),
-            asRecord(callArgs[1]) ?? {},
-            requiredString(callArgs[0], "tool call ID"),
-          ),
-          renderResult: createCandidateToolResultRenderer(tool.name as any),
-        } as any);
-      }
-      return;
+
+  function registerProjectedWorkerTool(tool: ToolDefinition<any, any>): void {
+    registerPublicTool({
+      ...tool,
+      execute: async (...callArgs: any[]) => projectWorkerReceipt(
+        tool.name as WorkerProjectedTool,
+        await (tool.execute as any)(...callArgs),
+        asRecord(callArgs[1]) ?? {},
+        requiredString(callArgs[0], "tool call ID"),
+      ),
+      renderResult: createCandidateToolResultRenderer(tool.name as any),
+    } as any);
+  }
+
+  function registerWorkerTool<TParams extends TSchema, TDetails>(tool: ToolDefinition<TParams, TDetails>): void {
+    workerToolDefinitions.set(tool.name, tool);
+    if (isTeammate && workerToolNames.has(tool.name)) registerProjectedWorkerTool(tool);
+  }
+
+  function registerRecoveredWorkerTools(): void {
+    for (const name of workerToolNames) {
+      const tool = workerToolDefinitions.get(name);
+      if (tool) registerProjectedWorkerTool(tool);
     }
-    if (currentWorkerTools.has(tool.name)) {
-      registerPublicTool({
-        ...tool,
-        execute: async (...callArgs: any[]) => projectWorkerReceipt(
-          tool.name as WorkerProjectedTool,
-          await (tool as any).execute(...callArgs),
-          asRecord(callArgs[1]) ?? {},
-          requiredString(callArgs[0], "tool call ID"),
-        ),
-        renderResult: createCandidateToolResultRenderer(tool.name as any),
-      } as any);
-    }
-  };
-  let isTeammate = !!process.env.PI_AGENT_NAME;
+  }
+
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
   const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
@@ -585,61 +619,56 @@ export default function (pi: ExtensionAPI) {
   let workerActiveToolBaseline: string[] | undefined;
   let alertToolRegistration: { description: string; parameters: unknown } | undefined;
 
-  function workerAggregate(cwd: string, ctx: any): { path?: string; projectTrusted: boolean } {
+  function workerAggregate(cwd: string, ctx: any): WorkerAggregate {
     const resources = resolveWorkerLaunchResources({
       cwd,
       leaderCwd: ctx.cwd ?? process.cwd(),
       leaderProjectTrusted: ctx.isProjectTrusted?.() === true,
     });
     for (const message of resources.policy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
-    return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted };
+    return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
   }
 
   const workerLaunchBridge = createWorkerLaunchBridge({
     buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
       const argv = buildPiArgv(getPiLaunchArgv(), model, thinking);
-      // A Worker must load this exact extension source once. Suppress ambient
-      // packages first, or Pi can load a stale global copy beside this one.
-      argv.push("-ne", "-e", process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION || __filename);
+      // A Worker loads the exact Pi Team Bright source while retaining normal
+      // unrelated extension and Skill discovery.
+      argv.push("-e", process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION || __filename);
       return buildPiArgv(argv, undefined, undefined, aggregatePath, projectTrusted);
     },
     resolveModel: resolveModelWithProvider,
+    resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
     workerAggregate: (cwd) => workerAggregate(cwd, { cwd, isProjectTrusted: () => false }),
   });
 
-  let previewLifecycleAdapter: DurablePreviewLifecycle | undefined;
-  const previewJourney = leaderPreviewProcess
-    ? (() => {
-      registeringCandidateLeaderTools = true;
-      try {
-        const lifecycleProxy: DurablePreviewLifecycle = {
-          teamCreated: async (name, sessionFile) => previewLifecycleAdapter?.teamCreated?.(name, sessionFile),
-          stopWorker: async (name, worker) => previewLifecycleAdapter
-            ? previewLifecycleAdapter.stopWorker(name, worker)
-            : { kind: "unavailable", reason: "carrier_unavailable", message: "Preview lifecycle adapter is not ready." },
-          shutdownTeam: async (name) => previewLifecycleAdapter
-            ? previewLifecycleAdapter.shutdownTeam(name)
-            : { kind: "unavailable", reason: "team_authority_unavailable", message: "Preview lifecycle adapter is not ready." },
-        };
-        return registerModelToolJourney(pi, new DurablePreviewTeamPort(workerLaunchBridge, lifecycleProxy));
-      } finally {
-        registeringCandidateLeaderTools = false;
-      }
-    })()
-    : undefined;
+  let modelToolLifecycleAdapter: ModelToolLifecycle | undefined;
+  let modelToolJourney: ReturnType<typeof registerModelToolJourney> | undefined;
+  if (!isTeammate) {
+    const lifecycle: ModelToolLifecycle = {
+      teamCreated: async (name, sessionFile) => modelToolLifecycleAdapter?.teamCreated?.(name, sessionFile),
+      stopWorker: async (name, worker) => modelToolLifecycleAdapter
+        ? modelToolLifecycleAdapter.stopWorker(name, worker)
+        : { kind: "unavailable", reason: "carrier_unavailable", message: "Model-tool lifecycle adapter is not ready." },
+      shutdownTeam: async (name) => modelToolLifecycleAdapter
+        ? modelToolLifecycleAdapter.shutdownTeam(name)
+        : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
+    };
+    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle));
+  }
 
-  function previewBranchIds(ctx: ExtensionContext): string[] {
+  function modelToolBranchIds(ctx: ExtensionContext): string[] {
     return ctx.sessionManager.getBranch().map((entry) => entry.id);
   }
 
-  function previewContainsExact(value: unknown, target: string): boolean {
+  function modelToolContainsExact(value: unknown, target: string): boolean {
     if (value === target) return true;
-    if (Array.isArray(value)) return value.some((item) => previewContainsExact(item, target));
-    if (value && typeof value === "object") return Object.values(value).some((item) => previewContainsExact(item, target));
+    if (Array.isArray(value)) return value.some((item) => modelToolContainsExact(item, target));
+    if (value && typeof value === "object") return Object.values(value).some((item) => modelToolContainsExact(item, target));
     return false;
   }
 
-  function previewPersistedToolResult(ctx: ExtensionContext, toolCallId: string, resultText: string): string | undefined {
+  function modelToolPersistedToolResult(ctx: ExtensionContext, toolCallId: string, resultText: string): string | undefined {
     const entry = ctx.sessionManager.getBranch().find((candidate) => {
       if (candidate.type !== "message") return false;
       const message = candidate.message;
@@ -650,26 +679,27 @@ export default function (pi: ExtensionAPI) {
     return entry?.id;
   }
 
-  if (previewJourney) {
+  if (modelToolJourney) {
     pi.on("tool_call", (event, ctx) => {
-      if (!candidateLeaderTools.has(event.toolName)) return;
-      previewJourney.port.setBranchContext(
+      if (isTeammate || !leaderToolNames.has(event.toolName)) return;
+      modelToolJourney.port.setBranchContext(
         exactLeaderSessionId(ctx.sessionManager.getSessionId()),
-        previewBranchIds(ctx),
+        modelToolBranchIds(ctx),
       );
     });
     pi.on("before_provider_request", async (event, ctx) => {
+      if (isTeammate) return;
       const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
-      const lineage = previewBranchIds(ctx);
-      previewJourney.port.setBranchContext(sessionId, lineage);
-      const pending = previewJourney.port.getPendingObservation?.(sessionId);
-      if (!pending || !previewContainsExact(event.payload, pending.resultText)) return;
-      const entryId = previewPersistedToolResult(ctx, pending.toolCallId, pending.resultText);
+      const lineage = modelToolBranchIds(ctx);
+      modelToolJourney.port.setBranchContext(sessionId, lineage);
+      const pending = modelToolJourney.port.getPendingObservation?.(sessionId);
+      if (!pending || !modelToolContainsExact(event.payload, pending.resultText)) return;
+      const entryId = modelToolPersistedToolResult(ctx, pending.toolCallId, pending.resultText);
       if (!entryId) return;
-      if (previewJourney.port.acknowledgePendingObservationAsync) {
-        await previewJourney.port.acknowledgePendingObservationAsync(sessionId, entryId, lineage);
+      if (modelToolJourney.port.acknowledgePendingObservationAsync) {
+        await modelToolJourney.port.acknowledgePendingObservationAsync(sessionId, entryId, lineage);
       } else {
-        previewJourney.port.acknowledgePendingObservation(sessionId, entryId, lineage);
+        modelToolJourney.port.acknowledgePendingObservation(sessionId, entryId, lineage);
       }
     });
   }
@@ -682,24 +712,36 @@ export default function (pi: ExtensionAPI) {
     // derives from it so removing settings restores Pi's active-tool baseline.
     workerActiveToolBaseline ??= pi.getActiveTools?.() ?? [];
     const registered = pi.getAllTools?.().map((tool: { name: string }) => tool.name) ?? workerActiveToolBaseline;
-    const projected = projectWorkerTools(workerActiveToolBaseline, registered, workerResourcePolicy);
+    // Settings may enable any discovered foreign tool, but never restore a Pi
+    // Team Bright leader-only tool removed from the Worker projection.
+    const workerEligibleRegistered = registered.filter((name) => !leaderToolNames.has(name) || workerToolNames.has(name));
+    const workerSurface = [
+      ...workerActiveToolBaseline.filter((name) => !leaderToolNames.has(name) || workerToolNames.has(name)),
+      ...[...workerToolNames].filter((name) => workerEligibleRegistered.includes(name)),
+    ];
+    const projected = projectWorkerTools([...new Set(workerSurface)], workerEligibleRegistered, workerResourcePolicy);
     pi.setActiveTools?.(projected);
     for (const message of workerResourcePolicy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
   }
 
   function alertToolProjection() {
+    const fields = {
+      team_name: Type.String(),
+      kind: StringEnum(isTeammate ? ["clarification", "attention"] : ["clarification", "attention", "announcement"]),
+      text: Type.String(),
+      task_id: Type.Optional(Type.String()),
+      task_version: Type.Optional(Type.String()),
+    };
     return {
       description: isTeammate
-        ? "Send exceptional clarification or attention to one current Team member. Alerts never assign or complete work; update the Task when durable intent changes."
+        ? "Send exceptional clarification or attention to team-lead. Alerts never assign or complete work; update the Task when durable intent changes."
         : "Send exceptional clarification, attention, or a Team announcement. Alerts never assign or complete work; update the Task when durable intent changes.",
-      parameters: Type.Object({
-        team_name: Type.String(),
-        to: Type.String({ description: isTeammate ? "Current Worker or team-lead name" : "Current Worker name, team-lead, or * for an announcement" }),
-        kind: StringEnum(isTeammate ? ["clarification", "attention"] : ["clarification", "attention", "announcement"]),
-        text: Type.String(),
-        task_id: Type.Optional(Type.String()),
-        task_version: Type.Optional(Type.String()),
-      }),
+      parameters: isTeammate
+        ? Type.Object(fields)
+        : Type.Object({
+            ...fields,
+            to: Type.String({ description: "Current Worker name, team-lead, or * for an announcement" }),
+          }),
     };
   }
 
@@ -708,7 +750,7 @@ export default function (pi: ExtensionAPI) {
     // Pi 0.82 replaces the same-name registration. This also covers a Worker
     // resumed without launch environment identity.
     Object.assign(alertToolRegistration, alertToolProjection());
-    pi.registerTool(alertToolRegistration as any);
+    registerWorkerTool(alertToolRegistration as any);
   }
 
   const registerCommand = (pi as any).registerCommand?.bind(pi);
@@ -931,8 +973,8 @@ export default function (pi: ExtensionAPI) {
         agentName = resumedMember.member.name;
         teamName = resumedMember.teamName;
         currentMembershipId = resumedMember.member.membershipId;
-        allowRecoveredWorkerRegistration = true;
         refreshAlertToolProjection();
+        registerRecoveredWorkerTools();
       }
     }
     // A fresh lead process has no lead environment variables either. Match
@@ -1164,11 +1206,6 @@ export default function (pi: ExtensionAPI) {
         systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,
       };
     }
-    if (previewJourney) {
-      return {
-        systemPrompt: event.systemPrompt + "\n\nUse the ten-tool release candidate as the Team leader. Create or resume one Team through your exact Session. Reuse Workers by stable semantic scope. Delegate executable work through assigned Tasks. Use a snapshot to establish hidden branch position, then use updates for routine supervision. Use worker_stop and team_shutdown only after exact stop evidence. Use task_link for typed graph changes and alert_send only for exceptional coordination. Task updates require the returned exact version and operation ID; identical retries replay the durable receipt."
-      };
-    }
   });
 
   type TeammateStopEvidence = {
@@ -1283,8 +1320,8 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  if (leaderPreviewProcess) {
-    previewLifecycleAdapter = {
+  if (modelToolJourney) {
+    modelToolLifecycleAdapter = {
       async teamCreated(targetTeamName, sessionFile) {
         isTeammate = false;
         agentName = "team-lead";
@@ -1342,7 +1379,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   // Tools
-  pi.registerTool({
+  registerWorkerTool({
     name: "team_create",
     label: "Create Team",
     description: "Create a new agent team.",
@@ -1454,7 +1491,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "ensure_worker",
     label: "Ensure Worker",
     description: "Ensure one stable named Worker exists. Reuse its live carrier, retry an unconsumed prepared launch, or resume the exact bound Session; assign executable work with a Task.",
@@ -1503,16 +1540,36 @@ export default function (pi: ExtensionAPI) {
         throw new Error(`Team ${params.team_name} does not exist`);
       }
 
-      const launch = await workerLaunchBridge.ensureWorker({
-        teamName: safeTeamName,
-        workerName: safeName,
-        scope: params.profile,
-        cwd: params.cwd,
-        model: params.model,
-        thinking: params.thinking,
-        signal,
-        workerAggregate: (cwd) => workerAggregate(cwd, ctx),
-      });
+      let launch;
+      try {
+        launch = await workerLaunchBridge.ensureWorker({
+          teamName: safeTeamName,
+          workerName: safeName,
+          scope: params.profile,
+          cwd: params.cwd,
+          model: params.model,
+          thinking: params.thinking,
+          signal,
+          workerAggregate: (cwd) => workerAggregate(cwd, ctx),
+        });
+      } catch (error) {
+        if (!(error instanceof WorkerDefaultModelConfigurationError)) throw error;
+        return {
+          content: [{ type: "text", text: `Worker not created: ${error.message}` }],
+          details: toolResultDetails({
+            outcome: "refused",
+            operation: "ensure_worker",
+            resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+            postState: { changed: false, reason: "worker_default_model_invalid" },
+            warnings: [toolResultWarning("worker_default_model_invalid", error.message, error.scope)],
+            nextActions: [{
+              tool: "ensure_worker",
+              reason: "Edit the reported Pi settings scope, then retry this Worker launch.",
+              args: { team_name: safeTeamName, name: safeName },
+            }],
+          }),
+        };
+      }
 
       if (launch.action === "reused") {
         return {
@@ -1620,7 +1677,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "send_message",
     label: "Send Message",
     description: "Send substantive coordination to a teammate. Avoid ACK-only messages unless semantic confirmation is required.",
@@ -1661,7 +1718,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "broadcast_message",
     label: "Broadcast Message",
     description: "Broadcast substantive coordination to current team members except the sender.",
@@ -1684,7 +1741,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "read_inbox",
     label: "Read Inbox",
     description: "Explicitly audit or inspect Message history. Never use this tool to fetch normal delivery; accepted Messages arrive as native custom context.",
@@ -1723,7 +1780,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "team_sync",
     label: "Sync Team",
     description: "Read the current compact Team projection or block on the next matching Task, Worker, or Alert event. This replaces polling and inbox reads.",
@@ -2022,7 +2079,10 @@ export default function (pi: ExtensionAPI) {
     ...projection,
     async execute(toolCallId: string, params: any, signal: any, onUpdate: any, ctx: any) {
       const actor = await assertCurrentSessionBinding(ctx, params.team_name);
-      if (params.to === "*" && params.kind !== "announcement") {
+      // A Worker Alert has one valid recipient. Derive it after binding, so
+      // direct or forged fields cannot redirect this process-specific call.
+      const recipient = isTeammate ? "team-lead" : params.to;
+      if (recipient === "*" && params.kind !== "announcement") {
         return {
           content: [{
             type: "text",
@@ -2033,7 +2093,7 @@ export default function (pi: ExtensionAPI) {
             operation: "alert_send",
             postState: {
               attemptedKind: params.kind,
-              attemptedRecipient: params.to,
+              attemptedRecipient: recipient,
               accepted: false,
               alertCreated: false,
               deliveryCreated: false,
@@ -2056,7 +2116,7 @@ export default function (pi: ExtensionAPI) {
         result = await alerts.sendAlert({
           teamName: params.team_name,
           from: agentName,
-          to: params.to,
+          to: recipient,
           kind: params.kind,
           text: params.text,
           taskId: params.task_id,
@@ -2072,21 +2132,21 @@ export default function (pi: ExtensionAPI) {
         const currentWorkers = current.members
           .filter((member) => member.agentType === "teammate" && member.isActive !== false)
           .map((member) => member.name);
-        const noEligibleBroadcastRecipients = params.to === "*"
+        const noEligibleBroadcastRecipients = recipient === "*"
           && message.includes("was not accepted by any current Team member");
         return {
           content: [{
             type: "text",
             text: noEligibleBroadcastRecipients
               ? `${params.kind} Alert wasn't sent: zero eligible Worker recipients, so nothing was delivered. Reconcile the roster with team_sync before deciding whether to retry.`
-              : `${params.kind} Alert not sent to ${params.to}: the recipient isn't a current Team member. Reconcile the current roster with team_sync before retrying.`,
+              : `${params.kind} Alert not sent to ${recipient}: the recipient isn't a current Team member. Reconcile the current roster with team_sync before retrying.`,
           }],
           details: toolResultDetails({
             outcome: "refused",
             operation: "alert_send",
             postState: {
               attemptedKind: params.kind,
-              attemptedRecipient: params.to,
+              attemptedRecipient: recipient,
               from: agentName,
               accepted: false,
               alertCreated: false,
@@ -2108,7 +2168,7 @@ export default function (pi: ExtensionAPI) {
               noEligibleBroadcastRecipients
                 ? "No other current Team member accepted the announcement."
                 : message,
-              noEligibleBroadcastRecipients ? undefined : params.to,
+              noEligibleBroadcastRecipients ? undefined : recipient,
             )],
             nextActions: noEligibleBroadcastRecipients
               ? [{
@@ -2157,7 +2217,7 @@ export default function (pi: ExtensionAPI) {
           postState: {
             kind: params.kind,
             from: agentName,
-            to: params.to,
+            to: recipient,
             recipients,
             ...(taskRef ? { taskRef } : {}),
             taskStateChanged: false,
@@ -2179,11 +2239,11 @@ export default function (pi: ExtensionAPI) {
     },
   };
     alertToolRegistration = registration;
-    pi.registerTool(registration as any);
+    registerWorkerTool(registration as any);
   }
   registerAlertTool();
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "task_create",
     label: "Create Task",
     description: "Create a Team Task. Its mutation receipt contains authoritative post-state; wait through team_sync for later changes.",
@@ -2285,7 +2345,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "task_list",
     label: "List Tasks",
     description: "Query the current compact Task projection on demand, not as follow-up to a mutation receipt.",
@@ -2302,7 +2362,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "task_update",
     label: "Update Task",
     description: "Apply one semantic Task mutation. Its receipt contains authoritative post-state; wait through team_sync for later changes.",
@@ -2317,11 +2377,52 @@ export default function (pi: ExtensionAPI) {
       assignee: Type.Optional(Type.String()),
       claim: Type.Optional(Type.Boolean({ default: false, description: "Atomically claim the task for the current agent" })),
       append_note: Type.Optional(Type.String({ description: "Append prose to the Task's native Beads notes" })),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
+      expected_version: TaskVersionRefSchema,
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const actingSessionFile = ctx?.sessionManager?.getSessionFile?.();
       const actorMembership = await assertCurrentSessionBinding(ctx, params.team_name);
+      // Worker calls use only the opaque model-facing version type. Resolve it
+      // once against current authority evidence, then pass its exact raw Beads
+      // version into the existing conditional write. No fallback may omit CAS.
+      const authorityRecord = await tasks.readCandidateTaskAuthorityRecord(params.team_name, params.task_id);
+      const currentTask = workerTaskCardFromRecord(authorityRecord);
+      const operationId = toolCallId;
+      const suppliedVersionIsValid = Check(TaskVersionRefSchema, params.expected_version);
+      if (!suppliedVersionIsValid || taskVersionRef(authorityRecord.task.version) !== params.expected_version) {
+        const supplied = typeof params.expected_version === "string" ? params.expected_version : "none";
+        const message = !suppliedVersionIsValid
+          ? "An exact TaskVersionRef from task_read is required; no Task mutation was made."
+          : `Expected Task version ${supplied} is stale; no Task mutation was made.`;
+        if (isCandidateTaskProjectionGap(currentTask)) {
+          return assembleCandidateToolResult("task_update", {
+            kind: "task_update_batch",
+            outcomes: [{
+              kind: "contract_gap",
+              input_index: 0,
+              task_id: currentTask.taskId,
+              operation_id: operationId,
+              reason: currentTask.reason,
+              unsupported: ["candidate_metadata"],
+              message: currentTask.message,
+              state_changed: false,
+            }],
+          }) as any;
+        }
+        return assembleCandidateToolResult("task_update", {
+          kind: "task_update_batch",
+          outcomes: [{
+            kind: "refused",
+            input_index: 0,
+            task_id: authorityRecord.task.id,
+            operation_id: operationId,
+            reason: "version_conflict",
+            message,
+            current_task: currentTask,
+            state_changed: false,
+          }],
+        }) as any;
+      }
       const requestedMutation = {
         ...(params.title !== undefined ? { title: params.title } : {}),
         ...(params.description !== undefined ? { description: params.description } : {}),
@@ -2335,26 +2436,57 @@ export default function (pi: ExtensionAPI) {
       let result: Awaited<ReturnType<typeof tasks.applySemanticTaskUpdate>>;
       let candidateTaskMetadata: CandidateTaskMetadata | undefined;
       let taskEventEvidence: Array<{ kind: "progress" | "status"; text: string }> | undefined;
-      if (
-        process.env[MODEL_TOOL_PREVIEW_WORKER_MARKER] === "1"
-        && (params.append_note !== undefined || params.status !== undefined)
-      ) {
-        try {
-          const record = await tasks.readCandidateTaskAuthorityRecord(params.team_name, params.task_id);
-          const parsed = parseCandidateTaskMetadata(record);
-          if (!("kind" in parsed)) {
-            candidateTaskMetadata = refreshCandidateTaskMetadata(
-              parsed,
-              params.append_note ?? parsed.current_context,
-            );
-            taskEventEvidence = [
-              ...(params.append_note !== undefined ? [{ kind: "progress" as const, text: params.append_note }] : []),
-              ...(params.status !== undefined ? [{ kind: "status" as const, text: `Worker set Task status to ${params.status}.` }] : []),
-            ];
-          }
-        } catch {
-          // Legacy or unreadable Tasks keep the shipped mutation behavior.
+      if (params.append_note !== undefined || params.status !== undefined) {
+        const record = authorityRecord;
+        const parsed = parseCandidateTaskMetadata(record);
+        if ("kind" in parsed) {
+          return assembleCandidateToolResult("task_update", {
+            kind: "task_update_batch",
+            outcomes: [{
+              kind: "contract_gap",
+              input_index: 0,
+              task_id: parsed.taskId,
+              operation_id: operationId,
+              reason: parsed.reason,
+              unsupported: ["candidate_metadata"],
+              message: parsed.message,
+              state_changed: false,
+            }],
+          }) as any;
         }
+        // Native Beads notes are unbounded evidence. A Worker uses an
+        // append_note as replacement candidate context, so reject oversize
+        // input rather than truncate it or leave stale candidate state.
+        const currentContext = params.append_note ?? parsed.current_context;
+        if (!isCandidateTaskCurrentContext(currentContext)) {
+          return assembleCandidateToolResult("task_update", {
+            kind: "task_update_batch",
+            outcomes: [{
+              kind: "contract_gap",
+              input_index: 0,
+              task_id: record.task.id,
+              operation_id: operationId,
+              reason: "candidate_metadata_invalid",
+              current_task: {
+                id: record.task.id,
+                title: record.task.title,
+                goal: parsed.goal,
+                status: record.task.status,
+                ...(record.task.assignee ? { assignee: record.task.assignee } : {}),
+                current_context: parsed.current_context,
+                version: record.task.version,
+              },
+              unsupported: ["candidate_current_context"],
+              message: `Task context exceeds the ${CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH}-character candidate limit; no Task mutation was made.`,
+              state_changed: false,
+            }],
+          }) as any;
+        }
+        candidateTaskMetadata = refreshCandidateTaskMetadata(parsed, currentContext);
+        taskEventEvidence = [
+          ...(params.append_note !== undefined ? [{ kind: "progress" as const, text: params.append_note }] : []),
+          ...(params.status !== undefined ? [{ kind: "status" as const, text: `Worker set Task status to ${params.status}.` }] : []),
+        ];
       }
       try {
         result = await tasks.applySemanticTaskUpdate(
@@ -2363,7 +2495,7 @@ export default function (pi: ExtensionAPI) {
           requestedMutation,
           {
             actor: agentName,
-            expectedVersion: params.expected_version,
+            expectedVersion: authorityRecord.task.version,
             actingSessionFile,
             actingMembershipId: actorMembership.membershipId,
             ...(candidateTaskMetadata ? { candidateTaskMetadata, taskEventEvidence } : {}),
@@ -2445,7 +2577,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "task_link",
     label: "Link Task",
     description: "Add or remove one typed Task relation with graph and version validation.",
@@ -2570,7 +2702,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "team_shutdown",
     label: "Shutdown Team",
     description: "Attempt to stop every teammate and deactivate only Memberships whose terminal/process stop is confirmed.",
@@ -2682,7 +2814,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "report_stale_agent_sessions",
     label: "Report Stale Agent Sessions",
     description: "Report old Pi-core agent session folders for review without deleting them.",
@@ -2703,7 +2835,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "task_read",
     label: "Read Task",
     description: "Read current Task details on demand, especially before a later conditional write; mutation receipts already contain their post-state.",
@@ -2771,7 +2903,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "check_teammate",
     label: "Check Teammate",
     description: "Diagnose one teammate's runtime health on demand. Do not routinely poll this tool for progress or completion.",
@@ -2848,7 +2980,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "worker_stop",
     label: "Stop Worker",
     description: "Stop one Worker only when it has no assigned nonterminal Tasks, then deactivate its current Membership after shutdown is confirmed.",
@@ -2957,7 +3089,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "list_predefined_teams",
     label: "List Predefined Teams",
     description: "List all available predefined team configurations from teams.yaml files. These are team templates that can be instantiated with create_predefined_team.",
@@ -2990,7 +3122,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "list_predefined_agents",
     label: "List Predefined Agents",
     description: "List all available predefined agent definitions from .md files. These can be used individually or as part of predefined teams.",
@@ -3014,7 +3146,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "create_predefined_team",
     label: "Create Predefined Team",
     description: "Create a team from a predefined team configuration. Spawns all agents defined in the team template from teams.yaml. Each agent is spawned with its predefined prompt, tools, and settings.",
@@ -3090,95 +3222,22 @@ export default function (pi: ExtensionAPI) {
 
         try {
           const safeName = paths.sanitizeName(agentName);
-          
-          let chosenModel = agentDef.model || params.default_model || config.defaultModel;
-          
-          if (chosenModel && !chosenModel.includes('/')) {
-            const resolved = resolveModelWithProvider(chosenModel);
-            if (resolved) {
-              chosenModel = resolved;
-            } else if (config.defaultModel && config.defaultModel.includes('/')) {
-              const [provider] = config.defaultModel.split('/');
-              chosenModel = `${provider}/${chosenModel}`;
-            }
-          }
-
-          const useSeparateWindow = params.separate_windows ?? config.separateWindows ?? false;
-          if (useSeparateWindow && !terminal.supportsWindows()) {
-            throw new Error(`Separate windows mode is not supported in ${terminal.name}.`);
-          }
-
-          const member: Member = {
-            membershipId: teams.newMembershipId(),
-            pendingLaunchId: teams.newLaunchId(),
-            agentId: `${safeName}@${safeTeamName}`,
-            name: safeName,
-            agentType: "teammate",
-            model: chosenModel,
-            joinedAt: Date.now(),
+          await workerLaunchBridge.ensureWorker({
+            teamName: safeTeamName,
+            workerName: safeName,
+            scope: agentDef.prompt,
             cwd: params.cwd,
-            subscriptions: [],
-            prompt: agentDef.prompt,
-            color: "blue",
+            model: agentDef.model,
             thinking: agentDef.thinking,
-          };
-
-          await teams.addMember(safeTeamName, member);
-
-          const aggregate = workerAggregate(params.cwd, ctx);
-          const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking, aggregate.path, aggregate.projectTrusted);
-
-          const env: Record<string, string> = {
-            ...process.env,
-            PI_TEAM_NAME: safeTeamName,
-            PI_AGENT_NAME: safeName,
-            PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
-            ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
-          };
-
-          await workerLaunchBridge.launchPreparedMembership(
-            safeTeamName,
-            member,
-            () => messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, agentDef.prompt, "Initial prompt from predefined team"),
-            async () => {
-            if (useSeparateWindow) {
-              const terminalId = terminal.spawnWindow({
-                name: safeName,
-                cwd: params.cwd,
-                argv: piCmd,
-                env: env,
-                teamName: safeTeamName,
-              });
-              return { terminalId, isWindow: true, backend: terminal.name };
-            }
-            if (terminal instanceof Iterm2Adapter) {
-              const teammates = (await teams.readConfig(safeTeamName)).members.filter(m => m.agentType === "teammate" && m.tmuxPaneId?.startsWith("iterm_"));
-              const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
-              if (lastTeammate?.tmuxPaneId) {
-                terminal.setSpawnContext({ lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") });
-              } else {
-                terminal.setSpawnContext({});
-              }
-            }
-
-            const leadMember = (await teams.readConfig(safeTeamName)).members.find(m => m.name === "team-lead");
-            const leadTarget = leadMember ? memberTerminalTarget(leadMember, config.terminalBackend || terminal.name) : undefined;
-            const anchorPaneId = leadTarget?.kind === "pane"
-              ? leadTarget.targetId
-              : (terminal as import("../src/utils/terminal-adapter").TerminalAdapter).currentTargetId?.() || undefined;
-
-            const terminalId = terminal.spawn({
-              name: safeName,
-              cwd: params.cwd,
-              argv: piCmd,
-              env: env,
-              anchorPaneId,
-            });
-            return { terminalId, isWindow: false, backend: terminal.name };
-            },
-            aggregate.path,
-          );
-
+            workerAggregate: (cwd) => workerAggregate(cwd, ctx),
+            initialMessage: () => messaging.sendPlainMessage(
+              safeTeamName,
+              "team-lead",
+              safeName,
+              agentDef.prompt,
+              "Initial prompt from predefined team",
+            ),
+          });
           spawnResults.push({ name: agentName, status: "spawned", error: undefined });
         } catch (e) {
           spawnResults.push({ name: agentName, status: "error", error: String(e) });
@@ -3214,7 +3273,7 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  registerWorkerTool({
     name: "save_team_as_template",
     label: "Save Team as Template",
     description: "Save a runtime team as a reusable predefined team template. Creates agent definition files and updates teams.yaml. Use this when you've created a team with custom prompts and want to reuse it later.",

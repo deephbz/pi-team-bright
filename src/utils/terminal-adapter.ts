@@ -10,6 +10,13 @@ import { spawnSync } from "node:child_process";
 /**
  * Options for spawning a new terminal pane or window
  */
+export interface TeamPanePlacement {
+  /** Exact Team leader pane. The first Worker splits this pane to the right. */
+  leaderPaneId: string;
+  /** Exact current Team Worker panes. Later Workers split the last pane down. */
+  workerPaneIds: readonly string[];
+}
+
 export interface SpawnOptions {
   /** Name/identifier for the pane/window */
   name: string;
@@ -23,8 +30,8 @@ export interface SpawnOptions {
   env: Record<string, string>;
   /** Team name for window title formatting (e.g., "team: agent") */
   teamName?: string;
-  /** Optional pane ID to anchor pane-based layouts to a specific origin pane */
-  anchorPaneId?: string;
+  /** Durable Team-only pane placement; never infer an anchor from terminal focus. */
+  panePlacement?: TeamPanePlacement;
 }
 
 /**

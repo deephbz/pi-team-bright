@@ -8,7 +8,7 @@ import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as taskAuthority from "./tasks";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;
@@ -94,7 +94,7 @@ async function createBeadsTeam(name: string, leadSession: string) {
  */
 function terminalBinding(): teams.TeamTerminalBinding | undefined {
   const detected = getTerminalAdapter();
-  return detected ? { backend: detected.name } : undefined;
+  return detected ? { backend: detected.name, leadTarget: { backend: detected.name, kind: "pane", targetId: "pane-leader" } } : undefined;
 }
 
 afterEach(() => {

@@ -1,0 +1,79 @@
+{
+  "schema": "pi-teams-pi-herdr-normal-composition/1",
+  "recordedAt": "2026-08-03T08:25:00Z",
+  "sourceBundle": {
+    "repository": "pi-team-bright",
+    "baseCommit": "7ccad1d1f7c1693822502e2aad7683b5fe981b52",
+    "sourcePaths": [
+      "extensions/index.ts",
+      "src/adapters/herdr-adapter.ts",
+      "src/adapters/herdr-adapter.test.ts",
+      "src/utils/ergonomic-tool-contract.test.ts",
+      "src/utils/worker-resource-extension.contract.test.ts",
+      "src/model-tool-contract/durable-model-tool-port.ts",
+      "package.json",
+      "package-lock.json"
+    ]
+  },
+  "versions": {
+    "pi": "0.83.0",
+    "herdr": "0.7.5",
+    "beads": "1.1.0"
+  },
+  "resourceComposition": {
+    "agentDirectory": "disposable and free of a distinct Pi Team Bright installation",
+    "explicitExtension": "working-tree Pi Team Bright extension",
+    "discoveredExtension": "harmless unrelated_probe extension",
+    "discoveredSkill": "harmless unrelated-skill",
+    "directProbe": [
+      "unrelated_extension_ok",
+      "unrelated_skill_ok"
+    ],
+    "workerEvidence": "Each Worker called unrelated_probe, followed unrelated-skill, added both receipts to its assigned Task notes, and closed that Task.",
+    "argvInvariant": "Workers retained normal discovery and added exact -e source; no -ns, -ne, or --no-extensions was used."
+  },
+  "realHerdrTeam": {
+    "teamName": "pi83-normal-live",
+    "leader": "team-lead",
+    "workers": [
+      "normal-live-a",
+      "normal-live-b"
+    ],
+    "lifecycle": {
+      "created": true,
+      "workersSessionBound": 2,
+      "tasksCreated": 2,
+      "tasksClosed": 2,
+      "firstWorkerStopped": "normal-live-a",
+      "secondWorkerStopped": "normal-live-b",
+      "teamShutdown": true,
+      "unfinishedTasks": 0
+    },
+    "layout": {
+      "twoWorkers": {
+        "leaderWidth": 37,
+        "totalWidth": 60,
+        "leaderWidthFraction": 0.6166666667,
+        "workerRegion": "one right-side column split down"
+      },
+      "afterFirstWorkerStop": {
+        "leaderWidth": 37,
+        "totalWidth": 60,
+        "leaderWidthFraction": 0.6166666667,
+        "workerRegion": "one right-side pane"
+      },
+      "afterSecondWorkerStop": {
+        "leaderWidth": 60,
+        "totalWidth": 60,
+        "splits": 0
+      }
+    },
+    "cleanup": "The Team shut down before the exact disposable Herdr tab and disposable agent directory were removed."
+  },
+  "unresolvedObservations": {
+    "leaderTaskCreate": "The first leader task_create rendered the generic no-semantic-result error. A later task_create created both Tasks. This receipt does not infer a cause or mark it fixed.",
+    "workerTaskUpdate": "Each Worker saw an expected-version refusal before a later read/retry/update sequence closed its Task. This receipt does not infer whether that refusal was a valid stale-write guard or a launch/delivery defect."
+  },
+  "supersedes": "The isolation-only 2026-08-03-pi-083-herdr-worker-compatibility.json receipt for composition acceptance. It remains historical root-cause evidence.",
+  "architectureImpact": "changed: Worker launch composition and the Herdr terminal-adapter contract changed; component ownership, dependencies, and deployment topology did not, so Structurizr DSL remains unchanged."
+}

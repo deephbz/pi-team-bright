@@ -10,6 +10,10 @@ const failure = (code: string, message: string, status = 1) => ({
   stdout: JSON.stringify({ id: "cli:test", error: { code, message } }), stderr: message, status,
 });
 
+const leaderLayout = (paneId: string, width = 82) => success({ type: "pane_layout", layout: {
+  panes: [{ pane_id: paneId, rect: { width } }],
+} });
+
 describe("HerdrAdapter", () => {
   let adapter: HerdrAdapter;
   let exec: ReturnType<typeof vi.spyOn>;
@@ -59,6 +63,8 @@ describe("HerdrAdapter", () => {
 
   it("splits a direct Herdr pane then starts Pi there with structured argv and allowlisted environment", () => {
     exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
+      .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
       .mockReturnValueOnce(success({ type: "agent_info", agent: { pane_id: "pane-worker" } }));
 
@@ -72,17 +78,20 @@ describe("HerdrAdapter", () => {
         HTTPS_PROXY: "http://127.0.0.1:6152",
         OTHER: "must-not-pass",
       },
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
     })).toBe("pane-worker");
 
-    expect(exec).toHaveBeenNthCalledWith(1, "herdr", [
-      "pane", "split", "--current", "--direction", "right",
+    expect(exec).toHaveBeenNthCalledWith(1, "herdr", ["pane", "get", "pane-origin"]);
+    expect(exec).toHaveBeenNthCalledWith(2, "herdr", ["pane", "layout", "--pane", "pane-origin"]);
+    expect(exec).toHaveBeenNthCalledWith(3, "herdr", [
+      "pane", "split", "--pane", "pane-origin", "--direction", "right", "--ratio", "0.6097560975609756",
       "--cwd", "/repo with spaces",
       "--env", "PI_TEAM_NAME=team-a",
       "--env", "PI_AGENT_NAME=worker",
       "--env", "HTTPS_PROXY=http://127.0.0.1:6152",
       "--no-focus",
     ]);
-    expect(exec).toHaveBeenNthCalledWith(2, "herdr", [
+    expect(exec).toHaveBeenNthCalledWith(4, "herdr", [
       "agent", "start", "worker",
       "--kind", "pi",
       "--pane", "pane-worker",
@@ -91,16 +100,73 @@ describe("HerdrAdapter", () => {
     ]);
   });
 
+  it("splits an exact current Worker downward without changing the leader", () => {
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "w4",
+        panes: [
+          { pane_id: "pane-leader", rect: { x: 0, width: 60 } },
+          { pane_id: "pane-worker-1", rect: { x: 60, width: 40 } },
+        ],
+      } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2" } }))
+      .mockReturnValueOnce(success({ type: "agent_info", agent: { pane_id: "pane-worker-2" } }));
+
+    expect(adapter.spawn({
+      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-worker-1"] },
+    })).toBe("pane-worker-2");
+    expect(exec).toHaveBeenNthCalledWith(1, "herdr", ["pane", "get", "pane-leader"]);
+    expect(exec).toHaveBeenNthCalledWith(2, "herdr", ["pane", "get", "pane-worker-1"]);
+    expect(exec).toHaveBeenNthCalledWith(3, "herdr", ["pane", "layout", "--pane", "pane-leader"]);
+    expect(exec).toHaveBeenNthCalledWith(4, "herdr", [
+      "pane", "split", "--pane", "pane-worker-1", "--direction", "down", "--ratio", "0.5",
+      "--cwd", "/repo", "--no-focus",
+    ]);
+  });
+
+  it("refuses a stale exact Team Worker target without falling back to the leader", () => {
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(failure("pane_not_found", "pane worker is gone"));
+
+    expect(() => adapter.spawn({
+      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-stale"] },
+    })).toThrow(/pane_not_found/i);
+    expect(exec).toHaveBeenCalledWith("herdr", ["pane", "get", "pane-leader"]);
+    expect(exec).toHaveBeenCalledWith("herdr", ["pane", "get", "pane-stale"]);
+    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["split"]));
+  });
+
+  it("refuses a Worker pane moved to another leader tab", () => {
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-moved", tab_id: "tab-b", workspace_id: "w4" } }));
+
+    expect(() => adapter.spawn({
+      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-moved"] },
+    })).toThrow(/not in the leader tab/i);
+    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["split"]));
+  });
+
   it("retries the transient split-to-shell readiness race before starting Pi", () => {
     exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
+      .mockReturnValueOnce(leaderLayout("pane-origin", 100))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
       .mockReturnValueOnce(failure("agent_pane_busy", "agent target pane is not an available shell"))
       .mockReturnValueOnce(success({ type: "agent_info", agent: { pane_id: "pane-worker" } }));
 
-    expect(adapter.spawn({ name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
-      .toBe("pane-worker");
-    expect(exec).toHaveBeenCalledTimes(3);
-    expect(exec.mock.calls[1]).toEqual(exec.mock.calls[2]);
+    expect(adapter.spawn({
+      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
+    })).toBe("pane-worker");
+    expect(exec).toHaveBeenCalledTimes(5);
+    expect(exec.mock.calls[3]).toEqual(exec.mock.calls[4]);
   });
 
   it("rejects legacy shell commands and malformed or incomplete start envelopes", () => {
@@ -109,18 +175,31 @@ describe("HerdrAdapter", () => {
     })).toThrow(/structured argv/i);
 
     exec.mockReturnValue({ stdout: "not-json", stderr: "", status: 0 });
-    expect(() => adapter.spawn({ name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
+    expect(() => adapter.spawn({
+      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
+    }))
       .toThrow(/malformed JSON/i);
 
-    exec.mockReturnValue(success({ type: "pane_info", pane: { terminal_id: "not-a-pane" } }));
-    expect(() => adapter.spawn({ name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
-      .toThrow(/pane\.pane_id/i);
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
+      .mockReturnValueOnce(leaderLayout("pane-origin"))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { terminal_id: "not-a-pane" } }));
+    expect(() => adapter.spawn({
+      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
+    })).toThrow(/pane\.pane_id/i);
 
     exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
+      .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
       .mockReturnValueOnce(failure("agent_start_failed", "agent unavailable"))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(() => adapter.spawn({ name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
+    expect(() => adapter.spawn({
+      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
+    }))
       .toThrow(/agent_start_failed: agent unavailable/i);
     expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
   });

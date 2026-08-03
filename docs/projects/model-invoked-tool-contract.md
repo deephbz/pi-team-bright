@@ -3,7 +3,7 @@ document_id: pi-team-bright-model-invoked-tool-contract
 document_kind: evergreen-shaping-contract
 lifecycle_stage: hardening
 scope: Model-facing Pi Team Bright coordination tools under the current one-leader and multiple-Worker topology.
-responsibility: Own current use cases, candidate call and result shapes, information semantics, and acceptance tests until the executable interface is accepted.
+responsibility: Own current use cases, call and result intent, information semantics, and acceptance tests for the shipped executable interface.
 authority: Shaping intent only; registered TypeBox schemas, implementations, and tests own current shipped behavior.
 excludes: Generic Team ontology, backend performance decisions, concrete Task-engine selection, and dated evidence.
 maintenance: Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.
@@ -13,16 +13,16 @@ maintenance: Replace superseded shaping content; move exact accepted contracts t
 
 Updated: 2026-08-03
 
-Stage: **hardening / release candidate**
+Stage: **hardening**
 
 Status: active. The accepted `team_create` → `ensure_worker` →
-`task_create` → snapshot → updates journey now runs as a branch-local durable
-preview through the real main extension. Leaders now register the complete
-ten-tool candidate surface; the four parity tools are `worker_stop`,
-`team_shutdown`, `task_link`, and `alert_send`. Preview-launched Workers keep the current Worker Task surface
+`task_create` → snapshot → updates journey runs through the shipped durable
+model-tool surface in the real main extension. Leaders register the complete
+ten-tool surface; the four parity tools are `worker_stop`, `team_shutdown`,
+`task_link`, and `alert_send`. Workers keep the current Worker Task surface
 over the same Team and Beads authorities. The adapter composes explicit Team
 epochs, logical Worker meaning, exact lead-Session resolution, the existing
-Worker launch bridge, candidate Beads metadata, structured events, and
+Worker launch bridge, model-tool Beads metadata, structured events,
 acknowledged branch-position storage, and authoritative Task projection
 rescan. Missing metadata and unstructured update evidence remain typed gaps.
 Leader Task updates use expected-version preflight plus durable operation
@@ -87,19 +87,20 @@ contracts then move to registered schemas, implementations, and tests.
 This file owns shaping intent, rationale, constraints, open choices, and
 reversal conditions. Replace superseded content instead of appending it.
 
-The executable candidate source is
+The executable model-tool source is
 [`src/model-tool-contract/catalog.ts`](../../src/model-tool-contract/catalog.ts).
 Its result-projection boundary is
 [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts).
 The result-projection implementation is the owning seam for the accepted
-model, TUI, and QA projections below.
-The durable candidate Task projection is
-[`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts);
-it remains internal and unregistered. The preliminary runtime and foreign adapter are
+model, TUI, and QA projections below. The durable model-tool port is
+[`src/model-tool-contract/durable-model-tool-port.ts`](../../src/model-tool-contract/durable-model-tool-port.ts).
+The internal Beads Task projection is
+[`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts).
+The runtime and registration adapters are
 [`runtime.ts`](../../src/model-tool-contract/runtime.ts) and
 [`pi-registration.ts`](../../src/model-tool-contract/pi-registration.ts). The
 [generated scenario review](../generated/model-tool-contract-review.html) is a
-human projection of the catalog. None is current shipped authority.
+human projection of the catalog. The executable modules own shipped behavior.
 
 The accepted initial journey is recorded in
 [decision 0009](../decisions/0009-initial-model-tool-journey.md).
@@ -135,7 +136,7 @@ Tasks are the only executable work authority. Alerts are exceptional
 coordination. Runtime activity, delivery, and terminal state do not prove Task
 progress.
 
-The candidate preserves the conceptual capabilities needed for a complete
+The model-tool surface preserves the conceptual capabilities needed for a complete
 surface: Team creation, Alerts, Task notification and mutation, Worker ensure,
 Worker stop, and Team shutdown. This round designs from first principles and
 does not preserve old parameter shapes.
@@ -158,7 +159,7 @@ Current context is corrected and replaceable. Journal evidence preserves what
 actors reported. Updates avoid repeated context cost. A snapshot restores
 orientation after startup, compaction, or suspected context loss.
 
-## Candidate `team_create`
+## Current `team_create`
 
 ### Call intent
 
@@ -181,7 +182,7 @@ The result reports a created active Team, a refusal because the Session already
 has an active Team or the name is unavailable, or unavailable Team/binding
 authority. Refusal and unavailable outcomes change no state.
 
-## Candidate `ensure_worker`
+## Current `ensure_worker`
 
 ### Call intent
 
@@ -207,7 +208,7 @@ The result reports one of three semantic outcomes:
 The same name cannot silently acquire a new meaning. A separate explicit
 operation can change scope if a demonstrated workflow needs it.
 
-## Candidate `team_sync`
+## Current `team_sync`
 
 ### Call intent
 
@@ -243,11 +244,17 @@ type TaskCard = {
 
 `goal` combines the desired outcome, relevant boundary, and success signal.
 Separate `scope` and `success_criteria` fields add surface without a required
-machine distinction, so they are not in the candidate.
+machine distinction, so they are not in the current surface.
 
 `current_context` contains only still-relevant progress, decisions, blockers,
-and next actions. Each update replaces it. Superseded detail stays in the Task
-journal.
+and next actions. Each update replaces it. The executable candidate schema in
+[`src/utils/beads.ts`](../../src/utils/beads.ts) limits it to 2,000 TypeBox
+string-length units. Superseded detail stays in the Task journal.
+
+Native Beads notes remain unbounded raw evidence. A marked Worker `append_note`
+that would exceed the candidate context limit refuses without mutation. Worker
+candidate receipts use validated canonical metadata, or return a typed metadata
+gap; they never copy native notes into `current_context`.
 
 A completed snapshot establishes the hidden incremental baseline at its
 observed Team head. It supersedes unseen older updates because the current
@@ -306,10 +313,10 @@ an authoritative change forever.
 
 ## No domain count caps or paging
 
-The candidate places no arbitrary count limit on Workers, nonterminal Tasks, or
+The model-tool surface places no arbitrary count limit on Workers, nonterminal Tasks, or
 journal entries. It also exposes no paging mechanism. The only accepted
-starting field budgets are 80 characters for Task title, 160 for goal, and 640
-for current context.
+starting field budgets are 80 TypeBox string-length units for Task title, 1,000
+for goal, and 2,000 for current context.
 
 Scale remains a performance and evaluation question. Measure serialized size,
 latency, decision quality, and failure behavior at realistic Team sizes. Do not
@@ -362,8 +369,9 @@ Per-tool model projections retain these facts:
   and recovery. Omit the echoed purpose.
 - `ensure_worker`: Worker name, created/reused/reconnected effect, and carrier.
   A scope conflict keeps the existing Worker's scope.
-- `task_create`: Task ID, status, assignee, and version per input. Omit echoed
-  title and goal after success.
+- `task_create`: its caller-supplied `operation_id`, Task ID, status, assignee,
+  and version per input. Omit echoed title and goal after success. An unknown
+  outcome retains the same operation coordinate and directs an exact retry.
 - `task_read`: complete current Task cards, or explicit missing and contract-gap
   outcomes. A deliberate read is not compressed into a mutation receipt.
 - `task_update`: Task ID, status, assignee, and new version after success. A
@@ -381,6 +389,13 @@ For `task_create`, `task_read`, and `task_update`, a one-item semantic batch
 projects as one result. It has no outer `outcomes` array or `input_index`.
 Multi-item calls retain an ordered batch and input indexes. The raw semantic
 result remains batch-shaped in both cases.
+
+Each `task_create` item has one required opaque `operation_id`. The adapter
+scopes it to the active Team and persists it in the same Beads create command.
+A retry returns the existing Task only when title, goal, assignee, and initial
+canonical candidate semantics still match. Different input with the same
+operation ID refuses without mutation. A post-authority error is
+`unknown_outcome`; retry exactly that operation ID, never a new create.
 
 A successful Task mutation returns the Task ID, status, assignee, and new
 version. It does not echo submitted context, journal text, or generated journal
@@ -402,10 +417,16 @@ understand the effect or next action. Batch output starts with a count and then
 names failures, conflicts, or guarded resources. It never prints `unknown` or a
 zero count when the semantic result does not contain a collection.
 
-Expanded output uses allowlisted per-tool cards and lists. It shows semantic
-details once. It does not show model JSON, recursive raw objects, legacy
-warnings, private paths, Session or Membership IDs, or opaque backend
+Expanded successful output uses allowlisted per-tool cards and lists. It shows
+semantic details once. It does not show model JSON, recursive raw objects,
+legacy warnings, private paths, Session or Membership IDs, or opaque backend
 identifiers. Recovery guidance appears as `Next:` only when action is required.
+
+Thrown execution errors and malformed result details bypass the successful
+semantic renderer. Their TUI output names the tool and shows the unmodified
+`content` and `details` in one copyable JSON report. It tells the operator to
+review sensitive fields before sharing. It never replaces the source error with
+a generic “no semantic result” message.
 
 Human tone derives from the semantic discriminant. `refused`, `unavailable`,
 `contract_gap`, `cancelled`, `snapshot_required`, and `partial` remain distinct.
@@ -492,10 +513,12 @@ context, append identified journal entries, apply an optional workflow change,
 and commit one new version. An operation ID enables receipt replay without
 duplicate evidence. A failed version precondition changes nothing.
 
-The current Beads adapter does not yet prove this contract. Expected-version
-checks are preflight reads rather than compare-and-swap, notes are mutable,
-idempotent receipt replay is absent, and parent-cycle validation is not
-complete. Exposure remains gated on a backend-neutral conformance suite.
+The current Beads adapter scopes each mutation receipt by Team, Task, and
+caller-supplied operation ID. It replays only an identical operation fingerprint
+and refuses reuse of that operation ID with different input. Expected-version
+checks remain preflight reads rather than database-native compare-and-swap
+against arbitrary external writers; the adapter verifies post-write authority.
+Exposure remains gated on a backend-neutral conformance suite.
 
 ## Task and Communication adapters
 
@@ -543,7 +566,7 @@ Correct-by-construction rules:
 
 ## Verification
 
-The candidate evaluator covers:
+The model-tool evaluator covers:
 
 1. Team creation and exact leader binding from an unbound Session;
 2. refusal without state change when an active Team already exists;

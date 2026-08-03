@@ -19,7 +19,7 @@ describe("candidate Task update version refs", () => {
     const port = new InMemoryModelToolTeamPort();
     const session = exactLeaderSessionId("leader-session");
     await port.createTeam(session, { name: "release", purpose: "Verify refs." });
-    await port.createTask(session, { title: "Verify", goal: "Verify opaque refs." });
+    await port.createTask(session, { operationId: "create-verify", title: "Verify", goal: "Verify opaque refs." });
     const updated = await port.updateTasks(session, [{ taskId: "task-1", operationId: "status", expectedVersion: v1, status: "in_progress" }]);
     expect(updated).toMatchObject({ kind: "batch", outcomes: [{ kind: "updated", task: { current_context: "Work has not started.", version: "task_v2" } }] });
 

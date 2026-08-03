@@ -6,6 +6,8 @@ the maintained [evergreen context](docs/current/README.md); consult the
 
 ## Work protocol
 
+- Product and systems observers are optional. Do not create them for routine or
+  major changes unless the owner or an assigned Task explicitly requests them.
 - An assigned Task is the only executable work contract. Put goals,
   constraints, review requests, and acceptance criteria in Task prose.
 - Reuse stable Workers. Memberships, Pi Sessions, processes, and terminal

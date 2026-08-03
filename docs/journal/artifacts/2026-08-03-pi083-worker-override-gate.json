@@ -1,0 +1,99 @@
+{
+  "schema": "pi-teams-worker-override-gate/1",
+  "recordedAt": "2026-08-03T10:53:00Z",
+  "scope": "Small release-verification rerun after the approved OpenRouter GPT-5.1 external 403. It reuses the passing create/replay/conflict and two-Worker geometry receipt in 2026-08-03-final-pi083-herdr-layout-gate.json.",
+  "sourceBundle": {
+    "repository": "pi-team-bright",
+    "baseCommit": "54016c82730744125c2d492a6f53313acabb806f",
+    "workingTreeDiffSha256": "3d824e1304cd2cfd1c3a2a94c2ae65ca1e1af4721a10436f0455ab5d7937b68c",
+    "workingTreeExtension": "<home>/repos/HyperCarrier/packages/pi-team-bright/extensions/index.ts",
+    "pi": "0.83.0",
+    "herdr": "0.7.5"
+  },
+  "isolation": {
+    "run": "ptb-layout-override-20260803T101612Z-18890",
+    "globalWorkerDefault": "openrouter/openai/gpt-5.1",
+    "coordinator": "_codex_with_proxy pi --model openai-codex/gpt-5.6-terra:medium",
+    "proxyEnvironment": {
+      "HTTPS_PROXY": "present",
+      "ALL_PROXY": "present",
+      "NO_PROXY": "present"
+    },
+    "normalResources": {
+      "unrelatedExtension": "unrelated_probe returned unrelated_extension_ok",
+      "unrelatedSkill": "loaded"
+    }
+  },
+  "teamDefaultAttempt": {
+    "team": "ptb-layout-override-20260803T101612Z-18890",
+    "requestedTeamDefault": "openai-codex/gpt-5.6-terra",
+    "observedConfigDefault": null,
+    "worker": {
+      "name": "override-worker",
+      "observedMembershipModel": "openrouter/openai/gpt-5.1",
+      "sessionBound": true,
+      "terminalTarget": "w4:pR4",
+      "providerResult": {
+        "status": 403,
+        "message": "The request is prohibited due to a violation of provider Terms Of Service."
+      }
+    },
+    "task": {
+      "rowsIncludingClosed": 1,
+      "deliveryFiles": 1,
+      "eventLines": 9,
+      "workerTaskReadOrUpdate": false,
+      "leadCleanup": "The lead recorded the mismatch, closed the Task, stopped the exact Worker, then shut down the Team."
+    },
+    "geometry": {
+      "afterWorkerLaunch": "leader left 33/55 = 60%; Worker right 22/55; right split ratio 0.6",
+      "afterCleanup": "one leader pane 55/55; zero splits"
+    }
+  },
+  "explicitWorkerAttempt": {
+    "team": "ptb-layout-worker-explicit-20260803T101612Z-18890",
+    "requestedWorkerModel": "openai-codex/gpt-5.6-terra",
+    "observedConfigDefault": null,
+    "worker": {
+      "name": "explicit-worker",
+      "observedMembershipModel": "openrouter/openai/gpt-5.1",
+      "sessionBound": true,
+      "terminalTarget": "w4:pR6",
+      "providerResult": {
+        "status": 403,
+        "message": "The request is prohibited due to a violation of provider Terms Of Service."
+      }
+    },
+    "toolSurfaceObservation": "The leader Session records show ensure_worker without a model argument. The interactive exposed schema did not let the leader submit the requested explicit Worker model.",
+    "task": {
+      "rowsIncludingClosed": 1,
+      "deliveryFiles": 1,
+      "eventLines": 7,
+      "workerTaskReadOrUpdate": false,
+      "leadCleanup": "The lead closed the unopened Task, stopped the exact Worker, then shut down the Team."
+    },
+    "geometryAfterCleanup": "one leader pane 55/55; zero splits"
+  },
+  "assessment": {
+    "result": "blocked",
+    "confirmed": [
+      "The dedicated lifecycle retained the global requested GPT-5.1 Worker setting.",
+      "Both attempts bound an exact Worker Session and used the stable right-side Herdr placement.",
+      "Both cleanup paths stopped only their disposable Worker and shut down their disposable Team."
+    ],
+    "notProven": [
+      "Team default-model override precedence",
+      "Explicit Worker-model override precedence",
+      "Worker task_read of a public v_ ref",
+      "First Worker task_update using that ref"
+    ],
+    "blocker": "In both isolated real runs, the persisted Worker Membership captured global openrouter/openai/gpt-5.1. The Team-default request was absent from persisted config. The exposed ensure_worker call did not carry the requested explicit model. Each Worker then received the external OpenRouter 403 before task_read or task_update.",
+    "nextAction": "Inspect and reconcile the active Pi tool schema/result registration with extensions/index.ts model parameters before another live override retry. Do not claim the Worker version-ref gate passed."
+  },
+  "cleanup": {
+    "dedicatedTabs": ["w4:t4T", "w4:t4V"],
+    "dedicatedAgentDirectory": "/tmp/ptb-layout-override-20260803T101612Z-18890",
+    "dedicatedTabsClosed": true,
+    "dedicatedAgentDirectoryRemoved": true
+  }
+}
