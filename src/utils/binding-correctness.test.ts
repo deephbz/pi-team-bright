@@ -23,7 +23,11 @@ function testTeamName(suffix: string): string {
   return name;
 }
 
-function registerExtension() {
+function registerExtension(legacyLeader = false) {
+  if (legacyLeader) {
+    vi.stubEnv("PI_TEAM_NAME", "legacy-test");
+    vi.stubEnv("PI_AGENT_NAME", "team-lead");
+  }
   const toolsByName = new Map<string, RegisteredTool>();
   const handlers = new Map<string, Handler>();
   piTeams({
@@ -57,7 +61,7 @@ afterEach(() => {
 describe("current team binding correctness", () => {
   it("alert_send rejects a nonexistent team without creating any state", async () => {
     const missingTeam = testTeamName("alert-missing-team");
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     await expect(sendAlert.execute("rejected", {
       team_name: missingTeam,
@@ -83,7 +87,7 @@ describe("current team binding correctness", () => {
       cwd: process.cwd(),
       subscriptions: [],
     });
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const accepted: any = await sendAlert.execute("accepted", {
       team_name: teamName,
@@ -92,14 +96,12 @@ describe("current team binding correctness", () => {
       text: "before removal",
     }, undefined, undefined, context("session"));
     expect(accepted).toMatchObject({
-      content: [{ type: "text", text: expect.stringMatching(/attention Alert accepted by worker.*No Task state changed/i) }],
+      content: [{ type: "text", text: '{"kind":"alert_sent","accepted_recipients":["worker"],"failed_recipients":[]}' }],
       details: {
-        schema: "pi-teams-tool-result/1",
-        outcome: "accepted",
-        operation: "alert_send",
-        resource: { kind: "alert", id: expect.stringMatching(/^alert_/), teamName },
-        postState: { to: "worker", recipients: ["worker"], taskStateChanged: false },
-        evidence: { alertText: "before removal" },
+        kind: "alert_sent",
+        accepted_recipients: ["worker"],
+        failed_recipients: [],
+        task_state_changed: false,
       },
     });
     await teams.deactivateMember(teamName, "worker", "replaced");
@@ -111,16 +113,10 @@ describe("current team binding correctness", () => {
       text: "after removal",
     }, undefined, undefined, context("session"));
     expect(refused).toMatchObject({
-      content: [{ type: "text", text: expect.stringMatching(/not sent.*isn't a current Team member/i) }],
+      content: [{ type: "text", text: expect.stringContaining('"kind":"refused"') }],
       details: {
-        schema: "pi-teams-tool-result/1",
-        outcome: "refused",
-        operation: "alert_send",
-        warnings: [{
-          code: "alert_recipient_not_current",
-          message: `Recipient 'worker' is not a current member of team '${teamName}'.`,
-          resourceId: "worker",
-        }],
+        kind: "refused",
+        reason: "recipient_not_current",
       },
     });
     expect(await messaging.readInbox(teamName, "worker", false, false)).toHaveLength(1);
@@ -184,7 +180,7 @@ describe("current team binding correctness", () => {
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
     });
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("partial", {
       team_name: teamName,
@@ -194,22 +190,19 @@ describe("current team binding correctness", () => {
     }, undefined, undefined, context("receipt-session"));
 
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "partial",
-      operation: "alert_send",
-      warnings: [{ code: "alert_delivery_failed", message: "Alert delivery wasn't accepted by this recipient.", resourceId: "worker-b" }],
-      postState: { recipients: ["worker-a"], taskStateChanged: false },
-      evidence: { failures: [{ recipient: "worker-b", error: "disk full" }] },
+      kind: "alert_sent",
+      accepted_recipients: ["worker-a"],
+      failed_recipients: ["worker-b"],
+      task_state_changed: false,
     });
-    expect(result.content[0].text).toMatch(/partially accepted by worker-a/i);
-    expect(result.content[0].text).toMatch(/wasn't accepted for worker-b/i);
+    expect(result.content[0].text).toContain('"failed_recipients":["worker-b"]');
     expect(result.content[0].text).not.toMatch(/accepted by all|broadcasted to all/i);
   });
 
   it("distinguishes an announcement with no eligible recipients from a bad recipient name", async () => {
     const teamName = testTeamName("zero-recipient-alert");
     await teams.createTeam(teamName, "lead-session", "lead-agent");
-    const sendAlert = registerExtension().toolsByName.get("alert_send")!;
+    const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("zero", {
       team_name: teamName,
@@ -219,41 +212,14 @@ describe("current team binding correctness", () => {
     }, undefined, undefined, context("lead-session"));
 
     expect(result).toMatchObject({
-      content: [{ type: "text", text: expect.stringMatching(/zero eligible Worker recipients.*nothing was delivered.*Reconcile the roster with team_sync.*whether to retry/is) }],
+      content: [{ type: "text", text: expect.stringContaining('"reason":"no_eligible_recipients"') }],
       details: {
-        schema: "pi-teams-tool-result/1",
-        outcome: "refused",
-        operation: "alert_send",
-        postState: {
-          attemptedRecipient: "*",
-          accepted: false,
-          reason: "no_eligible_recipients",
-          currentWorkers: [],
-          taskStateChanged: false,
-          teamStateChanged: false,
-          team: { name: teamName },
-        },
-        warnings: [{
-          code: "alert_no_eligible_recipients",
-          message: "No other current Team member accepted the announcement.",
-        }],
-        nextActions: [
-          { tool: "team_sync", args: { team_name: teamName } },
-          { tool: "worker_ensure", args: { team_name: teamName } },
-        ],
-        evidence: {
-          eligibleRecipients: 0,
-          deliveryAttempts: 0,
-          acceptedDeliveries: 0,
-          eventAppended: false,
-          alertEventCursor: null,
-          taskStateChanged: false,
-          teamStateChanged: false,
-        },
+        kind: "refused",
+        reason: "no_eligible_recipients",
       },
     });
     expect(result.content[0].text).not.toMatch(/no Alert event|no Team or Task state changed/i);
-    expect(result.details.warnings[0]).not.toHaveProperty("resourceId");
+    expect(result.details).not.toHaveProperty("warnings");
   });
 
   it("never signals a numeric PID from a stale per-name pid file", async () => {
@@ -277,11 +243,10 @@ describe("current team binding correctness", () => {
     vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
     const shutdown = registerExtension().toolsByName.get("worker_stop")!;
 
-    await expect(shutdown.execute("shutdown", {
-      team_name: teamName,
+    const result: any = await shutdown.execute("shutdown", {
       worker: "worker",
-    }, undefined, undefined, context(leadSession))).rejects.toThrow(/no terminal binding.*no exact Membership-bound runtime record/i);
-
+    }, undefined, undefined, context(leadSession));
+    expect(result.details).toMatchObject({ kind: "unavailable", state_changed: false });
     expect(kill).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(paths.teamDir(teamName), "worker.pid"))).toBe(true);
     expect((await teams.readConfig(teamName)).members.find((member) => member.name === "worker")?.isActive).not.toBe(false);

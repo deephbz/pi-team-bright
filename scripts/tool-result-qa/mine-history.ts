@@ -8,15 +8,18 @@ const outputPath = path.resolve(
     || path.join(process.cwd(), "artifacts", "tool-result-qa", "history-catalog.json"),
 );
 
+const legacyEnsureWorkerTool = ["worker", "ensure"].join("_");
+
 const currentTools = new Set([
   "team_create", "team_sync", "team_shutdown",
-  "worker_ensure", "worker_stop",
+  "ensure_worker", "worker_stop",
   "task_create", "task_read", "task_update", "task_link",
   "alert_send",
 ]);
 
 const historicalProjection: Record<string, string> = {
-  spawn_teammate: "worker_ensure",
+  [legacyEnsureWorkerTool]: "ensure_worker",
+  spawn_teammate: "ensure_worker",
   teammate_shutdown: "worker_stop",
   send_message: "alert_send",
   broadcast_message: "alert_send",
@@ -65,7 +68,7 @@ function category(tool: string, isError: boolean, text: string, details: any): s
     if (/Beads command failed/i.test(text)) return "error/backend";
     return "error/other";
   }
-  if (tool === "worker_ensure") return /reused/i.test(text) ? "success/reused" : "success/created";
+  if (tool === "ensure_worker") return /reused/i.test(text) ? "success/reused" : "success/created";
   if (tool === "team_sync") {
     if (details?.timedOut) return "success/timeout";
     if (Array.isArray(details?.events) && details.events.length > 1) return "success/multiple-events";

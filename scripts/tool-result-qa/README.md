@@ -7,9 +7,9 @@ the interactive TUI.
 ```mermaid
 flowchart LR
   S["Scenario code"] --> E["Real extension tool definition"]
-  E --> A["Agent content"]
-  E --> M["Machine details"]
-  E --> R["renderResult or fallback"]
+  E --> A["Validated model content"]
+  E --> M["Raw semantic details"]
+  E --> R["Collapsed and expanded TUI"]
   A --> B["QA bundle"]
   M --> B
   R --> B
@@ -61,7 +61,7 @@ outcome category, counts, and payload-size ranges, but copies no local paths,
 Session coordinates, timestamps, tool-call identifiers, prompts, tool
 arguments, result bodies, or detail bodies. Historical
 `spawn_teammate`, `teammate_shutdown`, Message, task-list, and health calls are
-mapped to their current `worker_ensure`, `worker_stop`, `alert_send`, and
+mapped to their current `ensure_worker`, `worker_stop`, `alert_send`, and
 `team_sync` responsibilities so recurring real failures continue to shape the
 new surface.
 
@@ -108,7 +108,9 @@ Synthesized:
   fallback while a tool has no custom renderer.
 
 The suite records synthesized fixture transitions explicitly in
-`fixtureTransitions`; they are setup provenance, not product evidence.
+`fixtureTransitions`; they are setup provenance, not product evidence. Each
+case keeps the exact raw semantic result, model JSON, and both allowlisted TUI
+modes. `PI_TEAMS_TRACE_JSONL` remains an operational payload-free trace.
 
 ## Adding a scenario
 

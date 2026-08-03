@@ -7,8 +7,12 @@ exhaustive parameter reference.
 
 ## Public agent interface
 
-- [`PI_TEAMS_PUBLIC_TOOLS`](../src/utils/tool-result-renderer.ts) is the exact
-  public tool selection and the shared TUI-renderer boundary.
+- The release candidate leader surface is the ten-tool catalog in
+  [`src/model-tool-contract/catalog.ts`](../src/model-tool-contract/catalog.ts),
+  registered by [`pi-registration.ts`](../src/model-tool-contract/pi-registration.ts).
+  [`CandidateProjectedTool`](../src/model-tool-contract/result-projection.ts)
+  and [`tui-projection.ts`](../src/model-tool-contract/tui-projection.ts) own
+  the candidate result and TUI projection boundaries.
 - [`extensions/index.ts`](../extensions/index.ts) owns each tool's TypeBox
   parameter schema, agent-facing description, authorization, execution, and
   semantic result content.
@@ -26,14 +30,13 @@ exhaustive parameter reference.
 
 ## Result and projection contract
 
-- [`PiTeamsToolResultDetails`](../src/utils/tool-results.ts) is the versioned
-  machine-recorded envelope for accepted, partial, and refused outcomes.
-- [`formatPiTeamsToolResult`](../src/utils/tool-result-renderer.ts) produces the
-  compact and expanded human projections without serializing machine state as
-  UI text.
-- Agent content, machine details, and human rendering are projections of the
-  same authoritative operation. The renderer keeps bounded model hints distinct
-  from receipt facts and exposes `nextActions` only in expanded machine evidence.
+- [`result-projection.ts`](../src/model-tool-contract/result-projection.ts)
+  validates raw semantic results, derives the schema-checked model projection,
+  and assembles raw machine details with serialized model content.
+- [`tui-projection.ts`](../src/model-tool-contract/tui-projection.ts) produces
+  exhaustive collapsed and expanded allowlisted human projections.
+- QA retains raw semantic details, model content, and both TUI modes. Operational
+  trace records remain payload-free.
 
 ## Domain and authority
 
@@ -54,6 +57,10 @@ exhaustive parameter reference.
   relations, versions, evidence guards, and Beads authority integration.
 - [`src/utils/team-events.ts`](../src/utils/team-events.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
+- [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)
+  owns Worker-only Pi settings parsing plus context and model-tool projection;
+  its focused executable anchors are `worker-resource-projection.test.ts` and
+  `worker-resource-extension.contract.test.ts`.
 - [`src/utils/worker-startup-observation.ts`](../src/utils/worker-startup-observation.ts)
   owns the bounded exact-Membership startup observation used after a new or
   recovered carrier launch; `session_bound` generation evidence correlates the

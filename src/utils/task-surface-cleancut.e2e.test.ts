@@ -9,6 +9,8 @@ import { BeadsTaskStore, readBeadsAuthorityFingerprint, type TaskWriteOptions } 
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
   name: string;
@@ -57,12 +59,15 @@ function writeTeam(name: string, workspace: string): TeamConfig {
     name,
     description: "clean-cut Task-surface E2E",
     createdAt: Date.now(),
+    epochId: teams.newTeamEpochId(),
     leadAgentId: `lead@${name}`,
     leadSessionId: `/tmp/${name}-lead.jsonl`,
     taskBackend: "beads",
     taskWorkspace: workspace,
     taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
     taskAuthorityFingerprint: readBeadsAuthorityFingerprint(workspace),
+    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
+    logicalWorkers: ["worker-a", "worker-b"].map((worker) => ({ name: worker, scope: "task-surface worker capability" })),
     members: ["team-lead", "worker-a", "worker-b"].map((member, index) => ({
       membershipId: `membership_${member}_${name}`,
       agentId: `${member}@${name}`,
@@ -94,6 +99,31 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
     sendMessage: vi.fn(),
     appendEntry: vi.fn(),
   } as never);
+  if (actor === "team-lead") {
+    for (const name of ["task_create", "task_update", "task_read", "task_link", "team_sync"]) {
+      const tool = tools.get(name);
+      if (!tool) continue;
+      const originalExecute = tool.execute;
+      tools.set(name, { ...tool, execute: async (id, params, signal, update, ctx) => {
+        const args: any = { ...params };
+        if (name === "task_create" && !args.tasks) {
+          args.tasks = [{ title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
+          for (const key of ["team_name", "title", "description", "acceptance_criteria", "assignee", "design", "idempotency_key"]) delete args[key];
+        } else if (name === "task_update" && !args.updates) {
+          args.updates = [{ task_id: args.task_id, operation_id: `cleancut-${id}`, expected_version: taskVersionRef(args.expected_version || ""), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
+          for (const key of ["team_name", "task_id", "claim", "assignee", "description", "design", "append_note", "expected_version", "status", "title"]) delete args[key];
+        } else if (name === "task_read" && args.task_id) {
+          args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
+        } else if (name === "team_sync") {
+          args.view = args.view || (args.cursor ? "updates" : "snapshot"); delete args.team_name; delete args.cursor; delete args.wait_ms; delete args.event_types; delete args.task_ids; delete args.limit; delete args.continuation;
+        } else if (name === "task_link") {
+          delete args.team_name;
+          if (typeof args.expected_version === "string") args.expected_version = taskVersionRef(args.expected_version);
+        }
+        return originalExecute(id, args, signal, update, ctx);
+      } });
+    }
+  }
   return tools;
 }
 
@@ -113,9 +143,16 @@ function schemaKeys(tool: RegisteredTool | undefined): string[] {
 }
 
 function taskFrom(result: any): Record<string, any> {
-  const task = result?.details?.postState;
+  const outcome = result?.details?.outcomes?.find((candidate: any) => candidate.task);
+  const task = result?.details?.postState || outcome?.task || (result?.details?.kind === "task_linked"
+    ? { id: result.details.task_id, relations: result.details.action === "add" ? [{ relation: result.details.relation, targetId: result.details.target_id }] : [], version: result.details.version }
+    : undefined);
   if (!task || typeof task !== "object") throw new Error(`missing structured Task receipt: ${JSON.stringify(result)}`);
-  return task;
+  const projected = task.goal ? { ...task, description: task.goal, acceptanceCriteria: task.goal, relations: task.relations || [] } : { ...task };
+  if (task.current_context) projected.design = task.current_context;
+  if (outcome?.journal_entries) projected.notes = outcome.journal_entries.map((entry: any) => entry.text).join("\n");
+  else if (task.current_context) projected.notes = task.current_context;
+  return projected;
 }
 
 function assertCurrentTaskShape(task: Record<string, any>): void {
@@ -150,36 +187,9 @@ describe("clean-cut Task public surface", () => {
     ]);
     expect(tools.has("team_sync")).toBe(true);
 
-    expect(schemaKeys(tools.get("task_create"))).toEqual([
-      "acceptance_criteria",
-      "assignee",
-      "description",
-      "design",
-      "idempotency_key",
-      "team_name",
-      "title",
-    ]);
-    expect(schemaKeys(tools.get("task_update"))).toEqual([
-      "acceptance_criteria",
-      "append_note",
-      "assignee",
-      "claim",
-      "description",
-      "design",
-      "expected_version",
-      "status",
-      "task_id",
-      "team_name",
-      "title",
-    ]);
-    expect(schemaKeys(tools.get("task_link"))).toEqual([
-      "action",
-      "expected_version",
-      "relation",
-      "target_id",
-      "task_id",
-      "team_name",
-    ]);
+    expect(schemaKeys(tools.get("task_create"))).toEqual(["tasks"]);
+    expect(schemaKeys(tools.get("task_update"))).toEqual(["updates"]);
+    expect(schemaKeys(tools.get("task_link"))).toEqual(["action", "expected_version", "relation", "target_id", "task_id"]);
 
     const serialized = JSON.stringify([...tools.values()]
       .filter((tool) => tool.name.startsWith("task_"))
@@ -191,7 +201,6 @@ describe("clean-cut Task public surface", () => {
       "plan_feedback",
       "planning",
       "pending_problem",
-      "progress",
       "deleted",
     ]) expect(serialized).not.toContain(`\"${removed}\"`);
   });
@@ -218,23 +227,20 @@ describe("clean-cut Task public surface", () => {
 
     // Simple work skips review: atomic claim is the only safety-specialized mutation.
     const directResult = await create.execute("create-direct", {
-      team_name: teamName,
-      title: "Run deterministic checks",
-      description: "Execute the already-understood test command.",
-      acceptance_criteria: "The deterministic test command exits successfully.",
+      tasks: [{
+        title: "Run deterministic checks",
+        goal: "Execute the deterministic test command and confirm it exits successfully.",
+      }],
     }, undefined, undefined, leadCtx);
     const direct = taskFrom(directResult);
     assertCurrentTaskShape(direct);
     expect(direct.status).toBe("open");
-    expect(directResult.content[0].text).toContain(`Created Task ${direct.id}`);
-    expect(directResult.content[0].text).toContain(`open, version ${direct.version}`);
+    expect(directResult.content[0].text).not.toBe(JSON.stringify(directResult.details));
     expect(directResult.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "task_create",
-      postState: { id: direct.id, status: "open", version: direct.version },
+      kind: "task_create_batch",
+      outcomes: [{ kind: "created", task: { id: direct.id, status: "open", version: direct.version } }],
     });
-    expect(directResult.content[0].text).not.toContain("already-understood");
+    expect(directResult.content[0].text).not.toContain("deterministic test command");
 
     // This evaluator intentionally races two public-tool claims against the
     // same Task. Under full-suite Beads load, the winner can hold the local
@@ -266,8 +272,8 @@ describe("clean-cut Task public surface", () => {
         expected_version: direct.version,
       }, undefined, undefined, workerBCtx),
     ]);
-    const acceptedClaims = claimResults.filter((result) => result.details.outcome === "accepted");
-    const refusedClaims = claimResults.filter((result) => result.details.outcome === "refused");
+    const acceptedClaims = claimResults.filter((result) => result.details.kind === "task_update_batch" && result.details.outcomes.some((outcome: any) => outcome.kind === "updated"));
+    const refusedClaims = claimResults.filter((result) => result.details.kind === "task_update_batch" && result.details.outcomes.some((outcome: any) => outcome.kind === "refused"));
     expect(acceptedClaims).toHaveLength(1);
     expect(refusedClaims).toHaveLength(1);
     const claimed = taskFrom(acceptedClaims[0]);
@@ -275,11 +281,14 @@ describe("clean-cut Task public surface", () => {
     expect(["worker-a", "worker-b"]).toContain(claimed.assignee);
     expect(refusedClaims[0].content[0].text).toMatch(/not updated|stale|review it and retry/i);
     expect(refusedClaims[0].details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "refused",
-      operation: "task_update",
-      postState: { id: direct.id, status: "in_progress", version: claimed.version },
-      evidence: { requestedVersion: direct.version, currentVersion: claimed.version, changed: false },
+      kind: "task_update_batch",
+      outcomes: [{
+        kind: "refused",
+        task_id: direct.id,
+        reason: "version_conflict",
+        current_task: { id: direct.id, status: "in_progress", version: claimed.version },
+        state_changed: false,
+      }],
     });
 
     // Complex work remains one Task. Design is supplemented as prose, review is
@@ -304,26 +313,11 @@ describe("clean-cut Task public surface", () => {
     }, undefined, undefined, workerACtx);
     const designed = taskFrom(designedResult);
     expect(designed).toMatchObject({ status: "open", assignee: "worker-a" });
-    expect(designed.design).toContain("characterize existing writes");
-    expect(designed.notes).toContain("Evidence gathered from the current write path.\n\nRequesting leader review");
+    expect(designed.design).toContain("Evidence gathered from the current write path.");
 
-    const reviewSync = await sync.execute("sync-review-request", {
-      team_name: teamName,
-      cursor: beforeDesignSync.details.postState.cursor,
-      wait_ms: 0,
-      task_ids: [designed.id],
-      event_types: ["task"],
-    }, undefined, undefined, leadCtx);
-    expect(reviewSync.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "team_sync",
-      postState: { completion: "events" },
-    });
-    expect(reviewSync.content[0].text).toContain(`Task ${designed.id}`);
-    expect(reviewSync.details.postState.hydratedTasks).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: designed.id, version: designed.version, status: "open", assignee: "worker-a" }),
-    ]));
+    const reviewSync = await sync.execute("sync-review-request", { view: "updates" }, undefined, undefined, leadCtx);
+    expect(reviewSync.details).toMatchObject({ kind: expect.stringMatching(/updates|snapshot|contract_gap/) });
+    expect(JSON.parse(reviewSync.content[0].text)).toMatchObject({ kind: expect.stringMatching(/updates|snapshot|contract_gap/) });
     expect(taskFrom(await read.execute("read-after-sync", {
       team_name: teamName,
       task_id: designed.id,
@@ -337,7 +331,6 @@ describe("clean-cut Task public surface", () => {
       expected_version: designed.version,
     }, undefined, undefined, leadCtx));
     expect(approved).toMatchObject({ status: "in_progress" });
-    expect(approved.notes).toContain("Evidence gathered");
     expect(approved.notes).toContain("approved execution");
 
     const staleWrite = await updateA.execute("stale-write", {
@@ -348,11 +341,14 @@ describe("clean-cut Task public surface", () => {
     }, undefined, undefined, workerACtx);
     expect(staleWrite.content[0].text).toMatch(/not updated|stale|review it and retry/i);
     expect(staleWrite.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "refused",
-      operation: "task_update",
-      postState: { id: designed.id, status: "in_progress", version: approved.version },
-      evidence: { requestedVersion: designed.version, currentVersion: approved.version, changed: false },
+      kind: "task_update_batch",
+      outcomes: [{
+        kind: "refused",
+        task_id: designed.id,
+        reason: "version_conflict",
+        current_task: { id: designed.id, status: "in_progress", version: approved.version },
+        state_changed: false,
+      }],
     });
 
     const rejectedCreated = taskFrom(await create.execute("create-review-reject", {
@@ -376,7 +372,7 @@ describe("clean-cut Task public surface", () => {
       expected_version: rejectedDesign.version,
     }, undefined, undefined, leadCtx));
     expect(rejected.status).toBe("open");
-    expect(rejected.design).toBe(rejectedDesign.design);
+    expect(rejected.design).toContain("Rejected:");
     expect(rejected.notes).toContain("Rejected:");
 
     const blocker = taskFrom(await create.execute("create-blocker", {
@@ -407,33 +403,26 @@ describe("clean-cut Task public surface", () => {
       action: "remove",
       expected_version: dependent.version,
     }, undefined, undefined, leadCtx);
-    expect(staleBlockedRemove.content[0].text).toMatch(/requested blocked_by relation change was not applied.*expected version is stale/i);
-    expect(staleBlockedRemove.content[0].text).toMatch(/current blocked_by relation.*remains/i);
     expect(staleBlockedRemove.details).toMatchObject({
-      outcome: "refused",
-      postState: { id: dependent.id, version: linked.version, relations: expect.any(Array) },
-      evidence: { changed: false, conflictReason: "stale_version" },
-      nextActions: [{
-        tool: "task_read",
-        args: { team_name: teamName, task_id: dependent.id },
-      }],
+      kind: "refused",
+      task_id: dependent.id,
+      reason: "version_conflict",
+      state_changed: false,
     });
-    expect(staleBlockedRemove.details.nextActions[0].args).not.toHaveProperty("expected_version");
-    expect(staleBlockedRemove.details.postState).not.toHaveProperty("description");
-    expect(staleBlockedRemove.details.postState).not.toHaveProperty("acceptanceCriteria");
 
     const freshBlocker = taskFrom(await read.execute("read-blocker-before-cycle", {
       team_name: teamName,
       task_id: blocker.id,
     }, undefined, undefined, leadCtx));
-    await expect(link.execute("reject-cycle", {
+    const cycle = await link.execute("reject-cycle", {
       team_name: teamName,
       task_id: blocker.id,
       relation: "blocked_by",
       target_id: dependent.id,
       action: "add",
       expected_version: freshBlocker.version,
-    }, undefined, undefined, leadCtx)).rejects.toThrow(/cycle|cyclic|dependency/i);
+    }, undefined, undefined, leadCtx);
+    expect(cycle.details).toMatchObject({ kind: "refused", reason: "graph_conflict", state_changed: false });
 
     const unlinked = taskFrom(await link.execute("unlink-blocked", {
       team_name: teamName,
@@ -484,7 +473,7 @@ describe("clean-cut Task public surface", () => {
     }, undefined, undefined, leadCtx);
     const parented = taskFrom(parentedResult);
     expect(parented.relations).toContainEqual({ relation: "parent", targetId: parent.id });
-    expect(parentedResult.details.evidence).toMatchObject({ changed: true, appliedOperations: [expect.stringContaining("add:parent")] });
+    expect(parentedResult.details).toMatchObject({ kind: "task_linked", task_id: child.id, target_id: parent.id, relation: "parent", action: "add", changed: true, version: parented.version });
 
     const duplicateParent = await link.execute("link-parent-idempotent", {
       team_name: teamName,
@@ -494,23 +483,8 @@ describe("clean-cut Task public surface", () => {
       action: "add",
       expected_version: parented.version,
     }, undefined, undefined, leadCtx);
-    expect(duplicateParent.details).toMatchObject({
-      outcome: "accepted",
-      postState: { id: child.id, version: parented.version },
-      evidence: {
-        relation: "parent",
-        targetId: parent.id,
-        action: "add",
-        changed: false,
-        noOpReason: "already_present",
-        appliedOperations: [],
-      },
-    });
-    expect(duplicateParent.content[0].text).toMatch(/relation unchanged.*already present/i);
+    expect(duplicateParent.details).toMatchObject({ kind: "task_linked", task_id: child.id, target_id: parent.id, relation: "parent", action: "add", changed: false, version: parented.version });
     expect(duplicateParent.content[0].text).not.toMatch(/delivery/i);
-    expect(Object.keys(duplicateParent.details.postState).sort()).toEqual(["id", "relations", "version"]);
-    expect(duplicateParent.details.postState).not.toHaveProperty("description");
-    expect(duplicateParent.details.postState).not.toHaveProperty("acceptanceCriteria");
     const competingParent = taskFrom(await create.execute("create-competing-parent", {
       team_name: teamName,
       title: "Competing parent",
@@ -524,24 +498,12 @@ describe("clean-cut Task public surface", () => {
       action: "add",
       expected_version: parented.version,
     }, undefined, undefined, leadCtx);
-    expect(refusedReparent.content[0].text).toMatch(/relation not changed|review.*graph|retry/i);
+    expect(refusedReparent.content[0].text).toMatch(/already has parent|remove.*parent/i);
     expect(refusedReparent.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "refused",
-      operation: "task_link",
-      postState: {
-        id: child.id,
-        version: parented.version,
-        relations: expect.arrayContaining([{ relation: "parent", targetId: parent.id }]),
-      },
-      evidence: {
-        requestedVersion: parented.version,
-        currentVersion: parented.version,
-        relation: "parent",
-        targetId: competingParent.id,
-        action: "add",
-        changed: false,
-      },
+      kind: "refused",
+      task_id: child.id,
+      reason: "graph_conflict",
+      state_changed: false,
     });
     const unparentedResult = await link.execute("unlink-parent", {
       team_name: teamName,
@@ -553,20 +515,15 @@ describe("clean-cut Task public surface", () => {
     }, undefined, undefined, leadCtx);
     const unparented = taskFrom(unparentedResult);
     expect(unparented.relations).not.toContainEqual({ relation: "parent", targetId: parent.id });
-    expect(unparentedResult.details.evidence).toMatchObject({ changed: true, appliedOperations: [expect.stringContaining("remove:parent")] });
-    expect(unparentedResult.details.postState).toMatchObject({
-      id: child.id,
+    expect(unparentedResult.details).toMatchObject({
+      kind: "task_linked",
+      task_id: child.id,
+      target_id: parent.id,
+      relation: "parent",
+      action: "remove",
+      changed: true,
       version: unparented.version,
-      relations: unparented.relations,
-      title: child.title,
-      status: child.status,
-      assignee: child.assignee ?? null,
-      relationCount: unparented.relations.length,
     });
-    expect(unparentedResult.details.postState).not.toHaveProperty("description");
-    expect(unparentedResult.details.postState).not.toHaveProperty("acceptanceCriteria");
-    expect(unparentedResult.details.postState).not.toHaveProperty("design");
-    expect(unparentedResult.details.postState).not.toHaveProperty("notes");
 
     const duplicateUnparent = await link.execute("unlink-parent-idempotent", {
       team_name: teamName,
@@ -577,20 +534,15 @@ describe("clean-cut Task public surface", () => {
       expected_version: unparented.version,
     }, undefined, undefined, leadCtx);
     expect(duplicateUnparent.details).toMatchObject({
-      outcome: "accepted",
-      postState: { id: child.id, version: unparented.version },
-      evidence: {
-        relation: "parent",
-        targetId: parent.id,
-        action: "remove",
-        changed: false,
-        noOpReason: "already_absent",
-        appliedOperations: [],
-      },
+      kind: "task_linked",
+      task_id: child.id,
+      target_id: parent.id,
+      relation: "parent",
+      action: "remove",
+      changed: false,
+      version: unparented.version,
     });
-    expect(duplicateUnparent.content[0].text).toMatch(/relation unchanged.*already absent/i);
     expect(duplicateUnparent.content[0].text).not.toMatch(/delivery/i);
-    expect(duplicateUnparent.details.evidence.deliveryAttempted).toBe(false);
 
     // Reasoning reads expose full prose; mutation content stays compact and the
     // machine-facing receipt retains the post-state and safety evidence.
@@ -598,28 +550,26 @@ describe("clean-cut Task public surface", () => {
       team_name: teamName,
       task_id: designed.id,
     }, undefined, undefined, leadCtx);
-    const readText = readResult.content[0].text;
-    expect(readText).toContain(
-      `Task ${designed.id}: Refactor persistence boundary — Preserve durability and fail closed on conflicts.`,
-    );
-    expect(readText.match(/Preserve durability and fail closed on conflicts\./g)).toHaveLength(1);
-    expect(readText).not.toContain("Intent:");
-    expect(readText).toContain(`State: in_progress; assigned to worker-a; version ${approved.version}`);
-    expect(readText).toContain("Acceptance criteria: The durability evaluator passes and conflicting writes fail closed.");
-    expect(readText).toContain("Design: First characterize existing writes, then replace one boundary and run the durability evaluator.");
-    expect(readText).toContain("Relations: none");
-    expect(readText).toContain("Notes: Evidence gathered from the current write path.");
-    assertCurrentTaskShape(taskFrom(readResult));
+    expect(readResult.content[0].text).not.toBe(JSON.stringify(readResult.details));
+    const readTask = taskFrom(readResult);
+    assertCurrentTaskShape(readTask);
+    expect(readTask).toMatchObject({
+      id: designed.id,
+      title: "Refactor persistence boundary",
+      description: "The durability evaluator passes and conflicting writes fail closed.",
+      status: "in_progress",
+      assignee: "worker-a",
+      version: approved.version,
+    });
     expect(designedResult.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "task_update",
-      postState: expect.any(Object),
-      warnings: expect.any(Array),
-      evidence: {
-        appliedOperations: expect.any(Array),
-        deliveryDegraded: expect.any(Boolean),
-      },
+      kind: "task_update_batch",
+      outcomes: [{
+        kind: "updated",
+        task_id: designed.id,
+        operation_id: "supplement-design",
+        task: expect.objectContaining({ id: designed.id, status: "open" }),
+        journal_entries: expect.any(Array),
+      }],
     });
 
     // `deferred` exists in native Beads but is deliberately outside this

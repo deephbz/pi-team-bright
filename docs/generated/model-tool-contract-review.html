@@ -1,0 +1,3316 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="document-id" content="pi-team-bright-model-invoked-tool-contract">
+  <meta name="document-kind" content="evergreen-shaping-contract">
+  <meta name="lifecycle-stage" content="hardening">
+  <meta name="scope" content="Model-facing Pi Team Bright coordination tools under the current one-leader and multiple-Worker topology.">
+  <meta name="responsibility" content="Own current use cases, candidate call and result shapes, information semantics, and acceptance tests until the executable interface is accepted.">
+  <meta name="authority" content="Shaping intent only; registered TypeBox schemas, implementations, and tests own current shipped behavior.">
+  <meta name="excludes" content="Generic Team ontology, backend performance decisions, concrete Task-engine selection, and dated evidence.">
+  <meta name="maintenance" content="Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.">
+  <meta name="catalog-schema" content="pi-team-bright-model-tool-catalog/1">
+  <meta name="catalog-status" content="candidate">
+  <meta name="catalog-sha256" content="af34fd5d38214ad07e8afd4f70253ef3ae201314998eb0874f0ab3d189d61db4">
+  <meta name="design-sha256" content="fdfad39745af86239458da9344380ec80e509ae04a8c00f5ab67326f2ddb608c">
+  <title>Pi Team Bright — Candidate Model Tool Contract</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f5f3ed; --panel:#fffdf8; --ink:#1f2a2a; --muted:#66706c; --line:#d8d5ca; --accent:#176b5b; --accent-soft:#dff1eb; --warn:#8c4f12; --warn-soft:#fff0d8; --code:#152422; --code-ink:#e9f7f2; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    a { color:var(--accent); } code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .shell { display:grid; grid-template-columns:250px minmax(0,1fr); max-width:1500px; margin:auto; }
+    nav { position:sticky; top:0; height:100vh; padding:28px 22px; border-right:1px solid var(--line); background:color-mix(in srgb,var(--panel) 90%,transparent); }
+    nav strong { display:block; margin-bottom:20px; } nav a { display:block; padding:7px 0; text-decoration:none; color:var(--muted); } nav a:hover { color:var(--accent); }
+    main { min-width:0; padding:56px clamp(24px,5vw,80px) 100px; }
+    .hero { max-width:1000px; margin-bottom:56px; } .badge { display:inline-block; padding:5px 10px; border-radius:999px; color:var(--warn); background:var(--warn-soft); font-weight:700; letter-spacing:.04em; text-transform:uppercase; font-size:12px; }
+    h1 { max-width:900px; font-size:clamp(38px,6vw,72px); line-height:1.02; letter-spacing:-.04em; margin:18px 0; } h2 { font-size:clamp(28px,4vw,42px); line-height:1.1; letter-spacing:-.025em; margin:0; } h3 { font-size:26px; margin:6px 0 20px; } h4 { margin:18px 0 8px; }
+    .lede { max-width:800px; font-size:20px; color:var(--muted); } .journey { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:28px; } .journey span { padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel); } .journey b { color:var(--accent); }
+    .section-heading { margin:70px 0 24px; } .eyebrow { color:var(--accent); font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+    .governance dl { display:grid; gap:1px; overflow:hidden; border:1px solid var(--line); border-radius:14px; background:var(--line); } .governance dl div { display:grid; grid-template-columns:160px 1fr; gap:20px; padding:16px 18px; background:var(--panel); } dt { font-weight:800; } dd { margin:0; color:var(--muted); }
+    .scenario,.tool-card,.projection { margin:0 0 30px; padding:28px; border:1px solid var(--line); border-radius:18px; background:var(--panel); box-shadow:0 12px 35px rgba(25,45,40,.06); }
+    .scenario-grid,.code-grid,.two-col { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; } .scenario-grid > *,.code-grid > *,.two-col > * { min-width:0; } .scenario-grid section,.reasoning,.review { padding:16px; border-radius:12px; background:var(--accent-soft); } .review { margin-top:18px; background:var(--warn-soft); }
+    .code-grid { margin:18px 0; } pre { width:100%; overflow:auto; max-height:560px; margin:0; padding:18px; border-radius:12px; background:var(--code); color:var(--code-ink); font-size:13px; line-height:1.5; } pre.model-return { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .call-signature { display:inline-block; margin:4px 0 20px; padding:12px 15px; border-radius:9px; background:var(--code); color:var(--code-ink); font-size:17px; }
+    table { width:100%; border-collapse:collapse; margin:16px 0 28px; } th,td { padding:12px 10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; } th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.08em; } .required { color:var(--accent); font-weight:800; }
+    .result-grid,.limit-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; } .result-variant,.limit { padding:16px; border:1px solid var(--line); border-radius:12px; } .limit strong { display:block; font-size:24px; color:var(--accent); }
+    details { margin-top:16px; padding:14px; border:1px solid var(--line); border-radius:10px; } summary { cursor:pointer; font-weight:750; }
+    .provenance { margin-top:70px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; overflow-wrap:anywhere; }
+    @media (max-width:850px) { .shell{display:block} nav{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)} main{padding-top:36px}.scenario-grid,.code-grid,.two-col{grid-template-columns:1fr}.governance dl div{grid-template-columns:1fr;gap:4px} }
+    @media (prefers-color-scheme:dark) { :root{--bg:#101715;--panel:#17211f;--ink:#e9efec;--muted:#abb8b3;--line:#33413d;--accent:#6fd4bb;--accent-soft:#1d3932;--warn:#ffbf75;--warn-soft:#3a2a18;--code:#09110f;--code-ink:#d8f4eb} }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <nav aria-label="Review navigation">
+    <strong>Pi Team Bright<br>Contract review</strong>
+    <a href="#scope">Scope</a><a href="#journey">Journey</a>
+    <a href="#scenario-start-team">Start a long-lived Team</a><a href="#scenario-deep-worker-scope">Create one deep-area Worker</a><a href="#scenario-post-compaction-warm-up">Warm up after compaction</a><a href="#scenario-routine-supervision-update">React to completion and blocker changes</a>
+    <a href="#tool-team_create">team_create</a><a href="#tool-task_create">task_create</a><a href="#tool-task_read">task_read</a><a href="#tool-task_update">task_update</a><a href="#tool-team_sync">team_sync</a><a href="#tool-ensure_worker">ensure_worker</a><a href="#tool-worker_stop">worker_stop</a><a href="#tool-team_shutdown">team_shutdown</a><a href="#tool-task_link">task_link</a><a href="#tool-alert_send">alert_send</a>
+    <a href="#projection">Result projection boundary</a><a href="#limits">Field limits</a><a href="#schemas">Exact schemas</a>
+  </nav>
+  <main>
+    <header class="hero">
+      <span class="badge">Candidate · not registered with Pi</span>
+      <h1>Create the Team. Build a deep Worker. See what changed.</h1>
+      <p class="lede">The long-lived leader chooses Worker scope and Team view. Pi Team Bright resolves the active Team and owns transport state. The default model return is minified, named JSON with the same validated semantics.</p>
+      <div class="journey" id="journey"><span>Create Team</span><b>→</b><span>Find deep area</span><b>→</b><span>Ensure Worker</span><b>→</b><span>Assign Tasks</span><b>→</b><span>Snapshot</span><b>→</b><span>Updates</span><b>→</b><span>Act</span></div>
+    </header>
+    <section class="governance" id="scope">
+    <div class="section-heading"><span class="eyebrow">Document contract</span><h2>Scope and responsibility</h2></div>
+    <dl><div><dt>Scope</dt><dd>Model-facing Pi Team Bright coordination tools under the current one-leader and multiple-Worker topology.</dd></div><div><dt>Responsibility</dt><dd>Own current use cases, candidate call and result shapes, information semantics, and acceptance tests until the executable interface is accepted.</dd></div><div><dt>Authority</dt><dd>Shaping intent only; registered TypeBox schemas, implementations, and tests own current shipped behavior.</dd></div><div><dt>Excludes</dt><dd>Generic Team ontology, backend performance decisions, concrete Task-engine selection, and dated evidence.</dd></div><div><dt>Maintenance</dt><dd>Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.</dd></div></dl>
+  </section>
+    <section id="scenarios"><div class="section-heading"><span class="eyebrow">Decision review</span><h2>Leader scenarios first</h2></div><article class="scenario" id="scenario-start-team">
+    <header>
+      <span class="eyebrow">Scenario 1 · team_create</span>
+      <h3>Start a long-lived Team</h3>
+    </header>
+    <div class="scenario-grid">
+      <section><h4>Situation</h4><p>An unbound leader Session has one durable coordination purpose and no active Team.</p></section>
+      <section><h4>Leader decision</h4><p>Create one Team whose purpose remains useful across several Worker areas and Tasks.</p></section>
+    </div>
+    <div class="code-grid">
+      <section><h4>Model call</h4><pre>{
+  &quot;name&quot;: &quot;release-team&quot;,
+  &quot;purpose&quot;: &quot;Prepare and verify the public release.&quot;
+}</pre></section>
+      <section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;team_created&quot;,&quot;team&quot;:{&quot;name&quot;:&quot;release-team&quot;,&quot;lifecycle&quot;:&quot;active&quot;}}</pre></section>
+    </div>
+    <details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;team_created&quot;,
+  &quot;team&quot;: {
+    &quot;name&quot;: &quot;release-team&quot;,
+    &quot;purpose&quot;: &quot;Prepare and verify the public release.&quot;,
+    &quot;lifecycle&quot;: &quot;active&quot;
+  }
+}</pre></details>
+    <section class="reasoning"><h4>Expected reasoning</h4><ul><li>The Team purpose states the durable outcome, not one short Task.</li><li>The exact calling Session becomes the leader authority for later calls.</li><li>Workers and Tasks are created separately when concrete areas and outcomes are known.</li></ul></section>
+    <section class="review"><h4>Your review</h4><ul><li>Does the purpose remain useful for the full release effort?</li><li>Is any low-level backend or terminal choice leaking into Team creation?</li><li>Can later leader calls resolve this Team without a model-visible Team locator?</li></ul></section>
+  </article><article class="scenario" id="scenario-deep-worker-scope">
+    <header>
+      <span class="eyebrow">Scenario 2 · ensure_worker</span>
+      <h3>Create one deep-area Worker</h3>
+    </header>
+    <div class="scenario-grid">
+      <section><h4>Situation</h4><p>A long-lived release Team needs independent verification without making every Worker reread package-construction context.</p></section>
+      <section><h4>Leader decision</h4><p>Choose a Worker identity and semantic area that can run with low context overlap and few dependencies.</p></section>
+    </div>
+    <div class="code-grid">
+      <section><h4>Model call</h4><pre>{
+  &quot;name&quot;: &quot;release-verifier&quot;,
+  &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;
+}</pre></section>
+      <section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;worker_ensured&quot;,&quot;effect&quot;:&quot;created&quot;,&quot;worker&quot;:{&quot;name&quot;:&quot;release-verifier&quot;,&quot;carrier&quot;:&quot;connected&quot;}}</pre></section>
+    </div>
+    <details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;worker_ensured&quot;,
+  &quot;effect&quot;: &quot;created&quot;,
+  &quot;worker&quot;: {
+    &quot;name&quot;: &quot;release-verifier&quot;,
+    &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;,
+    &quot;carrier&quot;: &quot;connected&quot;
+  }
+}</pre></details>
+    <section class="reasoning"><h4>Expected reasoning</h4><ul><li>release-verifier owns one cohesive verification area, not one transient Task.</li><li>The scope avoids candidate construction and publication implementation work.</li><li>Executable verification work must still arrive through assigned Tasks.</li></ul></section>
+    <section class="review"><h4>Your review</h4><ul><li>Does the name remain useful when shown repeatedly in Team snapshots and Task assignments?</li><li>Is the scope deep enough to minimize shared prerequisite context?</li><li>Would this split increase concurrency rather than create a dependency lock?</li></ul></section>
+  </article><article class="scenario" id="scenario-post-compaction-warm-up">
+    <header>
+      <span class="eyebrow">Scenario 3 · team_sync</span>
+      <h3>Warm up after compaction</h3>
+    </header>
+    <div class="scenario-grid">
+      <section><h4>Situation</h4><p>The long-lived leader Session compacted and no post-compaction Team snapshot exists on the active branch.</p></section>
+      <section><h4>Leader decision</h4><p>Recover current ownership, blockers, and next actions before changing the plan.</p></section>
+    </div>
+    <div class="code-grid">
+      <section><h4>Model call</h4><pre>{
+  &quot;view&quot;: &quot;snapshot&quot;
+}</pre></section>
+      <section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;snapshot&quot;,&quot;team&quot;:{&quot;name&quot;:&quot;release-team&quot;,&quot;purpose&quot;:&quot;Prepare and verify the public release.&quot;,&quot;lifecycle&quot;:&quot;active&quot;},&quot;workers&quot;:[{&quot;name&quot;:&quot;release-builder&quot;,&quot;scope&quot;:&quot;Own candidate construction, package metadata, and publication dry runs.&quot;,&quot;carrier&quot;:&quot;connected&quot;,&quot;nonterminal_task_ids&quot;:[&quot;task-17&quot;]},{&quot;name&quot;:&quot;release-verifier&quot;,&quot;scope&quot;:&quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;,&quot;carrier&quot;:&quot;connected&quot;,&quot;nonterminal_task_ids&quot;:[&quot;task-23&quot;]}],&quot;tasks&quot;:[{&quot;id&quot;:&quot;task-17&quot;,&quot;title&quot;:&quot;Prepare release candidate&quot;,&quot;goal&quot;:&quot;Produce an installable candidate package with a verified dry-run publication receipt.&quot;,&quot;status&quot;:&quot;in_progress&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Package is built. Dry-run publication is next; no blocker is known.&quot;,&quot;version&quot;:&quot;v_3f89cd171f52b332&quot;},{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release candidate&quot;,&quot;goal&quot;:&quot;Independently verify clean install, public exports, and provenance for the exact candidate digest.&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Waiting for the candidate digest from task-17.&quot;,&quot;version&quot;:&quot;v_4ab67899e5ec4e58&quot;}]}</pre></section>
+    </div>
+    <details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;snapshot&quot;,
+  &quot;team&quot;: {
+    &quot;name&quot;: &quot;release-team&quot;,
+    &quot;purpose&quot;: &quot;Prepare and verify the public release.&quot;,
+    &quot;lifecycle&quot;: &quot;active&quot;
+  },
+  &quot;workers&quot;: [
+    {
+      &quot;name&quot;: &quot;release-builder&quot;,
+      &quot;scope&quot;: &quot;Own candidate construction, package metadata, and publication dry runs.&quot;,
+      &quot;carrier&quot;: &quot;connected&quot;,
+      &quot;nonterminal_task_ids&quot;: [
+        &quot;task-17&quot;
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;release-verifier&quot;,
+      &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;,
+      &quot;carrier&quot;: &quot;connected&quot;,
+      &quot;nonterminal_task_ids&quot;: [
+        &quot;task-23&quot;
+      ]
+    }
+  ],
+  &quot;tasks&quot;: [
+    {
+      &quot;id&quot;: &quot;task-17&quot;,
+      &quot;title&quot;: &quot;Prepare release candidate&quot;,
+      &quot;goal&quot;: &quot;Produce an installable candidate package with a verified dry-run publication receipt.&quot;,
+      &quot;status&quot;: &quot;in_progress&quot;,
+      &quot;assignee&quot;: &quot;release-builder&quot;,
+      &quot;current_context&quot;: &quot;Package is built. Dry-run publication is next; no blocker is known.&quot;,
+      &quot;version&quot;: &quot;task_v7&quot;
+    },
+    {
+      &quot;id&quot;: &quot;task-23&quot;,
+      &quot;title&quot;: &quot;Verify release candidate&quot;,
+      &quot;goal&quot;: &quot;Independently verify clean install, public exports, and provenance for the exact candidate digest.&quot;,
+      &quot;status&quot;: &quot;open&quot;,
+      &quot;assignee&quot;: &quot;release-verifier&quot;,
+      &quot;current_context&quot;: &quot;Waiting for the candidate digest from task-17.&quot;,
+      &quot;version&quot;: &quot;task_v2&quot;
+    }
+  ]
+}</pre></details>
+    <section class="reasoning"><h4>Expected reasoning</h4><ul><li>task-17 is active and ready for publication dry run.</li><li>task-23 is waiting on task-17 rather than independently blocked.</li><li>No Task journal replay or transport cursor is needed.</li></ul></section>
+    <section class="review"><h4>Your review</h4><ul><li>Can you choose the next leader action without batch-reading Task history?</li><li>Which Task-card field is unnecessary for that decision?</li><li>Which missing fact would force a batch task_read?</li></ul></section>
+  </article><article class="scenario" id="scenario-routine-supervision-update">
+    <header>
+      <span class="eyebrow">Scenario 4 · team_sync</span>
+      <h3>React to completion and blocker changes</h3>
+    </header>
+    <div class="scenario-grid">
+      <section><h4>Situation</h4><p>The leader was caught up. One Worker completed delivery while another became blocked.</p></section>
+      <section><h4>Leader decision</h4><p>Choose whether to rebuild the candidate or correct provenance, and avoid redispatching completed work.</p></section>
+    </div>
+    <div class="code-grid">
+      <section><h4>Model call</h4><pre>{
+  &quot;view&quot;: &quot;updates&quot;
+}</pre></section>
+      <section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updates&quot;,&quot;team_changes&quot;:[],&quot;worker_changes&quot;:[],&quot;task_changes&quot;:[{&quot;task_id&quot;:&quot;task-17&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-91&quot;,&quot;at&quot;:&quot;2026-08-02T10:00:00Z&quot;,&quot;actor&quot;:&quot;release-builder&quot;,&quot;kind&quot;:&quot;result&quot;,&quot;text&quot;:&quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;closed&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Candidate delivered and verified locally. No further action remains.&quot;,&quot;version&quot;:&quot;v_93861017a874fd3d&quot;}},{&quot;task_id&quot;:&quot;task-23&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-92&quot;,&quot;at&quot;:&quot;2026-08-02T10:01:00Z&quot;,&quot;actor&quot;:&quot;release-verifier&quot;,&quot;kind&quot;:&quot;blocker&quot;,&quot;text&quot;:&quot;Provenance digest differs from the candidate package digest.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;blocked&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,&quot;version&quot;:&quot;v_d532cbd1d0458c7e&quot;}}],&quot;alerts&quot;:[]}</pre></section>
+    </div>
+    <details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;updates&quot;,
+  &quot;team_changes&quot;: [],
+  &quot;worker_changes&quot;: [],
+  &quot;task_changes&quot;: [
+    {
+      &quot;task_id&quot;: &quot;task-17&quot;,
+      &quot;change_kinds&quot;: [
+        &quot;status&quot;,
+        &quot;progress&quot;
+      ],
+      &quot;journal_entries&quot;: [
+        {
+          &quot;id&quot;: &quot;journal-91&quot;,
+          &quot;at&quot;: &quot;2026-08-02T10:00:00Z&quot;,
+          &quot;actor&quot;: &quot;release-builder&quot;,
+          &quot;kind&quot;: &quot;result&quot;,
+          &quot;text&quot;: &quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;
+        }
+      ],
+      &quot;current&quot;: {
+        &quot;status&quot;: &quot;closed&quot;,
+        &quot;assignee&quot;: &quot;release-builder&quot;,
+        &quot;current_context&quot;: &quot;Candidate delivered and verified locally. No further action remains.&quot;,
+        &quot;version&quot;: &quot;task_v8&quot;
+      }
+    },
+    {
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;change_kinds&quot;: [
+        &quot;status&quot;,
+        &quot;progress&quot;
+      ],
+      &quot;journal_entries&quot;: [
+        {
+          &quot;id&quot;: &quot;journal-92&quot;,
+          &quot;at&quot;: &quot;2026-08-02T10:01:00Z&quot;,
+          &quot;actor&quot;: &quot;release-verifier&quot;,
+          &quot;kind&quot;: &quot;blocker&quot;,
+          &quot;text&quot;: &quot;Provenance digest differs from the candidate package digest.&quot;
+        }
+      ],
+      &quot;current&quot;: {
+        &quot;status&quot;: &quot;blocked&quot;,
+        &quot;assignee&quot;: &quot;release-verifier&quot;,
+        &quot;current_context&quot;: &quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,
+        &quot;version&quot;: &quot;task_v3&quot;
+      }
+    }
+  ],
+  &quot;alerts&quot;: []
+}</pre></details>
+    <section class="reasoning"><h4>Expected reasoning</h4><ul><li>task-17 is complete and needs no further delegation.</li><li>task-23 is blocked by a digest mismatch and needs a leader decision.</li><li>The latest Task state appears once even though several change kinds occurred.</li></ul></section>
+    <section class="review"><h4>Your review</h4><ul><li>Can you make the rebuild-versus-correction decision from this update?</li><li>Would any new journal entry change that decision?</li><li>Is the current context concise enough for routine supervision?</li></ul></section>
+  </article></section>
+    <section id="tools"><div class="section-heading"><span class="eyebrow">Four first-journey calls</span><h2>Candidate tool contracts</h2></div><article class="tool-card" id="tool-team_create">
+    <span class="eyebrow">Candidate function 1 of 10</span>
+    <h3><code>team_create</code></h3>
+    <p>Create one long-lived Team and bind the exact calling Session as its leader.</p>
+    <div class="call-signature">team_create({ name, purpose })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Start the first Team for a durable coordination purpose.</li><li>Establish the leader binding used by later leader-only calls.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not create another Team while the exact Session already leads an active Team.</li><li>Do not put carrier placement, Task-backend, or terminal configuration in the Team purpose.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>name</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1, max 64</td>
+      <td></td>
+    </tr><tr>
+      <td><code>purpose</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1</td>
+      <td>The long-lived Team outcome and operating boundary.</td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>team_created</code></h4>
+      <p><code>team</code></p>
+    </article><article class="result-variant">
+      <h4><code>refused</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Creates one logical Team and one exact leader Session binding.</li><li>Does not create Workers, Tasks, or Alerts.</li><li>Refusal or unavailable authority changes no state.</li></ul>
+  </article><article class="tool-card" id="tool-task_create">
+    <span class="eyebrow">Candidate function 2 of 10</span>
+    <h3><code>task_create</code></h3>
+    <p>Create independent executable Task contracts and assign each one to an existing Worker.</p>
+    <div class="call-signature">task_create({ tasks })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Create one or more concrete work contracts after Worker areas exist.</li><li>Bind each Task to an existing Worker without claiming carrier readiness.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not include Team, backend, paging, relation, read, or update controls.</li><li>Do not create a Task for a Worker that is not in the active Team.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>tasks</code></td>
+      <td><span class="required">required</span></td>
+      <td>array</td>
+      <td>—</td>
+      <td></td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>task_create_batch</code></h4>
+      <p><code>outcomes</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Commits each input item independently in input order.</li><li>Creates open Tasks with current_context set to Work has not started.</li><li>A refused or unavailable item changes no state.</li></ul>
+  </article><article class="tool-card" id="tool-task_read">
+    <span class="eyebrow">Candidate function 3 of 10</span>
+    <h3><code>task_read</code></h3>
+    <p>Read current Task cards by ID without changing Team or observation state.</p>
+    <div class="call-signature">task_read({ task_ids })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Recover current definitions and state for selected Task IDs.</li><li>Confirm a mutation receipt or inspect a Task before choosing the next action.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not request journal history, updates, paging, filters, or Team locators.</li><li>Do not use it as a replacement for team_sync observation.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>task_ids</code></td>
+      <td><span class="required">required</span></td>
+      <td>array</td>
+      <td>—</td>
+      <td></td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>task_read_batch</code></h4>
+      <p><code>outcomes</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Returns one ordered found or missing outcome per input occurrence.</li><li>Returns one unavailable result without partial Task cards when authority cannot provide a coherent read.</li><li>Changes no Team, Task, or observation state.</li></ul>
+  </article><article class="tool-card" id="tool-task_update">
+    <span class="eyebrow">Candidate function 4 of 10</span>
+    <h3><code>task_update</code></h3>
+    <p>Replace one Task&#39;s current context and append leader decision evidence with an expected-version check.</p>
+    <div class="call-signature">task_update({ updates })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Record a coordination decision and current context for an assigned Task.</li><li>Keep a Task open while its assigned Worker awaits a carrier.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not change assignment, relations, or Worker state.</li><li>Do not use it to read history or observe Team updates.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>updates</code></td>
+      <td><span class="required">required</span></td>
+      <td>array</td>
+      <td>—</td>
+      <td></td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>task_update_batch</code></h4>
+      <p><code>outcomes</code></p>
+    </article><article class="result-variant">
+      <h4><code>refused</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Commits current context and generated journal provenance atomically per item.</li><li>Rejects duplicate Task IDs before mutation and refuses version or operation conflicts.</li><li>Does not claim Worker execution or carrier readiness.</li></ul>
+  </article><article class="tool-card" id="tool-team_sync">
+    <span class="eyebrow">Candidate function 5 of 10</span>
+    <h3><code>team_sync</code></h3>
+    <p>Restore current whole-Team context or observe incremental coordination changes.</p>
+    <div class="call-signature">team_sync({ view })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Restore current Team context after startup or compaction.</li><li>Receive changes since the exact Session branch&#39;s last completed observation.</li><li>Wait for the next Team change when no unseen update exists.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not use it to inspect full Task journal history; batch-read selected Tasks instead.</li><li>Do not use it to poll Worker runtime or infer progress from terminal activity.</li><li>Do not use it immediately after a mutation receipt that already contains post-state.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>view</code></td>
+      <td><span class="required">required</span></td>
+      <td>enum</td>
+      <td>snapshot | updates</td>
+      <td>Use snapshot to restore current context; use updates for routine supervision and waiting.</td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>snapshot</code></h4>
+      <p><code>team</code> · <code>workers</code> · <code>tasks</code></p>
+    </article><article class="result-variant">
+      <h4><code>updates</code></h4>
+      <p><code>team_changes</code> · <code>worker_changes</code> · <code>task_changes</code> · <code>alerts</code></p>
+    </article><article class="result-variant">
+      <h4><code>snapshot_required</code></h4>
+      <p><code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
+    </article><article class="result-variant">
+      <h4><code>cancelled</code></h4>
+      <p><code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
+    </article><article class="result-variant">
+      <h4><code>contract_gap</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>A persisted snapshot establishes the hidden incremental baseline at its observed head.</li><li>A persisted updates result advances the hidden baseline through all returned changes.</li><li>Cancellation or unavailable authority advances no baseline and publishes no Team observation.</li></ul>
+  </article><article class="tool-card" id="tool-ensure_worker">
+    <span class="eyebrow">Candidate function 6 of 10</span>
+    <h3><code>ensure_worker</code></h3>
+    <p>Create or reuse a short-lived Worker for one semantically deep area in the active Team.</p>
+    <div class="call-signature">ensure_worker({ name, scope })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Create one Worker whose area can proceed with little prerequisite overlap.</li><li>Reconnect or reuse that Worker while its semantic area remains active.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not encode one Task as Worker scope; assign executable work through Tasks.</li><li>Do not split work when Workers would repeatedly read the same context or block on each other.</li><li>Do not keep a Worker after its semantic area and nonterminal Tasks are complete.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>name</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1, max 64</td>
+      <td></td>
+    </tr><tr>
+      <td><code>scope</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1</td>
+      <td>A semantically deep area with high internal cohesion, low prerequisite overlap, and few dependencies on other Workers.</td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>worker_ensured</code></h4>
+      <p><code>effect</code> · <code>worker</code></p>
+    </article><article class="result-variant">
+      <h4><code>refused</code></h4>
+      <p><code>reason</code> · <code>existing_worker</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Creates, reconnects, or reuses one logical Worker in the active Team.</li><li>Does not assign a Task or claim model readiness.</li><li>The same name with a materially different scope is refused rather than silently redefined.</li></ul>
+  </article><article class="tool-card" id="tool-worker_stop">
+    <span class="eyebrow">Candidate function 7 of 10</span>
+    <h3><code>worker_stop</code></h3>
+    <p>Stop one Worker only after its nonterminal Tasks are resolved and exact terminal stop evidence is confirmed.</p>
+    <div class="call-signature">worker_stop({ worker })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Retire a completed semantic Worker area without changing Task history.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not stop the leader or a Worker with nonterminal assigned Tasks.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>worker</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1, max 64</td>
+      <td></td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>worker_stopped</code></h4>
+      <p><code>worker</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>refused</code></h4>
+      <p><code>reason</code> · <code>worker</code> · <code>message</code> · <code>state_changed</code> · <code>guarding_task_ids</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Deactivates only the exact current Membership after terminal stop evidence.</li><li>Never changes Task state.</li></ul>
+  </article><article class="tool-card" id="tool-team_shutdown">
+    <span class="eyebrow">Candidate function 8 of 10</span>
+    <h3><code>team_shutdown</code></h3>
+    <p>Stop every Worker and close the exact leader Team; failed stops keep current Memberships and permit retry.</p>
+    <div class="call-signature">team_shutdown({ })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Close a completed Team while retaining Task authority and history.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not recreate a Team while current Memberships remain.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>team_shutdown</code></h4>
+      <p><code>lifecycle</code> · <code>stopped_workers</code> · <code>unfinished_task_ids</code></p>
+    </article><article class="result-variant">
+      <h4><code>partial</code></h4>
+      <p><code>lifecycle</code> · <code>stopped_workers</code> · <code>failed_workers</code> · <code>unfinished_task_ids</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Stops Workers with exact terminal evidence, then deactivates the leader Membership only after all stops succeed.</li><li>Retains Task authority and unfinished Tasks.</li></ul>
+  </article><article class="tool-card" id="tool-task_link">
+    <span class="eyebrow">Candidate function 9 of 10</span>
+    <h3><code>task_link</code></h3>
+    <p>Add or remove one typed Task relation with graph and version validation.</p>
+    <div class="call-signature">task_link({ task_id, relation, target_id, action, expected_version })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Record a blocking, parent, or related relation between current Tasks.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not use a relation as a substitute for assignment, progress, or an Alert.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody><tr>
+      <td><code>task_id</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1, max 128</td>
+      <td></td>
+    </tr><tr>
+      <td><code>relation</code></td>
+      <td><span class="required">required</span></td>
+      <td>enum</td>
+      <td>blocked_by | parent | related</td>
+      <td></td>
+    </tr><tr>
+      <td><code>target_id</code></td>
+      <td><span class="required">required</span></td>
+      <td>string</td>
+      <td>min 1, max 128</td>
+      <td></td>
+    </tr><tr>
+      <td><code>action</code></td>
+      <td><span class="required">required</span></td>
+      <td>enum</td>
+      <td>add | remove</td>
+      <td></td>
+    </tr><tr>
+      <td><code>expected_version</code></td>
+      <td>optional</td>
+      <td>string</td>
+      <td>min 18, max 18</td>
+      <td></td>
+    </tr></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>task_linked</code></h4>
+      <p><code>task_id</code> · <code>target_id</code> · <code>relation</code> · <code>action</code> · <code>changed</code> · <code>version</code></p>
+    </article><article class="result-variant">
+      <h4><code>refused</code></h4>
+      <p><code>task_id</code> · <code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Changes only the requested relation when graph and version checks pass.</li><li>A no-op or refusal changes no graph state.</li></ul>
+  </article><article class="tool-card" id="tool-alert_send">
+    <span class="eyebrow">Candidate function 10 of 10</span>
+    <h3><code>alert_send</code></h3>
+    <p>Send exceptional clarification, attention, or announcement without changing Task state.</p>
+    <div class="call-signature">alert_send({ target, kind, text, task_id, task_version })</div>
+    <div class="two-col">
+      <section><h4>Use it for</h4><ul><li>Escalate exceptional coordination to one current Worker or announce to the Team.</li></ul></section>
+      <section><h4>Do not use it for</h4><ul><li>Do not use an Alert to assign, advance, block, or complete a Task.</li></ul></section>
+    </div>
+    <h4>Arguments</h4>
+    <table><thead><tr><th>Field</th><th>Presence</th><th>Type</th><th>Constraint</th><th>Meaning</th></tr></thead><tbody></tbody></table>
+    <h4>Semantic JSON results</h4>
+    <div class="result-grid"><article class="result-variant">
+      <h4><code>alert_sent</code></h4>
+      <p><code>alert_id</code> · <code>accepted_recipients</code> · <code>failed_recipients</code> · <code>task_state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>refused</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article><article class="result-variant">
+      <h4><code>unavailable</code></h4>
+      <p><code>reason</code> · <code>message</code> · <code>state_changed</code></p>
+    </article></div>
+    <h4>State effects</h4><ul><li>Delivers through exact current Memberships and appends one Alert event.</li><li>A refused Alert creates no delivery, event, or Task change.</li></ul>
+  </article></section>
+    <section class="projection" id="projection">
+      <span class="eyebrow">Projection boundary</span><h2>Raw truth with audience projections</h2>
+      <p>The raw semantic result is validated once, then projected into decision-relevant model JSON. Human TUI and QA records remain separate projections of the same raw truth.</p>
+      <p>Raw semantic results remain machine truth. The validated model projection, allowlisted TUI, and QA record may omit or reorganize facts, but cannot invent state or change the semantic outcome.</p>
+    </section>
+    <section id="limits"><div class="section-heading"><span class="eyebrow">Accepted starting budgets</span><h2>Concise Task fields</h2></div><p>No candidate limit is placed on Team Workers, nonterminal Tasks, or journal entries. Paging is not part of this contract.</p><div class="limit-grid"><div class="limit"><strong>80</strong>task title chars</div><div class="limit"><strong>160</strong>task goal chars</div><div class="limit"><strong>640</strong>task current context chars</div></div></section>
+    <section id="schemas"><div class="section-heading"><span class="eyebrow">Executable candidate</span><h2>Exact schemas and examples</h2></div>
+      <h3><code>team_create</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;name&quot;,
+    &quot;purpose&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;name&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;maxLength&quot;: 64
+    },
+    &quot;purpose&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;description&quot;: &quot;The long-lived Team outcome and operating boundary.&quot;
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Create one long-lived Team and bind the exact calling Session as its leader.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;team&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;team_created&quot;
+        },
+        &quot;team&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;required&quot;: [
+            &quot;name&quot;,
+            &quot;purpose&quot;,
+            &quot;lifecycle&quot;
+          ],
+          &quot;properties&quot;: {
+            &quot;name&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1,
+              &quot;maxLength&quot;: 64
+            },
+            &quot;purpose&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1
+            },
+            &quot;lifecycle&quot;: {
+              &quot;enum&quot;: [
+                &quot;active&quot;,
+                &quot;stopped&quot;
+              ]
+            }
+          },
+          &quot;additionalProperties&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;refused&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;active_team_exists&quot;,
+            &quot;name_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;team_authority_unavailable&quot;,
+            &quot;session_binding_unavailable&quot;,
+            &quot;task_authority_unavailable&quot;,
+            &quot;carrier_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><details><summary>Create and lead a long-lived Team</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;name&quot;: &quot;release-team&quot;,
+  &quot;purpose&quot;: &quot;Prepare and verify the public release.&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;team_created&quot;,&quot;team&quot;:{&quot;name&quot;:&quot;release-team&quot;,&quot;lifecycle&quot;:&quot;active&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;team_created&quot;,
+  &quot;team&quot;: {
+    &quot;name&quot;: &quot;release-team&quot;,
+    &quot;purpose&quot;: &quot;Prepare and verify the public release.&quot;,
+    &quot;lifecycle&quot;: &quot;active&quot;
+  }
+}</pre></details></details><h3><code>task_create</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;tasks&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;tasks&quot;: {
+      &quot;type&quot;: &quot;array&quot;,
+      &quot;items&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;required&quot;: [
+          &quot;title&quot;,
+          &quot;goal&quot;
+        ],
+        &quot;properties&quot;: {
+          &quot;title&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 80
+          },
+          &quot;goal&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 160,
+            &quot;description&quot;: &quot;Desired outcome, relevant boundary, and external success signal in one field.&quot;
+          },
+          &quot;assignee&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 64
+          }
+        },
+        &quot;additionalProperties&quot;: false
+      },
+      &quot;minItems&quot;: 1
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Create independent assigned Task work contracts in input order. Each item commits separately.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;kind&quot;,
+    &quot;outcomes&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;kind&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;const&quot;: &quot;task_create_batch&quot;
+    },
+    &quot;outcomes&quot;: {
+      &quot;type&quot;: &quot;array&quot;,
+      &quot;items&quot;: {
+        &quot;anyOf&quot;: [
+          {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;input_index&quot;,
+              &quot;kind&quot;,
+              &quot;task&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;input_index&quot;: {
+                &quot;type&quot;: &quot;integer&quot;,
+                &quot;minimum&quot;: 0
+              },
+              &quot;kind&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;const&quot;: &quot;created&quot;
+              },
+              &quot;task&quot;: {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;id&quot;,
+                  &quot;title&quot;,
+                  &quot;goal&quot;,
+                  &quot;status&quot;,
+                  &quot;current_context&quot;,
+                  &quot;version&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;title&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 80
+                  },
+                  &quot;goal&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 160,
+                    &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+                  },
+                  &quot;status&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;open&quot;,
+                      &quot;in_progress&quot;,
+                      &quot;blocked&quot;,
+                      &quot;closed&quot;
+                    ],
+                    &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                  },
+                  &quot;assignee&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 64
+                  },
+                  &quot;current_context&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 640
+                  },
+                  &quot;version&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  }
+                },
+                &quot;additionalProperties&quot;: false,
+                &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+              },
+              &quot;delivery_warnings&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;type&quot;: &quot;string&quot;,
+                  &quot;minLength&quot;: 1
+                }
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          },
+          {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;input_index&quot;,
+              &quot;kind&quot;,
+              &quot;reason&quot;,
+              &quot;message&quot;,
+              &quot;state_changed&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;input_index&quot;: {
+                &quot;type&quot;: &quot;integer&quot;,
+                &quot;minimum&quot;: 0
+              },
+              &quot;kind&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;const&quot;: &quot;refused&quot;
+              },
+              &quot;reason&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;const&quot;: &quot;worker_unavailable&quot;
+              },
+              &quot;message&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              },
+              &quot;state_changed&quot;: {
+                &quot;type&quot;: &quot;boolean&quot;,
+                &quot;const&quot;: false
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          },
+          {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;input_index&quot;,
+              &quot;kind&quot;,
+              &quot;reason&quot;,
+              &quot;message&quot;,
+              &quot;state_changed&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;input_index&quot;: {
+                &quot;type&quot;: &quot;integer&quot;,
+                &quot;minimum&quot;: 0
+              },
+              &quot;kind&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;const&quot;: &quot;unavailable&quot;
+              },
+              &quot;reason&quot;: {
+                &quot;enum&quot;: [
+                  &quot;no_active_team&quot;,
+                  &quot;task_authority_unavailable&quot;
+                ]
+              },
+              &quot;message&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              },
+              &quot;state_changed&quot;: {
+                &quot;type&quot;: &quot;boolean&quot;,
+                &quot;const&quot;: false
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          }
+        ]
+      }
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Independent ordered outcomes. A batch is not atomic.&quot;
+}</pre></details><details><summary>Assign one verification Task</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;tasks&quot;: [
+    {
+      &quot;title&quot;: &quot;Verify release candidate&quot;,
+      &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
+      &quot;assignee&quot;: &quot;release-verifier&quot;
+    }
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;created&quot;,&quot;task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;task_create_batch&quot;,
+  &quot;outcomes&quot;: [
+    {
+      &quot;kind&quot;: &quot;created&quot;,
+      &quot;input_index&quot;: 0,
+      &quot;task&quot;: {
+        &quot;id&quot;: &quot;task-23&quot;,
+        &quot;title&quot;: &quot;Verify release candidate&quot;,
+        &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
+        &quot;status&quot;: &quot;open&quot;,
+        &quot;assignee&quot;: &quot;release-verifier&quot;,
+        &quot;current_context&quot;: &quot;Work has not started.&quot;,
+        &quot;version&quot;: &quot;task_v1&quot;
+      }
+    }
+  ]
+}</pre></details></details><details><summary>Refuse a missing Worker</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;tasks&quot;: [
+    {
+      &quot;title&quot;: &quot;Verify release candidate&quot;,
+      &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
+      &quot;assignee&quot;: &quot;release-verifier&quot;
+    }
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;reason&quot;:&quot;worker_unavailable&quot;,&quot;message&quot;:&quot;The assigned Worker is not present in the active Team.&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;task_create_batch&quot;,
+  &quot;outcomes&quot;: [
+    {
+      &quot;kind&quot;: &quot;refused&quot;,
+      &quot;input_index&quot;: 0,
+      &quot;reason&quot;: &quot;worker_unavailable&quot;,
+      &quot;message&quot;: &quot;The assigned Worker is not present in the active Team.&quot;,
+      &quot;state_changed&quot;: false
+    }
+  ]
+}</pre></details></details><h3><code>task_read</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;task_ids&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;task_ids&quot;: {
+      &quot;type&quot;: &quot;array&quot;,
+      &quot;items&quot;: {
+        &quot;type&quot;: &quot;string&quot;,
+        &quot;minLength&quot;: 1,
+        &quot;maxLength&quot;: 128
+      },
+      &quot;minItems&quot;: 1
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Read current Task cards by ID without changing Team or observation state.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;outcomes&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;task_read_batch&quot;
+        },
+        &quot;outcomes&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;anyOf&quot;: [
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;kind&quot;,
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;task&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;found&quot;
+                  },
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;task&quot;: {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;goal&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;goal&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 160,
+                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ],
+                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 640
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false,
+                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              },
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;kind&quot;,
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;reason&quot;,
+                  &quot;state_changed&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;missing&quot;
+                  },
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;reason&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;task_not_found&quot;
+                  },
+                  &quot;state_changed&quot;: {
+                    &quot;type&quot;: &quot;boolean&quot;,
+                    &quot;const&quot;: false
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              },
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;kind&quot;,
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;reason&quot;,
+                  &quot;authority_version&quot;,
+                  &quot;message&quot;,
+                  &quot;state_changed&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;contract_gap&quot;
+                  },
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;reason&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;candidate_metadata_absent&quot;,
+                      &quot;candidate_metadata_invalid&quot;
+                    ]
+                  },
+                  &quot;authority_version&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;message&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1
+                  },
+                  &quot;state_changed&quot;: {
+                    &quot;type&quot;: &quot;boolean&quot;,
+                    &quot;const&quot;: false
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              }
+            ]
+          }
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;task_authority_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><details><summary>Read one current Task</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;task_ids&quot;: [
+    &quot;task-23&quot;
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;found&quot;,&quot;task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release candidate&quot;,&quot;goal&quot;:&quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Work has not started.&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;task_read_batch&quot;,
+  &quot;outcomes&quot;: [
+    {
+      &quot;kind&quot;: &quot;found&quot;,
+      &quot;input_index&quot;: 0,
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;task&quot;: {
+        &quot;id&quot;: &quot;task-23&quot;,
+        &quot;title&quot;: &quot;Verify release candidate&quot;,
+        &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
+        &quot;status&quot;: &quot;open&quot;,
+        &quot;assignee&quot;: &quot;release-verifier&quot;,
+        &quot;current_context&quot;: &quot;Work has not started.&quot;,
+        &quot;version&quot;: &quot;task_v1&quot;
+      }
+    }
+  ]
+}</pre></details></details><details><summary>Report a missing Task</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;task_ids&quot;: [
+    &quot;task-missing&quot;
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;missing&quot;,&quot;task_id&quot;:&quot;task-missing&quot;,&quot;reason&quot;:&quot;task_not_found&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;task_read_batch&quot;,
+  &quot;outcomes&quot;: [
+    {
+      &quot;kind&quot;: &quot;missing&quot;,
+      &quot;input_index&quot;: 0,
+      &quot;task_id&quot;: &quot;task-missing&quot;,
+      &quot;reason&quot;: &quot;task_not_found&quot;,
+      &quot;state_changed&quot;: false
+    }
+  ]
+}</pre></details></details><details><summary>No active Team</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;task_ids&quot;: [
+    &quot;task-23&quot;
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;unavailable&quot;,&quot;reason&quot;:&quot;no_active_team&quot;,&quot;message&quot;:&quot;The exact leader Session is not bound to an active Team.&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;unavailable&quot;,
+  &quot;reason&quot;: &quot;no_active_team&quot;,
+  &quot;message&quot;: &quot;The exact leader Session is not bound to an active Team.&quot;,
+  &quot;state_changed&quot;: false
+}</pre></details></details><h3><code>task_update</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;updates&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;updates&quot;: {
+      &quot;type&quot;: &quot;array&quot;,
+      &quot;items&quot;: {
+        &quot;type&quot;: &quot;object&quot;,
+        &quot;required&quot;: [
+          &quot;task_id&quot;,
+          &quot;operation_id&quot;,
+          &quot;expected_version&quot;
+        ],
+        &quot;properties&quot;: {
+          &quot;task_id&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 128
+          },
+          &quot;operation_id&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 128
+          },
+          &quot;expected_version&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+            &quot;minLength&quot;: 18,
+            &quot;maxLength&quot;: 18
+          },
+          &quot;current_context&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 640
+          },
+          &quot;journal_entries&quot;: {
+            &quot;type&quot;: &quot;array&quot;,
+            &quot;items&quot;: {
+              &quot;type&quot;: &quot;object&quot;,
+              &quot;required&quot;: [
+                &quot;kind&quot;,
+                &quot;text&quot;
+              ],
+              &quot;properties&quot;: {
+                &quot;kind&quot;: {
+                  &quot;enum&quot;: [
+                    &quot;progress&quot;,
+                    &quot;decision&quot;,
+                    &quot;blocker&quot;,
+                    &quot;result&quot;,
+                    &quot;note&quot;
+                  ]
+                },
+                &quot;text&quot;: {
+                  &quot;type&quot;: &quot;string&quot;,
+                  &quot;minLength&quot;: 1
+                }
+              },
+              &quot;additionalProperties&quot;: false
+            },
+            &quot;minItems&quot;: 1
+          },
+          &quot;status&quot;: {
+            &quot;enum&quot;: [
+              &quot;open&quot;,
+              &quot;in_progress&quot;,
+              &quot;blocked&quot;,
+              &quot;closed&quot;
+            ],
+            &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+          }
+        },
+        &quot;additionalProperties&quot;: false,
+        &quot;minProperties&quot;: 4
+      },
+      &quot;minItems&quot;: 1
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Apply one or more supplied Task changes. Omit current_context when it remains relevant; omit journal_entries when no evidence or rationale changes.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;outcomes&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;task_update_batch&quot;
+        },
+        &quot;outcomes&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;anyOf&quot;: [
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;operation_id&quot;,
+                  &quot;kind&quot;,
+                  &quot;task&quot;,
+                  &quot;journal_entries&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;operation_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;updated&quot;
+                  },
+                  &quot;task&quot;: {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;goal&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;goal&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 160,
+                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ],
+                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 640
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false,
+                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                  },
+                  &quot;journal_entries&quot;: {
+                    &quot;type&quot;: &quot;array&quot;,
+                    &quot;items&quot;: {
+                      &quot;type&quot;: &quot;object&quot;,
+                      &quot;required&quot;: [
+                        &quot;id&quot;,
+                        &quot;at&quot;,
+                        &quot;actor&quot;,
+                        &quot;kind&quot;,
+                        &quot;text&quot;
+                      ],
+                      &quot;properties&quot;: {
+                        &quot;id&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1,
+                          &quot;maxLength&quot;: 128
+                        },
+                        &quot;at&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1,
+                          &quot;maxLength&quot;: 64
+                        },
+                        &quot;actor&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1,
+                          &quot;maxLength&quot;: 64
+                        },
+                        &quot;kind&quot;: {
+                          &quot;enum&quot;: [
+                            &quot;progress&quot;,
+                            &quot;decision&quot;,
+                            &quot;blocker&quot;,
+                            &quot;result&quot;,
+                            &quot;note&quot;
+                          ]
+                        },
+                        &quot;text&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1
+                        }
+                      },
+                      &quot;additionalProperties&quot;: false
+                    }
+                  },
+                  &quot;delivery_warnings&quot;: {
+                    &quot;type&quot;: &quot;array&quot;,
+                    &quot;items&quot;: {
+                      &quot;type&quot;: &quot;string&quot;,
+                      &quot;minLength&quot;: 1
+                    }
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              },
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;operation_id&quot;,
+                  &quot;kind&quot;,
+                  &quot;reason&quot;,
+                  &quot;message&quot;,
+                  &quot;state_changed&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;operation_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;refused&quot;
+                  },
+                  &quot;reason&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;task_not_found&quot;,
+                      &quot;version_conflict&quot;,
+                      &quot;operation_conflict&quot;,
+                      &quot;terminal_evidence_required&quot;
+                    ]
+                  },
+                  &quot;message&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1
+                  },
+                  &quot;current_task&quot;: {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;goal&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;goal&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 160,
+                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ],
+                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 640
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false,
+                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                  },
+                  &quot;state_changed&quot;: {
+                    &quot;type&quot;: &quot;boolean&quot;,
+                    &quot;const&quot;: false
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              },
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;operation_id&quot;,
+                  &quot;kind&quot;,
+                  &quot;reason&quot;,
+                  &quot;unsupported&quot;,
+                  &quot;message&quot;,
+                  &quot;state_changed&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;operation_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;contract_gap&quot;
+                  },
+                  &quot;reason&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;candidate_metadata_absent&quot;,
+                      &quot;candidate_metadata_invalid&quot;,
+                      &quot;beads_external_writer_atomicity_unavailable&quot;
+                    ]
+                  },
+                  &quot;current_task&quot;: {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;goal&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;goal&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 160,
+                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ],
+                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 640
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false,
+                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                  },
+                  &quot;unsupported&quot;: {
+                    &quot;type&quot;: &quot;array&quot;,
+                    &quot;items&quot;: {
+                      &quot;type&quot;: &quot;string&quot;,
+                      &quot;minLength&quot;: 1
+                    },
+                    &quot;minItems&quot;: 1
+                  },
+                  &quot;message&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1
+                  },
+                  &quot;state_changed&quot;: {
+                    &quot;type&quot;: &quot;boolean&quot;,
+                    &quot;const&quot;: false
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              },
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;input_index&quot;,
+                  &quot;task_id&quot;,
+                  &quot;operation_id&quot;,
+                  &quot;kind&quot;,
+                  &quot;reason&quot;,
+                  &quot;message&quot;,
+                  &quot;state_changed&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;input_index&quot;: {
+                    &quot;type&quot;: &quot;integer&quot;,
+                    &quot;minimum&quot;: 0
+                  },
+                  &quot;task_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;operation_id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;kind&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;unavailable&quot;
+                  },
+                  &quot;reason&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;no_active_team&quot;,
+                      &quot;task_authority_unavailable&quot;
+                    ]
+                  },
+                  &quot;message&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1
+                  },
+                  &quot;state_changed&quot;: {
+                    &quot;type&quot;: &quot;boolean&quot;,
+                    &quot;const&quot;: false
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              }
+            ]
+          }
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;refused&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;duplicate_task_id&quot;
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;no_active_team&quot;
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><details><summary>Record a coordination decision</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;updates&quot;: [
+    {
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;operation_id&quot;: &quot;verify-release-1&quot;,
+      &quot;expected_version&quot;: &quot;v_3680fa021836b49f&quot;,
+      &quot;current_context&quot;: &quot;Task is assigned but awaits a Worker carrier.&quot;,
+      &quot;journal_entries&quot;: [
+        {
+          &quot;kind&quot;: &quot;decision&quot;,
+          &quot;text&quot;: &quot;Keep the Task open until a Worker carrier is available.&quot;
+        }
+      ]
+    }
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updated&quot;,&quot;task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;version&quot;:&quot;v_4ab67899e5ec4e58&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;task_update_batch&quot;,
+  &quot;outcomes&quot;: [
+    {
+      &quot;kind&quot;: &quot;updated&quot;,
+      &quot;input_index&quot;: 0,
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;operation_id&quot;: &quot;verify-release-1&quot;,
+      &quot;task&quot;: {
+        &quot;id&quot;: &quot;task-23&quot;,
+        &quot;title&quot;: &quot;Verify release candidate&quot;,
+        &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
+        &quot;status&quot;: &quot;open&quot;,
+        &quot;assignee&quot;: &quot;release-verifier&quot;,
+        &quot;current_context&quot;: &quot;Task is assigned but awaits a Worker carrier.&quot;,
+        &quot;version&quot;: &quot;task_v2&quot;
+      },
+      &quot;journal_entries&quot;: [
+        {
+          &quot;id&quot;: &quot;journal-task-23-1&quot;,
+          &quot;at&quot;: &quot;2026-08-02T00:00:00.000Z&quot;,
+          &quot;actor&quot;: &quot;leader&quot;,
+          &quot;kind&quot;: &quot;decision&quot;,
+          &quot;text&quot;: &quot;Keep the Task open until a Worker carrier is available.&quot;
+        }
+      ]
+    }
+  ]
+}</pre></details></details><details><summary>Refuse a stale version</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;updates&quot;: [
+    {
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;operation_id&quot;: &quot;verify-release-1&quot;,
+      &quot;expected_version&quot;: &quot;v_3680fa021836b49f&quot;,
+      &quot;current_context&quot;: &quot;Task is assigned but awaits a Worker carrier.&quot;,
+      &quot;journal_entries&quot;: [
+        {
+          &quot;kind&quot;: &quot;decision&quot;,
+          &quot;text&quot;: &quot;Keep the Task open until a Worker carrier is available.&quot;
+        }
+      ]
+    }
+  ]
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;task_id&quot;:&quot;task-23&quot;,&quot;reason&quot;:&quot;version_conflict&quot;,&quot;message&quot;:&quot;The Task version does not match the expected version.&quot;,&quot;current_task&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release candidate&quot;,&quot;goal&quot;:&quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Work has not started.&quot;,&quot;version&quot;:&quot;v_3680fa021836b49f&quot;},&quot;recovery&quot;:{&quot;action&quot;:&quot;reconcile_and_retry&quot;,&quot;expected_version&quot;:&quot;v_3680fa021836b49f&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;task_update_batch&quot;,
+  &quot;outcomes&quot;: [
+    {
+      &quot;kind&quot;: &quot;refused&quot;,
+      &quot;input_index&quot;: 0,
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;operation_id&quot;: &quot;verify-release-1&quot;,
+      &quot;reason&quot;: &quot;version_conflict&quot;,
+      &quot;message&quot;: &quot;The Task version does not match the expected version.&quot;,
+      &quot;current_task&quot;: {
+        &quot;id&quot;: &quot;task-23&quot;,
+        &quot;title&quot;: &quot;Verify release candidate&quot;,
+        &quot;goal&quot;: &quot;Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.&quot;,
+        &quot;status&quot;: &quot;open&quot;,
+        &quot;assignee&quot;: &quot;release-verifier&quot;,
+        &quot;current_context&quot;: &quot;Work has not started.&quot;,
+        &quot;version&quot;: &quot;task_v1&quot;
+      },
+      &quot;state_changed&quot;: false
+    }
+  ]
+}</pre></details></details><h3><code>team_sync</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;view&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;view&quot;: {
+      &quot;enum&quot;: [
+        &quot;snapshot&quot;,
+        &quot;updates&quot;
+      ],
+      &quot;description&quot;: &quot;Use snapshot to restore current context; use updates for routine supervision and waiting.&quot;
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Read the active Team&#39;s snapshot or incremental updates. Team identity is resolved from the exact leader Session binding.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;team&quot;,
+        &quot;workers&quot;,
+        &quot;tasks&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;snapshot&quot;
+        },
+        &quot;team&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;required&quot;: [
+            &quot;name&quot;,
+            &quot;purpose&quot;,
+            &quot;lifecycle&quot;
+          ],
+          &quot;properties&quot;: {
+            &quot;name&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1,
+              &quot;maxLength&quot;: 64
+            },
+            &quot;purpose&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1
+            },
+            &quot;lifecycle&quot;: {
+              &quot;enum&quot;: [
+                &quot;active&quot;,
+                &quot;stopped&quot;
+              ]
+            }
+          },
+          &quot;additionalProperties&quot;: false
+        },
+        &quot;workers&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;name&quot;,
+              &quot;scope&quot;,
+              &quot;carrier&quot;,
+              &quot;nonterminal_task_ids&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;name&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 64
+              },
+              &quot;scope&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;description&quot;: &quot;Concise semantic area owned by this Worker, not its current Task.&quot;
+              },
+              &quot;carrier&quot;: {
+                &quot;enum&quot;: [
+                  &quot;starting&quot;,
+                  &quot;connected&quot;,
+                  &quot;absent&quot;
+                ],
+                &quot;description&quot;: &quot;Current carrier observation. It is not Task progress or readiness.&quot;
+              },
+              &quot;nonterminal_task_ids&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;type&quot;: &quot;string&quot;,
+                  &quot;minLength&quot;: 1,
+                  &quot;maxLength&quot;: 128
+                }
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          }
+        },
+        &quot;tasks&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;id&quot;,
+              &quot;title&quot;,
+              &quot;goal&quot;,
+              &quot;status&quot;,
+              &quot;current_context&quot;,
+              &quot;version&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
+              &quot;title&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 80
+              },
+              &quot;goal&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 160,
+                &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+              },
+              &quot;status&quot;: {
+                &quot;enum&quot;: [
+                  &quot;open&quot;,
+                  &quot;in_progress&quot;,
+                  &quot;blocked&quot;,
+                  &quot;closed&quot;
+                ],
+                &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+              },
+              &quot;assignee&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 64
+              },
+              &quot;current_context&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 640
+              },
+              &quot;version&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              }
+            },
+            &quot;additionalProperties&quot;: false,
+            &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+          }
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;team_changes&quot;,
+        &quot;worker_changes&quot;,
+        &quot;task_changes&quot;,
+        &quot;alerts&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;updates&quot;
+        },
+        &quot;team_changes&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;kind&quot;,
+              &quot;text&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;kind&quot;: {
+                &quot;enum&quot;: [
+                  &quot;created&quot;,
+                  &quot;lifecycle&quot;,
+                  &quot;purpose&quot;
+                ]
+              },
+              &quot;text&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          }
+        },
+        &quot;worker_changes&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;worker&quot;,
+              &quot;scope&quot;,
+              &quot;kind&quot;,
+              &quot;text&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;worker&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 64
+              },
+              &quot;scope&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              },
+              &quot;kind&quot;: {
+                &quot;enum&quot;: [
+                  &quot;created&quot;,
+                  &quot;connected&quot;,
+                  &quot;stopped&quot;,
+                  &quot;failed&quot;,
+                  &quot;scope_changed&quot;
+                ]
+              },
+              &quot;text&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          }
+        },
+        &quot;task_changes&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;task_id&quot;,
+              &quot;change_kinds&quot;,
+              &quot;journal_entries&quot;,
+              &quot;current&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;task_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
+              &quot;change_kinds&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;enum&quot;: [
+                    &quot;created&quot;,
+                    &quot;goal&quot;,
+                    &quot;assignment&quot;,
+                    &quot;progress&quot;,
+                    &quot;status&quot;,
+                    &quot;relation&quot;
+                  ]
+                },
+                &quot;minItems&quot;: 1,
+                &quot;uniqueItems&quot;: true
+              },
+              &quot;journal_entries&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;type&quot;: &quot;object&quot;,
+                  &quot;required&quot;: [
+                    &quot;id&quot;,
+                    &quot;at&quot;,
+                    &quot;actor&quot;,
+                    &quot;kind&quot;,
+                    &quot;text&quot;
+                  ],
+                  &quot;properties&quot;: {
+                    &quot;id&quot;: {
+                      &quot;type&quot;: &quot;string&quot;,
+                      &quot;minLength&quot;: 1,
+                      &quot;maxLength&quot;: 128
+                    },
+                    &quot;at&quot;: {
+                      &quot;type&quot;: &quot;string&quot;,
+                      &quot;minLength&quot;: 1,
+                      &quot;maxLength&quot;: 64
+                    },
+                    &quot;actor&quot;: {
+                      &quot;type&quot;: &quot;string&quot;,
+                      &quot;minLength&quot;: 1,
+                      &quot;maxLength&quot;: 64
+                    },
+                    &quot;kind&quot;: {
+                      &quot;enum&quot;: [
+                        &quot;progress&quot;,
+                        &quot;decision&quot;,
+                        &quot;blocker&quot;,
+                        &quot;result&quot;,
+                        &quot;note&quot;
+                      ]
+                    },
+                    &quot;text&quot;: {
+                      &quot;type&quot;: &quot;string&quot;,
+                      &quot;minLength&quot;: 1
+                    }
+                  },
+                  &quot;additionalProperties&quot;: false
+                }
+              },
+              &quot;current&quot;: {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;status&quot;,
+                  &quot;current_context&quot;,
+                  &quot;version&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;status&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;open&quot;,
+                      &quot;in_progress&quot;,
+                      &quot;blocked&quot;,
+                      &quot;closed&quot;
+                    ],
+                    &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                  },
+                  &quot;assignee&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 64
+                  },
+                  &quot;current_context&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 640
+                  },
+                  &quot;version&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              }
+            },
+            &quot;additionalProperties&quot;: false,
+            &quot;description&quot;: &quot;All new Task journal entries grouped with the latest current state.&quot;
+          }
+        },
+        &quot;alerts&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;alert_id&quot;,
+              &quot;from&quot;,
+              &quot;kind&quot;,
+              &quot;text&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;alert_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
+              &quot;from&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 64
+              },
+              &quot;kind&quot;: {
+                &quot;enum&quot;: [
+                  &quot;clarification&quot;,
+                  &quot;attention&quot;,
+                  &quot;announcement&quot;
+                ]
+              },
+              &quot;task_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
+              &quot;text&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          }
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;,
+        &quot;observation_advanced&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;snapshot_required&quot;
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;observation_advanced&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;,
+        &quot;observation_advanced&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;cancelled&quot;
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;observation_advanced&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;,
+        &quot;observation_advanced&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;contract_gap&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;team_epoch_missing&quot;,
+            &quot;logical_workers_missing&quot;,
+            &quot;candidate_metadata_absent&quot;,
+            &quot;candidate_metadata_invalid&quot;,
+            &quot;structured_task_event_evidence_absent&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;observation_advanced&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;,
+        &quot;observation_advanced&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;team_state_unavailable&quot;,
+            &quot;task_authority_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;observation_advanced&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><details><summary>Current snapshot</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;view&quot;: &quot;snapshot&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;snapshot&quot;,&quot;team&quot;:{&quot;name&quot;:&quot;release-team&quot;,&quot;purpose&quot;:&quot;Prepare and verify the public release.&quot;,&quot;lifecycle&quot;:&quot;active&quot;},&quot;workers&quot;:[{&quot;name&quot;:&quot;release-builder&quot;,&quot;scope&quot;:&quot;Own candidate construction, package metadata, and publication dry runs.&quot;,&quot;carrier&quot;:&quot;connected&quot;,&quot;nonterminal_task_ids&quot;:[&quot;task-17&quot;]},{&quot;name&quot;:&quot;release-verifier&quot;,&quot;scope&quot;:&quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;,&quot;carrier&quot;:&quot;connected&quot;,&quot;nonterminal_task_ids&quot;:[&quot;task-23&quot;]}],&quot;tasks&quot;:[{&quot;id&quot;:&quot;task-17&quot;,&quot;title&quot;:&quot;Prepare release candidate&quot;,&quot;goal&quot;:&quot;Produce an installable candidate package with a verified dry-run publication receipt.&quot;,&quot;status&quot;:&quot;in_progress&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Package is built. Dry-run publication is next; no blocker is known.&quot;,&quot;version&quot;:&quot;v_3f89cd171f52b332&quot;},{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release candidate&quot;,&quot;goal&quot;:&quot;Independently verify clean install, public exports, and provenance for the exact candidate digest.&quot;,&quot;status&quot;:&quot;open&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Waiting for the candidate digest from task-17.&quot;,&quot;version&quot;:&quot;v_4ab67899e5ec4e58&quot;}]}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;snapshot&quot;,
+  &quot;team&quot;: {
+    &quot;name&quot;: &quot;release-team&quot;,
+    &quot;purpose&quot;: &quot;Prepare and verify the public release.&quot;,
+    &quot;lifecycle&quot;: &quot;active&quot;
+  },
+  &quot;workers&quot;: [
+    {
+      &quot;name&quot;: &quot;release-builder&quot;,
+      &quot;scope&quot;: &quot;Own candidate construction, package metadata, and publication dry runs.&quot;,
+      &quot;carrier&quot;: &quot;connected&quot;,
+      &quot;nonterminal_task_ids&quot;: [
+        &quot;task-17&quot;
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;release-verifier&quot;,
+      &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;,
+      &quot;carrier&quot;: &quot;connected&quot;,
+      &quot;nonterminal_task_ids&quot;: [
+        &quot;task-23&quot;
+      ]
+    }
+  ],
+  &quot;tasks&quot;: [
+    {
+      &quot;id&quot;: &quot;task-17&quot;,
+      &quot;title&quot;: &quot;Prepare release candidate&quot;,
+      &quot;goal&quot;: &quot;Produce an installable candidate package with a verified dry-run publication receipt.&quot;,
+      &quot;status&quot;: &quot;in_progress&quot;,
+      &quot;assignee&quot;: &quot;release-builder&quot;,
+      &quot;current_context&quot;: &quot;Package is built. Dry-run publication is next; no blocker is known.&quot;,
+      &quot;version&quot;: &quot;task_v7&quot;
+    },
+    {
+      &quot;id&quot;: &quot;task-23&quot;,
+      &quot;title&quot;: &quot;Verify release candidate&quot;,
+      &quot;goal&quot;: &quot;Independently verify clean install, public exports, and provenance for the exact candidate digest.&quot;,
+      &quot;status&quot;: &quot;open&quot;,
+      &quot;assignee&quot;: &quot;release-verifier&quot;,
+      &quot;current_context&quot;: &quot;Waiting for the candidate digest from task-17.&quot;,
+      &quot;version&quot;: &quot;task_v2&quot;
+    }
+  ]
+}</pre></details></details><details><summary>Incremental updates</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;view&quot;: &quot;updates&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updates&quot;,&quot;team_changes&quot;:[],&quot;worker_changes&quot;:[],&quot;task_changes&quot;:[{&quot;task_id&quot;:&quot;task-17&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-91&quot;,&quot;at&quot;:&quot;2026-08-02T10:00:00Z&quot;,&quot;actor&quot;:&quot;release-builder&quot;,&quot;kind&quot;:&quot;result&quot;,&quot;text&quot;:&quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;closed&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Candidate delivered and verified locally. No further action remains.&quot;,&quot;version&quot;:&quot;v_93861017a874fd3d&quot;}},{&quot;task_id&quot;:&quot;task-23&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-92&quot;,&quot;at&quot;:&quot;2026-08-02T10:01:00Z&quot;,&quot;actor&quot;:&quot;release-verifier&quot;,&quot;kind&quot;:&quot;blocker&quot;,&quot;text&quot;:&quot;Provenance digest differs from the candidate package digest.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;blocked&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,&quot;version&quot;:&quot;v_d532cbd1d0458c7e&quot;}}],&quot;alerts&quot;:[]}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;updates&quot;,
+  &quot;team_changes&quot;: [],
+  &quot;worker_changes&quot;: [],
+  &quot;task_changes&quot;: [
+    {
+      &quot;task_id&quot;: &quot;task-17&quot;,
+      &quot;change_kinds&quot;: [
+        &quot;status&quot;,
+        &quot;progress&quot;
+      ],
+      &quot;journal_entries&quot;: [
+        {
+          &quot;id&quot;: &quot;journal-91&quot;,
+          &quot;at&quot;: &quot;2026-08-02T10:00:00Z&quot;,
+          &quot;actor&quot;: &quot;release-builder&quot;,
+          &quot;kind&quot;: &quot;result&quot;,
+          &quot;text&quot;: &quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;
+        }
+      ],
+      &quot;current&quot;: {
+        &quot;status&quot;: &quot;closed&quot;,
+        &quot;assignee&quot;: &quot;release-builder&quot;,
+        &quot;current_context&quot;: &quot;Candidate delivered and verified locally. No further action remains.&quot;,
+        &quot;version&quot;: &quot;task_v8&quot;
+      }
+    },
+    {
+      &quot;task_id&quot;: &quot;task-23&quot;,
+      &quot;change_kinds&quot;: [
+        &quot;status&quot;,
+        &quot;progress&quot;
+      ],
+      &quot;journal_entries&quot;: [
+        {
+          &quot;id&quot;: &quot;journal-92&quot;,
+          &quot;at&quot;: &quot;2026-08-02T10:01:00Z&quot;,
+          &quot;actor&quot;: &quot;release-verifier&quot;,
+          &quot;kind&quot;: &quot;blocker&quot;,
+          &quot;text&quot;: &quot;Provenance digest differs from the candidate package digest.&quot;
+        }
+      ],
+      &quot;current&quot;: {
+        &quot;status&quot;: &quot;blocked&quot;,
+        &quot;assignee&quot;: &quot;release-verifier&quot;,
+        &quot;current_context&quot;: &quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,
+        &quot;version&quot;: &quot;task_v3&quot;
+      }
+    }
+  ],
+  &quot;alerts&quot;: []
+}</pre></details></details><details><summary>Required authority unavailable</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;view&quot;: &quot;snapshot&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;unavailable&quot;,&quot;reason&quot;:&quot;task_authority_unavailable&quot;,&quot;message&quot;:&quot;Task authority could not supply the complete snapshot. No Team observation was published.&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;unavailable&quot;,
+  &quot;reason&quot;: &quot;task_authority_unavailable&quot;,
+  &quot;message&quot;: &quot;Task authority could not supply the complete snapshot. No Team observation was published.&quot;,
+  &quot;state_changed&quot;: false,
+  &quot;observation_advanced&quot;: false
+}</pre></details></details><h3><code>ensure_worker</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;name&quot;,
+    &quot;scope&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;name&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;maxLength&quot;: 64
+    },
+    &quot;scope&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;description&quot;: &quot;A semantically deep area with high internal cohesion, low prerequisite overlap, and few dependencies on other Workers.&quot;
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Create, reconnect, or reuse one Worker in the active Team. Work is assigned separately through Tasks.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;effect&quot;,
+        &quot;worker&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;worker_ensured&quot;
+        },
+        &quot;effect&quot;: {
+          &quot;enum&quot;: [
+            &quot;created&quot;,
+            &quot;reused&quot;,
+            &quot;reconnected&quot;
+          ]
+        },
+        &quot;worker&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;required&quot;: [
+            &quot;name&quot;,
+            &quot;scope&quot;,
+            &quot;carrier&quot;
+          ],
+          &quot;properties&quot;: {
+            &quot;name&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1,
+              &quot;maxLength&quot;: 64
+            },
+            &quot;scope&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1
+            },
+            &quot;carrier&quot;: {
+              &quot;enum&quot;: [
+                &quot;starting&quot;,
+                &quot;connected&quot;,
+                &quot;absent&quot;
+              ],
+              &quot;description&quot;: &quot;Current carrier observation. It is not Task progress or readiness.&quot;
+            }
+          },
+          &quot;additionalProperties&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;existing_worker&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;refused&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;name_scope_conflict&quot;
+        },
+        &quot;existing_worker&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;required&quot;: [
+            &quot;name&quot;,
+            &quot;scope&quot;,
+            &quot;carrier&quot;
+          ],
+          &quot;properties&quot;: {
+            &quot;name&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1,
+              &quot;maxLength&quot;: 64
+            },
+            &quot;scope&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1
+            },
+            &quot;carrier&quot;: {
+              &quot;enum&quot;: [
+                &quot;starting&quot;,
+                &quot;connected&quot;,
+                &quot;absent&quot;
+              ],
+              &quot;description&quot;: &quot;Current carrier observation. It is not Task progress or readiness.&quot;
+            }
+          },
+          &quot;additionalProperties&quot;: false
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;carrier_unavailable&quot;,
+            &quot;team_authority_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><details><summary>Create a deep-area Worker</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;name&quot;: &quot;release-verifier&quot;,
+  &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;worker_ensured&quot;,&quot;effect&quot;:&quot;created&quot;,&quot;worker&quot;:{&quot;name&quot;:&quot;release-verifier&quot;,&quot;carrier&quot;:&quot;connected&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;worker_ensured&quot;,
+  &quot;effect&quot;: &quot;created&quot;,
+  &quot;worker&quot;: {
+    &quot;name&quot;: &quot;release-verifier&quot;,
+    &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;,
+    &quot;carrier&quot;: &quot;connected&quot;
+  }
+}</pre></details></details><details><summary>Refuse a conflicting existing scope</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;name&quot;: &quot;release-verifier&quot;,
+  &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;refused&quot;,&quot;reason&quot;:&quot;name_scope_conflict&quot;,&quot;existing_worker&quot;:{&quot;name&quot;:&quot;release-verifier&quot;,&quot;scope&quot;:&quot;Own release-note review and public documentation verification.&quot;,&quot;carrier&quot;:&quot;connected&quot;}}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;refused&quot;,
+  &quot;reason&quot;: &quot;name_scope_conflict&quot;,
+  &quot;existing_worker&quot;: {
+    &quot;name&quot;: &quot;release-verifier&quot;,
+    &quot;scope&quot;: &quot;Own release-note review and public documentation verification.&quot;,
+    &quot;carrier&quot;: &quot;connected&quot;
+  },
+  &quot;state_changed&quot;: false
+}</pre></details></details><details><summary>No active Team is bound</summary><div class="code-grid"><section><h4>Call</h4><pre>{
+  &quot;name&quot;: &quot;release-verifier&quot;,
+  &quot;scope&quot;: &quot;Own independent release verification: clean install, exported surface, provenance, and publication evidence.&quot;
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;unavailable&quot;,&quot;reason&quot;:&quot;no_active_team&quot;,&quot;message&quot;:&quot;The exact leader Session is not bound to an active Team.&quot;}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+  &quot;kind&quot;: &quot;unavailable&quot;,
+  &quot;reason&quot;: &quot;no_active_team&quot;,
+  &quot;message&quot;: &quot;The exact leader Session is not bound to an active Team.&quot;,
+  &quot;state_changed&quot;: false
+}</pre></details></details><h3><code>worker_stop</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;worker&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;worker&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;maxLength&quot;: 64
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Stop one Worker after its nonterminal Tasks are resolved and exact terminal stop evidence is available.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;worker&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;worker_stopped&quot;
+        },
+        &quot;worker&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 64
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: true
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;worker&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;refused&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;worker_not_found&quot;,
+            &quot;nonterminal_tasks_assigned&quot;,
+            &quot;stop_not_confirmed&quot;,
+            &quot;leader_reserved&quot;
+          ]
+        },
+        &quot;worker&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 64
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;guarding_task_ids&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 128
+          }
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;team_authority_unavailable&quot;,
+            &quot;carrier_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><h3><code>team_shutdown</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;properties&quot;: {},
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Stop every Worker and close the exact leader Team. Failed stops keep the Team active for retry.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;lifecycle&quot;,
+        &quot;stopped_workers&quot;,
+        &quot;unfinished_task_ids&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;team_shutdown&quot;
+        },
+        &quot;lifecycle&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;stopped&quot;
+        },
+        &quot;stopped_workers&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 64
+          }
+        },
+        &quot;unfinished_task_ids&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 128
+          }
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;lifecycle&quot;,
+        &quot;stopped_workers&quot;,
+        &quot;failed_workers&quot;,
+        &quot;unfinished_task_ids&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;partial&quot;
+        },
+        &quot;lifecycle&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;active&quot;
+        },
+        &quot;stopped_workers&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 64
+          }
+        },
+        &quot;failed_workers&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 64
+          }
+        },
+        &quot;unfinished_task_ids&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 128
+          }
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: true
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;team_authority_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><h3><code>task_link</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;required&quot;: [
+    &quot;task_id&quot;,
+    &quot;relation&quot;,
+    &quot;target_id&quot;,
+    &quot;action&quot;
+  ],
+  &quot;properties&quot;: {
+    &quot;task_id&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;maxLength&quot;: 128
+    },
+    &quot;relation&quot;: {
+      &quot;enum&quot;: [
+        &quot;blocked_by&quot;,
+        &quot;parent&quot;,
+        &quot;related&quot;
+      ]
+    },
+    &quot;target_id&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;minLength&quot;: 1,
+      &quot;maxLength&quot;: 128
+    },
+    &quot;action&quot;: {
+      &quot;enum&quot;: [
+        &quot;add&quot;,
+        &quot;remove&quot;
+      ]
+    },
+    &quot;expected_version&quot;: {
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+      &quot;minLength&quot;: 18,
+      &quot;maxLength&quot;: 18
+    }
+  },
+  &quot;additionalProperties&quot;: false,
+  &quot;description&quot;: &quot;Add or remove one typed Task relation with graph and version validation.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;task_id&quot;,
+        &quot;target_id&quot;,
+        &quot;relation&quot;,
+        &quot;action&quot;,
+        &quot;changed&quot;,
+        &quot;version&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;task_linked&quot;
+        },
+        &quot;task_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        },
+        &quot;target_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        },
+        &quot;relation&quot;: {
+          &quot;enum&quot;: [
+            &quot;blocked_by&quot;,
+            &quot;parent&quot;,
+            &quot;related&quot;
+          ]
+        },
+        &quot;action&quot;: {
+          &quot;enum&quot;: [
+            &quot;add&quot;,
+            &quot;remove&quot;
+          ]
+        },
+        &quot;changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;
+        },
+        &quot;version&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;task_id&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;refused&quot;
+        },
+        &quot;task_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;task_not_found&quot;,
+            &quot;version_conflict&quot;,
+            &quot;graph_conflict&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;task_authority_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details><h3><code>alert_send</code></h3><details><summary>Parameter JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;target&quot;,
+        &quot;kind&quot;,
+        &quot;text&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;target&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;required&quot;: [
+            &quot;kind&quot;,
+            &quot;name&quot;
+          ],
+          &quot;properties&quot;: {
+            &quot;kind&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;const&quot;: &quot;worker&quot;
+            },
+            &quot;name&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;minLength&quot;: 1,
+              &quot;maxLength&quot;: 64
+            }
+          },
+          &quot;additionalProperties&quot;: false
+        },
+        &quot;kind&quot;: {
+          &quot;enum&quot;: [
+            &quot;clarification&quot;,
+            &quot;attention&quot;
+          ]
+        },
+        &quot;text&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;task_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        },
+        &quot;task_version&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+          &quot;minLength&quot;: 18,
+          &quot;maxLength&quot;: 18
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;target&quot;,
+        &quot;kind&quot;,
+        &quot;text&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;target&quot;: {
+          &quot;type&quot;: &quot;object&quot;,
+          &quot;required&quot;: [
+            &quot;kind&quot;
+          ],
+          &quot;properties&quot;: {
+            &quot;kind&quot;: {
+              &quot;type&quot;: &quot;string&quot;,
+              &quot;const&quot;: &quot;team&quot;
+            }
+          },
+          &quot;additionalProperties&quot;: false
+        },
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;announcement&quot;
+        },
+        &quot;text&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;task_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        },
+        &quot;task_version&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+          &quot;minLength&quot;: 18,
+          &quot;maxLength&quot;: 18
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ],
+  &quot;description&quot;: &quot;Send exceptional clarification, attention, or announcement. Team targets are valid only for announcements; Worker targets are valid for clarification and attention. An Alert never changes Task state.&quot;
+}</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
+  &quot;anyOf&quot;: [
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;alert_id&quot;,
+        &quot;accepted_recipients&quot;,
+        &quot;failed_recipients&quot;,
+        &quot;task_state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;alert_sent&quot;
+        },
+        &quot;alert_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1,
+          &quot;maxLength&quot;: 128
+        },
+        &quot;accepted_recipients&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 64
+          }
+        },
+        &quot;failed_recipients&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;string&quot;,
+            &quot;minLength&quot;: 1,
+            &quot;maxLength&quot;: 64
+          }
+        },
+        &quot;task_state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;refused&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;recipient_not_current&quot;,
+            &quot;no_eligible_recipients&quot;,
+            &quot;invalid_fanout&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;reason&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;unavailable&quot;
+        },
+        &quot;reason&quot;: {
+          &quot;enum&quot;: [
+            &quot;no_active_team&quot;,
+            &quot;team_authority_unavailable&quot;
+          ]
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    }
+  ]
+}</pre></details>
+    </section>
+    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 3f6e4d6cd5e48ff219e5430d250f0a1195d18a0b</div><div>Catalog SHA-256: af34fd5d38214ad07e8afd4f70253ef3ae201314998eb0874f0ab3d189d61db4</div><div>Design SHA-256: fdfad39745af86239458da9344380ec80e509ae04a8c00f5ab67326f2ddb608c</div></footer>
+  </main>
+</div>
+</body>
+</html>

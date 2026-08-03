@@ -36,6 +36,11 @@ types, implementations, and tests.
   schemas, implementations, and tests. Docs keep intent and pointers rather
   than a second parameter or state-machine copy.
 
-Run `npm run typecheck` plus tests proportional to the changed component.
+Run tests proportional to the changed component. During implementation, use
+the smallest deterministic check that detects the change's unique risk. Do not
+rerun broad or full suites for small iterations. Run the broad package/release
+lane once, only after all implementation Tasks close and the exact final tree
+is stable. If it fails, isolate the failure and rerun only that focused class
+until the fix is complete; the final verifier then runs the aggregate lane once.
 Behavioral claims require an executable or runtime anchor; a doc alone is not
 proof.

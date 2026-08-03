@@ -1,5 +1,5 @@
 import type { TeamCurrentProjection } from "./team-events";
-import type { ToolResultNextAction } from "./tool-results";
+import type { ToolResultNextAction } from "./receipt-types";
 
 type SyncCompletion = "snapshot" | "events" | "timeout";
 

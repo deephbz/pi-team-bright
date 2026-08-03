@@ -1,0 +1,427 @@
+{
+  "schema": "pi-team-bright-model-tool-real-pi-canary/1",
+  "redactionPolicy": "pi-team-bright-model-tool-canary-redaction/1",
+  "completedAt": "2026-08-02T13:51:57.123Z",
+  "status": "passed",
+  "sourceRevision": "63c7c4a9c46af956b2c1e3fda1ba82b9741af720",
+  "sourceDigests": {
+    "scripts/model-tool-canary/extension.ts": "91a69e6b1db5bda50826fb898423c1215d7aa0db60ab1b40675a67746b81c6fd",
+    "scripts/model-tool-canary/run.mjs": "545acca0b32e366285bd795a1f4f1a31b9c5cb075e74f81c73e2b5f70faed9f4",
+    "src/model-tool-contract/catalog.ts": "a3774129b27540d9b11eab1dc3701dfa7483504d56c63c0e0cd0c1f06cdb97a0",
+    "src/model-tool-contract/result-projection.ts": "bab668eadafba809f594973d4e1621ae17bfeaf025bffb60e15d84d63585d67c",
+    "src/model-tool-contract/in-memory-team-port.ts": "37529b90f6d39ce5a6d6afed69d470104b3e26357d58bfacad98a2258213b8ae",
+    "src/model-tool-contract/executors.ts": "650ac07ba55d764683316cd77064dc114c45af6b207e77d89c593d4c71932242",
+    "src/model-tool-contract/pi-registration.ts": "ed5daf1a56135bf5558fbb751e7c659669bc04d00bfaad6bcefc303c03c7735e",
+    "src/model-tool-contract/runtime.ts": "1e720897f3205f69767a68a59d5f1e9972eaea3dcf196f05637c4495d947af50"
+  },
+  "runtime": {
+    "piVersion": "0.80.10",
+    "nodeVersion": "v25.6.0",
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "thinking": "off"
+  },
+  "prompt": {
+    "systemSha256": "3eb9f8085cfe4dafc95c158aa09373ea83d078ecefb7bff6882cb7eb8a8f8341",
+    "operatorSha256": "6bae5d8b0ee0ea7c79da4994261a38dd0988ef9b4d8eed0c84ffdaadd7735fe4",
+    "source": "scripts/model-tool-canary/run.mjs"
+  },
+  "isolation": {
+    "freshWorkingDirectory": true,
+    "freshConfigDirectory": true,
+    "freshSessionDirectory": true,
+    "discoveredExtensions": false,
+    "discoveredSkills": false,
+    "discoveredPromptTemplates": false,
+    "discoveredThemes": false,
+    "contextFiles": false,
+    "builtInTools": false,
+    "activeToolNames": [
+      "team_create",
+      "ensure_worker",
+      "task_create",
+      "task_read",
+      "team_sync"
+    ],
+    "offlineStartup": true,
+    "projectTrust": false
+  },
+  "providerObservation": {
+    "interpretation": "before_provider_request is a local pre-send observation; an HTTP success or a completed usage-bearing assistant response correlated with the valid ordered tool journey anchors provider execution",
+    "requestCount": 6,
+    "evidenceClasses": {
+      "httpResponse": {
+        "observedCount": 0,
+        "successfulCount": 0
+      },
+      "completedUsageBearingAssistantResponse": {
+        "observedCount": 1,
+        "assistantMessageEndCount": 6
+      }
+    },
+    "anchorClass": "completed_usage_bearing_assistant_response",
+    "schemas": [
+      {
+        "name": "team_create",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Create one long-lived Team and bind the exact calling Session as its leader.",
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "purpose": {
+              "description": "The long-lived Team outcome and operating boundary.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "purpose"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "c1ec5dfc964d5492dd80ac69a1c89610ed92472b46d03508e7c2ba768163e8fa",
+        "resultSchemaSha256": "9a1055b9a830de312ebec6810364e9793542c93b6691e5a51a6ba66e0cb99056"
+      },
+      {
+        "name": "ensure_worker",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Create, reconnect, or reuse one Worker in the active Team. Work is assigned separately through Tasks.",
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "scope": {
+              "description": "A semantically deep area with high internal cohesion, low prerequisite overlap, and few dependencies on other Workers.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "scope"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "b4b68a048f085b7c32bba2b99974606f9c0acaa56e8b63c727d8986d09c41e56",
+        "resultSchemaSha256": "87252bc4ea84d5bebc46422653344bae0af179720820e5c0976083b41d887548"
+      },
+      {
+        "name": "task_create",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Create independent assigned Task work contracts in input order. Each item commits separately.",
+          "properties": {
+            "tasks": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "assignee": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "goal": {
+                    "description": "Desired outcome, relevant boundary, and external success signal in one field.",
+                    "maxLength": 160,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "title",
+                  "goal"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "tasks"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "ed9782739939a8e61add30cf97d3aa3bd5c1c27437a7b9af53a3383a153aa013",
+        "resultSchemaSha256": "3220ac0c2f91072c1872dec826b7d8a88a7dd4c55c04814dc309c32713e3638e"
+      },
+      {
+        "name": "task_read",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Read current Task cards by ID without changing Team or observation state.",
+          "properties": {
+            "task_ids": {
+              "items": {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "task_ids"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "9f8a74d74b68b3ac8d0d84d0e2d758c1df8c4f2967cf9ac6ebe51cf1ed2cae3a",
+        "resultSchemaSha256": "24f644f33afcf9c6288b22213616b4aff23844263a463d974e9f4bde6671f932"
+      },
+      {
+        "name": "team_sync",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Read the active Team's snapshot or incremental updates. Team identity is resolved from the exact leader Session binding.",
+          "properties": {
+            "view": {
+              "description": "Use snapshot to restore current context; use updates for routine supervision and waiting.",
+              "enum": [
+                "snapshot",
+                "updates"
+              ]
+            }
+          },
+          "required": [
+            "view"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "a7bd9d8feba0d1339513a714d691c769b1be822e2bc071be6e85d1a806454426",
+        "resultSchemaSha256": "0202f469d9fb692efad33dcbd1c202a7e76b85f4e48ee627bbb58eb7a47e3903"
+      }
+    ]
+  },
+  "journey": [
+    {
+      "tool": "team_create",
+      "call": {
+        "name": "release-coordination",
+        "purpose": "Coordinate durable release preparation with independently assigned verification work and clear execution boundaries."
+      },
+      "result": {
+        "kind": "team_created",
+        "team": {
+          "name": "release-coordination",
+          "purpose": "Coordinate durable release preparation with independently assigned verification work and clear execution boundaries.",
+          "lifecycle": "active"
+        }
+      }
+    },
+    {
+      "tool": "ensure_worker",
+      "call": {
+        "name": "release-verification",
+        "scope": "Independently verify release readiness, artifacts, and acceptance evidence with minimal overlap with coordination work."
+      },
+      "result": {
+        "kind": "worker_ensured",
+        "effect": "created",
+        "worker": {
+          "name": "release-verification",
+          "scope": "Independently verify release readiness, artifacts, and acceptance evidence with minimal overlap with coordination work.",
+          "carrier": "absent"
+        }
+      }
+    },
+    {
+      "tool": "task_create",
+      "call": {
+        "tasks": [
+          {
+            "title": "Execute release verification",
+            "goal": "Verify release readiness, artifacts, and acceptance evidence; report pass/fail findings and any blockers for release coordination.",
+            "assignee": "release-verification"
+          }
+        ]
+      },
+      "result": {
+        "kind": "task_create_batch",
+        "outcomes": [
+          {
+            "kind": "created",
+            "input_index": 0,
+            "task": {
+              "id": "task-1",
+              "title": "Execute release verification",
+              "goal": "Verify release readiness, artifacts, and acceptance evidence; report pass/fail findings and any blockers for release coordination.",
+              "status": "open",
+              "assignee": "release-verification",
+              "current_context": "Work has not started.",
+              "version": "task_v1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "task_read",
+      "call": {
+        "task_ids": [
+          "task-1"
+        ]
+      },
+      "result": {
+        "kind": "task_read_batch",
+        "outcomes": [
+          {
+            "kind": "found",
+            "input_index": 0,
+            "task_id": "task-1",
+            "task": {
+              "id": "task-1",
+              "title": "Execute release verification",
+              "goal": "Verify release readiness, artifacts, and acceptance evidence; report pass/fail findings and any blockers for release coordination.",
+              "status": "open",
+              "assignee": "release-verification",
+              "current_context": "Work has not started.",
+              "version": "task_v1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "team_sync",
+      "call": {
+        "view": "snapshot"
+      },
+      "result": {
+        "kind": "snapshot",
+        "team": {
+          "name": "release-coordination",
+          "purpose": "Coordinate durable release preparation with independently assigned verification work and clear execution boundaries.",
+          "lifecycle": "active"
+        },
+        "workers": [
+          {
+            "name": "release-verification",
+            "scope": "Independently verify release readiness, artifacts, and acceptance evidence with minimal overlap with coordination work.",
+            "carrier": "absent",
+            "nonterminal_task_ids": [
+              "task-1"
+            ]
+          }
+        ],
+        "tasks": [
+          {
+            "id": "task-1",
+            "title": "Execute release verification",
+            "goal": "Verify release readiness, artifacts, and acceptance evidence; report pass/fail findings and any blockers for release coordination.",
+            "status": "open",
+            "assignee": "release-verification",
+            "current_context": "Work has not started.",
+            "version": "task_v1"
+          }
+        ]
+      }
+    }
+  ],
+  "orderedEventKinds": [
+    "rpc:agent_start",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:team_create",
+    "rpc:tool_execution_end:team_create",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:ensure_worker",
+    "rpc:tool_execution_end:ensure_worker",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:task_create",
+    "rpc:tool_execution_end:task_create",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:task_read",
+    "rpc:tool_execution_end:task_read",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:team_sync",
+    "rpc:tool_execution_end:team_sync",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:turn_end",
+    "rpc:agent_settled",
+    "extension:session_start",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:team_create",
+    "extension:tool_result:team_create",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:ensure_worker",
+    "extension:tool_result:ensure_worker",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:task_create",
+    "extension:tool_result:task_create",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:task_read",
+    "extension:tool_result:task_read",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:team_sync",
+    "extension:tool_result:team_sync",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:agent_settled",
+    "extension:session_shutdown"
+  ],
+  "checks": {
+    "packageLocalPiPinned": true,
+    "privateCaptureSecure": true,
+    "isolatedCommands": true,
+    "sessionIdentityExact": true,
+    "providerSchemasExact": true,
+    "providerSystemExact": true,
+    "successfulProviderAnchor": true,
+    "parametersValid": true,
+    "resultSchemasValid": true,
+    "modelContentEqualsDetails": true,
+    "callOrderExact": true,
+    "noParallelCalls": true,
+    "teamPreserved": true,
+    "logicalWorkerPreserved": true,
+    "carrierAbsent": true,
+    "taskReadAgrees": true,
+    "taskSnapshotAgrees": true,
+    "workerTaskIndexAgrees": true,
+    "taskReadDoesNotMutate": true,
+    "finalReportsAbsentCarrier": true,
+    "finalReportsAssignedTask": true,
+    "noForbiddenFinalClaim": true,
+    "sessionEvidencePresent": true,
+    "noRuntimeErrors": true,
+    "processExitedCleanly": true
+  },
+  "failedChecks": [],
+  "privateEvidence": {
+    "persistedOutsideGit": true,
+    "bundleSha256": "201495338a928341a928e445ee8603543354a11fb3dc132c703fc52a25bc9c16"
+  },
+  "claims": {
+    "proved": "One provider-bound Pi Session created and re-read one in-process logical Team, assigned one open Task to one Worker, and reported carrier absent.",
+    "notProved": [
+      "public or shipped registration",
+      "carrier launch, connection, readiness, liveness, or staffing",
+      "Task creation, assignment, delegation, progress, or completion",
+      "persistence, reload, resume, fork, or cross-Session isolation",
+      "updates, waiting, cancellation, performance, security, or general readiness"
+    ]
+  }
+}
