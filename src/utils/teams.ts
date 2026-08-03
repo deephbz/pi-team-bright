@@ -649,15 +649,15 @@ export async function withCurrentConfig<T>(teamName: string, action: (config: Te
   return withLock(p, async () => action(readConfigRaw(p)));
 }
 
-export type TeamPreviewContractGapReason = "team_epoch_missing" | "logical_workers_missing";
+export type TeamModelToolContractGapReason = "team_epoch_missing" | "logical_workers_missing";
 
-export interface TeamPreviewContractGap {
+export interface TeamModelToolContractGap {
   kind: "contract_gap";
-  reason: TeamPreviewContractGapReason;
+  reason: TeamModelToolContractGapReason;
 }
 
-/** Legacy TeamConfig remains readable, but preview state cannot infer missing authority coordinates. */
-export function teamPreviewContractGap(config: TeamConfig): TeamPreviewContractGap | undefined {
+/** Legacy TeamConfig remains readable, but model-tool state cannot infer missing authority coordinates. */
+export function teamModelToolContractGap(config: TeamConfig): TeamModelToolContractGap | undefined {
   if (!config.epochId) return { kind: "contract_gap", reason: "team_epoch_missing" };
   if (!config.logicalWorkers) return { kind: "contract_gap", reason: "logical_workers_missing" };
   return undefined;
@@ -666,13 +666,13 @@ export function teamPreviewContractGap(config: TeamConfig): TeamPreviewContractG
 export type ReadLogicalWorkerResult =
   | { kind: "found"; worker: LogicalWorker }
   | { kind: "not_found" }
-  | TeamPreviewContractGap;
+  | TeamModelToolContractGap;
 
 /** Read one stable logical Worker without consulting Membership or carrier state. */
 export async function readLogicalWorker(teamName: string, workerName: string): Promise<ReadLogicalWorkerResult> {
   sanitizeName(workerName);
   return withCurrentConfig(teamName, async (config) => {
-    const gap = teamPreviewContractGap(config);
+    const gap = teamModelToolContractGap(config);
     if (gap) return gap;
     const worker = config.logicalWorkers!.find((candidate) => candidate.name === workerName);
     return worker ? { kind: "found", worker: structuredClone(worker) } : { kind: "not_found" };
@@ -683,7 +683,7 @@ export type EnsureLogicalWorkerResult =
   | { kind: "created"; worker: LogicalWorker }
   | { kind: "reused"; worker: LogicalWorker }
   | { kind: "scope_conflict"; worker: LogicalWorker }
-  | TeamPreviewContractGap;
+  | TeamModelToolContractGap;
 
 /**
  * Ensure durable Worker meaning under the TeamConfig lock. This operation does
@@ -701,7 +701,7 @@ export async function ensureLogicalWorker(
   if (!fs.existsSync(p)) throw new Error(`Team ${teamName} not found`);
   return withLock(p, async () => {
     const config = readConfigRaw(p);
-    const gap = teamPreviewContractGap(config);
+    const gap = teamModelToolContractGap(config);
     if (gap) return gap;
     const existing = config.logicalWorkers!.find((worker) => worker.name === input.name);
     if (existing) {

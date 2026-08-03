@@ -144,6 +144,7 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
       "create-task",
       {
         tasks: [{
+          operation_id: "create-default-authority",
           title: "Use the default private authority",
           goal: "The first Task must work without operator setup.",
         }],

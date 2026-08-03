@@ -5,7 +5,7 @@ import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;

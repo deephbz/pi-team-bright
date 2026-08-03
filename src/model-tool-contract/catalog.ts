@@ -1,4 +1,8 @@
 import { Type } from "typebox";
+import {
+  CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
+  CandidateTaskCurrentContextSchema,
+} from "../utils/beads";
 
 /**
  * Candidate model-facing contract shaped in
@@ -10,8 +14,8 @@ import { Type } from "typebox";
 
 export const MODEL_TOOL_CANDIDATE_LIMITS = {
   maxTaskTitleChars: 80,
-  maxTaskGoalChars: 160,
-  maxTaskCurrentContextChars: 640,
+  maxTaskGoalChars: 1_000,
+  maxTaskCurrentContextChars: CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
 } as const;
 
 const TaskId = Type.String({ minLength: 1, maxLength: 128 });
@@ -45,12 +49,13 @@ export const CandidateTaskCardSchema = Type.Object({
   goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and success signal in one field." }),
   status: TaskStatus,
   assignee: Type.Optional(WorkerName),
-  current_context: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskCurrentContextChars }),
+  current_context: CandidateTaskCurrentContextSchema,
   // Raw semantic details retain this authority version. Model projection maps it to TaskVersionRefSchema.
   version: TaskAuthorityVersion,
 }, { additionalProperties: false, description: "Current Task projection used for authority-backed details." });
 
 const CandidateTaskCreateItemSchema = Type.Object({
+  operation_id: Type.String({ minLength: 1, maxLength: 128, description: "Opaque caller-chosen create operation identity. Reuse it only to reconcile an unknown create outcome." }),
   title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars }),
   goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and external success signal in one field." }),
   assignee: Type.Optional(WorkerName),
@@ -65,6 +70,7 @@ export const CandidateTaskCreateParametersSchema = Type.Object({
 
 const CandidateTaskCreateOutcomeBase = {
   input_index: Type.Integer({ minimum: 0 }),
+  operation_id: Type.String({ minLength: 1, maxLength: 128 }),
 };
 
 export const CandidateTaskCreateResultSchema = Type.Object({
@@ -79,9 +85,14 @@ export const CandidateTaskCreateResultSchema = Type.Object({
     Type.Object({
       ...CandidateTaskCreateOutcomeBase,
       kind: Type.Literal("refused"),
-      reason: Type.Literal("worker_unavailable"),
+      reason: Type.Enum(["worker_unavailable", "operation_conflict"]),
       message: Type.String({ minLength: 1 }),
       state_changed: Type.Literal(false),
+    }, { additionalProperties: false }),
+    Type.Object({
+      ...CandidateTaskCreateOutcomeBase,
+      kind: Type.Literal("unknown_outcome"),
+      message: Type.String({ minLength: 1 }),
     }, { additionalProperties: false }),
     Type.Object({
       ...CandidateTaskCreateOutcomeBase,
@@ -150,7 +161,7 @@ const CandidateTaskUpdateItemSchema = Type.Object({
   task_id: TaskId,
   operation_id: Type.String({ minLength: 1, maxLength: 128 }),
   expected_version: TaskVersionRefSchema,
-  current_context: Type.Optional(Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskCurrentContextChars })),
+  current_context: Type.Optional(CandidateTaskCurrentContextSchema),
   journal_entries: Type.Optional(Type.Array(CandidateTaskUpdateJournalEntrySchema, { minItems: 1 })),
   status: Type.Optional(TaskStatus),
 }, { additionalProperties: false, minProperties: 4 });
@@ -230,7 +241,7 @@ export const CandidateTaskUpdateResultSchema = Type.Union([
 const TaskDeltaCurrent = Type.Object({
   status: TaskStatus,
   assignee: Type.Optional(WorkerName),
-  current_context: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskCurrentContextChars }),
+  current_context: CandidateTaskCurrentContextSchema,
   version: TaskAuthorityVersion,
 }, { additionalProperties: false });
 
@@ -543,6 +554,7 @@ const ensureWorkerCall = {
 } as const;
 const taskCreateCall = {
   tasks: [{
+    operation_id: "create-release-candidate",
     title: "Verify release candidate",
     goal: "Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.",
     assignee: "release-verifier",
@@ -553,6 +565,7 @@ const taskCreateResult = {
   outcomes: [{
     kind: "created",
     input_index: 0,
+    operation_id: "create-release-candidate",
     task: {
       id: "task-23",
       title: "Verify release candidate",
@@ -569,6 +582,7 @@ const taskCreateRefusedResult = {
   outcomes: [{
     kind: "refused",
     input_index: 0,
+    operation_id: "create-release-candidate",
     reason: "worker_unavailable",
     message: "The assigned Worker is not present in the active Team.",
     state_changed: false,

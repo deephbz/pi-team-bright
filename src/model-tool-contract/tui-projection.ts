@@ -1,9 +1,10 @@
 import { Text } from "@earendil-works/pi-tui";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { projectCandidateToolResult, unsupportedCandidateToolResult, type CandidateProjectedTool } from "./result-projection";
+import { projectCandidateToolResult, type CandidateProjectedTool } from "./result-projection";
 
 export interface CandidateTuiInput {
   tool: CandidateProjectedTool;
+  content?: unknown;
   details: unknown;
   expanded: boolean;
   isError?: boolean;
@@ -27,6 +28,7 @@ function recoveryLine(value: any): string | undefined {
   if (recovery.action === "reconcile_and_retry") return recovery.new_operation_id
     ? `Next: read the current Task, then retry at version ${recovery.expected_version} with a new operation_id.`
     : `Next: read the current Task, then retry at version ${recovery.expected_version}.`;
+  if (recovery.action === "retry_same_operation") return `Next: retry create operation ${quoted(recovery.operation_id)} exactly; do not create a new operation.`;
   if (recovery.action === "read_before_retry") return `Next: read Task ${quoted(recovery.task_id)} before retrying.`;
   if (recovery.action === "request_snapshot") return "Next: request a Team snapshot before continuing.";
   if (recovery.action === "retry_team_shutdown") return "Next: resolve the named Worker stop failures, then retry Team shutdown.";
@@ -48,7 +50,7 @@ function toolLines(tool: CandidateProjectedTool, raw: any, model: any, expanded:
       const failures = model.outcomes.filter((item: any) => item.kind !== "created");
       lines.push(`${model.outcomes.length} Task results · ${failures.length} refused or unavailable.`);
       for (const item of failures) {
-        lines.push(`${item.kind} · input ${item.input_index}: ${compact(item.message)}`);
+        lines.push(`${item.kind} · input ${item.input_index} · operation ${quoted(item.operation_id)}: ${compact(item.message)}`);
         const retry = recoveryLine(item);
         if (retry) lines.push(retry);
       }
@@ -56,12 +58,16 @@ function toolLines(tool: CandidateProjectedTool, raw: any, model: any, expanded:
         lines.push(`Delivery warnings for input ${item.input_index}: ${item.delivery_warnings.join("; ")}.`);
       }
       if (expanded) for (const item of model.outcomes.filter((item: any) => item.task)) {
-        lines.push(`Created ${taskLine(item.task)}.`);
+        lines.push(`Created ${taskLine(item.task)} · operation ${quoted(item.operation_id)}.`);
         if (item.delivery_warnings?.length) lines.push(`Delivery warnings: ${item.delivery_warnings.join("; ")}.`);
       }
     } else if (model.kind === "created") {
-      lines.push(`Task ${taskLine(model.task)} was created.`);
+      lines.push(`Task ${taskLine(model.task)} was created · operation ${quoted(model.operation_id)}.`);
       if (model.delivery_warnings?.length) lines.push(`Delivery warnings: ${model.delivery_warnings.join("; ")}.`);
+    } else if (model.kind === "unknown_outcome") {
+      lines.push(`unknown outcome · operation ${quoted(model.operation_id)}: ${compact(model.message)}`);
+      const retry = recoveryLine(model);
+      if (retry) lines.push(retry);
     }
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "task_read") {
@@ -127,8 +133,23 @@ function toolLines(tool: CandidateProjectedTool, raw: any, model: any, expanded:
   return lines;
 }
 
+function rawErrorLines(input: CandidateTuiInput, issue: "execution_error" | "result_projection_error"): string[] {
+  const report = {
+    tool: input.tool,
+    issue,
+    content: input.content ?? [],
+    details: input.details,
+  };
+  const raw = JSON.stringify(report, null, 2) ?? String(report);
+  return [
+    `✗ ${input.tool} ${issue === "execution_error" ? "execution error" : "result projection error"}`,
+    "  Raw report follows. Review sensitive fields before sharing.",
+    ...raw.split("\n").map((line) => `  ${line}`),
+  ];
+}
+
 export function projectCandidateTui(input: CandidateTuiInput): string[] {
-  if (input.isError) return ["✗ Execution error: the tool did not produce a semantic result."];
+  if (input.isError) return rawErrorLines(input, "execution_error");
   try {
     const model = projectCandidateToolResult(input.tool, input.details) as any;
     const kind = model.kind;
@@ -142,7 +163,7 @@ export function projectCandidateTui(input: CandidateTuiInput): string[] {
     const tone = negative ? "!" : "✓";
     return [`${tone} ${mixedTaskBatch || partialTaskCreate || partialAlert ? "partial" : kind}`, ...toolLines(input.tool, input.details, model, input.expanded).map((line) => `  ${line}`)];
   } catch {
-    return [`✗ ${unsupportedCandidateToolResult(input.tool, input.details)}`];
+    return rawErrorLines(input, "result_projection_error");
   }
 }
 
@@ -150,7 +171,7 @@ export type CandidateRenderResult = NonNullable<ToolDefinition["renderResult"]>;
 
 export function createCandidateToolResultRenderer(tool: CandidateProjectedTool): CandidateRenderResult {
   return (result, options, _theme, context) => {
-    const lines = projectCandidateTui({ tool, details: result.details, expanded: options.expanded, isError: (context as any)?.isError === true });
+    const lines = projectCandidateTui({ tool, content: result.content, details: result.details, expanded: options.expanded, isError: (context as any)?.isError === true });
     return new Text(lines.join("\n"), 0, 0);
   };
 }

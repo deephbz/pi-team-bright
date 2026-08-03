@@ -66,12 +66,13 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     const teamEvents = await import("../../src/utils/team-events");
     const terminalRegistry = await import("../../src/adapters/terminal-registry");
 
-    const livePanes = new Map<string, boolean>();
+    const livePanes = new Map<string, boolean>([["qa-pane-lead", true]]);
     const unkillablePanes = new Set<string>();
     terminalRegistry.setAdapter({
       name: "qa-memory-terminal",
       detect: () => true,
       isDirectCarrier: () => true,
+      currentTargetId: () => "qa-pane-lead",
       spawn: (options: { name: string }) => {
         const id = `qa-pane-${options.name}`;
         livePanes.set(id, true);
@@ -189,12 +190,12 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       const args = { ...options.args };
       if (options.actor === "team-lead") {
         if (options.tool === "task_create" && !Array.isArray(args.tasks)) {
-          args.tasks = [{ title: args.title, goal: args.description || args.goal || "Complete the requested Task and record evidence.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
+          args.tasks = [{ operation_id: `qa-${options.id}`, title: args.title, goal: args.description || args.goal || "Complete the requested Task and record evidence.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
           delete args.team_name; delete args.title; delete args.description; delete args.goal; delete args.assignee;
         } else if (options.tool === "task_read" && args.task_id && !args.task_ids) {
           args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
         } else if (options.tool === "task_update" && args.task_id && !args.updates) {
-          args.updates = [{ task_id: args.task_id, operation_id: `qa-${options.id}`, expected_version: args.expected_version || "1", current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
+          args.updates = [{ task_id: args.task_id, operation_id: `qa-${options.id}`, expected_version: taskVersionRef(args.expected_version || "1"), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
           for (const key of ["team_name", "task_id", "status", "design", "append_note", "expected_version"]) delete args[key];
         } else if (options.tool === "team_sync" && !args.view) {
           args.view = args.cursor ? "updates" : "snapshot";
@@ -206,9 +207,11 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
             args.target = args.to === "*" ? { kind: "team" } : { kind: "worker", name: args.to };
             delete args.to;
           }
-          if (options.tool === "task_link" && typeof args.expected_version === "string") {
-            args.expected_version = taskVersionRef(args.expected_version);
-          }
+        }
+      }
+      for (const field of ["expected_version", "task_version"] as const) {
+        if (typeof args[field] === "string" && !args[field].startsWith("v_")) {
+          args[field] = taskVersionRef(args[field]);
         }
       }
       const handlers = options.actor === "team-lead" ? leadRegistration.handlers : undefined;
@@ -342,7 +345,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       "reviewer",
       workerSession,
       prepared.pendingLaunchId,
-      { tmuxPaneId: prepared.tmuxPaneId },
+      prepared.terminalTarget ? { terminalTarget: prepared.terminalTarget } : { tmuxPaneId: prepared.tmuxPaneId },
       workerMembership.membershipId,
     );
     await teamEvents.appendTeamEvent(teamName, {
@@ -353,7 +356,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     });
     fixtureTransitions.push({
       action: "simulate Worker first-session binding without launching Pi",
-      evidence: { worker: "reviewer", membershipId: bound.membershipId, sessionFile: workerSession },
+      evidence: { worker: "reviewer", membershipId: bound.membershipId, sessionFile: path.relative(fakeHome, workerSession) },
     });
 
     await capture({
@@ -423,7 +426,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     fs.mkdirSync(brokenTaskQueue, { recursive: true });
     fixtureTransitions.push({
       action: "replace one Task delivery queue file with a directory to force post-commit enqueue degradation",
-      evidence: { worker: "reviewer", queuePath: brokenTaskQueue },
+      evidence: { worker: "reviewer", queuePath: path.relative(fakeHome, brokenTaskQueue) },
     });
 
     const deliveryWarningTask = await capture({
@@ -1031,7 +1034,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     fs.mkdirSync(brokenInbox, { recursive: true });
     fixtureTransitions.push({
       action: "replace one Alert delivery queue file with a directory to force a partial announcement",
-      evidence: { worker: "delivery-broken", queuePath: brokenInbox },
+      evidence: { worker: "delivery-broken", queuePath: path.relative(fakeHome, brokenInbox) },
     });
 
     await capture({

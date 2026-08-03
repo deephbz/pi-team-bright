@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { Type } from "typebox";
+import { Check } from "typebox/value";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -16,6 +18,24 @@ export const DEFAULT_BD_INIT_TIMEOUT_MS = 30_000;
 export const PI_TEAMS_SCHEMA = "1";
 export const CANDIDATE_TASK_METADATA_KEY = "pi_teams_candidate_task";
 export const CANDIDATE_TASK_METADATA_SCHEMA = "pi-teams-candidate-task/1" as const;
+/** Standard TypeBox length limit for model-facing candidate Task context. */
+export const CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH = 2_000;
+export const CandidateTaskCurrentContextSchema = Type.String({
+  minLength: 1,
+  maxLength: CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
+});
+
+/** Use the exported schema for every runtime candidate-context validation. */
+export function isCandidateTaskCurrentContext(value: unknown): value is string {
+  return Check(CandidateTaskCurrentContextSchema, value);
+}
+
+/** Reject invalid canonical context before a Beads command can mutate it. */
+export function assertCandidateTaskMetadataContext(value: unknown): asserts value is CandidateTaskMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !isCandidateTaskCurrentContext((value as Record<string, unknown>).current_context)) {
+    throw new Error(`Candidate Task current_context must contain 1 to ${CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
+  }
+}
 
 export interface CandidateTaskOperationRecord {
   operation_id: string;
@@ -330,6 +350,12 @@ export interface TaskMutationResult {
   appliedOperations: string[];
 }
 
+/** Result of a create, including whether an idempotency replay supplied the Task. */
+export interface TaskCreateResult {
+  task: TaskFile;
+  replayed: boolean;
+}
+
 export function beadsLabel(teamName: string): string {
   return `pi-teams:${sanitizeName(teamName)}`;
 }
@@ -617,31 +643,38 @@ export class BeadsTaskStore {
   }
 
   async create(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskFile> {
+    return (await this.createWithResult(input, options)).task;
+  }
+
+  async createWithResult(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskCreateResult> {
+    if (input.internalMetadata && CANDIDATE_TASK_METADATA_KEY in input.internalMetadata) {
+      assertCandidateTaskMetadataContext(input.internalMetadata[CANDIDATE_TASK_METADATA_KEY]);
+    }
     if (!input.title || !input.title.trim()) throw new Error("Task title must not be empty");
     if (input.assignee && !input.acceptanceCriteria?.trim() && !input.internalMetadata) {
       throw new Error("Assigned Tasks require nonempty acceptance criteria");
     }
     const idempotencyKey = input.idempotencyKey || options.idempotencyKey;
-    const create = async (): Promise<TaskFile> => {
+    const create = async (): Promise<TaskCreateResult> => {
       if (idempotencyKey) {
         const existing = (await this.listRaw()).filter(raw => metadataValue(raw, "pi_teams_idempotency_key") === idempotencyKey);
         if (existing.length > 1) throw new BeadsError(`Duplicate Beads tasks share idempotency key ${idempotencyKey}; refusing to choose a mapping.`, "conflict", `bd list ${idempotencyKey}`);
-        if (existing[0]) return mapTask(existing[0]);
+        if (existing[0]) return { task: mapTask(existing[0]), replayed: true };
       }
       const metadata = {
-      ...(input.internalMetadata || {}),
-      pi_teams_team: this.teamName,
-      pi_teams_source: "pi-teams",
-      pi_teams_schema: PI_TEAMS_SCHEMA,
-      ...(idempotencyKey ? { pi_teams_idempotency_key: idempotencyKey } : {}),
+        ...(input.internalMetadata || {}),
+        pi_teams_team: this.teamName,
+        pi_teams_source: "pi-teams",
+        pi_teams_schema: PI_TEAMS_SCHEMA,
+        ...(idempotencyKey ? { pi_teams_idempotency_key: idempotencyKey } : {}),
       };
       const args = [
-      "create",
-      "--title", input.title,
-      "--description", input.description,
-      "--labels", beadsLabel(this.teamName),
-      "--metadata", JSON.stringify(metadata),
-      "--actor", actorName(options.actor || this.actor),
+        "create",
+        "--title", input.title,
+        "--description", input.description,
+        "--labels", beadsLabel(this.teamName),
+        "--metadata", JSON.stringify(metadata),
+        "--actor", actorName(options.actor || this.actor),
       ];
       if (input.acceptanceCriteria) args.push("--acceptance", input.acceptanceCriteria);
       if (input.design) args.push("--design", input.design);
@@ -650,7 +683,7 @@ export class BeadsTaskStore {
       const created = Array.isArray(raw) ? raw[0] : raw;
       if (!created?.id) throw new BeadsError("Beads create returned no task ID.", "malformed", "bd create");
       this.verifyScope(created);
-      return mapTask(await this.showRaw(created.id));
+      return { task: mapTask(await this.showRaw(created.id)), replayed: false };
     };
     if (!idempotencyKey) return create();
     fs.mkdirSync(teamDir(this.teamName), { recursive: true });
@@ -774,6 +807,7 @@ export class BeadsTaskStore {
   }
 
   async updateWithResult(taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
+    if (options.candidateTaskMetadata !== undefined) assertCandidateTaskMetadataContext(options.candidateTaskMetadata);
     const safeId = sanitizeName(taskId);
     return withLock(this.lockPath(safeId), async () => {
       const beforeRaw = await this.showRaw(safeId);

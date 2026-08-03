@@ -113,7 +113,7 @@ function governanceHtml(governance: ContractReviewGovernance): string {
 function toolSignature(name: string): string {
   if (name === "team_create") return "team_create({ name, purpose })";
   if (name === "team_sync") return "team_sync({ view })";
-  if (name === "task_create") return "task_create({ tasks })";
+  if (name === "task_create") return "task_create({ tasks: [{ operation_id, … }] })";
   if (name === "task_read") return "task_read({ task_ids })";
   if (name === "task_update") return "task_update({ updates })";
   if (name === "worker_stop") return "worker_stop({ worker })";

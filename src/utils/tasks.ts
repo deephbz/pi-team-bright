@@ -284,26 +284,44 @@ export async function createTask(
   internalPublication: InternalTaskPublicationOptions = {},
 ): Promise<TaskCreateReceipt> {
   return withSemanticTrace("task_create", { teamName }, async () => {
-    const mutate = (store: BeadsTaskStore) => store.create(input, {
+    const mutate = (store: BeadsTaskStore) => store.createWithResult(input, {
       idempotencyKey: input.idempotencyKey,
       actor: binding?.actor,
     });
-    const task = binding
+    const result = binding
       ? await withAgentMutationAuthority(teamName, binding, mutate)
       : await mutate(await storeFor(teamName));
-    if (binding?.actingSessionFile && task.assignee === binding.actor) {
-      await suppressTaskVersionForSession(teamName, binding.actor, binding.actingSessionFile, task);
+    if (result.replayed) {
+      return {
+        task: result.task,
+        changed: false,
+        appliedOperations: [],
+        deliveryDegraded: false,
+        deliveryWarnings: [],
+        publication: {
+          teamEvent: { appended: false },
+          delivery: {
+            attemptedRecipients: [],
+            failedRecipients: [],
+            recoveryRecordedFor: [],
+            recoveryRecordFailedFor: [],
+          },
+        },
+      };
+    }
+    if (binding?.actingSessionFile && result.task.assignee === binding.actor) {
+      await suppressTaskVersionForSession(teamName, binding.actor, binding.actingSessionFile, result.task);
     }
     const publication = await publishTaskMutation(
       teamName,
-      task,
-      task,
-      task.assignee ? "assigned" : "task_changed",
+      result.task,
+      result.task,
+      result.task.assignee ? "assigned" : "task_changed",
       binding?.actor,
       internalPublication.taskEventEvidence,
     );
     return {
-      task,
+      task: result.task,
       changed: true,
       appliedOperations: ["create"],
       deliveryDegraded: publication.warnings.length > 0,

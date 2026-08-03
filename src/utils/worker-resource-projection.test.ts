@@ -35,6 +35,55 @@ describe("Worker resource projection", () => {
     expect(projectWorkerTools([], ["a", "b"], loaded)).toEqual(["b"]);
   });
 
+  it("uses a trusted project's Worker model setting over global and ignores untrusted project settings", () => {
+    const root = temp();
+    const agent = path.join(root, "agent");
+    const cwd = path.join(root, "project");
+    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    fs.mkdirSync(agent, { recursive: true });
+    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: "global/model" } },
+    }));
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: "project/model" } },
+    }));
+
+    expect(loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent }).defaultModel)
+      .toEqual({ scope: "project", value: "project/model" });
+    expect(loadWorkerResourcePolicy({ cwd, projectTrusted: false, agentDir: agent }).defaultModel)
+      .toEqual({ scope: "global", value: "global/model" });
+  });
+
+  it("uses PI_CODING_AGENT_DIR for the active global Worker setting", () => {
+    const root = temp();
+    const agent = path.join(root, "active-agent");
+    fs.mkdirSync(agent, { recursive: true });
+    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: "openrouter/openai/gpt-5.1" } },
+    }));
+    const prior = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agent;
+    try {
+      expect(loadWorkerResourcePolicy({ cwd: root, projectTrusted: false }).defaultModel)
+        .toEqual({ scope: "global", value: "openrouter/openai/gpt-5.1" });
+    } finally {
+      if (prior === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = prior;
+    }
+  });
+
+  it("retains malformed Worker model setting scope for launch refusal", () => {
+    const root = temp();
+    const agent = path.join(root, "agent");
+    fs.mkdirSync(agent, { recursive: true });
+    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: 7 } },
+    }));
+
+    expect(loadWorkerResourcePolicy({ cwd: root, projectTrusted: false, agentDir: agent }).defaultModel)
+      .toEqual({ scope: "global", error: "must be a nonempty qualified provider/model string" });
+  });
+
   it("aggregates replacement, ancestor context, then append in a private file", () => {
     const root = temp();
     const agent = path.join(root, "agent");

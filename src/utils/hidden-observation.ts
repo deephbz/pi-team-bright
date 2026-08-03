@@ -4,8 +4,8 @@ import path from "node:path";
 import { withLock } from "./lock";
 import { teamDir } from "./paths";
 import {
-  type TeamPreviewContractGap,
-  teamPreviewContractGap,
+  type TeamModelToolContractGap,
+  teamModelToolContractGap,
   withCurrentConfig,
 } from "./teams";
 
@@ -43,7 +43,7 @@ export type ReadHiddenObservationResult =
   | { kind: "found"; projection: HiddenObservationProjection }
   | { kind: "not_found"; reason: "absent" | "lineage_mismatch" }
   | { kind: "coordinate_mismatch"; reason: "team_epoch_mismatch" | "lead_session_mismatch" }
-  | TeamPreviewContractGap;
+  | TeamModelToolContractGap;
 
 export type CommitHiddenObservationResult =
   | { kind: "committed"; projection: HiddenObservationProjection }
@@ -56,7 +56,7 @@ export type CommitHiddenObservationResult =
         | "stale_acknowledgement"
         | "acknowledgement_conflict";
     }
-  | TeamPreviewContractGap;
+  | TeamModelToolContractGap;
 
 function hiddenObservationPath(teamName: string, epochId: string, exactSessionId: string): string {
   const epochKey = crypto.createHash("sha256").update(epochId).digest("hex");
@@ -175,7 +175,7 @@ export async function readHiddenObservationProjection(
     throw new Error("Hidden observation reads require a Team epoch and exact Session identity.");
   }
   return withCurrentConfig(teamName, async (config) => {
-    const gap = teamPreviewContractGap(config);
+    const gap = teamModelToolContractGap(config);
     if (gap) return gap;
     if (config.epochId !== coordinate.teamEpochId) {
       return { kind: "coordinate_mismatch", reason: "team_epoch_mismatch" };
@@ -227,7 +227,7 @@ export async function commitHiddenObservationProjection(
   );
 
   return withCurrentConfig(teamName, async (config) => {
-    const gap = teamPreviewContractGap(config);
+    const gap = teamModelToolContractGap(config);
     if (gap) return gap;
     if (config.epochId !== input.teamEpochId) return { kind: "refused", reason: "team_epoch_mismatch" };
     if (!currentLeadMatches(config, input.exactSessionId)) return { kind: "refused", reason: "lead_session_mismatch" };

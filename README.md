@@ -49,6 +49,7 @@ ensure_worker({
 
 task_create({
   tasks: [{
+    operation_id: "audit-recovery-contract-1",
     title: "Audit the recovery contract",
     goal: "Compare implementation with the documented recovery path and report exact evidence.",
     assignee: "auditor"
@@ -76,10 +77,23 @@ based substitute for Tasks.
 
 - **This is Team-scoped coordination.** It is not a general agent directory,
   cross-Team router, universal chat bus, or freeform work-by-message system.
-- **Terminal capabilities vary.** Herdr, tmux, Zellij, cmux, iTerm2, WezTerm,
-  and Windows adapters do not all have identical spawn, stop, nesting, or
-  window support. Placement is Team-wide policy, never a per-Worker override;
-  an unsupported policy is refused.
+- **Terminal capabilities vary.** Herdr and tmux enforce the Team pane-placement
+  invariant: the first Worker splits the exact leader pane right with a measured
+  ratio that keeps the leader at least 60% wide, and later Workers split an exact current Worker pane down only after
+  proving it remains in the leader tab and Worker region. They never use terminal
+  focus, select a whole-window layout, or close another pane during
+  Worker stop. iTerm2, Zellij, cmux, WezTerm, and Windows preserve their existing
+  placement behavior but do not guarantee this exact target-and-ratio invariant.
+  Herdr owns the `pi` executable used by `agent start`; a real Herdr Team must
+  configure that executable to a supported Pi release (0.80.10, 0.82.x, or
+  0.83.x). Launching a supported local Pi only for the leader does not change
+  Worker Pi. Workers load the exact Pi Team Bright extension and retain Pi's
+  normal unrelated extension and Skill discovery. A distinct discovered Pi Team
+  Bright copy violates the one-version-epoch rule and remains a documented
+  installation risk. Herdr forwards the established Pi and proxy environment
+  allowlist into Worker launches.
+  Placement remains Team-wide policy, never a per-Worker override; an unsupported
+  policy is refused.
 - **One live Team is one version epoch.** There is no rolling mix of Pi Team
   Bright versions. Stop the Team before an upgrade or rollback, then restart
   it on one version.
@@ -101,7 +115,7 @@ based substitute for Tasks.
 After npm lists this release candidate, pin the exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.2
+pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.3
 ```
 
 The package owns its local Task backend through the exact runtime dependency
@@ -114,16 +128,17 @@ is live.
 
 ## Worker resource settings
 
-Worker-only prompt and tool projection uses Pi settings, not Team state. Put it under
-`pi_team_bright.worker` in Pi global `~/.pi/agent/settings.json`, or in a trusted
-project's `.pi/settings.json`. Pi applies its normal global/project merge, so the
-trusted project's nested Worker values take precedence. No Pi Team Bright settings
-file exists.
+Worker-only prompt, tool, and default-model projection uses Pi settings. Put it under
+`pi_team_bright.worker` in the active Pi agent directory's `settings.json`
+(`PI_CODING_AGENT_DIR`, normally `~/.pi/agent`), or in a trusted project's
+`.pi/settings.json`. Pi applies its normal global/project merge, so the trusted
+project's nested Worker values take precedence. No Pi Team Bright settings file exists.
 
 ```json
 {
   "pi_team_bright": {
     "worker": {
+      "default_model": "provider/model",
       "agents": {
         "replace_global": "/absolute/path/to/worker-global.md",
         "append_global": "/absolute/path/to/worker-append.md"
@@ -133,6 +148,18 @@ file exists.
   }
 }
 ```
+
+`default_model` is optional and applies only to new Workers. Its first slash
+separates a provider from a nonempty model ID; the model ID can contain later
+slashes, for example `openrouter/openai/gpt-5.1`. Pi Team Bright requires the
+exact available identifier and never selects a provider for this setting. Explicit Worker or template models and the durable Team `default_model`
+take precedence. Then trusted-project and global Worker settings apply. If none
+apply, Pi receives no `--model` and uses its native default. Pi Team Bright stores
+the selected exact model on Membership before launch, so recovery cannot drift.
+A malformed, bare, or unavailable setting refuses the launch before carrier
+creation. The refusal identifies the global or trusted-project scope; edit it and
+retry. An untrusted or unknown Worker ignores project settings and can use only
+the global Worker setting.
 
 Both `agents` paths are optional and must be absolute. The four cases are:
 

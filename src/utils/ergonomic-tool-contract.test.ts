@@ -12,12 +12,13 @@ import * as teamEvents from "./team-events";
 import * as taskAuthority from "./tasks";
 import * as runtime from "./runtime";
 import * as workerResources from "./worker-resource-projection";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
   name: string;
   description: string;
+  parameters: { properties?: Record<string, unknown> };
   execute: (toolCallId: string, params: any, signal?: unknown, onUpdate?: unknown, ctx?: unknown) => Promise<any>;
 };
 
@@ -83,6 +84,7 @@ function terminal(): TerminalAdapter {
     name: "ergonomic-contract-terminal",
     isDirectCarrier: () => true,
     detect: () => true,
+    currentTargetId: () => "pane-leader",
     spawn: (options: { name: string }) => `pane-${options.name}`,
     kill() {},
     isAlive: () => false,
@@ -113,7 +115,7 @@ function createBoundTeam(name: string, leadSession: string, separateWindows?: bo
     undefined,
     undefined,
     undefined,
-    detected ? { backend: detected.name } : undefined,
+    detected ? { backend: detected.name, leadTarget: { backend: detected.name, kind: "pane", targetId: "pane-leader" } } : undefined,
     MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
 }
@@ -472,9 +474,12 @@ describe("ergonomic agent-facing Team contracts", () => {
     const spawnOptions = spawn.mock.calls[0][0];
     expect(spawnOptions.argv).not.toContain("--session");
     expect(spawnOptions.argv).toEqual(expect.arrayContaining([
-      "-ne", "-e", "/private/exact-team-extension.ts",
+      "-e",
+      "/private/exact-team-extension.ts",
     ]));
-    expect(spawnOptions.argv.indexOf("-ne")).toBeLessThan(spawnOptions.argv.indexOf("-e"));
+    expect(spawnOptions.argv).not.toContain("-ns");
+    expect(spawnOptions.argv).not.toContain("-ne");
+    expect(spawnOptions.argv).not.toContain("--no-extensions");
     expect(spawnOptions.env).toMatchObject({
       PI_TEAM_NAME: team,
       PI_AGENT_NAME: "worker",
@@ -822,9 +827,19 @@ describe("ergonomic agent-facing Team contracts", () => {
       expect(tools.has(tool)).toBe(false);
     }
 
-    const sent = await tools.get("alert_send")!.execute("send", {
+    const alert = tools.get("alert_send")!;
+    expect(alert.parameters.properties).toHaveProperty("team_name");
+    expect(alert.parameters.properties).toHaveProperty("kind");
+    expect(alert.parameters.properties).toHaveProperty("text");
+    expect(alert.parameters.properties).toHaveProperty("task_id");
+    expect(alert.parameters.properties).toHaveProperty("task_version");
+    expect(alert.parameters.properties).not.toHaveProperty("to");
+    expect(alert.parameters.properties).not.toHaveProperty("target");
+
+    const sent = await alert.execute("send", {
       team_name: team,
-      to: "team-lead",
+      to: "worker",
+      target: { kind: "worker", name: "worker" },
       kind: "clarification",
       text: "Does the acceptance criterion include the restart case?",
     }, undefined, undefined, workerContext);
@@ -835,6 +850,25 @@ describe("ergonomic agent-facing Team contracts", () => {
       failed_recipients: [],
       task_state_changed: false,
     });
+
+    const attention = await alert.execute("attention", {
+      team_name: team,
+      to: "worker",
+      kind: "attention",
+      text: "The test setup needs owner attention.",
+    }, undefined, undefined, workerContext);
+    expect(attention.details).toMatchObject({
+      kind: "alert_sent",
+      accepted_recipients: ["team-lead"],
+      failed_recipients: [],
+      task_state_changed: false,
+    });
+    const workerAlerts = teamEvents.readTeamEvents(team, { eventTypes: ["alert"] }).events;
+    expect(workerAlerts).toHaveLength(2);
+    expect(workerAlerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ from: "worker", to: "team-lead", kind: "clarification" }),
+      expect.objectContaining({ from: "worker", to: "team-lead", kind: "attention" }),
+    ]));
     expect(JSON.stringify(sent.details)).not.toContain(workerSession);
     expect(tools.has("read_inbox")).toBe(false);
   });
@@ -859,7 +893,7 @@ describe("ergonomic agent-facing Team contracts", () => {
 
     const rejectedDescription = "Do not copy this underspecified prompt body into retry arguments.";
     const refused = await tools.get("task_create")!.execute("missing-criteria", {
-      tasks: [{ title: "Underspecified assigned work", goal: "Add independently verifiable acceptance criteria before retrying.", assignee: "worker" }],
+      tasks: [{ operation_id: "create-underspecified-work", title: "Underspecified assigned work", goal: "Add independently verifiable acceptance criteria before retrying.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
     expect(refused.details).toMatchObject({ kind: "task_create_batch", outcomes: [{ kind: "created", task: { title: "Underspecified assigned work", assignee: "worker" } }] });
     expect(JSON.stringify(refused.details)).not.toContain(rejectedDescription);
@@ -884,7 +918,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     }, undefined, undefined, leadContext);
 
     const task = await tools.get("task_create")!.execute("task", {
-      tasks: [{ title: "Verify restart persistence", goal: "A fresh store reads the committed terminal state.", assignee: "worker" }],
+      tasks: [{ operation_id: "create-restart-persistence", title: "Verify restart persistence", goal: "A fresh store reads the committed terminal state.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
     const taskCard = task.details.outcomes[0].task;
     expect(task.details).toMatchObject({ kind: "task_create_batch", outcomes: [{ kind: "created", task: { title: "Verify restart persistence", assignee: "worker", status: "open" } }] });

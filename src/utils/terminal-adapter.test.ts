@@ -15,8 +15,9 @@ describe("structured terminal launch security", () => {
     process.env.TMUX = "/tmp/pi-teams-test/default,1,0";
     process.env.TMUX_PANE = "%1";
     const exec = vi.spyOn(terminal, "execCommand").mockImplementation((_bin, args) => {
-      if (args[0] === "display-message" && args[4] === "#{pane_id}") return { stdout: args[3], stderr: "", status: 0 };
-      if (args[0] === "display-message" && args[4] === "#{window_id}") return { stdout: "@1", stderr: "", status: 0 };
+      if (args[0] === "display-message" && args[4] === "#{window_id}\t#{pane_left}\t#{pane_width}") {
+        return { stdout: "@1\t0\t60", stderr: "", status: 0 };
+      }
       if (args[0] === "split-window") {
         const shell = args[args.length - 1];
         spawnSync(process.env.SHELL || "sh", ["-c", shell], { stdio: "ignore" });
@@ -31,6 +32,7 @@ describe("structured terminal launch security", () => {
       cwd: os.tmpdir(),
       argv: [process.execPath, "-e", "", "--model", maliciousModel],
       env: { PI_AGENT_NAME: "worker" },
+      panePlacement: { leaderPaneId: "%1", workerPaneIds: [] },
     });
 
     expect(fs.existsSync(marker)).toBe(false);

@@ -92,6 +92,7 @@ describe("durable candidate Task adapter", () => {
     const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", { create, read });
 
     const created = await adapter.create({
+      operationId: "create-candidate",
       title: "Verify candidate",
       goal: "Verify the exact release digest.",
       assignee: "verifier",
@@ -101,6 +102,7 @@ describe("durable candidate Task adapter", () => {
     expect(create.mock.calls[0][0]).toMatchObject({
       title: "Verify candidate",
       description: "Verify the exact release digest.",
+      idempotencyKey: "model-task-create:candidate-team:create-candidate",
       acceptanceCriteria: "Verify the exact release digest.",
       assignee: "verifier",
       internalMetadata: {
@@ -111,14 +113,57 @@ describe("durable candidate Task adapter", () => {
       taskEventEvidence: [{ kind: "created", text: "Verify the exact release digest." }],
     });
     expect(created).toEqual({
-      id: "candidate-task-1",
-      title: "Verify candidate",
-      goal: "Verify the exact release digest.",
-      status: "open",
-      assignee: "verifier",
-      current_context: "Work has not started.",
-      version: "beads_authority_version",
+      kind: "created",
+      operationId: "create-candidate",
+      task: {
+        id: "candidate-task-1",
+        title: "Verify candidate",
+        goal: "Verify the exact release digest.",
+        status: "open",
+        assignee: "verifier",
+        current_context: "Work has not started.",
+        version: "beads_authority_version",
+      },
+      deliveryWarnings: [],
     });
+  });
+
+  it("recovers an unknown create outcome only through the same Team-scoped operation", async () => {
+    let stored: CandidateTaskAuthorityRecord | undefined;
+    let failAfterCreate = true;
+    let authorityMutations = 0;
+    const create = vi.fn(async (input: CreateTaskInput) => {
+      expect(input.idempotencyKey).toBe("model-task-create:candidate-team:create-safe-1");
+      if (!stored) {
+        authorityMutations += 1;
+        stored = authorityRecord(metadata());
+      }
+      return receipt(stored.task);
+    });
+    const read = vi.fn(async () => {
+      if (failAfterCreate) {
+        failAfterCreate = false;
+        throw new Error("transport ended after Beads committed");
+      }
+      return stored!;
+    });
+    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", { create, read });
+    const input = { operationId: "create-safe-1", title: "Verify candidate", goal: "Verify the exact release digest.", assignee: "verifier" };
+
+    await expect(adapter.create(input)).resolves.toMatchObject({
+      kind: "unknown_outcome",
+      operationId: input.operationId,
+    });
+    await expect(adapter.create(input)).resolves.toMatchObject({
+      kind: "created",
+      operationId: input.operationId,
+      task: { id: "candidate-task-1" },
+    });
+    await expect(adapter.create({ ...input, goal: "Different goal." })).resolves.toMatchObject({
+      kind: "operation_conflict",
+      operationId: input.operationId,
+    });
+    expect(authorityMutations).toBe(1);
   });
 
   it("reads object or CLI-string metadata and never infers goal from compatibility fields", async () => {
@@ -146,6 +191,27 @@ describe("durable candidate Task adapter", () => {
       kind: "contract_gap",
       reason: "candidate_metadata_absent",
       authorityVersion: "beads_authority_version",
+    });
+  });
+
+  it("accepts 2,000 TypeBox string units and maps oversized external context to a typed read gap", async () => {
+    const records = [
+      authorityRecord(metadata("a".repeat(2_000))),
+      authorityRecord(metadata("👩🏽‍🚀".repeat(1_001))),
+    ];
+    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
+      create: vi.fn(async () => receipt(task())),
+      read: vi.fn(async () => records.shift()!),
+    });
+
+    await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
+      kind: "found",
+      task: { current_context: "a".repeat(2_000) }
+    });
+    await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
+      kind: "contract_gap",
+      reason: "candidate_metadata_invalid",
+      taskId: "candidate-task-1",
     });
   });
 
@@ -266,6 +332,23 @@ describe("durable candidate Task adapter", () => {
     expect(storedMetadata.last_operation?.journal_entries).toHaveLength(1);
   });
 
+  it("rejects an oversized leader context before invoking its authority", async () => {
+    const update = vi.fn();
+    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
+      create: vi.fn(async () => receipt(task())),
+      read: vi.fn(async () => authorityRecord(metadata("Ready to update."))),
+      update,
+    });
+
+    await expect(adapter.update({
+      taskId: "candidate-task-1",
+      operationId: "context-too-large",
+      expectedVersion: taskVersionRef("beads_authority_version"),
+      currentContext: "👩🏽‍🚀".repeat(2_001),
+    })).rejects.toThrow("2,000 TypeBox string");
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("derives nonterminal Worker work from current assignment and status", () => {
     const current = {
       id: "task-open",
@@ -285,6 +368,26 @@ describe("durable candidate Task adapter", () => {
 });
 
 describe("candidate Beads metadata and Team event evidence", () => {
+  it("rejects direct candidate metadata writes before any Beads command", async () => {
+    const run = vi.fn();
+    const store = new BeadsTaskStore({
+      teamName: "candidate-store",
+      workspace: "/tmp/candidate-store",
+      runner: { run } satisfies BdRunner,
+    });
+    const invalid = metadata("👩🏽‍🚀".repeat(2_001));
+
+    await expect(store.create({
+      title: "Invalid candidate",
+      description: "No Beads write is allowed.",
+      internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: invalid },
+    })).rejects.toThrow("2,000 TypeBox string");
+    await expect(store.updateWithResult("candidate-task-1", {}, {
+      candidateTaskMetadata: invalid,
+    })).rejects.toThrow("2,000 TypeBox string");
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("commits current context metadata with status and note in one Beads update command", async () => {
     const before = {
       id: "candidate-task-1",

@@ -3,6 +3,8 @@ import {
   BeadsError,
   CANDIDATE_TASK_METADATA_KEY,
   CANDIDATE_TASK_METADATA_SCHEMA,
+  assertCandidateTaskMetadataContext,
+  isCandidateTaskCurrentContext,
 } from "../utils/beads";
 import type { TaskFile, TeamEvent } from "../utils/models";
 import {
@@ -49,6 +51,11 @@ export interface CandidateTaskProjectionGap {
 export type CandidateTaskReadOutcome =
   | { kind: "found"; task: ModelToolTaskCurrent }
   | CandidateTaskProjectionGap;
+
+export type CandidateTaskCreateOutcome =
+  | { kind: "created"; operationId: string; task: ModelToolTaskCurrent; deliveryWarnings: string[] }
+  | { kind: "operation_conflict"; operationId: string; message: string }
+  | { kind: "unknown_outcome"; operationId: string; message: string };
 
 export type CandidateTaskUpdateOutcome =
   | {
@@ -106,6 +113,7 @@ export type CandidateTaskChangesOutcome =
   };
 
 function candidateMetadata(goal: string, currentContext: string, lastOperation?: CandidateTaskMetadata["last_operation"]): CandidateTaskMetadata {
+  assertCandidateTaskMetadataContext({ current_context: currentContext });
   return {
     schema: CANDIDATE_TASK_METADATA_SCHEMA,
     goal,
@@ -178,8 +186,7 @@ export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord)
     metadata.schema !== CANDIDATE_TASK_METADATA_SCHEMA
     || typeof metadata.goal !== "string"
     || metadata.goal.length === 0
-    || typeof metadata.current_context !== "string"
-    || metadata.current_context.length === 0
+    || !isCandidateTaskCurrentContext(metadata.current_context)
   ) {
     return projectionGap(
       record.task,
@@ -263,22 +270,53 @@ export class CandidateBeadsTaskAdapter {
     this.authority = authority;
   }
 
-  async create(input: { title: string; goal: string; assignee?: string }): Promise<ModelToolTaskCurrent> {
-    return (await this.createWithReceipt(input)).task;
+  async create(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CandidateTaskCreateOutcome> {
+    return this.createWithReceipt(input);
   }
 
-  async createWithReceipt(input: { title: string; goal: string; assignee?: string }): Promise<{ task: ModelToolTaskCurrent; deliveryWarnings: string[] }> {
+  async createWithReceipt(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CandidateTaskCreateOutcome> {
     const metadata = candidateMetadata(input.goal, INITIAL_CURRENT_CONTEXT);
-    const receipt = await this.authority.create({
-      title: input.title,
-      // These are compatibility projections only. Candidate reads use metadata.
-      description: input.goal,
-      ...(input.assignee ? { acceptanceCriteria: input.goal, assignee: input.assignee } : {}),
-      internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: metadata },
-    }, {
-      taskEventEvidence: [{ kind: "created", text: input.goal }],
-    });
-    return { task: projectTask(receipt.task, metadata), deliveryWarnings: receipt.deliveryWarnings };
+    try {
+      const receipt = await this.authority.create({
+        title: input.title,
+        // These are compatibility projections only. Candidate reads use metadata.
+        description: input.goal,
+        ...(input.assignee ? { acceptanceCriteria: input.goal, assignee: input.assignee } : {}),
+        internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: metadata },
+        // Beads persists this Team-scoped opaque operation coordinate with the
+        // create itself. It is never derived from Task content or tool-call ID.
+        idempotencyKey: `model-task-create:${this.teamName}:${input.operationId}`,
+      }, {
+        taskEventEvidence: [{ kind: "created", text: input.goal }],
+      });
+      const record = await this.authority.read(receipt.task.id);
+      const parsed = parseCandidateTaskMetadata(record);
+      const matches = !('kind' in parsed)
+        && record.task.title === input.title
+        && (record.task.assignee || undefined) === input.assignee
+        && parsed.goal === input.goal
+        && parsed.current_context === INITIAL_CURRENT_CONTEXT
+        && parsed.last_operation === undefined;
+      if (!matches) {
+        return {
+          kind: "operation_conflict",
+          operationId: input.operationId,
+          message: "The create operation ID already identifies a Task with different initial semantics.",
+        };
+      }
+      return {
+        kind: "created",
+        operationId: input.operationId,
+        task: projectTask(record.task, parsed),
+        deliveryWarnings: receipt.deliveryWarnings,
+      };
+    } catch (error) {
+      return {
+        kind: "unknown_outcome",
+        operationId: input.operationId,
+        message: `Task create outcome is unknown after authority interaction: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
   async read(taskId: string): Promise<CandidateTaskReadOutcome> {

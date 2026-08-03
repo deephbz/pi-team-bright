@@ -55,12 +55,29 @@ restating executable definitions.
   never OS liveness.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
+- Pane placement is a typed terminal-adapter responsibility. Herdr and tmux
+  receive the durable leader pane plus current Worker panes from
+  [`src/utils/team-pane-placement.ts`](../../src/utils/team-pane-placement.ts),
+  rather than terminal focus. They keep the leader left at at least 60% width,
+  prove later targets still share its tab and Worker region before splitting,
+  and stop only exact Worker
+  panes. Pi 0.83.0 support now loads the exact working-tree extension while
+  retaining normal unrelated extension and Skill discovery. A disposable Herdr
+  Team with a harmless discovered extension and Skill proved two Worker Session
+  bindings, Task-tool use, and exact stops. A distinct globally discovered Pi
+  Team Bright copy still conflicts with explicit `-e`; it remains a documented
+  single-version-epoch installation risk, not a reason to suppress normal
+  resources. Herdr preserves its established Pi and proxy environment allowlist.
+  Other adapters retain existing behavior without this guarantee; the executable contract is
+  [`TeamPanePlacement`](../../src/utils/terminal-adapter.ts).
+  This changes the Pi Team Bright adapter contract, but no depicted component,
+  dependency, or topology, so the Structurizr DSL is unchanged.
 - One live Team runs one Pi Team Bright version; upgrades happen as a stopped
   and restarted epoch, not a rolling deployment. Fresh Team epochs persist an
   opaque epoch identity and stable logical Worker name/scope records separately
   from replaceable Membership, Session, process, and terminal carriers. The
-  model-tool preview keeps its exact-Session branch position as locked derived
-  coordination state; it never becomes Team or Task authority. Since `0.17.0-rc.2`,
+  model-tool surface keeps its exact-Session branch position as locked derived
+  coordination state; it never becomes Team or Task authority. Since `0.17.0-rc.3`,
   `ensure_worker.separate_window` is deliberately absent:
   durable Team configuration exclusively owns placement policy. A launch receipt
   may report exact bounded startup observation, but never Worker readiness or
@@ -70,24 +87,38 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.2` release candidate uses the real main extension as its local
+- The `0.17.0-rc.3` release candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
-  Preview Workers keep `task_read`, `task_update`, and `alert_send` over the same
-  Team and Beads authorities. No parallel preview extension or store exists.
-  A real ten-tool smoke exposed a release-blocking result-projection mismatch:
-  candidate semantic results entered the old generic renderer and could produce
+  Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
+  and Beads authorities. Worker `alert_send` derives its only recipient,
+  `team-lead`; its schema has no recipient field. Worker launch must retain
+  normal unrelated extension and Skill discovery while loading its exact Pi Team
+  Bright extension. Worker settings cannot re-enable leader tools. No parallel
+  extension or store exists. A real ten-tool smoke exposed a release-blocking result-projection mismatch: model-tool
+  semantic results entered the old generic renderer and could produce
   false human summaries. The accepted revamp now keeps raw semantic details as
   truth and derives separate validated model, collapsed TUI, expanded TUI, and
-  exact QA projections. It removes the old `/1` result envelope and
-  compatibility path rather than preserving them. The internal
+  exact QA projections. Candidate Task-card `goal` accepts one to 1,000 TypeBox
+  string-length units across create input and returned Task cards. Candidate
+  `current_context` uses the shared standard TypeBox schema in
+  [`src/utils/beads.ts`](../../src/utils/beads.ts): one to 2,000 units. These
+  public Task-card invariants change the contract, but no depicted component,
+  flow, or topology, so the Structurizr DSL is unchanged. Successful TUI results
+  remain concise semantic projections. Execution and result-projection errors
+  instead show one copyable raw `content` and `details` report, with a warning to
+  review sensitive fields before sharing. The renderer no longer hides the
+  source error behind a generic missing-semantic-result message. It removes the
+  old `/1` result envelope and compatibility path rather than preserving them. The internal
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.2` is the prepared public release
+- `@hypercarrier/pi-team-bright@0.17.0-rc.3` is the prepared public release
   candidate. It adds the complete exact-Session ten-tool model surface while
   preserving one-live-process startup admission and the Task-first authority.
-  Compatibility metadata covers the tested Pi 0.80.10 and 0.82.x minor lines.
+  Compatibility metadata covers the tested Pi 0.80.10, 0.82.x, and 0.83.0
+  lines. The Pi 0.83.0 normal-resource Herdr lifecycle receipt is
+  [`2026-08-03-pi-083-herdr-normal-composition.json`](../journal/artifacts/2026-08-03-pi-083-herdr-normal-composition.json).
   Publication uses the manually dispatched GitHub Actions OIDC workflow and
   the npm `next` dist-tag.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
@@ -110,10 +141,15 @@ restating executable definitions.
   parser plus Worker tool and CLI aggregate projection are
   [`src/utils/worker-resource-projection.ts`](../../src/utils/worker-resource-projection.ts),
   wired at Worker session and launch composition in
-  [`extensions/index.ts`](../../extensions/index.ts). It reads only Pi global
-  settings and trusted project settings under `pi_team_bright.worker`; it never
-  changes Team, Membership, Task, Session, or observation records. Intent and
-  reversal criteria are in [decision 0008](../decisions/0008-worker-resource-projection.md).
+  [`extensions/index.ts`](../../extensions/index.ts). It reads the active Pi global
+  directory and trusted project settings under `pi_team_bright.worker`. An available
+  `default_model`, split at its first slash into provider and nonempty model ID, is
+  captured on new Membership only after explicit
+  Worker/template and durable Team defaults; invalid settings refuse before carrier
+  creation, while recovery uses the captured Membership model. It never changes
+  native Pi settings, Task, Session, or observation records. This is a Worker launch
+  contract change with no topology change. Intent and reversal criteria are in
+  [decision 0008](../decisions/0008-worker-resource-projection.md).
 - One current Membership admits one live Pi process generation. The executable
   rule is [`src/utils/runtime.ts`](../../src/utils/runtime.ts), lifecycle wiring
   is [`extensions/index.ts`](../../extensions/index.ts), and focused evidence is
@@ -137,18 +173,17 @@ context or the executable contract sources.
   concise allowlisted TUI views, and keeps exact raw/model comparisons in QA.
   Singleton Task results do not expose batch nesting. The retired result
   envelope, pass-through model projection, and generic legacy renderer are
-  removed from the current surface. The candidate has no model-managed Team
-  locator, cursor, count cap, or paging.
-  The branch-local durable release candidate composes Team epochs, logical
-  Worker meaning, exact lead-Session binding, Beads candidate metadata,
-  structured events, hidden branch position, authoritative Task rescan, and
-  the existing Worker launch bridge through the real main extension. Leader
-  Task updates now use expected-version preflight plus durable operation
-  metadata replay; stale and conflicting operations refuse without a second
-  candidate mutation. The redacted receipt is
-  [`2026-08-02-durable-preview-local-canary.json`](../journal/artifacts/2026-08-02-durable-preview-local-canary.json).
-  This proves the first local decision loop, not public cutover or a durable
-  candidate Worker mutation surface.
+  removed from the current surface. The model-tool surface has no
+  model-managed Team locator, cursor, count cap, or paging. The durable
+  model-tool surface composes Team epochs, logical Worker meaning, exact
+  lead-Session binding, Beads model-tool metadata, structured events, hidden
+  branch position, authoritative Task rescan, and the existing Worker launch
+  bridge through the real main extension. Leader Task updates use
+  expected-version preflight plus durable operation metadata replay; stale and
+  conflicting operations refuse without a second model-tool mutation. The
+  redacted receipt is [`2026-08-02-durable-preview-local-canary.json`](../journal/artifacts/2026-08-02-durable-preview-local-canary.json).
+  This proves the first local decision loop, not public release or a durable
+  Worker mutation surface.
 - [Task-engine performance](../projects/task-engine-performance.md) is in
   hardening measurement. It owns trace repair, benchmark design, current
   performance assessment, and optimization selection.

@@ -17,8 +17,10 @@ import {
   CandidateTaskLinkResultSchema,
   CandidateWorkerStopResultSchema,
   TaskVersionRefSchema,
+  MODEL_TOOL_CANDIDATE_LIMITS,
 } from "./catalog";
 import { taskVersionRef } from "./task-version-ref";
+import { CandidateTaskCurrentContextSchema } from "../utils/beads";
 
 export type CandidateProjectedTool =
   | "team_create"
@@ -41,14 +43,15 @@ const TaskStatus = Type.Enum(["open", "in_progress", "blocked", "closed"]);
 const TaskCard = Type.Object({
   id: TaskId,
   title: Type.String({ minLength: 1, maxLength: 80 }),
-  goal: Type.String({ minLength: 1, maxLength: 160 }),
+  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars }),
   status: TaskStatus,
   assignee: Type.Optional(WorkerName),
-  current_context: Type.String({ minLength: 1, maxLength: 640 }),
+  current_context: CandidateTaskCurrentContextSchema,
   version: TaskVersion,
 }, { additionalProperties: false });
 const Recovery = Type.Union([
   Type.Object({ action: Type.Literal("reconcile_and_retry"), expected_version: TaskVersion, new_operation_id: Type.Optional(Type.Literal(true)) }, { additionalProperties: false }),
+  Type.Object({ action: Type.Literal("retry_same_operation"), operation_id: Type.String({ minLength: 1, maxLength: 128 }) }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal("read_before_retry"), task_id: TaskId }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal("team_sync") }, { additionalProperties: false }),
@@ -79,15 +82,18 @@ const ProjectedTask = Type.Object({
   version: TaskVersion,
 }, { additionalProperties: false });
 
+const CreateOperationId = Type.String({ minLength: 1, maxLength: 128 });
 const ProjectedTaskOutcome = Type.Union([
-  Type.Object({ kind: Type.Literal("created"), input_index: Type.Integer({ minimum: 0 }), task: ProjectedTask, delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), reason: Type.Literal("worker_unavailable"), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("unavailable"), input_index: Type.Integer({ minimum: 0 }), reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("created"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, task: ProjectedTask, delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, reason: Type.Enum(["worker_unavailable", "operation_conflict"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("unknown_outcome"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, message: Type.String({ minLength: 1 }), recovery: Type.Object({ action: Type.Literal("retry_same_operation"), operation_id: CreateOperationId }, { additionalProperties: false }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("unavailable"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
 ]);
 export const CandidateTaskCreateModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("created"), task: ProjectedTask, delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), reason: Type.Literal("worker_unavailable"), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("unavailable"), reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("created"), operation_id: CreateOperationId, task: ProjectedTask, delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), operation_id: CreateOperationId, reason: Type.Enum(["worker_unavailable", "operation_conflict"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("unknown_outcome"), operation_id: CreateOperationId, message: Type.String({ minLength: 1 }), recovery: Type.Object({ action: Type.Literal("retry_same_operation"), operation_id: CreateOperationId }, { additionalProperties: false }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("unavailable"), operation_id: CreateOperationId, reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("task_create_batch"), outcomes: Type.Array(ProjectedTaskOutcome) }, { additionalProperties: false }),
 ]);
 
@@ -210,19 +216,28 @@ function taskSummary(task: any): Record<string, unknown> {
   };
 }
 
+/** Authority versions remain raw evidence and never enter a public projection. */
+function taskUpdateMessage(raw: any): string {
+  return raw.reason === "version_conflict" ? "The supplied Task version is stale." : raw.message;
+}
+
 function projectOutcome(tool: CandidateProjectedTool, raw: any): any {
   if (tool === "task_create") {
     if (raw.kind === "task_create_batch") {
       if (raw.outcomes.length === 1) return projectOutcome("task_create", raw.outcomes[0]);
-      return { kind: raw.kind, outcomes: raw.outcomes.map((item: any) => ({
-        ...item,
-        ...(item.task ? { task: taskSummary(item.task) } : {}),
-        ...("state_changed" in item ? { state_changed: undefined } : {}),
-      })).map((item: any) => { const { state_changed: _stateChanged, ...rest } = item; return rest; }) };
+      return { kind: raw.kind, outcomes: raw.outcomes.map((item: any) => {
+        const { state_changed: _stateChanged, ...rest } = item;
+        const projected = { ...rest, ...(item.task ? { task: taskSummary(item.task) } : {}) };
+        return item.kind === "unknown_outcome"
+          ? { ...projected, recovery: { action: "retry_same_operation", operation_id: item.operation_id } }
+          : projected;
+      }) };
     }
-    if (raw.kind === "created") return { kind: raw.kind, task: taskSummary(raw.task), ...(raw.delivery_warnings?.length ? { delivery_warnings: raw.delivery_warnings } : {}) };
+    if (raw.kind === "created") return { kind: raw.kind, operation_id: raw.operation_id, task: taskSummary(raw.task), ...(raw.delivery_warnings?.length ? { delivery_warnings: raw.delivery_warnings } : {}) };
     const { state_changed: _stateChanged, input_index: _inputIndex, ...rest } = raw;
-    return rest;
+    return raw.kind === "unknown_outcome"
+      ? { ...rest, recovery: { action: "retry_same_operation", operation_id: raw.operation_id } }
+      : rest;
   }
   if (tool === "task_read") {
     if (raw.kind === "task_read_batch") {
@@ -252,15 +267,16 @@ function projectOutcome(tool: CandidateProjectedTool, raw: any): any {
         return item.task
           ? { ...rest, task: taskSummary(item.task) }
           : (item.reason === "version_conflict" || item.reason === "operation_conflict") && item.current_task
-            ? { ...rest, current_task: { ...item.current_task, version: taskVersionRef(item.current_task.version) }, recovery: { action: "reconcile_and_retry", expected_version: taskVersionRef(item.current_task.version), ...(item.reason === "operation_conflict" ? { new_operation_id: true } : {}) } }
+            ? { ...rest, message: taskUpdateMessage(item), current_task: { ...item.current_task, version: taskVersionRef(item.current_task.version) }, recovery: { action: "reconcile_and_retry", expected_version: taskVersionRef(item.current_task.version), ...(item.reason === "operation_conflict" ? { new_operation_id: true } : {}) } }
             : rest;
       }) };
     }
     if (raw.kind === "updated") return { kind: raw.kind, task: taskSummary(raw.task) };
-    const { state_changed: _stateChanged, operation_id: _operationId, input_index: _inputIndex, current_task: _currentTask, ...rest } = raw;
+    const { state_changed: _stateChanged, operation_id: _operationId, input_index: _inputIndex, task_id: _taskId, current_task: _currentTask, ...rest } = raw;
+    const withTaskId = raw.kind === "unavailable" ? rest : { ...rest, task_id: _taskId };
     return (raw.reason === "version_conflict" || raw.reason === "operation_conflict") && raw.current_task
-      ? { ...rest, current_task: { ...raw.current_task, version: taskVersionRef(raw.current_task.version) }, recovery: { action: "reconcile_and_retry", expected_version: taskVersionRef(raw.current_task.version), ...(raw.reason === "operation_conflict" ? { new_operation_id: true } : {}) } }
-      : rest;
+      ? { ...withTaskId, message: taskUpdateMessage(raw), current_task: { ...raw.current_task, version: taskVersionRef(raw.current_task.version) }, recovery: { action: "reconcile_and_retry", expected_version: taskVersionRef(raw.current_task.version), ...(raw.reason === "operation_conflict" ? { new_operation_id: true } : {}) } }
+      : withTaskId;
   }
   if (tool === "team_sync") {
     if (raw.kind === "snapshot") return {
@@ -340,11 +356,6 @@ export function assembleCandidateToolResult<TTool extends CandidateProjectedTool
   if (!Check(schemaFor(tool), result)) throw new Error(`Invalid semantic result for ${tool}.`);
   const model = projectCandidateToolResult(tool, result);
   return { content: [{ type: "text", text: JSON.stringify(model) }], details: result } as CandidateToolResultAssembly<TTool>;
-}
-
-/** Fail closed for unsupported or malformed persisted details. */
-export function unsupportedCandidateToolResult(tool: CandidateProjectedTool, _details: unknown): string {
-  return `Unsupported ${tool} result; semantic details could not be validated.`;
 }
 
 export function parseCandidateToolResult(tool: CandidateProjectedTool, content: string): unknown {

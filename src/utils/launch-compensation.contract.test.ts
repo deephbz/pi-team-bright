@@ -8,7 +8,7 @@ import * as teams from "./teams";
 import * as tasks from "./tasks";
 import { projectCandidateTui } from "../../src/model-tool-contract/tui-projection";
 import { createWorkerLaunchBridge } from "./worker-launch-bridge";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;
@@ -65,7 +65,7 @@ function register(terminal: TerminalAdapter): Map<string, RegisteredTool> {
   return tools;
 }
 
-async function team(suffix: string) {
+async function team(suffix: string, defaultModel?: string) {
   const name = unique(suffix);
   const leadSession = `/tmp/${name}-lead.jsonl`;
   const taskWorkspace = paths.teamDir(name);
@@ -82,7 +82,7 @@ async function team(suffix: string) {
     leadSession,
     "lead",
     undefined,
-    undefined,
+    defaultModel,
     undefined,
     taskWorkspace,
     `task-authority-${name}`,
@@ -94,7 +94,7 @@ async function team(suffix: string) {
       projectId: `launch-compensation-${name}`,
     },
     undefined,
-    undefined,
+    { backend: "launch-contract-terminal", leadTarget: { backend: "launch-contract-terminal", kind: "pane", targetId: "pane-leader" } },
     MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
   return { name, leadSession };
@@ -118,6 +118,7 @@ describe("compensated Worker launch", () => {
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => [],
       resolveModel: () => null,
+      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
     });
     const member = {
@@ -145,9 +146,168 @@ describe("compensated Worker launch", () => {
     expect(launch).toEqual({ terminalId: "pane-worker", isWindow: false, backend: a.terminal.name });
     expect((await teams.currentMembership(f.name, "worker"))).toMatchObject({
       membershipId: member.membershipId,
-      tmuxPaneId: "pane-worker",
+      terminalTarget: { backend: "launch-contract-terminal", kind: "pane", targetId: "pane-worker" },
       isActive: true,
     });
+  });
+
+  it("passes only durable Team pane targets for first and later Workers", async () => {
+    const f = await team("pane-placement");
+    const a = adapter();
+    a.spawn.mockReturnValueOnce("pane-worker-1").mockReturnValueOnce("pane-worker-2");
+    setAdapter(a.terminal);
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+    });
+
+    await bridge.ensureWorker({ teamName: f.name, workerName: "worker-1", scope: "First area", cwd: process.cwd() });
+    await bridge.ensureWorker({ teamName: f.name, workerName: "worker-2", scope: "Second area", cwd: process.cwd() });
+
+    expect(a.spawn).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: [] },
+    }));
+    expect(a.spawn).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-worker-1"] },
+    }));
+  });
+
+  it("captures a qualified Worker settings model before carrier creation and preserves explicit and Team defaults", async () => {
+    const captured: Array<string | undefined> = [];
+    const a = adapter();
+    a.spawn.mockReturnValueOnce("pane-settings").mockReturnValueOnce("pane-settings-retry").mockReturnValueOnce("pane-explicit").mockReturnValueOnce("pane-team").mockReturnValueOnce("pane-template");
+    setAdapter(a.terminal);
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: (model) => {
+        captured.push(model);
+        return ["pi", ...(model ? ["--model", model] : [])];
+      },
+      resolveModel: (model) => `resolved/${model}`,
+      resolveSettingsModel: (model) => model === "setting/provider" ? model : null,
+      workerAggregate: () => ({
+        projectTrusted: false,
+        defaultModel: { scope: "global", value: "setting/provider" },
+      }),
+    });
+
+    const settingsTeam = await team("settings-model");
+    const settingsWorker = await bridge.ensureWorker({
+      teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(),
+    });
+    expect(settingsWorker.member.model).toBe("setting/provider");
+    const recoveredSettings = await bridge.ensureWorker({
+      teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(),
+    });
+    expect(recoveredSettings.action).toBe("recovered");
+    expect(recoveredSettings.member.model).toBe("setting/provider");
+
+    const explicitWorker = await bridge.ensureWorker({
+      teamName: settingsTeam.name, workerName: "explicit", scope: "Explicit model", cwd: process.cwd(), model: "explicit",
+    });
+    expect(explicitWorker.member.model).toBe("resolved/explicit");
+
+    const teamDefault = await team("team-model", "team/default");
+    const teamWorker = await bridge.ensureWorker({
+      teamName: teamDefault.name, workerName: "team", scope: "Team model", cwd: process.cwd(),
+    });
+    expect(teamWorker.member.model).toBe("team/default");
+
+    const templateWorker = await bridge.ensureWorker({
+      teamName: settingsTeam.name,
+      workerName: "template",
+      scope: "Template model",
+      cwd: process.cwd(),
+      initialMessage: async () => ({ id: "template-message", from: "lead", to: "template", text: "Template prompt", timestamp: new Date().toISOString(), read: false }),
+    });
+    expect(templateWorker.member.model).toBe("setting/provider");
+    expect(captured).toEqual(expect.arrayContaining(["setting/provider", "resolved/explicit", "team/default"]));
+    expect(captured.filter((model) => model === "setting/provider")).toHaveLength(3);
+  });
+
+  it("accepts a canonical nested Worker settings model and persists its exact ID", async () => {
+    const f = await team("nested-settings-model");
+    const a = adapter();
+    setAdapter(a.terminal);
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const nested = "openrouter/openai/gpt-5.1";
+    const argv = vi.fn((model: string | undefined) => ["pi", ...(model ? ["--model", model] : [])]);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: argv,
+      resolveModel: () => null,
+      resolveSettingsModel: (model) => model === nested ? model : null,
+      workerAggregate: () => ({ projectTrusted: false, defaultModel: { scope: "global", value: nested } }),
+    });
+
+    const worker = await bridge.ensureWorker({ teamName: f.name, workerName: "nested", scope: "Nested model", cwd: process.cwd() });
+    expect(worker.member.model).toBe(nested);
+    expect(argv).toHaveBeenCalledWith(nested, undefined, undefined, false);
+  });
+
+  it("keeps Pi's native default when no Worker, Team, or explicit model applies", async () => {
+    const captured: Array<string | undefined> = [];
+    const f = await team("native-model");
+    const a = adapter();
+    setAdapter(a.terminal);
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: (model) => {
+        captured.push(model);
+        return ["pi"];
+      },
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+    });
+
+    const worker = await bridge.ensureWorker({ teamName: f.name, workerName: "native", scope: "Native model", cwd: process.cwd() });
+    expect(worker.member.model).toBeUndefined();
+    expect(captured).toEqual([undefined]);
+  });
+
+  it("refuses an invalid Worker settings model before Membership or carrier creation", async () => {
+    const f = await team("invalid-settings-model");
+    const a = adapter();
+    setAdapter(a.terminal);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({
+        projectTrusted: false,
+        defaultModel: { scope: "project", value: "bare-model" },
+      }),
+    });
+
+    await expect(bridge.ensureWorker({
+      teamName: f.name, workerName: "invalid", scope: "Invalid settings", cwd: process.cwd(),
+    })).rejects.toThrow(/trusted project Pi settings.*qualified provider\/model.*Edit.*retry/i);
+    expect(a.spawn).not.toHaveBeenCalled();
+    expect((await teams.readConfig(f.name)).members.find((member) => member.name === "invalid")).toBeUndefined();
+  });
+
+  it("refuses an unavailable qualified Worker settings model before Membership or carrier creation", async () => {
+    const f = await team("unavailable-settings-model");
+    const a = adapter();
+    setAdapter(a.terminal);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({
+        projectTrusted: false,
+        defaultModel: { scope: "global", value: "missing/model" },
+      }),
+    });
+
+    await expect(bridge.ensureWorker({
+      teamName: f.name, workerName: "missing", scope: "Unavailable settings", cwd: process.cwd(),
+    })).rejects.toThrow(/global Pi settings.*missing\/model.*unavailable.*Edit.*retry/i);
+    expect(a.spawn).not.toHaveBeenCalled();
+    expect((await teams.readConfig(f.name)).members.find((member) => member.name === "missing")).toBeUndefined();
   });
 
   it("does not create a Worker carrier when Membership preparation persistence fails", async () => {

@@ -139,8 +139,8 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       "batch",
       {
         tasks: [
-          { title: "Missing Worker", goal: "Refuse this item without changing Team state.", assignee: "missing-worker" },
-          { title: "Unassigned Task", goal: "Create this independent open Task and report its receipt." },
+          { operation_id: "missing-worker", title: "Missing Worker", goal: "Refuse this item without changing Team state.", assignee: "missing-worker" },
+          { operation_id: "unassigned-task", title: "Unassigned Task", goal: "Create this independent open Task and report its receipt." },
         ],
       },
       leaderSessionId,
@@ -152,6 +152,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
         {
           kind: "refused",
           input_index: 0,
+          operation_id: "missing-worker",
           reason: "worker_unavailable",
           message: expect.any(String),
           state_changed: false,
@@ -159,6 +160,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
         {
           kind: "created",
           input_index: 1,
+          operation_id: "unassigned-task",
           task: {
             id: "task-1",
             title: "Unassigned Task",
@@ -172,12 +174,42 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     });
   });
 
+  it("replays mixed create batches in input order without new Task state", async () => {
+    const { invoke, port } = registerJourney();
+    const leaderSessionId = "019fc274-f97e-7910-b6b6-579a20b3b1d0";
+    await invoke("team_create", "create", { name: "release-team", purpose: "Prepare the release." }, leaderSessionId);
+    const first = canonicalDetails(await invoke("task_create", "first-batch", {
+      tasks: [
+        { operation_id: "create-alpha", title: "Alpha", goal: "Create the first independent Task." },
+        { operation_id: "missing-worker", title: "Unavailable", goal: "Keep this refusal independent.", assignee: "missing" },
+      ],
+    }, leaderSessionId));
+    const second = canonicalDetails(await invoke("task_create", "reordered-retry", {
+      tasks: [
+        { operation_id: "missing-worker", title: "Unavailable", goal: "Keep this refusal independent.", assignee: "missing" },
+        { operation_id: "create-alpha", title: "Alpha", goal: "Create the first independent Task." },
+      ],
+    }, leaderSessionId));
+
+    expect(first.outcomes.map((outcome: { kind: string; operation_id: string }) => [outcome.kind, outcome.operation_id])).toEqual([
+      ["created", "create-alpha"],
+      ["refused", "missing-worker"],
+    ]);
+    expect(second.outcomes.map((outcome: { kind: string; operation_id: string }) => [outcome.kind, outcome.operation_id])).toEqual([
+      ["refused", "missing-worker"],
+      ["created", "create-alpha"],
+    ]);
+    expect(second.outcomes[1].task.id).toBe(first.outcomes[0].task.id);
+    const snapshot = await port.readSnapshot(leaderSessionId as ReturnType<typeof exactLeaderSessionId>);
+    expect(snapshot.kind === "snapshot" && snapshot.tasks).toHaveLength(1);
+  });
+
   it("rejects duplicate Task IDs before any update mutation", async () => {
     const { invoke, port } = registerJourney();
     const leaderSessionId = "019fc274-f97e-7910-b6b6-579a20b3b1d0";
     await invoke("team_create", "create", { name: "release-team", purpose: "Prepare the release." }, leaderSessionId);
     await invoke("ensure_worker", "worker", { name: "verifier", scope: "Own release verification." }, leaderSessionId);
-    await invoke("task_create", "task", { tasks: [{ title: "Verify", goal: "Verify the release.", assignee: "verifier" }] }, leaderSessionId);
+    await invoke("task_create", "task", { tasks: [{ operation_id: "create-verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" }] }, leaderSessionId);
     const revisionBefore = port.readDebugRevision();
     const duplicate = canonicalDetails(await invoke("task_update", "duplicate", {
       updates: [
@@ -199,7 +231,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     const leaderSessionId = "019fc274-f97e-7910-b6b6-579a20b3b1d0";
     await invoke("team_create", "create", { name: "release-team", purpose: "Prepare the release." }, leaderSessionId);
     await invoke("ensure_worker", "worker", { name: "verifier", scope: "Own release verification." }, leaderSessionId);
-    await invoke("task_create", "task-1", { tasks: [{ title: "Verify one", goal: "Verify one release input.", assignee: "verifier" }, { title: "Verify two", goal: "Verify a second release input.", assignee: "verifier" }] }, leaderSessionId);
+    await invoke("task_create", "task-1", { tasks: [{ operation_id: "create-verify-one", title: "Verify one", goal: "Verify one release input.", assignee: "verifier" }, { operation_id: "create-verify-two", title: "Verify two", goal: "Verify a second release input.", assignee: "verifier" }] }, leaderSessionId);
 
     const sharedUpdate = (taskId: string, text: string) => ({
       updates: [{
@@ -259,7 +291,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     const session = exactLeaderSessionId(leaderSessionId);
     await invoke("team_create", "create", { name: "release-team", purpose: "Prepare the release." }, leaderSessionId);
     await invoke("ensure_worker", "worker", { name: "verifier", scope: "Own release verification." }, leaderSessionId);
-    await invoke("task_create", "task", { tasks: [{ title: "Verify", goal: "Verify the release.", assignee: "verifier" }] }, leaderSessionId);
+    await invoke("task_create", "task", { tasks: [{ operation_id: "create-verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" }] }, leaderSessionId);
 
     const required = canonicalDetails(await invoke("team_sync", "updates-before-snapshot", { view: "updates" }, leaderSessionId));
     expect(required).toEqual({ kind: "snapshot_required", message: expect.any(String), state_changed: false, observation_advanced: false });
@@ -326,7 +358,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     port.setBranchContext(session, ["worker-entry"]);
     expect(port.acknowledgePendingObservation(session, "worker-entry", ["worker-entry"])).toBe(true);
 
-    await invoke("task_create", "task", { tasks: [{ title: "Verify", goal: "Verify the release.", assignee: "verifier" }] }, leaderSessionId);
+    await invoke("task_create", "task", { tasks: [{ operation_id: "create-verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" }] }, leaderSessionId);
     const created = canonicalDetails(await invoke("team_sync", "created-task", { view: "updates" }, leaderSessionId));
     expect(created).toMatchObject({ kind: "updates", task_changes: [{ task_id: "task-1", change_kinds: ["created"] }] });
     port.setBranchContext(session, ["created-task-entry"]);
@@ -479,6 +511,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       "create-task",
       {
         tasks: [{
+          operation_id: "create-release-candidate",
           title: "Verify release candidate",
           goal: "Confirm the candidate installs cleanly and report the external verification signal.",
           assignee: worker.name,
@@ -491,6 +524,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       outcomes: [{
         kind: "created",
         input_index: 0,
+        operation_id: "create-release-candidate",
         task: {
           id: "task-1",
           title: "Verify release candidate",

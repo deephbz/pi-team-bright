@@ -58,10 +58,12 @@ export type TeamSnapshotPortResult =
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "candidate_metadata_absent" | "candidate_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
 
 export type CreateTaskPortResult =
-  | { kind: "created"; task: ModelToolTaskCurrent; deliveryWarnings?: string[] }
-  | { kind: "worker_unavailable" }
-  | { kind: "unavailable"; reason: "task_authority_unavailable"; message: string }
-  | { kind: "no_active_team" };
+  | { kind: "created"; operationId: string; task: ModelToolTaskCurrent; deliveryWarnings?: string[] }
+  | { kind: "operation_conflict"; operationId: string; message: string }
+  | { kind: "unknown_outcome"; operationId: string; message: string }
+  | { kind: "worker_unavailable"; operationId: string }
+  | { kind: "unavailable"; operationId: string; reason: "task_authority_unavailable"; message: string }
+  | { kind: "no_active_team"; operationId: string };
 
 export type ReadTaskContractGap = {
   kind: "contract_gap";
@@ -171,7 +173,7 @@ export interface ModelToolTeamPort {
   readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult>;
   createTask(
     leaderSessionId: ExactLeaderSessionId,
-    input: { title: string; goal: string; assignee?: string },
+    input: { operationId: string; title: string; goal: string; assignee?: string },
   ): Promise<CreateTaskPortResult>;
   readTasks(
     leaderSessionId: ExactLeaderSessionId,
@@ -215,6 +217,7 @@ interface StoredTeam {
   tasksById: Map<string, ModelToolTaskCurrent>;
   journalEntriesByTaskId: Map<string, ModelToolTaskJournalEntry[]>;
   operationsByTaskAndId: Map<string, { taskId: string; fingerprint: string; outcome: Extract<TaskUpdatePortOutcome, { kind: "updated" }> }>;
+  createOperationsById: Map<string, { fingerprint: string; taskId: string }>;
   nextJournalNumber: number;
   events: ModelToolTeamEvent[];
 }
@@ -302,6 +305,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
       tasksById: new Map(),
       journalEntriesByTaskId: new Map(),
       operationsByTaskAndId: new Map(),
+      createOperationsById: new Map(),
       nextJournalNumber: 1,
       events: [],
     };
@@ -348,12 +352,21 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
 
   async createTask(
     leaderSessionId: ExactLeaderSessionId,
-    input: { title: string; goal: string; assignee?: string },
+    input: { operationId: string; title: string; goal: string; assignee?: string },
   ): Promise<CreateTaskPortResult> {
     const team = this.activeTeamFor(leaderSessionId);
-    if (!team) return { kind: "no_active_team" };
+    if (!team) return { kind: "no_active_team", operationId: input.operationId };
+    const fingerprint = JSON.stringify({ title: input.title, goal: input.goal, ...(input.assignee ? { assignee: input.assignee } : {}) });
+    const previous = team.createOperationsById.get(input.operationId);
+    if (previous) {
+      const task = team.tasksById.get(previous.taskId);
+      if (previous.fingerprint !== fingerprint || !task) {
+        return { kind: "operation_conflict", operationId: input.operationId, message: "The create operation ID was already used with different input." };
+      }
+      return { kind: "created", operationId: input.operationId, task: { ...task } };
+    }
     if (input.assignee && !team.workersByName.has(input.assignee)) {
-      return { kind: "worker_unavailable" };
+      return { kind: "worker_unavailable", operationId: input.operationId };
     }
 
     const task: ModelToolTaskCurrent = {
@@ -370,6 +383,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
       : undefined;
     // These synchronous writes commit one item and its Worker index together.
     team.tasksById.set(task.id, task);
+    team.createOperationsById.set(input.operationId, { fingerprint, taskId: task.id });
     if (taskIds && input.assignee && task.status !== "closed") {
       taskIds.add(task.id);
       team.taskIdsByWorkerName.set(input.assignee, taskIds);
@@ -378,7 +392,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
     this.nextTaskNumber += 1;
     this.revision += 1;
     this.notifyWaiters(leaderSessionId);
-    return { kind: "created", task: { ...task } };
+    return { kind: "created", operationId: input.operationId, task: { ...task } };
   }
 
   async updateTasks(
@@ -512,7 +526,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
   }
 
   async linkTask(_leaderSessionId: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult> {
-    return { kind: "unavailable", reason: "task_authority_unavailable", message: `The in-memory preview has no relation authority for ${input.taskId}.` };
+    return { kind: "unavailable", reason: "task_authority_unavailable", message: `The in-memory model-tool port has no relation authority for ${input.taskId}.` };
   }
 
   async sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: string }): Promise<AlertSendPortResult> {

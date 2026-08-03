@@ -6,9 +6,9 @@ import * as tasks from "../utils/tasks";
 import * as teamEvents from "../utils/team-events";
 import { BeadsError } from "../utils/beads";
 import * as alerts from "../utils/alerts";
-import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
+import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../utils/worker-launch-bridge";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_PREVIEW_WORKER_MARKER } from "./preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
 import { taskVersionRef } from "./task-version-ref";
 import {
   CandidateBeadsTaskAdapter,
@@ -60,7 +60,7 @@ type PendingDurableObservation = PendingObservation & {
 
 type BoundTeam = { teamName: string; config: TeamConfig; sessionFile: string };
 
-export interface DurablePreviewLifecycle {
+export interface ModelToolLifecycle {
   teamCreated?(teamName: string, sessionFile: string): Promise<void>;
   stopWorker(teamName: string, worker: string): Promise<WorkerStopPortResult>;
   shutdownTeam(teamName: string): Promise<TeamShutdownPortResult>;
@@ -114,10 +114,10 @@ function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "crea
 }
 
 /**
- * Durable preview adapter. It projects existing Team, Beads, event, and
+ * Durable model-tool adapter. It projects existing Team, Beads, event, and
  * Membership authorities; it owns no Team, Task, Worker, or event store.
  */
-export class DurablePreviewTeamPort implements ModelToolTeamPort {
+export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private readonly sessionFiles = new Map<ExactLeaderSessionId, string>();
   private readonly branchIds = new Map<ExactLeaderSessionId, string[]>();
   private readonly pending = new Map<ExactLeaderSessionId, PendingDurableObservation>();
@@ -134,19 +134,20 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
       return result;
     },
     resolveModel: () => null,
+    resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
     workerAggregate: (cwd) => {
       const resources = resolveWorkerLaunchResources({
         cwd,
         leaderCwd: process.cwd(),
         leaderProjectTrusted: false,
       });
-      return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted };
+      return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
     },
   });
   private readonly launchBridge: WorkerLaunchBridge;
-  private readonly lifecycle?: DurablePreviewLifecycle;
+  private readonly lifecycle?: ModelToolLifecycle;
 
-  constructor(launchBridge?: WorkerLaunchBridge, lifecycle?: DurablePreviewLifecycle) {
+  constructor(launchBridge?: WorkerLaunchBridge, lifecycle?: ModelToolLifecycle) {
     this.launchBridge = launchBridge ?? this.defaultLaunchBridge;
     this.lifecycle = lifecycle;
   }
@@ -160,7 +161,7 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
     input: { name: string; purpose: string },
   ): Promise<CreateTeamPortResult> {
     const sessionFile = this.sessionFiles.get(leaderSessionId);
-    if (!sessionFile) return { kind: "unavailable", reason: "session_binding_unavailable", message: "The preview requires the exact durable leader Session file." };
+    if (!sessionFile) return { kind: "unavailable", reason: "session_binding_unavailable", message: "The model-tool surface requires the exact durable leader Session file." };
     const existing = await teams.resolveCurrentLeadSessionBinding(sessionFile);
     if (existing.status === "bound") return { kind: "refused", reason: "active_team_exists" };
     if (existing.status !== "abstain" || existing.reason === "runtime_metadata_unavailable") {
@@ -168,7 +169,7 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
     }
     const teamName = paths.sanitizeName(input.name);
     const terminal = getTerminalAdapter();
-    if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the preview Worker." };
+    if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the model-tool Worker." };
     let authority;
     try {
       authority = await tasks.resolveTeamTaskAuthority(teamName);
@@ -181,7 +182,7 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
         sessionFile,
         "lead-agent",
         input.purpose,
-        process.env.PI_MODEL_TOOL_PREVIEW_WORKER_MODEL,
+        process.env.PI_MODEL_TOOL_WORKER_MODEL,
         undefined,
         authority.workspace,
         authority.authorityId,
@@ -216,7 +217,7 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
         workerName: input.name,
         scope: logical.worker.scope,
         cwd: process.cwd(),
-        launchEnvironment: { [MODEL_TOOL_PREVIEW_WORKER_MARKER]: "1" },
+        launchEnvironment: { [MODEL_TOOL_WORKER_MARKER]: "1" },
       });
     } catch (error) {
       return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) };
@@ -235,10 +236,10 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
   async readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "no_active_team" };
-    const gap = teams.teamPreviewContractGap(bound.config);
-    if (gap) return { ...gap, message: `Preview ${gap.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
+    const gap = teams.teamModelToolContractGap(bound.config);
+    if (gap) return { ...gap, message: `Model-tool ${gap.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
     try {
-      const tasks = await this.readCandidateTasks(bound.teamName);
+      const tasks = await this.readModelToolTasks(bound.teamName);
       if (tasks.kind === "contract_gap") return tasks;
       const workers = this.readWorkers(bound, tasks.tasks);
       return { kind: "snapshot", team: currentTeam(bound.config), workers, tasks: tasks.tasks };
@@ -249,20 +250,20 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
 
   async createTask(
     leaderSessionId: ExactLeaderSessionId,
-    input: { title: string; goal: string; assignee?: string },
+    input: { operationId: string; title: string; goal: string; assignee?: string },
   ): Promise<CreateTaskPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
-    if (!bound) return { kind: "no_active_team" };
+    if (!bound) return { kind: "no_active_team", operationId: input.operationId };
     if (input.assignee) {
       const logical = await teams.readLogicalWorker(bound.teamName, input.assignee);
-      if (logical.kind !== "found") return { kind: "worker_unavailable" };
+      if (logical.kind !== "found") return { kind: "worker_unavailable", operationId: input.operationId };
     }
-    try {
-      const receipt = await new CandidateBeadsTaskAdapter(bound.teamName, "team-lead").createWithReceipt(input);
-      return { kind: "created", task: receipt.task, ...(receipt.deliveryWarnings.length > 0 ? { deliveryWarnings: receipt.deliveryWarnings } : {}) };
-    } catch (error) {
-      return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) };
+    const outcome = await new CandidateBeadsTaskAdapter(bound.teamName, "team-lead").createWithReceipt(input);
+    if (outcome.kind === "created") {
+      return { kind: "created", operationId: outcome.operationId, task: outcome.task, ...(outcome.deliveryWarnings.length > 0 ? { deliveryWarnings: outcome.deliveryWarnings } : {}) };
     }
+    if (outcome.kind === "operation_conflict") return outcome;
+    return outcome;
   }
 
   async readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult> {
@@ -327,14 +328,14 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
   async stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
-    if (!this.lifecycle) return { kind: "unavailable", reason: "carrier_unavailable", message: "The preview lifecycle adapter is not attached to the main extension." };
+    if (!this.lifecycle) return { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." };
     return this.lifecycle.stopWorker(bound.teamName, worker);
   }
 
   async shutdownTeam(leaderSessionId: ExactLeaderSessionId): Promise<TeamShutdownPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
-    if (!this.lifecycle) return { kind: "unavailable", reason: "team_authority_unavailable", message: "The preview lifecycle adapter is not attached to the main extension." };
+    if (!this.lifecycle) return { kind: "unavailable", reason: "team_authority_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." };
     return this.lifecycle.shutdownTeam(bound.teamName);
   }
 
@@ -408,8 +409,8 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
   ): Promise<TeamSyncPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
-    const gap = teams.teamPreviewContractGap(bound.config);
-    if (gap) return { kind: "contract_gap", reason: gap.reason, message: `Preview ${gap.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
+    const gap = teams.teamModelToolContractGap(bound.config);
+    if (gap) return { kind: "contract_gap", reason: gap.reason, message: `Model-tool ${gap.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
     const pending = this.pending.get(leaderSessionId);
     if (pending) return pending.internalResult;
     const branchLineage = this.branchIds.get(leaderSessionId) ?? [];
@@ -419,11 +420,11 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
         exactSessionId: bound.sessionFile,
         branchLineage,
       });
-      if (observation.kind === "contract_gap") return { ...observation, message: `Preview ${observation.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
+      if (observation.kind === "contract_gap") return { ...observation, message: `Model-tool ${observation.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
       if (observation.kind !== "found") {
         return { kind: "snapshot_required", message: "Take a Team snapshot before requesting updates." };
       }
-      let tasksResult = await this.readCandidateTasks(bound.teamName);
+      let tasksResult = await this.readModelToolTasks(bound.teamName);
       if (tasksResult.kind === "contract_gap") return tasksResult;
       let batch = teamEvents.readTeamEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
       const taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks);
@@ -431,7 +432,7 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
         try {
           const waited = await teamEvents.waitForTeamEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: WAIT_MS, signal });
           batch = waited;
-          tasksResult = await this.readCandidateTasks(bound.teamName);
+          tasksResult = await this.readModelToolTasks(bound.teamName);
           if (tasksResult.kind === "contract_gap") return tasksResult;
         } catch (error) {
           if (isAbort(error)) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
@@ -505,14 +506,11 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
     const binding = await teams.resolveCurrentLeadSessionBinding(sessionFile);
     if (binding.status !== "bound") return undefined;
     const config = await teams.readConfig(binding.teamName);
-    // The candidate surface must never mutate a Team created by another
-    // implementation epoch. Legacy records remain readable by the legacy
-    // surface, but this port fails closed before any candidate mutation.
     if (config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) return undefined;
     return { teamName: binding.teamName, config, sessionFile };
   }
 
-  private async readCandidateTasks(teamName: string): Promise<{ kind: "tasks"; tasks: ModelToolTaskCurrent[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
+  private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: ModelToolTaskCurrent[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
     const listed = await tasks.listTasksWithVersions(teamName);
     const adapter = new CandidateBeadsTaskAdapter(teamName, "team-lead");
     const projected: ModelToolTaskCurrent[] = [];
@@ -537,7 +535,7 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
   }
 
   private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: ModelToolTaskCurrent[], taskRevisionChanged = false): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
-    const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection } : await this.readCandidateTasks(bound.teamName);
+    const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection } : await this.readModelToolTasks(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
     const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];
     for (const event of events) {
@@ -588,6 +586,6 @@ export class DurablePreviewTeamPort implements ModelToolTeamPort {
   }
 }
 
-export function durablePreviewLeaderSessionId(value: string): ExactLeaderSessionId {
+export function durableModelToolLeaderSessionId(value: string): ExactLeaderSessionId {
   return exactLeaderSessionId(value);
 }

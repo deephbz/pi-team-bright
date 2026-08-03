@@ -1,0 +1,96 @@
+{
+  "schema": "pi-teams-layout-verification/1",
+  "recordedAt": "2026-08-03T07:33:00Z",
+  "sourceBundle": {
+    "repository": "pi-team-bright",
+    "baseCommit": "7ccad1d1f7c1693822502e2aad7683b5fe981b52",
+    "reviewedPlacementDiffSha256": "f366d8d78264dcd020906c93255beabc701a67595ae16a3c0a7151e9407acfb6",
+    "workingTreeExtension": "extensions/index.ts"
+  },
+  "intent": "Independently test a real working-tree Pi Team Bright Team in an isolated Herdr tab. The leader must remain left and at least 60% wide after Worker placement.",
+  "focusedTests": {
+    "command": "npm exec vitest run src/adapters/herdr-adapter.test.ts src/adapters/tmux-adapter.test.ts src/utils/terminal-adapter.test.ts src/utils/launch-compensation.contract.test.ts",
+    "result": {
+      "testFiles": 3,
+      "tests": 20,
+      "passed": true
+    }
+  },
+  "realTeamRun": {
+    "proxyEnvironment": {
+      "HTTPS_PROXY": "present",
+      "ALL_PROXY": "present",
+      "NO_PROXY": "present"
+    },
+    "coordinatorLaunch": "zsh -lic _codex_with_proxy pi --model openai-codex/gpt-5.6-terra:medium",
+    "teamName": "ptb-layout-verify-20260803T073109Z-38994",
+    "workspace": "/tmp/ptb-layout-verify-20260803T073109Z-38994",
+    "herdr": {
+      "workspaceId": "w4",
+      "tabId": "w4:t4C",
+      "leaderPaneId": "w4:pPR"
+    },
+    "initialLayout": {
+      "area": { "height": 36, "width": 82, "x": 4, "y": 1 },
+      "panes": [
+        { "paneId": "w4:pPR", "rect": { "height": 36, "width": 82, "x": 4, "y": 1 } }
+      ],
+      "splits": []
+    },
+    "firstEnsureWorkerReceipt": {
+      "semanticResult": "unavailable/carrier_unavailable",
+      "backendError": {
+        "code": "agent_name_not_found",
+        "message": "named agent layout-a/layout-b no longer owns the target terminal"
+      },
+      "compensation": "Each prepared membership was deactivated after compensation."
+    },
+    "layoutAfterFirstRealEnsureAttempt": {
+      "rawReceipt": {
+        "id": "cli:pane:layout",
+        "result": {
+          "layout": {
+            "area": { "height": 36, "width": 82, "x": 4, "y": 1 },
+            "focused_pane_id": "w4:pPR",
+            "panes": [
+              { "focused": true, "pane_id": "w4:pPR", "rect": { "height": 36, "width": 33, "x": 4, "y": 1 } },
+              { "focused": false, "pane_id": "w4:pPV", "rect": { "height": 36, "width": 49, "x": 37, "y": 1 } }
+            ],
+            "splits": [
+              { "direction": "right", "id": "split_0_root", "ratio": 0.4, "rect": { "height": 36, "width": 82, "x": 4, "y": 1 } }
+            ],
+            "tab_id": "w4:t4C",
+            "workspace_id": "w4",
+            "zoomed": false
+          }
+        },
+        "type": "pane_layout"
+      },
+      "leaderWidth": 33,
+      "totalWidth": 82,
+      "leaderWidthFraction": 0.4024390244,
+      "assessment": "Herdr pane split --direction right --ratio 0.4 assigned about 40% of width to the existing leader pane, not 40% to the new Worker pane. The implemented leader-width invariant fails on the first real Worker launch."
+    },
+    "shutdown": {
+      "semanticReceipt": "Team stopped; 0 Workers stopped; 2 unfinished Tasks retained.",
+      "postShutdownLayout": {
+        "area": { "height": 36, "width": 82, "x": 4, "y": 1 },
+        "panes": [
+          { "paneId": "w4:pPR", "rect": { "height": 36, "width": 82, "x": 4, "y": 1 } }
+        ],
+        "splits": []
+      },
+      "unrelatedLocationsChanged": false
+    }
+  },
+  "result": "blocked",
+  "blockingEvidence": [
+    "The real Team invocation issued the implemented first-worker Herdr split at ratio 0.4 and measured the leader at 33/82 width (40.24%), below the required 60%.",
+    "Herdr agent start failed for both Worker carriers with agent_name_not_found, so the two-Worker, worker_stop, and successful Worker-authored Task-event portions could not run."
+  ],
+  "nextAction": "Change the Herdr first-split ratio according to its measured existing-pane semantics, add a focused geometry regression test, then repeat this isolated real-Team run. Separately diagnose the Herdr agent-start ownership failure before claiming an end-to-end Worker lifecycle result.",
+  "residualBackendGaps": [
+    "The unit adapter tests treat 0.4 as a Worker share, but the live Herdr geometry shows it is the existing leader share.",
+    "The live Herdr agent-start path rejected both freshly split Worker panes as no longer owned by the named agent; deterministic mocks did not expose this failure."
+  ]
+}

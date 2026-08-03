@@ -9,7 +9,7 @@ import { BeadsTaskStore, readBeadsAuthorityFingerprint, type TaskWriteOptions } 
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
@@ -107,7 +107,7 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
       tools.set(name, { ...tool, execute: async (id, params, signal, update, ctx) => {
         const args: any = { ...params };
         if (name === "task_create" && !args.tasks) {
-          args.tasks = [{ title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
+          args.tasks = [{ operation_id: `cleancut-${id}`, title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
           for (const key of ["team_name", "title", "description", "acceptance_criteria", "assignee", "design", "idempotency_key"]) delete args[key];
         } else if (name === "task_update" && !args.updates) {
           args.updates = [{ task_id: args.task_id, operation_id: `cleancut-${id}`, expected_version: taskVersionRef(args.expected_version || ""), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
@@ -169,11 +169,34 @@ function assertCurrentTaskShape(task: Record<string, any>): void {
   }
 }
 
+function cleanupTestArtifacts(): void {
+  const names = testTeams.splice(0);
+  const roots = testRoots.splice(0);
+  const failures: string[] = [];
+  for (const name of names) {
+    try {
+      fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
+    } catch (error) {
+      failures.push(`Team ${name}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  for (const root of roots) {
+    try {
+      fs.rmSync(root, { recursive: true, force: true });
+    } catch (error) {
+      failures.push(`Temporary root ${root}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (failures.length > 0) throw new Error(`Task-surface test cleanup failed:\n${failures.join("\n")}`);
+}
+
 afterEach(() => {
-  vi.restoreAllMocks();
-  vi.unstubAllEnvs();
-  for (const name of testTeams.splice(0)) fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
-  for (const root of testRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+  try {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  } finally {
+    cleanupTestArtifacts();
+  }
 });
 
 describe("clean-cut Task public surface", () => {
@@ -205,6 +228,25 @@ describe("clean-cut Task public surface", () => {
     ]) expect(serialized).not.toContain(`\"${removed}\"`);
   });
 
+  it("removes registered Team and Beads roots after an injected setup error", () => {
+    expect(hasBd, "The clean-cut E2E requires the sole Task authority CLI (`bd`) to be installed.").toBe(true);
+    const teamName = uniqueTeam("cleanup-error");
+    const workspace = initBeadsWorkspace();
+    const root = path.dirname(workspace);
+    writeTeam(teamName, workspace);
+
+    try {
+      throw new Error("injected setup failure");
+    } catch (error) {
+      expect(error).toMatchObject({ message: "injected setup failure" });
+    } finally {
+      cleanupTestArtifacts();
+    }
+
+    expect(fs.existsSync(paths.teamDir(teamName))).toBe(false);
+    expect(fs.existsSync(root)).toBe(false);
+  });
+
   it("supports direct execution, prose design review, stale-write rejection, notes, claims, and graph relations", async () => {
     expect(hasBd, "The clean-cut E2E requires the sole Task authority CLI (`bd`) to be installed.").toBe(true);
     const teamName = uniqueTeam("workflow");
@@ -228,6 +270,7 @@ describe("clean-cut Task public surface", () => {
     // Simple work skips review: atomic claim is the only safety-specialized mutation.
     const directResult = await create.execute("create-direct", {
       tasks: [{
+        operation_id: "create-deterministic-checks",
         title: "Run deterministic checks",
         goal: "Execute the deterministic test command and confirm it exits successfully.",
       }],
@@ -263,13 +306,13 @@ describe("clean-cut Task public surface", () => {
         team_name: teamName,
         task_id: direct.id,
         claim: true,
-        expected_version: direct.version,
+        expected_version: taskVersionRef(direct.version),
       }, undefined, undefined, workerACtx),
       updateB.execute("claim-b", {
         team_name: teamName,
         task_id: direct.id,
         claim: true,
-        expected_version: direct.version,
+        expected_version: taskVersionRef(direct.version),
       }, undefined, undefined, workerBCtx),
     ]);
     const acceptedClaims = claimResults.filter((result) => result.details.kind === "task_update_batch" && result.details.outcomes.some((outcome: any) => outcome.kind === "updated"));
@@ -309,11 +352,31 @@ describe("clean-cut Task public surface", () => {
       task_id: complexCreated.id,
       design: "First characterize existing writes, then replace one boundary and run the durability evaluator.",
       append_note: "Evidence gathered from the current write path.\n\nRequesting leader review of the proposed design.",
-      expected_version: complexCreated.version,
+      expected_version: taskVersionRef(complexCreated.version),
     }, undefined, undefined, workerACtx);
     const designed = taskFrom(designedResult);
     expect(designed).toMatchObject({ status: "open", assignee: "worker-a" });
     expect(designed.design).toContain("Evidence gathered from the current write path.");
+
+    const oversizedContext = await updateA.execute("oversized-context", {
+      team_name: teamName,
+      task_id: designed.id,
+      append_note: "👩🏽‍🚀".repeat(2_001),
+      expected_version: taskVersionRef(designed.version),
+    }, undefined, undefined, workerACtx);
+    expect(oversizedContext.details).toMatchObject({
+      kind: "task_update_batch",
+      outcomes: [{
+        kind: "contract_gap",
+        reason: "candidate_metadata_invalid",
+        task_id: designed.id,
+        state_changed: false,
+      }],
+    });
+    expect(taskFrom(await read.execute("read-after-oversized-context", {
+      team_name: teamName,
+      task_id: designed.id,
+    }, undefined, undefined, leadCtx)).version).toBe(designed.version);
 
     const reviewSync = await sync.execute("sync-review-request", { view: "updates" }, undefined, undefined, leadCtx);
     expect(reviewSync.details).toMatchObject({ kind: expect.stringMatching(/updates|snapshot|contract_gap/) });
@@ -337,7 +400,7 @@ describe("clean-cut Task public surface", () => {
       team_name: teamName,
       task_id: designed.id,
       append_note: "This must not overwrite the accepted version.",
-      expected_version: designed.version,
+      expected_version: taskVersionRef(designed.version),
     }, undefined, undefined, workerACtx);
     expect(staleWrite.content[0].text).toMatch(/not updated|stale|review it and retry/i);
     expect(staleWrite.details).toMatchObject({
@@ -363,7 +426,7 @@ describe("clean-cut Task public surface", () => {
       task_id: rejectedCreated.id,
       design: "Delete every generated directory in one pass.",
       append_note: "Requesting review because this cleanup is destructive.",
-      expected_version: rejectedCreated.version,
+      expected_version: taskVersionRef(rejectedCreated.version),
     }, undefined, undefined, workerACtx));
     const rejected = taskFrom(await updateLead.execute("reject-by-feedback", {
       team_name: teamName,
