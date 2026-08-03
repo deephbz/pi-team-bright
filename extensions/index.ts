@@ -2580,14 +2580,14 @@ export default function (pi: ExtensionAPI) {
   registerWorkerTool({
     name: "task_link",
     label: "Link Task",
-    description: "Add or remove one typed Task relation with graph and version validation.",
+    description: "Add or remove one typed Task relation with graph and version validation. Closed Tasks can still receive relation or evidence writes, so use the latest receipt or read before another conditional mutation.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
       relation: StringEnum(["blocked_by", "parent", "related"]),
       target_id: Type.String(),
       action: StringEnum(["add", "remove"]),
-      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from task_read" })),
+      expected_version: Type.Optional(Type.String({ description: "Optimistic concurrency token from the latest Task receipt or task_read; closure does not freeze the version" })),
     }) as any,
     async execute(toolCallId, params: any, signal, onUpdate, ctx) {
       const graphPostState = (task: TaskFile, includeBoundedSource = false) => ({

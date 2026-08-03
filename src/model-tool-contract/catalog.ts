@@ -467,7 +467,7 @@ export const CandidateTaskLinkParametersSchema = Type.Object({
   expected_version: Type.Optional(TaskVersionRefSchema),
 }, {
   additionalProperties: false,
-  description: "Add or remove one typed Task relation with graph and version validation.",
+  description: "Add or remove one typed Task relation with graph and version validation. Closed Tasks can still receive relation or evidence writes, so use the latest receipt or read before another conditional mutation.",
 });
 
 export const CandidateTaskLinkResultSchema = Type.Union([
@@ -976,7 +976,7 @@ export const candidateModelToolCatalog = {
     {
       name: "task_link",
       label: "Link Task",
-      responsibility: "Add or remove one typed Task relation with graph and version validation.",
+      responsibility: "Add or remove one typed Task relation with graph and version validation using the latest Task version; closure does not freeze the version.",
       actors: ["leader"],
       commonUseCases: ["Record a blocking, parent, or related relation between current Tasks."],
       whenNotToUse: ["Do not use a relation as a substitute for assignment, progress, or an Alert."],

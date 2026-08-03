@@ -87,7 +87,7 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.3` release candidate uses the real main extension as its local
+- The `0.17.0-rc.4` release candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
@@ -113,16 +113,12 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.3` is published through GitHub
-  Actions OIDC, and npm `next` points to it. It adds the complete exact-Session
-  ten-tool model surface while preserving one-live-process startup admission
-  and the Task-first authority. Compatibility metadata covers the tested Pi
-  0.80.10, 0.82.x, and 0.83.0 lines. The Pi 0.83.0 normal-resource Herdr
-  lifecycle receipt is
-  [`2026-08-03-pi-083-herdr-normal-composition.json`](../journal/artifacts/2026-08-03-pi-083-herdr-normal-composition.json).
-  Exact source, workflow, registry-byte, dist-tag, provenance, and GitHub
-  Release evidence is in the
+- `@hypercarrier/pi-team-bright@0.17.0-rc.4` is the prepared release candidate.
+  It adds strict stress-recovery guidance and the `pi-team-bright` packaged
+  Skill name without changing Task authority behavior. The published rc.3
+  registry and provenance evidence remains in the
   [`v0.17.0-rc.3` release receipt](../journal/2026-08-03-v0.17.0-rc.3-release-receipt.md).
+  Record rc.4 publication only after registry and provenance verification.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -192,34 +188,32 @@ context or the executable contract sources.
 
 ## Constraints and open work
 
-An active rc.3 ten-Worker stress prefix confirms a Beads/Dolt contention tail
-across every Worker. It also found that exact Task-create replay can return a
-false operation conflict after the created Task evolves, because replay identity
-is inferred from mutable current state. A replayed authority commit can also
-remain without its Task-creation event or delivery because publication state is
-not durable. The immutable-prefix evidence and
-nontrivial repair handoff are in
+The completed rc.3 ten-Worker stress run closed all 160 Tasks, applied the full
+159-edge dependency chain, stopped all Workers, and shut down with no unfinished
+Task IDs. It also confirmed the Beads/Dolt contention tail and the unavailable
+bulk snapshot path at this scale. Exact create replay can still return a false
+operation conflict after its Task evolves, and a replayed authority commit can
+remain without its Task-creation event or delivery. The final assessment is
+[`2026-08-03-rc3-stress-final-assessment.md`](../journal/2026-08-03-rc3-stress-final-assessment.md).
+The nontrivial repair design remains in
 [`2026-08-03-stress-team-rc3-investigation-handoff.md`](../journal/2026-08-03-stress-team-rc3-investigation-handoff.md).
 The required observation invariant remains one complete coordination observation
 or no semantic observation. An unavailable Task authority must not advance the
 internal watermark, report zero Tasks, or present the last complete projection
-as fresh. The focused rc.3 regression proves no watermark advance after a failed
-event read. The active prefix does not establish a final error rate or capacity
-limit.
+as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Finish the active rc.3 stress run and preserve its final versioned receipt.
-2. Design immutable Task-create operation identity before changing replay code.
-3. Measure and repair Beads contention before making a Worker-capacity claim.
-4. Repair or explain `structured_task_event_evidence_absent` with runtime
+1. Design immutable Task-create operation identity before changing replay code.
+2. Measure and repair Beads contention before making a Worker-capacity claim.
+3. Repair or explain `structured_task_event_evidence_absent` with runtime
    evidence; do not hide it in the renderer.
-5. Add payload-free outer-operation trace correlation before the representative
+4. Add payload-free outer-operation trace correlation before the representative
    performance epoch.
-6. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
+5. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-7. Restart live Teams as one version epoch after an upgrade or rollback.
-8. Define observation and cleanup for a reserved recovery carrier that never
+6. Restart live Teams as one version epoch after an upgrade or rollback.
+7. Define observation and cleanup for a reserved recovery carrier that never
    publishes runtime evidence. Keep it pending; do not infer readiness or work.
 
 
