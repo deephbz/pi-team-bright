@@ -113,14 +113,16 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.3` is the prepared public release
-  candidate. It adds the complete exact-Session ten-tool model surface while
-  preserving one-live-process startup admission and the Task-first authority.
-  Compatibility metadata covers the tested Pi 0.80.10, 0.82.x, and 0.83.0
-  lines. The Pi 0.83.0 normal-resource Herdr lifecycle receipt is
+- `@hypercarrier/pi-team-bright@0.17.0-rc.3` is published through GitHub
+  Actions OIDC, and npm `next` points to it. It adds the complete exact-Session
+  ten-tool model surface while preserving one-live-process startup admission
+  and the Task-first authority. Compatibility metadata covers the tested Pi
+  0.80.10, 0.82.x, and 0.83.0 lines. The Pi 0.83.0 normal-resource Herdr
+  lifecycle receipt is
   [`2026-08-03-pi-083-herdr-normal-composition.json`](../journal/artifacts/2026-08-03-pi-083-herdr-normal-composition.json).
-  Publication uses the manually dispatched GitHub Actions OIDC workflow and
-  the npm `next` dist-tag.
+  Exact source, workflow, registry-byte, dist-tag, provenance, and GitHub
+  Release evidence is in the
+  [`v0.17.0-rc.3` release receipt](../journal/2026-08-03-v0.17.0-rc.3-release-receipt.md).
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -182,32 +184,35 @@ context or the executable contract sources.
   expected-version preflight plus durable operation metadata replay; stale and
   conflicting operations refuse without a second model-tool mutation. The
   redacted receipt is [`2026-08-02-durable-preview-local-canary.json`](../journal/artifacts/2026-08-02-durable-preview-local-canary.json).
-  This proves the first local decision loop, not public release or a durable
-  Worker mutation surface.
+  The public rc.3 release now proves package delivery and provenance; the
+  Worker mutation surface remains the bounded three-tool projection.
 - [Task-engine performance](../projects/task-engine-performance.md) is in
   hardening measurement. It owns trace repair, benchmark design, current
   performance assessment, and optimization selection.
 
 ## Constraints and open work
 
-One live blocker remains below the recovered Worker lifecycle: ordinary
-`team_sync` intermittently times out in the single underlying Beads `list`
-command while live Workers settle Tasks. The shaping target is one complete
-coordination observation or no semantic observation. An unavailable Task
-authority must not advance the internal watermark, report zero Tasks, or
-present the last complete projection as fresh. This availability policy must
-settle before the performance Project optimizes its implementation.
+The rc.2 16-Worker stress run found a Beads/Dolt contention tail, but it cannot
+establish rc.3 capacity because it loaded the old extension. Ordinary
+`team_sync` can time out in the underlying Beads read path while Workers settle
+Tasks. The required invariant remains one complete coordination observation or
+no semantic observation. An unavailable Task authority must not advance the
+internal watermark, report zero Tasks, or present the last complete projection
+as fresh. The focused rc.3 regression now proves no watermark advance after a
+failed event read. A traced rc.3 run must measure authority availability before
+any 16-Worker capacity claim.
 
 Next steps:
 
-1. Complete the fresh full-suite and QA projection gates before publication.
-2. Repair or explain `structured_task_event_evidence_absent` with runtime
+1. Run a version-asserted rc.3 stress epoch through the required Terra proxy and
+   preserve exact `PI_TEAMS_TRACE_JSONL` evidence.
+2. Measure and repair Beads contention before making a 16-Worker capacity claim.
+3. Repair or explain `structured_task_event_evidence_absent` with runtime
    evidence; do not hide it in the renderer.
-3. Add payload-free outer-operation trace correlation before starting the new
-   representative `PI_TEAMS_TRACE_JSONL` Team epoch.
-4. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
+4. Add payload-free outer-operation trace correlation before the representative
+   performance epoch.
+5. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-5. Run the independent exact-tree release lane after the repair gate.
 6. Restart live Teams as one version epoch after an upgrade or rollback.
 7. Define observation and cleanup for a reserved recovery carrier that never
    publishes runtime evidence. Keep it pending; do not infer readiness or work.
