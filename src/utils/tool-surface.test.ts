@@ -13,7 +13,7 @@ type RegisteredTool = {
 };
 
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
-const skill = read("skills/pi-teams/SKILL.md");
+const skill = read("skills/pi-team-bright/SKILL.md");
 const reference = read("docs/reference.md");
 const current = read("docs/current/README.md");
 const registeredTools: RegisteredTool[] = [];
@@ -81,6 +81,29 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(sync.parameters.properties).not.toHaveProperty("cursor");
     expect(sync.description).toMatch(/current|incremental|supervision/i);
     expect(skill).toMatch(/snapshot|updates/);
+    expect(skill).toMatch(/For a new Team, call `team_create` before the first `team_sync`/);
+  });
+
+  it("makes Worker claim and timeout recovery rules explicit", () => {
+    const previousAgentName = process.env.PI_AGENT_NAME;
+    process.env.PI_AGENT_NAME = "worker-surface-test";
+    const workerTools: RegisteredTool[] = [];
+    try {
+      piTeams({
+        registerTool(candidate: RegisteredTool) { workerTools.push(candidate); },
+        on() {},
+        sendUserMessage() {},
+      } as never);
+    } finally {
+      if (previousAgentName === undefined) delete process.env.PI_AGENT_NAME;
+      else process.env.PI_AGENT_NAME = previousAgentName;
+    }
+    const workerUpdate = workerTools.find(candidate => candidate.name === "task_update");
+    expect(workerUpdate?.description).toMatch(/claim=true.+atomic claim.+no status/is);
+    expect(JSON.stringify(workerUpdate?.parameters.properties?.claim)).toMatch(/do not include.+status/i);
+    expect(skill).toMatch(/claim=true.+alone/is);
+    expect(skill).toMatch(/Beads timeout.+unknown authority outcome/is);
+    expect(skill).toMatch(/same operation ID and identical/i);
   });
 
   it("keeps terminal window placement as Team policy", () => {

@@ -1,9 +1,9 @@
 ---
-name: pi-teams
-description: Operate PiTeams with durable assigned Tasks, stable Workers, and event-driven Team synchronization.
+name: pi-team-bright
+description: Operate Pi Team Bright with durable assigned Tasks, stable Workers, and event-driven Team synchronization.
 ---
 
-# PiTeams
+# Pi Team Bright
 
 Task plus assignee is the only work-delegation contract. Alerts are exceptional
 coordination, and `team_sync` is the event-driven observation surface. Don't
@@ -11,19 +11,27 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
 
 ## Operating protocol
 
-1. Create the Team, then use `team_sync({view:"snapshot"})` to inspect its
-   current projection.
+1. For a new Team, call `team_create` before the first `team_sync`. `team_sync`
+   does not discover or create a Team. In a resumed exact leader Session, use
+   `team_sync({view:"snapshot"})` to restore its current projection.
 2. Use `ensure_worker` only when no suitable current Worker exists. A Worker
    scope is a standing role, never the current work item.
 3. Create assigned Tasks with explicit goals and independently verifiable
    success signals.
-4. A Worker starts accepted work, verifies it, then closes with evidence or
-   blocks with blocker evidence and a next action.
-5. Use `team_sync({view:"updates"})` for routine supervision. Mutation
-   receipts already contain post-state; don't immediately re-read them.
-6. Use `task_link` for typed graph relations and `alert_send` only for
+4. A Worker starts accepted work with an atomic claim. Send `claim=true` alone;
+   don't combine it with status, context, or evidence changes. Use the returned
+   Task version for the next update. The Worker verifies work, then closes with
+   evidence or blocks with blocker evidence and a next action.
+5. Use `team_sync({view:"updates"})` for routine supervision. Mutation receipts
+   already contain post-state; don't immediately re-read them.
+6. Treat a Beads timeout as an unknown authority outcome, not an empty Task set
+   or proof of failure. Retry a timed-out read. After a mutation timeout, first
+   read the current Task. If retry is still required, reuse the same operation
+   ID and identical semantics with the current exact version. For Task creation,
+   retry an `unknown_outcome` with the same operation ID and identical input.
+7. Use `task_link` for typed graph relations and `alert_send` only for
    clarification, attention, or announcements. An Alert never changes a Task.
-7. Reuse current Workers. Stop a Worker only after its nonterminal assigned
+8. Reuse current Workers. Stop a Worker only after its nonterminal assigned
    Tasks are resolved. Reconcile once more, then use `team_shutdown`.
 
 ## Invariants

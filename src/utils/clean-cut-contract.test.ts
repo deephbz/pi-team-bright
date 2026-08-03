@@ -226,7 +226,7 @@ describe("clean-cut public contract", () => {
     const messageDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/message-delivery.ts"), "utf8");
     const taskDelivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
     const tasks = fs.readFileSync(path.join(process.cwd(), "src/utils/tasks.ts"), "utf8");
-    const docs = ["README.md", "docs/current/README.md", "docs/reference.md", "skills/pi-teams/SKILL.md"]
+    const docs = ["README.md", "docs/current/README.md", "docs/reference.md", "skills/pi-team-bright/SKILL.md"]
       .map((file) => fs.readFileSync(path.join(process.cwd(), file), "utf8"))
       .join("\n");
 

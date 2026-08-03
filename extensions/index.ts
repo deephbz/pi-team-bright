@@ -2365,7 +2365,7 @@ export default function (pi: ExtensionAPI) {
   registerWorkerTool({
     name: "task_update",
     label: "Update Task",
-    description: "Apply one semantic Task mutation. Its receipt contains authoritative post-state; wait through team_sync for later changes.",
+    description: "Apply one semantic Task mutation. Set claim=true only as an atomic claim with no status, context, evidence, assignment, or other mutation. Its receipt contains authoritative post-state; use its version for the next update and wait through team_sync for later changes.",
     parameters: Type.Object({
       team_name: Type.String(),
       task_id: Type.String(),
@@ -2375,7 +2375,7 @@ export default function (pi: ExtensionAPI) {
       design: Type.Optional(Type.String()),
       status: Type.Optional(StringEnum(["open", "in_progress", "blocked", "closed"])),
       assignee: Type.Optional(Type.String()),
-      claim: Type.Optional(Type.Boolean({ default: false, description: "Atomically claim the task for the current agent" })),
+      claim: Type.Optional(Type.Boolean({ default: false, description: "Atomically claim the Task for the current agent. When true, do not include title, description, acceptance_criteria, design, status, assignee, or append_note." })),
       append_note: Type.Optional(Type.String({ description: "Append prose to the Task's native Beads notes" })),
       expected_version: TaskVersionRefSchema,
     }) as any,

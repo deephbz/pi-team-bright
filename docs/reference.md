@@ -16,7 +16,7 @@ exhaustive parameter reference.
 - [`extensions/index.ts`](../extensions/index.ts) owns each tool's TypeBox
   parameter schema, agent-facing description, authorization, execution, and
   semantic result content.
-- [`skills/pi-teams/SKILL.md`](../skills/pi-teams/SKILL.md) is operating
+- [`skills/pi-team-bright/SKILL.md`](../skills/pi-team-bright/SKILL.md) is operating
   procedure, not another schema. Pi presents the executable tool schemas to the
   agent directly.
 - [`src/utils/tool-surface.test.ts`](https://github.com/deephbz/pi-team-bright/blob/main/src/utils/tool-surface.test.ts)
