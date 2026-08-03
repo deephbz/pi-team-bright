@@ -9,6 +9,7 @@ import { DurableModelToolTeamPort, type ModelToolLifecycle } from "./durable-mod
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
 import { CANDIDATE_TASK_METADATA_SCHEMA } from "../utils/beads";
+import { readHiddenObservationProjection } from "../utils/hidden-observation";
 
 const testTeams: string[] = [];
 
@@ -98,6 +99,66 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       reason: "candidate_metadata_invalid",
     });
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+  });
+
+  it("does not advance the hidden watermark when event consumption fails", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const task = {
+      id: "watermark-task",
+      title: "Watermark safety",
+      description: "Ensure failed event reads do not advance observation state.",
+      acceptanceCriteria: "The hidden watermark stays at the last complete observation.",
+      status: "open" as const,
+      relations: [],
+      version: "beads_watermark_v1",
+      provenance: { authority: "beads" as const, teamName: name },
+    };
+    vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([task]);
+    vi.spyOn(tasks, "readCandidateTaskAuthorityRecord").mockResolvedValue({
+      task,
+      candidateMetadata: {
+        schema: CANDIDATE_TASK_METADATA_SCHEMA,
+        goal: "Keep the hidden watermark safe.",
+        current_context: "No event read has failed yet.",
+      },
+    });
+
+    const snapshot = await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    expect(snapshot).toMatchObject({ kind: "snapshot", head: 0 });
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await expect(port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"])).resolves.toBe(true);
+
+    const beforeFailure = await readHiddenObservationProjection(name, {
+      teamEpochId: (await teams.readConfig(name)).epochId!,
+      exactSessionId: sessionFile,
+      branchLineage: ["snapshot-entry"],
+    });
+    expect(beforeFailure).toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
+
+    const readEvents = vi.spyOn(teamEvents, "readTeamEvents").mockImplementation(() => {
+      throw new Error("simulated event authority failure");
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-updates"))
+      .rejects.toThrow("simulated event authority failure");
+    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+    readEvents.mockRestore();
+
+    const afterFailure = await readHiddenObservationProjection(name, {
+      teamEpochId: (await teams.readConfig(name)).epochId!,
+      exactSessionId: sessionFile,
+      branchLineage: ["snapshot-entry"],
+    });
+    expect(afterFailure).toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
+
+    await teamEvents.appendTeamEvent(name, {
+      type: "worker",
+      worker: "worker",
+      membershipId: "watermark-membership",
+      phase: "failed",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "recovered-updates"))
+      .resolves.toMatchObject({ kind: "updates", head: 1 });
   });
 
   it("keeps valid direct Task reads usable beside an invalid external Task", async () => {

@@ -1,0 +1,81 @@
+{
+  "schema": "pi-team-bright/rc-stress-analysis/1",
+  "team": "rc-stress-16",
+  "runtimeImplementationVersion": "0.17.0-rc.2",
+  "source": {
+    "teamConfig": "private runtime Team config",
+    "configuredMembersIncludingLead": 17,
+    "existingSessionFiles": 16,
+    "missingSessionFiles": [
+      "latency-observer"
+    ],
+    "existingSessionBundleSha256": "7a2f7e270cdff4cf4587bd056739e50873539eb368c9668941430ab019d33261",
+    "rawEvidencePolicy": "Raw Team and Session records remain private in place. This artifact contains only sanitized derived counts."
+  },
+  "persistedToolResults": {
+    "total": 539,
+    "errors": 112,
+    "piTeamToolErrorsUsingTheCandidateRenderer": 92,
+    "otherToolErrors": 20,
+    "piTeamErrorsByTool": {
+      "task_update": 65,
+      "task_read": 22,
+      "team_sync": 4,
+      "team_shutdown": 1
+    },
+    "piTeamErrorsByCause": {
+      "compoundClaimRejected": 28,
+      "beadsTimeout": 64
+    },
+    "beadsTimeoutByCommand": {
+      "show": 55,
+      "update": 8,
+      "list": 1
+    },
+    "piTeamToolResultsContainingInvalidSemanticResult": 0,
+    "piTeamToolResultsContainingInvalidModelProjection": 0
+  },
+  "firstPersistedPiTeamError": {
+    "timestamp": "2026-08-03T14:01:17.274Z",
+    "actor": "load-reader",
+    "tool": "task_update",
+    "inputKeys": [
+      "claim",
+      "expected_version",
+      "status",
+      "task_id",
+      "team_name"
+    ],
+    "inputConflict": "claim=true was combined with status=in_progress",
+    "rawContent": "claim is an atomic assignment operation and cannot be combined with other task_update changes.",
+    "rawDetailsKeys": [],
+    "isError": true
+  },
+  "firstPersistedBeadsTimeout": {
+    "timestamp": "2026-08-03T14:01:48.119Z",
+    "actor": "sync-cursor-b",
+    "tool": "task_update",
+    "commandClass": "update",
+    "timeoutMs": 10000
+  },
+  "isolatedReadContentionAnchor": {
+    "method": "Copy the inactive Team workspace, then run 32 parallel single-Task bd show commands without the product timeout.",
+    "parallelCommands": 32,
+    "successes": 32,
+    "commandsExceedingProductionTimeout": 9,
+    "productionTimeoutMs": 10000,
+    "p50Ms": 6928,
+    "p95Ms": 16843,
+    "maxMs": 21470
+  },
+  "assessment": {
+    "genericMessageCause": "The rc.2 candidate TUI renderer replaced every isError result with one generic semantic-result message and discarded raw content and details.",
+    "underlyingCauses": [
+      "The Worker called a runtime-forbidden compound claim shape that the rc.2 schema still permitted.",
+      "Concurrent external bd commands against embedded Dolt exceeded the fixed ten-second command timeout."
+    ],
+    "semanticValidatorFailureObserved": false,
+    "releaseClassification": "old-version-only generic-renderer artifact",
+    "currentReleaseAnchor": "The rc.3 result-projection test requires raw content and details for errors and forbids the old generic phrase."
+  }
+}
