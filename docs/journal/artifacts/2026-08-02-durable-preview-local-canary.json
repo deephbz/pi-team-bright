@@ -1,0 +1,96 @@
+{
+  "schema": "pi-team-bright-durable-preview-canary/1",
+  "recordedAt": "2026-08-02T15:51:31.263Z",
+  "branch": "preview/new-model-tool-surface",
+  "team": {
+    "name": "durable-preview-canary-154614",
+    "purpose": "Prove one durable leader and Worker decision loop.",
+    "epochPresent": true,
+    "epochDigest": "37249ee321c6f06888c1592a17c82c8ad2499eb7215238bb15090564906bb5d2"
+  },
+  "authority": {
+    "backend": "beads",
+    "authorityIdPresent": true,
+    "fingerprintDigest": "d5d979fcb596383b526a96e29003c510c271784469f5126ddef057ba3abbeaa9"
+  },
+  "identities": {
+    "exactLeaderSessionPresent": true,
+    "exactWorkerSessionPresent": true,
+    "sessionsDistinct": true,
+    "membershipGenerationsDistinct": true
+  },
+  "worker": {
+    "name": "workflow-worker",
+    "logicalScope": "Own the assigned preview verification Task and record concrete evidence.",
+    "carrierBackend": "herdr",
+    "carrierKind": "pane",
+    "runtimeGenerationMatchesMembership": true,
+    "runtimeObserved": true,
+    "readinessClaimedByLaunch": false
+  },
+  "task": {
+    "id": "durable-preview-canary-154614-6ui",
+    "status": "closed",
+    "currentContext": "worker-evidence-154614-done",
+    "version": "beads_7621442478032658c910ca4a53a08cc17e09966ce27865367fdc3edf9097b7e2",
+    "assignedToWorker": true,
+    "markerCompleted": true
+  },
+  "evidence": [
+    {
+      "cursor": "3",
+      "actor": "team-lead",
+      "kind": "created",
+      "text": "Use current Worker Task surface: set in_progress with append_note worker-evidence-154614-start; then closed with append_note worker-evidence-154614-done."
+    },
+    {
+      "cursor": "4",
+      "actor": "workflow-worker",
+      "kind": "progress",
+      "text": "worker-evidence-154614-start"
+    },
+    {
+      "cursor": "5",
+      "actor": "workflow-worker",
+      "kind": "status",
+      "text": "Worker set Task status to in_progress."
+    },
+    {
+      "cursor": "6",
+      "actor": "workflow-worker",
+      "kind": "progress",
+      "text": "worker-evidence-154614-done"
+    },
+    {
+      "cursor": "7",
+      "actor": "workflow-worker",
+      "kind": "status",
+      "text": "Worker set Task status to closed."
+    }
+  ],
+  "leaderObservation": {
+    "groupedChangeKinds": [
+      "progress",
+      "status"
+    ],
+    "observedContext": "worker-evidence-154614-start",
+    "observationCount": 1
+  },
+  "leaderCandidateUpdate": {
+    "reason": "beads_external_writer_atomicity_unavailable",
+    "stateChanged": false,
+    "unsupported": [
+      "atomic_compare_and_swap",
+      "task_scoped_operation_replay"
+    ]
+  },
+  "hiddenObservation": {
+    "fileCount": 1,
+    "allMode0600": true
+  },
+  "verification": {
+    "typecheck": "passed",
+    "realSessions": 2,
+    "workflow": "passed"
+  }
+}

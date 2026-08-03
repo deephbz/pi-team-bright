@@ -1,0 +1,519 @@
+{
+  "schema": "pi-team-bd-latency-audit/1",
+  "generatedAt": "2026-08-02T06:46:57.381187Z",
+  "method": {
+    "exactBdTimingAvailable": false,
+    "reason": "PI_TEAMS_TRACE_JSONL was not set and no semantic trace file exists for the audited processes.",
+    "outerLatency": "Exact tool-call elapsed time from Session JSONL.",
+    "taskEngineUpperBound": "Direct task-path elapsed time plus team_sync time after wakeup. It includes locks, local projection, delivery, and scheduling, so it is not exact bd time.",
+    "teamSyncPostWaitTail": "For timeouts, elapsed minus requested wait. For event returns, result time minus the later of call time or newest returned event time.",
+    "bdSubprocessLowerBound": "Minimum command count implied by the audited Beads adapter. Recovery and delivery reconciliation can add commands.",
+    "runningSource": {
+      "repository": "<home>/repos/pi-team-bright-release",
+      "commit": "4e69ce2a8b68e45cb9ed4b2305725312f2cc3f50",
+      "beadsTsSha256": "94d7639eba007452bc41726ad76f992776c866dd9fbf203905783033eb33d4e2",
+      "teamEventsTsSha256": "7d37538244a6c5dca7e28102cb35c14b9722c531bb7e16ce55b0b0eb646724aa"
+    }
+  },
+  "sources": [
+    {
+      "kind": "team_config",
+      "originalPath": "<home>/.pi/teams/rarebit-public-release-e2e/config.json",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/teams/rarebit-public-release-e2e-config.json",
+      "sha256": "3730863fc6d3e7f757a5a1a12d294e8acc5e90395daeb062445dad742c4438da"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+      "prefixLines": 2421,
+      "sha256": "342bf952bc65d232dc0ef804748c0a8d5225431cc67ee043a5f8a7261b7386bb"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-55-739Z_019fbfe1-84fb-79ca-a2d8-3125dee2d875.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-30-55-739Z_019fbfe1-84fb-79ca-a2d8-3125dee2d875.jsonl",
+      "prefixLines": 174,
+      "sha256": "484f25aebcf0561fe99aafd7aa1e78744f7a74664d7e55374cd09feedf000360"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+      "prefixLines": 190,
+      "sha256": "e28a94dbe7ccb0671745ba63912d78ba76b9946f945367fcc080c54ebaed97ae"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-36-21-784Z_019fbfe6-7e98-7813-ac7a-e32a6b0d4683.jsonl",
+      "prefixLines": 619,
+      "sha256": "d51f7627f38f22496e73bbe049116d0505953a252504d240e53eb98ae922d464"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-36-24-765Z_019fbfe6-8a3d-7de1-94a5-58c011b3b48f.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-36-24-765Z_019fbfe6-8a3d-7de1-94a5-58c011b3b48f.jsonl",
+      "prefixLines": 295,
+      "sha256": "0a989a88a20f50e3946e499ae36fd8ff66b50129681e4bba1fe600b06bab3e47"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--private-tmp-hypercarrier-rarebit-alpha2-composition--/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T04-45-07-186Z_019fc0ca-3cf2-7012-a0d9-37578aa29e8b.jsonl",
+      "prefixLines": 315,
+      "sha256": "594d6ae451a81333d249c8cae2c4787fc908fa572cb3d78a4cfcab1b45f2ea82"
+    },
+    {
+      "kind": "team_config",
+      "originalPath": "<home>/.pi/teams/worker-resource-projection-review/config.json",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/teams/worker-resource-projection-review-config.json",
+      "sha256": "f9f60cd092fa7d6a396438e7d2adc8cdfc1e9492514203e5f09677ed4e2efb0b"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+      "prefixLines": 654,
+      "sha256": "2781486a1b6b41a7a74e27df9138e78c56f91252b0d77205ba1540a632f832bf"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T00-37-15-281Z_019fbfe7-4f91-7b2a-8e2a-36b384b952bf.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-37-15-281Z_019fbfe7-4f91-7b2a-8e2a-36b384b952bf.jsonl",
+      "prefixLines": 137,
+      "sha256": "5440c37cfc495fa1b809771634a7a83cb32549aeb0b50c8395e083f83176a27b"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T00-37-18-372Z_019fbfe7-5ba4-71ab-aa5e-72e81b593f8d.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T00-37-18-372Z_019fbfe7-5ba4-71ab-aa5e-72e81b593f8d.jsonl",
+      "prefixLines": 430,
+      "sha256": "5e58bd7f2bebe6e049f28b1ec2594af5cb5d9887e2334ba569399022c543bc70"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T01-07-59-088Z_019fc003-71f0-7913-8cc7-a033ce5b5a65.jsonl",
+      "prefixLines": 309,
+      "sha256": "61710869cd1b79fa28657e92120aa6cf158d1e857f9de369a9fbb8f993e6ecf4"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T01-08-01-890Z_019fc003-7ce2-71f0-82ac-32110b150f4a.jsonl",
+      "prefixLines": 80,
+      "sha256": "6119d8b67e8065a4374905719dfcb0b2b3e27eef5bcfa8745cc4efa50f62e829"
+    },
+    {
+      "kind": "session_prefix",
+      "originalPath": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-02T05-12-42-001Z_019fc0e3-7d11-7a2e-8a70-3b1d5a300991.jsonl",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/sessions/2026-08-02T05-12-42-001Z_019fc0e3-7d11-7a2e-8a70-3b1d5a300991.jsonl",
+      "prefixLines": 102,
+      "sha256": "21cf8aebe48b4bf15c632c8f451fbebad670721f03cab1432f5edfd53a1499fa"
+    },
+    {
+      "kind": "team_event_prefix",
+      "team": "rarebit-public-release-e2e",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/teams/rarebit-public-release-e2e-events.jsonl",
+      "prefixLines": 175,
+      "sha256": "6c0890b2b26de65e03246c407054608abd34e45f12606d7e9fc75a5c3d3b5af9"
+    },
+    {
+      "kind": "team_event_prefix",
+      "team": "worker-resource-projection-review",
+      "snapshotFile": "/tmp/pi-team-audit-snapshot-20260802T052359Z/teams/worker-resource-projection-review-events.jsonl",
+      "prefixLines": 71,
+      "sha256": "51cc4cbdc0384743a52d9ea1ab0d02348eb8c493ab0755170cd625d52db6aee0"
+    }
+  ],
+  "totals": {
+    "taskEnginePathUpperBoundSeconds": 1060.863,
+    "taskEnginePathUpperBoundMinutes": 17.681,
+    "adjustedAllToolLatencySeconds": 1116.79,
+    "taskEnginePathUpperBoundSharePercent": 94.992,
+    "bdSubprocessLowerBound": 1238,
+    "upperBoundByOperationSeconds": {
+      "task_create": 186.439,
+      "task_link": 1.849,
+      "task_read": 302.403,
+      "task_update": 236.234,
+      "team_create": 6.418,
+      "team_sync_post_wait": 314.696,
+      "worker_stop": 12.824
+    },
+    "bdSubprocessLowerBoundByCommand": {
+      "create": 63,
+      "dep_or_update": 1,
+      "init": 2,
+      "list": 315,
+      "show": 724,
+      "update": 133
+    },
+    "suppressedLeaderWaitSeconds": 602.207
+  },
+  "teams": {
+    "rarebit-public-release-e2e": {
+      "directTaskPathOuterLatency": {
+        "task_create": {
+          "count": 57,
+          "sumSeconds": 169.72,
+          "meanMs": 2977.544,
+          "medianMs": 2601.0,
+          "p95Ms": 4000.0,
+          "maxMs": 7842.0
+        },
+        "task_read": {
+          "count": 107,
+          "sumSeconds": 269.123,
+          "meanMs": 2515.168,
+          "medianMs": 518.0,
+          "p95Ms": 8665.0,
+          "maxMs": 64834.0
+        },
+        "task_update": {
+          "count": 99,
+          "sumSeconds": 156.688,
+          "meanMs": 1582.707,
+          "medianMs": 1402.0,
+          "p95Ms": 2301.0,
+          "maxMs": 4231.0
+        },
+        "team_create": {
+          "count": 1,
+          "sumSeconds": 3.312,
+          "meanMs": 3312.0,
+          "medianMs": 3312.0,
+          "p95Ms": 3312.0,
+          "maxMs": 3312.0
+        }
+      },
+      "teamSyncPostWaitTail": {
+        "all": {
+          "count": 159,
+          "sumSeconds": 194.042,
+          "meanMs": 1220.39,
+          "medianMs": 910.0,
+          "p95Ms": 2014.0,
+          "maxMs": 10405.0
+        },
+        "byCompletion": {
+          "beads_timeout": {
+            "count": 2,
+            "sumSeconds": 20.774,
+            "meanMs": 10387.0,
+            "medianMs": 10387.0,
+            "p95Ms": 10369.0,
+            "maxMs": 10405.0
+          },
+          "event_tail": {
+            "count": 113,
+            "sumSeconds": 125.228,
+            "meanMs": 1108.212,
+            "medianMs": 941.0,
+            "p95Ms": 1765.0,
+            "maxMs": 3089.0
+          },
+          "non_backend_error": {
+            "count": 3,
+            "sumSeconds": 0.0,
+            "meanMs": 0,
+            "medianMs": 0,
+            "p95Ms": 0,
+            "maxMs": 0
+          },
+          "snapshot": {
+            "count": 3,
+            "sumSeconds": 8.058,
+            "meanMs": 2686.0,
+            "medianMs": 1846.0,
+            "p95Ms": 1846.0,
+            "maxMs": 5818.0
+          },
+          "timeout_tail": {
+            "count": 38,
+            "sumSeconds": 39.982,
+            "meanMs": 1052.158,
+            "medianMs": 861.0,
+            "p95Ms": 2003.0,
+            "maxMs": 2195.0
+          }
+        }
+      },
+      "taskEnginePathUpperBoundSeconds": 792.885,
+      "adjustedAllToolLatencySeconds": 820.712,
+      "taskEnginePathUpperBoundSharePercent": 96.609,
+      "upperBoundByOperationSeconds": {
+        "task_create": 169.72,
+        "task_read": 269.123,
+        "task_update": 156.688,
+        "team_create": 3.312,
+        "team_sync_post_wait": 194.042
+      },
+      "bdSubprocessLowerBound": {
+        "total": 878,
+        "byCommand": {
+          "create": 57,
+          "init": 1,
+          "list": 213,
+          "show": 511,
+          "update": 96
+        }
+      },
+      "slowTaskReads": [
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T01:43:22.524Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 79,
+          "resultLine": 80,
+          "task_id": "rarebit-public-release-e2e-qjw",
+          "durationMs": 10770.0
+        },
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T02:47:53.041Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 155,
+          "resultLine": 156,
+          "task_id": "rarebit-public-release-e2e-ooj",
+          "durationMs": 15720.0
+        },
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:12:59.583Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 166,
+          "resultLine": 167,
+          "task_id": "rarebit-public-release-e2e-4ud",
+          "durationMs": 63004.0
+        },
+        {
+          "actor": "systems-observer",
+          "tool": "task_read",
+          "timestamp": "2026-08-02T03:36:09.829Z",
+          "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-02T00-30-58-559Z_019fbfe1-8fff-7dde-964d-341bc1a51eab.jsonl",
+          "callLine": 180,
+          "resultLine": 181,
+          "task_id": "rarebit-public-release-e2e-vne",
+          "durationMs": 64834.0
+        }
+      ],
+      "waitFilter": {
+        "leaderSyncCalls": 156,
+        "taskFilteredCallsAlsoRequestingWorkerEvents": 153,
+        "timeoutsDespiteContractMatchingEvent": [],
+        "fullTimeoutsWithWorkerEventsSuppressedByTaskFilter": [
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T04:49:30.338Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier--/2026-08-01T02-37-30-495Z_019fbb2f-0bff-7cf8-abee-c1968e6e03b9.jsonl",
+            "callLine": 2367,
+            "resultLine": 2368,
+            "cursor": "163",
+            "wait_ms": 300000,
+            "limit": 20,
+            "durationMs": 300834.0,
+            "suppressedWorkerEvents": [
+              {
+                "cursor": "164",
+                "worker": "parent-docs-implementer",
+                "phase": "prepared",
+                "at": "2026-08-02T04:45:06.159Z"
+              },
+              {
+                "cursor": "165",
+                "worker": "parent-docs-implementer",
+                "phase": "session_bound",
+                "at": "2026-08-02T04:45:08.039Z"
+              }
+            ]
+          }
+        ],
+        "suppressedWaitSeconds": 300.834
+      }
+    },
+    "worker-resource-projection-review": {
+      "directTaskPathOuterLatency": {
+        "task_create": {
+          "count": 6,
+          "sumSeconds": 16.719,
+          "meanMs": 2786.5,
+          "medianMs": 2433.0,
+          "p95Ms": 2787.0,
+          "maxMs": 5458.0
+        },
+        "task_link": {
+          "count": 1,
+          "sumSeconds": 1.849,
+          "meanMs": 1849.0,
+          "medianMs": 1849.0,
+          "p95Ms": 1849.0,
+          "maxMs": 1849.0
+        },
+        "task_read": {
+          "count": 35,
+          "sumSeconds": 33.28,
+          "meanMs": 950.857,
+          "medianMs": 583.0,
+          "p95Ms": 2353.0,
+          "maxMs": 2354.0
+        },
+        "task_update": {
+          "count": 42,
+          "sumSeconds": 79.546,
+          "meanMs": 1893.952,
+          "medianMs": 1703.5,
+          "p95Ms": 3872.0,
+          "maxMs": 5459.0
+        },
+        "team_create": {
+          "count": 1,
+          "sumSeconds": 3.106,
+          "meanMs": 3106.0,
+          "medianMs": 3106.0,
+          "p95Ms": 3106.0,
+          "maxMs": 3106.0
+        },
+        "worker_stop": {
+          "count": 4,
+          "sumSeconds": 12.824,
+          "meanMs": 3206.0,
+          "medianMs": 4101.0,
+          "p95Ms": 4101.0,
+          "maxMs": 4101.0
+        }
+      },
+      "teamSyncPostWaitTail": {
+        "all": {
+          "count": 95,
+          "sumSeconds": 120.654,
+          "meanMs": 1270.042,
+          "medianMs": 956.0,
+          "p95Ms": 2591.0,
+          "maxMs": 10892.0
+        },
+        "byCompletion": {
+          "event_tail": {
+            "count": 40,
+            "sumSeconds": 41.703,
+            "meanMs": 1042.575,
+            "medianMs": 948.5,
+            "p95Ms": 1647.0,
+            "maxMs": 2591.0
+          },
+          "non_backend_error": {
+            "count": 3,
+            "sumSeconds": 0.0,
+            "meanMs": 0,
+            "medianMs": 0,
+            "p95Ms": 0,
+            "maxMs": 0
+          },
+          "snapshot": {
+            "count": 11,
+            "sumSeconds": 31.526,
+            "meanMs": 2866.0,
+            "medianMs": 2212.0,
+            "p95Ms": 3238.0,
+            "maxMs": 10892.0
+          },
+          "timeout_tail": {
+            "count": 41,
+            "sumSeconds": 47.425,
+            "meanMs": 1156.707,
+            "medianMs": 834.0,
+            "p95Ms": 2452.0,
+            "maxMs": 5126.0
+          }
+        }
+      },
+      "taskEnginePathUpperBoundSeconds": 267.978,
+      "adjustedAllToolLatencySeconds": 296.078,
+      "taskEnginePathUpperBoundSharePercent": 90.509,
+      "upperBoundByOperationSeconds": {
+        "task_create": 16.719,
+        "task_link": 1.849,
+        "task_read": 33.28,
+        "task_update": 79.546,
+        "team_create": 3.106,
+        "team_sync_post_wait": 120.654,
+        "worker_stop": 12.824
+      },
+      "bdSubprocessLowerBound": {
+        "total": 360,
+        "byCommand": {
+          "create": 6,
+          "dep_or_update": 1,
+          "init": 1,
+          "list": 102,
+          "show": 213,
+          "update": 37
+        }
+      },
+      "slowTaskReads": [],
+      "waitFilter": {
+        "leaderSyncCalls": 87,
+        "taskFilteredCallsAlsoRequestingWorkerEvents": 68,
+        "timeoutsDespiteContractMatchingEvent": [],
+        "fullTimeoutsWithWorkerEventsSuppressedByTaskFilter": [
+          {
+            "actor": "team-lead",
+            "tool": "team_sync",
+            "timestamp": "2026-08-02T05:13:15.915Z",
+            "source": "<home>/.pi/agent/sessions/--Users-user-repos-HyperCarrier-packages-pi-team-bright--/2026-08-01T14-02-27-662Z_019fbda2-23ce-7a8c-a475-e03375fa63ab.jsonl",
+            "callLine": 650,
+            "resultLine": 651,
+            "cursor": "65",
+            "wait_ms": 300000,
+            "limit": 100,
+            "durationMs": 301373.0,
+            "suppressedWorkerEvents": [
+              {
+                "cursor": "66",
+                "worker": "worker-resource-repairer",
+                "phase": "prepared",
+                "at": "2026-08-02T05:12:40.901Z"
+              },
+              {
+                "cursor": "67",
+                "worker": "worker-resource-repairer",
+                "phase": "session_bound",
+                "at": "2026-08-02T05:12:43.104Z"
+              },
+              {
+                "cursor": "68",
+                "worker": "worker-resource-implementer",
+                "phase": "stopped",
+                "at": "2026-08-02T05:13:01.411Z"
+              },
+              {
+                "cursor": "69",
+                "worker": "worker-resource-test-reviewer",
+                "phase": "stopped",
+                "at": "2026-08-02T05:13:10.630Z"
+              },
+              {
+                "cursor": "70",
+                "worker": "role-config-systems-observer",
+                "phase": "stopped",
+                "at": "2026-08-02T05:13:11.734Z"
+              },
+              {
+                "cursor": "71",
+                "worker": "role-config-product-observer",
+                "phase": "stopped",
+                "at": "2026-08-02T05:13:12.737Z"
+              }
+            ]
+          }
+        ],
+        "suppressedWaitSeconds": 301.373
+      }
+    }
+  }
+}

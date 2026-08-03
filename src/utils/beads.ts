@@ -14,6 +14,27 @@ const execFileAsync = promisify(execFile);
 export const DEFAULT_BD_TIMEOUT_MS = 10_000;
 export const DEFAULT_BD_INIT_TIMEOUT_MS = 30_000;
 export const PI_TEAMS_SCHEMA = "1";
+export const CANDIDATE_TASK_METADATA_KEY = "pi_teams_candidate_task";
+export const CANDIDATE_TASK_METADATA_SCHEMA = "pi-teams-candidate-task/1" as const;
+
+export interface CandidateTaskOperationRecord {
+  operation_id: string;
+  fingerprint: string;
+  journal_entries: Array<{ id: string; at: string; actor: string; kind: "progress" | "decision" | "blocker" | "result" | "note"; text: string }>;
+}
+
+export interface CandidateTaskMetadata {
+  schema: typeof CANDIDATE_TASK_METADATA_SCHEMA;
+  goal: string;
+  current_context: string;
+  last_operation?: CandidateTaskOperationRecord;
+}
+
+export interface CandidateTaskAuthorityRecord {
+  task: TaskFile;
+  candidateMetadata?: unknown;
+}
+
 /** Internal adapter evidence. It is intentionally excluded from Task metadata. */
 export const OWNER_TRANSITION_OPERATION_METADATA = "pi_teams_owner_transition_operation";
 
@@ -276,6 +297,8 @@ export interface TaskWriteOptions {
   idempotencyKey?: string;
   /** Semantic payload combined into the same native Beads update command. */
   appendNote?: string;
+  /** Internal candidate projection committed with the same native update. */
+  candidateTaskMetadata?: CandidateTaskMetadata;
   retries?: number;
   /** Internal precommit hook; never part of the agent-facing Task contract. */
   internalOwnerTransition?: {
@@ -670,6 +693,17 @@ export class BeadsTaskStore {
     return mapTask(await this.showRaw(taskId));
   }
 
+  /** Read the canonical candidate payload without projecting compatibility fields. */
+  async readCandidateTaskAuthorityRecord(taskId: string): Promise<CandidateTaskAuthorityRecord> {
+    const raw = await this.showRaw(taskId);
+    return {
+      task: mapTask(raw),
+      ...(raw.metadata && CANDIDATE_TASK_METADATA_KEY in raw.metadata
+        ? { candidateMetadata: raw.metadata[CANDIDATE_TASK_METADATA_KEY] }
+        : {}),
+    };
+  }
+
   /** Hydrate several exact Task revisions with one Beads authority query. */
   async readMany(taskIds: readonly string[]): Promise<TaskFile[]> {
     return (await this.showManyRaw(taskIds)).map(mapTask);
@@ -709,6 +743,9 @@ export class BeadsTaskStore {
     if (options.internalOwnerTransition) {
       args.push("--set-metadata", `${OWNER_TRANSITION_OPERATION_METADATA}=${options.internalOwnerTransition.operationId}`);
     }
+    if (options.candidateTaskMetadata) {
+      args.push("--set-metadata", `${CANDIDATE_TASK_METADATA_KEY}=${JSON.stringify(options.candidateTaskMetadata)}`);
+    }
     if (updates.status === "open") args.push("--status", "open");
     if (updates.status === "in_progress") args.push("--status", "in_progress");
     if (updates.status === "blocked" || updates.status === "closed") {
@@ -731,6 +768,7 @@ export class BeadsTaskStore {
       appliedOperations: [
         ...Object.keys(updates).map((field) => `set:${field}`),
         ...(options.appendNote !== undefined ? ["append:note"] : []),
+        ...(options.candidateTaskMetadata !== undefined ? ["set:candidateTaskMetadata"] : []),
       ],
     };
   }

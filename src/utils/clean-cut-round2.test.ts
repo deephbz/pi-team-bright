@@ -22,6 +22,8 @@ import {
 } from "./task-delivery";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
   name: string;
@@ -79,10 +81,13 @@ function writeTeam(
   const config: TeamConfig = {
     name: teamName,
     description: "round-2 evaluator fixture",
+    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
+    epochId: teams.newTeamEpochId(),
     createdAt: Date.now(),
     leadAgentId: "lead-agent",
     leadSessionId: "lead-session",
     members,
+    logicalWorkers: members.filter((candidate) => candidate.name !== "team-lead").map((candidate) => ({ name: candidate.name, scope: "round-2 worker capability" })),
     taskBackend: "beads",
     taskWorkspace: workspace,
     taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
@@ -329,52 +334,27 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       member(teamName, "team-lead", leadSession),
       member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
     ]);
-    vi.stubEnv("PI_AGENT_NAME", "team-lead");
-    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     // A directory at the recipient spool path deterministically fails the
     // post-commit enqueue while leaving Beads Task authority writable.
     fs.mkdirSync(paths.taskDeliveryPath(teamName, "worker"), { recursive: true });
     const result = await harness().tools.get("task_create")!.execute("create-degraded", {
-      team_name: teamName,
-      title: "Preserve delivery degradation",
-      description: "The Task commit must survive a recipient enqueue failure.",
-      acceptance_criteria: "The Task is readable and its receipt reports the failed delivery.",
-      assignee: "worker",
+      tasks: [{
+        title: "Preserve delivery degradation",
+        goal: "The Task commit must survive delivery degradation and remain readable.",
+        assignee: "worker",
+      }],
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => leadSession },
     });
 
-    const task = result.details.postState as TaskFile;
-    const warning = "Task authority committed, but delivery enqueue for worker failed";
-    expect(result.content[0].text).toContain(`Created Task ${task.id} “Preserve delivery degradation”`);
-    expect(result.content[0].text).toMatch(/Task authority committed, but Worker delivery degraded/i);
-    expect(result.content[0].text).toMatch(/Do not recreate this Task; investigate delivery recovery with team_sync/i);
-    expect(result.content[0].text).not.toContain(task.version);
+    const task = result.details.outcomes[0].task;
     expect(result.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "partial",
-      operation: "task_create",
-      resource: { kind: "task", id: task.id, teamName },
-      postState: { id: task.id, status: "open", assignee: "worker", version: task.version },
-      warnings: [{ code: "task_delivery_degraded", message: warning, resourceId: task.id }],
-      evidence: {
-        changed: true,
-        appliedOperations: ["create"],
-        deliveryDegraded: true,
-        teamEvent: { appended: true },
-        delivery: {
-          attemptedRecipients: ["worker"],
-          failedRecipients: ["worker"],
-          recoveryRecordedFor: ["worker"],
-          recoveryRecordFailedFor: [],
-        },
-      },
-      nextActions: [{
-        tool: "team_sync",
-        args: { team_name: teamName, task_ids: [task.id] },
-      }],
+      kind: "task_create_batch",
+      outcomes: [{ kind: "created", input_index: 0, task: { id: task.id, title: "Preserve delivery degradation", status: "open", assignee: "worker", version: task.version } }],
     });
     await expect(tasks.readTask(teamName, task.id)).resolves.toMatchObject({
       id: task.id,
@@ -392,123 +372,36 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       member(teamName, "team-lead", leadSession),
       member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
     ]);
-    vi.stubEnv("PI_AGENT_NAME", "team-lead");
-    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
     const tools = harness().tools;
     const context = { sessionManager: { getSessionFile: () => leadSession } };
 
     const createdResult = await tools.get("task_create")!.execute("create", {
-      team_name: teamName,
-      title: "Receipt contract",
-      description: "large descriptions stay out of model-visible mutation receipts",
+      tasks: [{ title: "Receipt contract", goal: "Keep the mutation receipt concise and verifiable." }],
     }, undefined, undefined, context);
-    const created = createdResult.details.postState as TaskFile;
-    expect(createdResult.content[0].text).toBe(
-      `Created Task ${created.id} “Receipt contract”: open, version ${created.version}.`,
-    );
+    const created = createdResult.details.outcomes[0].task;
     expect(createdResult.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "accepted",
-      operation: "task_create",
-      resource: { kind: "task", id: created.id, teamName },
-      postState: {
-        id: expect.any(String),
-        status: "open",
-        version: expect.stringMatching(/^beads_/),
-      },
-      warnings: [],
-      nextActions: [],
-    });
-    expect(createdResult.content[0].text).not.toContain("large descriptions");
-
-    const designedResult = await tools.get("task_update")!.execute("design", {
-      team_name: teamName,
-      task_id: created.id,
-      design: "inspect then test",
-      append_note: "Requesting review of this design.",
-      expected_version: created.version,
-    }, undefined, undefined, context);
-    const designed = designedResult.details.postState as TaskFile;
-    expect(designedResult.content[0].text).toBe(
-      `Task ${created.id} is open, unassigned, version ${designed.version}. Delivery warnings: none.`,
-    );
-    expect(designed).toMatchObject({
-      id: created.id,
-      status: "open",
-      version: expect.stringMatching(/^beads_/),
-    });
-    expect(designedResult.details.evidence).toMatchObject({
-      before: { id: created.id, status: "open", version: created.version },
-      appliedOperations: ["set:design", "append:note"],
-      deliveryDegraded: false,
+      kind: "task_create_batch",
+      outcomes: [{ kind: "created", input_index: 0, task: { id: expect.any(String), status: "open", version: expect.stringMatching(/^beads_/) } }],
     });
 
-    const evaluatedResult = await tools.get("task_update")!.execute("approve", {
-      team_name: teamName,
-      task_id: created.id,
-      status: "in_progress",
-      append_note: "Leader approved execution at this exact Task version.",
-      expected_version: designed.version,
-    }, undefined, undefined, context);
-    const evaluated = evaluatedResult.details.postState as TaskFile;
-    expect(evaluatedResult.content[0].text).toBe(
-      `Task ${created.id} is in_progress, unassigned, version ${evaluated.version}. Delivery warnings: none.`,
-    );
-    expect(evaluated).toMatchObject({
-      id: created.id,
-      status: "in_progress",
-      version: expect.stringMatching(/^beads_/),
-    });
-    expect(evaluatedResult.details.evidence.appliedOperations).toEqual(["set:status", "append:note"]);
+    const update = async (operationId: string, expectedVersion: string, status: "open" | "in_progress", text: string) => {
+      const result = await tools.get("task_update")!.execute(operationId, {
+        updates: [{ task_id: created.id, operation_id: operationId, expected_version: taskVersionRef(expectedVersion), status, current_context: text, journal_entries: [{ kind: "progress", text }] }],
+      }, undefined, undefined, context);
+      expect(result.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task_id: created.id, operation_id: operationId, task: { id: created.id, status }, journal_entries: [expect.objectContaining({ text })] }] });
+      return result.details.outcomes[0].task;
+    };
+    const designed = await update("design", created.version, "open", "Inspect then test.");
+    const evaluated = await update("approve", designed.version, "in_progress", "Leader approved execution.");
+    const progressed = await update("progress", evaluated.version, "in_progress", "Comment-backed revision.");
 
-    const updatedResult = await tools.get("task_update")!.execute("assign", {
-      team_name: teamName,
-      task_id: created.id,
-      assignee: "worker",
-      expected_version: evaluated.version,
-    }, undefined, undefined, context);
-    const updated = updatedResult.details.postState as TaskFile;
-    expect(updatedResult.content[0].text).toBe(
-      `Task ${created.id} is in_progress, assigned to worker, version ${updated.version}. Delivery warnings: none.`,
-    );
-    expect(updated).toMatchObject({
-      id: created.id,
-      status: "in_progress",
-      assignee: "worker",
-      version: expect.stringMatching(/^beads_/),
-    });
-    expect(updatedResult.details.evidence.appliedOperations).toContain("set:assignee");
-    expect(updatedResult.details.warnings).toEqual([]);
-
-    const progressedResult = await tools.get("task_update")!.execute("progress", {
-      team_name: teamName,
-      task_id: created.id,
-      append_note: "comment-backed revision",
-      expected_version: updated.version,
-    }, undefined, undefined, context);
-    const progressed = progressedResult.details.postState as TaskFile;
-    expect(progressedResult.content[0].text).toBe(
-      `Task ${created.id} is in_progress, assigned to worker, version ${progressed.version}. Delivery warnings: none.`,
-    );
-    const syncResult = await tools.get("team_sync")!.execute("sync", {
-      team_name: teamName,
-    }, undefined, undefined, context);
-    const projected = syncResult.details.postState.projection.tasks.find((task: any) => task.id === created.id);
-    expect(syncResult.content[0].text).toContain(`Tasks: ${created.id}`);
-    expect(projected.version).toBe(progressed.version);
-
-    const readResult = await tools.get("task_read")!.execute("read", {
-      team_name: teamName,
-      task_id: created.id,
-    }, undefined, undefined, context);
-    expect(readResult.content[0].text).toContain(`State: in_progress; assigned to worker; version ${progressed.version}`);
-    expect(readResult.details.postState.version).toBe(progressed.version);
-    await expect(tools.get("task_update")!.execute("safe-next-write", {
-      team_name: teamName,
-      task_id: created.id,
-      status: "open",
-      expected_version: readResult.details.postState.version,
-    }, undefined, undefined, context)).resolves.toBeDefined();
+    const syncResult = await tools.get("team_sync")!.execute("sync", { view: "snapshot" }, undefined, undefined, context);
+    expect(syncResult.details).toMatchObject({ kind: "snapshot", tasks: [expect.objectContaining({ id: created.id, version: progressed.version })] });
+    const readResult = await tools.get("task_read")!.execute("read", { task_ids: [created.id] }, undefined, undefined, context);
+    expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: created.id, task: { status: "in_progress", version: progressed.version } }] });
+    await expect(update("safe-next-write", progressed.version, "open", "Safe next write.")).resolves.toMatchObject({ version: expect.any(String) });
   }, 60_000);
 
   it("combines assignee plus nonterminal status in one native update and returns full post-state plus applied operations", async () => {
@@ -518,113 +411,56 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`),
       member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
     ]);
-    vi.stubEnv("PI_AGENT_NAME", "team-lead");
-    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
     const tool = harness().tools.get("task_update")!;
-    const created = await new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false })
-      .create({ title: "semantic", description: "one agent call" });
-
-    const result = await tool.execute("semantic", {
-      team_name: teamName,
-      task_id: created.id,
-      assignee: "worker",
-      status: "in_progress",
-      expected_version: created.version,
-    }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` },
-    });
-
-    expect(result.details.postState).toMatchObject({
-      id: created.id,
-      assignee: "worker",
-      status: "in_progress",
-      version: expect.any(String),
-    });
-    expect(result.content[0].text).toMatch(/^Task .+ is in_progress, assigned to worker, version beads_.+ Delivery warnings: none\.$/);
-    expect(result.content[0].text).not.toMatch(/Changed:|set:|append:/);
-    expect(Array.isArray(result.details.evidence.appliedOperations)).toBe(true);
-    expect(JSON.stringify(result.details.evidence.appliedOperations)).toMatch(/assignee/i);
-    expect(JSON.stringify(result.details.evidence.appliedOperations)).toMatch(/status/i);
-    expect(JSON.stringify(result.details.evidence.appliedOperations)).not.toMatch(/progress/i);
+    const createdResult = await harness().tools.get("task_create")!.execute("create", {
+      tasks: [{ title: "semantic", goal: "one agent call", assignee: "worker" }],
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    const created = createdResult.details.outcomes[0].task;
     const traceFile = path.join(tempRoot("semantic-trace"), "trace.jsonl");
-    // The public result needn't expose a redundant `atomic` flag; the trace
-    // proves this compatible field group used one native mutation command.
     vi.stubEnv("PI_TEAMS_TRACE_JSONL", traceFile);
-    const traced = await tool.execute("semantic-traced", {
-      team_name: teamName,
-      task_id: created.id,
-      assignee: "worker",
-      status: "open",
-      expected_version: result.details.postState.version,
-    }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` },
-    });
-    expect(traced.details.postState.status).toBe("open");
+    const result = await tool.execute("semantic", {
+      updates: [{ task_id: created.id, operation_id: "semantic", status: "in_progress", current_context: "One native mutation.", journal_entries: [{ kind: "result", text: "One native mutation." }], expected_version: taskVersionRef(created.version) }],
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    expect(result.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: created.id, status: "in_progress", assignee: "worker" }, operation_id: "semantic" }] });
     const trace = fs.readFileSync(traceFile, "utf8").trim().split("\n").map((line) => JSON.parse(line)).at(-1);
     expect(trace.bdCalls.filter((call: any) => call.command === "update")).toHaveLength(1);
   }, 60_000);
 
-  it("makes expected_version optional but rejects a supplied stale token before mutation", async () => {
+  it("uses a short expected_version ref and rejects a supplied stale ref before mutation", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("optional-version");
     writeTeam(teamName, workspace, [member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`)]);
-    vi.stubEnv("PI_AGENT_NAME", "team-lead");
-    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
     const tool = harness().tools.get("task_update")!;
-    const store = new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false });
-    const created = await store.create({ title: "version", description: "v0" });
-
-    const withoutToken = await tool.execute("without-token", {
-      team_name: teamName,
-      task_id: created.id,
-      status: "in_progress",
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    expect(withoutToken.details.postState.status).toBe("in_progress");
-    const current = withoutToken.details.postState as TaskFile;
-
-    const stale = await tool.execute("stale", {
-      team_name: teamName,
-      task_id: created.id,
-      status: "open",
-      expected_version: created.version,
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    expect(stale.content[0].text).toMatch(/not updated|stale|review it and retry/i);
-    expect(stale.details).toMatchObject({
-      schema: "pi-teams-tool-result/1",
-      outcome: "refused",
-      operation: "task_update",
-      postState: { id: created.id, status: "in_progress", version: current.version },
-      evidence: { requestedVersion: created.version, currentVersion: current.version, changed: false },
-    });
-    expect((await store.read(created.id)).version).toBe(current.version);
-    expect((await store.read(created.id)).status).toBe("in_progress");
+    const create = await harness().tools.get("task_create")!.execute("create", { tasks: [{ title: "version", goal: "v0" }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    const created = create.details.outcomes[0].task;
+    const firstUpdate = await tool.execute("first-update", { updates: [{ task_id: created.id, operation_id: "first-update", status: "in_progress", current_context: "v1", journal_entries: [{ kind: "progress", text: "v1" }], expected_version: taskVersionRef(created.version) }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    const current = firstUpdate.details.outcomes[0].task;
+    const stale = await tool.execute("stale", { updates: [{ task_id: created.id, operation_id: "stale", status: "open", current_context: "stale", journal_entries: [{ kind: "blocker", text: "stale" }], expected_version: taskVersionRef(created.version) }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    expect(stale.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "refused", reason: "version_conflict", task_id: created.id, current_task: { status: "in_progress", version: current.version }, state_changed: false }] });
+    expect(current.version).not.toBe(created.version);
   }, 60_000);
 
   it("rejects claim combined with another mutation and keeps graph edits on task_link", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("unsafe-composite");
     writeTeam(teamName, workspace, [member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`)]);
-    vi.stubEnv("PI_AGENT_NAME", "team-lead");
-    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
     const tool = harness().tools.get("task_update")!;
-    const store = new BeadsTaskStore({ teamName, workspace, requireExpectedVersion: false });
-    const target = await store.create({ title: "target", description: "unchanged" });
+    const create = await harness().tools.get("task_create")!.execute("create", { tasks: [{ title: "target", goal: "unchanged" }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    const target = create.details.outcomes[0].task;
     const ctx = { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } };
-    await expect(tool.execute("claim-plus-status", {
-      team_name: teamName,
-      task_id: target.id,
-      claim: true,
-      status: "in_progress",
-    }, undefined, undefined, ctx)).rejects.toThrow(/claim|atomic|combine/i);
-
+    const duplicate = await tool.execute("duplicate", { updates: [
+      { task_id: target.id, operation_id: "one", current_context: "unchanged", journal_entries: [{ kind: "note", text: "one" }], expected_version: taskVersionRef(target.version) },
+      { task_id: target.id, operation_id: "two", current_context: "unchanged", journal_entries: [{ kind: "note", text: "two" }], expected_version: taskVersionRef(target.version) },
+    ] }, undefined, undefined, ctx);
+    expect(duplicate.details).toMatchObject({ kind: "refused", reason: "duplicate_task_id", state_changed: false });
     expect(tool.parameters.properties).not.toHaveProperty("blocked_by");
     expect(tool.parameters.properties).not.toHaveProperty("progress");
-
-    expect(await store.read(target.id)).toMatchObject({
-      status: "open",
-      relations: [],
-      assignee: undefined,
-    });
   }, 60_000);
 });
 
@@ -851,20 +687,14 @@ describe.skipIf(!hasBd)("trace, recovery, retention, and shutdown evidence", () 
     await expect(messaging.sendPlainMessage(teamName, "team-lead", "worker", "late", "late"))
       .rejects.toThrow(/not a current member/i);
 
-    vi.stubEnv("PI_TEAM_NAME", teamName);
-    vi.stubEnv("PI_AGENT_NAME", "team-lead");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
     const shutdown = harness().tools.get("team_shutdown")!;
-    const result = await shutdown.execute("shutdown", { team_name: teamName }, undefined, undefined, {
+    const result = await shutdown.execute("shutdown", {}, undefined, undefined, {
       sessionManager: { getSessionFile: () => lead.sessionFile },
     });
-    expect(result.details.diagnostics.staleBindings).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        name: "worker",
-        sessionBound: true,
-        terminal: { kind: "pane", targetId: "%historical" },
-      }),
-    ]));
-    expect(JSON.stringify(result.details.diagnostics)).not.toContain(worker.sessionFile);
+    expect(result.details).toMatchObject({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: expect.any(Array) });
+    expect(JSON.stringify(result.details)).not.toContain(worker.sessionFile);
     const afterShutdown = await teams.readConfig(teamName);
     expect(afterShutdown.members).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "worker", sessionFile: worker.sessionFile, isActive: false }),

@@ -19,6 +19,7 @@ import * as taskAuthority from "./tasks";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
 
 type RegisteredTool = {
   name: string;
@@ -114,6 +115,7 @@ async function createBeadsTeam(name: string, leadSession: string) {
     },
     undefined,
     terminalBinding(),
+    MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
 }
 
@@ -232,13 +234,13 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("lead-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    const before = await teams.createTeam(name, leadSession, "lead-agent");
+    const before = await teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
     const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown-lead", {
       team_name: name,
       worker: "team-lead",
-    }, undefined, undefined, context(leadSession))).rejects.toThrow(/cannot shut down the team leader/i);
+    }, undefined, undefined, context(leadSession))).resolves.toMatchObject({ details: { kind: "refused", reason: "leader_reserved", state_changed: false } });
 
     const after = await teams.readConfig(name);
     expect(after.members.find((item) => item.membershipId === before.members[0].membershipId)).toMatchObject({
@@ -327,15 +329,7 @@ describe("release P1 public contracts", () => {
     expect(config.members.find((item) => item.name === "succeeds")?.isActive).toBe(false);
     expect(config.members.find((item) => item.name === "team-lead")?.isActive).not.toBe(false);
     expect(config.members.find((item) => item.name === "team-lead")?.isActive).toBe(true);
-    expect(result.details.postState.failures).toEqual([
-      expect.objectContaining({ name: "fails", reason: "stop_not_confirmed", membershipRemainsCurrent: true }),
-    ]);
-    expect(result.details.evidence.stopFailures).toEqual([
-      expect.objectContaining({ name: "fails", error: expect.stringContaining("simulated terminal kill failure") }),
-    ]);
-    expect(result.details.evidence.stop).toEqual([
-      expect.objectContaining({ kind: "terminal_pane_stopped", target: "pane-succeeds" }),
-    ]);
+    expect(result.details).toMatchObject({ kind: "partial", lifecycle: "active", failed_workers: ["fails"], state_changed: true });
   });
 
   it.each([
@@ -374,7 +368,7 @@ describe("release P1 public contracts", () => {
     await expect(tool.execute("shutdown", {
       team_name: name,
       worker: "worker",
-    }, undefined, undefined, context(leadSession))).rejects.toThrow(/cannot confirm shutdown.*remains current/i);
+    }, undefined, undefined, context(leadSession))).resolves.toMatchObject({ details: { kind: "refused", reason: "stop_not_confirmed", state_changed: false } });
 
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(true);
     expect(await runtime.readRuntimeStatus(name, "worker")).toMatchObject({
@@ -407,10 +401,7 @@ describe("release P1 public contracts", () => {
       worker: "worker",
     }, undefined, undefined, context(leadSession));
 
-    expect(result.details.evidence.stop).toMatchObject({
-      kind: "bound_process_already_exited",
-      membershipId: worker.membershipId,
-    });
+    expect(result.details).toMatchObject({ kind: "worker_stopped", worker: "worker", state_changed: true });
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(false);
   });
 
@@ -445,7 +436,7 @@ describe("release P1 public contracts", () => {
     await expect(tool.execute("shutdown", {
       team_name: name,
       worker: "worker",
-    }, undefined, undefined, context(leadSession))).rejects.toThrow(/runtime process generation changed.*remains current/i);
+    }, undefined, undefined, context(leadSession))).resolves.toMatchObject({ details: { kind: "refused", reason: "stop_not_confirmed", state_changed: false } });
 
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(true);
     expect(await runtime.readRuntimeStatus(name, "worker")).toMatchObject({
@@ -535,7 +526,7 @@ describe("release P1 public contracts", () => {
     await expect(tool.execute("shutdown", {
       team_name: name,
       worker: "worker",
-    }, undefined, undefined, context(leadSession))).rejects.toThrow(/cannot confirm shutdown.*remains current/i);
+    }, undefined, undefined, context(leadSession))).resolves.toMatchObject({ details: { kind: "refused", reason: "stop_not_confirmed", state_changed: false } });
 
     expect(killProbe).not.toHaveBeenCalled();
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(true);

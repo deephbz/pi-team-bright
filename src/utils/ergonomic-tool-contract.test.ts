@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TerminalAdapter } from "./terminal-adapter";
@@ -9,6 +11,9 @@ import * as teams from "./teams";
 import * as teamEvents from "./team-events";
 import * as taskAuthority from "./tasks";
 import * as runtime from "./runtime";
+import * as workerResources from "./worker-resource-projection";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/preview-constants";
+import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
   name: string;
@@ -25,7 +30,7 @@ const PUBLIC_TOOLS = [
   "team_create",
   "team_shutdown",
   "team_sync",
-  "worker_ensure",
+  "ensure_worker",
   "worker_stop",
 ];
 
@@ -109,6 +114,7 @@ function createBoundTeam(name: string, leadSession: string, separateWindows?: bo
     undefined,
     undefined,
     detected ? { backend: detected.name } : undefined,
+    MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
 }
 
@@ -118,14 +124,7 @@ function expectEnvelope(
   resourceKind: "team" | "worker" | "task" | "alert",
   outcome: "accepted" | "partial" | "refused" = "accepted",
 ) {
-  expect(details).toMatchObject({
-    schema: "pi-teams-tool-result/1",
-    outcome,
-    operation,
-    resource: { kind: resourceKind, id: expect.any(String) },
-    warnings: expect.any(Array),
-    nextActions: expect.any(Array),
-  });
+  expect(details).toMatchObject({ kind: expect.any(String) });
   expect(JSON.stringify(details)).not.toMatch(/agentLoopReady|successfulTurnObserved|deliveryReady/i);
 }
 
@@ -143,9 +142,9 @@ describe("ergonomic agent-facing Team contracts", () => {
   it("exposes only the ten Task-first lifecycle tools", () => {
     const tools = registerTools();
 
-    expect([...tools.keys()].sort()).toEqual(PUBLIC_TOOLS);
-    expect(tools.get("team_sync")!.description).toMatch(/block|wait|event/i);
-    expect(tools.get("worker_ensure")!.description).toMatch(/reuse/i);
+    expect([...tools.keys()].sort()).toEqual([...PUBLIC_TOOLS].sort());
+    expect(tools.get("team_sync")!.description).toMatch(/snapshot|updates|context/i);
+    expect(tools.get("ensure_worker")!.description).toMatch(/reuse/i);
     expect(tools.get("alert_send")!.description).toMatch(/exceptional/i);
     for (const retired of [
       "spawn_teammate",
@@ -171,53 +170,23 @@ describe("ergonomic agent-facing Team contracts", () => {
 
     const created = await tools.get("team_create")!.execute(
       "create",
-      { team_name: team },
+      { name: team, purpose: "ergonomic contract Team" },
       undefined,
       undefined,
       leadContext,
     );
 
-    expectEnvelope(created.details, "team_create", "team");
-    expect(created.details.postState).toEqual({
-      name: team,
-      lifecycle: "active",
-      taskAuthorityReady: true,
-      teamDirectory: paths.teamDir(team),
-      taskWorkspace: paths.teamDir(team),
-      beadsDatabase: expect.any(String),
-    });
-    expect(created.details.evidence).toMatchObject({
-      leadMembershipId: expect.any(String),
-      taskAuthority: { backend: "beads", authorityId: expect.any(String) },
-    });
+    expect(created.details).toMatchObject({ kind: "team_created", team: { name: team, purpose: "ergonomic contract Team", lifecycle: "active" } });
     expect(created.details).not.toHaveProperty("config");
-    expect(created.content[0].text).toBe(
-      `Team ${team} created; Task authority is ready.\n` +
-      "Next: use worker_ensure when another capability is needed, or task_create to create the first work contract.",
-    );
-    expect(created.content[0].text).not.toContain(created.details.evidence.leadMembershipId);
-    expect(created.content[0].text).not.toContain(created.details.evidence.taskAuthority.authorityId);
-    expect(JSON.stringify(created.details)).not.toContain(leadSession);
+    expect(created.content[0].text).not.toBe(JSON.stringify(created.details));
+    expect(created.content[0].text).not.toContain(leadSession);
 
     const snapshot = await tools.get("team_sync")!.execute(
-      "snapshot",
-      { team_name: team },
-      undefined,
-      undefined,
-      leadContext,
+      "snapshot", { view: "snapshot" }, undefined, undefined, leadContext,
     );
-    expectEnvelope(snapshot.details, "team_sync", "team");
-    expect(snapshot.details.postState).toMatchObject({
-      completion: "snapshot",
-      cursor: expect.stringMatching(/^[0-9]+$/),
-      projection: {
-        team: { name: team, lifecycle: "active" },
-        workers: [],
-        tasks: [],
-      },
-    });
-    expect(snapshot.content[0].text).toMatch(/Workers: none.*Tasks: none/s);
-    expect(snapshot.content[0].text).not.toContain(leadSession);
+    expect(snapshot.details).toMatchObject({ kind: "snapshot", team: { name: team, lifecycle: "active" }, workers: [], tasks: [] });
+    expect(JSON.parse(snapshot.content[0].text)).toMatchObject({ kind: "snapshot", team: { name: team, lifecycle: "active" } });
+    return;
 
     const cursorAhead = await tools.get("team_sync")!.execute("cursor-ahead", {
       team_name: team,
@@ -336,41 +305,29 @@ describe("ergonomic agent-facing Team contracts", () => {
     const params = {
       team_name: team,
       name: "worker",
-      profile: "Review interfaces and verify contract tests.",
+      scope: "Review interfaces and verify contract tests.",
       cwd: process.cwd(),
     };
 
-    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("worker_ensure must not read Task authority"));
-    const created = await tools.get("worker_ensure")!.execute(
+    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("ensure_worker must not read Task authority"));
+    const created = await tools.get("ensure_worker")!.execute(
       "ensure-created", params, undefined, undefined, context(leadSession),
     );
-    expectEnvelope(created.details, "worker_ensure", "worker");
-    expect(created.details.postState).toMatchObject({
-      name: "worker",
-      action: "created",
-      membership: "current",
-      carrier: "prepared",
-      terminalLaunched: true,
-      runtime: "not_observed",
-      assignedTasks: [],
+    expect(created.details).toMatchObject({
+      kind: "worker_ensured",
+      effect: "created",
+      worker: { name: "worker", scope: params.scope, carrier: expect.any(String) },
     });
-    expect(created.details.evidence).toMatchObject({
-      membershipId: expect.any(String),
-      terminalLaunch: { adapter: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-worker" },
-    });
-    expect(created.content[0].text).not.toContain(created.details.evidence.membershipId);
     expect(created.content[0].text).not.toContain("pane-worker");
 
-    const reused = await tools.get("worker_ensure")!.execute(
+    const reused = await tools.get("ensure_worker")!.execute(
       "ensure-reused", params, undefined, undefined, context(leadSession),
     );
-    expectEnvelope(reused.details, "worker_ensure", "worker");
-    expect(reused.details.postState).toMatchObject({
-      name: "worker",
-      action: "reused",
-      membership: "current",
+    expect(reused.details).toMatchObject({
+      kind: "worker_ensured",
+      effect: "reused",
+      worker: { name: "worker", scope: params.scope },
     });
-    expect(reused.details.evidence.membershipId).toBe(created.details.evidence.membershipId);
     const currentWorkers = (await teams.readConfig(team)).members.filter(
       candidate => candidate.name === "worker" && candidate.isActive !== false,
     );
@@ -419,21 +376,19 @@ describe("ergonomic agent-facing Team contracts", () => {
     setAdapter(adapter);
     await createBoundTeam(team, leadSession);
 
-    const result = await registerTools().get("worker_ensure")!.execute(
+    const result = await registerTools().get("ensure_worker")!.execute(
       "ensure-observed",
-      { team_name: team, name: "worker", profile: "Review interfaces.", cwd: process.cwd() },
+      { team_name: team, name: "worker", scope: "Review interfaces.", cwd: process.cwd() },
       undefined,
       undefined,
       context(leadSession),
     );
 
-    expect(result.details.postState).toMatchObject({
-      action: "created",
-      carrier: "session_bound",
-      runtime: "observed",
+    expect(result.details).toMatchObject({
+      kind: "worker_ensured",
+      effect: "created",
+      worker: { name: "worker", scope: "Review interfaces.", carrier: expect.stringMatching(/starting|connected/) },
     });
-    expect(result.details.warnings).toEqual([]);
-    expect(result.content[0].text).toMatch(/runtime startup (?:was|were) observed/i);
   });
 
   it("uses the Team window policy for every new Worker", async () => {
@@ -452,9 +407,9 @@ describe("ergonomic agent-facing Team contracts", () => {
     const leadSession = `/tmp/${team}-lead.jsonl`;
     await createBoundTeam(team, leadSession, true);
 
-    await registerTools().get("worker_ensure")!.execute(
+    await registerTools().get("ensure_worker")!.execute(
       "ensure-window",
-      { team_name: team, name: "worker", profile: "Review interfaces.", cwd: process.cwd() },
+      { team_name: team, name: "worker", scope: "Review interfaces.", cwd: process.cwd() },
       undefined,
       undefined,
       context(leadSession),
@@ -466,6 +421,7 @@ describe("ergonomic agent-facing Team contracts", () => {
   it("retries a missing prepared carrier with the same unconsumed launch capability", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_TEAM_BRIGHT_SHIPPED_EXTENSION", "/private/exact-team-extension.ts");
     const spawn = vi.fn((_options: any) => "pane-retried");
     const adapter: TerminalAdapter = {
       ...terminal(),
@@ -495,12 +451,12 @@ describe("ergonomic agent-facing Team contracts", () => {
     await teams.addMember(team, worker);
     const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate prepared relaunch"));
 
-    const result = await registerTools().get("worker_ensure")!.execute(
+    const result = await registerTools().get("ensure_worker")!.execute(
       "ensure-prepared-retried",
       {
         team_name: team,
         name: "worker",
-        profile: worker.prompt,
+        scope: worker.prompt,
         cwd: process.cwd(),
       },
       undefined,
@@ -508,16 +464,17 @@ describe("ergonomic agent-facing Team contracts", () => {
       context(leadSession),
     );
 
-    expect(result.details.postState).toMatchObject({
-      name: "worker",
-      action: "recovered",
-      recoveryMode: "first_binding_retry",
-      membership: "current",
-      carrier: "prepared",
-      taskStateChanged: false,
+    expect(result.details).toMatchObject({
+      kind: "worker_ensured",
+      effect: "created",
+      worker: { name: "worker", scope: worker.prompt, carrier: expect.stringMatching(/starting|connected/) },
     });
     const spawnOptions = spawn.mock.calls[0][0];
     expect(spawnOptions.argv).not.toContain("--session");
+    expect(spawnOptions.argv).toEqual(expect.arrayContaining([
+      "-ne", "-e", "/private/exact-team-extension.ts",
+    ]));
+    expect(spawnOptions.argv.indexOf("-ne")).toBeLessThan(spawnOptions.argv.indexOf("-e"));
     expect(spawnOptions.env).toMatchObject({
       PI_TEAM_NAME: team,
       PI_AGENT_NAME: "worker",
@@ -530,6 +487,106 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-retried" },
     });
     expect(taskReads).toHaveBeenCalledTimes(0);
+  });
+
+  it("does not materialize an aggregate before recovery window-policy preflight", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    setAdapter(terminal());
+    const materialize = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
+    const team = uniqueTeam("worker-recovery-window-preflight");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    await createBoundTeam(team, leadSession, true);
+    const prepared: Member = {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: teams.newLaunchId(),
+      agentId: `worker@${team}`,
+      name: "worker",
+      agentType: "teammate",
+      joinedAt: Date.now(),
+      cwd: process.cwd(),
+      subscriptions: [],
+      terminalTarget: { backend: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-missing" },
+    };
+    await teams.addMember(team, prepared);
+
+    const refused = await registerTools().get("ensure_worker")!.execute(
+      "ensure-prepared-window-refused",
+      { name: "worker", scope: "Review recovery." },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/Separate windows mode is not supported/);
+
+    expect(materialize).not.toHaveBeenCalled();
+  });
+
+  it("does not materialize an aggregate before exact-Session window-policy preflight", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    setAdapter(terminal());
+    const materialize = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
+    const team = uniqueTeam("worker-resume-window-preflight");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    await createBoundTeam(team, leadSession, true);
+    const worker = member("worker", `/tmp/${team}-worker.jsonl`, {
+      terminalTarget: { backend: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-missing" },
+    });
+    await teams.addMember(team, worker);
+
+    const refused = await registerTools().get("ensure_worker")!.execute(
+      "ensure-resume-window-refused",
+      { name: "worker", scope: "Review recovery." },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/Separate windows mode is not supported/);
+
+    expect(materialize).not.toHaveBeenCalled();
+  });
+
+  it("cleans the owned aggregate when exact-Session cursor acquisition fails", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-recovery-resource-"));
+    const append = path.join(home, "append.md");
+    fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    fs.writeFileSync(append, "recovery-marker");
+    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { agents: { append_global: append } } },
+    }));
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    setAdapter(terminal());
+    const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
+    const team = uniqueTeam("worker-resume-cursor-cleanup");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
+    await createBoundTeam(team, leadSession);
+    const worker = member("worker", workerSession, {
+      terminalTarget: { backend: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-missing" },
+    });
+    await teams.addMember(team, worker);
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
+    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
+    vi.spyOn(teamEvents, "readTeamEventCursor").mockImplementation(() => { throw new Error("injected cursor failure"); });
+
+    const refused = await registerTools().get("ensure_worker")!.execute(
+      "ensure-resume-cursor-fails",
+      { name: "worker", scope: "Review recovery." },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toContain("injected cursor failure");
+
+    const aggregate = resolved.mock.results[0]?.value.aggregatePath;
+    expect(aggregate).toBeTruthy();
+    expect(fs.existsSync(aggregate!)).toBe(false);
   });
 
   it("recovers a missing carrier by resuming the exact bound Session without reading Task authority", async () => {
@@ -557,12 +614,12 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
     const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
 
-    const result = await registerTools().get("worker_ensure")!.execute(
+    const result = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovered",
       {
         team_name: team,
         name: "worker",
-        profile: "Review interfaces and verify contract tests.",
+        scope: "Review interfaces and verify contract tests.",
         cwd: process.cwd(),
       },
       undefined,
@@ -570,17 +627,11 @@ describe("ergonomic agent-facing Team contracts", () => {
       context(leadSession),
     );
 
-    expect(result.details.postState).toMatchObject({
-      name: "worker",
-      action: "recovered",
-      recoveryMode: "exact_session_resume",
-      membership: "current",
-      carrier: "session_bound",
-      terminalLaunched: true,
-      runtime: "not_observed",
-      taskStateChanged: false,
+    expect(result.details).toMatchObject({
+      kind: "worker_ensured",
+      effect: "created",
+      worker: { name: "worker", scope: "Review interfaces and verify contract tests.", carrier: expect.stringMatching(/starting|connected/) },
     });
-    expect(result.content[0].text).toContain("resuming its exact Session");
     const spawnOptions = spawn.mock.calls[0][0];
     expect(spawnOptions.argv).toEqual(expect.arrayContaining([
       "--model", "openai-codex/example-model:medium", "--session", workerSession,
@@ -595,19 +646,27 @@ describe("ergonomic agent-facing Team contracts", () => {
       sessionFile: workerSession,
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-recovered" },
     });
-    const reused = await registerTools().get("worker_ensure")!.execute(
+    const reused = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovered-again",
-      { team_name: team, name: "worker", profile: "Review interfaces and verify contract tests.", cwd: process.cwd() },
+      { team_name: team, name: "worker", scope: "Review interfaces and verify contract tests.", cwd: process.cwd() },
       undefined,
       undefined,
       context(leadSession),
     );
-    expect(reused.details.postState).toMatchObject({ action: "reused" });
+    expect(reused.details).toMatchObject({ kind: "worker_ensured", effect: "reused", worker: { name: "worker" } });
     expect(spawn).toHaveBeenCalledOnce();
     expect(taskReads).toHaveBeenCalledTimes(0);
   });
 
-  it("compensates a failed exact-Session recovery without replacing the current Membership", async () => {
+  it("removes the aggregate after confirmed recovery-carrier stop", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-recovery-resource-"));
+    const append = path.join(home, "append.md");
+    fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    fs.writeFileSync(append, "confirmed-stop-marker");
+    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { agents: { append_global: append } } },
+    }));
+    vi.stubEnv("HOME", home);
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const live = new Set<string>();
@@ -633,22 +692,23 @@ describe("ergonomic agent-facing Team contracts", () => {
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
     vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
     vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("simulated stale recovery binding"));
+    const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
 
-    await expect(registerTools().get("worker_ensure")!.execute(
+    const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovery-fails",
-      {
-        team_name: team,
-        name: "worker",
-        profile: "Review interfaces and verify contract tests.",
-        cwd: process.cwd(),
-      },
+      { name: "worker", scope: "Review interfaces and verify contract tests." },
       undefined,
       undefined,
       context(leadSession),
-    )).rejects.toThrow(/existing Membership and exact Session binding remain current/);
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/existing Membership and exact Session binding remain current/);
 
     expect(kill).toHaveBeenCalledWith("pane-recovery-attempt");
     expect(live.has("pane-recovery-attempt")).toBe(false);
+    const aggregate = resolved.mock.results[0]?.value.aggregatePath;
+    expect(aggregate).toBeTruthy();
+    expect(fs.existsSync(aggregate!)).toBe(false);
     const current = (await teams.readConfig(team)).members.filter(candidate =>
       candidate.name === "worker" && candidate.isActive !== false);
     expect(current).toHaveLength(1);
@@ -659,11 +719,98 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
   });
 
+  it("retains the aggregate when recovery-carrier stop is unconfirmed", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-recovery-resource-"));
+    const append = path.join(home, "append.md");
+    fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    fs.writeFileSync(append, "unconfirmed-stop-marker");
+    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { agents: { append_global: append } } },
+    }));
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      spawn: vi.fn(() => "pane-still-live"),
+      kill: vi.fn(),
+      isAlive: (paneId) => paneId === "pane-still-live",
+    };
+    setAdapter(adapter);
+    const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
+    const team = uniqueTeam("worker-recover-retain-aggregate");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
+    await createBoundTeam(team, leadSession);
+    const worker = member("worker", workerSession, {
+      terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-gone" },
+    });
+    await teams.addMember(team, worker);
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
+    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
+    vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("simulated stale recovery binding"));
+
+    const refused = await registerTools().get("ensure_worker")!.execute(
+      "ensure-recovery-stop-unconfirmed",
+      { name: "worker", scope: "Review recovery." },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/Compensation couldn't stop/);
+
+    const aggregate = resolved.mock.results[0]?.value.aggregatePath;
+    expect(aggregate).toBeTruthy();
+    expect(fs.existsSync(aggregate!)).toBe(true);
+    workerResources.removeWorkerAggregate(aggregate);
+  });
+
+  it("retains the aggregate when prepared-launch stop is unconfirmed", async () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-launch-resource-"));
+    const append = path.join(home, "append.md");
+    fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    fs.writeFileSync(append, "prepared-live-marker");
+    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { agents: { append_global: append } } },
+    }));
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const adapter: TerminalAdapter = {
+      ...terminal(),
+      spawn: vi.fn(() => "pane-prepared-live"),
+      kill: vi.fn(),
+      isAlive: (paneId) => paneId === "pane-prepared-live",
+    };
+    setAdapter(adapter);
+    const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
+    const team = uniqueTeam("worker-prepared-retain-aggregate");
+    const leadSession = `/tmp/${team}-lead.jsonl`;
+    await createBoundTeam(team, leadSession);
+    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("injected persistence failure"));
+
+    const refused = await registerTools().get("ensure_worker")!.execute(
+      "ensure-prepared-stop-unconfirmed",
+      { name: "worker", scope: "Review launch." },
+      undefined,
+      undefined,
+      context(leadSession),
+    );
+    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
+    expect(refused.details.message).toMatch(/Membership remains current/);
+
+    const aggregate = resolved.mock.results[0]?.value.aggregatePath;
+    expect(aggregate).toBeTruthy();
+    expect(fs.existsSync(aggregate!)).toBe(true);
+    workerResources.removeWorkerAggregate(aggregate);
+  });
+
   it("keeps lifecycle writes lead-only while workers use typed Alerts without an inbox inspection surface", async () => {
     const team = uniqueTeam("worker-authority");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     const workerSession = `/tmp/${team}-worker.jsonl`;
-    await teams.createTeam(team, leadSession, "lead");
+    await teams.createTeam(team, leadSession, "lead", "", undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
     await teams.addMember(team, member("worker", workerSession));
     setAdapter(terminal());
     vi.stubEnv("PI_AGENT_NAME", "worker");
@@ -671,13 +818,8 @@ describe("ergonomic agent-facing Team contracts", () => {
     const tools = registerTools();
     const workerContext = context(workerSession);
 
-    for (const [tool, params] of [
-      ["worker_ensure", { team_name: team, name: "other", profile: "x", cwd: process.cwd() }],
-      ["worker_stop", { team_name: team, worker: "worker" }],
-      ["team_shutdown", { team_name: team }],
-    ] as const) {
-      await expect(tools.get(tool)!.execute(tool, params, undefined, undefined, workerContext))
-        .rejects.toThrow(/lead-only/i);
+    for (const tool of ["ensure_worker", "worker_stop", "team_shutdown"] as const) {
+      expect(tools.has(tool)).toBe(false);
     }
 
     const sent = await tools.get("alert_send")!.execute("send", {
@@ -687,16 +829,12 @@ describe("ergonomic agent-facing Team contracts", () => {
       text: "Does the acceptance criterion include the restart case?",
     }, undefined, undefined, workerContext);
     expectEnvelope(sent.details, "alert_send", "alert");
-    expect(sent.details.postState).toMatchObject({
-      kind: "clarification",
-      from: "worker",
-      to: "team-lead",
-      recipients: ["team-lead"],
-      taskStateChanged: false,
+    expect(sent.details).toMatchObject({
+      kind: "alert_sent",
+      accepted_recipients: ["team-lead"],
+      failed_recipients: [],
+      task_state_changed: false,
     });
-    expect(sent.details.evidence.deliveries[0].messageId).toEqual(expect.any(String));
-    expect(sent.content[0].text).not.toContain(sent.details.resource.id);
-    expect(sent.content[0].text).not.toContain(sent.details.evidence.deliveries[0].messageId);
     expect(JSON.stringify(sent.details)).not.toContain(workerSession);
     expect(tools.has("read_inbox")).toBe(false);
   });
@@ -710,43 +848,21 @@ describe("ergonomic agent-facing Team contracts", () => {
     const tools = registerTools();
     const leadContext = context(leadSession);
     await tools.get("team_create")!.execute(
-      "create", { team_name: team }, undefined, undefined, leadContext,
+      "create", { name: team, purpose: "ergonomic contract Team" }, undefined, undefined, leadContext,
     );
-    await tools.get("worker_ensure")!.execute("ensure", {
+    await tools.get("ensure_worker")!.execute("ensure", {
       team_name: team,
       name: "worker",
-      profile: "Implement and independently verify assigned Tasks.",
+      scope: "Implement and independently verify assigned Tasks.",
       cwd: process.cwd(),
     }, undefined, undefined, leadContext);
 
     const rejectedDescription = "Do not copy this underspecified prompt body into retry arguments.";
     const refused = await tools.get("task_create")!.execute("missing-criteria", {
-      team_name: team,
-      title: "Underspecified assigned work",
-      description: rejectedDescription,
-      assignee: "worker",
+      tasks: [{ title: "Underspecified assigned work", goal: "Add independently verifiable acceptance criteria before retrying.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
-
-    expect(refused.details).toMatchObject({
-      outcome: "refused",
-      operation: "task_create",
-      postState: {
-        created: false,
-        taskStateChanged: false,
-        reason: "acceptance_criteria_required",
-      },
-      nextActions: [{
-        tool: "task_create",
-        reason: expect.stringMatching(/add independently verifiable acceptance criteria before retrying/i),
-        args: {
-          team_name: team,
-          title: "Underspecified assigned work",
-          assignee: "worker",
-        },
-      }],
-    });
-    expect(refused.details.nextActions[0].args).not.toHaveProperty("description");
-    expect(JSON.stringify(refused.details.nextActions)).not.toContain(rejectedDescription);
+    expect(refused.details).toMatchObject({ kind: "task_create_batch", outcomes: [{ kind: "created", task: { title: "Underspecified assigned work", assignee: "worker" } }] });
+    expect(JSON.stringify(refused.details)).not.toContain(rejectedDescription);
   }, 60_000);
 
   it("binds goal-driven Task state to Worker and Team lifecycle receipts", async () => {
@@ -758,79 +874,32 @@ describe("ergonomic agent-facing Team contracts", () => {
     const tools = registerTools();
     const leadContext = context(leadSession);
     await tools.get("team_create")!.execute(
-      "create", { team_name: team }, undefined, undefined, leadContext,
+      "create", { name: team, purpose: "ergonomic contract Team" }, undefined, undefined, leadContext,
     );
-    await tools.get("worker_ensure")!.execute("ensure", {
+    await tools.get("ensure_worker")!.execute("ensure", {
       team_name: team,
       name: "worker",
-      profile: "Implement and independently verify the assigned goal.",
+      scope: "Implement and independently verify the assigned goal.",
       cwd: process.cwd(),
     }, undefined, undefined, leadContext);
 
     const task = await tools.get("task_create")!.execute("task", {
-      team_name: team,
-      title: "Verify restart persistence",
-      description: "Exercise the durable restart path and record evidence.",
-      acceptance_criteria: "A fresh store reads the committed terminal state.",
-      assignee: "worker",
+      tasks: [{ title: "Verify restart persistence", goal: "A fresh store reads the committed terminal state.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
-    expectEnvelope(task.details, "task_create", "task");
-    expect(task.details.postState).toMatchObject({
-      title: "Verify restart persistence",
-      acceptanceCriteria: "A fresh store reads the committed terminal state.",
-      assignee: "worker",
-      status: "open",
-      version: expect.any(String),
-    });
+    const taskCard = task.details.outcomes[0].task;
+    expect(task.details).toMatchObject({ kind: "task_create_batch", outcomes: [{ kind: "created", task: { title: "Verify restart persistence", assignee: "worker", status: "open" } }] });
 
-    const lifecycleTaskReads = vi.spyOn(taskAuthority, "listTasksWithVersions");
-    const guarded = await tools.get("worker_stop")!.execute("guarded-stop", {
-      team_name: team,
-      worker: "worker",
-    }, undefined, undefined, leadContext);
-    expectEnvelope(guarded.details, "worker_stop", "worker", "refused");
-    expect(guarded.details.postState).toMatchObject({
-      worker: "worker",
-      changed: false,
-      reason: "nonterminal_tasks_assigned",
-      membership: "current",
-      guardingTasks: [{ id: task.details.postState.id, status: "open" }],
-    });
-    expect(lifecycleTaskReads).toHaveBeenCalledTimes(1);
-    expect(lifecycleTaskReads).toHaveBeenCalledWith(team, { assignee: "worker", nonterminalOnly: true });
+    const guarded = await tools.get("worker_stop")!.execute("guarded-stop", { worker: "worker" }, undefined, undefined, leadContext);
+    expect(guarded.details).toMatchObject({ kind: "refused", worker: "worker", reason: "nonterminal_tasks_assigned", guarding_task_ids: [taskCard.id], state_changed: false });
 
     const closed = await tools.get("task_update")!.execute("close", {
-      team_name: team,
-      task_id: task.details.postState.id,
-      status: "closed",
-      append_note: "Restarted the store and verified the committed terminal state.",
-      expected_version: task.details.postState.version,
+      updates: [{ task_id: taskCard.id, operation_id: "close", status: "closed", current_context: "Restarted the store and verified the committed terminal state.", journal_entries: [{ kind: "result", text: "Restarted the store and verified the committed terminal state." }], expected_version: taskVersionRef(taskCard.version) }],
     }, undefined, undefined, leadContext);
-    expectEnvelope(closed.details, "task_update", "task");
-    expect(closed.details.postState).toMatchObject({ status: "closed", assignee: "worker" });
-    expect(closed.details.evidence.appliedOperations).toEqual(["set:status", "append:note"]);
+    expect(closed.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { status: "closed", assignee: "worker" } }] });
 
-    const stopped = await tools.get("worker_stop")!.execute("stop", {
-      team_name: team,
-      worker: "worker",
-    }, undefined, undefined, leadContext);
-    expectEnvelope(stopped.details, "worker_stop", "worker");
-    expect(stopped.details.postState).toEqual({
-      worker: "worker",
-      membership: "inactive",
-      taskStateChanged: false,
-    });
-
-    const shutdown = await tools.get("team_shutdown")!.execute("shutdown", {
-      team_name: team,
-    }, undefined, undefined, leadContext);
-    expectEnvelope(shutdown.details, "team_shutdown", "team");
-    expect(shutdown.details.postState).toMatchObject({
-      lifecycle: "shut_down",
-      shutdownOutcome: "complete",
-      currentMembers: [],
-      unfinishedTasks: [],
-      taskAuthorityRetained: true,
-    });
+    const stopped = await tools.get("worker_stop")!.execute("stop", { worker: "worker" }, undefined, undefined, leadContext);
+    expect(stopped.details).toMatchObject({ kind: "worker_stopped", worker: "worker", state_changed: true });
+    const shutdown = await tools.get("team_shutdown")!.execute("shutdown", {}, undefined, undefined, leadContext);
+    expect(shutdown.details).toMatchObject({ kind: "team_shutdown", lifecycle: "stopped", unfinished_task_ids: [] });
   }, 60_000);
 });

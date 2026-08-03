@@ -1,5 +1,4 @@
-export const PI_TEAMS_TOOL_RESULT_SCHEMA = "pi-teams-tool-result/1" as const;
-
+/** Internal legacy-shell receipt helpers. Public model results use the catalog projection boundary. */
 export type ToolResultOutcome = "accepted" | "partial" | "refused";
 
 export interface ToolResultResource {
@@ -24,45 +23,12 @@ export type WorkerLaunchObservationState =
   | { carrier: "session_bound"; runtime: "observed" }
   | { carrier: "prepared" | "session_bound"; runtime: "not_observed" };
 
-/** Public machine post-state for successful `worker_ensure` outcomes. */
-export type WorkerEnsurePostState =
-  | ({
-    name: string;
-    action: "created";
-    membership: "current";
-    terminalLaunched: true;
-    assignedTasks: [];
-  } & WorkerLaunchObservationState)
-  | {
-    name: string;
-    action: "reused";
-    membership: "current";
-    carrier: "prepared" | "session_bound";
-    taskStateChanged: false;
-  }
-  | ({
-    name: string;
-    action: "recovered";
-    recoveryMode: "first_binding_retry" | "exact_session_resume";
-    membership: "current";
-    terminalLaunched: true;
-    taskStateChanged: false;
-  } & WorkerLaunchObservationState);
+export type WorkerEnsurePostState = Record<string, unknown> & {
+  name: string;
+  action: "created" | "reused" | "recovered";
+};
 
-export type WorkerEnsureAction = WorkerEnsurePostState["action"];
-export type WorkerEnsureRecoveryMode = Extract<WorkerEnsurePostState, { action: "recovered" }>["recoveryMode"];
-
-/**
- * The Session/machine record for every public PiTeams tool.
- *
- * Agent-facing content and human-facing rendering are deliberately separate
- * projections. This envelope retains typed post-state and evidence without
- * forcing either audience to parse backend records or transport identifiers.
- *
- * Design context: docs/current/README.md and docs/reference.md
- */
 export interface PiTeamsToolResultDetails<TPostState = unknown, TEvidence = unknown, TDiagnostics = unknown> {
-  schema: typeof PI_TEAMS_TOOL_RESULT_SCHEMA;
   outcome: ToolResultOutcome;
   operation: string;
   resource?: ToolResultResource;
@@ -84,7 +50,6 @@ export function toolResultDetails<TPostState = unknown, TEvidence = unknown, TDi
   diagnostics?: TDiagnostics;
 }): PiTeamsToolResultDetails<TPostState, TEvidence, TDiagnostics> {
   return {
-    schema: PI_TEAMS_TOOL_RESULT_SCHEMA,
     outcome: input.outcome ?? "accepted",
     operation: input.operation,
     ...(input.resource ? { resource: input.resource } : {}),

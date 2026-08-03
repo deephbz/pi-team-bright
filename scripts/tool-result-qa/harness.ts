@@ -45,6 +45,16 @@ export interface QaCase {
     isError: boolean;
   };
   projections: {
+    model: {
+      content: any[];
+      text: string;
+      characters: number;
+    };
+    raw: {
+      details: unknown;
+      jsonCharacters: number;
+    };
+    /** Compatibility aliases for older QA readers; model is not raw truth. */
     agent: {
       content: any[];
       text: string;
@@ -63,7 +73,8 @@ export interface QaCase {
 }
 
 export interface QaBundle {
-  schema: "pi-teams-tool-result-qa/1";
+  schema: "pi-teams-tool-result-qa/2";
+  projectionVersion: "2";
   generatedAt: string;
   source: {
     extension: "extensions/index.ts";
@@ -142,13 +153,18 @@ export async function captureToolCase(options: {
   context: unknown;
   qaBrief: QaBrief;
   snapshot: () => Promise<unknown>;
+  beforeExecute?: () => Promise<void>;
+  afterExecute?: (result: { content: any[]; details: unknown }) => Promise<void>;
+  signal?: AbortSignal;
 }): Promise<QaCase> {
   const before = await options.snapshot();
+  await options.beforeExecute?.();
   let threw = false;
   let result: any;
   try {
-    result = await options.tool.execute(options.id, options.args, undefined, undefined, options.context);
+    result = await options.tool.execute(options.id, options.args, options.signal, undefined, options.context);
     result = { ...result, isError: false };
+    await options.afterExecute?.(result);
   } catch (error) {
     threw = true;
     result = {
@@ -168,6 +184,8 @@ export async function captureToolCase(options: {
     oracle: { before, after },
     execution: { threw, isError: !!result.isError },
     projections: {
+      model: { content: result.content || [], text, characters: text.length },
+      raw: { details: result.details, jsonCharacters: jsonSize(result.details) },
       agent: { content: result.content || [], text, characters: text.length },
       machine: { details: result.details, jsonCharacters: jsonSize(result.details) },
       human: {

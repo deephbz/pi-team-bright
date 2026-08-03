@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget } from "./models";
+import { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget, LogicalWorker } from "./models";
 import { assertTerminalTargetShape } from "./terminal-target";
 import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
 import { withLock } from "./lock";
@@ -88,6 +88,34 @@ function malformedConfigError(configFile: string, detail: string): Error {
 
 function validateConfigShape(value: Record<string, unknown>, configFile: string): void {
   if (value.name !== undefined && typeof value.name !== "string") throw malformedConfigError(configFile, "name must be a string");
+  if (value.epochId !== undefined && (typeof value.epochId !== "string" || !value.epochId)) {
+    throw malformedConfigError(configFile, "epochId must be a non-empty string");
+  }
+  if (value.implementationVersion !== undefined && (typeof value.implementationVersion !== "string" || !value.implementationVersion)) {
+    throw malformedConfigError(configFile, "implementationVersion must be a non-empty string");
+  }
+  if (value.logicalWorkers !== undefined && !Array.isArray(value.logicalWorkers)) {
+    throw malformedConfigError(configFile, "logicalWorkers must be an array");
+  }
+  if (Array.isArray(value.logicalWorkers)) {
+    const names = new Set<string>();
+    for (const [index, rawWorker] of value.logicalWorkers.entries()) {
+      if (!rawWorker || typeof rawWorker !== "object" || Array.isArray(rawWorker)) {
+        throw malformedConfigError(configFile, `logicalWorkers[${index}] must be an object`);
+      }
+      const worker = rawWorker as Partial<LogicalWorker>;
+      if (typeof worker.name !== "string" || !worker.name || typeof worker.scope !== "string" || !worker.scope.trim()) {
+        throw malformedConfigError(configFile, `logicalWorkers[${index}] requires non-empty name and scope strings`);
+      }
+      try {
+        sanitizeName(worker.name);
+      } catch (error) {
+        throw malformedConfigError(configFile, error instanceof Error ? error.message : String(error));
+      }
+      if (names.has(worker.name)) throw malformedConfigError(configFile, `logicalWorkers contains duplicate name ${worker.name}`);
+      names.add(worker.name);
+    }
+  }
   if (value.members !== undefined && !Array.isArray(value.members)) throw malformedConfigError(configFile, "members must be an array");
   if (value.terminalBackend !== undefined && (typeof value.terminalBackend !== "string" || !value.terminalBackend)) {
     throw malformedConfigError(configFile, "terminalBackend must be a non-empty string");
@@ -167,6 +195,10 @@ export function newLaunchId(): string {
   return `launch_${crypto.randomUUID()}`;
 }
 
+export function newTeamEpochId(): string {
+  return `team_epoch_${crypto.randomUUID()}`;
+}
+
 /** 600 lock attempts at 100 ms each: bounded to one minute. */
 export const TEAM_TOPOLOGY_LEASE_RETRIES = 600;
 
@@ -230,6 +262,7 @@ export async function createTeam(
   taskAuthorityFingerprint?: BeadsAuthorityFingerprint,
   topologyLease?: TeamTopologyLease,
   terminalBinding?: TeamTerminalBinding,
+  implementationVersion?: string,
 ): Promise<TeamConfig> {
   if (!topologyLease) {
     return withTeamTopologyLease(name, (lease) => createTeam(
@@ -244,6 +277,7 @@ export async function createTeam(
       taskAuthorityFingerprint,
       lease,
       terminalBinding,
+      implementationVersion,
     ));
   }
   assertTopologyLease(name, topologyLease);
@@ -265,6 +299,7 @@ export async function createTeam(
   return withLock(priorConfigPath, async () => {
   let priorAuthority: Pick<TeamConfig, "taskBackend" | "taskWorkspace" | "taskAuthorityId" | "taskAuthorityFingerprint" | "taskCutover"> = {};
   let priorMembers: Member[] = [];
+  let priorLogicalWorkers: LogicalWorker[] | undefined;
   if (fs.existsSync(priorConfigPath)) {
     const prior = readConfigRaw(priorConfigPath);
     const currentMembers = prior.members.filter((member) => member.isActive !== false);
@@ -275,6 +310,7 @@ export async function createTeam(
       );
     }
     priorMembers = structuredClone(prior.members);
+    priorLogicalWorkers = prior.logicalWorkers === undefined ? undefined : structuredClone(prior.logicalWorkers);
     const cutoverEvidence = findCutoverEvidence(name);
     if (cutoverEvidence && prior.taskBackend !== "beads") {
       throw new Error(`Team ${name} has a ${cutoverEvidence.marker.state} Beads cutover marker at ${cutoverEvidence.markerPath}, but its config is not Beads-authoritative; refusing to reconnect the team to legacy tasks. Restore the Beads TeamConfig or complete an explicit recovery review.`);
@@ -333,6 +369,9 @@ export async function createTeam(
     createdAt: Date.now(),
     leadAgentId,
     leadSessionId: sessionId,
+    epochId: newTeamEpochId(),
+    ...(implementationVersion ? { implementationVersion } : {}),
+    logicalWorkers: priorLogicalWorkers ?? [],
     members: [...priorMembers, leadMember],
     ...(terminalBinding ? { terminalBackend: terminalBinding.backend } : {}),
     defaultModel,
@@ -442,6 +481,73 @@ export function findTeammateBySessionFile(sessionFile: string): { teamName: stri
   return matches[0] ?? null;
 }
 
+export type CurrentLeadSessionBindingResolution =
+  | { status: "bound"; teamName: string; member: Member }
+  | {
+      status: "abstain";
+      reason: "not_bound" | "ambiguous_binding" | "runtime_metadata_unavailable" | "stale_binding";
+    };
+
+/**
+ * Resolve one current lead Membership by exact durable Pi Session identity.
+ * A strict scan and locked revalidation prevent filesystem order, names,
+ * processes, terminal carriers, or a concurrently replaced epoch from binding.
+ */
+export async function resolveCurrentLeadSessionBinding(
+  sessionFile: string,
+): Promise<CurrentLeadSessionBindingResolution> {
+  if (!sessionFile || !fs.existsSync(TEAMS_DIR)) return { status: "abstain", reason: "not_bound" };
+
+  const exact: Array<{ teamName: string; member: Member; epochId?: string }> = [];
+  try {
+    for (const teamName of fs.readdirSync(TEAMS_DIR)) {
+      const file = configPath(teamName);
+      if (!fs.existsSync(file)) continue;
+      const config = readConfigRaw(file);
+      for (const member of config.members) {
+        if (
+          member.isActive !== false
+          && member.agentType === "lead"
+          && member.name === "team-lead"
+          && member.sessionFile === sessionFile
+        ) {
+          exact.push({ teamName, member: structuredClone(member), epochId: config.epochId });
+        }
+      }
+    }
+  } catch {
+    return { status: "abstain", reason: "runtime_metadata_unavailable" };
+  }
+  if (exact.length === 0) return { status: "abstain", reason: "not_bound" };
+  if (exact.length !== 1) return { status: "abstain", reason: "ambiguous_binding" };
+
+  const candidate = exact[0];
+  try {
+    return await withCurrentConfig(candidate.teamName, async (config) => {
+      const current = [...config.members].reverse().find((member) =>
+        member.isActive !== false
+        && member.agentType === "lead"
+        && member.name === "team-lead"
+        && member.sessionFile === sessionFile
+      );
+      if (
+        !current
+        || config.epochId !== candidate.epochId
+        || (candidate.member.membershipId !== undefined && current.membershipId !== candidate.member.membershipId)
+      ) {
+        return { status: "abstain" as const, reason: "stale_binding" as const };
+      }
+      return {
+        status: "bound" as const,
+        teamName: candidate.teamName,
+        member: structuredClone(current),
+      };
+    });
+  } catch {
+    return { status: "abstain", reason: "runtime_metadata_unavailable" };
+  }
+}
+
 export type CurrentTeammateSessionBindingResolution =
   | { status: "bound"; teamName: string; member: Member }
   | {
@@ -541,6 +647,74 @@ export async function withCurrentConfig<T>(teamName: string, action: (config: Te
   const p = configPath(teamName);
   if (!fs.existsSync(p)) throw new Error(`Team ${teamName} not found`);
   return withLock(p, async () => action(readConfigRaw(p)));
+}
+
+export type TeamPreviewContractGapReason = "team_epoch_missing" | "logical_workers_missing";
+
+export interface TeamPreviewContractGap {
+  kind: "contract_gap";
+  reason: TeamPreviewContractGapReason;
+}
+
+/** Legacy TeamConfig remains readable, but preview state cannot infer missing authority coordinates. */
+export function teamPreviewContractGap(config: TeamConfig): TeamPreviewContractGap | undefined {
+  if (!config.epochId) return { kind: "contract_gap", reason: "team_epoch_missing" };
+  if (!config.logicalWorkers) return { kind: "contract_gap", reason: "logical_workers_missing" };
+  return undefined;
+}
+
+export type ReadLogicalWorkerResult =
+  | { kind: "found"; worker: LogicalWorker }
+  | { kind: "not_found" }
+  | TeamPreviewContractGap;
+
+/** Read one stable logical Worker without consulting Membership or carrier state. */
+export async function readLogicalWorker(teamName: string, workerName: string): Promise<ReadLogicalWorkerResult> {
+  sanitizeName(workerName);
+  return withCurrentConfig(teamName, async (config) => {
+    const gap = teamPreviewContractGap(config);
+    if (gap) return gap;
+    const worker = config.logicalWorkers!.find((candidate) => candidate.name === workerName);
+    return worker ? { kind: "found", worker: structuredClone(worker) } : { kind: "not_found" };
+  });
+}
+
+export type EnsureLogicalWorkerResult =
+  | { kind: "created"; worker: LogicalWorker }
+  | { kind: "reused"; worker: LogicalWorker }
+  | { kind: "scope_conflict"; worker: LogicalWorker }
+  | TeamPreviewContractGap;
+
+/**
+ * Ensure durable Worker meaning under the TeamConfig lock. This operation does
+ * not create, replace, inspect, or otherwise mutate Membership/carrier state.
+ */
+export async function ensureLogicalWorker(
+  teamName: string,
+  input: LogicalWorker,
+): Promise<EnsureLogicalWorkerResult> {
+  sanitizeName(input.name);
+  if (typeof input.scope !== "string" || !input.scope.trim()) {
+    throw new Error("Logical Worker scope must be a non-empty string.");
+  }
+  const p = configPath(teamName);
+  if (!fs.existsSync(p)) throw new Error(`Team ${teamName} not found`);
+  return withLock(p, async () => {
+    const config = readConfigRaw(p);
+    const gap = teamPreviewContractGap(config);
+    if (gap) return gap;
+    const existing = config.logicalWorkers!.find((worker) => worker.name === input.name);
+    if (existing) {
+      const worker = structuredClone(existing);
+      return existing.scope === input.scope
+        ? { kind: "reused", worker }
+        : { kind: "scope_conflict", worker };
+    }
+    const worker = structuredClone(input);
+    config.logicalWorkers!.push(worker);
+    writeConfigAtomic(p, config);
+    return { kind: "created", worker: structuredClone(worker) };
+  });
 }
 
 /** 600 lock attempts at 100 ms each: bounded to one minute. */

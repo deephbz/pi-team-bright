@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
-import type { Member, TaskFile, TeamConfig, TeamEvent, TeamEventInput, TeamEventType } from "./models";
+import type { Member, TaskFile, TaskTeamEvent, TeamConfig, TeamEvent, TeamEventInput, TeamEventType } from "./models";
 import { configPath, teamEventCursorStatePath, teamEventJournalPath } from "./paths";
 
 // Event/wait intent and authority boundaries: docs/current/README.md and
@@ -17,6 +17,33 @@ export interface TeamEventReadOptions {
   eventTypes?: readonly TeamEventType[];
   taskIds?: readonly string[];
   limit?: number;
+}
+
+export type TaskEventEvidenceKind =
+  | "created"
+  | "goal"
+  | "assignment"
+  | "progress"
+  | "status"
+  | "relation"
+  | "decision"
+  | "blocker"
+  | "result"
+  | "note";
+
+export interface TaskEventEvidenceInput {
+  kind: TaskEventEvidenceKind;
+  text: string;
+}
+
+export interface TaskEvidenceTeamEvent extends TaskTeamEvent {
+  taskEvidence: TaskEventEvidenceInput;
+}
+
+export interface ProjectedTaskEventEvidence extends TaskEventEvidenceInput {
+  id: string;
+  at: string;
+  actor: string;
 }
 
 export interface TeamEventBatch {
@@ -139,6 +166,16 @@ function parseEvent(line: string, lineNumber: number): TeamEvent {
     if (!["created", "assigned", "design", "note", "status", "relation"].includes(String(event.change))) {
       throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid task change.`);
     }
+    if (event.taskEvidence !== undefined) {
+      if (!event.taskEvidence || typeof event.taskEvidence !== "object" || Array.isArray(event.taskEvidence)) {
+        throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid task evidence.`);
+      }
+      const evidence = event.taskEvidence as Record<string, unknown>;
+      if (!["created", "goal", "assignment", "progress", "status", "relation", "decision", "blocker", "result", "note"].includes(String(evidence.kind))) {
+        throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid task evidence kind.`);
+      }
+      assertString(evidence.text, "taskEvidence.text");
+    }
   } else if (event.type === "worker") {
     assertString(event.worker, "worker");
     assertString(event.membershipId, "membershipId");
@@ -227,6 +264,27 @@ export async function appendTeamEvent(teamName: string, input: TeamEventInput): 
     writeCursorProjection(teamName, cursor);
     return event;
   });
+}
+
+/** Append structured candidate evidence and return its committed identity/time. */
+export async function appendTaskEvidenceEvent(
+  teamName: string,
+  input: Omit<TaskTeamEvent, "cursor" | "at"> & { taskEvidence: TaskEventEvidenceInput },
+): Promise<TaskEvidenceTeamEvent> {
+  return await appendTeamEvent(teamName, input as TeamEventInput) as TaskEvidenceTeamEvent;
+}
+
+/** Project only committed event coordinates; caller prose never supplies IDs or time. */
+export function projectTaskEventEvidence(event: TeamEvent): ProjectedTaskEventEvidence | undefined {
+  if (event.type !== "task" || !("taskEvidence" in event)) return undefined;
+  const evidence = (event as TaskEvidenceTeamEvent).taskEvidence;
+  return {
+    id: `task-event-${event.cursor}`,
+    at: event.at,
+    actor: event.actor,
+    kind: evidence.kind,
+    text: evidence.text,
+  };
 }
 
 /** Non-consuming read: each caller owns its supplied cursor. */

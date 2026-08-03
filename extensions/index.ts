@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import * as paths from "../src/utils/paths";
@@ -9,9 +9,8 @@ import * as messaging from "../src/utils/messaging";
 import * as alerts from "../src/utils/alerts";
 import * as teamEvents from "../src/utils/team-events";
 import { selectTeamSyncNextActions, summarizeTeamSyncNextActions } from "../src/utils/team-sync-actions";
-import { toolResultDetails, warning as toolResultWarning, type WorkerEnsurePostState, type WorkerLaunchObservationState } from "../src/utils/tool-results";
-import { observeWorkerStartup, WORKER_STARTUP_OBSERVATION_MS, type WorkerStartupObservation } from "../src/utils/worker-startup-observation";
-import { createPiTeamsResultRenderer, type PiTeamsPublicTool } from "../src/utils/tool-result-renderer";
+import { toolResultDetails, warning as toolResultWarning, type WorkerEnsurePostState } from "../src/utils/receipt-types";
+import { createCandidateToolResultRenderer } from "../src/model-tool-contract/tui-projection";
 import {
   DirectMessageDelivery,
   messagePollMs,
@@ -21,17 +20,12 @@ import {
   taskPollMs,
 } from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
+import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, resolveWorkerLaunchResources, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { IdentifiedInboxMessage, Member, TaskFile, TeamConfig } from "../src/utils/models";
-import {
-  normalizeWorkerCarrier,
-  planWorkerEnsure,
-  type WorkerEnsurePlan,
-  type WorkerRecoveryMode,
-} from "../src/utils/worker-ensure-lifecycle";
-import { getAdapterByName, getTerminalAdapter } from "../src/adapters/terminal-registry";
+import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { assertTeamTerminalTarget, hasPersistedTerminalTarget, memberTerminalTarget, terminalTarget } from "../src/utils/terminal-target";
-import { assertTargetSupportedByTerminal, currentTerminalForTeam, terminalForTeam } from "../src/utils/team-terminal";
+import { assertTargetSupportedByTerminal, terminalForTeam } from "../src/utils/team-terminal";
 import {
   admitTeamSession,
   placeSessionTerminal,
@@ -44,7 +38,15 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
+import { createWorkerLaunchBridge, launchObservationState } from "../src/utils/worker-launch-bridge";
+import { parseCandidateTaskMetadata, refreshCandidateTaskMetadata } from "../src/model-tool-contract/beads-task-adapter";
+import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_PREVIEW_WORKER_MARKER } from "../src/model-tool-contract/preview-constants";
+import type { CandidateTaskMetadata } from "../src/utils/beads";
+import { DurablePreviewTeamPort, type DurablePreviewLifecycle } from "../src/model-tool-contract/durable-preview-port";
+import { exactLeaderSessionId, registerModelToolJourney } from "../src/model-tool-contract/runtime";
+import { assembleCandidateToolResult } from "../src/model-tool-contract/result-projection";
 import {
   diagnoseTeam,
   formatTeamStatus,
@@ -94,11 +96,14 @@ function getPiLaunchArgv(): string[] {
   return ["pi"];
 }
 
-export function buildPiArgv(base: string[], model?: string, thinking?: string, tools?: string[]): string[] {
+export function buildPiArgv(base: string[], model?: string, thinking?: string, aggregatePrompt?: string, projectTrusted?: boolean): string[] {
   const argv = [...base];
   if (model) argv.push("--model", thinking ? `${model}:${thinking}` : model);
   else if (thinking) argv.push("--thinking", thinking);
-  if (tools && tools.length > 0) argv.push("--tools", tools.join(","));
+  // Worker model-facing tools are projected in the Worker process. Do not pass
+  // a CLI allowlist, because it cannot re-enable registered tools at runtime.
+  if (aggregatePrompt) argv.push("--no-context-files", "--append-system-prompt", aggregatePrompt);
+  if (projectTrusted !== undefined) argv.push(projectTrusted ? "--approve" : "--no-approve");
   return argv;
 }
 
@@ -345,23 +350,217 @@ export function inspectAgentSessionCleanup(
   return report;
 }
 
+type WorkerProjectedTool = "task_read" | "task_update" | "alert_send";
+type UnknownRecord = Record<string, unknown>;
+
+type WorkerTaskCard = {
+  id: string;
+  title: string;
+  goal: string;
+  status: "open" | "in_progress" | "blocked" | "closed";
+  assignee?: string;
+  current_context: string;
+  version: string;
+};
+
+function asRecord(value: unknown): UnknownRecord | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : undefined;
+}
+
+function requiredString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length === 0) throw new Error(`Unsupported legacy Worker receipt: ${field} is missing.`);
+  return value;
+}
+
+function workerTaskCard(value: unknown): WorkerTaskCard {
+  const task = asRecord(value);
+  if (!task) throw new Error("Unsupported legacy Worker receipt: Task post-state is missing.");
+  const status = task.status;
+  if (status !== "open" && status !== "in_progress" && status !== "blocked" && status !== "closed") {
+    throw new Error("Unsupported legacy Worker receipt: Task status is invalid.");
+  }
+  const id = requiredString(task.id, "postState.id");
+  const title = typeof task.title === "string" && task.title.length > 0 ? task.title : id;
+  const goal = [task.description, task.acceptanceCriteria, task.title, task.id]
+    .find((candidate): candidate is string => typeof candidate === "string" && candidate.length > 0) ?? id;
+  return {
+    id,
+    title,
+    goal,
+    status,
+    ...(typeof task.assignee === "string" && task.assignee.length > 0 ? { assignee: task.assignee } : {}),
+    current_context: typeof task.notes === "string" && task.notes.length > 0 ? task.notes : "No current Task context is recorded.",
+    version: requiredString(task.version, "postState.version"),
+  };
+}
+
+function receiptWarnings(details: UnknownRecord): UnknownRecord[] {
+  return Array.isArray(details.warnings) ? details.warnings.flatMap((value) => asRecord(value) ? [value] : []) : [];
+}
+
+function receiptMessage(result: UnknownRecord, warnings: readonly UnknownRecord[]): string {
+  const warning = warnings.map((value) => value.message).find((value): value is string => typeof value === "string" && value.length > 0);
+  const content = Array.isArray(result.content)
+    ? result.content.flatMap((value) => asRecord(value) ? [value.text] : []).find((value): value is string => typeof value === "string" && value.length > 0)
+    : undefined;
+  return warning ?? content ?? "The operation was refused.";
+}
+
+function reasonFromReceipt(
+  postState: UnknownRecord | undefined,
+  warningCodes: ReadonlySet<string>,
+  allowed: readonly string[],
+  codeReasons: Readonly<Record<string, string>>,
+): string | undefined {
+  if (postState && typeof postState.reason === "string" && allowed.includes(postState.reason)) return postState.reason;
+  for (const [code, reason] of Object.entries(codeReasons)) if (warningCodes.has(code)) return reason;
+  return undefined;
+}
+
+/** Adapt only known legacy Worker receipts. Unknown data fails before model projection. */
+function projectWorkerReceipt(tool: WorkerProjectedTool, result: unknown, args: Record<string, unknown>, toolCallId: string): unknown {
+  const receipt = asRecord(result);
+  const details = receipt && asRecord(receipt.details);
+  if (details?.kind !== undefined) return result;
+  if (!receipt || !details) throw new Error(`Unsupported legacy ${tool} receipt.`);
+  const postState = asRecord(details.postState);
+  const warnings = receiptWarnings(details);
+  const warningCodes = new Set(warnings.flatMap((value) => typeof value.code === "string" ? [value.code] : []));
+  const message = receiptMessage(receipt, warnings);
+
+  if (tool === "task_read") {
+    const taskId = requiredString(args.task_id, "task_id");
+    if (postState?.found === false) {
+      return assembleCandidateToolResult("task_read", {
+        kind: "task_read_batch",
+        outcomes: [{ kind: "missing", input_index: 0, task_id: taskId, reason: "task_not_found", state_changed: false }],
+      });
+    }
+    return assembleCandidateToolResult("task_read", {
+      kind: "task_read_batch",
+      outcomes: [{ kind: "found", input_index: 0, task_id: workerTaskCard(postState).id, task: workerTaskCard(postState) }],
+    });
+  }
+
+  if (tool === "task_update") {
+    const taskId = requiredString(args.task_id, "task_id");
+    const operationId = typeof args.operation_id === "string" && args.operation_id.length > 0 ? args.operation_id : toolCallId;
+    if (details.outcome === "refused") {
+      const reason = reasonFromReceipt(postState, warningCodes,
+        ["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"],
+        {
+          task_not_found: "task_not_found",
+          task_version_conflict: "version_conflict",
+          task_operation_conflict: "operation_conflict",
+          terminal_evidence_required: "terminal_evidence_required",
+        });
+      if (!reason) throw new Error("Unsupported legacy task_update refusal receipt.");
+      const current = postState?.id ? workerTaskCard(postState) : undefined;
+      return assembleCandidateToolResult("task_update", {
+        kind: "task_update_batch",
+        outcomes: [{ kind: "refused", input_index: 0, task_id: current?.id ?? taskId, operation_id: operationId, reason: reason as "task_not_found" | "version_conflict" | "operation_conflict" | "terminal_evidence_required", message, ...(current ? { current_task: current } : {}), state_changed: false }],
+      });
+    }
+    if (details.outcome !== "accepted" && details.outcome !== "partial") throw new Error("Unsupported legacy task_update receipt outcome.");
+    const current = workerTaskCard(postState);
+    const evidence = asRecord(details.evidence);
+    const evidenceEntries = evidence?.journalEntries ?? evidence?.journal_entries;
+    const journalEntries = Array.isArray(evidenceEntries) ? evidenceEntries : [];
+    const deliveryWarnings = warnings.flatMap((value) => typeof value.message === "string" && value.message.length > 0 ? [value.message] : []);
+    return assembleCandidateToolResult("task_update", {
+      kind: "task_update_batch",
+      outcomes: [{
+        kind: "updated",
+        input_index: 0,
+        task_id: current.id,
+        operation_id: operationId,
+        task: current,
+        journal_entries: journalEntries,
+        ...(deliveryWarnings.length > 0 ? { delivery_warnings: deliveryWarnings } : {}),
+      }],
+    });
+  }
+
+  if (details.outcome === "refused") {
+    const reason = reasonFromReceipt(postState, warningCodes,
+      ["recipient_not_current", "no_eligible_recipients", "invalid_fanout"],
+      {
+        alert_recipient_not_current: "recipient_not_current",
+        alert_no_eligible_recipients: "no_eligible_recipients",
+        invalid_alert_fanout: "invalid_fanout",
+      });
+    if (!reason) throw new Error("Unsupported legacy alert_send refusal receipt.");
+    return assembleCandidateToolResult("alert_send", {
+      kind: "refused",
+      reason: reason as "recipient_not_current" | "no_eligible_recipients" | "invalid_fanout",
+      message,
+      state_changed: false,
+    });
+  }
+  if (details.outcome !== "accepted" && details.outcome !== "partial") throw new Error("Unsupported legacy alert_send receipt outcome.");
+  const evidence = asRecord(details.evidence);
+  const failures = Array.isArray(evidence?.failures) ? evidence!.failures : [];
+  const accepted = Array.isArray(postState?.recipients)
+    ? postState.recipients.filter((value): value is string => typeof value === "string" && value.length > 0)
+    : [];
+  const failed = failures.flatMap((value) => {
+    const failure = asRecord(value);
+    return typeof failure?.recipient === "string" && failure.recipient.length > 0 ? [failure.recipient] : [];
+  });
+  const resource = asRecord(details.resource);
+  return assembleCandidateToolResult("alert_send", {
+    kind: "alert_sent",
+    alert_id: requiredString(resource?.id ?? evidence?.alertId, "alert identifier"),
+    accepted_recipients: accepted,
+    failed_recipients: failed,
+    task_state_changed: false,
+  });
+}
+
 export default function (pi: ExtensionAPI) {
   registerAutomaticSummaryPolicyProvider(pi);
   // Keep the default agent-facing coordination surface intentionally small.
   // Legacy implementations remain readable for migration and historical
   // delivery recovery, but registration is filtered at this boundary.
-  const publicTools = new Set([
-    "team_create", "team_sync", "team_shutdown",
-    "worker_ensure", "worker_stop",
-    "task_create", "task_read", "task_update", "task_link",
-    "alert_send",
+  const candidateLeaderTools = new Set([
+    "team_create", "ensure_worker", "task_create", "task_read", "task_update", "team_sync",
+    "worker_stop", "team_shutdown", "task_link", "alert_send",
   ]);
+  const currentWorkerTools = new Set(["task_read", "task_update", "alert_send"]);
+  // An envless process is provisionally a leader. Session-start recovery
+  // replaces the provisional Alert registration when it proves a Worker
+  // Membership, so a lead resumed with PI_TEAM_NAME keeps the new surface.
+  const leaderPreviewProcess = !process.env.PI_AGENT_NAME;
+  let registeringCandidateLeaderTools = false;
+  let allowRecoveredWorkerRegistration = false;
   const registerPublicTool = pi.registerTool.bind(pi);
   (pi as any).registerTool = (tool: { name: string }) => {
-    if (publicTools.has(tool.name)) {
+    if (leaderPreviewProcess) {
+      if (registeringCandidateLeaderTools && candidateLeaderTools.has(tool.name)) registerPublicTool(tool as any);
+      else if (allowRecoveredWorkerRegistration && currentWorkerTools.has(tool.name)) {
+        registerPublicTool({
+          ...tool,
+          execute: async (...callArgs: any[]) => projectWorkerReceipt(
+            tool.name as WorkerProjectedTool,
+            await (tool as any).execute(...callArgs),
+            asRecord(callArgs[1]) ?? {},
+            requiredString(callArgs[0], "tool call ID"),
+          ),
+          renderResult: createCandidateToolResultRenderer(tool.name as any),
+        } as any);
+      }
+      return;
+    }
+    if (currentWorkerTools.has(tool.name)) {
       registerPublicTool({
         ...tool,
-        renderResult: createPiTeamsResultRenderer(tool.name as PiTeamsPublicTool),
+        execute: async (...callArgs: any[]) => projectWorkerReceipt(
+          tool.name as WorkerProjectedTool,
+          await (tool as any).execute(...callArgs),
+          asRecord(callArgs[1]) ?? {},
+          requiredString(callArgs[0], "tool call ID"),
+        ),
+        renderResult: createCandidateToolResultRenderer(tool.name as any),
       } as any);
     }
   };
@@ -382,6 +581,135 @@ export default function (pi: ExtensionAPI) {
   let directMessageSessionEligible = true;
   let taskChangeSessionEligible = true;
   let footerModel: any;
+  let workerResourcePolicy: WorkerResourcePolicy | undefined;
+  let workerActiveToolBaseline: string[] | undefined;
+  let alertToolRegistration: { description: string; parameters: unknown } | undefined;
+
+  function workerAggregate(cwd: string, ctx: any): { path?: string; projectTrusted: boolean } {
+    const resources = resolveWorkerLaunchResources({
+      cwd,
+      leaderCwd: ctx.cwd ?? process.cwd(),
+      leaderProjectTrusted: ctx.isProjectTrusted?.() === true,
+    });
+    for (const message of resources.policy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
+    return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted };
+  }
+
+  const workerLaunchBridge = createWorkerLaunchBridge({
+    buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
+      const argv = buildPiArgv(getPiLaunchArgv(), model, thinking);
+      // A Worker must load this exact extension source once. Suppress ambient
+      // packages first, or Pi can load a stale global copy beside this one.
+      argv.push("-ne", "-e", process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION || __filename);
+      return buildPiArgv(argv, undefined, undefined, aggregatePath, projectTrusted);
+    },
+    resolveModel: resolveModelWithProvider,
+    workerAggregate: (cwd) => workerAggregate(cwd, { cwd, isProjectTrusted: () => false }),
+  });
+
+  let previewLifecycleAdapter: DurablePreviewLifecycle | undefined;
+  const previewJourney = leaderPreviewProcess
+    ? (() => {
+      registeringCandidateLeaderTools = true;
+      try {
+        const lifecycleProxy: DurablePreviewLifecycle = {
+          teamCreated: async (name, sessionFile) => previewLifecycleAdapter?.teamCreated?.(name, sessionFile),
+          stopWorker: async (name, worker) => previewLifecycleAdapter
+            ? previewLifecycleAdapter.stopWorker(name, worker)
+            : { kind: "unavailable", reason: "carrier_unavailable", message: "Preview lifecycle adapter is not ready." },
+          shutdownTeam: async (name) => previewLifecycleAdapter
+            ? previewLifecycleAdapter.shutdownTeam(name)
+            : { kind: "unavailable", reason: "team_authority_unavailable", message: "Preview lifecycle adapter is not ready." },
+        };
+        return registerModelToolJourney(pi, new DurablePreviewTeamPort(workerLaunchBridge, lifecycleProxy));
+      } finally {
+        registeringCandidateLeaderTools = false;
+      }
+    })()
+    : undefined;
+
+  function previewBranchIds(ctx: ExtensionContext): string[] {
+    return ctx.sessionManager.getBranch().map((entry) => entry.id);
+  }
+
+  function previewContainsExact(value: unknown, target: string): boolean {
+    if (value === target) return true;
+    if (Array.isArray(value)) return value.some((item) => previewContainsExact(item, target));
+    if (value && typeof value === "object") return Object.values(value).some((item) => previewContainsExact(item, target));
+    return false;
+  }
+
+  function previewPersistedToolResult(ctx: ExtensionContext, toolCallId: string, resultText: string): string | undefined {
+    const entry = ctx.sessionManager.getBranch().find((candidate) => {
+      if (candidate.type !== "message") return false;
+      const message = candidate.message;
+      return message.role === "toolResult"
+        && message.toolCallId === toolCallId
+        && message.content.some((part) => part.type === "text" && part.text === resultText);
+    });
+    return entry?.id;
+  }
+
+  if (previewJourney) {
+    pi.on("tool_call", (event, ctx) => {
+      if (!candidateLeaderTools.has(event.toolName)) return;
+      previewJourney.port.setBranchContext(
+        exactLeaderSessionId(ctx.sessionManager.getSessionId()),
+        previewBranchIds(ctx),
+      );
+    });
+    pi.on("before_provider_request", async (event, ctx) => {
+      const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
+      const lineage = previewBranchIds(ctx);
+      previewJourney.port.setBranchContext(sessionId, lineage);
+      const pending = previewJourney.port.getPendingObservation?.(sessionId);
+      if (!pending || !previewContainsExact(event.payload, pending.resultText)) return;
+      const entryId = previewPersistedToolResult(ctx, pending.toolCallId, pending.resultText);
+      if (!entryId) return;
+      if (previewJourney.port.acknowledgePendingObservationAsync) {
+        await previewJourney.port.acknowledgePendingObservationAsync(sessionId, entryId, lineage);
+      } else {
+        previewJourney.port.acknowledgePendingObservation(sessionId, entryId, lineage);
+      }
+    });
+  }
+
+  function configureWorkerResources(ctx: any): void {
+    if (!isTeammate) return;
+    const cwd = ctx.cwd ?? process.cwd();
+    workerResourcePolicy = loadWorkerResourcePolicy({ cwd, projectTrusted: ctx.isProjectTrusted?.() === true });
+    // Capture this once, before this extension projects settings. Reload always
+    // derives from it so removing settings restores Pi's active-tool baseline.
+    workerActiveToolBaseline ??= pi.getActiveTools?.() ?? [];
+    const registered = pi.getAllTools?.().map((tool: { name: string }) => tool.name) ?? workerActiveToolBaseline;
+    const projected = projectWorkerTools(workerActiveToolBaseline, registered, workerResourcePolicy);
+    pi.setActiveTools?.(projected);
+    for (const message of workerResourcePolicy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
+  }
+
+  function alertToolProjection() {
+    return {
+      description: isTeammate
+        ? "Send exceptional clarification or attention to one current Team member. Alerts never assign or complete work; update the Task when durable intent changes."
+        : "Send exceptional clarification, attention, or a Team announcement. Alerts never assign or complete work; update the Task when durable intent changes.",
+      parameters: Type.Object({
+        team_name: Type.String(),
+        to: Type.String({ description: isTeammate ? "Current Worker or team-lead name" : "Current Worker name, team-lead, or * for an announcement" }),
+        kind: StringEnum(isTeammate ? ["clarification", "attention"] : ["clarification", "attention", "announcement"]),
+        text: Type.String(),
+        task_id: Type.Optional(Type.String()),
+        task_version: Type.Optional(Type.String()),
+      }),
+    };
+  }
+
+  function refreshAlertToolProjection(): void {
+    if (!alertToolRegistration) return;
+    // Pi 0.82 replaces the same-name registration. This also covers a Worker
+    // resumed without launch environment identity.
+    Object.assign(alertToolRegistration, alertToolProjection());
+    pi.registerTool(alertToolRegistration as any);
+  }
 
   const registerCommand = (pi as any).registerCommand?.bind(pi);
   registerCommand?.("pi-team-bright", {
@@ -467,6 +795,10 @@ export default function (pi: ExtensionAPI) {
   async function assertCurrentSessionBinding(ctx: any, requestedTeam: string): Promise<Member> {
     const sessionFile = ctx?.sessionManager?.getSessionFile?.();
     if (!sessionFile) throw new Error("A durable Pi Session is required for every team-scoped tool operation.");
+    const config = await teams.readConfig(requestedTeam);
+    if (config.implementationVersion && config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) {
+      throw new Error(`Team ${requestedTeam} belongs to implementation ${config.implementationVersion}; this process cannot mutate a mixed-version Team epoch.`);
+    }
     return teams.assertCurrentSessionBinding(requestedTeam, agentName, sessionFile);
   }
 
@@ -476,6 +808,10 @@ export default function (pi: ExtensionAPI) {
       throw new Error(`${operation} is lead-only; ask team-lead to perform this Team mutation.`);
     }
     if (!requestedTeam) return undefined;
+    const config = await teams.readConfig(requestedTeam);
+    if (config.implementationVersion && config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) {
+      throw new Error(`${operation} refused: Team ${requestedTeam} belongs to implementation ${config.implementationVersion}; stop the Team and restart one version epoch before mutating it.`);
+    }
     const member = await assertCurrentSessionBinding(ctx, requestedTeam);
     if (member.name !== "team-lead" || member.agentType !== "lead") {
       throw new Error(`${operation} is lead-only; current Membership ${member.name} is not the Team lead.`);
@@ -595,6 +931,8 @@ export default function (pi: ExtensionAPI) {
         agentName = resumedMember.member.name;
         teamName = resumedMember.teamName;
         currentMembershipId = resumedMember.member.membershipId;
+        allowRecoveredWorkerRegistration = true;
+        refreshAlertToolProjection();
       }
     }
     // A fresh lead process has no lead environment variables either. Match
@@ -611,6 +949,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     if (isTeammate) {
+      configureWorkerResources(ctx);
       if (teamName) {
         if (!piSessionFile) throw new Error("Teammate startup requires a durable Pi Session file.");
         const teamConfig = await teams.readConfig(teamName);
@@ -721,7 +1060,26 @@ export default function (pi: ExtensionAPI) {
     await refreshTeamFooter(ctx);
   });
 
-  pi.on("session_shutdown", async (_event, ctx) => {
+  pi.on("session_shutdown", async (event, ctx) => {
+    if (isTeammate && event.reason === "reload") {
+      // Pi captures active tools after this hook and replaces this extension
+      // closure. Restore the immutable baseline before that capture.
+      if (workerActiveToolBaseline) pi.setActiveTools?.(workerActiveToolBaseline);
+      const aggregate = process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
+      if (aggregate && ownsWorkerAggregate(aggregate)) {
+        const cwd = ctx.cwd ?? process.cwd();
+        const trusted = ctx.isProjectTrusted?.() === true;
+        const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: trusted });
+        // Keep the fixed CLI path, but overwrite it atomically even if both
+        // entries disappeared. Pi reload then sees native global/ancestor/project content.
+        materializeWorkerAggregate({ cwd, policy, target: aggregate, force: true });
+      } else if (aggregate) {
+        ctx.ui?.notify?.("Pi Team Bright Worker aggregate path is not package-owned; reload refresh skipped.", "warning");
+      }
+    } else if (isTeammate && process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE) {
+      // Best effort only: this disposable file is never orchestration authority.
+      removeWorkerAggregate(process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
+    }
     stopDeliveries();
     clearTeamFooter(ctx);
   });
@@ -806,9 +1164,9 @@ export default function (pi: ExtensionAPI) {
         systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,
       };
     }
-    if (teamName) {
+    if (previewJourney) {
       return {
-        systemPrompt: event.systemPrompt + "\n\nDelegate executable work only through Task plus assignee and explicit acceptance criteria. Use alert_send only for exceptional clarification or attention. Wait through team_sync, reuse current Workers, and reconcile Workers and Tasks before finishing.",
+        systemPrompt: event.systemPrompt + "\n\nUse the ten-tool release candidate as the Team leader. Create or resume one Team through your exact Session. Reuse Workers by stable semantic scope. Delegate executable work through assigned Tasks. Use a snapshot to establish hidden branch position, then use updates for routine supervision. Use worker_stop and team_shutdown only after exact stop evidence. Use task_link for typed graph changes and alert_send only for exceptional coordination. Task updates require the returned exact version and operation ID; identical retries replay the durable receipt."
       };
     }
   });
@@ -925,235 +1283,62 @@ export default function (pi: ExtensionAPI) {
     });
   }
 
-  type PreparedLaunchTarget = { terminalId: string; isWindow: boolean; backend: string };
-  type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: IdentifiedInboxMessage };
-
-  function stopLaunchTarget(target: PreparedLaunchTarget): void {
-    const launchTerminal = getAdapterByName(target.backend);
-    if (!launchTerminal) throw new Error(`cannot stop ${target.terminalId}: terminal backend ${target.backend} is unavailable`);
-    if (target.isWindow && !launchTerminal.supportsWindows()) {
-      throw new Error(`${launchTerminal.name} doesn't support window targets`);
-    }
-    if (target.isWindow) {
-      launchTerminal.killWindow(target.terminalId);
-      if (launchTerminal.isWindowAlive(target.terminalId)) {
-        throw new Error(`${launchTerminal.name} did not stop window ${target.terminalId}`);
-      }
-      return;
-    }
-    launchTerminal.kill(target.terminalId);
-    if (launchTerminal.isAlive(target.terminalId)) {
-      throw new Error(`${launchTerminal.name} did not stop pane ${target.terminalId}`);
-    }
-  }
-
-  async function compensatePreparedLaunch(
-    targetTeamName: string,
-    prepared: Member,
-    target: PreparedLaunchTarget | null,
-  ): Promise<void> {
-    if (!prepared.membershipId) throw new Error(`Prepared Membership for ${prepared.name} has no stable identity.`);
-    await teams.withCurrentMembershipLease(targetTeamName, prepared.membershipId, async (current) => {
-      if (target) {
-        stopLaunchTarget(target);
-        const status = await runtime.readRuntimeStatus(targetTeamName, current.name);
-        const generation = exactRuntimeGeneration(current, status);
-        if (generation) await runtime.deleteRuntimeStatus(targetTeamName, current.name, generation);
-      }
-      await teams.deactivateMembership(targetTeamName, prepared.membershipId!, "replaced");
-    });
-  }
-
-  function spawnWorkerCarrier(
-    teamConfig: TeamConfig,
-    teamTerminal: ReturnType<typeof currentTerminalForTeam>,
-    member: Member,
-    argv: string[],
-    env: Record<string, string>,
-    useSeparateWindow: boolean,
-  ): PreparedLaunchTarget {
-    if (useSeparateWindow) {
-      const terminalId = teamTerminal.spawnWindow({
-        name: member.name,
-        cwd: member.cwd,
-        argv,
-        env,
-        teamName: teamConfig.name,
-      });
-      return { terminalId, isWindow: true, backend: teamTerminal.name };
-    }
-    if (teamTerminal instanceof Iterm2Adapter) {
-      const teammates = teamConfig.members.filter(candidate =>
-        candidate.agentType === "teammate" && candidate.tmuxPaneId?.startsWith("iterm_"));
-      const lastTeammate = teammates.length > 0 ? teammates[teammates.length - 1] : null;
-      teamTerminal.setSpawnContext(lastTeammate?.tmuxPaneId
-        ? { lastSessionId: lastTeammate.tmuxPaneId.replace("iterm_", "") }
-        : {});
-    }
-
-    const leadMember = teamConfig.members.find(candidate => candidate.name === "team-lead");
-    const leadTarget = leadMember
-      ? memberTerminalTarget(leadMember, teamConfig.terminalBackend || teamTerminal.name)
-      : undefined;
-    const anchorPaneId = leadTarget?.kind === "pane"
-      ? leadTarget.targetId
-      : teamTerminal.currentTargetId?.() || undefined;
-    const terminalId = teamTerminal.spawn({
-      name: member.name,
-      cwd: member.cwd,
-      argv,
-      env,
-      anchorPaneId,
-    });
-    return { terminalId, isWindow: false, backend: teamTerminal.name };
-  }
-
-  async function launchPreparedMembership(
-    targetTeamName: string,
-    prepared: Member,
-    initialMessage: (() => Promise<IdentifiedInboxMessage>) | null,
-    spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>,
-  ): Promise<PreparedLaunchReceipt> {
-    let target: PreparedLaunchTarget | null = null;
-    try {
-      const acceptedMessage = initialMessage ? await initialMessage() : undefined;
-      target = await spawn();
-      if (!target.terminalId) throw new Error("terminal adapter returned an empty target ID");
-      const teamConfig = await teams.readConfig(targetTeamName);
-      await teams.updateMembership(
-        targetTeamName,
-        prepared.membershipId!,
-        teamConfig.terminalBackend
-          ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) }
-          : target.isWindow
-            ? { windowId: target.terminalId }
-            : { tmuxPaneId: target.terminalId },
-      );
-      return { ...target, ...(acceptedMessage ? { initialMessage: acceptedMessage } : {}) };
-    } catch (launchError) {
-      try {
-        await compensatePreparedLaunch(targetTeamName, prepared, target);
-      } catch (cleanupError) {
-        const targetText = target
-          ? `${target.isWindow ? "window" : "pane"} ${target.terminalId}`
-          : "the prepared Membership before terminal spawn";
-        throw new Error(
-          `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
-          + `Compensation failed for ${targetText}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
-          + "The Membership remains current because process shutdown could not be confirmed.",
-        );
-      }
-      throw new Error(
-        `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
-        + "The exact prepared Membership was deactivated after compensation.",
-      );
-    }
-  }
-
-  type WorkerRecoveryInput = {
-    teamName: string;
-    teamConfig: TeamConfig;
-    teamTerminal: ReturnType<typeof currentTerminalForTeam>;
-    member: Member;
-    mode: WorkerRecoveryMode;
-    argv: string[];
-    env: Record<string, string>;
-    useSeparateWindow: boolean;
-  };
-
-  /** Executes both recovery plans with one spawn, persistence, and compensation path. */
-  async function executeWorkerRecovery(input: WorkerRecoveryInput): Promise<PreparedLaunchTarget> {
-    const { teamName: targetTeamName, teamConfig, teamTerminal, member, mode, argv, env, useSeparateWindow } = input;
-    let recoveredTarget: PreparedLaunchTarget | null = null;
-    const action = mode === "first_binding_retry" ? "relaunch prepared Worker" : "recover";
-    const retained = mode === "first_binding_retry"
-      ? "The unconsumed Membership remains current for another exact retry."
-      : "The existing Membership and exact Session binding remain current.";
-    try {
-      recoveredTarget = spawnWorkerCarrier(teamConfig, teamTerminal, member, argv, env, useSeparateWindow);
-      const update = teamConfig.terminalBackend
-        ? { terminalTarget: terminalTarget(recoveredTarget.backend, recoveredTarget.isWindow ? "window" : "pane", recoveredTarget.terminalId) }
-        : recoveredTarget.isWindow
-          ? { windowId: recoveredTarget.terminalId }
-          : { tmuxPaneId: recoveredTarget.terminalId };
-      // Reserve the spawned carrier under the same exact Membership lease.
-      // A competing ensure sees this target as alive and reuses it. This
-      // parent has no child PID, so it only repeats admission as a bounded
-      // pre-persistence check; the child makes the durable PID claim.
-      await teams.withCurrentMembershipLease(targetTeamName, member.membershipId!, async (current) => {
-        const admission = runtime.admitRuntimeStartup(
-          current,
-          member.sessionFile || "",
-          await runtime.readRuntimeStatus(targetTeamName, member.name),
-          -1,
-          runtime.probePidPresence,
-          member.pendingLaunchId,
-        );
-        if (admission.kind === "refused") throw new Error(admission.reason);
-        if (mode === "first_binding_retry") {
-          await teams.updateMembership(targetTeamName, member.membershipId!, update);
-        } else {
-          await teams.bindMemberSession(targetTeamName, member.name, member.sessionFile!, undefined, update, member.membershipId);
-        }
-      });
-      return recoveredTarget;
-    } catch (error) {
-      if (recoveredTarget) {
-        try {
-          stopLaunchTarget(recoveredTarget);
-        } catch (cleanupError) {
-          throw new Error(
-            `Failed to ${action} ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
-            + `Compensation couldn't stop ${recoveredTarget.isWindow ? "window" : "pane"} ${recoveredTarget.terminalId}: `
-            + `${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
-            + "The Membership remains current; reconcile the live process before retrying.",
-          );
-        }
-      }
-      throw new Error(
-        `Failed to ${action} ${member.name}: ${error instanceof Error ? error.message : String(error)}. ${retained}`,
-      );
-    }
-  }
-
-  function launchObservationState(observation: WorkerStartupObservation): WorkerLaunchObservationState {
-    return observation.observed
-      ? { carrier: "session_bound", runtime: "observed" }
-      : { carrier: observation.carrier, runtime: "not_observed" };
-  }
-
-  async function observeLaunchedWorker(
-    targetTeamName: string,
-    workerName: string,
-    membershipId: string,
-    afterCursor: string,
-    signal?: AbortSignal,
-  ) {
-    const configuredWait = process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS;
-    const timeoutMs = configuredWait === undefined
-      ? WORKER_STARTUP_OBSERVATION_MS
-      : Number(configuredWait);
-    return observeWorkerStartup({
-      teamName: targetTeamName,
-      workerName,
-      membershipId,
-      afterCursor,
-      timeoutMs,
-      ...(signal ? { signal } : {}),
-      waitForEvents: (options) => teamEvents.waitForTeamEvents(options),
-      verifyAuthority: async () => {
-        try {
-          const current = await teams.currentMembership(targetTeamName, workerName);
-          const status = await runtime.readRuntimeStatus(targetTeamName, workerName);
-          return {
-            sessionBound: current.membershipId === membershipId && !!current.sessionFile,
-            generation: runtime.runtimeGeneration(status) ?? undefined,
-          };
-        } catch {
-          return { sessionBound: false, runtimeObserved: false };
-        }
+  if (leaderPreviewProcess) {
+    previewLifecycleAdapter = {
+      async teamCreated(targetTeamName, sessionFile) {
+        isTeammate = false;
+        agentName = "team-lead";
+        teamName = targetTeamName;
+        const config = await teams.readConfig(targetTeamName);
+        currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
+        await registerLeadSession(targetTeamName, sessionFile, undefined, true, currentMembershipId);
       },
-    });
+      async stopWorker(targetTeamName, worker) {
+        const safeTeamName = paths.sanitizeName(targetTeamName);
+        const safeWorker = paths.sanitizeName(worker);
+        return teams.withTeamTopologyLease(safeTeamName, async () => {
+          const config = await teams.readConfig(safeTeamName);
+          const member = [...config.members].reverse().find((candidate) => candidate.name === safeWorker && candidate.isActive !== false);
+          if (!member) return { kind: "refused" as const, worker: safeWorker, reason: "worker_not_found" as const, message: `Worker ${safeWorker} is not current.` };
+          if (member.name === "team-lead" || member.agentType === "lead") return { kind: "refused" as const, worker: safeWorker, reason: "leader_reserved" as const, message: "The Team leader is reserved; use team_shutdown for whole-Team closure." };
+          const unfinished = await tasks.listTasksWithVersions(safeTeamName, { assignee: safeWorker, nonterminalOnly: true });
+          if (unfinished.length > 0) return { kind: "refused" as const, worker: safeWorker, reason: "nonterminal_tasks_assigned" as const, message: `Worker ${safeWorker} has nonterminal Tasks.`, guardingTaskIds: unfinished.map((task) => task.id) };
+          try {
+            const changed = await transitionCurrentMembership(safeTeamName, member, "process_shutdown", true);
+            await teamEvents.appendTeamEvent(safeTeamName, { type: "worker", worker: safeWorker, membershipId: member.membershipId!, phase: "stopped" });
+            if (!changed.member) return { kind: "refused" as const, worker: safeWorker, reason: "stop_not_confirmed" as const, message: `Worker ${safeWorker} was not deactivated.` };
+            return { kind: "stopped" as const, worker: safeWorker };
+          } catch (error) {
+            return { kind: "refused" as const, worker: safeWorker, reason: "stop_not_confirmed" as const, message: error instanceof Error ? error.message : String(error) };
+          }
+        });
+      },
+      async shutdownTeam(targetTeamName) {
+        const safeTeamName = paths.sanitizeName(targetTeamName);
+        return teams.withTeamTopologyLease(safeTeamName, async () => {
+          const config = await teams.readConfig(safeTeamName);
+          const current = config.members.filter((member) => member.isActive !== false);
+          const teammates = current.filter((member) => member.name !== "team-lead" && member.agentType !== "lead");
+          const stoppedWorkers: string[] = [];
+          const failedWorkers: string[] = [];
+          await Promise.all(teammates.map(async (member) => {
+            try {
+              const changed = await transitionCurrentMembership(safeTeamName, member, "team_shutdown", true);
+              if (changed.member) stoppedWorkers.push(member.name);
+            } catch {
+              failedWorkers.push(member.name);
+            }
+          }));
+          if (failedWorkers.length === 0) {
+            const lead = current.find((member) => member.name === "team-lead" || member.agentType === "lead");
+            if (lead) await transitionCurrentMembership(safeTeamName, lead, "team_shutdown", false);
+          }
+          const unfinishedTaskIds = (await tasks.listTasksWithVersions(safeTeamName, { nonterminalOnly: true })).map((task) => task.id);
+          if (failedWorkers.length > 0) return { kind: "partial" as const, stoppedWorkers: stoppedWorkers.sort(), failedWorkers: failedWorkers.sort(), unfinishedTaskIds };
+          return { kind: "shutdown" as const, stoppedWorkers: stoppedWorkers.sort(), unfinishedTaskIds };
+        });
+      },
+    };
   }
 
   // Tools
@@ -1238,7 +1423,7 @@ export default function (pi: ExtensionAPI) {
       return {
         content: [{
           type: "text",
-          text: `Team ${safeTeamName} created; Task authority is ready.\nNext: use worker_ensure when another capability is needed, or task_create to create the first work contract.`,
+          text: `Team ${safeTeamName} created; Task authority is ready.\nNext: use ensure_worker when another capability is needed, or task_create to create the first work contract.`,
         }],
         details: toolResultDetails({
           operation: "team_create",
@@ -1252,7 +1437,7 @@ export default function (pi: ExtensionAPI) {
             beadsDatabase: config.taskAuthorityFingerprint?.doltDatabase,
           },
           nextActions: [
-            { tool: "worker_ensure", reason: "Create a stable Worker only when the Team needs another capability.", args: { team_name: safeTeamName } },
+            { tool: "ensure_worker", reason: "Create a stable Worker only when the Team needs another capability.", args: { team_name: safeTeamName } },
             { tool: "task_create", reason: "Create the first durable work contract.", args: { team_name: safeTeamName } },
           ],
           evidence: {
@@ -1270,7 +1455,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
-    name: "worker_ensure",
+    name: "ensure_worker",
     label: "Ensure Worker",
     description: "Ensure one stable named Worker exists. Reuse its live carrier, retry an unconsumed prepared launch, or resume the exact bound Session; assign executable work with a Task.",
     parameters: Type.Object({
@@ -1286,13 +1471,13 @@ export default function (pi: ExtensionAPI) {
       const safeTeamName = paths.sanitizeName(params.team_name);
 
       if (safeName === "team-lead") {
-        await assertLeadMutation(ctx, "worker_ensure", safeTeamName);
+        await assertLeadMutation(ctx, "ensure_worker", safeTeamName);
         const current = await teams.readConfig(safeTeamName);
         return {
           content: [{ type: "text", text: `Worker not created: team-lead is reserved. Choose a distinct Worker name; the current roster is unchanged.` }],
           details: toolResultDetails({
             outcome: "refused",
-            operation: "worker_ensure",
+            operation: "ensure_worker",
             resource: { kind: "worker", id: safeName, teamName: safeTeamName },
             postState: {
               changed: false,
@@ -1301,7 +1486,7 @@ export default function (pi: ExtensionAPI) {
             },
             warnings: [toolResultWarning("reserved_worker_name", "team-lead is reserved for the Team leader.", safeName)],
             nextActions: [{
-              tool: "worker_ensure",
+              tool: "ensure_worker",
               reason: "Choose a distinct stable Worker name.",
               args: { team_name: safeTeamName },
             }],
@@ -1312,344 +1497,123 @@ export default function (pi: ExtensionAPI) {
       return teams.withTeamTopologyLease(safeTeamName, async () => {
       // The caller may have become stale while waiting for another topology
       // transaction. Revalidate only after this Team's lease is held.
-      await assertLeadMutation(ctx, "worker_ensure", safeTeamName);
+      await assertLeadMutation(ctx, "ensure_worker", safeTeamName);
 
       if (!teams.teamExists(safeTeamName)) {
         throw new Error(`Team ${params.team_name} does not exist`);
       }
 
-      const teamConfig = await teams.readConfig(safeTeamName);
-      const teamTerminal = currentTerminalForTeam(teamConfig);
+      const launch = await workerLaunchBridge.ensureWorker({
+        teamName: safeTeamName,
+        workerName: safeName,
+        scope: params.profile,
+        cwd: params.cwd,
+        model: params.model,
+        thinking: params.thinking,
+        signal,
+        workerAggregate: (cwd) => workerAggregate(cwd, ctx),
+      });
 
-      const existingMember = [...teamConfig.members].reverse().find(m => m.name === safeName && m.agentType === "teammate" && m.isActive !== false);
-      if (existingMember) {
-        const existingTarget = memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name);
-        if (existingTarget) assertTargetSupportedByTerminal(teamTerminal, existingTarget);
-        const carrierObservation = existingTarget?.kind === "window"
-          ? (teamTerminal.isWindowAlive(existingTarget.targetId) ? "live" : "missing")
-          : existingTarget?.kind === "pane"
-            ? (teamTerminal.isAlive(existingTarget.targetId) ? "live" : "missing")
-            : "missing";
-        const workerPlan: WorkerEnsurePlan = planWorkerEnsure(
-          normalizeWorkerCarrier(existingMember),
-          carrierObservation,
-        );
-
-        if (workerPlan.action === "refuse") {
-          throw new Error(
-            `Current Membership for ${safeName} has invalid carrier evidence: ${workerPlan.carrier.reason}.`,
-          );
-        }
-
-        if (workerPlan.action === "reuse") {
-          return {
-            content: [{ type: "text", text: `Reused current Worker ${safeName}; no relaunch occurred. Task state is unchanged; reconcile its current assignment before creating a Task for new work.` }],
-            details: toolResultDetails({
-              operation: "worker_ensure",
-              resource: { kind: "worker", id: safeName, teamName: safeTeamName },
-              postState: {
-                name: safeName,
-                action: "reused",
-                membership: "current",
-                carrier: existingMember.sessionFile ? "session_bound" : "prepared",
-                taskStateChanged: false,
-              } satisfies WorkerEnsurePostState,
-              nextActions: [{
-                tool: "team_sync",
-                reason: "Reconcile this Worker's current Task assignment before creating more work.",
-                args: { team_name: safeTeamName },
-              }],
-              evidence: {
-                membershipId: existingMember.membershipId,
-                sessionBound: !!existingMember.sessionFile,
-                terminal: existingTarget,
-              },
-            }),
-          };
-        }
-
-        const agentDef = predefined.getAgentDefinition(safeName, existingMember.cwd);
-        if (workerPlan.action === "recover" && workerPlan.recoveryMode === "first_binding_retry") {
-          const prepared = workerPlan.carrier;
-          const retryArgv = buildPiArgv(
-            getPiLaunchArgv(), existingMember.model, existingMember.thinking, agentDef?.tools,
-          );
-          const retryEnv = {
-            ...process.env,
-            PI_TEAM_NAME: safeTeamName,
-            PI_AGENT_NAME: safeName,
-            PI_AGENT_LAUNCH_ID: prepared.pendingLaunchId,
-          } as Record<string, string>;
-          const retryInSeparateWindow = teamConfig.separateWindows ?? false;
-          if (retryInSeparateWindow && !teamTerminal.supportsWindows()) {
-            throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
-          }
-
-          const recoveryCursor = teamEvents.readTeamEventCursor(safeTeamName);
-          const retriedTarget = await executeWorkerRecovery({
-            teamName: safeTeamName,
-            teamConfig,
-            teamTerminal,
-            member: prepared.member,
-            mode: workerPlan.recoveryMode,
-            argv: retryArgv,
-            env: retryEnv,
-            useSeparateWindow: retryInSeparateWindow,
-          });
-
-          const startup = await observeLaunchedWorker(
-            safeTeamName,
-            safeName,
-            existingMember.membershipId!,
-            recoveryCursor,
-            signal,
-          );
-          const retriedMember = await teams.currentMembership(safeTeamName, safeName);
-          return {
-            content: [{
-              type: "text",
-              text: startup.observed
-                ? `Recovered prepared Worker ${safeName}; its exact Session binding and runtime startup were observed. Task state is unchanged.`
-                : `Recovered prepared Worker ${safeName} by retrying its unconsumed first binding in a new carrier, but runtime startup wasn't observed. Task state is unchanged.`,
-            }],
-            details: toolResultDetails({
-              operation: "worker_ensure",
-              resource: { kind: "worker", id: safeName, teamName: safeTeamName },
-              postState: {
-                name: safeName,
-                action: "recovered",
-                recoveryMode: "first_binding_retry",
-                membership: "current",
-                ...launchObservationState(startup),
-                terminalLaunched: true,
-                taskStateChanged: false,
-              } satisfies WorkerEnsurePostState,
-              warnings: startup.observed ? [] : [toolResultWarning(
-                "runtime_not_observed",
-                "First-binding relaunch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
-                safeName,
-              )],
-              nextActions: [{
-                tool: "team_sync",
-                reason: "Reconcile this Worker's binding event and current Task assignment.",
-                args: { team_name: safeTeamName },
-              }],
-              evidence: {
-                membershipId: existingMember.membershipId,
-                sessionBound: !!retriedMember.sessionFile,
-                terminalLaunch: {
-                  adapter: retriedTarget.backend,
-                  kind: retriedTarget.isWindow ? "window" : "pane",
-                  targetId: retriedTarget.terminalId,
-                },
-              },
-            }),
-          };
-        }
-
-        if (workerPlan.action !== "recover" || workerPlan.recoveryMode !== "exact_session_resume") {
-          throw new Error("Worker ensure planner returned no executable recovery action.");
-        }
-        const bound = workerPlan.carrier;
-        const resumeArgv = [
-          ...buildPiArgv(getPiLaunchArgv(), existingMember.model, existingMember.thinking, agentDef?.tools),
-          "--session", bound.sessionFile,
-        ];
-        const resumeEnv = {
-          ...process.env,
-          PI_TEAM_NAME: safeTeamName,
-          PI_AGENT_NAME: safeName,
-        } as Record<string, string>;
-        delete resumeEnv.PI_AGENT_LAUNCH_ID;
-        const recoverInSeparateWindow = teamConfig.separateWindows ?? false;
-        if (recoverInSeparateWindow && !teamTerminal.supportsWindows()) {
-          throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
-        }
-
-        const runtimeAdmission = await teams.withMembershipMutationLease(safeTeamName, bound.membershipId, async () => {
-          const current = await teams.currentMembership(safeTeamName, safeName);
-          // worker_ensure is not the candidate process. It may only spawn after
-          // ESRCH proves the prior exact runtime PID absent.
-          return runtime.admitRuntimeStartup(current, bound.sessionFile, await runtime.readRuntimeStatus(safeTeamName, safeName), -1);
-        });
-        if (runtimeAdmission.kind === "refused") {
-          throw new Error(`Cannot resume ${safeName}: ${runtimeAdmission.reason} No terminal target changed and no candidate was spawned.`);
-        }
-        const recoveryCursor = teamEvents.readTeamEventCursor(safeTeamName);
-        const recoveredTarget = await executeWorkerRecovery({
-          teamName: safeTeamName,
-          teamConfig,
-          teamTerminal,
-          member: bound.member,
-          mode: workerPlan.recoveryMode,
-          argv: resumeArgv,
-          env: resumeEnv,
-          useSeparateWindow: recoverInSeparateWindow,
-        });
-
-        const startup = await observeLaunchedWorker(
-          safeTeamName,
-          safeName,
-          existingMember.membershipId!,
-          recoveryCursor,
-          signal,
-        );
+      if (launch.action === "reused") {
         return {
-          content: [{
-            type: "text",
-            text: startup.observed
-              ? `Recovered Worker ${safeName} by resuming its exact Session; runtime startup was observed. Task state is unchanged.`
-              : `Recovered Worker ${safeName} by resuming its exact Session, but runtime startup wasn't observed. Task state is unchanged.`,
-          }],
+          content: [{ type: "text", text: `Reused current Worker ${safeName}; no relaunch occurred. Task state is unchanged; reconcile its current assignment before creating a Task for new work.` }],
           details: toolResultDetails({
-            operation: "worker_ensure",
+            operation: "ensure_worker",
             resource: { kind: "worker", id: safeName, teamName: safeTeamName },
             postState: {
               name: safeName,
-              action: "recovered",
-              recoveryMode: workerPlan.recoveryMode,
+              action: "reused",
               membership: "current",
-              ...launchObservationState(startup),
-              terminalLaunched: true,
+              carrier: launch.member.sessionFile ? "session_bound" : "prepared",
               taskStateChanged: false,
             } satisfies WorkerEnsurePostState,
-            warnings: startup.observed ? [] : [toolResultWarning(
-              "runtime_not_observed",
-              "Exact-Session relaunch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
-              safeName,
-            )],
             nextActions: [{
               tool: "team_sync",
-              reason: "Reconcile this Worker's current Task assignment and later lifecycle event.",
+              reason: "Reconcile this Worker's current Task assignment before creating more work.",
               args: { team_name: safeTeamName },
             }],
             evidence: {
-              membershipId: existingMember.membershipId,
-              sessionBound: true,
-              terminalLaunch: {
-                adapter: recoveredTarget.backend,
-                kind: recoveredTarget.isWindow ? "window" : "pane",
-                targetId: recoveredTarget.terminalId,
-              },
+              membershipId: launch.membershipId,
+              sessionBound: !!launch.member.sessionFile,
+              terminal: launch.target,
             },
           }),
         };
       }
 
-      const absentPlan: WorkerEnsurePlan = planWorkerEnsure(normalizeWorkerCarrier(undefined), "missing");
-      if (absentPlan.action !== "create") {
-        throw new Error("Worker ensure planner returned no executable create action.");
-      }
-
-      let chosenModel = params.model || teamConfig.defaultModel;
-
-      // Resolve model to provider/model format
-      if (chosenModel) {
-        if (!chosenModel.includes('/')) {
-          // Try to resolve using available models from pi --list-models
-          const resolved = resolveModelWithProvider(chosenModel);
-          if (resolved) {
-            chosenModel = resolved;
-          } else if (teamConfig.defaultModel && teamConfig.defaultModel.includes('/')) {
-            // Fall back to team default provider
-            const [provider] = teamConfig.defaultModel.split('/');
-            chosenModel = `${provider}/${chosenModel}`;
-          }
-        }
-      }
-
-      const useSeparateWindow = teamConfig.separateWindows ?? false;
-      if (useSeparateWindow && !teamTerminal.supportsWindows()) {
-        throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
-      }
-
-      const member: Member = {
-        membershipId: teams.newMembershipId(),
-        pendingLaunchId: teams.newLaunchId(),
-        agentId: `${safeName}@${safeTeamName}`,
-        name: safeName,
-        agentType: "teammate",
-        model: chosenModel,
-        joinedAt: Date.now(),
-        cwd: params.cwd,
-        subscriptions: [],
-        isActive: true,
-        prompt: params.profile,
-        color: "blue",
-        thinking: params.thinking,
-      };
-
-      await teams.addMember(safeTeamName, member);
-      const preparedEvent = await teamEvents.appendTeamEvent(safeTeamName, {
-        type: "worker", worker: safeName, membershipId: member.membershipId!, phase: "prepared",
-      });
-
-      const agentDef = predefined.getAgentDefinition(safeName, params.cwd);
-      const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, params.thinking, agentDef?.tools);
-
-      const env: Record<string, string> = {
-        ...process.env,
-        PI_TEAM_NAME: safeTeamName,
-        PI_AGENT_NAME: safeName,
-        PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
-      };
-
-      const launch = await launchPreparedMembership(
-        safeTeamName,
-        member,
-        null,
-        () => spawnWorkerCarrier(teamConfig, teamTerminal, member, piCmd, env, useSeparateWindow),
-      );
-
-      const startup = await observeLaunchedWorker(
-        safeTeamName,
+      const startup = launch.startup;
+      const firstBindingRetry = launch.action === "recovered" && launch.recoveryMode === "first_binding_retry";
+      const actionText = launch.action === "created"
+        ? startup.observed
+          ? `Worker ${safeName} created; its exact Session binding and runtime startup were observed, and no Task is assigned.\nNext: create a Task only when real work exists.`
+          : `Worker ${safeName} was launched, but its exact runtime startup wasn't observed within the bounded wait; no Task is assigned.\nNext: use team_sync to observe binding changes; create a Task only when real work exists.`
+        : firstBindingRetry
+          ? startup.observed
+            ? `Recovered prepared Worker ${safeName}; its exact Session binding and runtime startup were observed. Task state is unchanged.`
+            : `Recovered prepared Worker ${safeName} by retrying its unconsumed first binding in a new carrier, but runtime startup wasn't observed. Task state is unchanged.`
+          : startup.observed
+            ? `Recovered Worker ${safeName} by resuming its exact Session; runtime startup was observed. Task state is unchanged.`
+            : `Recovered Worker ${safeName} by resuming its exact Session, but runtime startup wasn't observed. Task state is unchanged.`;
+      const warning = startup.observed ? [] : [toolResultWarning(
+        "runtime_not_observed",
+        launch.action === "created"
+          ? "Terminal launch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait."
+          : firstBindingRetry
+            ? "First-binding relaunch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait."
+            : "Exact-Session relaunch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
         safeName,
-        member.membershipId!,
-        preparedEvent.cursor,
-        signal,
-      );
-
-      return {
-        content: [{
-          type: "text",
-          text: startup.observed
-            ? `Worker ${safeName} created; its exact Session binding and runtime startup were observed, and no Task is assigned.\nNext: create a Task only when real work exists.`
-            : `Worker ${safeName} was launched, but its exact runtime startup wasn't observed within the bounded wait; no Task is assigned.\nNext: use team_sync to observe binding changes; create a Task only when real work exists.`,
-        }],
-        details: toolResultDetails({
-          operation: "worker_ensure",
-          resource: { kind: "worker", id: safeName, teamName: safeTeamName },
-          postState: {
-            name: safeName,
-            action: "created",
-            membership: "current",
-            ...launchObservationState(startup),
-            terminalLaunched: true,
-            assignedTasks: [],
-          } satisfies WorkerEnsurePostState,
-          warnings: startup.observed ? [] : [toolResultWarning(
-            "runtime_not_observed",
-            "Terminal launch succeeded, but this call did not observe the exact Worker runtime startup within the bounded wait.",
-            safeName,
-          )],
-          nextActions: startup.observed ? [{
-            tool: "task_create",
-            reason: "Assign a goal and independently verifiable acceptance criteria.",
-            args: { team_name: safeTeamName, assignee: safeName },
-          }] : [{
-            tool: "team_sync",
-            reason: "Observe the exact Worker binding before assigning executable work.",
-            args: { team_name: safeTeamName },
-          }],
-          evidence: {
-            membershipId: member.membershipId,
-            agentId: member.agentId,
-            terminalLaunch: {
-              adapter: launch.backend,
-              kind: launch.isWindow ? "window" : "pane",
-              targetId: launch.terminalId,
-            },
+      )];
+      const nextActions = launch.action === "created"
+        ? startup.observed ? [{ tool: "task_create", reason: "Assign a goal and independently verifiable acceptance criteria.", args: { team_name: safeTeamName, assignee: safeName } }] : [{ tool: "team_sync", reason: "Observe the exact Worker binding before assigning executable work.", args: { team_name: safeTeamName } }]
+        : firstBindingRetry
+          ? [{ tool: "team_sync", reason: "Reconcile this Worker's binding event and current Task assignment.", args: { team_name: safeTeamName } }]
+          : [{ tool: "team_sync", reason: "Reconcile this Worker's current Task assignment and later lifecycle event.", args: { team_name: safeTeamName } }];
+      const postState: WorkerEnsurePostState = launch.action === "created"
+        ? {
+          name: safeName,
+          action: "created",
+          membership: "current",
+          ...launchObservationState(startup),
+          terminalLaunched: true,
+          assignedTasks: [],
+        }
+        : {
+          name: safeName,
+          action: "recovered",
+          recoveryMode: launch.recoveryMode,
+          membership: "current",
+          ...launchObservationState(startup),
+          terminalLaunched: true,
+          taskStateChanged: false,
+        };
+      const evidence = launch.action === "created"
+        ? {
+          membershipId: launch.membershipId,
+          agentId: launch.member.agentId,
+          terminalLaunch: {
+            adapter: launch.target.backend,
+            kind: launch.target.isWindow ? "window" : "pane",
+            targetId: launch.target.terminalId,
           },
+        }
+        : {
+          membershipId: launch.membershipId,
+          sessionBound: !!launch.member.sessionFile,
+          terminalLaunch: {
+            adapter: launch.target.backend,
+            kind: launch.target.isWindow ? "window" : "pane",
+            targetId: launch.target.terminalId,
+          },
+        };
+      return {
+        content: [{ type: "text", text: actionText }],
+        details: toolResultDetails({
+          operation: "ensure_worker",
+          resource: { kind: "worker", id: safeName, teamName: safeTeamName },
+          postState,
+          warnings: warning,
+          nextActions,
+          evidence,
         }),
       };
       });
@@ -2048,19 +2012,15 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.registerTool({
+  function registerAlertTool(): void {
+    const projection = alertToolProjection();
+    const registration = {
     name: "alert_send",
     label: "Send Alert",
-    description: "Send exceptional clarification, attention, or a Team announcement. Alerts never assign or complete work; update the Task when durable intent changes.",
-    parameters: Type.Object({
-      team_name: Type.String(),
-      to: Type.String({ description: "Current Worker name, team-lead, or * for an announcement" }),
-      kind: StringEnum(["clarification", "attention", "announcement"]),
-      text: Type.String(),
-      task_id: Type.Optional(Type.String()),
-      task_version: Type.Optional(Type.String()),
-    }),
-    async execute(toolCallId, params: any, signal, onUpdate, ctx) {
+    // This process-specific TypeBox projection limits Worker model calls. The
+    // alerts service remains the authority and rejects forged announcements.
+    ...projection,
+    async execute(toolCallId: string, params: any, signal: any, onUpdate: any, ctx: any) {
       const actor = await assertCurrentSessionBinding(ctx, params.team_name);
       if (params.to === "*" && params.kind !== "announcement") {
         return {
@@ -2156,7 +2116,7 @@ export default function (pi: ExtensionAPI) {
                   reason: "Reconcile the current roster before deciding whether this announcement is still needed.",
                   args: { team_name: params.team_name },
                 }, {
-                  tool: "worker_ensure",
+                  tool: "ensure_worker",
                   reason: "Only if actual work requires a Worker, ensure one stable Worker before retrying the still-needed announcement.",
                   args: { team_name: params.team_name },
                 }]
@@ -2217,7 +2177,11 @@ export default function (pi: ExtensionAPI) {
         }),
       };
     },
-  });
+  };
+    alertToolRegistration = registration;
+    pi.registerTool(registration as any);
+  }
+  registerAlertTool();
 
   pi.registerTool({
     name: "task_create",
@@ -2369,12 +2333,41 @@ export default function (pi: ExtensionAPI) {
         ...(params.append_note !== undefined ? { appendNote: params.append_note } : {}),
       };
       let result: Awaited<ReturnType<typeof tasks.applySemanticTaskUpdate>>;
+      let candidateTaskMetadata: CandidateTaskMetadata | undefined;
+      let taskEventEvidence: Array<{ kind: "progress" | "status"; text: string }> | undefined;
+      if (
+        process.env[MODEL_TOOL_PREVIEW_WORKER_MARKER] === "1"
+        && (params.append_note !== undefined || params.status !== undefined)
+      ) {
+        try {
+          const record = await tasks.readCandidateTaskAuthorityRecord(params.team_name, params.task_id);
+          const parsed = parseCandidateTaskMetadata(record);
+          if (!("kind" in parsed)) {
+            candidateTaskMetadata = refreshCandidateTaskMetadata(
+              parsed,
+              params.append_note ?? parsed.current_context,
+            );
+            taskEventEvidence = [
+              ...(params.append_note !== undefined ? [{ kind: "progress" as const, text: params.append_note }] : []),
+              ...(params.status !== undefined ? [{ kind: "status" as const, text: `Worker set Task status to ${params.status}.` }] : []),
+            ];
+          }
+        } catch {
+          // Legacy or unreadable Tasks keep the shipped mutation behavior.
+        }
+      }
       try {
         result = await tasks.applySemanticTaskUpdate(
           params.team_name,
           params.task_id,
           requestedMutation,
-          { actor: agentName, expectedVersion: params.expected_version, actingSessionFile, actingMembershipId: actorMembership.membershipId },
+          {
+            actor: agentName,
+            expectedVersion: params.expected_version,
+            actingSessionFile,
+            actingMembershipId: actorMembership.membershipId,
+            ...(candidateTaskMetadata ? { candidateTaskMetadata, taskEventEvidence } : {}),
+          },
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -3132,16 +3125,18 @@ export default function (pi: ExtensionAPI) {
 
           await teams.addMember(safeTeamName, member);
 
-          const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking, agentDef.tools);
+          const aggregate = workerAggregate(params.cwd, ctx);
+          const piCmd = buildPiArgv(getPiLaunchArgv(), chosenModel, agentDef.thinking, aggregate.path, aggregate.projectTrusted);
 
           const env: Record<string, string> = {
             ...process.env,
             PI_TEAM_NAME: safeTeamName,
             PI_AGENT_NAME: safeName,
             PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
+            ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
           };
 
-          await launchPreparedMembership(
+          await workerLaunchBridge.launchPreparedMembership(
             safeTeamName,
             member,
             () => messaging.sendPlainMessage(safeTeamName, "team-lead", safeName, agentDef.prompt, "Initial prompt from predefined team"),
@@ -3181,6 +3176,7 @@ export default function (pi: ExtensionAPI) {
             });
             return { terminalId, isWindow: false, backend: terminal.name };
             },
+            aggregate.path,
           );
 
           spawnResults.push({ name: agentName, status: "spawned", error: undefined });

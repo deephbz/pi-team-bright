@@ -1,0 +1,268 @@
+{
+  "schema": "pi-team-bright-model-tool-real-pi-canary/1",
+  "redactionPolicy": "pi-team-bright-model-tool-canary-redaction/1",
+  "completedAt": "2026-08-02T13:25:37.388Z",
+  "status": "passed",
+  "sourceRevision": "08317bc3a54d1516af9a5a48369be3a126cd9489",
+  "sourceDigests": {
+    "scripts/model-tool-canary/extension.ts": "15f724a937f23f42eab7b37e129b1f4023869f6db8b09913000c01a2bd437551",
+    "scripts/model-tool-canary/run.mjs": "a629e17010958eaca63d909394f7783f8c163c72426fbc8a0d0a4e4645f068de",
+    "src/model-tool-contract/catalog.ts": "94548e3e87e3c6e7a48bfde5278c4ff4ee5d9476338ec8dd68c2c863dc3fcccf",
+    "src/model-tool-contract/result-projection.ts": "99cb1738f6106d73e75998df5108b8ae8480be8fd25a10a33fb807b85d483397",
+    "src/model-tool-contract/in-memory-team-port.ts": "e0db95ec9a0b3f8615af1363c6879984e99923858ffd953d6bdca591ee644bb2",
+    "src/model-tool-contract/executors.ts": "b84e9f2aa361226041b85b132f077275b9d8a42338dd5de5636e62702524372f",
+    "src/model-tool-contract/pi-registration.ts": "48f8a7d0fec6787fcfc19ee85d78480d92fe2ceba41c331d007806b6e62d0343",
+    "src/model-tool-contract/runtime.ts": "f1d98d9f04cd2a4bc283ff38a9732ee4f527851200f1bb9a43f5a4997103e2ab"
+  },
+  "runtime": {
+    "piVersion": "0.80.10",
+    "nodeVersion": "v25.6.0",
+    "provider": "openai-codex",
+    "model": "gpt-5.6-luna",
+    "thinking": "off"
+  },
+  "prompt": {
+    "systemSha256": "3eb9f8085cfe4dafc95c158aa09373ea83d078ecefb7bff6882cb7eb8a8f8341",
+    "operatorSha256": "7d24c88813ce812224c4d99aec5627f36d76b806a8c1157f252cb473fd5bd8ad",
+    "source": "scripts/model-tool-canary/run.mjs"
+  },
+  "isolation": {
+    "freshWorkingDirectory": true,
+    "freshConfigDirectory": true,
+    "freshSessionDirectory": true,
+    "discoveredExtensions": false,
+    "discoveredSkills": false,
+    "discoveredPromptTemplates": false,
+    "discoveredThemes": false,
+    "contextFiles": false,
+    "builtInTools": false,
+    "activeToolNames": [
+      "team_create",
+      "ensure_worker",
+      "team_sync"
+    ],
+    "offlineStartup": true,
+    "projectTrust": false
+  },
+  "providerObservation": {
+    "interpretation": "before_provider_request is a local pre-send observation; an HTTP success or a completed usage-bearing assistant response correlated with the valid ordered tool journey anchors provider execution",
+    "requestCount": 4,
+    "evidenceClasses": {
+      "httpResponse": {
+        "observedCount": 0,
+        "successfulCount": 0
+      },
+      "completedUsageBearingAssistantResponse": {
+        "observedCount": 1,
+        "assistantMessageEndCount": 4
+      }
+    },
+    "anchorClass": "completed_usage_bearing_assistant_response",
+    "schemas": [
+      {
+        "name": "team_create",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Create one long-lived Team and bind the exact calling Session as its leader.",
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "purpose": {
+              "description": "The long-lived Team outcome and operating boundary.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "purpose"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "c1ec5dfc964d5492dd80ac69a1c89610ed92472b46d03508e7c2ba768163e8fa",
+        "resultSchemaSha256": "9a1055b9a830de312ebec6810364e9793542c93b6691e5a51a6ba66e0cb99056"
+      },
+      {
+        "name": "ensure_worker",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Create, reconnect, or reuse one Worker in the active Team. Work is assigned separately through Tasks.",
+          "properties": {
+            "name": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "scope": {
+              "description": "A semantically deep area with high internal cohesion, low prerequisite overlap, and few dependencies on other Workers.",
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "scope"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "b4b68a048f085b7c32bba2b99974606f9c0acaa56e8b63c727d8986d09c41e56",
+        "resultSchemaSha256": "87252bc4ea84d5bebc46422653344bae0af179720820e5c0976083b41d887548"
+      },
+      {
+        "name": "team_sync",
+        "parameters": {
+          "additionalProperties": false,
+          "description": "Read the active Team's snapshot or incremental updates. Team identity is resolved from the exact leader Session binding.",
+          "properties": {
+            "view": {
+              "description": "Use snapshot to restore current context; use updates for routine supervision and waiting.",
+              "enum": [
+                "snapshot",
+                "updates"
+              ]
+            }
+          },
+          "required": [
+            "view"
+          ],
+          "type": "object"
+        },
+        "parameterSchemaSha256": "a7bd9d8feba0d1339513a714d691c769b1be822e2bc071be6e85d1a806454426",
+        "resultSchemaSha256": "0202f469d9fb692efad33dcbd1c202a7e76b85f4e48ee627bbb58eb7a47e3903"
+      }
+    ]
+  },
+  "journey": [
+    {
+      "tool": "team_create",
+      "call": {
+        "name": "release-coordination",
+        "purpose": "Durable coordination frame for release planning, verification, and supervised execution."
+      },
+      "result": {
+        "kind": "team_created",
+        "team": {
+          "name": "release-coordination",
+          "purpose": "Durable coordination frame for release planning, verification, and supervised execution.",
+          "lifecycle": "active"
+        }
+      }
+    },
+    {
+      "tool": "ensure_worker",
+      "call": {
+        "name": "release-verification",
+        "scope": "Independent release verification: validate release readiness, artifacts, checks, and acceptance evidence without owning unrelated coordination work."
+      },
+      "result": {
+        "kind": "worker_ensured",
+        "effect": "created",
+        "worker": {
+          "name": "release-verification",
+          "scope": "Independent release verification: validate release readiness, artifacts, checks, and acceptance evidence without owning unrelated coordination work.",
+          "carrier": "absent"
+        }
+      }
+    },
+    {
+      "tool": "team_sync",
+      "call": {
+        "view": "snapshot"
+      },
+      "result": {
+        "kind": "snapshot",
+        "team": {
+          "name": "release-coordination",
+          "purpose": "Durable coordination frame for release planning, verification, and supervised execution.",
+          "lifecycle": "active"
+        },
+        "workers": [
+          {
+            "name": "release-verification",
+            "scope": "Independent release verification: validate release readiness, artifacts, checks, and acceptance evidence without owning unrelated coordination work.",
+            "carrier": "absent",
+            "nonterminal_task_ids": []
+          }
+        ],
+        "tasks": []
+      }
+    }
+  ],
+  "orderedEventKinds": [
+    "rpc:agent_start",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:team_create",
+    "rpc:tool_execution_end:team_create",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:ensure_worker",
+    "rpc:tool_execution_end:ensure_worker",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:tool_execution_start:team_sync",
+    "rpc:tool_execution_end:team_sync",
+    "rpc:turn_end",
+    "rpc:turn_start",
+    "rpc:turn_end",
+    "rpc:agent_settled",
+    "extension:session_start",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:team_create",
+    "extension:tool_result:team_create",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:ensure_worker",
+    "extension:tool_result:ensure_worker",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:tool_call:team_sync",
+    "extension:tool_result:team_sync",
+    "extension:before_provider_request",
+    "extension:assistant_message_end",
+    "extension:agent_settled",
+    "extension:session_shutdown"
+  ],
+  "checks": {
+    "packageLocalPiPinned": true,
+    "privateCaptureSecure": true,
+    "isolatedCommands": true,
+    "sessionIdentityExact": true,
+    "providerSchemasExact": true,
+    "providerSystemExact": true,
+    "successfulProviderAnchor": true,
+    "parametersValid": true,
+    "resultSchemasValid": true,
+    "modelContentEqualsDetails": true,
+    "callOrderExact": true,
+    "noParallelCalls": true,
+    "teamPreserved": true,
+    "logicalWorkerPreserved": true,
+    "carrierAbsent": true,
+    "noTasks": true,
+    "finalReportsAbsentCarrier": true,
+    "finalIdentifiesMissingTaskAction": true,
+    "noForbiddenFinalClaim": true,
+    "sessionEvidencePresent": true,
+    "noRuntimeErrors": true,
+    "processExitedCleanly": true
+  },
+  "failedChecks": [],
+  "privateEvidence": {
+    "persistedOutsideGit": true,
+    "bundleSha256": "ed1b29d3fabdfb613490e20f7f6065e0482428a801eec50fa5461b7cc13224cf"
+  },
+  "claims": {
+    "proved": "One provider-bound Pi Session created and re-read one in-process logical Team and Worker record while reporting carrier absent and no Tasks.",
+    "notProved": [
+      "public or shipped registration",
+      "carrier launch, connection, readiness, liveness, or staffing",
+      "Task creation, assignment, delegation, progress, or completion",
+      "persistence, reload, resume, fork, or cross-Session isolation",
+      "updates, waiting, cancellation, performance, security, or general readiness"
+    ]
+  }
+}
