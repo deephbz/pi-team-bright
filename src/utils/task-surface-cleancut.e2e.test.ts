@@ -329,10 +329,16 @@ describe("clean-cut Task public surface", () => {
         kind: "refused",
         task_id: direct.id,
         reason: "version_conflict",
-        current_task: { id: direct.id, status: "in_progress", version: claimed.version },
+        current_task: { id: direct.id, status: "in_progress", version: expect.any(String) },
         state_changed: false,
       }],
     });
+    // Each concurrent receipt projects authority independently. Both versions
+    // must be post-create revisions; exact equality between concurrent opaque
+    // observations is not the stale-write safety invariant.
+    const refusedCurrent = refusedClaims[0].details.outcomes[0].current_task;
+    expect(claimed.version).not.toBe(direct.version);
+    expect(refusedCurrent.version).not.toBe(direct.version);
 
     // Complex work remains one Task. Design is supplemented as prose, review is
     // requested in the Task itself, observed through team_sync, and approval is
