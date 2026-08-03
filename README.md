@@ -106,9 +106,8 @@ based substitute for Tasks.
   `list` command. Do not interpret that timeout as an empty Task set, Worker
   failure, or lack of progress; preserve the last valid cursor and reconcile
   from authoritative state when the read is available.
-- **The packaged operating skill is currently named `pi-teams`.** The product,
-  command, and npm package use Pi Team Bright naming, but the skill rename is
-  still TODO.
+- **The packaged operating skill is named `pi-team-bright`.** Its discovery
+  name now matches the product, command, and npm package.
 
 ## Install and upgrade
 
@@ -252,7 +251,5 @@ by Victor (`cs50victor`). The original MIT copyright notice is retained in
 
 ## TODO
 
-- Rename the packaged operating skill from `pi-teams` to `pi-team-bright` while
-  retaining stable compatibility identities where required.
 - Isolate Task projection availability from valid Team and Worker carrier state
   when the underlying Beads list read is contended.

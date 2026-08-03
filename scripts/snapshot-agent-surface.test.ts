@@ -123,7 +123,7 @@ test("captures the agent-facing PiTeams surface", { timeout: 30_000 }, async () 
 
     const lead = instantiate("lead");
     const extensionPath = path.join(repo, "extensions", "index.ts");
-    const skillPath = path.join(repo, "skills", "pi-teams", "SKILL.md");
+    const skillPath = path.join(repo, "skills", "pi-team-bright", "SKILL.md");
     const snapshot = {
       schema: "pi-teams-agent-surface-snapshot/1",
       label,
@@ -131,7 +131,7 @@ test("captures the agent-facing PiTeams surface", { timeout: 30_000 }, async () 
         revision,
         extension: "extensions/index.ts",
         extensionSha256: crypto.createHash("sha256").update(fs.readFileSync(extensionPath)).digest("hex"),
-        skill: "skills/pi-teams/SKILL.md",
+        skill: "skills/pi-team-bright/SKILL.md",
         skillSha256: crypto.createHash("sha256").update(fs.readFileSync(skillPath)).digest("hex")
       },
       prompts: { lead: await promptsFor("lead"), worker: await promptsFor("worker") },

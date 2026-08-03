@@ -1,6 +1,6 @@
-# PiTeams agent entry point
+# Pi Team Bright agent entry point
 
-PiTeams is in **hardening** for its Task-first coordination surface. Start from
+Pi Team Bright is in **hardening** for its Task-first coordination surface. Start from
 the maintained [evergreen context](docs/current/README.md); consult the
 [journal](docs/journal/) only for historical rationale or evidence.
 
@@ -22,7 +22,7 @@ the maintained [evergreen context](docs/current/README.md); consult the
   nonterminal assigned Tasks are resolved; reconcile before Team shutdown.
 
 The executable tool schemas shown by Pi are authoritative. The
-[PiTeams skill](skills/pi-teams/SKILL.md) contains the concise operating
+[Pi Team Bright skill](skills/pi-team-bright/SKILL.md) contains the concise operating
 procedure; the [contract source map](docs/reference.md) routes to schemas,
 types, implementations, and tests.
 

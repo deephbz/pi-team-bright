@@ -1,0 +1,89 @@
+{
+  "schema": "pi-team-bright/stress-prefix-analysis/1",
+  "team": "stress-team",
+  "status": "active-prefix-not-final-run",
+  "implementationVersion": "0.17.0-rc.3",
+  "capturedAt": "2026-08-03T14:52:50.306620Z",
+  "source": {
+    "configuredMembersIncludingLead": 11,
+    "presentSessionPrefixes": 11,
+    "sessionPrefixLines": 1749,
+    "sessionPrefixBundleSha256": "394ab6a7f2b3517abb12a616b4d566be64d7319415b429d91646fe2a2eeb98c5",
+    "teamEventsSha256": "d1a306d41462abf029c12c80cc8d46fb4f20dd21f2047a37e196fce49ee6ee51",
+    "rawEvidencePolicy": "Raw active Team and Pi Session records remain private in place. This artifact contains sanitized derived counts from immutable prefixes."
+  },
+  "runtime": {
+    "logicalWorkers": 10,
+    "activeMembershipsIncludingLead": 11,
+    "workerRuntimeRecordsReady": 10
+  },
+  "toolResults": {
+    "taskCreate": { "calls": 12, "completedCalls": 12, "createdOutcomes": 154, "unknownOutcomes": 13, "operationConflictOutcomes": 6 },
+    "taskRead": { "calls": 196, "completedCalls": 196, "foundOutcomes": 192, "executionErrors": 14 },
+    "taskUpdate": { "calls": 353, "completedCalls": 353, "updatedOutcomes": 285, "versionConflictOutcomes": 11, "executionErrors": 57 },
+    "alertSend": { "acceptedResults": 22 },
+    "teamSync": { "calls": 3, "contractGaps": 2, "snapshotRequired": 1, "successfulSnapshots": 0, "successfulUpdates": 0 },
+    "taskLink": { "calls": 2, "timeoutMappedToGraphConflict": 1, "linked": 1 }
+  },
+  "failureClusters": {
+    "compoundClaimExecutionErrors": 10,
+    "timeoutBearingOutcomes": 77,
+    "timeoutCommands": { "show": 64, "update": 9, "create": 1, "list": 3 },
+    "actorsWithTimeoutsIncludingLead": 11,
+    "versionConflictsImmediatelyFollowingTimeoutAtPriorCutoff": 8
+  },
+  "createReplayEvidence": {
+    "unknownOperationsRetried": 13,
+    "retryReturnedCreated": 7,
+    "retryReturnedOperationConflict": 6,
+    "retryReturnedCreatedWithoutCreationEvent": 4,
+    "firstThreeExactInputHashes": [
+      { "operationId": "op-s-t36", "sha256": "f1884fb3c7f0ef960da120cf2959b63d180ae2d157278743ae7a6bce6da6fa7e", "retryOutcome": "operation_conflict" },
+      { "operationId": "op-s-t48", "sha256": "6f8541c17b0d0562ad590ee253ebd933fbc32b5576201f68c6fa0a3b33661148", "retryOutcome": "operation_conflict" },
+      { "operationId": "op-s-t56", "sha256": "5667e4b45bb907288716c3230a0f4ec77b0b5511fba72eba047c9f738d2a4860", "retryOutcome": "created_without_creation_event" }
+    ]
+  },
+  "createBatchServiceSeconds": {
+    "completedSixteenItemBatches": 10,
+    "minimum": 112.615,
+    "median": 122.3505,
+    "maximum": 148.844,
+    "sum": 1254.923
+  },
+  "syncEvidence": {
+    "bulkSnapshotAttempts": 2,
+    "bulkSnapshotOutcome": "contract_gap",
+    "reportedReason": "structured_task_event_evidence_absent",
+    "actualMessageClass": "Beads bulk show timeout",
+    "updatesWithoutBaseline": "snapshot_required",
+    "hiddenObservationAdvanced": false,
+    "smallTaskReadSucceeded": true
+  },
+  "eventJournal": {
+    "events": 634,
+    "cursorMinimum": 1,
+    "cursorMaximum": 634,
+    "uniqueCursors": 634,
+    "strictlyContiguous": true,
+    "workerEvents": 20,
+    "taskEvents": 592,
+    "alertEvents": 22,
+    "taskEvidence": { "created": 156, "assignment": 145, "progress": 145, "status": 145, "relation": 1 }
+  },
+  "assessment": {
+    "simpleRepairsApplied": [
+      "Rename the packaged skill to pi-team-bright.",
+      "Require team_create before the first team_sync for a new Team.",
+      "Describe atomic claim composition and post-receipt version use.",
+      "Describe timeout reconciliation and retry safety."
+    ],
+    "nontrivialChangesDeferred": [
+      "Persist immutable Task-create operation fingerprints so exact replay does not compare against mutable Task state.",
+      "Persist create-publication state so replay can recover a committed Task whose event or delivery did not publish.",
+      "Represent Task-authority timeout separately from structured_task_event_evidence_absent and graph_conflict.",
+      "Bound or page snapshot Task hydration instead of one bulk show.",
+      "Change Worker timeout failures into typed retry-safe unknown outcomes.",
+      "Change Beads/Dolt authority concurrency or process architecture."
+    ]
+  }
+}

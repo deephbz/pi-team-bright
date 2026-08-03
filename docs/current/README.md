@@ -40,7 +40,7 @@ variables do not.
 | Task authority and mutation semantics | [`src/utils/tasks.ts`](../../src/utils/tasks.ts) and [`src/utils/beads.ts`](../../src/utils/beads.ts) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Human operating introduction | [Repository README](../../README.md) |
-| Agent operating procedure | [`skills/pi-teams/SKILL.md`](../../skills/pi-teams/SKILL.md) |
+| Agent operating procedure | [`skills/pi-team-bright/SKILL.md`](../../skills/pi-team-bright/SKILL.md) |
 
 The [contract source map](../reference.md) gives one-hop navigation without
 restating executable definitions.
@@ -192,29 +192,34 @@ context or the executable contract sources.
 
 ## Constraints and open work
 
-The rc.2 16-Worker stress run found a Beads/Dolt contention tail, but it cannot
-establish rc.3 capacity because it loaded the old extension. Ordinary
-`team_sync` can time out in the underlying Beads read path while Workers settle
-Tasks. The required invariant remains one complete coordination observation or
-no semantic observation. An unavailable Task authority must not advance the
+An active rc.3 ten-Worker stress prefix confirms a Beads/Dolt contention tail
+across every Worker. It also found that exact Task-create replay can return a
+false operation conflict after the created Task evolves, because replay identity
+is inferred from mutable current state. A replayed authority commit can also
+remain without its Task-creation event or delivery because publication state is
+not durable. The immutable-prefix evidence and
+nontrivial repair handoff are in
+[`2026-08-03-stress-team-rc3-investigation-handoff.md`](../journal/2026-08-03-stress-team-rc3-investigation-handoff.md).
+The required observation invariant remains one complete coordination observation
+or no semantic observation. An unavailable Task authority must not advance the
 internal watermark, report zero Tasks, or present the last complete projection
-as fresh. The focused rc.3 regression now proves no watermark advance after a
-failed event read. A traced rc.3 run must measure authority availability before
-any 16-Worker capacity claim.
+as fresh. The focused rc.3 regression proves no watermark advance after a failed
+event read. The active prefix does not establish a final error rate or capacity
+limit.
 
 Next steps:
 
-1. Run a version-asserted rc.3 stress epoch through the required Terra proxy and
-   preserve exact `PI_TEAMS_TRACE_JSONL` evidence.
-2. Measure and repair Beads contention before making a 16-Worker capacity claim.
-3. Repair or explain `structured_task_event_evidence_absent` with runtime
+1. Finish the active rc.3 stress run and preserve its final versioned receipt.
+2. Design immutable Task-create operation identity before changing replay code.
+3. Measure and repair Beads contention before making a Worker-capacity claim.
+4. Repair or explain `structured_task_event_evidence_absent` with runtime
    evidence; do not hide it in the renderer.
-4. Add payload-free outer-operation trace correlation before the representative
+5. Add payload-free outer-operation trace correlation before the representative
    performance epoch.
-5. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
+6. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-6. Restart live Teams as one version epoch after an upgrade or rollback.
-7. Define observation and cleanup for a reserved recovery carrier that never
+7. Restart live Teams as one version epoch after an upgrade or rollback.
+8. Define observation and cleanup for a reserved recovery carrier that never
    publishes runtime evidence. Keep it pending; do not infer readiness or work.
 
 
