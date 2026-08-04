@@ -143,27 +143,52 @@ describe("Worker resource projection", () => {
     expect(refreshed).not.toContain("obsolete-append");
   });
 
-  it("uses public Pi trust decisions for trusted, saved-false, and unknown Workers", () => {
+  it("inherits explicit leader trust for same and different Worker cwds", () => {
     const root = temp();
     const agent = path.join(root, "agent");
     const leader = path.join(root, "leader");
-    const trusted = path.join(root, "trusted");
-    const denied = path.join(root, "denied");
+    const worker = path.join(root, "worker");
+    fs.mkdirSync(agent, { recursive: true });
+    fs.mkdirSync(leader, { recursive: true });
+    fs.mkdirSync(worker, { recursive: true });
+
+    expect(resolveWorkerLaunchResources({ cwd: leader, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent }).projectTrusted).toBe(true);
+    expect(resolveWorkerLaunchResources({ cwd: leader, leaderCwd: leader, leaderProjectTrusted: false, agentDir: agent }).projectTrusted).toBe(false);
+    expect(resolveWorkerLaunchResources({ cwd: worker, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent }).projectTrusted).toBe(true);
+    expect(resolveWorkerLaunchResources({ cwd: worker, leaderCwd: leader, leaderProjectTrusted: false, agentDir: agent }).projectTrusted).toBe(false);
+  });
+
+  it("uses saved decisions for a different Worker cwd and trusts when context is unavailable", () => {
+    const root = temp();
+    const agent = path.join(root, "agent");
+    const leader = path.join(root, "leader");
+    const savedFalse = path.join(root, "saved-false");
+    const savedTrue = path.join(root, "saved-true");
     const unknown = path.join(root, "unknown");
     fs.mkdirSync(agent, { recursive: true });
     fs.mkdirSync(leader, { recursive: true });
-    fs.mkdirSync(trusted, { recursive: true });
-    fs.mkdirSync(denied, { recursive: true });
-    fs.mkdirSync(unknown, { recursive: true });
+    fs.mkdirSync(savedFalse, { recursive: true });
+    fs.mkdirSync(savedTrue, { recursive: true });
+    fs.mkdirSync(path.join(unknown, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(unknown, ".pi", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: "project/model" } },
+    }));
     const trustStore = new ProjectTrustStore(agent);
-    trustStore.set(denied, false);
+    trustStore.set(savedFalse, false);
+    trustStore.set(savedTrue, true);
 
-    expect(resolveWorkerLaunchResources({ cwd: trusted, leaderCwd: trusted, leaderProjectTrusted: true, agentDir: agent }).projectTrusted).toBe(true);
-    expect(resolveWorkerLaunchResources({ cwd: denied, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent }).projectTrusted).toBe(false);
-    const result = resolveWorkerLaunchResources({ cwd: unknown, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent });
-    expect(result.projectTrusted).toBe(false);
-    expect(result.policy.diagnostics).toContain(
-      "Worker cwd has no saved Pi trust decision; launched with --no-approve and global settings only.",
+    expect(resolveWorkerLaunchResources({ cwd: savedFalse, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent }).projectTrusted).toBe(false);
+    expect(resolveWorkerLaunchResources({ cwd: savedTrue, leaderCwd: leader, leaderProjectTrusted: false, agentDir: agent }).projectTrusted).toBe(true);
+
+    const inherited = resolveWorkerLaunchResources({ cwd: unknown, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent });
+    expect(inherited.projectTrusted).toBe(true);
+    expect(inherited.policy.defaultModel).toEqual({ scope: "project", value: "project/model" });
+
+    const fallback = resolveWorkerLaunchResources({ cwd: unknown, leaderCwd: leader, agentDir: agent });
+    expect(fallback.projectTrusted).toBe(true);
+    expect(fallback.policy.defaultModel).toEqual({ scope: "project", value: "project/model" });
+    expect(fallback.policy.diagnostics).toContain(
+      "Worker Pi trust context unavailable; launched with --approve and trusted project settings enabled.",
     );
   });
 

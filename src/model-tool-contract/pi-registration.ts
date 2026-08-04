@@ -77,12 +77,27 @@ export function registerModelToolJourney(
   port: ModelToolTeamPort = new InMemoryModelToolTeamPort(),
 ): RegisteredModelToolJourney {
   const executors = createModelToolJourneyExecutors(port);
-  const leaderSessionId = (ctx: { sessionManager: { getSessionId?: () => string; getSessionFile?: () => string | undefined } }) => {
+  const leaderSessionId = (ctx: {
+    sessionManager: { getSessionId?: () => string; getSessionFile?: () => string | undefined };
+    cwd?: string;
+    isProjectTrusted?: () => unknown;
+  }) => {
     const sessionFile = ctx.sessionManager.getSessionFile?.();
     const rawSessionId = ctx.sessionManager.getSessionId?.() ?? sessionFile;
     if (!rawSessionId) throw new Error("A durable Pi Session identity is required for the model-tool surface.");
     const exact = exactLeaderSessionId(rawSessionId);
     if (sessionFile) port.setLeaderSessionFile?.(exact, sessionFile);
+    let projectTrusted: boolean | undefined;
+    try {
+      const trust = ctx.isProjectTrusted?.();
+      projectTrusted = typeof trust === "boolean" ? trust : undefined;
+    } catch {
+      projectTrusted = undefined;
+    }
+    port.setLeaderLaunchContext?.(exact, {
+      cwd: ctx.cwd ?? process.cwd(),
+      projectTrusted,
+    });
     return exact;
   };
 

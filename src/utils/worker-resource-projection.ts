@@ -134,15 +134,19 @@ export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: b
 export function resolveWorkerLaunchResources(input: {
   cwd: string;
   leaderCwd: string;
-  leaderProjectTrusted: boolean;
+  /** The leader's resolved Pi trust, or undefined when the context is unavailable. */
+  leaderProjectTrusted?: boolean;
   agentDir?: string;
 }): WorkerLaunchResources {
   const sameCwd = path.resolve(input.cwd) === path.resolve(input.leaderCwd);
   const savedTrust = sameCwd ? undefined : savedProjectTrust(input.cwd, input.agentDir);
-  const projectTrusted = sameCwd ? input.leaderProjectTrusted : savedTrust === true;
+  // A saved decision for a different Worker cwd is authoritative. Otherwise
+  // inherit the leader's resolved trust, with the always-trust fallback when
+  // neither Pi context is available.
+  const projectTrusted = savedTrust ?? input.leaderProjectTrusted ?? true;
   const policy = loadWorkerResourcePolicy({ cwd: input.cwd, projectTrusted, agentDir: input.agentDir });
-  if (!sameCwd && savedTrust === undefined) {
-    warn(policy, "Worker cwd has no saved Pi trust decision; launched with --no-approve and global settings only.");
+  if (savedTrust === undefined && input.leaderProjectTrusted === undefined) {
+    warn(policy, "Worker Pi trust context unavailable; launched with --approve and trusted project settings enabled.");
   }
   return {
     aggregatePath: materializeWorkerAggregate({ cwd: input.cwd, policy, agentDir: input.agentDir }),

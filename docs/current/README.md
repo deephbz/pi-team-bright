@@ -140,13 +140,16 @@ restating executable definitions.
   [`src/utils/worker-resource-projection.ts`](../../src/utils/worker-resource-projection.ts),
   wired at Worker session and launch composition in
   [`extensions/index.ts`](../../extensions/index.ts). It reads the active Pi global
-  directory and trusted project settings under `pi_team_bright.worker`. An available
-  `default_model`, split at its first slash into provider and nonempty model ID, is
-  captured on new Membership only after explicit
-  Worker/template and durable Team defaults; invalid settings refuse before carrier
-  creation, while recovery uses the captured Membership model. It never changes
-  native Pi settings, Task, Session, or observation records. This is a Worker launch
-  contract change with no topology change. Intent and reversal criteria are in
+  directory and trusted project settings under `pi_team_bright.worker`. The launch
+  resolves one Pi trust boolean for both trusted project settings and child
+  `--approve`/`--no-approve`: a saved decision for a different Worker cwd wins,
+  otherwise the Worker inherits the leader's resolved trust, with `true` when the
+  trust context is unavailable. An available `default_model`, split at its first
+  slash into provider and nonempty model ID, is captured on new Membership only
+  after explicit Worker/template and durable Team defaults; invalid settings refuse
+  before carrier creation, while recovery uses the captured Membership model. It
+  never changes native Pi settings, Task, Session, or observation records. This is
+  a Worker launch contract change with no topology change. Intent and reversal criteria are in
   [decision 0008](../decisions/0008-worker-resource-projection.md).
 - One current Membership admits one live Pi process generation. The executable
   rule is [`src/utils/runtime.ts`](../../src/utils/runtime.ts), lifecycle wiring
