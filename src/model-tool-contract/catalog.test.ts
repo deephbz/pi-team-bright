@@ -72,9 +72,13 @@ function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_
 }
 
 describe("candidate model-tool catalog", () => {
-  it("creates a Team from only its stable identity and purpose", () => {
+  it("creates a Team from its stable identity, purpose, and optional pane policy", () => {
     const valid = { name: "release-team", purpose: "Prepare and verify the public release." };
     expect(Check(CandidateTeamCreateParametersSchema, valid)).toBe(true);
+    expect(Check(CandidateTeamCreateParametersSchema, {
+      ...valid,
+      pane_layout: { leader_share: 0.7, worker_tiling: "grid" },
+    })).toBe(true);
 
     for (const invalid of [
       {},
@@ -82,6 +86,8 @@ describe("candidate model-tool catalog", () => {
       { purpose: "Prepare and verify the public release." },
       { ...valid, separate_windows: true },
       { ...valid, task_backend: "beads" },
+      { ...valid, pane_layout: { leader_share: 0.59, worker_tiling: "linear" } },
+      { ...valid, pane_layout: { leader_share: 0.7, worker_tiling: "diagonal" } },
     ]) {
       expect(Check(CandidateTeamCreateParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
     }

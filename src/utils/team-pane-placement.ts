@@ -30,5 +30,5 @@ export function teamPanePlacement(
     throw new Error(`Team ${config.name} has overlapping pane targets; refusing Worker spawn.`);
   }
 
-  return { leaderPaneId, workerPaneIds };
+  return { leaderPaneId, workerPaneIds, paneLayout: config.paneLayout };
 }

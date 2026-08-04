@@ -81,9 +81,12 @@ restating executable definitions.
   `ensure_worker.separate_window` is deliberately absent:
   durable Team configuration exclusively owns placement policy. A launch receipt
   may report exact bounded startup observation, but never Worker readiness or
-  progress. Existing absent/false settings mean panes; stop the Team and create
-  a new epoch with `team_create.separate_windows=true` to adopt windows—never
-  edit config or pass a Worker override, and unsupported carriers refuse.
+  progress. Existing absent/false settings mean panes. A Team epoch captures its
+  resolved `pane_layout` once: explicit `team_create.pane_layout`, trusted project
+  `pi_team_bright.team.pane_layout`, global settings, then `{ leader_share: 0.6,
+  worker_tiling: "linear" }`. Settings changes do not move live Teams. Herdr
+  supports `linear` and deterministic `grid`; other pane backends refuse `grid`.
+  Never edit a live TeamConfig or pass a Worker placement override.
 
 ## Current status and anchors
 

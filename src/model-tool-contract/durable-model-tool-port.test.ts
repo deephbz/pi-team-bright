@@ -12,8 +12,10 @@ import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
 import { CANDIDATE_TASK_METADATA_SCHEMA } from "../utils/beads";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { registerModelToolJourney } from "./pi-registration";
+import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 
 const testTeams: string[] = [];
+const paneSettingsRoots: string[] = [];
 
 function teamName(suffix: string): string {
   const name = `durable-model-tool-fence-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
@@ -55,10 +57,69 @@ async function foreignPort(implementationVersion: string | undefined) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  clearAdapterCache();
   for (const name of testTeams.splice(0)) {
     fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
     fs.rmSync(paths.taskDir(name), { recursive: true, force: true });
   }
+  for (const root of paneSettingsRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
+
+async function createTeamWithPaneSettings(projectTrusted?: boolean): Promise<{ result: any; createArgs: any[] }> {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "pi-team-pane-settings-"));
+  paneSettingsRoots.push(root);
+  const agentDir = path.join(root, "agent");
+  const cwd = path.join(root, "leader-project");
+  fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
+    pi_team_bright: { team: { pane_layout: { leader_share: 0.7, worker_tiling: "grid" } } },
+  }));
+  vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+  setAdapter({
+    name: "herdr",
+    isDirectCarrier: () => true,
+    detect: () => true,
+    currentTargetId: () => "leader-pane",
+    spawn: () => "worker-pane",
+    kill() {},
+    isAlive: () => true,
+    setTitle() {},
+    supportsWindows: () => false,
+    spawnWindow: () => { throw new Error("unused"); },
+    setWindowTitle() {},
+    killWindow() {},
+    isWindowAlive: () => false,
+  });
+  vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "abstain", reason: "not_bound" });
+  vi.spyOn(tasks, "resolveTeamTaskAuthority").mockResolvedValue({
+    workspace: path.join(root, "tasks"), authorityId: "authority-pane-settings", fingerprint: {} as any,
+  });
+  let createArgs: any[] | undefined;
+  vi.spyOn(teams, "createTeam").mockImplementation(async (...args: any[]) => {
+    createArgs = args;
+    return { name: args[0], description: args[3], members: [] } as any;
+  });
+  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+  const leaderSessionId = exactLeaderSessionId(`pane-settings-${Date.now()}-${Math.random()}`);
+  port.setLeaderSessionFile(leaderSessionId, path.join(root, "leader.jsonl"));
+  port.setLeaderLaunchContext(leaderSessionId, { cwd, projectTrusted });
+  const result = await port.createTeam(leaderSessionId, { name: `pane-settings-${Date.now()}`, purpose: "Test pane settings." });
+  if (!createArgs) throw new Error("Team creation was not invoked.");
+  return { result, createArgs };
+}
+
+describe("DurableModelToolTeamPort pane settings", () => {
+  it.each([
+    [false, undefined, "linear", 0.6],
+    [true, "grid", "grid", 0.7],
+    [undefined, "grid", "grid", 0.7],
+  ] as const)("uses exact ExtensionContext trust (%s)", async (projectTrusted, expectedTiling, tiling, share) => {
+    const { result, createArgs } = await createTeamWithPaneSettings(projectTrusted);
+    expect(result).toMatchObject({ kind: "created" });
+    expect(createArgs[12]).toEqual({ leader_share: share, worker_tiling: tiling });
+    if (expectedTiling === undefined) expect(createArgs[12].worker_tiling).toBe("linear");
+  });
 });
 
 describe("DurableModelToolTeamPort implementation fence", () => {

@@ -5,6 +5,7 @@ import { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget, LogicalW
 import { assertTerminalTargetShape } from "./terminal-target";
 import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
 import { withLock } from "./lock";
+import { normalizeTeamPaneLayout, type TeamPaneLayout } from "./team-pane-layout";
 
 export interface CutoverMarker {
   state: "prepared" | "active";
@@ -119,6 +120,13 @@ function validateConfigShape(value: Record<string, unknown>, configFile: string)
   if (value.members !== undefined && !Array.isArray(value.members)) throw malformedConfigError(configFile, "members must be an array");
   if (value.terminalBackend !== undefined && (typeof value.terminalBackend !== "string" || !value.terminalBackend)) {
     throw malformedConfigError(configFile, "terminalBackend must be a non-empty string");
+  }
+  if (value.paneLayout !== undefined) {
+    try {
+      normalizeTeamPaneLayout(value.paneLayout, typeof value.terminalBackend === "string" ? value.terminalBackend : undefined);
+    } catch (error) {
+      throw malformedConfigError(configFile, error instanceof Error ? error.message : String(error));
+    }
   }
   if (Array.isArray(value.members)) {
     for (const [index, rawMember] of value.members.entries()) {
@@ -263,6 +271,7 @@ export async function createTeam(
   topologyLease?: TeamTopologyLease,
   terminalBinding?: TeamTerminalBinding,
   implementationVersion?: string,
+  paneLayout?: TeamPaneLayout,
 ): Promise<TeamConfig> {
   if (!topologyLease) {
     return withTeamTopologyLease(name, (lease) => createTeam(
@@ -278,9 +287,17 @@ export async function createTeam(
       lease,
       terminalBinding,
       implementationVersion,
+      paneLayout,
     ));
   }
   assertTopologyLease(name, topologyLease);
+  if (paneLayout) {
+    try {
+      paneLayout = normalizeTeamPaneLayout(paneLayout, terminalBinding?.backend);
+    } catch (error) {
+      throw new Error(`Invalid Team pane layout: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
   if (terminalBinding && (!terminalBinding.backend || typeof terminalBinding.backend !== "string")) {
     throw new Error("Team terminal binding requires a non-empty backend.");
   }
@@ -376,6 +393,7 @@ export async function createTeam(
     ...(terminalBinding ? { terminalBackend: terminalBinding.backend } : {}),
     defaultModel,
     separateWindows,
+    ...(paneLayout ? { paneLayout } : {}),
     ...(taskWorkspace ? { taskBackend: "beads" as const, taskWorkspace, taskAuthorityId, taskAuthorityFingerprint } : {}),
     ...priorAuthority,
   };

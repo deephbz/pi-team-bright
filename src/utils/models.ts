@@ -1,3 +1,5 @@
+import type { TeamPaneLayout } from "./team-pane-layout";
+
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
@@ -70,6 +72,8 @@ export interface TeamConfig {
   members: Member[];
   defaultModel?: string;
   separateWindows?: boolean;
+  /** Resolved once at Team creation; live epochs do not follow later settings changes. */
+  paneLayout?: TeamPaneLayout;
   /** One terminal backend owns every current Member target in this Team epoch. */
   terminalBackend?: string;
   /** Task authority. Omitted means the historical local JSON store. */

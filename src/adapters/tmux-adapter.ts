@@ -6,6 +6,7 @@
 
 import { execSync } from "node:child_process";
 import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
+import { DEFAULT_TEAM_PANE_LAYOUT } from "../utils/team-pane-layout";
 
 export class TmuxAdapter implements TerminalAdapter {
   readonly name = "tmux";
@@ -47,6 +48,10 @@ export class TmuxAdapter implements TerminalAdapter {
       .filter(([k]) => k.startsWith("PI_"))
       .map(([k, v]) => `${k}=${v}`);
     const { leaderPaneId, workerPaneIds } = options.panePlacement;
+    const paneLayout = options.panePlacement.paneLayout ?? DEFAULT_TEAM_PANE_LAYOUT;
+    if (paneLayout.worker_tiling === "grid") {
+      throw new Error("Pane worker_tiling=grid is unsupported by terminal backend tmux; use worker_tiling=linear or a Herdr Team.");
+    }
     const workerPaneId = workerPaneIds.at(-1);
     const targetPaneId = workerPaneId ?? leaderPaneId;
 
@@ -68,7 +73,9 @@ export class TmuxAdapter implements TerminalAdapter {
     const tmuxArgs = [
       "split-window",
       workerPaneId ? "-v" : "-h",
-      ...(workerPaneId ? [] : ["-l", "40%"]),
+      // tmux sizes the new Worker pane. Floor it so the rendered leader keeps
+      // at least the requested share when the percentage is not an integer.
+      ...(workerPaneId ? [] : ["-l", `${Math.floor((1 - paneLayout.leader_share) * 100)}%`]),
       "-dP",
       "-F", "#{pane_id}",
       "-t", targetPaneId,

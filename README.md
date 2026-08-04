@@ -79,8 +79,9 @@ based substitute for Tasks.
   cross-Team router, universal chat bus, or freeform work-by-message system.
 - **Terminal capabilities vary.** Herdr and tmux enforce the Team pane-placement
   invariant: the first Worker splits the exact leader pane right with a measured
-  ratio that keeps the leader at least 60% wide, and later Workers split an exact current Worker pane down only after
-  proving it remains in the leader tab and Worker region. They never use terminal
+  ratio that keeps the leader at least 60% wide. Linear placement splits an exact
+  current Worker pane down; Herdr grid placement creates a deterministic Worker
+  grid. Every target is checked against the leader tab and Worker region. They never use terminal
   focus, select a whole-window layout, or close another pane during
   Worker stop. iTerm2, Zellij, cmux, WezTerm, and Windows preserve their existing
   placement behavior but do not guarantee this exact target-and-ratio invariant.
@@ -124,6 +125,27 @@ For an upgrade or rollback, first resolve nonterminal Tasks and stop the live
 Team. Install the chosen version for every participant, then create a new
 single-version Team epoch. Do not update members one at a time while the Team
 is live.
+
+## Team pane layout settings
+
+Set the optional Team policy under `pi_team_bright.team` in global
+`settings.json` or a trusted project's `.pi/settings.json`:
+
+```json
+{
+  "pi_team_bright": {
+    "team": {
+      "pane_layout": { "leader_share": 0.65, "worker_tiling": "grid" }
+    }
+  }
+}
+```
+
+`team_create.pane_layout` takes precedence over trusted project settings, then
+global settings, then `{ "leader_share": 0.6, "worker_tiling": "linear" }`.
+Herdr supports `linear` and `grid`; other pane backends support `linear` only.
+The resolved policy is stored in `TeamConfig`, so later settings changes do not
+move a live Team. Stop and recreate the Team to apply a new policy.
 
 ## Worker resource settings
 

@@ -127,6 +127,68 @@ describe("HerdrAdapter", () => {
     ]);
   });
 
+  it("refuses a narrow pane when a valid high leader share rounds to 100%", () => {
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        panes: [{ pane_id: "pane-origin", rect: { width: 5 } }],
+      } }));
+
+    expect(() => adapter.spawn({
+      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-origin", workerPaneIds: [],
+        paneLayout: { leader_share: 0.9, worker_tiling: "linear" },
+      },
+    })).toThrow(/too narrow.*Worker region/i);
+    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
+  });
+
+  it("places four grid Workers as a stable 2x2 Worker region", () => {
+    const layout = success({ type: "pane_layout", layout: {
+      tab_id: "tab-a", workspace_id: "w4",
+      panes: [
+        { pane_id: "pane-leader", rect: { x: 0, width: 60 } },
+        { pane_id: "pane-worker-1", rect: { x: 60, width: 20 } },
+        { pane_id: "pane-worker-2", rect: { x: 60, width: 20 } },
+        { pane_id: "pane-worker-3", rect: { x: 80, width: 20 } },
+      ],
+    } });
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: { panes: [{ pane_id: "pane-leader", rect: { width: 100 } }] } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-1" } }))
+      .mockReturnValueOnce(success({ agent: { pane_id: "pane-worker-1" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-2" } }))
+      .mockReturnValueOnce(success({ agent: { pane_id: "pane-worker-2" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-3" } }))
+      .mockReturnValueOnce(success({ agent: { pane_id: "pane-worker-3" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2", tab_id: "tab-a", workspace_id: "w4" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-4" } }))
+      .mockReturnValueOnce(success({ agent: { pane_id: "pane-worker-4" } }));
+
+    const placement = { leaderPaneId: "pane-leader", paneLayout: { leader_share: 0.6, worker_tiling: "grid" as const } };
+    expect(adapter.spawn({ name: "worker-1", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: [] } })).toBe("pane-worker-1");
+    expect(adapter.spawn({ name: "worker-2", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: ["pane-worker-1"] } })).toBe("pane-worker-2");
+    expect(adapter.spawn({ name: "worker-3", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: ["pane-worker-1", "pane-worker-2"] } })).toBe("pane-worker-3");
+    expect(adapter.spawn({ name: "worker-4", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: ["pane-worker-1", "pane-worker-2", "pane-worker-3"] } })).toBe("pane-worker-4");
+
+    expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "pane" && args[1] === "split").map(([, args]: [string, string[]]) => args)).toEqual([
+      expect.arrayContaining(["--pane", "pane-leader", "--direction", "right"]),
+      expect.arrayContaining(["--pane", "pane-worker-1", "--direction", "down"]),
+      expect.arrayContaining(["--pane", "pane-worker-1", "--direction", "right"]),
+      expect.arrayContaining(["--pane", "pane-worker-2", "--direction", "right"]),
+    ]);
+  });
+
   it("refuses a stale exact Team Worker target without falling back to the leader", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))

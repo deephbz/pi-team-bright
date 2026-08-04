@@ -1,4 +1,5 @@
 import { Type } from "typebox";
+import { TeamPaneLayoutSchema } from "../utils/team-pane-layout";
 import {
   CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
   CandidateTaskCurrentContextSchema,
@@ -303,6 +304,7 @@ export const CandidateAlertDeltaSchema = Type.Object({
 export const CandidateTeamCreateParametersSchema = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   purpose: Type.String({ minLength: 1, description: "The long-lived Team outcome and operating boundary." }),
+  pane_layout: Type.Optional(TeamPaneLayoutSchema),
 }, {
   additionalProperties: false,
   description: "Create one long-lived Team and bind the exact calling Session as its leader.",
