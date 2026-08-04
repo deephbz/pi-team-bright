@@ -161,6 +161,13 @@ export type AlertTarget =
   | { kind: "worker"; name: string }
   | { kind: "team" };
 
+export interface ModelToolLeaderLaunchContext {
+  /** Exact leader cwd used for Worker launch trust resolution. */
+  cwd: string;
+  /** Resolved Pi trust, or undefined when the ExtensionContext lacks it. */
+  projectTrusted?: boolean;
+}
+
 export interface ModelToolTeamPort {
   createTeam(
     leaderSessionId: ExactLeaderSessionId,
@@ -201,6 +208,7 @@ export interface ModelToolTeamPort {
   ): boolean;
   setBranchContext(leaderSessionId: ExactLeaderSessionId, branchIds: string[]): void;
   setLeaderSessionFile?(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void;
+  setLeaderLaunchContext?(leaderSessionId: ExactLeaderSessionId, context: ModelToolLeaderLaunchContext): void;
   acknowledgePendingObservationAsync?(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): Promise<boolean>;
   getPendingObservation?(leaderSessionId: ExactLeaderSessionId): PendingObservation | undefined;
   readonly readDebugRevision?: () => number;

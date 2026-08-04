@@ -23,6 +23,7 @@ import {
 } from "../utils/hidden-observation";
 import type {
   ExactLeaderSessionId,
+  ModelToolLeaderLaunchContext,
   ModelToolTaskCurrent,
   ModelToolTaskJournalEntry,
   ModelToolTeamCurrent,
@@ -87,6 +88,11 @@ function workerCarrier(member: Member | undefined): ModelToolWorkerCurrent["carr
   return member.sessionFile ? "connected" : member.pendingLaunchId ? "starting" : "absent";
 }
 
+function resolveWorkerAggregate(cwd: string, leaderCwd: string, leaderProjectTrusted?: boolean) {
+  const resources = resolveWorkerLaunchResources({ cwd, leaderCwd, leaderProjectTrusted });
+  return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
+}
+
 function isMissingTask(error: unknown): boolean {
   if (error instanceof BeadsError) return /not found|missing|does not exist/i.test(error.message);
   return error instanceof Error && /not found|missing|does not exist/i.test(error.message);
@@ -108,6 +114,7 @@ function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "crea
  */
 export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private readonly sessionFiles = new Map<ExactLeaderSessionId, string>();
+  private readonly leaderLaunchContexts = new Map<ExactLeaderSessionId, ModelToolLeaderLaunchContext>();
   private readonly branchIds = new Map<ExactLeaderSessionId, string[]>();
   private readonly pending = new Map<ExactLeaderSessionId, PendingDurableObservation>();
   private readonly defaultLaunchBridge = createWorkerLaunchBridge({
@@ -124,14 +131,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     },
     resolveModel: () => null,
     resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
-    workerAggregate: (cwd) => {
-      const resources = resolveWorkerLaunchResources({
-        cwd,
-        leaderCwd: process.cwd(),
-        leaderProjectTrusted: false,
-      });
-      return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
-    },
+    workerAggregate: (cwd) => resolveWorkerAggregate(cwd, process.cwd()),
   });
   private readonly launchBridge: WorkerLaunchBridge;
   private readonly lifecycle?: ModelToolLifecycle;
@@ -143,6 +143,10 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
 
   setLeaderSessionFile(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void {
     this.sessionFiles.set(leaderSessionId, sessionFile);
+  }
+
+  setLeaderLaunchContext(leaderSessionId: ExactLeaderSessionId, context: ModelToolLeaderLaunchContext): void {
+    this.leaderLaunchContexts.set(leaderSessionId, context);
   }
 
   async createTeam(
@@ -199,13 +203,16 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const logical = await teams.ensureLogicalWorker(bound.teamName, { name: input.name, scope: input.scope });
     if (logical.kind === "contract_gap") return { kind: "no_active_team" };
     if (logical.kind === "scope_conflict") return { kind: "scope_conflict", worker: { name: logical.worker.name, scope: logical.worker.scope, carrier: "absent" } };
+    const launchContext = this.leaderLaunchContexts.get(leaderSessionId);
+    const leaderCwd = launchContext?.cwd ?? process.cwd();
     let launch;
     try {
       launch = await this.launchBridge.ensureWorker({
         teamName: bound.teamName,
         workerName: input.name,
         scope: logical.worker.scope,
-        cwd: process.cwd(),
+        cwd: leaderCwd,
+        workerAggregate: (cwd) => resolveWorkerAggregate(cwd, leaderCwd, launchContext?.projectTrusted),
         launchEnvironment: { [MODEL_TOOL_WORKER_MARKER]: "1" },
       });
     } catch (error) {

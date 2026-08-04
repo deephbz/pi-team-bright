@@ -619,11 +619,20 @@ export default function (pi: ExtensionAPI) {
   let workerActiveToolBaseline: string[] | undefined;
   let alertToolRegistration: { description: string; parameters: unknown } | undefined;
 
+  function projectTrust(ctx: any): boolean | undefined {
+    try {
+      const trust = ctx?.isProjectTrusted?.();
+      return typeof trust === "boolean" ? trust : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   function workerAggregate(cwd: string, ctx: any): WorkerAggregate {
     const resources = resolveWorkerLaunchResources({
       cwd,
       leaderCwd: ctx.cwd ?? process.cwd(),
-      leaderProjectTrusted: ctx.isProjectTrusted?.() === true,
+      leaderProjectTrusted: projectTrust(ctx),
     });
     for (const message of resources.policy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
     return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
@@ -639,7 +648,9 @@ export default function (pi: ExtensionAPI) {
     },
     resolveModel: resolveModelWithProvider,
     resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
-    workerAggregate: (cwd) => workerAggregate(cwd, { cwd, isProjectTrusted: () => false }),
+    // No leader context exists on this fallback path; the resolver applies the
+    // authorized always-trust default instead of manufacturing false.
+    workerAggregate: (cwd) => workerAggregate(cwd, { cwd }),
   });
 
   let modelToolLifecycleAdapter: ModelToolLifecycle | undefined;
@@ -707,7 +718,7 @@ export default function (pi: ExtensionAPI) {
   function configureWorkerResources(ctx: any): void {
     if (!isTeammate) return;
     const cwd = ctx.cwd ?? process.cwd();
-    workerResourcePolicy = loadWorkerResourcePolicy({ cwd, projectTrusted: ctx.isProjectTrusted?.() === true });
+    workerResourcePolicy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) ?? true });
     // Capture this once, before this extension projects settings. Reload always
     // derives from it so removing settings restores Pi's active-tool baseline.
     workerActiveToolBaseline ??= pi.getActiveTools?.() ?? [];
@@ -1110,8 +1121,7 @@ export default function (pi: ExtensionAPI) {
       const aggregate = process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
       if (aggregate && ownsWorkerAggregate(aggregate)) {
         const cwd = ctx.cwd ?? process.cwd();
-        const trusted = ctx.isProjectTrusted?.() === true;
-        const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: trusted });
+        const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) ?? true });
         // Keep the fixed CLI path, but overwrite it atomically even if both
         // entries disappeared. Pi reload then sees native global/ancestor/project content.
         materializeWorkerAggregate({ cwd, policy, target: aggregate, force: true });

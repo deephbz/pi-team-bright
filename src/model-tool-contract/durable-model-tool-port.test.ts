@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import * as alerts from "../utils/alerts";
 import * as paths from "../utils/paths";
 import * as tasks from "../utils/tasks";
@@ -10,6 +11,7 @@ import { exactLeaderSessionId } from "./in-memory-team-port";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
 import { CANDIDATE_TASK_METADATA_SCHEMA } from "../utils/beads";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
+import { registerModelToolJourney } from "./pi-registration";
 
 const testTeams: string[] = [];
 
@@ -90,6 +92,47 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       reason: "candidate_metadata_invalid",
     });
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+  });
+
+  it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
+    const { name, port, leaderSessionId, launchBridge } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const cwd = path.join(paths.teamDir(name), "leader-cwd");
+    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: "project/model" } },
+    }));
+    launchBridge.ensureWorker.mockResolvedValue({
+      action: "created",
+      member: { name: "worker", agentType: "teammate", sessionFile: "/tmp/model-tool-worker.jsonl" },
+      membershipId: "membership-model-tool",
+      target: { backend: "fixture", kind: "pane", targetId: "pane-model-tool" },
+      startup: { observed: true },
+    } as any);
+    const tools = new Map<string, any>();
+    registerModelToolJourney({ registerTool: (tool) => tools.set(tool.name, tool) }, port);
+
+    await tools.get("ensure_worker").execute(
+      "ensure-model-tool-worker",
+      { name: "worker", scope: "fixture scope" },
+      undefined,
+      undefined,
+      {
+        cwd,
+        isProjectTrusted: () => projectTrusted,
+        sessionManager: {
+          getSessionId: () => leaderSessionId,
+          getSessionFile: () => `/tmp/${name}-lead.jsonl`,
+        },
+      },
+    );
+
+    expect(launchBridge.ensureWorker).toHaveBeenCalledOnce();
+    const request = launchBridge.ensureWorker.mock.calls[0][0];
+    expect(request.cwd).toBe(cwd);
+    expect(request.workerAggregate(cwd)).toMatchObject({
+      projectTrusted,
+      defaultModel: projectTrusted ? { scope: "project", value: "project/model" } : undefined,
+    });
   });
 
   it("does not advance the hidden watermark when event consumption fails", async () => {

@@ -27,9 +27,11 @@ ancestor/project context rather than leaving stale Worker content. A final
 Worker shutdown removes the disposable file on a best-effort basis. A failed
 launch removes it only after no carrier exists or terminal stop is confirmed;
 a possibly live carrier retains its aggregate lease. The same resolved trust
-boolean controls aggregate materialization and child `--approve` or `--no-approve`. Settings and saved trust
-changes apply on Worker restart; an unknown cwd starts conservatively with
-`--no-approve`.
+boolean controls trusted project settings and child `--approve` or
+`--no-approve`. A saved trust decision for a different Worker cwd wins;
+otherwise the Worker inherits the leader's resolved Pi trust. If that context
+is unavailable, the always-trust environment uses `true` and `--approve`.
+Settings and saved trust changes apply on Worker restart.
 
 Malformed settings, unavailable files, and unknown tools yield at most eight
 nonfatal diagnostics. They never stop orchestration. Reconsider this decision
