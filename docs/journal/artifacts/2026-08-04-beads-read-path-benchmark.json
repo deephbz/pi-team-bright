@@ -1,0 +1,84 @@
+{
+  "schema": "pi-team-bright-beads-read-path-benchmark/1",
+  "recorded_at": "2026-08-04",
+  "mode": "read_only",
+  "environment": {
+    "pi_team_bright_source_commit": "800c143eac246dfae0534d53ad82e1eaad021669",
+    "node": "v25.6.0",
+    "platform": "Darwin-arm64",
+    "native_beads": {
+      "version": "1.1.0",
+      "commit": "8e4e59d39f3459a43cf21a3236a13eca4dd874f7"
+    }
+  },
+  "workloads": [
+    {
+      "name": "stopped-18-task-authority-no-relations",
+      "task_count": 18,
+      "writes_during_measurement": 0,
+      "measurements_ms": {
+        "bd_version_range": [80, 85],
+        "team_labeled_list_range": [325, 341],
+        "multi_id_show_default_range": [4100, 4300],
+        "multi_id_show_long_comments_dependents_range": [5260, 5710],
+        "eighteen_sequential_long_comments_dependents_shows_range": [8250, 8480],
+        "current_snapshot_beads_chain_lower_bound_range": [13870, 14230],
+        "observed_snapshot_samples": [13930, 14150],
+        "single_comparison_run": {
+          "show_default": 4227,
+          "show_include_dependents": 4838,
+          "show_include_comments": 4859,
+          "show_include_comments_and_dependents": 5857,
+          "show_long_include_comments_and_dependents": 6256
+        },
+        "export_range": [383, 405]
+      },
+      "output_checks": {
+        "show_long_changed_json": false,
+        "show_both_minus_comments_equaled_show_dependents": true,
+        "beads_comment_rows": 0,
+        "beads_dependent_rows": 0
+      }
+    },
+    {
+      "name": "stopped-18-task-subset-with-chain-relations",
+      "task_count": 18,
+      "writes_during_measurement": 0,
+      "measurements_ms": {
+        "show_default": 4638,
+        "show_include_dependents": 5338,
+        "show_include_comments_and_dependents": 5871
+      },
+      "output_checks": {
+        "dependency_rows": 18,
+        "dependent_rows_with_flag": 17,
+        "beads_comment_rows": 0,
+        "show_both_minus_comments_equaled_show_dependents": true
+      }
+    },
+    {
+      "name": "stopped-160-task-chain-authority",
+      "task_count": 160,
+      "dependency_edges": 159,
+      "writes_during_measurement": 0,
+      "measurements_ms": {
+        "export_prior_cold": 811,
+        "export_prior_warm": 434,
+        "export_later_sample": 1035
+      },
+      "export": {
+        "records": 160,
+        "bytes_later_sample": 198428,
+        "dependency_edges_present": 159,
+        "candidate_metadata_present": true,
+        "labels_present": true
+      }
+    }
+  ],
+  "limitations": [
+    "These are local diagnostic samples, not a statistically powered capacity benchmark.",
+    "The authorities were stopped, so the samples do not measure concurrent writers.",
+    "Export timing does not prove semantic equivalence with show.",
+    "Task identifiers and local authority paths are intentionally omitted."
+  ]
+}

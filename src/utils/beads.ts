@@ -598,7 +598,7 @@ export class BeadsTaskStore {
     const safeIds = [...new Set(taskIds.map((taskId) => sanitizeName(taskId)))];
     if (safeIds.length === 0) return [];
     const result = await this.command<RawBead[]>([
-      "show", ...safeIds, "--long", "--include-comments", "--include-dependents",
+      "show", ...safeIds, "--include-dependents",
     ]);
     if (!Array.isArray(result)) {
       throw new BeadsError("Beads show returned a non-array JSON value.", "malformed", `bd show ${safeIds.join(" ")}`);
@@ -726,15 +726,23 @@ export class BeadsTaskStore {
     return mapTask(await this.showRaw(taskId));
   }
 
-  /** Read the canonical candidate payload without projecting compatibility fields. */
-  async readCandidateTaskAuthorityRecord(taskId: string): Promise<CandidateTaskAuthorityRecord> {
-    const raw = await this.showRaw(taskId);
+  private candidateTaskAuthorityRecord(raw: RawBead): CandidateTaskAuthorityRecord {
     return {
       task: mapTask(raw),
       ...(raw.metadata && CANDIDATE_TASK_METADATA_KEY in raw.metadata
         ? { candidateMetadata: raw.metadata[CANDIDATE_TASK_METADATA_KEY] }
         : {}),
     };
+  }
+
+  /** Read the canonical candidate payload without projecting compatibility fields. */
+  async readCandidateTaskAuthorityRecord(taskId: string): Promise<CandidateTaskAuthorityRecord> {
+    return this.candidateTaskAuthorityRecord(await this.showRaw(taskId));
+  }
+
+  /** Hydrate candidate payloads with one Beads authority query. */
+  async readCandidateTaskAuthorityRecords(taskIds: readonly string[]): Promise<CandidateTaskAuthorityRecord[]> {
+    return (await this.showManyRaw(taskIds)).map((raw) => this.candidateTaskAuthorityRecord(raw));
   }
 
   /** Hydrate several exact Task revisions with one Beads authority query. */

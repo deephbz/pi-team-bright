@@ -1,0 +1,132 @@
+{
+  "schema": "pi-team-bright-snapshot-e2e-result/1",
+  "benchmark": "snapshot-e2e-20260804",
+  "git": {
+    "head": "800c143eac246dfae0534d53ad82e1eaad021669",
+    "working_tree_diff_sha256": "7d84de665ff4070d3c01f3220aa268945ea1a69706ed5c6b7a64c109428d385a",
+    "working_tree_status_entry_count": 12
+  },
+  "environment": {
+    "node": "v25.6.0",
+    "platform": "darwin-arm64",
+    "native_bd_version": "bd version 1.1.0 (8e4e59d39)"
+  },
+  "counts": {
+    "teams": 1,
+    "workers": 6,
+    "fixture_tasks": 18,
+    "fixture_tasks_closed": 18
+  },
+  "baseline_rc4_wall_duration_ms": [
+    13930,
+    14150
+  ],
+  "prediction_wall_duration_ms": [
+    5200,
+    5700
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "label": "cold",
+      "wall_duration_ms": 5317,
+      "trace": {
+        "record_count": 2,
+        "bd_call_count": 2,
+        "commands": [
+          {
+            "operation": "candidate_task_list",
+            "command": "list",
+            "duration_ms": 328,
+            "trace_duration_ms": 329
+          },
+          {
+            "operation": "candidate_task_read_many",
+            "command": "show",
+            "duration_ms": 4969,
+            "trace_duration_ms": 4969
+          }
+        ]
+      },
+      "output_complete": true
+    },
+    {
+      "run": 2,
+      "label": "warm",
+      "wall_duration_ms": 4867,
+      "trace": {
+        "record_count": 2,
+        "bd_call_count": 2,
+        "commands": [
+          {
+            "operation": "candidate_task_list",
+            "command": "list",
+            "duration_ms": 310,
+            "trace_duration_ms": 310
+          },
+          {
+            "operation": "candidate_task_read_many",
+            "command": "show",
+            "duration_ms": 4542,
+            "trace_duration_ms": 4544
+          }
+        ]
+      },
+      "output_complete": true
+    },
+    {
+      "run": 3,
+      "label": "warm",
+      "wall_duration_ms": 5197,
+      "trace": {
+        "record_count": 2,
+        "bd_call_count": 2,
+        "commands": [
+          {
+            "operation": "candidate_task_list",
+            "command": "list",
+            "duration_ms": 333,
+            "trace_duration_ms": 333
+          },
+          {
+            "operation": "candidate_task_read_many",
+            "command": "show",
+            "duration_ms": 4847,
+            "trace_duration_ms": 4848
+          }
+        ]
+      },
+      "output_complete": true
+    }
+  ],
+  "wall_duration_ms": {
+    "values": [
+      5317,
+      4867,
+      5197
+    ],
+    "min": 4867,
+    "median": 5197,
+    "max": 5317
+  },
+  "trace_validation": {
+    "trace_record_count": 6,
+    "candidate_task_list_records": 3,
+    "candidate_task_read_many_records": 3,
+    "candidate_task_read_records": 0,
+    "extra_bd_calls": 0,
+    "valid": true
+  },
+  "output_completeness": {
+    "all_snapshots_complete": true,
+    "workers_per_snapshot": 6,
+    "tasks_per_snapshot": 18
+  },
+  "limitations": [
+    "Three samples on one Darwin arm64 host are not a capacity result.",
+    "The first sample is cold; the other two are warm.",
+    "All fixture Tasks were terminal and no concurrent Task writes ran during the three snapshots.",
+    "The working tree had pre-existing diff entries; this artifact records their SHA-256 for later comparison.",
+    "Trace command timing covers only the two recorded native Beads commands per run."
+  ]
+}

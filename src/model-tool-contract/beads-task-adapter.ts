@@ -16,6 +16,7 @@ import {
   applySemanticTaskUpdate,
   createTask,
   readCandidateTaskAuthorityRecord,
+  readCandidateTaskAuthorityRecords,
   type InternalTaskPublicationOptions,
   type TaskCreateReceipt,
   type SemanticTaskUpdateResult,
@@ -87,6 +88,8 @@ export type CandidateTaskUpdateOutcome =
 export interface CandidateTaskAdapterAuthority {
   create(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
   read(taskId: string): Promise<CandidateTaskAuthorityRecord>;
+  /** Batch candidate hydration over the existing native multi-ID show seam. */
+  readMany?(taskIds: readonly string[]): Promise<CandidateTaskAuthorityRecord[]>;
   update?(taskId: string, input: ModelToolTaskUpdateInput, metadata: CandidateTaskMetadata): Promise<SemanticTaskUpdateResult>;
 }
 
@@ -237,10 +240,16 @@ function projectTask(task: TaskFile, metadata: CandidateTaskMetadata): ModelTool
   };
 }
 
+function projectCandidateTaskRecord(record: CandidateTaskAuthorityRecord): CandidateTaskReadOutcome {
+  const metadata = parseCandidateTaskMetadata(record);
+  return "kind" in metadata ? metadata : { kind: "found", task: projectTask(record.task, metadata) };
+}
+
 function defaultAuthority(teamName: string, actor: string): CandidateTaskAdapterAuthority {
   return {
     create: (input, publication) => createTask(teamName, input, { actor }, publication),
     read: (taskId) => readCandidateTaskAuthorityRecord(teamName, taskId),
+    readMany: (taskIds) => readCandidateTaskAuthorityRecords(teamName, taskIds),
     update: (taskId, input, metadata) => applySemanticTaskUpdate(teamName, taskId, {
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.journalEntries?.length ? { appendNote: input.journalEntries.map((entry) => `[${entry.kind}] ${entry.text}`).join("\\n") } : {}),
@@ -321,8 +330,15 @@ export class CandidateBeadsTaskAdapter {
 
   async read(taskId: string): Promise<CandidateTaskReadOutcome> {
     const record = await this.authority.read(taskId);
-    const metadata = parseCandidateTaskMetadata(record);
-    return "kind" in metadata ? metadata : { kind: "found", task: projectTask(record.task, metadata) };
+    return projectCandidateTaskRecord(record);
+  }
+
+  /** Project all candidate records without changing gap or version semantics. */
+  async readMany(taskIds: readonly string[]): Promise<CandidateTaskReadOutcome[]> {
+    const records = this.authority.readMany
+      ? await this.authority.readMany(taskIds)
+      : await Promise.all(taskIds.map((taskId) => this.authority.read(taskId)));
+    return records.map(projectCandidateTaskRecord);
   }
 
   async update(input: ModelToolTaskUpdateInput): Promise<CandidateTaskUpdateOutcome> {

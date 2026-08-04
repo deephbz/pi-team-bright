@@ -111,7 +111,7 @@ describe("Round 3 canonical Task revision and delivery dedupe", () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run.mock.calls[0][0]).toEqual([
       "--directory", "/tmp/version-round3", "--json",
-      "show", "task-first", "task-second", "--long", "--include-comments", "--include-dependents",
+      "show", "task-first", "task-second", "--include-dependents",
     ]);
   });
 

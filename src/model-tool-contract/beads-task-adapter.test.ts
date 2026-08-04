@@ -194,6 +194,90 @@ describe("durable candidate Task adapter", () => {
     });
   });
 
+  it("hydrates a snapshot candidate set with one multi-ID show and preserves metadata gaps", async () => {
+    const ids = ["candidate-task-1", "candidate-task-2"];
+    const commands: string[][] = [];
+    const runner: BdRunner = {
+      run: vi.fn(async (args) => {
+        commands.push(args);
+        const operation = args[3];
+        if (operation === "list") {
+          return {
+            stdout: JSON.stringify(ids.map((id) => ({
+              id,
+              title: id,
+              status: "open",
+              labels: ["pi-teams:candidate-team"],
+              metadata: {
+                pi_teams_team: "candidate-team",
+                [CANDIDATE_TASK_METADATA_KEY]: metadata(),
+              },
+            }))),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        if (operation === "show") {
+          return {
+            stdout: JSON.stringify(ids.map((id) => ({
+              id,
+              title: id,
+              status: "open",
+              labels: ["pi-teams:candidate-team"],
+              metadata: {
+                pi_teams_team: "candidate-team",
+                ...(id === "candidate-task-1" ? { [CANDIDATE_TASK_METADATA_KEY]: metadata() } : {}),
+              },
+            }))),
+            stderr: "",
+            exitCode: 0,
+          };
+        }
+        throw new Error(`unexpected bd operation: ${operation}`);
+      }),
+    };
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
+    const listed = await store.list();
+    const records = await store.readCandidateTaskAuthorityRecords(listed.map((candidate) => candidate.id));
+
+    const listCommands = commands.filter((args) => args[3] === "list");
+    const showCommands = commands.filter((args) => args[3] === "show");
+    expect(listCommands).toHaveLength(1);
+    expect(listCommands[0]).toEqual([
+      "--directory", "/tmp/candidate-team-authority", "--json",
+      "list", "--label", "pi-teams:candidate-team", "--all", "--no-pager", "--limit", "0",
+    ]);
+    expect(showCommands).toHaveLength(1);
+    expect(showCommands[0]).toEqual([
+      "--directory", "/tmp/candidate-team-authority", "--json",
+      "show", ...ids, "--include-dependents",
+    ]);
+    expect(showCommands.filter((args) => ids.filter((id) => args.includes(id)).length === 1)).toHaveLength(0);
+    expect(records).toHaveLength(2);
+    expect(records[0].candidateMetadata).toEqual(metadata());
+    expect(records[1]).not.toHaveProperty("candidateMetadata");
+  });
+
+  it("projects batched candidate records with the same found and gap semantics", async () => {
+    const read = vi.fn(async (taskId: string) => authorityRecord(metadata(`${taskId} context`)));
+    const readMany = vi.fn(async (taskIds: readonly string[]) => taskIds.map((taskId) => ({
+      ...authorityRecord(taskId === "candidate-task-2" ? undefined : metadata(`${taskId} context`)),
+      task: task({ id: taskId }),
+    })));
+    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
+      create: vi.fn(async () => receipt(task())),
+      read,
+      readMany,
+    });
+
+    await expect(adapter.readMany(["candidate-task-1", "candidate-task-2"])).resolves.toMatchObject([
+      { kind: "found", task: { id: "candidate-task-1", current_context: "candidate-task-1 context" } },
+      { kind: "contract_gap", reason: "candidate_metadata_absent", taskId: "candidate-task-2" },
+    ]);
+    expect(readMany).toHaveBeenCalledOnce();
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("accepts 2,000 TypeBox string units and maps oversized external context to a typed read gap", async () => {
     const records = [
       authorityRecord(metadata("a".repeat(2_000))),

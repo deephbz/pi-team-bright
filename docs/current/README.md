@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -191,9 +191,16 @@ context or the executable contract sources.
 The completed rc.3 ten-Worker stress run closed all 160 Tasks, applied the full
 159-edge dependency chain, stopped all Workers, and shut down with no unfinished
 Task IDs. It also confirmed the Beads/Dolt contention tail and the unavailable
-bulk snapshot path at this scale. Exact create replay can still return a false
-operation conflict after its Task evolves, and a replayed authority commit can
-remain without its Task-creation event or delivery. The final assessment is
+bulk snapshot path at this scale. The maintained snapshot path now selects
+Team-scoped candidate IDs with `bd list` and hydrates candidate metadata with
+one native multi-ID `bd show`; it must not regress to N+1 external CLI calls. The
+[source and benchmark investigation](../journal/2026-08-04-beads-read-path-investigation.md)
+shows that native `show` still loops per ID, while bulk export is faster but not
+semantically equivalent. Three full 18-Task snapshots then measured a
+5.197-second median against the rc.4 baseline mean of 14.040 seconds: a 63.0%
+latency reduction and 2.70x speedup. Exact create replay can still return a false operation
+conflict after its Task evolves, and a replayed authority commit can remain without its Task-creation
+event or delivery. The final assessment is
 [`2026-08-03-rc3-stress-final-assessment.md`](../journal/2026-08-03-rc3-stress-final-assessment.md).
 The nontrivial repair design remains in
 [`2026-08-03-stress-team-rc3-investigation-handoff.md`](../journal/2026-08-03-stress-team-rc3-investigation-handoff.md).

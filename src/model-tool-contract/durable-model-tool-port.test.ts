@@ -62,17 +62,8 @@ afterEach(() => {
 describe("DurableModelToolTeamPort implementation fence", () => {
   it("fails closed on one externally oversized candidate Task without staging a partial snapshot", async () => {
     const { port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
-    vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([{
-      id: "invalid-task",
-      title: "Invalid external context",
-      description: "Compatibility text",
-      acceptanceCriteria: "Compatibility text",
-      status: "open",
-      relations: [],
-      version: "beads_invalid_task",
-      provenance: { authority: "beads", teamName: testTeams[testTeams.length - 1] },
-    }]);
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecord").mockResolvedValue({
+    vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue(["invalid-task"]);
+    vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockResolvedValue([{
       task: {
         id: "invalid-task",
         title: "Invalid external context",
@@ -88,7 +79,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         goal: "Keep the Team observation coherent.",
         current_context: "👩🏽‍🚀".repeat(2_001),
       },
-    });
+    }]);
 
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
       kind: "contract_gap",
@@ -114,15 +105,15 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       version: "beads_watermark_v1",
       provenance: { authority: "beads" as const, teamName: name },
     };
-    vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([task]);
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecord").mockResolvedValue({
+    vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue([task.id]);
+    vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockResolvedValue([{
       task,
       candidateMetadata: {
         schema: CANDIDATE_TASK_METADATA_SCHEMA,
         goal: "Keep the hidden watermark safe.",
         current_context: "No event read has failed yet.",
       },
-    });
+    }]);
 
     const snapshot = await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     expect(snapshot).toMatchObject({ kind: "snapshot", head: 0 });
@@ -207,15 +198,15 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       version: "beads_context_changed",
       provenance: { authority: "beads" as const, teamName: name },
     };
-    vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([task]);
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecord").mockImplementation(async () => ({
+    vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue([task.id]);
+    vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockImplementation(async () => ([{
       task,
       candidateMetadata: {
         schema: CANDIDATE_TASK_METADATA_SCHEMA,
         goal: "Keep the Team observation coherent.",
         current_context: currentContext,
       },
-    }));
+    }]));
 
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "valid-snapshot")).resolves.toMatchObject({ kind: "snapshot" });
@@ -235,7 +226,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     ["legacy absent version", undefined],
   ])("fails closed for a %s before any authority call", async (_caseName, implementationVersion) => {
     const { port, leaderSessionId, launchBridge, lifecycle } = await foreignPort(implementationVersion);
-    const listTasks = vi.spyOn(tasks, "listTasksWithVersions");
+    const listTasks = vi.spyOn(tasks, "listCandidateTaskIds");
     const readTask = vi.spyOn(tasks, "readTask");
     const updateLink = vi.spyOn(tasks, "mutateTaskLink");
     const sendAlert = vi.spyOn(alerts, "sendAlert");
