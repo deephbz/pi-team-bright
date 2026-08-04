@@ -56,6 +56,13 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
 - Team lifecycle and terminal placement remain durable authorities. The public
   model surface does not expose carrier placement or backend controls.
 
+## Recovery
+
+Never mutate Team authority during normal operation. If `team_create` reports
+an active Team while both `team_sync` and `team_shutdown` report no active
+Team, stop and use the [last-resort stale Team rescue](references/team-rescue.md)
+only with explicit owner authorization and exact absence evidence.
+
 ## Contract lookup
 
 Pi presents each tool's executable schema and description directly. Treat
