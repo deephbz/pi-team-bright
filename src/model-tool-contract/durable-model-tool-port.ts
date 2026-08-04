@@ -7,6 +7,7 @@ import * as teamEvents from "../utils/team-events";
 import { BeadsError } from "../utils/beads";
 import * as alerts from "../utils/alerts";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
+import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../utils/worker-launch-bridge";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
 import { taskVersionRef } from "./task-version-ref";
@@ -152,7 +153,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
 
   async createTeam(
     leaderSessionId: ExactLeaderSessionId,
-    input: { name: string; purpose: string },
+    input: { name: string; purpose: string; pane_layout?: TeamPaneLayout },
   ): Promise<CreateTeamPortResult> {
     const sessionFile = this.sessionFiles.get(leaderSessionId);
     if (!sessionFile) return { kind: "unavailable", reason: "session_binding_unavailable", message: "The model-tool surface requires the exact durable leader Session file." };
@@ -164,6 +165,21 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const teamName = paths.sanitizeName(input.name);
     const terminal = getTerminalAdapter();
     if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the model-tool Worker." };
+    let paneLayout: TeamPaneLayout;
+    try {
+      const launchContext = this.leaderLaunchContexts.get(leaderSessionId);
+      const leaderCwd = launchContext?.cwd ?? process.cwd();
+      const projectTrusted = launchContext?.projectTrusted ?? true;
+      const settings = loadTeamPaneLayoutSettings({ cwd: leaderCwd, projectTrusted });
+      paneLayout = resolveTeamPaneLayout({
+        explicit: input.pane_layout,
+        project: settings.project,
+        global: settings.global,
+        backend: terminal.name,
+      });
+    } catch (error) {
+      return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) };
+    }
     let authority;
     try {
       authority = await tasks.resolveTeamTaskAuthority(teamName);
@@ -187,6 +203,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
           ...(terminal.currentTargetId?.() ? { leadTarget: { backend: terminal.name, kind: "pane", targetId: terminal.currentTargetId()! } } : {}),
         },
         MODEL_TOOL_IMPLEMENTATION_VERSION,
+        paneLayout,
       ));
       await this.lifecycle?.teamCreated?.(teamName, sessionFile);
       return { kind: "created", team: currentTeam(config) };

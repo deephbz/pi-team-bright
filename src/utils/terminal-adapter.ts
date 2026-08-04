@@ -10,11 +10,15 @@ import { spawnSync } from "node:child_process";
 /**
  * Options for spawning a new terminal pane or window
  */
+import type { TeamPaneLayout } from "./team-pane-layout";
+
 export interface TeamPanePlacement {
   /** Exact Team leader pane. The first Worker splits this pane to the right. */
   leaderPaneId: string;
-  /** Exact current Team Worker panes. Later Workers split the last pane down. */
+  /** Exact current Team Worker panes. Adapters choose a deterministic target. */
   workerPaneIds: readonly string[];
+  /** Resolved immutable policy for this Team epoch. */
+  paneLayout?: TeamPaneLayout;
 }
 
 export interface SpawnOptions {

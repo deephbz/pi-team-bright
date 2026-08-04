@@ -10,7 +10,7 @@ their existing `task_read`, `task_update`, and `alert_send` registrations.
 
 | Published capability | New leader mapping | Authority and verification |
 |---|---|---|
-| `team_create` | `team_create({name,purpose})` | Team/Membership/Beads creation through `DurableModelToolTeamPort`; catalog and first-journey tests |
+| `team_create` | `team_create({name,purpose,pane_layout?})` | Team/Membership/Beads creation through `DurableModelToolTeamPort`; typed policy resolution and pane-layout tests |
 | `team_sync` | `team_sync({view})` | Team events, hidden observation, Team epoch, logical Workers, and Beads projection; durable model-tool tests |
 | `ensure_worker` | `ensure_worker({name,scope})` | Logical Worker plus existing Worker launch bridge; resource/startup/terminal composition stays in the bridge |
 | `task_create` | `task_create({tasks})` | Team-scoped opaque per-item `operation_id` in Beads idempotency metadata; retries return only matching canonical initial Task semantics |
@@ -41,7 +41,11 @@ their existing `task_read`, `task_update`, and `alert_send` registrations.
 ## Focused implementation evidence
 
 - `src/model-tool-contract/catalog.test.ts` validates the ten-tool catalog and
-  result schemas.
+  result schemas, including `team_create.pane_layout`.
+- `src/utils/team-pane-layout.test.ts` validates policy precedence, trust-gated
+  project settings, backend support, and immutable default resolution.
+- `src/adapters/herdr-adapter.test.ts` validates exact pane placement and the
+  deterministic four-Worker 2x2 grid sequence.
 - `src/model-tool-contract/first-journey.test.ts` validates registration,
   model JSON, exact binding, batch Task semantics, and replay/conflict behavior.
 - `src/model-tool-contract/beads-task-adapter.test.ts` proves matching create

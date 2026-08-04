@@ -5,6 +5,7 @@ import {
   spawnArgv,
   validateSpawnOptions,
 } from "../utils/terminal-adapter";
+import { DEFAULT_TEAM_PANE_LAYOUT, type TeamPaneLayout } from "../utils/team-pane-layout";
 
 type HerdrEnvelope = {
   result?: unknown;
@@ -15,7 +16,6 @@ const FORWARDED_ENV = /^(?:PI_[A-Z0-9_]+|HTTP_PROXY|HTTPS_PROXY|WSS_PROXY|ALL_PR
 const SHELL_READY_RETRY_MS = 50;
 const SHELL_READY_TIMEOUT_MS = 5_000;
 /** Herdr applies a right-split ratio to the existing (leader) pane. */
-const MINIMUM_LEADER_SHARE = 0.6;
 const retryWait = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 
 function currentHerdrPane(): string | null {
@@ -152,7 +152,7 @@ export class HerdrAdapter implements TerminalAdapter {
     }
   }
 
-  private firstWorkerLeaderShare(leaderPaneId: string): string {
+  private firstWorkerLeaderShare(leaderPaneId: string, leaderShare: number): string {
     const layout = this.invoke(["pane", "layout", "--pane", leaderPaneId]).layout;
     if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
       throw new Error(`Herdr leader pane ${leaderPaneId} returned no layout; refusing Worker spawn.`);
@@ -171,8 +171,12 @@ export class HerdrAdapter implements TerminalAdapter {
       throw new Error(`Herdr leader pane ${leaderPaneId} layout has no usable width; refusing Worker spawn.`);
     }
     // Herdr rounds the existing pane down. Round the requested share up so its
-    // rendered integer width is never below the Team's 60% leader invariant.
-    return String(Math.ceil(width * MINIMUM_LEADER_SHARE) / width);
+    // rendered integer width is never below the Team's configured invariant.
+    const requestedLeaderWidth = Math.ceil(width * leaderShare);
+    if (requestedLeaderWidth >= width) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} is too narrow to represent leader_share=${leaderShare} while leaving a Worker region.`);
+    }
+    return String(requestedLeaderWidth / width);
   }
 
   spawn(options: SpawnOptions): string {
@@ -181,15 +185,29 @@ export class HerdrAdapter implements TerminalAdapter {
     validateSpawnOptions(options);
 
     const { leaderPaneId, workerPaneIds } = options.panePlacement;
-    const workerPaneId = workerPaneIds.at(-1);
-    const targetPaneId = workerPaneId ?? leaderPaneId;
+    const paneLayout: TeamPaneLayout = options.panePlacement.paneLayout ?? DEFAULT_TEAM_PANE_LAYOUT;
+    const isGrid = paneLayout.worker_tiling === "grid";
+    // Grid placement is deliberately explicit. For four Workers, the first
+    // split creates the Worker region, the second creates its second row, and
+    // the third and fourth split the two rows into stable columns.
+    const workerCount = workerPaneIds.length;
+    const targetPaneId = workerCount === 0
+      ? leaderPaneId
+      : isGrid && workerCount >= 2
+        ? workerPaneIds[workerCount - 2]
+        : workerPaneIds.at(-1)!;
+    const direction = workerCount === 0
+      ? "right"
+      : isGrid && workerCount >= 2
+        ? "right"
+        : "down";
     if (!targetPaneId || workerPaneIds.some((paneId) => !paneId || paneId === leaderPaneId)) {
       throw new Error("Herdr Worker spawn requires distinct exact Team pane targets.");
     }
-    const firstWorkerLeaderShare = workerPaneId
-      ? undefined
-      : (this.paneRecord(targetPaneId), this.firstWorkerLeaderShare(leaderPaneId));
-    if (workerPaneId) this.assertWorkerRegion(leaderPaneId, workerPaneId);
+    const firstWorkerLeaderShare = workerCount === 0
+      ? (this.paneRecord(targetPaneId), this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share))
+      : undefined;
+    if (workerCount > 0) this.assertWorkerRegion(leaderPaneId, targetPaneId);
 
     const envArgs = Object.entries(options.env)
       .filter(([key, value]) => FORWARDED_ENV.test(key) && !value.includes("\0"))
@@ -197,8 +215,8 @@ export class HerdrAdapter implements TerminalAdapter {
     const argv = spawnArgv(options);
     const split = this.invoke([
       "pane", "split", "--pane", targetPaneId,
-      "--direction", workerPaneId ? "down" : "right",
-      "--ratio", workerPaneId ? "0.5" : firstWorkerLeaderShare!,
+      "--direction", direction,
+      "--ratio", workerCount > 0 ? "0.5" : firstWorkerLeaderShare!,
       "--cwd", options.cwd,
       ...envArgs,
       "--no-focus",

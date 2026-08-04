@@ -53,6 +53,27 @@ describe("TeamConfig authority recovery", () => {
     expect(fs.existsSync(configFile)).toBe(false);
   });
 
+  it("persists the resolved pane policy in TeamConfig", async () => {
+    const policy = { leader_share: 0.7, worker_tiling: "linear" as const };
+    const created = await createTeam(
+      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
+      undefined, undefined, { backend: "tmux", leadTarget: { backend: "tmux", kind: "pane", targetId: "%leader" } },
+      "model-tools", policy,
+    );
+
+    expect(created.paneLayout).toEqual(policy);
+    expect(JSON.parse(fs.readFileSync(configFile, "utf8")).paneLayout).toEqual(policy);
+  });
+
+  it("refuses an invalid pane policy before writing TeamConfig", async () => {
+    await expect(createTeam(
+      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
+      undefined, undefined, { backend: "tmux" }, "model-tools",
+      { leader_share: 0.7, worker_tiling: "grid" as const },
+    )).rejects.toThrow(/unsupported.*tmux/i);
+    expect(fs.existsSync(configFile)).toBe(false);
+  });
+
   it("preserves the old config when an atomic TeamConfig rename fails", async () => {
     const initial = await createTeam(teamName, "session", "lead");
     const before = fs.readFileSync(configFile, "utf8");

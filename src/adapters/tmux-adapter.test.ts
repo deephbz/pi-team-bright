@@ -57,6 +57,20 @@ describe("TmuxAdapter", () => {
     expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["select-layout"]));
   });
 
+  it("floors a non-default Worker percentage to preserve the leader share", () => {
+    mockExecCommand.mockImplementation((_bin: string, args: string[]) => {
+      if (args[0] === "display-message") return { stdout: "@7\t0\t60", stderr: "", status: 0 };
+      if (args[0] === "split-window") return { stdout: "%worker-1", stderr: "", status: 0 };
+      return { stdout: "", stderr: "", status: 0 };
+    });
+
+    expect(adapter.spawn({
+      name: "worker-1", cwd: "/tmp/project", command: "pi", env: {},
+      panePlacement: { leaderPaneId: "%leader", workerPaneIds: [], paneLayout: { leader_share: 0.655, worker_tiling: "linear" } },
+    })).toBe("%worker-1");
+    expect(mockExecCommand).toHaveBeenCalledWith("tmux", expect.arrayContaining(["-l", "34%"]));
+  });
+
   it("splits the exact current Worker downward", () => {
     mockExecCommand.mockImplementation((_bin: string, args: string[]) => {
       if (args[0] === "display-message" && args[3] === "%worker-1") return { stdout: "@7\t60\t40", stderr: "", status: 0 };

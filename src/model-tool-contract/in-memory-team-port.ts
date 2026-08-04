@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { taskVersionRef } from "./task-version-ref";
+import type { TeamPaneLayout } from "../utils/team-pane-layout";
 
 declare const exactLeaderSessionIdBrand: unique symbol;
 
@@ -195,7 +196,7 @@ export interface ModelToolLeaderLaunchContext {
 export interface ModelToolTeamPort {
   createTeam(
     leaderSessionId: ExactLeaderSessionId,
-    input: { name: string; purpose: string },
+    input: { name: string; purpose: string; pane_layout?: TeamPaneLayout },
   ): Promise<CreateTeamPortResult>;
   ensureWorker(
     leaderSessionId: ExactLeaderSessionId,
@@ -317,7 +318,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
 
   async createTeam(
     leaderSessionId: ExactLeaderSessionId,
-    input: { name: string; purpose: string },
+    input: { name: string; purpose: string; pane_layout?: TeamPaneLayout },
   ): Promise<CreateTeamPortResult> {
     if (this.activeTeamIdByLeaderSession.has(leaderSessionId)) {
       return { kind: "refused", reason: "active_team_exists" };
