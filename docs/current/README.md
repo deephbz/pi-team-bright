@@ -122,14 +122,13 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.5` is the prepared release candidate.
-  It batches candidate snapshot hydration, projects externally oversized Task
-  fields without hiding structural work, inherits explicit Pi trust for Worker
-  launch, adds immutable Team pane policy with a deterministic Herdr grid, and
-  adds last-resort stale-Team rescue guidance. npm `next` remains on rc.4 until
-  rc.5 registry bytes and provenance pass publication verification. The latest
-  durable publication record is the
-  [`v0.17.0-rc.3` release receipt](../journal/2026-08-03-v0.17.0-rc.3-release-receipt.md).
+- `@hypercarrier/pi-team-bright@0.17.0-rc.5` is published, and npm `next`
+  points to it. It batches candidate snapshot hydration, projects externally
+  oversized Task fields without hiding structural work, inherits explicit Pi
+  trust for Worker launch, adds immutable Team pane policy with a deterministic
+  Herdr grid, and adds last-resort stale-Team rescue guidance. The exact source,
+  workflow, registry-byte, provenance, and GitHub prerelease evidence is in the
+  [`v0.17.0-rc.5` release receipt](../journal/2026-08-04-v0.17.0-rc.5-release-receipt.md).
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
