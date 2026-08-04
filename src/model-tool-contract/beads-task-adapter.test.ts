@@ -278,10 +278,12 @@ describe("durable candidate Task adapter", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("accepts 2,000 TypeBox string units and maps oversized external context to a typed read gap", async () => {
+  it("preserves write limits and marks oversized external display fields without mutating them", async () => {
     const records = [
       authorityRecord(metadata("a".repeat(2_000))),
-      authorityRecord(metadata("👩🏽‍🚀".repeat(1_001))),
+      authorityRecord(metadata("👩🏽‍🚀".repeat(2_001))),
+      authorityRecord({ ...metadata(), goal: "😀".repeat(501) }),
+      { ...authorityRecord(metadata()), task: task({ title: "😀".repeat(41) }) },
     ];
     const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
       create: vi.fn(async () => receipt(task())),
@@ -290,12 +292,29 @@ describe("durable candidate Task adapter", () => {
 
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
       kind: "found",
-      task: { current_context: "a".repeat(2_000) }
+      task: { current_context: "a".repeat(2_000) },
     });
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
-      kind: "contract_gap",
-      reason: "candidate_metadata_invalid",
-      taskId: "candidate-task-1",
+      kind: "found",
+      task: {
+        current_context: expect.stringContaining("…"),
+        projection_warnings: [{ truncated_fields: ["current_context"], incomplete_fields: [] }],
+      },
+    });
+    await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
+      kind: "found",
+      task: {
+        id: "candidate-task-1",
+        goal_state: "incomplete",
+        projection_warnings: [{ incomplete_fields: ["goal"] }],
+        status: "open",
+        assignee: "verifier",
+        version: "beads_authority_version",
+      },
+    });
+    await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
+      kind: "found",
+      task: { title: expect.stringContaining("…"), projection_warnings: [{ truncated_fields: ["title"] }] },
     });
   });
 
@@ -460,6 +479,7 @@ describe("candidate Beads metadata and Team event evidence", () => {
       runner: { run } satisfies BdRunner,
     });
     const invalid = metadata("👩🏽‍🚀".repeat(2_001));
+    const invalidGoal = { ...metadata(), goal: "😀".repeat(501) };
 
     await expect(store.create({
       title: "Invalid candidate",
@@ -469,6 +489,11 @@ describe("candidate Beads metadata and Team event evidence", () => {
     await expect(store.updateWithResult("candidate-task-1", {}, {
       candidateTaskMetadata: invalid,
     })).rejects.toThrow("2,000 TypeBox string");
+    await expect(store.create({
+      title: "Invalid goal",
+      description: "No Beads write is allowed.",
+      internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: invalidGoal },
+    })).rejects.toThrow("1,000 TypeBox string");
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -582,6 +607,49 @@ describe("candidate Beads metadata and Team event evidence", () => {
       type: "task",
       cursor: "99",
       ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
+      change: "status",
+      actor: "external",
+      at: "2026-08-02T00:00:00.000Z",
+    }], [{
+      id: "candidate-task-1",
+      title: "Verify candidate",
+      goal: "Verify the exact release digest.",
+      status: "blocked",
+      current_context: "Current.",
+      version: "beads_v2",
+    }])).toEqual({
+      kind: "projected",
+      changes: [{
+        taskId: "candidate-task-1",
+        changeKinds: ["status"],
+        journalEntries: [],
+        current: { status: "blocked", current_context: "Current.", version: "beads_v2" },
+      }],
+    });
+    const structural = (["created", "assigned", "status", "relation"] as const).map((change, index) => ({
+      type: "task" as const,
+      cursor: String(index + 1),
+      ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
+      change,
+      actor: "external",
+      at: "2026-08-02T00:00:00.000Z",
+    }));
+    expect(projectCandidateTaskChanges(structural, [{
+      id: "candidate-task-1",
+      title: "Verify candidate",
+      goal: "Verify the exact release digest.",
+      status: "blocked",
+      current_context: "Current.",
+      version: "beads_v2",
+    }])).toMatchObject({
+      kind: "projected",
+      changes: [{ changeKinds: ["created", "assignment", "status", "relation"], journalEntries: [] }],
+    });
+
+    expect(projectCandidateTaskChanges([{
+      type: "task",
+      cursor: "100",
+      ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
       change: "note",
       actor: "external",
       at: "2026-08-02T00:00:00.000Z",
@@ -595,8 +663,9 @@ describe("candidate Beads metadata and Team event evidence", () => {
     }])).toMatchObject({
       kind: "contract_gap",
       reason: "structured_task_event_evidence_absent",
-      eventId: "task-event-99",
+      eventId: "task-event-100",
     });
+
     expect(candidateUpdateEventEvidence({
       taskId: "candidate-task-1",
       operationId: "operation-1",

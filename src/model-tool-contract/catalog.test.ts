@@ -26,6 +26,7 @@ import {
   candidateModelToolCatalog,
 } from "./catalog";
 import {
+  CandidateModelResultSchemas,
   parseCandidateToolResult,
   projectCandidateToolResult,
   serializeCandidateToolResult,
@@ -130,6 +131,34 @@ describe("candidate model-tool catalog", () => {
       current_context: "Not started.",
       version: "raw-version",
     })).toBe(false);
+  });
+
+  it("encodes complete and incomplete Task cards as exclusive variants", () => {
+    const base = {
+      id: "task-1",
+      title: "Verify",
+      status: "open" as const,
+      current_context: "Not started.",
+      version: "raw-version",
+    };
+    const warning = {
+      task_id: "task-1",
+      truncated_fields: [],
+      incomplete_fields: ["goal"],
+      message: "The goal is incomplete.",
+    };
+    expect(Check(CandidateTaskCardSchema, { ...base, goal: "Verify the release." })).toBe(true);
+    expect(Check(CandidateTaskCardSchema, { ...base, goal_state: "incomplete", projection_warnings: [warning] })).toBe(true);
+    expect(Check(CandidateTaskCardSchema, { ...base })).toBe(false);
+    expect(Check(CandidateTaskCardSchema, { ...base, goal: "Verify the release.", goal_state: "incomplete", projection_warnings: [warning] })).toBe(false);
+
+    const modelIncomplete = {
+      kind: "found",
+      task: { ...base, version: "v_0123456789abcdef", goal_state: "incomplete", projection_warnings: [warning] },
+    };
+    expect(Check(CandidateModelResultSchemas.task_read, modelIncomplete)).toBe(true);
+    expect(Check(CandidateModelResultSchemas.task_read, { kind: "found", task: { ...modelIncomplete.task } })).toBe(true);
+    expect(Check(CandidateModelResultSchemas.task_read, { kind: "found", task: { ...modelIncomplete.task, goal: "not allowed" } })).toBe(false);
   });
 
   it("keeps observation outcomes distinct from authority unavailability", () => {

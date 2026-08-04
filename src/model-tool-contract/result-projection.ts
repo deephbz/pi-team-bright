@@ -18,6 +18,7 @@ import {
   CandidateWorkerStopResultSchema,
   TaskVersionRefSchema,
   MODEL_TOOL_CANDIDATE_LIMITS,
+  CandidateTaskProjectionWarningSchema,
 } from "./catalog";
 import { taskVersionRef } from "./task-version-ref";
 import { CandidateTaskCurrentContextSchema } from "../utils/beads";
@@ -40,15 +41,25 @@ const TaskId = Type.String({ minLength: 1, maxLength: 128 });
 const TaskVersion = TaskVersionRefSchema;
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const TaskStatus = Type.Enum(["open", "in_progress", "blocked", "closed"]);
-const TaskCard = Type.Object({
+const TaskCardBase = {
   id: TaskId,
-  title: Type.String({ minLength: 1, maxLength: 80 }),
-  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars }),
+  title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars }),
   status: TaskStatus,
   assignee: Type.Optional(WorkerName),
   current_context: CandidateTaskCurrentContextSchema,
   version: TaskVersion,
+};
+const TaskCardCompleteSchema = Type.Object({
+  ...TaskCardBase,
+  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars }),
+  projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
 }, { additionalProperties: false });
+const TaskCardIncompleteSchema = Type.Object({
+  ...TaskCardBase,
+  goal_state: Type.Literal("incomplete"),
+  projection_warnings: Type.Array(CandidateTaskProjectionWarningSchema, { minItems: 1 }),
+}, { additionalProperties: false });
+const TaskCard = Type.Union([TaskCardCompleteSchema, TaskCardIncompleteSchema]);
 const Recovery = Type.Union([
   Type.Object({ action: Type.Literal("reconcile_and_retry"), expected_version: TaskVersion, new_operation_id: Type.Optional(Type.Literal(true)) }, { additionalProperties: false }),
   Type.Object({ action: Type.Literal("retry_same_operation"), operation_id: Type.String({ minLength: 1, maxLength: 128 }) }, { additionalProperties: false }),
@@ -100,12 +111,12 @@ export const CandidateTaskCreateModelResultSchema = Type.Union([
 const TaskReadOutcome = Type.Union([
   Type.Object({ kind: Type.Literal("found"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, task: TaskCard }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("missing"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Literal("task_not_found") }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("contract_gap"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid"]), authority_version: TaskVersion, message: Type.String({ minLength: 1 }), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("contract_gap"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid"]), authority_version: TaskVersion, message: Type.String({ minLength: 1 }), projection_warning: Type.Optional(CandidateTaskProjectionWarningSchema), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
 ]);
 export const CandidateTaskReadModelResultSchema = Type.Union([
   Type.Object({ kind: Type.Literal("found"), task: TaskCard }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("missing"), task_id: TaskId, reason: Type.Literal("task_not_found") }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("contract_gap"), task_id: TaskId, reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid"]), authority_version: TaskVersion, message: Type.String({ minLength: 1 }), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("contract_gap"), task_id: TaskId, reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid"]), authority_version: TaskVersion, message: Type.String({ minLength: 1 }), projection_warning: Type.Optional(CandidateTaskProjectionWarningSchema), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("task_read_batch"), outcomes: Type.Array(TaskReadOutcome) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("task_authority_unavailable")])),
 ]);
@@ -127,8 +138,8 @@ export const CandidateTaskUpdateModelResultSchema = Type.Union([
 
 const SyncRecovery = Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false });
 export const CandidateTeamSyncModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId) }, { additionalProperties: false })), tasks: Type.Array(TaskCard) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(CandidateTeamDeltaSchema), worker_changes: Type.Array(CandidateWorkerDeltaSchema), task_changes: Type.Array(CandidateTaskDeltaSchema), alerts: Type.Array(CandidateAlertDeltaSchema) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(CandidateTeamDeltaSchema), worker_changes: Type.Array(CandidateWorkerDeltaSchema), task_changes: Type.Array(CandidateTaskDeltaSchema), alerts: Type.Array(CandidateAlertDeltaSchema), task_projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Enum(["snapshot_required", "cancelled"]), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("contract_gap"), reason: Type.Enum(["team_epoch_missing", "logical_workers_missing", "candidate_metadata_absent", "candidate_metadata_invalid", "structured_task_event_evidence_absent"]), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("team_state_unavailable"), Type.Literal("task_authority_unavailable")])),

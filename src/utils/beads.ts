@@ -20,6 +20,8 @@ export const CANDIDATE_TASK_METADATA_KEY = "pi_teams_candidate_task";
 export const CANDIDATE_TASK_METADATA_SCHEMA = "pi-teams-candidate-task/1" as const;
 /** Standard TypeBox length limit for model-facing candidate Task context. */
 export const CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH = 2_000;
+export const CANDIDATE_TASK_GOAL_MAX_LENGTH = 1_000;
+export const CandidateTaskGoalSchema = Type.String({ minLength: 1, maxLength: CANDIDATE_TASK_GOAL_MAX_LENGTH });
 export const CandidateTaskCurrentContextSchema = Type.String({
   minLength: 1,
   maxLength: CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
@@ -27,13 +29,26 @@ export const CandidateTaskCurrentContextSchema = Type.String({
 
 /** Use the exported schema for every runtime candidate-context validation. */
 export function isCandidateTaskCurrentContext(value: unknown): value is string {
-  return Check(CandidateTaskCurrentContextSchema, value);
+  return typeof value === "string"
+    && value.length <= CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH
+    && Check(CandidateTaskCurrentContextSchema, value);
+}
+
+/** Enforce the model contract in JavaScript string-length units before writes. */
+export function isCandidateTaskGoal(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length <= CANDIDATE_TASK_GOAL_MAX_LENGTH
+    && Check(CandidateTaskGoalSchema, value);
 }
 
 /** Reject invalid canonical context before a Beads command can mutate it. */
 export function assertCandidateTaskMetadataContext(value: unknown): asserts value is CandidateTaskMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value) || !isCandidateTaskCurrentContext((value as Record<string, unknown>).current_context)) {
     throw new Error(`Candidate Task current_context must contain 1 to ${CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
+  }
+  const goal = (value as Record<string, unknown>).goal;
+  if (goal !== undefined && !isCandidateTaskGoal(goal)) {
+    throw new Error(`Candidate Task goal must contain 1 to ${CANDIDATE_TASK_GOAL_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
   }
 }
 

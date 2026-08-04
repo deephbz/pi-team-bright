@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe("DurableModelToolTeamPort implementation fence", () => {
-  it("fails closed on one externally oversized candidate Task without staging a partial snapshot", async () => {
+  it("tolerates one externally oversized candidate Task without rejecting the snapshot", async () => {
     const { port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue(["invalid-task"]);
     vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockResolvedValue([{
@@ -84,14 +84,16 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     }]);
 
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
-      kind: "contract_gap",
-      reason: "candidate_metadata_invalid",
+      kind: "snapshot",
+      tasks: [{ id: "invalid-task", projection_warnings: [{ task_id: "invalid-task", truncated_fields: ["current_context"] }] }],
+      taskProjectionWarnings: [{ task_id: "invalid-task", truncated_fields: ["current_context"] }],
     });
     await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "invalid-snapshot")).resolves.toMatchObject({
-      kind: "contract_gap",
-      reason: "candidate_metadata_invalid",
+      kind: "snapshot",
+      tasks: [{ id: "invalid-task", projection_warnings: [{ task_id: "invalid-task", truncated_fields: ["current_context"] }] }],
+      taskProjectionWarnings: [{ task_id: "invalid-task", truncated_fields: ["current_context"] }],
     });
-    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+    expect(port.getPendingObservation(leaderSessionId)).toBeDefined();
   });
 
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
@@ -213,7 +215,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         schema: CANDIDATE_TASK_METADATA_SCHEMA,
         goal: "Keep the direct Task read usable.",
         current_context: taskId === "invalid-task"
-          ? "👩🏽‍🚀".repeat(1_001)
+          ? "👩🏽‍🚀".repeat(2_001)
           : "Valid candidate context.",
       },
     }));
@@ -222,13 +224,13 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       kind: "read",
       tasks: [
         { id: "valid-task", current_context: "Valid candidate context." },
-        { kind: "contract_gap", reason: "candidate_metadata_invalid", taskId: "invalid-task" },
+        { id: "invalid-task", projection_warnings: [{ task_id: "invalid-task", truncated_fields: ["current_context"] }] },
         { id: "valid-task", current_context: "Valid candidate context." },
       ],
     });
   });
 
-  it("returns a no-observation gap for updates after external context becomes invalid", async () => {
+  it("publishes an explicit warning for updates after external context exceeds the display limit", async () => {
     const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     let currentContext = "Valid candidate context.";
     const task = {
@@ -258,10 +260,10 @@ describe("DurableModelToolTeamPort implementation fence", () => {
 
     currentContext = "👩🏽‍🚀".repeat(2_001);
     await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "invalid-updates")).resolves.toMatchObject({
-      kind: "contract_gap",
-      reason: "candidate_metadata_invalid",
+      kind: "updates",
+      taskProjectionWarnings: [{ task_id: "invalid-after-snapshot", truncated_fields: ["current_context"] }],
     });
-    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+    expect(port.getPendingObservation(leaderSessionId)).toBeDefined();
   });
 
   it.each([

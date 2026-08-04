@@ -102,8 +102,14 @@ restating executable definitions.
   exact QA projections. Candidate Task-card `goal` accepts one to 1,000 TypeBox
   string-length units across create input and returned Task cards. Candidate
   `current_context` uses the shared standard TypeBox schema in
-  [`src/utils/beads.ts`](../../src/utils/beads.ts): one to 2,000 units. These
-  public Task-card invariants change the contract, but no depicted component,
+  [`src/utils/beads.ts`](../../src/utils/beads.ts): one to 2,000 units. Owned
+  writes keep these limits. Reads tolerate external oversized display fields
+  without changing Beads: title and current context use a bounded display with
+  structured `projection_warnings`, while an oversized executable goal is
+  marked incomplete and remains visible with its identity, status, assignee,
+  version, and Worker index coordinates, but is not executable. Structural Task
+  events can advance `team_sync` without narrative evidence; journal entries
+  still require committed task evidence. These public Task-card invariants change the contract, but no depicted component,
   flow, or topology, so the Structurizr DSL is unchanged. Successful TUI results
   remain concise semantic projections. Execution and result-projection errors
   instead show one copyable raw `content` and `details` report, with a warning to
@@ -216,8 +222,9 @@ Next steps:
 
 1. Design immutable Task-create operation identity before changing replay code.
 2. Measure and repair Beads contention before making a Worker-capacity claim.
-3. Repair or explain `structured_task_event_evidence_absent` with runtime
-   evidence; do not hide it in the renderer.
+3. Keep malformed-event diagnostics distinct from normal structural Task
+   events; structural creation, assignment, status, and relation events now
+   sync without narrative evidence.
 4. Add payload-free outer-operation trace correlation before the representative
    performance epoch.
 5. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
