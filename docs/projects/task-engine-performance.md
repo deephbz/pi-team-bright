@@ -11,7 +11,7 @@ maintenance: Replace superseded assessments and link reproducible journal artifa
 
 # Task-engine performance Project
 
-Updated: 2026-08-02
+Updated: 2026-08-04
 
 Stage: **hardening measurement** for the existing Beads path; any replacement
 adapter begins in **exploration**.
@@ -100,6 +100,22 @@ These data prove that subprocess and backend work are material. They do not
 separate process startup, Dolt execution, lock wait, projection work, or
 scheduling, so they do not justify a backend choice.
 
+The direct [Beads read-path investigation](../journal/2026-08-04-beads-read-path-investigation.md)
+then isolated one snapshot defect: candidate projection repeated a detailed
+single-ID `show` after an existing multi-ID hydration. Snapshot now uses one
+Team-scoped list and one multi-ID show, with no per-Task CLI calls. The same
+investigation shows that native Beads v1.1.0 implements multi-ID `show` as a
+per-ID storage loop. Bulk export is substantially faster, but its relation
+shape, counts, selection, and opaque-version inputs are not equivalent, so it
+is not selected as the production read path.
+
+The post-fix end-to-end run used six Workers and 18 terminal Tasks. Three full
+snapshots completed in 5.317, 4.867, and 5.197 seconds. The 5.197-second median
+is 63.0% below the 14.040-second rc.4 baseline mean and is a 2.70x speedup. Each
+snapshot emitted exactly one `list` and one multi-ID `show`; `show` still used
+about 93% of wall time. The machine result and raw payload-free trace are linked
+from the investigation.
+
 The existing trace is also too small for the full benchmark contract. It records
 one semantic operation, duration, nested `bd` calls, and lock wait. It does not
 record a tool-call or parent-operation correlation ID, Task or hydration counts,
@@ -124,7 +140,9 @@ chains have data or safety dependencies:
   multi-ID `show`.
 
 The current implementation already runs Team-config and Task-list reads in
-parallel and already batches multi-Task hydration. Parallelizing dependent
+parallel and batches snapshot candidate hydration with one native multi-ID `bd
+show`. External CLI boundaries must not add one single-ID call per candidate
+when one exact batch preserves the same semantics. Parallelizing dependent
 steps is therefore not a trivial safe optimization.
 
 A true one-call mutation requires backend support for the precondition,
@@ -186,9 +204,11 @@ Use the first measured bottleneck, not preference, to choose the next step.
    workload metadata.
 2. **Reduce unnecessary work after semantic acceptance.** Build snapshot Task
    cards and grouped update deltas without hydrating unrelated closed history.
-   On a required-authority failure, preserve the prior baseline and return no
-   semantic observation. The model-visible semantics are owned by the contract
-   Project; this Project measures their cost.
+   Keep candidate metadata on the same exact multi-ID authority read; do not
+   regress to N+1 external CLI calls. On a required-authority failure, preserve
+   the prior baseline and return no semantic observation. The model-visible
+   semantics are owned by the contract Project; this Project measures their
+   cost.
 3. **Remove redundant commands.** Only remove a `list` or `show` when backend
    evidence and contract tests prove equivalent idempotency, scope, relation,
    and version behavior.

@@ -47,8 +47,6 @@ import type {
 } from "./in-memory-team-port";
 import type { Member, TeamConfig, TeamEvent } from "../utils/models";
 import { exactLeaderSessionId } from "./in-memory-team-port";
-import type { TaskFile } from "../utils/models";
-
 const WAIT_MS = 120_000;
 
 type PendingDurableObservation = PendingObservation & {
@@ -96,15 +94,6 @@ function isMissingTask(error: unknown): boolean {
 
 function isAbort(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
-}
-
-function currentTaskProjection(task: TaskFile, candidate: ModelToolTaskCurrent): ModelToolTaskCurrent {
-  return {
-    ...candidate,
-    status: task.status,
-    ...(task.assignee ? { assignee: task.assignee } : {}),
-    version: task.version,
-  };
 }
 
 function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "created" | "connected" | "stopped" | "failed" {
@@ -511,13 +500,13 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   }
 
   private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: ModelToolTaskCurrent[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
-    const listed = await tasks.listTasksWithVersions(teamName);
+    const taskIds = await tasks.listCandidateTaskIds(teamName);
     const adapter = new CandidateBeadsTaskAdapter(teamName, "team-lead");
+    const records = await adapter.readMany(taskIds);
     const projected: ModelToolTaskCurrent[] = [];
-    for (const task of listed) {
-      const result = await adapter.read(task.id);
+    for (const result of records) {
       if (result.kind === "contract_gap") return result;
-      projected.push(currentTaskProjection(task, result.task));
+      projected.push(result.task);
     }
     return { kind: "tasks", tasks: projected };
   }

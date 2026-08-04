@@ -343,9 +343,24 @@ export async function readCandidateTaskAuthorityRecord(
     (await storeFor(teamName)).readCandidateTaskAuthorityRecord(taskId));
 }
 
+/** Read canonical candidate metadata for exact Task IDs with one authority query. */
+export async function readCandidateTaskAuthorityRecords(
+  teamName: string,
+  taskIds: readonly string[],
+): Promise<CandidateTaskAuthorityRecord[]> {
+  return withSemanticTrace("candidate_task_read_many", { teamName }, async () =>
+    (await storeFor(teamName)).readCandidateTaskAuthorityRecords(taskIds));
+}
+
 export async function readTasks(teamName: string, taskIds: readonly string[]): Promise<TaskFile[]> {
   return withSemanticTrace("task_read_many", { teamName }, async () =>
     (await storeFor(teamName)).readMany(taskIds));
+}
+
+/** Select snapshot candidates from the compact Team-scoped list surface. */
+export async function listCandidateTaskIds(teamName: string): Promise<string[]> {
+  return withSemanticTrace("candidate_task_list", { teamName }, async () =>
+    (await storeFor(teamName)).list()).then((listed) => listed.map((task) => task.id));
 }
 
 export async function listTasks(teamName: string): Promise<TaskListItem[]> {
