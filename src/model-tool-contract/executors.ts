@@ -167,6 +167,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
               reason: task.reason,
               authority_version: task.authorityVersion,
               message: task.message,
+              ...(task.projectionWarning ? { projection_warning: task.projectionWarning } : {}),
               state_changed: false as const,
             };
           }
@@ -379,6 +380,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           team: outcome.team,
           workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, nonterminal_task_ids: worker.nonterminalTaskIds })),
           tasks: outcome.tasks,
+          ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
         }
         : {
           kind: "updates" as const,
@@ -386,6 +388,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           worker_changes: outcome.workerChanges,
           task_changes: outcome.taskChanges.map((change) => ({ task_id: change.taskId, change_kinds: change.changeKinds, journal_entries: change.journalEntries, current: change.current })),
           alerts: outcome.alerts,
+          ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
         };
       port.setPendingObservationResult(leaderSessionId, projectCandidateToolResult("team_sync", result));
       return result;

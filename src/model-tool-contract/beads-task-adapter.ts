@@ -2,9 +2,10 @@ import type { CandidateTaskAuthorityRecord, CandidateTaskMetadata, CreateTaskInp
 import {
   BeadsError,
   CANDIDATE_TASK_METADATA_KEY,
+  CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
+  CANDIDATE_TASK_GOAL_MAX_LENGTH,
   CANDIDATE_TASK_METADATA_SCHEMA,
   assertCandidateTaskMetadataContext,
-  isCandidateTaskCurrentContext,
 } from "../utils/beads";
 import type { TaskFile, TeamEvent } from "../utils/models";
 import {
@@ -24,9 +25,11 @@ import {
 import type {
   ModelToolTaskCurrent,
   ModelToolTaskJournalEntry,
+  ModelToolTaskProjectionWarning,
   ModelToolTaskUpdateInput,
 } from "./in-memory-team-port";
 import { taskVersionRef } from "./task-version-ref";
+import { MODEL_TOOL_CANDIDATE_LIMITS } from "./catalog";
 
 const INITIAL_CURRENT_CONTEXT = "Work has not started.";
 const JOURNAL_KINDS = new Set<TaskEventEvidenceKind>([
@@ -47,6 +50,7 @@ export interface CandidateTaskProjectionGap {
   taskId: string;
   authorityVersion: string;
   message: string;
+  projectionWarning?: ModelToolTaskProjectionWarning;
 }
 
 export type CandidateTaskReadOutcome =
@@ -102,6 +106,7 @@ export interface CandidateTaskChangeProjection {
     assignee?: string;
     current_context: string;
     version: string;
+    projection_warnings?: ModelToolTaskProjectionWarning[];
   };
 }
 
@@ -147,6 +152,7 @@ function projectionGap(
   task: TaskFile,
   reason: CandidateTaskProjectionGapReason,
   message: string,
+  projectionWarning?: ModelToolTaskProjectionWarning,
 ): CandidateTaskProjectionGap {
   return {
     kind: "contract_gap",
@@ -154,7 +160,31 @@ function projectionGap(
     taskId: task.id,
     authorityVersion: task.version,
     message,
+    ...(projectionWarning ? { projectionWarning } : {}),
   };
+}
+
+const MAX_TASK_TITLE = MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars;
+const MAX_TASK_GOAL = CANDIDATE_TASK_GOAL_MAX_LENGTH;
+const MAX_TASK_CONTEXT = CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH;
+
+function displayValue(value: string, max: number): { value: string; truncated: boolean } {
+  if (value.length <= max) return { value, truncated: false };
+  if (max <= 1) return { value: "…", truncated: true };
+  let end = max - 1;
+  // Keep the bounded display valid UTF-16 while counting the same JavaScript
+  // string units as the TypeBox maxLength contract.
+  if (end > 0 && end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1] ?? "")) end -= 1;
+  return { value: `${value.slice(0, end)}…`, truncated: true };
+}
+
+function projectionWarning(
+  task: TaskFile,
+  truncatedFields: ModelToolTaskProjectionWarning["truncated_fields"],
+  incompleteFields: ModelToolTaskProjectionWarning["incomplete_fields"],
+  message: string,
+): ModelToolTaskProjectionWarning {
+  return { task_id: task.id, truncated_fields: truncatedFields, incomplete_fields: incompleteFields, message };
 }
 
 export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord): CandidateTaskMetadata | CandidateTaskProjectionGap {
@@ -189,7 +219,8 @@ export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord)
     metadata.schema !== CANDIDATE_TASK_METADATA_SCHEMA
     || typeof metadata.goal !== "string"
     || metadata.goal.length === 0
-    || !isCandidateTaskCurrentContext(metadata.current_context)
+    || typeof metadata.current_context !== "string"
+    || metadata.current_context.length === 0
   ) {
     return projectionGap(
       record.task,
@@ -229,20 +260,45 @@ export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord)
 }
 
 function projectTask(task: TaskFile, metadata: CandidateTaskMetadata): ModelToolTaskCurrent {
-  return {
+  const title = displayValue(task.title, MAX_TASK_TITLE);
+  const context = displayValue(metadata.current_context, MAX_TASK_CONTEXT);
+  const truncatedFields: ModelToolTaskProjectionWarning["truncated_fields"] = [];
+  const incompleteFields: ModelToolTaskProjectionWarning["incomplete_fields"] = [];
+  if (title.truncated) truncatedFields.push("title");
+  if (context.truncated) truncatedFields.push("current_context");
+  const goalIncomplete = metadata.goal.length > MAX_TASK_GOAL;
+  if (goalIncomplete) incompleteFields.push("goal");
+  const warning = truncatedFields.length > 0 || incompleteFields.length > 0
+    ? projectionWarning(task, truncatedFields, incompleteFields, goalIncomplete
+      ? "The executable goal is incomplete in this model projection; the authority record was not changed."
+      : "One or more external display fields were truncated for the model projection; the authority record was not changed.")
+    : undefined;
+  const structural = {
     id: task.id,
-    title: task.title,
-    goal: metadata.goal,
+    title: title.value,
     status: task.status,
     ...(task.assignee ? { assignee: task.assignee } : {}),
-    current_context: metadata.current_context,
+    current_context: context.value,
     version: task.version,
+  };
+  if (goalIncomplete) {
+    return {
+      ...structural,
+      goal_state: "incomplete",
+      projection_warnings: [warning!],
+    };
+  }
+  return {
+    ...structural,
+    goal: metadata.goal,
+    ...(warning ? { projection_warnings: [warning] } : {}),
   };
 }
 
 function projectCandidateTaskRecord(record: CandidateTaskAuthorityRecord): CandidateTaskReadOutcome {
   const metadata = parseCandidateTaskMetadata(record);
-  return "kind" in metadata ? metadata : { kind: "found", task: projectTask(record.task, metadata) };
+  if ("kind" in metadata) return metadata;
+  return { kind: "found", task: projectTask(record.task, metadata) };
 }
 
 function defaultAuthority(teamName: string, actor: string): CandidateTaskAdapterAuthority {
@@ -343,9 +399,11 @@ export class CandidateBeadsTaskAdapter {
 
   async update(input: ModelToolTaskUpdateInput): Promise<CandidateTaskUpdateOutcome> {
     const record = await this.authority.read(input.taskId);
+    const projected = projectCandidateTaskRecord(record);
+    if (projected.kind === "contract_gap") return projected;
     const metadata = parseCandidateTaskMetadata(record);
     if ("kind" in metadata) return metadata;
-    const currentTask = projectTask(record.task, metadata);
+    const currentTask = projected.task;
     const fingerprint = updateFingerprint(input);
     const prior = metadata.last_operation;
     if (prior && prior.operation_id === input.operationId) {
@@ -472,17 +530,19 @@ export function projectCandidateTaskChanges(
     if (event.type !== "task") continue;
     const task = currentById.get(event.ref.taskId);
     if (!task) continue;
-    if (!projectTaskEventEvidence(event)) {
+    // Structural Task events remain useful without narrative evidence. Only
+    // journal meaning requires taskEvidence; never invent a journal entry.
+    const kind = changeKind(event);
+    if (!kind && !projectTaskEventEvidence(event)) {
       return {
         kind: "contract_gap",
         reason: "structured_task_event_evidence_absent",
         taskId: task.id,
         eventId: `task-event-${event.cursor}`,
-        message: `Task event ${event.cursor} has no structured actor/kind/text evidence; candidate updates cannot reconstruct it safely.`,
+        message: `Task event ${event.cursor} has no structured evidence for its narrative change; candidate updates cannot reconstruct it safely.`,
       };
     }
     const group = grouped.get(task.id) ?? { taskId: task.id, changeKinds: [], journalEntries: [] };
-    const kind = changeKind(event);
     if (kind && !group.changeKinds.includes(kind)) group.changeKinds.push(kind);
     const journalEntry = projectCandidateTaskJournalEntry(event);
     if (journalEntry) group.journalEntries.push(journalEntry);
@@ -500,6 +560,7 @@ export function projectCandidateTaskChanges(
           ...(task.assignee ? { assignee: task.assignee } : {}),
           current_context: task.current_context,
           version: task.version,
+          ...(task.projection_warnings ? { projection_warnings: task.projection_warnings } : {}),
         },
       }];
     }),

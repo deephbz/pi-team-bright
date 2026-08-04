@@ -30,6 +30,13 @@ const WorkerCarrier = Type.Enum(["starting", "connected", "absent"], {
   description: "Current carrier observation. It is not Task progress or readiness.",
 });
 
+export const CandidateTaskProjectionWarningSchema = Type.Object({
+  task_id: TaskId,
+  truncated_fields: Type.Array(Type.Enum(["title", "goal", "current_context"])),
+  incomplete_fields: Type.Array(Type.Enum(["title", "goal", "current_context"])),
+  message: Type.String({ minLength: 1 }),
+}, { additionalProperties: false, description: "Structured evidence that an external Task display projection was truncated or incomplete." });
+
 const TeamCurrent = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   purpose: Type.String({ minLength: 1 }),
@@ -43,16 +50,32 @@ export const CandidateWorkerCurrentSchema = Type.Object({
   nonterminal_task_ids: Type.Array(TaskId),
 }, { additionalProperties: false });
 
-export const CandidateTaskCardSchema = Type.Object({
+const CandidateTaskCardBase = {
   id: TaskId,
   title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars }),
-  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and success signal in one field." }),
   status: TaskStatus,
   assignee: Type.Optional(WorkerName),
   current_context: CandidateTaskCurrentContextSchema,
   // Raw semantic details retain this authority version. Model projection maps it to TaskVersionRefSchema.
   version: TaskAuthorityVersion,
-}, { additionalProperties: false, description: "Current Task projection used for authority-backed details." });
+};
+
+const CandidateTaskCardCompleteSchema = Type.Object({
+  ...CandidateTaskCardBase,
+  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and success signal in one field." }),
+  projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
+}, { additionalProperties: false });
+
+const CandidateTaskCardIncompleteSchema = Type.Object({
+  ...CandidateTaskCardBase,
+  goal_state: Type.Literal("incomplete"),
+  projection_warnings: Type.Array(CandidateTaskProjectionWarningSchema, { minItems: 1 }),
+}, { additionalProperties: false });
+
+export const CandidateTaskCardSchema = Type.Union([
+  CandidateTaskCardCompleteSchema,
+  CandidateTaskCardIncompleteSchema,
+], { description: "Current Task projection. Complete cards have executable goal prose; incomplete cards preserve structure but cannot execute." });
 
 const CandidateTaskCreateItemSchema = Type.Object({
   operation_id: Type.String({ minLength: 1, maxLength: 128, description: "Opaque caller-chosen create operation identity. Reuse it only to reconcile an unknown create outcome." }),
@@ -136,6 +159,7 @@ const CandidateTaskReadContractGapSchema = Type.Object({
   reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid"]),
   authority_version: TaskAuthorityVersion,
   message: Type.String({ minLength: 1 }),
+  projection_warning: Type.Optional(CandidateTaskProjectionWarningSchema),
   state_changed: Type.Literal(false),
 }, { additionalProperties: false });
 
@@ -243,6 +267,7 @@ const TaskDeltaCurrent = Type.Object({
   assignee: Type.Optional(WorkerName),
   current_context: CandidateTaskCurrentContextSchema,
   version: TaskAuthorityVersion,
+  projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
 }, { additionalProperties: false });
 
 export const CandidateTaskDeltaSchema = Type.Object({
@@ -316,6 +341,7 @@ export const CandidateTeamSnapshotResultSchema = Type.Object({
   team: TeamCurrent,
   workers: Type.Array(CandidateWorkerCurrentSchema),
   tasks: Type.Array(CandidateTaskCardSchema),
+  task_projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
 }, { additionalProperties: false });
 
 export const CandidateTeamUpdatesResultSchema = Type.Object({
@@ -324,6 +350,7 @@ export const CandidateTeamUpdatesResultSchema = Type.Object({
   worker_changes: Type.Array(CandidateWorkerDeltaSchema),
   task_changes: Type.Array(CandidateTaskDeltaSchema),
   alerts: Type.Array(CandidateAlertDeltaSchema),
+  task_projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
 }, { additionalProperties: false });
 
 export const CandidateTeamSyncUnavailableResultSchema = Type.Object({

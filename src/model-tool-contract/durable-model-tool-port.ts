@@ -26,6 +26,7 @@ import type {
   ModelToolLeaderLaunchContext,
   ModelToolTaskCurrent,
   ModelToolTaskJournalEntry,
+  ModelToolTaskProjectionWarning,
   ModelToolTeamCurrent,
   ModelToolTeamPort,
   ModelToolWorkerCurrent,
@@ -65,8 +66,8 @@ export interface ModelToolLifecycle {
   shutdownTeam(teamName: string): Promise<TeamShutdownPortResult>;
 }
 
-function taskProjectionRevision(tasks: readonly ModelToolTaskCurrent[]): string {
-  return crypto.createHash("sha256").update(JSON.stringify(tasks)).digest("hex");
+function taskProjectionRevision(tasks: readonly ModelToolTaskCurrent[], warnings: readonly ModelToolTaskProjectionWarning[] = []): string {
+  return crypto.createHash("sha256").update(JSON.stringify({ tasks, warnings })).digest("hex");
 }
 
 function asNumber(cursor: string): number {
@@ -238,7 +239,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       const tasks = await this.readModelToolTasks(bound.teamName);
       if (tasks.kind === "contract_gap") return tasks;
       const workers = this.readWorkers(bound, tasks.tasks);
-      return { kind: "snapshot", team: currentTeam(bound.config), workers, tasks: tasks.tasks };
+      return { kind: "snapshot", team: currentTeam(bound.config), workers, tasks: tasks.tasks, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
     } catch (error) {
       return { kind: "contract_gap", reason: "structured_task_event_evidence_absent", message: error instanceof Error ? error.message : String(error) };
     }
@@ -423,7 +424,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       let tasksResult = await this.readModelToolTasks(bound.teamName);
       if (tasksResult.kind === "contract_gap") return tasksResult;
       let batch = teamEvents.readTeamEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
-      const taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks);
+      const taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
       if (batch.events.length === 0 && !taskRevisionChanged) {
         try {
           const waited = await teamEvents.waitForTeamEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: WAIT_MS, signal });
@@ -435,11 +436,11 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
           throw error;
         }
       }
-      const result = await this.projectUpdates(bound, batch.events, observation.projection, tasksResult.tasks, taskRevisionChanged);
+      const result = await this.projectUpdates(bound, batch.events, observation.projection, tasksResult.tasks, taskRevisionChanged, tasksResult.warnings);
       if (result.kind === "contract_gap") return result;
       this.stage(leaderSessionId, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
         team_events: String(asNumber(batch.headCursor)),
-        task_projection: taskProjectionRevision(tasksResult.tasks),
+        task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
       });
       return result;
     }
@@ -452,7 +453,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const result: Extract<TeamSyncPortResult, { kind: "snapshot" }> = { ...snapshot, head: asNumber(head), epochId: bound.config.epochId! };
     this.stage(leaderSessionId, bound.sessionFile, toolCallId, result, asNumber(head), bound.config.epochId!, bound.teamName, view, {
       team_events: String(asNumber(head)),
-      task_projection: taskProjectionRevision(result.tasks),
+      task_projection: taskProjectionRevision(result.tasks, result.taskProjectionWarnings),
     });
     return result;
   }
@@ -506,16 +507,22 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     return { teamName: binding.teamName, config, sessionFile };
   }
 
-  private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: ModelToolTaskCurrent[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
+  private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: ModelToolTaskCurrent[]; warnings: ModelToolTaskProjectionWarning[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
     const taskIds = await tasks.listCandidateTaskIds(teamName);
     const adapter = new CandidateBeadsTaskAdapter(teamName, "team-lead");
     const records = await adapter.readMany(taskIds);
     const projected: ModelToolTaskCurrent[] = [];
+    const warnings: ModelToolTaskProjectionWarning[] = [];
     for (const result of records) {
-      if (result.kind === "contract_gap") return result;
+      if (result.kind === "contract_gap") {
+        if (result.projectionWarning) warnings.push(result.projectionWarning);
+        else return result;
+        continue;
+      }
       projected.push(result.task);
     }
-    return { kind: "tasks", tasks: projected };
+    for (const task of projected) warnings.push(...(task.projection_warnings ?? []));
+    return { kind: "tasks", tasks: projected, warnings };
   }
 
   private readWorkers(bound: BoundTeam, taskProjection: ModelToolTaskCurrent[]): Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }> {
@@ -530,8 +537,8 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     }).sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: ModelToolTaskCurrent[], taskRevisionChanged = false): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
-    const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection } : await this.readModelToolTasks(bound.teamName);
+  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: ModelToolTaskCurrent[], taskRevisionChanged = false, taskWarnings: ModelToolTaskProjectionWarning[] = []): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
+    const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection, warnings: taskWarnings } : await this.readModelToolTasks(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
     const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];
     for (const event of events) {
@@ -562,6 +569,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       alerts: [],
       head: events.length === 0 ? asNumber(observation.teamEventCursor) : Math.max(...events.map((event) => asNumber(event.cursor))),
       epochId: bound.config.epochId!,
+      ...(taskResult.warnings.length ? { taskProjectionWarnings: taskResult.warnings } : {}),
     };
     return result;
   }

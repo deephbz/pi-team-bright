@@ -25,15 +25,37 @@ export interface ModelToolWorkerCurrent {
   carrier: "starting" | "connected" | "absent";
 }
 
-export interface ModelToolTaskCurrent {
+export type ModelToolTaskProjectionField = "title" | "goal" | "current_context";
+
+/** Explicit evidence when an external authority record cannot fit the model projection. */
+export interface ModelToolTaskProjectionWarning {
+  task_id: string;
+  truncated_fields: ModelToolTaskProjectionField[];
+  incomplete_fields: ModelToolTaskProjectionField[];
+  message: string;
+}
+
+interface ModelToolTaskCurrentBase {
   id: string;
   title: string;
-  goal: string;
   status: "open" | "in_progress" | "blocked" | "closed";
   assignee?: string;
   current_context: string;
   version: string;
 }
+
+export type ModelToolTaskCurrent =
+  | (ModelToolTaskCurrentBase & {
+    goal: string;
+    projection_warnings?: ModelToolTaskProjectionWarning[];
+    goal_state?: never;
+  })
+  /** Incomplete cards preserve structural coordinates but cannot execute. */
+  | (ModelToolTaskCurrentBase & {
+    goal_state: "incomplete";
+    projection_warnings: ModelToolTaskProjectionWarning[];
+    goal?: never;
+  });
 
 export type CreateTeamPortResult =
   | { kind: "created"; team: ModelToolTeamCurrent }
@@ -53,6 +75,7 @@ export type TeamSnapshotPortResult =
     team: ModelToolTeamCurrent;
     workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>;
     tasks: ModelToolTaskCurrent[];
+    taskProjectionWarnings?: ModelToolTaskProjectionWarning[];
   }
   | { kind: "no_active_team" }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "candidate_metadata_absent" | "candidate_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
@@ -70,6 +93,7 @@ export type ReadTaskContractGap = {
   reason: "candidate_metadata_absent" | "candidate_metadata_invalid";
   authorityVersion: string;
   message: string;
+  projectionWarning?: ModelToolTaskProjectionWarning;
 };
 
 export type ReadTasksPortResult =
@@ -141,8 +165,8 @@ export interface ModelToolTeamEvent {
 }
 
 export type TeamSyncPortResult =
-  | { kind: "snapshot"; team: ModelToolTeamCurrent; workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: ModelToolTaskCurrent[]; head: number; epochId: string }
-  | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: { status: ModelToolTaskCurrent["status"]; assignee?: string; current_context: string; version: string } }>; alerts: []; head: number; epochId: string }
+  | { kind: "snapshot"; team: ModelToolTeamCurrent; workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: ModelToolTaskCurrent[]; taskProjectionWarnings?: ModelToolTaskProjectionWarning[]; head: number; epochId: string }
+  | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: { status: ModelToolTaskCurrent["status"]; assignee?: string; current_context: string; version: string } }>; taskProjectionWarnings?: ModelToolTaskProjectionWarning[]; alerts: []; head: number; epochId: string }
   | { kind: "snapshot_required"; message: string }
   | { kind: "cancelled"; message: string }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "candidate_metadata_absent" | "candidate_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }

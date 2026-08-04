@@ -24,7 +24,8 @@ over the same Team and Beads authorities. The adapter composes explicit Team
 epochs, logical Worker meaning, exact lead-Session resolution, the existing
 Worker launch bridge, model-tool Beads metadata, structured events,
 acknowledged branch-position storage, and authoritative Task projection
-rescan. Missing metadata and unstructured update evidence remain typed gaps.
+rescan. Missing metadata remains a typed gap. Structural Task events do not
+need narrative evidence; journal entries still require committed task evidence.
 Leader Task updates use expected-version preflight plus durable operation
 metadata replay; Beads 1.1 still lacks database-native compare-and-swap against
 arbitrary external writers, so the adapter verifies post-write authority. One
@@ -231,7 +232,16 @@ Workers, and nonterminal Task cards.
 A Task card contains only the coordinates needed for the leader's next choice:
 
 ```ts
-type TaskCard = {
+type TaskProjectionWarning = {
+  task_id: TaskId;
+  truncated_fields: ("title" | "goal" | "current_context")[];
+  incomplete_fields: ("title" | "goal" | "current_context")[];
+  message: string;
+};
+
+type TaskCard = CompleteTaskCard | IncompleteTaskCard;
+
+type CompleteTaskCard = {
   id: TaskId;
   title: string;
   goal: string;
@@ -239,6 +249,18 @@ type TaskCard = {
   assignee?: WorkerName;
   current_context: string;
   version: TaskVersion;
+  projection_warnings?: TaskProjectionWarning[];
+};
+
+type IncompleteTaskCard = {
+  id: TaskId;
+  title: string;
+  goal_state: "incomplete";
+  status: TaskStatus;
+  assignee?: WorkerName;
+  current_context: string;
+  version: TaskVersion;
+  projection_warnings: TaskProjectionWarning[];
 };
 ```
 
@@ -249,7 +271,11 @@ machine distinction, so they are not in the current surface.
 `current_context` contains only still-relevant progress, decisions, blockers,
 and next actions. Each update replaces it. The executable candidate schema in
 [`src/utils/beads.ts`](../../src/utils/beads.ts) limits it to 2,000 TypeBox
-string-length units. Superseded detail stays in the Task journal.
+string-length units. Superseded detail stays in the Task journal. External
+records can exceed display limits without a Beads write: title and context are
+bounded for display and carry `projection_warnings`; an oversized goal keeps
+its Task identity and structural coordinates but is marked incomplete and
+non-executable, never presented as ordinary executable goal prose.
 
 Native Beads notes remain unbounded raw evidence. A marked Worker `append_note`
 that would exceed the candidate context limit refuses without mutation. Worker
@@ -287,7 +313,9 @@ type TaskDelta = {
 ```
 
 There are no journal-summary caps, omitted-entry counts, continuations, or
-paging semantics. A snapshot plus a batch Task read is the explicit recovery
+paging semantics. Structural changes may have an empty `journal_entries`
+array; narrative meaning appears only when committed task evidence exists. A
+snapshot plus a batch Task read is the explicit recovery
 path if hidden observation state and model-visible context ever diverge.
 
 ## Hidden observation position
@@ -406,9 +434,10 @@ current version. It never copies the full prior mutation into retry arguments.
 A `team_sync` snapshot and update result retains the complete bounded
 orientation or delta. `contract_gap`, `unavailable`, `cancelled`, and
 `snapshot_required` results state that observation did not advance. They return
-no entity counts. `structured_task_event_evidence_absent` supplies a typed
-`request_snapshot` recovery action. The missing event evidence remains in the
-raw semantic result and QA trace.
+no entity counts. Structural Task events can produce deltas without narrative
+text; `journal_entries` is empty in that case. The obsolete
+`structured_task_event_evidence_absent` recovery is reserved for malformed
+authority behavior, not a normal structural event.
 
 ### Human TUI projection
 
