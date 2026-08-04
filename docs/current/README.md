@@ -90,7 +90,7 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.4` release candidate uses the real main extension as its local
+- The `0.17.0-rc.5` release candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
@@ -122,12 +122,14 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.4` is the prepared release candidate.
-  It adds strict stress-recovery guidance and the `pi-team-bright` packaged
-  Skill name without changing Task authority behavior. The published rc.3
-  registry and provenance evidence remains in the
+- `@hypercarrier/pi-team-bright@0.17.0-rc.5` is the prepared release candidate.
+  It batches candidate snapshot hydration, projects externally oversized Task
+  fields without hiding structural work, inherits explicit Pi trust for Worker
+  launch, adds immutable Team pane policy with a deterministic Herdr grid, and
+  adds last-resort stale-Team rescue guidance. npm `next` remains on rc.4 until
+  rc.5 registry bytes and provenance pass publication verification. The latest
+  durable publication record is the
   [`v0.17.0-rc.3` release receipt](../journal/2026-08-03-v0.17.0-rc.3-release-receipt.md).
-  Record rc.4 publication only after registry and provenance verification.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
