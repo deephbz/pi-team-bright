@@ -96,7 +96,7 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.6` release candidate uses the real main extension as its local
+- The `0.17.0-rc.7` release candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
@@ -108,8 +108,8 @@ restating executable definitions.
   semantic results entered the old generic renderer and could produce
   false human summaries. The accepted revamp now keeps raw semantic details as
   truth and derives separate validated model, collapsed TUI, expanded TUI, and
-  exact QA projections. Candidate Task-card `goal` accepts one to 1,000 TypeBox
-  string-length units across create input and returned Task cards. Candidate
+  exact QA projections. Canonical Task-card `goal` accepts one to 1,000 TypeBox
+  string-length units across create input and returned Task cards. Canonical
   `current_context` uses the shared standard TypeBox schema in
   [`src/utils/beads.ts`](../../src/utils/beads.ts): one to 2,000 units. Owned
   writes keep these limits. Reads tolerate external oversized display fields
@@ -129,12 +129,17 @@ restating executable definitions.
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
 - `@hypercarrier/pi-team-bright@0.17.0-rc.5` is published, and npm `next`
-  still points to it. `0.17.0-rc.6` is prepared but not published. It batches candidate snapshot hydration, projects externally
-  oversized Task fields without hiding structural work, inherits explicit Pi
-  trust for Worker launch, adds immutable Team pane policy with a deterministic
-  Herdr grid, and adds last-resort stale-Team rescue guidance. The exact source,
-  workflow, registry-byte, provenance, and GitHub prerelease evidence is in the
-  [`v0.17.0-rc.5` release receipt](../journal/2026-08-04-v0.17.0-rc.5-release-receipt.md). The prepared [`v0.17.0-rc.6` receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md) records pending VCS and publication evidence.
+  still points to it. The `v0.17.0-rc.6` source tag was aborted before npm
+  publication because final review found a release-specific generated-dist
+  verifier exception. No rc.6 npm package or GitHub Release exists.
+  `0.17.0-rc.7` removes that exception and tracks each generated dependency.
+  It batches Team-scoped snapshot hydration, projects externally oversized Task
+  fields without hiding structural work, and retains the accepted trust and
+  pane-layout contracts. The published rc.5 evidence is in its
+  [release receipt](../journal/2026-08-04-v0.17.0-rc.5-release-receipt.md).
+  The [aborted rc.6 receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md)
+  and [prepared rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md)
+  keep their separate evidence.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
