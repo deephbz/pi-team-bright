@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { BeadsAuthorityFingerprint, TeamConfig } from "./models";
-import { BeadsTaskStore, assertBeadsAuthorityFingerprint } from "./beads";
+import { verifyTaskAuthority } from "../model-tool-contract/beads-authority-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
 
@@ -84,19 +84,7 @@ function shellQuoted(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-async function verifyConfiguredBeads(config: TeamConfig): Promise<BeadsAuthorityFingerprint> {
-  if (!config.taskWorkspace || !config.taskAuthorityFingerprint) {
-    throw new Error("TeamConfig has an incomplete Beads authority binding");
-  }
-  assertBeadsAuthorityFingerprint(config.taskWorkspace, config.taskAuthorityFingerprint);
-  const store = new BeadsTaskStore({
-    teamName: config.name,
-    workspace: config.taskWorkspace,
-    authorityFingerprint: config.taskAuthorityFingerprint,
-    requireExpectedVersion: false,
-  });
-  return store.assertWorkspaceRoot();
-}
+const verifyConfiguredBeads = verifyTaskAuthority;
 
 /** Build a read-only diagnosis from TeamConfig plus an exact `bd where` check. */
 export async function diagnoseTeam(teamName: string, options: DiagnoseTeamOptions): Promise<TeamStatusReport> {

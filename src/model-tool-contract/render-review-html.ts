@@ -1,5 +1,5 @@
-import { MODEL_TOOL_CANDIDATE_LIMITS, type CandidateModelToolCatalog } from "./catalog";
-import { serializeCandidateToolResult, type CandidateProjectedTool } from "./result-projection";
+import { MODEL_TOOL_LIMITS, type ModelToolCatalog } from "./catalog";
+import { serializeToolResult, type ProjectedTool } from "./result-projection";
 
 export interface ContractReviewGovernance {
   document_id: string;
@@ -75,8 +75,8 @@ function resultSummary(schema: Record<string, any>): string {
   }).join("");
 }
 
-function scenarioHtml(scenario: CandidateModelToolCatalog["scenarios"][number], index: number): string {
-  const modelContent = serializeCandidateToolResult(scenario.tool as CandidateProjectedTool, scenario.result);
+function scenarioHtml(scenario: ModelToolCatalog["scenarios"][number], index: number): string {
+  const modelContent = serializeToolResult(scenario.tool as ProjectedTool, scenario.result);
   return `<article class="scenario" id="scenario-${escapeHtml(scenario.id)}">
     <header>
       <span class="eyebrow">Scenario ${index + 1} · ${escapeHtml(scenario.tool)}</span>
@@ -123,9 +123,9 @@ function toolSignature(name: string): string {
   return "ensure_worker({ name, scope })";
 }
 
-function toolHtml(tool: CandidateModelToolCatalog["tools"][number], index: number, toolCount: number): string {
+function toolHtml(tool: ModelToolCatalog["tools"][number], index: number, toolCount: number): string {
   return `<article class="tool-card" id="tool-${escapeHtml(tool.name)}">
-    <span class="eyebrow">Candidate function ${index + 1} of ${escapeHtml(toolCount)}</span>
+    <span class="eyebrow">Function ${index + 1} of ${escapeHtml(toolCount)}</span>
     <h3><code>${escapeHtml(tool.name)}</code></h3>
     <p>${escapeHtml(tool.responsibility)}</p>
     <div class="call-signature">${escapeHtml(toolSignature(tool.name))}</div>
@@ -142,14 +142,14 @@ function toolHtml(tool: CandidateModelToolCatalog["tools"][number], index: numbe
 }
 
 export function renderModelToolContractReview(
-  catalog: CandidateModelToolCatalog,
+  catalog: ModelToolCatalog,
   governance: ContractReviewGovernance,
   provenance: ContractReviewProvenance,
 ): string {
   const limits = {
-    task_title_chars: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars,
-    task_goal_chars: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars,
-    task_current_context_chars: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskCurrentContextChars,
+    task_title_chars: MODEL_TOOL_LIMITS.maxTaskTitleChars,
+    task_goal_chars: MODEL_TOOL_LIMITS.maxTaskGoalChars,
+    task_current_context_chars: MODEL_TOOL_LIMITS.maxTaskCurrentContextChars,
   };
   const meta = Object.entries(governance)
     .map(([name, value]) => `<meta name="${escapeHtml(name.replaceAll("_", "-"))}" content="${escapeHtml(value)}">`)
@@ -204,14 +204,14 @@ export function renderModelToolContractReview(
   </nav>
   <main>
     <header class="hero">
-      <span class="badge">Candidate · not registered with Pi</span>
+      <span class="badge">Not registered with Pi</span>
       <h1>Create the Team. Build a deep Worker. See what changed.</h1>
       <p class="lede">The long-lived leader chooses Worker scope and Team view. Pi Team Bright resolves the active Team and owns transport state. The default model return is minified, named JSON with the same validated semantics.</p>
       <div class="journey" id="journey"><span>Create Team</span><b>→</b><span>Find deep area</span><b>→</b><span>Ensure Worker</span><b>→</b><span>Assign Tasks</span><b>→</b><span>Snapshot</span><b>→</b><span>Updates</span><b>→</b><span>Act</span></div>
     </header>
     ${governanceHtml(governance)}
     <section id="scenarios"><div class="section-heading"><span class="eyebrow">Decision review</span><h2>Leader scenarios first</h2></div>${catalog.scenarios.map(scenarioHtml).join("")}</section>
-    <section id="tools"><div class="section-heading"><span class="eyebrow">Four first-journey calls</span><h2>Candidate tool contracts</h2></div>${catalog.tools.map((tool, index) => toolHtml(tool, index, catalog.tools.length)).join("")}</section>
+    <section id="tools"><div class="section-heading"><span class="eyebrow">Four first-journey calls</span><h2>Tool contracts</h2></div>${catalog.tools.map((tool, index) => toolHtml(tool, index, catalog.tools.length)).join("")}</section>
     <section class="projection" id="projection">
       <span class="eyebrow">Projection boundary</span><h2>Raw truth with audience projections</h2>
       <p>The raw semantic result is validated once, then projected into decision-relevant model JSON. Human TUI and QA records remain separate projections of the same raw truth.</p>
@@ -219,7 +219,7 @@ export function renderModelToolContractReview(
     </section>
     <section id="limits"><div class="section-heading"><span class="eyebrow">Accepted starting budgets</span><h2>Concise Task fields</h2></div><p>No candidate limit is placed on Team Workers, nonterminal Tasks, or journal entries. Paging is not part of this contract.</p><div class="limit-grid">${Object.entries(limits).map(([name, value]) => `<div class="limit"><strong>${escapeHtml(value)}</strong>${escapeHtml(name.replaceAll("_", " "))}</div>`).join("")}</div></section>
     <section id="schemas"><div class="section-heading"><span class="eyebrow">Executable candidate</span><h2>Exact schemas and examples</h2></div>
-      ${catalog.tools.map((tool) => `<h3><code>${escapeHtml(tool.name)}</code></h3><details><summary>Parameter JSON Schema</summary><pre>${json(tool.parameters)}</pre></details><details><summary>Raw result JSON Schema</summary><pre>${json(tool.result)}</pre></details>${tool.examples.map((example) => `<details><summary>${escapeHtml(example.title)}</summary><div class="code-grid"><section><h4>Call</h4><pre>${json(example.call)}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">${escapeHtml(serializeCandidateToolResult(tool.name as CandidateProjectedTool, example.result))}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>${json(example.result)}</pre></details></details>`).join("")}`).join("")}
+      ${catalog.tools.map((tool) => `<h3><code>${escapeHtml(tool.name)}</code></h3><details><summary>Parameter JSON Schema</summary><pre>${json(tool.parameters)}</pre></details><details><summary>Raw result JSON Schema</summary><pre>${json(tool.result)}</pre></details>${tool.examples.map((example) => `<details><summary>${escapeHtml(example.title)}</summary><div class="code-grid"><section><h4>Call</h4><pre>${json(example.call)}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">${escapeHtml(serializeToolResult(tool.name as ProjectedTool, example.result))}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>${json(example.result)}</pre></details></details>`).join("")}`).join("")}
     </section>
     <footer class="provenance"><div>Catalog schema: ${escapeHtml(catalog.schema)} · status: ${escapeHtml(catalog.status)}</div><div>Base revision: ${escapeHtml(provenance.baseRevision)}</div><div>Catalog SHA-256: ${escapeHtml(provenance.catalogSha256)}</div><div>Design SHA-256: ${escapeHtml(provenance.designSha256)}</div></footer>
   </main>

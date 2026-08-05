@@ -13,8 +13,8 @@
   <meta name="maintenance" content="Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.">
   <meta name="catalog-schema" content="pi-team-bright-model-tool-catalog/1">
   <meta name="catalog-status" content="candidate">
-  <meta name="catalog-sha256" content="bfce9659681ac76016bb2bc0ce6463f63b591d84456a163a79b3bfa3366448cd">
-  <meta name="design-sha256" content="b44642fdbddcdddadff1d419dfba9d0e08452460662f915a095502062039b2d6">
+  <meta name="catalog-sha256" content="beab72f842387422c110cc09c77f8590b95180b555b4db634032a33f6b719e82">
+  <meta name="design-sha256" content="31beea2fb9c2bb61a8fc8ad7955aee0aea0ac8fd9dda0e3d80183de8a06440e2">
   <title>Pi Team Bright — Candidate Model Tool Contract</title>
   <style>
     :root { color-scheme: light dark; --bg:#f5f3ed; --panel:#fffdf8; --ink:#1f2a2a; --muted:#66706c; --line:#d8d5ca; --accent:#176b5b; --accent-soft:#dff1eb; --warn:#8c4f12; --warn-soft:#fff0d8; --code:#152422; --code-ink:#e9f7f2; }
@@ -54,7 +54,7 @@
   </nav>
   <main>
     <header class="hero">
-      <span class="badge">Candidate · not registered with Pi</span>
+      <span class="badge">Not registered with Pi</span>
       <h1>Create the Team. Build a deep Worker. See what changed.</h1>
       <p class="lede">The long-lived leader chooses Worker scope and Team view. Pi Team Bright resolves the active Team and owns transport state. The default model return is minified, named JSON with the same validated semantics.</p>
       <div class="journey" id="journey"><span>Create Team</span><b>→</b><span>Find deep area</span><b>→</b><span>Ensure Worker</span><b>→</b><span>Assign Tasks</span><b>→</b><span>Snapshot</span><b>→</b><span>Updates</span><b>→</b><span>Act</span></div>
@@ -164,7 +164,7 @@
       &quot;status&quot;: &quot;in_progress&quot;,
       &quot;assignee&quot;: &quot;release-builder&quot;,
       &quot;current_context&quot;: &quot;Package is built. Dry-run publication is next; no blocker is known.&quot;,
-      &quot;version&quot;: &quot;task_v7&quot;
+      &quot;version&quot;: &quot;v_3f89cd171f52b332&quot;
     },
     {
       &quot;id&quot;: &quot;task-23&quot;,
@@ -173,7 +173,7 @@
       &quot;status&quot;: &quot;open&quot;,
       &quot;assignee&quot;: &quot;release-verifier&quot;,
       &quot;current_context&quot;: &quot;Waiting for the candidate digest from task-17.&quot;,
-      &quot;version&quot;: &quot;task_v2&quot;
+      &quot;version&quot;: &quot;v_4ab67899e5ec4e58&quot;
     }
   ]
 }</pre></details>
@@ -192,7 +192,7 @@
       <section><h4>Model call</h4><pre>{
   &quot;view&quot;: &quot;updates&quot;
 }</pre></section>
-      <section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updates&quot;,&quot;team_changes&quot;:[],&quot;worker_changes&quot;:[],&quot;task_changes&quot;:[{&quot;task_id&quot;:&quot;task-17&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-91&quot;,&quot;at&quot;:&quot;2026-08-02T10:00:00Z&quot;,&quot;actor&quot;:&quot;release-builder&quot;,&quot;kind&quot;:&quot;result&quot;,&quot;text&quot;:&quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;closed&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Candidate delivered and verified locally. No further action remains.&quot;,&quot;version&quot;:&quot;v_93861017a874fd3d&quot;}},{&quot;task_id&quot;:&quot;task-23&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-92&quot;,&quot;at&quot;:&quot;2026-08-02T10:01:00Z&quot;,&quot;actor&quot;:&quot;release-verifier&quot;,&quot;kind&quot;:&quot;blocker&quot;,&quot;text&quot;:&quot;Provenance digest differs from the candidate package digest.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;blocked&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,&quot;version&quot;:&quot;v_d532cbd1d0458c7e&quot;}}],&quot;alerts&quot;:[]}</pre></section>
+      <section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updates&quot;,&quot;team_changes&quot;:[],&quot;worker_changes&quot;:[],&quot;task_changes&quot;:[{&quot;task_id&quot;:&quot;task-17&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-91&quot;,&quot;at&quot;:&quot;2026-08-02T10:00:00Z&quot;,&quot;actor&quot;:&quot;release-builder&quot;,&quot;kind&quot;:&quot;result&quot;,&quot;text&quot;:&quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;}],&quot;current&quot;:{&quot;id&quot;:&quot;task-17&quot;,&quot;title&quot;:&quot;Build release candidate&quot;,&quot;goal&quot;:&quot;Build and verify the release candidate.&quot;,&quot;status&quot;:&quot;closed&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Candidate delivered and verified locally. No further action remains.&quot;,&quot;version&quot;:&quot;v_93861017a874fd3d&quot;}},{&quot;task_id&quot;:&quot;task-23&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-92&quot;,&quot;at&quot;:&quot;2026-08-02T10:01:00Z&quot;,&quot;actor&quot;:&quot;release-verifier&quot;,&quot;kind&quot;:&quot;blocker&quot;,&quot;text&quot;:&quot;Provenance digest differs from the candidate package digest.&quot;}],&quot;current&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release provenance&quot;,&quot;goal&quot;:&quot;Verify the release provenance digest.&quot;,&quot;status&quot;:&quot;blocked&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,&quot;version&quot;:&quot;v_d532cbd1d0458c7e&quot;}}],&quot;alerts&quot;:[]}</pre></section>
     </div>
     <details><summary>Raw semantic JSON</summary><pre>{
   &quot;kind&quot;: &quot;updates&quot;,
@@ -215,10 +215,13 @@
         }
       ],
       &quot;current&quot;: {
+        &quot;id&quot;: &quot;task-17&quot;,
+        &quot;title&quot;: &quot;Build release candidate&quot;,
+        &quot;goal&quot;: &quot;Build and verify the release candidate.&quot;,
         &quot;status&quot;: &quot;closed&quot;,
         &quot;assignee&quot;: &quot;release-builder&quot;,
         &quot;current_context&quot;: &quot;Candidate delivered and verified locally. No further action remains.&quot;,
-        &quot;version&quot;: &quot;task_v8&quot;
+        &quot;version&quot;: &quot;v_93861017a874fd3d&quot;
       }
     },
     {
@@ -237,10 +240,13 @@
         }
       ],
       &quot;current&quot;: {
+        &quot;id&quot;: &quot;task-23&quot;,
+        &quot;title&quot;: &quot;Verify release provenance&quot;,
+        &quot;goal&quot;: &quot;Verify the release provenance digest.&quot;,
         &quot;status&quot;: &quot;blocked&quot;,
         &quot;assignee&quot;: &quot;release-verifier&quot;,
         &quot;current_context&quot;: &quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,
-        &quot;version&quot;: &quot;task_v3&quot;
+        &quot;version&quot;: &quot;v_d532cbd1d0458c7e&quot;
       }
     }
   ],
@@ -249,8 +255,8 @@
     <section class="reasoning"><h4>Expected reasoning</h4><ul><li>task-17 is complete and needs no further delegation.</li><li>task-23 is blocked by a digest mismatch and needs a leader decision.</li><li>The latest Task state appears once even though several change kinds occurred.</li></ul></section>
     <section class="review"><h4>Your review</h4><ul><li>Can you make the rebuild-versus-correction decision from this update?</li><li>Would any new journal entry change that decision?</li><li>Is the current context concise enough for routine supervision?</li></ul></section>
   </article></section>
-    <section id="tools"><div class="section-heading"><span class="eyebrow">Four first-journey calls</span><h2>Candidate tool contracts</h2></div><article class="tool-card" id="tool-team_create">
-    <span class="eyebrow">Candidate function 1 of 10</span>
+    <section id="tools"><div class="section-heading"><span class="eyebrow">Four first-journey calls</span><h2>Tool contracts</h2></div><article class="tool-card" id="tool-team_create">
+    <span class="eyebrow">Function 1 of 10</span>
     <h3><code>team_create</code></h3>
     <p>Create one long-lived Team and bind the exact calling Session as its leader.</p>
     <div class="call-signature">team_create({ name, purpose })</div>
@@ -271,6 +277,12 @@
       <td>string</td>
       <td>min 1</td>
       <td>The long-lived Team outcome and operating boundary.</td>
+    </tr><tr>
+      <td><code>pane_layout</code></td>
+      <td>optional</td>
+      <td>object</td>
+      <td>—</td>
+      <td></td>
     </tr></tbody></table>
     <h4>Semantic JSON results</h4>
     <div class="result-grid"><article class="result-variant">
@@ -285,7 +297,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Creates one logical Team and one exact leader Session binding.</li><li>Does not create Workers, Tasks, or Alerts.</li><li>Refusal or unavailable authority changes no state.</li></ul>
   </article><article class="tool-card" id="tool-task_create">
-    <span class="eyebrow">Candidate function 2 of 10</span>
+    <span class="eyebrow">Function 2 of 10</span>
     <h3><code>task_create</code></h3>
     <p>Create independent executable Task contracts and assign each one to an existing Worker.</p>
     <div class="call-signature">task_create({ tasks: [{ operation_id, … }] })</div>
@@ -308,7 +320,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Commits each input item independently in input order.</li><li>Creates open Tasks with current_context set to Work has not started.</li><li>A refused or unavailable item changes no state.</li></ul>
   </article><article class="tool-card" id="tool-task_read">
-    <span class="eyebrow">Candidate function 3 of 10</span>
+    <span class="eyebrow">Function 3 of 10</span>
     <h3><code>task_read</code></h3>
     <p>Read current Task cards by ID without changing Team or observation state.</p>
     <div class="call-signature">task_read({ task_ids })</div>
@@ -334,7 +346,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Returns one ordered found or missing outcome per input occurrence.</li><li>Returns one unavailable result without partial Task cards when authority cannot provide a coherent read.</li><li>Changes no Team, Task, or observation state.</li></ul>
   </article><article class="tool-card" id="tool-task_update">
-    <span class="eyebrow">Candidate function 4 of 10</span>
+    <span class="eyebrow">Function 4 of 10</span>
     <h3><code>task_update</code></h3>
     <p>Replace one Task&#39;s current context and append leader decision evidence with an expected-version check.</p>
     <div class="call-signature">task_update({ updates })</div>
@@ -363,7 +375,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Commits current context and generated journal provenance atomically per item.</li><li>Rejects duplicate Task IDs before mutation and refuses version or operation conflicts.</li><li>Does not claim Worker execution or carrier readiness.</li></ul>
   </article><article class="tool-card" id="tool-team_sync">
-    <span class="eyebrow">Candidate function 5 of 10</span>
+    <span class="eyebrow">Function 5 of 10</span>
     <h3><code>team_sync</code></h3>
     <p>Restore current whole-Team context or observe incremental coordination changes.</p>
     <div class="call-signature">team_sync({ view })</div>
@@ -382,10 +394,10 @@
     <h4>Semantic JSON results</h4>
     <div class="result-grid"><article class="result-variant">
       <h4><code>snapshot</code></h4>
-      <p><code>team</code> · <code>workers</code> · <code>tasks</code></p>
+      <p><code>team</code> · <code>workers</code> · <code>tasks</code> · <code>task_projection_warnings</code></p>
     </article><article class="result-variant">
       <h4><code>updates</code></h4>
-      <p><code>team_changes</code> · <code>worker_changes</code> · <code>task_changes</code> · <code>alerts</code></p>
+      <p><code>team_changes</code> · <code>worker_changes</code> · <code>task_changes</code> · <code>alerts</code> · <code>task_projection_warnings</code></p>
     </article><article class="result-variant">
       <h4><code>snapshot_required</code></h4>
       <p><code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
@@ -401,7 +413,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>A persisted snapshot establishes the hidden incremental baseline at its observed head.</li><li>A persisted updates result advances the hidden baseline through all returned changes.</li><li>Cancellation or unavailable authority advances no baseline and publishes no Team observation.</li></ul>
   </article><article class="tool-card" id="tool-ensure_worker">
-    <span class="eyebrow">Candidate function 6 of 10</span>
+    <span class="eyebrow">Function 6 of 10</span>
     <h3><code>ensure_worker</code></h3>
     <p>Create or reuse a short-lived Worker for one semantically deep area in the active Team.</p>
     <div class="call-signature">ensure_worker({ name, scope })</div>
@@ -436,7 +448,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Creates, reconnects, or reuses one logical Worker in the active Team.</li><li>Does not assign a Task or claim model readiness.</li><li>The same name with a materially different scope is refused rather than silently redefined.</li></ul>
   </article><article class="tool-card" id="tool-worker_stop">
-    <span class="eyebrow">Candidate function 7 of 10</span>
+    <span class="eyebrow">Function 7 of 10</span>
     <h3><code>worker_stop</code></h3>
     <p>Stop one Worker only after its nonterminal Tasks are resolved and exact terminal stop evidence is confirmed.</p>
     <div class="call-signature">worker_stop({ worker })</div>
@@ -465,7 +477,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Deactivates only the exact current Membership after terminal stop evidence.</li><li>Never changes Task state.</li></ul>
   </article><article class="tool-card" id="tool-team_shutdown">
-    <span class="eyebrow">Candidate function 8 of 10</span>
+    <span class="eyebrow">Function 8 of 10</span>
     <h3><code>team_shutdown</code></h3>
     <p>Stop every Worker and close the exact leader Team; failed stops keep current Memberships and permit retry.</p>
     <div class="call-signature">team_shutdown({ })</div>
@@ -488,9 +500,9 @@
     </article></div>
     <h4>State effects</h4><ul><li>Stops Workers with exact terminal evidence, then deactivates the leader Membership only after all stops succeed.</li><li>Retains Task authority and unfinished Tasks.</li></ul>
   </article><article class="tool-card" id="tool-task_link">
-    <span class="eyebrow">Candidate function 9 of 10</span>
+    <span class="eyebrow">Function 9 of 10</span>
     <h3><code>task_link</code></h3>
-    <p>Add or remove one typed Task relation with graph and version validation.</p>
+    <p>Add or remove one typed Task relation with graph and version validation using the latest Task version; closure does not freeze the version.</p>
     <div class="call-signature">task_link({ task_id, relation, target_id, action, expected_version })</div>
     <div class="two-col">
       <section><h4>Use it for</h4><ul><li>Record a blocking, parent, or related relation between current Tasks.</li></ul></section>
@@ -541,7 +553,7 @@
     </article></div>
     <h4>State effects</h4><ul><li>Changes only the requested relation when graph and version checks pass.</li><li>A no-op or refusal changes no graph state.</li></ul>
   </article><article class="tool-card" id="tool-alert_send">
-    <span class="eyebrow">Candidate function 10 of 10</span>
+    <span class="eyebrow">Function 10 of 10</span>
     <h3><code>alert_send</code></h3>
     <p>Send exceptional clarification, attention, or announcement without changing Task state.</p>
     <div class="call-signature">alert_send({ target, kind, text, task_id, task_version })</div>
@@ -587,6 +599,27 @@
       &quot;type&quot;: &quot;string&quot;,
       &quot;minLength&quot;: 1,
       &quot;description&quot;: &quot;The long-lived Team outcome and operating boundary.&quot;
+    },
+    &quot;pane_layout&quot;: {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;leader_share&quot;,
+        &quot;worker_tiling&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;leader_share&quot;: {
+          &quot;type&quot;: &quot;number&quot;,
+          &quot;minimum&quot;: 0.6,
+          &quot;exclusiveMaximum&quot;: 1
+        },
+        &quot;worker_tiling&quot;: {
+          &quot;enum&quot;: [
+            &quot;linear&quot;,
+            &quot;grid&quot;
+          ]
+        }
+      },
+      &quot;additionalProperties&quot;: false
     }
   },
   &quot;additionalProperties&quot;: false,
@@ -790,59 +823,203 @@
                 &quot;const&quot;: &quot;created&quot;
               },
               &quot;task&quot;: {
-                &quot;type&quot;: &quot;object&quot;,
-                &quot;required&quot;: [
-                  &quot;id&quot;,
-                  &quot;title&quot;,
-                  &quot;goal&quot;,
-                  &quot;status&quot;,
-                  &quot;current_context&quot;,
-                  &quot;version&quot;
-                ],
-                &quot;properties&quot;: {
-                  &quot;id&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 128
-                  },
-                  &quot;title&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 80
-                  },
-                  &quot;goal&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 1000,
-                    &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
-                  },
-                  &quot;status&quot;: {
-                    &quot;enum&quot;: [
-                      &quot;open&quot;,
-                      &quot;in_progress&quot;,
-                      &quot;blocked&quot;,
-                      &quot;closed&quot;
+                &quot;anyOf&quot;: [
+                  {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;,
+                      &quot;goal&quot;
                     ],
-                    &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ]
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 2000
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                        &quot;minLength&quot;: 18,
+                        &quot;maxLength&quot;: 18
+                      },
+                      &quot;goal&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 1000
+                      },
+                      &quot;projection_warnings&quot;: {
+                        &quot;type&quot;: &quot;array&quot;,
+                        &quot;items&quot;: {
+                          &quot;type&quot;: &quot;object&quot;,
+                          &quot;required&quot;: [
+                            &quot;task_id&quot;,
+                            &quot;truncated_fields&quot;,
+                            &quot;incomplete_fields&quot;,
+                            &quot;message&quot;
+                          ],
+                          &quot;properties&quot;: {
+                            &quot;task_id&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1,
+                              &quot;maxLength&quot;: 128
+                            },
+                            &quot;truncated_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;incomplete_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;message&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1
+                            }
+                          },
+                          &quot;additionalProperties&quot;: false
+                        }
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false
                   },
-                  &quot;assignee&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 64
-                  },
-                  &quot;current_context&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 2000
-                  },
-                  &quot;version&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 128
+                  {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;,
+                      &quot;goal_state&quot;,
+                      &quot;projection_warnings&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ]
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 2000
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                        &quot;minLength&quot;: 18,
+                        &quot;maxLength&quot;: 18
+                      },
+                      &quot;goal_state&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;const&quot;: &quot;incomplete&quot;
+                      },
+                      &quot;projection_warnings&quot;: {
+                        &quot;type&quot;: &quot;array&quot;,
+                        &quot;items&quot;: {
+                          &quot;type&quot;: &quot;object&quot;,
+                          &quot;required&quot;: [
+                            &quot;task_id&quot;,
+                            &quot;truncated_fields&quot;,
+                            &quot;incomplete_fields&quot;,
+                            &quot;message&quot;
+                          ],
+                          &quot;properties&quot;: {
+                            &quot;task_id&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1,
+                              &quot;maxLength&quot;: 128
+                            },
+                            &quot;truncated_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;incomplete_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;message&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1
+                            }
+                          },
+                          &quot;additionalProperties&quot;: false
+                        },
+                        &quot;minItems&quot;: 1
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false
                   }
-                },
-                &quot;additionalProperties&quot;: false,
-                &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                ]
               },
               &quot;delivery_warnings&quot;: {
                 &quot;type&quot;: &quot;array&quot;,
@@ -994,7 +1171,7 @@
         &quot;status&quot;: &quot;open&quot;,
         &quot;assignee&quot;: &quot;release-verifier&quot;,
         &quot;current_context&quot;: &quot;Work has not started.&quot;,
-        &quot;version&quot;: &quot;task_v1&quot;
+        &quot;version&quot;: &quot;v_3680fa021836b49f&quot;
       }
     }
   ]
@@ -1077,59 +1254,203 @@
                     &quot;maxLength&quot;: 128
                   },
                   &quot;task&quot;: {
-                    &quot;type&quot;: &quot;object&quot;,
-                    &quot;required&quot;: [
-                      &quot;id&quot;,
-                      &quot;title&quot;,
-                      &quot;goal&quot;,
-                      &quot;status&quot;,
-                      &quot;current_context&quot;,
-                      &quot;version&quot;
-                    ],
-                    &quot;properties&quot;: {
-                      &quot;id&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
-                      },
-                      &quot;title&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 80
-                      },
-                      &quot;goal&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 1000,
-                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
-                      },
-                      &quot;status&quot;: {
-                        &quot;enum&quot;: [
-                          &quot;open&quot;,
-                          &quot;in_progress&quot;,
-                          &quot;blocked&quot;,
-                          &quot;closed&quot;
+                    &quot;anyOf&quot;: [
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal&quot;
                         ],
-                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 1000
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            }
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       },
-                      &quot;assignee&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 64
-                      },
-                      &quot;current_context&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 2000
-                      },
-                      &quot;version&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal_state&quot;,
+                          &quot;projection_warnings&quot;
+                        ],
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal_state&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;const&quot;: &quot;incomplete&quot;
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            },
+                            &quot;minItems&quot;: 1
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       }
-                    },
-                    &quot;additionalProperties&quot;: false,
-                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                    ]
                   }
                 },
                 &quot;additionalProperties&quot;: false
@@ -1175,7 +1496,7 @@
                   &quot;input_index&quot;,
                   &quot;task_id&quot;,
                   &quot;reason&quot;,
-                  &quot;authority_version&quot;,
+                  &quot;version&quot;,
                   &quot;message&quot;,
                   &quot;state_changed&quot;
                 ],
@@ -1195,18 +1516,60 @@
                   },
                   &quot;reason&quot;: {
                     &quot;enum&quot;: [
-                      &quot;candidate_metadata_absent&quot;,
-                      &quot;candidate_metadata_invalid&quot;
+                      &quot;task_metadata_absent&quot;,
+                      &quot;task_metadata_invalid&quot;
                     ]
                   },
-                  &quot;authority_version&quot;: {
+                  &quot;version&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 128
+                    &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                    &quot;minLength&quot;: 18,
+                    &quot;maxLength&quot;: 18
                   },
                   &quot;message&quot;: {
                     &quot;type&quot;: &quot;string&quot;,
                     &quot;minLength&quot;: 1
+                  },
+                  &quot;projection_warning&quot;: {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;task_id&quot;,
+                      &quot;truncated_fields&quot;,
+                      &quot;incomplete_fields&quot;,
+                      &quot;message&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;task_id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;truncated_fields&quot;: {
+                        &quot;type&quot;: &quot;array&quot;,
+                        &quot;items&quot;: {
+                          &quot;enum&quot;: [
+                            &quot;title&quot;,
+                            &quot;goal&quot;,
+                            &quot;current_context&quot;
+                          ]
+                        }
+                      },
+                      &quot;incomplete_fields&quot;: {
+                        &quot;type&quot;: &quot;array&quot;,
+                        &quot;items&quot;: {
+                          &quot;enum&quot;: [
+                            &quot;title&quot;,
+                            &quot;goal&quot;,
+                            &quot;current_context&quot;
+                          ]
+                        }
+                      },
+                      &quot;message&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false
                   },
                   &quot;state_changed&quot;: {
                     &quot;type&quot;: &quot;boolean&quot;,
@@ -1270,7 +1633,7 @@
         &quot;status&quot;: &quot;open&quot;,
         &quot;assignee&quot;: &quot;release-verifier&quot;,
         &quot;current_context&quot;: &quot;Work has not started.&quot;,
-        &quot;version&quot;: &quot;task_v1&quot;
+        &quot;version&quot;: &quot;v_3680fa021836b49f&quot;
       }
     }
   ]
@@ -1427,59 +1790,203 @@
                     &quot;const&quot;: &quot;updated&quot;
                   },
                   &quot;task&quot;: {
-                    &quot;type&quot;: &quot;object&quot;,
-                    &quot;required&quot;: [
-                      &quot;id&quot;,
-                      &quot;title&quot;,
-                      &quot;goal&quot;,
-                      &quot;status&quot;,
-                      &quot;current_context&quot;,
-                      &quot;version&quot;
-                    ],
-                    &quot;properties&quot;: {
-                      &quot;id&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
-                      },
-                      &quot;title&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 80
-                      },
-                      &quot;goal&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 1000,
-                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
-                      },
-                      &quot;status&quot;: {
-                        &quot;enum&quot;: [
-                          &quot;open&quot;,
-                          &quot;in_progress&quot;,
-                          &quot;blocked&quot;,
-                          &quot;closed&quot;
+                    &quot;anyOf&quot;: [
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal&quot;
                         ],
-                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 1000
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            }
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       },
-                      &quot;assignee&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 64
-                      },
-                      &quot;current_context&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 2000
-                      },
-                      &quot;version&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal_state&quot;,
+                          &quot;projection_warnings&quot;
+                        ],
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal_state&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;const&quot;: &quot;incomplete&quot;
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            },
+                            &quot;minItems&quot;: 1
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       }
-                    },
-                    &quot;additionalProperties&quot;: false,
-                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                    ]
                   },
                   &quot;journal_entries&quot;: {
                     &quot;type&quot;: &quot;array&quot;,
@@ -1578,59 +2085,203 @@
                     &quot;minLength&quot;: 1
                   },
                   &quot;current_task&quot;: {
-                    &quot;type&quot;: &quot;object&quot;,
-                    &quot;required&quot;: [
-                      &quot;id&quot;,
-                      &quot;title&quot;,
-                      &quot;goal&quot;,
-                      &quot;status&quot;,
-                      &quot;current_context&quot;,
-                      &quot;version&quot;
-                    ],
-                    &quot;properties&quot;: {
-                      &quot;id&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
-                      },
-                      &quot;title&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 80
-                      },
-                      &quot;goal&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 1000,
-                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
-                      },
-                      &quot;status&quot;: {
-                        &quot;enum&quot;: [
-                          &quot;open&quot;,
-                          &quot;in_progress&quot;,
-                          &quot;blocked&quot;,
-                          &quot;closed&quot;
+                    &quot;anyOf&quot;: [
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal&quot;
                         ],
-                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 1000
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            }
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       },
-                      &quot;assignee&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 64
-                      },
-                      &quot;current_context&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 2000
-                      },
-                      &quot;version&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal_state&quot;,
+                          &quot;projection_warnings&quot;
+                        ],
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal_state&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;const&quot;: &quot;incomplete&quot;
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            },
+                            &quot;minItems&quot;: 1
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       }
-                    },
-                    &quot;additionalProperties&quot;: false,
-                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                    ]
                   },
                   &quot;state_changed&quot;: {
                     &quot;type&quot;: &quot;boolean&quot;,
@@ -1672,65 +2323,209 @@
                   },
                   &quot;reason&quot;: {
                     &quot;enum&quot;: [
-                      &quot;candidate_metadata_absent&quot;,
-                      &quot;candidate_metadata_invalid&quot;,
-                      &quot;beads_external_writer_atomicity_unavailable&quot;
+                      &quot;task_metadata_absent&quot;,
+                      &quot;task_metadata_invalid&quot;,
+                      &quot;external_writer_atomicity_unavailable&quot;
                     ]
                   },
                   &quot;current_task&quot;: {
-                    &quot;type&quot;: &quot;object&quot;,
-                    &quot;required&quot;: [
-                      &quot;id&quot;,
-                      &quot;title&quot;,
-                      &quot;goal&quot;,
-                      &quot;status&quot;,
-                      &quot;current_context&quot;,
-                      &quot;version&quot;
-                    ],
-                    &quot;properties&quot;: {
-                      &quot;id&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
-                      },
-                      &quot;title&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 80
-                      },
-                      &quot;goal&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 1000,
-                        &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
-                      },
-                      &quot;status&quot;: {
-                        &quot;enum&quot;: [
-                          &quot;open&quot;,
-                          &quot;in_progress&quot;,
-                          &quot;blocked&quot;,
-                          &quot;closed&quot;
+                    &quot;anyOf&quot;: [
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal&quot;
                         ],
-                        &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 1000
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            }
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       },
-                      &quot;assignee&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 64
-                      },
-                      &quot;current_context&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 2000
-                      },
-                      &quot;version&quot;: {
-                        &quot;type&quot;: &quot;string&quot;,
-                        &quot;minLength&quot;: 1,
-                        &quot;maxLength&quot;: 128
+                      {
+                        &quot;type&quot;: &quot;object&quot;,
+                        &quot;required&quot;: [
+                          &quot;id&quot;,
+                          &quot;title&quot;,
+                          &quot;status&quot;,
+                          &quot;current_context&quot;,
+                          &quot;version&quot;,
+                          &quot;goal_state&quot;,
+                          &quot;projection_warnings&quot;
+                        ],
+                        &quot;properties&quot;: {
+                          &quot;id&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 128
+                          },
+                          &quot;title&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 80
+                          },
+                          &quot;status&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;open&quot;,
+                              &quot;in_progress&quot;,
+                              &quot;blocked&quot;,
+                              &quot;closed&quot;
+                            ]
+                          },
+                          &quot;assignee&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 64
+                          },
+                          &quot;current_context&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;minLength&quot;: 1,
+                            &quot;maxLength&quot;: 2000
+                          },
+                          &quot;version&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                            &quot;minLength&quot;: 18,
+                            &quot;maxLength&quot;: 18
+                          },
+                          &quot;goal_state&quot;: {
+                            &quot;type&quot;: &quot;string&quot;,
+                            &quot;const&quot;: &quot;incomplete&quot;
+                          },
+                          &quot;projection_warnings&quot;: {
+                            &quot;type&quot;: &quot;array&quot;,
+                            &quot;items&quot;: {
+                              &quot;type&quot;: &quot;object&quot;,
+                              &quot;required&quot;: [
+                                &quot;task_id&quot;,
+                                &quot;truncated_fields&quot;,
+                                &quot;incomplete_fields&quot;,
+                                &quot;message&quot;
+                              ],
+                              &quot;properties&quot;: {
+                                &quot;task_id&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1,
+                                  &quot;maxLength&quot;: 128
+                                },
+                                &quot;truncated_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;incomplete_fields&quot;: {
+                                  &quot;type&quot;: &quot;array&quot;,
+                                  &quot;items&quot;: {
+                                    &quot;enum&quot;: [
+                                      &quot;title&quot;,
+                                      &quot;goal&quot;,
+                                      &quot;current_context&quot;
+                                    ]
+                                  }
+                                },
+                                &quot;message&quot;: {
+                                  &quot;type&quot;: &quot;string&quot;,
+                                  &quot;minLength&quot;: 1
+                                }
+                              },
+                              &quot;additionalProperties&quot;: false
+                            },
+                            &quot;minItems&quot;: 1
+                          }
+                        },
+                        &quot;additionalProperties&quot;: false
                       }
-                    },
-                    &quot;additionalProperties&quot;: false,
-                    &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+                    ]
                   },
                   &quot;unsupported&quot;: {
                     &quot;type&quot;: &quot;array&quot;,
@@ -1891,7 +2686,7 @@
         &quot;status&quot;: &quot;open&quot;,
         &quot;assignee&quot;: &quot;release-verifier&quot;,
         &quot;current_context&quot;: &quot;Task is assigned but awaits a Worker carrier.&quot;,
-        &quot;version&quot;: &quot;task_v2&quot;
+        &quot;version&quot;: &quot;v_4ab67899e5ec4e58&quot;
       },
       &quot;journal_entries&quot;: [
         {
@@ -1936,7 +2731,7 @@
         &quot;status&quot;: &quot;open&quot;,
         &quot;assignee&quot;: &quot;release-verifier&quot;,
         &quot;current_context&quot;: &quot;Work has not started.&quot;,
-        &quot;version&quot;: &quot;task_v1&quot;
+        &quot;version&quot;: &quot;v_3680fa021836b49f&quot;
       },
       &quot;state_changed&quot;: false
     }
@@ -2042,59 +2837,247 @@
         &quot;tasks&quot;: {
           &quot;type&quot;: &quot;array&quot;,
           &quot;items&quot;: {
+            &quot;anyOf&quot;: [
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;id&quot;,
+                  &quot;title&quot;,
+                  &quot;status&quot;,
+                  &quot;current_context&quot;,
+                  &quot;version&quot;,
+                  &quot;goal&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;title&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 80
+                  },
+                  &quot;status&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;open&quot;,
+                      &quot;in_progress&quot;,
+                      &quot;blocked&quot;,
+                      &quot;closed&quot;
+                    ]
+                  },
+                  &quot;assignee&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 64
+                  },
+                  &quot;current_context&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 2000
+                  },
+                  &quot;version&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                    &quot;minLength&quot;: 18,
+                    &quot;maxLength&quot;: 18
+                  },
+                  &quot;goal&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 1000
+                  },
+                  &quot;projection_warnings&quot;: {
+                    &quot;type&quot;: &quot;array&quot;,
+                    &quot;items&quot;: {
+                      &quot;type&quot;: &quot;object&quot;,
+                      &quot;required&quot;: [
+                        &quot;task_id&quot;,
+                        &quot;truncated_fields&quot;,
+                        &quot;incomplete_fields&quot;,
+                        &quot;message&quot;
+                      ],
+                      &quot;properties&quot;: {
+                        &quot;task_id&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1,
+                          &quot;maxLength&quot;: 128
+                        },
+                        &quot;truncated_fields&quot;: {
+                          &quot;type&quot;: &quot;array&quot;,
+                          &quot;items&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;title&quot;,
+                              &quot;goal&quot;,
+                              &quot;current_context&quot;
+                            ]
+                          }
+                        },
+                        &quot;incomplete_fields&quot;: {
+                          &quot;type&quot;: &quot;array&quot;,
+                          &quot;items&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;title&quot;,
+                              &quot;goal&quot;,
+                              &quot;current_context&quot;
+                            ]
+                          }
+                        },
+                        &quot;message&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1
+                        }
+                      },
+                      &quot;additionalProperties&quot;: false
+                    }
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              },
+              {
+                &quot;type&quot;: &quot;object&quot;,
+                &quot;required&quot;: [
+                  &quot;id&quot;,
+                  &quot;title&quot;,
+                  &quot;status&quot;,
+                  &quot;current_context&quot;,
+                  &quot;version&quot;,
+                  &quot;goal_state&quot;,
+                  &quot;projection_warnings&quot;
+                ],
+                &quot;properties&quot;: {
+                  &quot;id&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 128
+                  },
+                  &quot;title&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 80
+                  },
+                  &quot;status&quot;: {
+                    &quot;enum&quot;: [
+                      &quot;open&quot;,
+                      &quot;in_progress&quot;,
+                      &quot;blocked&quot;,
+                      &quot;closed&quot;
+                    ]
+                  },
+                  &quot;assignee&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 64
+                  },
+                  &quot;current_context&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;minLength&quot;: 1,
+                    &quot;maxLength&quot;: 2000
+                  },
+                  &quot;version&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                    &quot;minLength&quot;: 18,
+                    &quot;maxLength&quot;: 18
+                  },
+                  &quot;goal_state&quot;: {
+                    &quot;type&quot;: &quot;string&quot;,
+                    &quot;const&quot;: &quot;incomplete&quot;
+                  },
+                  &quot;projection_warnings&quot;: {
+                    &quot;type&quot;: &quot;array&quot;,
+                    &quot;items&quot;: {
+                      &quot;type&quot;: &quot;object&quot;,
+                      &quot;required&quot;: [
+                        &quot;task_id&quot;,
+                        &quot;truncated_fields&quot;,
+                        &quot;incomplete_fields&quot;,
+                        &quot;message&quot;
+                      ],
+                      &quot;properties&quot;: {
+                        &quot;task_id&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1,
+                          &quot;maxLength&quot;: 128
+                        },
+                        &quot;truncated_fields&quot;: {
+                          &quot;type&quot;: &quot;array&quot;,
+                          &quot;items&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;title&quot;,
+                              &quot;goal&quot;,
+                              &quot;current_context&quot;
+                            ]
+                          }
+                        },
+                        &quot;incomplete_fields&quot;: {
+                          &quot;type&quot;: &quot;array&quot;,
+                          &quot;items&quot;: {
+                            &quot;enum&quot;: [
+                              &quot;title&quot;,
+                              &quot;goal&quot;,
+                              &quot;current_context&quot;
+                            ]
+                          }
+                        },
+                        &quot;message&quot;: {
+                          &quot;type&quot;: &quot;string&quot;,
+                          &quot;minLength&quot;: 1
+                        }
+                      },
+                      &quot;additionalProperties&quot;: false
+                    },
+                    &quot;minItems&quot;: 1
+                  }
+                },
+                &quot;additionalProperties&quot;: false
+              }
+            ]
+          }
+        },
+        &quot;task_projection_warnings&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
             &quot;type&quot;: &quot;object&quot;,
             &quot;required&quot;: [
-              &quot;id&quot;,
-              &quot;title&quot;,
-              &quot;goal&quot;,
-              &quot;status&quot;,
-              &quot;current_context&quot;,
-              &quot;version&quot;
+              &quot;task_id&quot;,
+              &quot;truncated_fields&quot;,
+              &quot;incomplete_fields&quot;,
+              &quot;message&quot;
             ],
             &quot;properties&quot;: {
-              &quot;id&quot;: {
+              &quot;task_id&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
                 &quot;minLength&quot;: 1,
                 &quot;maxLength&quot;: 128
               },
-              &quot;title&quot;: {
-                &quot;type&quot;: &quot;string&quot;,
-                &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 80
+              &quot;truncated_fields&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;enum&quot;: [
+                    &quot;title&quot;,
+                    &quot;goal&quot;,
+                    &quot;current_context&quot;
+                  ]
+                }
               },
-              &quot;goal&quot;: {
-                &quot;type&quot;: &quot;string&quot;,
-                &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 1000,
-                &quot;description&quot;: &quot;Desired outcome, relevant boundary, and success signal in one field.&quot;
+              &quot;incomplete_fields&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;enum&quot;: [
+                    &quot;title&quot;,
+                    &quot;goal&quot;,
+                    &quot;current_context&quot;
+                  ]
+                }
               },
-              &quot;status&quot;: {
-                &quot;enum&quot;: [
-                  &quot;open&quot;,
-                  &quot;in_progress&quot;,
-                  &quot;blocked&quot;,
-                  &quot;closed&quot;
-                ],
-                &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
-              },
-              &quot;assignee&quot;: {
+              &quot;message&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
-                &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 64
-              },
-              &quot;current_context&quot;: {
-                &quot;type&quot;: &quot;string&quot;,
-                &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 2000
-              },
-              &quot;version&quot;: {
-                &quot;type&quot;: &quot;string&quot;,
-                &quot;minLength&quot;: 1,
-                &quot;maxLength&quot;: 128
+                &quot;minLength&quot;: 1
               }
             },
-            &quot;additionalProperties&quot;: false,
-            &quot;description&quot;: &quot;Current Task projection used for authority-backed details.&quot;
+            &quot;additionalProperties&quot;: false
           }
         }
       },
@@ -2251,39 +3234,203 @@
                 }
               },
               &quot;current&quot;: {
-                &quot;type&quot;: &quot;object&quot;,
-                &quot;required&quot;: [
-                  &quot;status&quot;,
-                  &quot;current_context&quot;,
-                  &quot;version&quot;
-                ],
-                &quot;properties&quot;: {
-                  &quot;status&quot;: {
-                    &quot;enum&quot;: [
-                      &quot;open&quot;,
-                      &quot;in_progress&quot;,
-                      &quot;blocked&quot;,
-                      &quot;closed&quot;
+                &quot;anyOf&quot;: [
+                  {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;,
+                      &quot;goal&quot;
                     ],
-                    &quot;description&quot;: &quot;Authoritative Task workflow state.&quot;
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ]
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 2000
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                        &quot;minLength&quot;: 18,
+                        &quot;maxLength&quot;: 18
+                      },
+                      &quot;goal&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 1000
+                      },
+                      &quot;projection_warnings&quot;: {
+                        &quot;type&quot;: &quot;array&quot;,
+                        &quot;items&quot;: {
+                          &quot;type&quot;: &quot;object&quot;,
+                          &quot;required&quot;: [
+                            &quot;task_id&quot;,
+                            &quot;truncated_fields&quot;,
+                            &quot;incomplete_fields&quot;,
+                            &quot;message&quot;
+                          ],
+                          &quot;properties&quot;: {
+                            &quot;task_id&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1,
+                              &quot;maxLength&quot;: 128
+                            },
+                            &quot;truncated_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;incomplete_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;message&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1
+                            }
+                          },
+                          &quot;additionalProperties&quot;: false
+                        }
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false
                   },
-                  &quot;assignee&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 64
-                  },
-                  &quot;current_context&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 2000
-                  },
-                  &quot;version&quot;: {
-                    &quot;type&quot;: &quot;string&quot;,
-                    &quot;minLength&quot;: 1,
-                    &quot;maxLength&quot;: 128
+                  {
+                    &quot;type&quot;: &quot;object&quot;,
+                    &quot;required&quot;: [
+                      &quot;id&quot;,
+                      &quot;title&quot;,
+                      &quot;status&quot;,
+                      &quot;current_context&quot;,
+                      &quot;version&quot;,
+                      &quot;goal_state&quot;,
+                      &quot;projection_warnings&quot;
+                    ],
+                    &quot;properties&quot;: {
+                      &quot;id&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 128
+                      },
+                      &quot;title&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 80
+                      },
+                      &quot;status&quot;: {
+                        &quot;enum&quot;: [
+                          &quot;open&quot;,
+                          &quot;in_progress&quot;,
+                          &quot;blocked&quot;,
+                          &quot;closed&quot;
+                        ]
+                      },
+                      &quot;assignee&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 64
+                      },
+                      &quot;current_context&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;minLength&quot;: 1,
+                        &quot;maxLength&quot;: 2000
+                      },
+                      &quot;version&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+                        &quot;minLength&quot;: 18,
+                        &quot;maxLength&quot;: 18
+                      },
+                      &quot;goal_state&quot;: {
+                        &quot;type&quot;: &quot;string&quot;,
+                        &quot;const&quot;: &quot;incomplete&quot;
+                      },
+                      &quot;projection_warnings&quot;: {
+                        &quot;type&quot;: &quot;array&quot;,
+                        &quot;items&quot;: {
+                          &quot;type&quot;: &quot;object&quot;,
+                          &quot;required&quot;: [
+                            &quot;task_id&quot;,
+                            &quot;truncated_fields&quot;,
+                            &quot;incomplete_fields&quot;,
+                            &quot;message&quot;
+                          ],
+                          &quot;properties&quot;: {
+                            &quot;task_id&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1,
+                              &quot;maxLength&quot;: 128
+                            },
+                            &quot;truncated_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;incomplete_fields&quot;: {
+                              &quot;type&quot;: &quot;array&quot;,
+                              &quot;items&quot;: {
+                                &quot;enum&quot;: [
+                                  &quot;title&quot;,
+                                  &quot;goal&quot;,
+                                  &quot;current_context&quot;
+                                ]
+                              }
+                            },
+                            &quot;message&quot;: {
+                              &quot;type&quot;: &quot;string&quot;,
+                              &quot;minLength&quot;: 1
+                            }
+                          },
+                          &quot;additionalProperties&quot;: false
+                        },
+                        &quot;minItems&quot;: 1
+                      }
+                    },
+                    &quot;additionalProperties&quot;: false
                   }
-                },
-                &quot;additionalProperties&quot;: false
+                ]
               }
             },
             &quot;additionalProperties&quot;: false,
@@ -2324,6 +3471,50 @@
                 &quot;maxLength&quot;: 128
               },
               &quot;text&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1
+              }
+            },
+            &quot;additionalProperties&quot;: false
+          }
+        },
+        &quot;task_projection_warnings&quot;: {
+          &quot;type&quot;: &quot;array&quot;,
+          &quot;items&quot;: {
+            &quot;type&quot;: &quot;object&quot;,
+            &quot;required&quot;: [
+              &quot;task_id&quot;,
+              &quot;truncated_fields&quot;,
+              &quot;incomplete_fields&quot;,
+              &quot;message&quot;
+            ],
+            &quot;properties&quot;: {
+              &quot;task_id&quot;: {
+                &quot;type&quot;: &quot;string&quot;,
+                &quot;minLength&quot;: 1,
+                &quot;maxLength&quot;: 128
+              },
+              &quot;truncated_fields&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;enum&quot;: [
+                    &quot;title&quot;,
+                    &quot;goal&quot;,
+                    &quot;current_context&quot;
+                  ]
+                }
+              },
+              &quot;incomplete_fields&quot;: {
+                &quot;type&quot;: &quot;array&quot;,
+                &quot;items&quot;: {
+                  &quot;enum&quot;: [
+                    &quot;title&quot;,
+                    &quot;goal&quot;,
+                    &quot;current_context&quot;
+                  ]
+                }
+              },
+              &quot;message&quot;: {
                 &quot;type&quot;: &quot;string&quot;,
                 &quot;minLength&quot;: 1
               }
@@ -2408,8 +3599,8 @@
           &quot;enum&quot;: [
             &quot;team_epoch_missing&quot;,
             &quot;logical_workers_missing&quot;,
-            &quot;candidate_metadata_absent&quot;,
-            &quot;candidate_metadata_invalid&quot;,
+            &quot;task_metadata_absent&quot;,
+            &quot;task_metadata_invalid&quot;,
             &quot;structured_task_event_evidence_absent&quot;
           ]
         },
@@ -2500,7 +3691,7 @@
       &quot;status&quot;: &quot;in_progress&quot;,
       &quot;assignee&quot;: &quot;release-builder&quot;,
       &quot;current_context&quot;: &quot;Package is built. Dry-run publication is next; no blocker is known.&quot;,
-      &quot;version&quot;: &quot;task_v7&quot;
+      &quot;version&quot;: &quot;v_3f89cd171f52b332&quot;
     },
     {
       &quot;id&quot;: &quot;task-23&quot;,
@@ -2509,12 +3700,12 @@
       &quot;status&quot;: &quot;open&quot;,
       &quot;assignee&quot;: &quot;release-verifier&quot;,
       &quot;current_context&quot;: &quot;Waiting for the candidate digest from task-17.&quot;,
-      &quot;version&quot;: &quot;task_v2&quot;
+      &quot;version&quot;: &quot;v_4ab67899e5ec4e58&quot;
     }
   ]
 }</pre></details></details><details><summary>Incremental updates</summary><div class="code-grid"><section><h4>Call</h4><pre>{
   &quot;view&quot;: &quot;updates&quot;
-}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updates&quot;,&quot;team_changes&quot;:[],&quot;worker_changes&quot;:[],&quot;task_changes&quot;:[{&quot;task_id&quot;:&quot;task-17&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-91&quot;,&quot;at&quot;:&quot;2026-08-02T10:00:00Z&quot;,&quot;actor&quot;:&quot;release-builder&quot;,&quot;kind&quot;:&quot;result&quot;,&quot;text&quot;:&quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;closed&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Candidate delivered and verified locally. No further action remains.&quot;,&quot;version&quot;:&quot;v_93861017a874fd3d&quot;}},{&quot;task_id&quot;:&quot;task-23&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-92&quot;,&quot;at&quot;:&quot;2026-08-02T10:01:00Z&quot;,&quot;actor&quot;:&quot;release-verifier&quot;,&quot;kind&quot;:&quot;blocker&quot;,&quot;text&quot;:&quot;Provenance digest differs from the candidate package digest.&quot;}],&quot;current&quot;:{&quot;status&quot;:&quot;blocked&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,&quot;version&quot;:&quot;v_d532cbd1d0458c7e&quot;}}],&quot;alerts&quot;:[]}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
+}</pre></section><section><h4>Validated model projection</h4><pre class="model-return">{&quot;kind&quot;:&quot;updates&quot;,&quot;team_changes&quot;:[],&quot;worker_changes&quot;:[],&quot;task_changes&quot;:[{&quot;task_id&quot;:&quot;task-17&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-91&quot;,&quot;at&quot;:&quot;2026-08-02T10:00:00Z&quot;,&quot;actor&quot;:&quot;release-builder&quot;,&quot;kind&quot;:&quot;result&quot;,&quot;text&quot;:&quot;Candidate built; clean install passed. Digest sent to release-verifier.&quot;}],&quot;current&quot;:{&quot;id&quot;:&quot;task-17&quot;,&quot;title&quot;:&quot;Build release candidate&quot;,&quot;goal&quot;:&quot;Build and verify the release candidate.&quot;,&quot;status&quot;:&quot;closed&quot;,&quot;assignee&quot;:&quot;release-builder&quot;,&quot;current_context&quot;:&quot;Candidate delivered and verified locally. No further action remains.&quot;,&quot;version&quot;:&quot;v_93861017a874fd3d&quot;}},{&quot;task_id&quot;:&quot;task-23&quot;,&quot;change_kinds&quot;:[&quot;status&quot;,&quot;progress&quot;],&quot;journal_entries&quot;:[{&quot;id&quot;:&quot;journal-92&quot;,&quot;at&quot;:&quot;2026-08-02T10:01:00Z&quot;,&quot;actor&quot;:&quot;release-verifier&quot;,&quot;kind&quot;:&quot;blocker&quot;,&quot;text&quot;:&quot;Provenance digest differs from the candidate package digest.&quot;}],&quot;current&quot;:{&quot;id&quot;:&quot;task-23&quot;,&quot;title&quot;:&quot;Verify release provenance&quot;,&quot;goal&quot;:&quot;Verify the release provenance digest.&quot;,&quot;status&quot;:&quot;blocked&quot;,&quot;assignee&quot;:&quot;release-verifier&quot;,&quot;current_context&quot;:&quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,&quot;version&quot;:&quot;v_d532cbd1d0458c7e&quot;}}],&quot;alerts&quot;:[]}</pre></section></div><details><summary>Raw semantic JSON</summary><pre>{
   &quot;kind&quot;: &quot;updates&quot;,
   &quot;team_changes&quot;: [],
   &quot;worker_changes&quot;: [],
@@ -2535,10 +3726,13 @@
         }
       ],
       &quot;current&quot;: {
+        &quot;id&quot;: &quot;task-17&quot;,
+        &quot;title&quot;: &quot;Build release candidate&quot;,
+        &quot;goal&quot;: &quot;Build and verify the release candidate.&quot;,
         &quot;status&quot;: &quot;closed&quot;,
         &quot;assignee&quot;: &quot;release-builder&quot;,
         &quot;current_context&quot;: &quot;Candidate delivered and verified locally. No further action remains.&quot;,
-        &quot;version&quot;: &quot;task_v8&quot;
+        &quot;version&quot;: &quot;v_93861017a874fd3d&quot;
       }
     },
     {
@@ -2557,10 +3751,13 @@
         }
       ],
       &quot;current&quot;: {
+        &quot;id&quot;: &quot;task-23&quot;,
+        &quot;title&quot;: &quot;Verify release provenance&quot;,
+        &quot;goal&quot;: &quot;Verify the release provenance digest.&quot;,
         &quot;status&quot;: &quot;blocked&quot;,
         &quot;assignee&quot;: &quot;release-verifier&quot;,
         &quot;current_context&quot;: &quot;Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.&quot;,
-        &quot;version&quot;: &quot;task_v3&quot;
+        &quot;version&quot;: &quot;v_d532cbd1d0458c7e&quot;
       }
     }
   ],
@@ -3042,7 +4239,7 @@
     }
   },
   &quot;additionalProperties&quot;: false,
-  &quot;description&quot;: &quot;Add or remove one typed Task relation with graph and version validation.&quot;
+  &quot;description&quot;: &quot;Add or remove one typed Task relation with graph and version validation. Closed Tasks can still receive relation or evidence writes, so use the latest receipt or read before another conditional mutation.&quot;
 }</pre></details><details><summary>Raw result JSON Schema</summary><pre>{
   &quot;anyOf&quot;: [
     {
@@ -3089,8 +4286,9 @@
         },
         &quot;version&quot;: {
           &quot;type&quot;: &quot;string&quot;,
-          &quot;minLength&quot;: 1,
-          &quot;maxLength&quot;: 128
+          &quot;pattern&quot;: &quot;^v_[0-9a-f]{16}$&quot;,
+          &quot;minLength&quot;: 18,
+          &quot;maxLength&quot;: 18
         }
       },
       &quot;additionalProperties&quot;: false
@@ -3369,7 +4567,7 @@
   ]
 }</pre></details>
     </section>
-    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 54016c82730744125c2d492a6f53313acabb806f</div><div>Catalog SHA-256: bfce9659681ac76016bb2bc0ce6463f63b591d84456a163a79b3bfa3366448cd</div><div>Design SHA-256: b44642fdbddcdddadff1d419dfba9d0e08452460662f915a095502062039b2d6</div></footer>
+    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 27a532d1c9c9696afe3790c081028aae8af77d76</div><div>Catalog SHA-256: beab72f842387422c110cc09c77f8590b95180b555b4db634032a33f6b719e82</div><div>Design SHA-256: 31beea2fb9c2bb61a8fc8ad7955aee0aea0ac8fd9dda0e3d80183de8a06440e2</div></footer>
   </main>
 </div>
 </body>

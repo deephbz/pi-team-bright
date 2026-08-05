@@ -1,4 +1,5 @@
 import type { TeamPaneLayout } from "./team-pane-layout";
+import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
 export declare const THINKING_LEVELS: readonly ["off", "minimal", "low", "medium", "high", "xhigh"];
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 export interface TerminalTarget {
@@ -91,41 +92,14 @@ export interface TaskRelation {
     relation: TaskRelationType;
     targetId: string;
 }
-/**
- * PiTeams' deliberately small Task projection. Beads owns persistence,
- * history, graph validation, and concurrency; this type exposes only the
- * coordinates an agent needs to collaborate safely.
- */
-export interface TaskFile {
-    id: string;
-    title: string;
-    description: string;
-    /** Observable success criteria used by the assignee to self-verify the work. */
-    acceptanceCriteria: string;
-    design?: string;
-    status: TaskStatus;
-    assignee?: string;
-    notes?: string;
-    relations: TaskRelation[];
-    /** Exact authority revision used for optimistic concurrency and review. */
-    version: string;
-    /** Evidence identifying the authority that produced this projection. */
-    provenance: {
-        authority: "beads";
-        teamName: string;
-    };
-}
-/** Compact query projection; re-read the full Task before a conditional write. */
-export type TaskListItem = Omit<TaskFile, "version">;
 export type TeamEventType = "task" | "worker" | "alert";
-export type TaskEventChange = "created" | "assigned" | "design" | "note" | "status" | "relation";
+export type TaskEventChange = "created" | "assigned" | "goal" | "note" | "status" | "relation";
 export interface TaskTeamEvent {
     type: "task";
     cursor: string;
     ref: {
-        authorityId: string;
         taskId: string;
-        version: string;
+        version: TaskVersionRef;
     };
     change: TaskEventChange;
     actor: string;
@@ -156,7 +130,7 @@ export interface AlertTeamEvent {
     to: string | "*";
     taskRef?: {
         taskId: string;
-        version?: string;
+        version?: TaskVersionRef;
     };
     kind: AlertKind;
     text: string;

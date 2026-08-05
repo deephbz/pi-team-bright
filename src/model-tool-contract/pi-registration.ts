@@ -1,29 +1,29 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
-  CandidateEnsureWorkerParametersSchema,
-  CandidateTaskCreateParametersSchema,
-  CandidateTaskReadParametersSchema,
-  CandidateTaskUpdateParametersSchema,
-  CandidateTeamCreateParametersSchema,
-  CandidateTeamSyncParametersSchema,
-  CandidateWorkerStopParametersSchema,
-  CandidateTeamShutdownParametersSchema,
-  CandidateTaskLinkParametersSchema,
-  CandidateAlertSendParametersSchema,
-  candidateModelToolCatalog,
+  EnsureWorkerParametersSchema,
+  TaskCreateParametersSchema,
+  TaskReadParametersSchema,
+  TaskUpdateParametersSchema,
+  TeamCreateParametersSchema,
+  TeamSyncParametersSchema,
+  WorkerStopParametersSchema,
+  TeamShutdownParametersSchema,
+  TaskLinkParametersSchema,
+  AlertSendParametersSchema,
+  modelToolCatalog,
 } from "./catalog";
 import {
   createModelToolJourneyExecutors,
-  type CandidateEnsureWorkerResult,
-  type CandidateTaskCreateResult,
-  type CandidateTaskReadResult,
-  type CandidateTaskUpdateResult,
-  type CandidateTeamCreateResult,
-  type CandidateTeamSyncResult,
-  type CandidateWorkerStopResult,
-  type CandidateTeamShutdownResult,
-  type CandidateTaskLinkResult,
-  type CandidateAlertSendResult,
+  type EnsureWorkerResult,
+  type TaskCreateResult,
+  type TaskReadResult,
+  type TaskUpdateResult,
+  type TeamCreateResult,
+  type TeamSyncResult,
+  type WorkerStopResult,
+  type TeamShutdownResult,
+  type TaskLinkResult,
+  type AlertSendResult,
   type ModelToolJourneyExecutors,
 } from "./executors";
 import {
@@ -31,12 +31,12 @@ import {
   InMemoryModelToolTeamPort,
   type ModelToolTeamPort,
 } from "./in-memory-team-port";
-import { assembleCandidateToolResult } from "./result-projection";
-import { createCandidateToolResultRenderer } from "./tui-projection";
+import { assembleToolResult } from "./result-projection";
+import { createToolResultRenderer } from "./tui-projection";
 
 function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "task_link" | "alert_send") {
-  const entry = candidateModelToolCatalog.tools.find((tool) => tool.name === name);
-  if (!entry) throw new Error(`Candidate model-tool catalog has no ${name} entry.`);
+  const entry = modelToolCatalog.tools.find((tool) => tool.name === name);
+  if (!entry) throw new Error(`Model tool catalog has no ${name} entry.`);
   return entry;
 }
 
@@ -102,34 +102,34 @@ export function registerModelToolJourney(
   };
 
   const teamCreateTool: ToolDefinition<
-    typeof CandidateTeamCreateParametersSchema,
-    CandidateTeamCreateResult
+    typeof TeamCreateParametersSchema,
+    TeamCreateResult
   > = {
     name: "team_create",
     label: teamCreateCatalogEntry.label,
     description: teamCreateCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("team_create"),
-    parameters: CandidateTeamCreateParametersSchema,
+    renderResult: createToolResultRenderer("team_create"),
+    parameters: TeamCreateParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
       const result = await executors.teamCreate(
         leaderSessionId(ctx),
         parameters,
       );
-      return assembleCandidateToolResult("team_create", result);
+      return assembleToolResult("team_create", result);
     },
   };
   pi.registerTool(teamCreateTool);
 
   const teamSyncTool: ToolDefinition<
-    typeof CandidateTeamSyncParametersSchema,
-    CandidateTeamSyncResult
+    typeof TeamSyncParametersSchema,
+    TeamSyncResult
   > = {
     name: "team_sync",
     label: teamSyncCatalogEntry.label,
     description: teamSyncCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("team_sync"),
-    parameters: CandidateTeamSyncParametersSchema,
+    renderResult: createToolResultRenderer("team_sync"),
+    parameters: TeamSyncParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
       const result = await executors.teamSync(
@@ -138,139 +138,139 @@ export function registerModelToolJourney(
         _signal,
         _toolCallId,
       );
-      return assembleCandidateToolResult("team_sync", result);
+      return assembleToolResult("team_sync", result);
     },
   };
   pi.registerTool(teamSyncTool);
 
   const ensureWorkerTool: ToolDefinition<
-    typeof CandidateEnsureWorkerParametersSchema,
-    CandidateEnsureWorkerResult
+    typeof EnsureWorkerParametersSchema,
+    EnsureWorkerResult
   > = {
     name: "ensure_worker",
     label: ensureWorkerCatalogEntry.label,
     description: ensureWorkerCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("ensure_worker"),
-    parameters: CandidateEnsureWorkerParametersSchema,
+    renderResult: createToolResultRenderer("ensure_worker"),
+    parameters: EnsureWorkerParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
       const result = await executors.ensureWorker(
         leaderSessionId(ctx),
         parameters,
       );
-      return assembleCandidateToolResult("ensure_worker", result);
+      return assembleToolResult("ensure_worker", result);
     },
   };
   pi.registerTool(ensureWorkerTool);
 
   const taskCreateTool: ToolDefinition<
-    typeof CandidateTaskCreateParametersSchema,
-    CandidateTaskCreateResult
+    typeof TaskCreateParametersSchema,
+    TaskCreateResult
   > = {
     name: "task_create",
     label: taskCreateCatalogEntry.label,
     description: taskCreateCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("task_create"),
-    parameters: CandidateTaskCreateParametersSchema,
+    renderResult: createToolResultRenderer("task_create"),
+    parameters: TaskCreateParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
       const result = await executors.taskCreate(
         leaderSessionId(ctx),
         parameters,
       );
-      return assembleCandidateToolResult("task_create", result);
+      return assembleToolResult("task_create", result);
     },
   };
   pi.registerTool(taskCreateTool);
 
   const taskReadTool: ToolDefinition<
-    typeof CandidateTaskReadParametersSchema,
-    CandidateTaskReadResult
+    typeof TaskReadParametersSchema,
+    TaskReadResult
   > = {
     name: "task_read",
     label: taskReadCatalogEntry.label,
     description: taskReadCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("task_read"),
-    parameters: CandidateTaskReadParametersSchema,
+    renderResult: createToolResultRenderer("task_read"),
+    parameters: TaskReadParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
       const result = await executors.taskRead(
         leaderSessionId(ctx),
         parameters,
       );
-      return assembleCandidateToolResult("task_read", result);
+      return assembleToolResult("task_read", result);
     },
   };
   pi.registerTool(taskReadTool);
 
   const taskUpdateTool: ToolDefinition<
-    typeof CandidateTaskUpdateParametersSchema,
-    CandidateTaskUpdateResult
+    typeof TaskUpdateParametersSchema,
+    TaskUpdateResult
   > = {
     name: "task_update",
     label: taskUpdateCatalogEntry.label,
     description: taskUpdateCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("task_update"),
-    parameters: CandidateTaskUpdateParametersSchema,
+    renderResult: createToolResultRenderer("task_update"),
+    parameters: TaskUpdateParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
       const result = await executors.taskUpdate(
         leaderSessionId(ctx),
         parameters,
       );
-      return assembleCandidateToolResult("task_update", result);
+      return assembleToolResult("task_update", result);
     },
   };
   pi.registerTool(taskUpdateTool);
 
-  const workerStopTool: ToolDefinition<typeof CandidateWorkerStopParametersSchema, CandidateWorkerStopResult> = {
+  const workerStopTool: ToolDefinition<typeof WorkerStopParametersSchema, WorkerStopResult> = {
     name: "worker_stop",
     label: workerStopCatalogEntry.label,
     description: workerStopCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("worker_stop"),
-    parameters: CandidateWorkerStopParametersSchema,
+    renderResult: createToolResultRenderer("worker_stop"),
+    parameters: WorkerStopParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
-      return assembleCandidateToolResult("worker_stop", await executors.workerStop(leaderSessionId(ctx), parameters));
+      return assembleToolResult("worker_stop", await executors.workerStop(leaderSessionId(ctx), parameters));
     },
   };
   pi.registerTool(workerStopTool);
 
-  const teamShutdownTool: ToolDefinition<typeof CandidateTeamShutdownParametersSchema, CandidateTeamShutdownResult> = {
+  const teamShutdownTool: ToolDefinition<typeof TeamShutdownParametersSchema, TeamShutdownResult> = {
     name: "team_shutdown",
     label: teamShutdownCatalogEntry.label,
     description: teamShutdownCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("team_shutdown"),
-    parameters: CandidateTeamShutdownParametersSchema,
+    renderResult: createToolResultRenderer("team_shutdown"),
+    parameters: TeamShutdownParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
-      return assembleCandidateToolResult("team_shutdown", await executors.teamShutdown(leaderSessionId(ctx), parameters));
+      return assembleToolResult("team_shutdown", await executors.teamShutdown(leaderSessionId(ctx), parameters));
     },
   };
   pi.registerTool(teamShutdownTool);
 
-  const taskLinkTool: ToolDefinition<typeof CandidateTaskLinkParametersSchema, CandidateTaskLinkResult> = {
+  const taskLinkTool: ToolDefinition<typeof TaskLinkParametersSchema, TaskLinkResult> = {
     name: "task_link",
     label: taskLinkCatalogEntry.label,
     description: taskLinkCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("task_link"),
-    parameters: CandidateTaskLinkParametersSchema,
+    renderResult: createToolResultRenderer("task_link"),
+    parameters: TaskLinkParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
-      return assembleCandidateToolResult("task_link", await executors.taskLink(leaderSessionId(ctx), parameters));
+      return assembleToolResult("task_link", await executors.taskLink(leaderSessionId(ctx), parameters));
     },
   };
   pi.registerTool(taskLinkTool);
 
-  const alertSendTool: ToolDefinition<typeof CandidateAlertSendParametersSchema, CandidateAlertSendResult> = {
+  const alertSendTool: ToolDefinition<typeof AlertSendParametersSchema, AlertSendResult> = {
     name: "alert_send",
     label: alertSendCatalogEntry.label,
     description: alertSendCatalogEntry.responsibility,
-    renderResult: createCandidateToolResultRenderer("alert_send"),
-    parameters: CandidateAlertSendParametersSchema,
+    renderResult: createToolResultRenderer("alert_send"),
+    parameters: AlertSendParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
-      return assembleCandidateToolResult("alert_send", await executors.alertSend(leaderSessionId(ctx), parameters));
+      return assembleToolResult("alert_send", await executors.alertSend(leaderSessionId(ctx), parameters));
     },
   };
   pi.registerTool(alertSendTool);

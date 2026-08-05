@@ -7,7 +7,7 @@ import piTeams from "../../extensions/index";
 import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
-import { BEADS_WORKSPACE_ENV } from "./tasks";
+import { BEADS_WORKSPACE_ENV } from "../model-tool-contract/beads-authority-adapter";
 import * as teams from "./teams";
 
 type RegisteredTool = {

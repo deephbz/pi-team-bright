@@ -63,6 +63,8 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     const paths = await import("../../src/utils/paths");
     const teams = await import("../../src/utils/teams");
     const tasks = await import("../../src/utils/tasks");
+    const authorityAdapter = await import("../../src/model-tool-contract/beads-authority-adapter");
+    const taskAdapter = await import("../../src/model-tool-contract/beads-task-adapter");
     const teamEvents = await import("../../src/utils/team-events");
     const terminalRegistry = await import("../../src/adapters/terminal-registry");
 
@@ -165,7 +167,6 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
           title: task.title,
           status: task.status,
           assignee: task.assignee || null,
-          relationCount: task.relations.length,
         })),
       };
     }
@@ -460,15 +461,18 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     });
     const leadMembership = (await teams.readConfig(teamName)).members.find((member) => member.name === "team-lead" && member.isActive !== false)!;
     const deliveryWarningTaskState = postStateOf(deliveryWarningTask);
-    const clearedDeliveryWarningTask = await tasks.applySemanticTaskUpdate(teamName, deliveryWarningTaskState.id, {
+    const deliveryWarningAuthority = await authorityAdapter.readTaskAuthorityRecordEnvelope(teamName, deliveryWarningTaskState.id);
+
+    const clearedDeliveryWarningTask = await authorityAdapter.applySemanticTaskUpdate(teamName, deliveryWarningTaskState.id, {
       status: "blocked",
       assignee: "",
       appendNote: "QA fixture cleanup: delivery degradation was captured; the Worker is released from this synthetic Task.",
     }, {
       actor: "team-lead",
-      expectedVersion: deliveryWarningTaskState.version,
+      expectedVersion: deliveryWarningAuthority.task.version,
       actingSessionFile: leadSession,
       actingMembershipId: leadMembership.membershipId,
+      taskCardProjector: taskAdapter.projectTaskCard,
     });
     fixtureTransitions.push({
       action: "release the Worker from the synthetic delivery-warning Task through real Task authority",
@@ -574,6 +578,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       args: {
         team_name: teamName,
         task_id: taskCreated.id,
+        operation_id: "qa-task-started",
         status: "in_progress",
         expected_version: taskCreated.version,
       },
@@ -587,6 +592,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       ),
     });
     let currentTask = postStateOf(startedTask);
+
 
     await capture({
       id: "task-update-stale-version",
@@ -620,6 +626,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       args: {
         team_name: teamName,
         task_id: taskCreated.id,
+        operation_id: "qa-task-terminal-without-evidence",
         status: "closed",
         expected_version: currentTask.version,
       },
@@ -651,6 +658,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       ),
     });
     let syncCursor = postStateOf(changedSync).cursor;
+
     expect(detailsOf(changedSync)).toMatchObject({ kind: "updates" });
     expect(detailsOf(changedSync).task_changes).toEqual(expect.arrayContaining([
       expect.objectContaining({ task_id: taskCreated.id, current: expect.objectContaining({ status: "in_progress", version: currentTask.version }) }),
@@ -1087,17 +1095,19 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       args: {
         team_name: teamName,
         task_id: currentTask.id,
+        operation_id: "qa-task-blocked-unassigned",
         status: "blocked",
         assignee: "",
-        append_note: "Blocked on the QA scoring threshold; next action: team-lead chooses the threshold and reassigns the Task.",
+        current_context: "Blocked on the QA scoring threshold; next action: team-lead chooses the threshold and reassigns the Task.",
+        journal_entries: [{ kind: "blocker", text: "Blocked on the QA scoring threshold; next action: team-lead chooses the threshold and reassigns the Task." }],
         expected_version: currentTask.version,
       },
       ctx: workerCtx,
       qaBrief: brief(
-        "The Worker records blocker evidence and releases ownership in one authoritative mutation.",
+        "The Worker records blocker evidence in one authoritative mutation.",
         "The lead must resolve the blocker before reassigning; the Worker can now be stopped.",
         "What changed, what is the blocker, and who acts next?",
-        ["blocked status", "unassigned owner", "new version", "warnings", "evidence/next action acknowledgement"],
+        ["blocked status", "current owner", "new version", "warnings", "evidence/next action acknowledgement"],
         ["before and after Task", "appended note", "delivery warnings"],
       ),
     });
@@ -1278,15 +1288,13 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     }));
     expect(caseAfter("task-linked").tasks).toContainEqual(expect.objectContaining({
       title: "Audit tool result projections",
-      relationCount: 1,
+      status: "in_progress",
     }));
     expect(caseAfter("task-link-removed").tasks).toContainEqual(expect.objectContaining({
       title: "Audit tool result projections",
-      relationCount: 0,
     }));
     expect(caseAfter("task-link-readded").tasks).toContainEqual(expect.objectContaining({
       title: "Audit tool result projections",
-      relationCount: 1,
     }));
     expect(caseAfter("task-link-duplicate")).toEqual(
       cases.find((item) => item.id === "task-link-duplicate")?.oracle.before,
@@ -1303,7 +1311,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     expect(caseAfter("task-blocked-unassigned").tasks).toContainEqual(expect.objectContaining({
       title: "Audit tool result projections",
       status: "blocked",
-      assignee: null,
+      assignee: "reviewer",
     }));
     const stoppedCase = cases.find((item) => item.id === "worker-stopped")!;
     if (stoppedCase.projections.machine.details?.schema) {

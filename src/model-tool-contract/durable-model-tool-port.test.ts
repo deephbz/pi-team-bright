@@ -3,16 +3,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as alerts from "../utils/alerts";
 import * as paths from "../utils/paths";
-import * as tasks from "../utils/tasks";
+import * as authority from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
 import * as teams from "../utils/teams";
 import { DurableModelToolTeamPort, type ModelToolLifecycle } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
-import { CANDIDATE_TASK_METADATA_SCHEMA } from "../utils/beads";
+import { TASK_METADATA_SCHEMA } from "../utils/beads";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { registerModelToolJourney } from "./pi-registration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
+import { taskVersionRef } from "./task-version-ref";
 
 const testTeams: string[] = [];
 const paneSettingsRoots: string[] = [];
@@ -92,7 +93,7 @@ async function createTeamWithPaneSettings(projectTrusted?: boolean): Promise<{ r
     isWindowAlive: () => false,
   });
   vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "abstain", reason: "not_bound" });
-  vi.spyOn(tasks, "resolveTeamTaskAuthority").mockResolvedValue({
+  vi.spyOn(authority, "resolveTeamTaskAuthority").mockResolvedValue({
     workspace: path.join(root, "tasks"), authorityId: "authority-pane-settings", fingerprint: {} as any,
   });
   let createArgs: any[] | undefined;
@@ -123,10 +124,10 @@ describe("DurableModelToolTeamPort pane settings", () => {
 });
 
 describe("DurableModelToolTeamPort implementation fence", () => {
-  it("tolerates one externally oversized candidate Task without rejecting the snapshot", async () => {
+  it("tolerates one externally oversized Task without rejecting the snapshot", async () => {
     const { port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
-    vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue(["invalid-task"]);
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockResolvedValue([{
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["invalid-task"]);
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([{
       task: {
         id: "invalid-task",
         title: "Invalid external context",
@@ -137,8 +138,8 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         version: "beads_invalid_task",
         provenance: { authority: "beads", teamName: testTeams[testTeams.length - 1] },
       },
-      candidateMetadata: {
-        schema: CANDIDATE_TASK_METADATA_SCHEMA,
+      taskMetadata: {
+        schema: TASK_METADATA_SCHEMA,
         goal: "Keep the Team observation coherent.",
         current_context: "👩🏽‍🚀".repeat(2_001),
       },
@@ -211,11 +212,11 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       version: "beads_watermark_v1",
       provenance: { authority: "beads" as const, teamName: name },
     };
-    vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue([task.id]);
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockResolvedValue([{
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue([task.id]);
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([{
       task,
-      candidateMetadata: {
-        schema: CANDIDATE_TASK_METADATA_SCHEMA,
+      taskMetadata: {
+        schema: TASK_METADATA_SCHEMA,
         goal: "Keep the hidden watermark safe.",
         current_context: "No event read has failed yet.",
       },
@@ -258,7 +259,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       .resolves.toMatchObject({ kind: "updates", head: 1 });
   });
 
-  it("keeps valid direct Task reads usable beside an invalid external Task", async () => {
+  it("hydrates direct Task reads once for unique requested IDs and restores duplicates", async () => {
     const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const task = (id: string) => ({
       id,
@@ -270,16 +271,16 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       version: `beads_${id}`,
       provenance: { authority: "beads" as const, teamName: name },
     });
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecord").mockImplementation(async (_teamName, taskId) => ({
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_teamName, taskIds) => taskIds.map((taskId) => ({
       task: task(taskId),
-      candidateMetadata: {
-        schema: CANDIDATE_TASK_METADATA_SCHEMA,
+      taskMetadata: {
+        schema: TASK_METADATA_SCHEMA,
         goal: "Keep the direct Task read usable.",
         current_context: taskId === "invalid-task"
           ? "👩🏽‍🚀".repeat(2_001)
           : "Valid candidate context.",
       },
-    }));
+    })));
 
     await expect(port.readTasks(leaderSessionId, ["valid-task", "invalid-task", "valid-task"])).resolves.toMatchObject({
       kind: "read",
@@ -289,6 +290,52 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         { id: "valid-task", current_context: "Valid candidate context." },
       ],
     });
+    expect(hydrate).toHaveBeenCalledOnce();
+    expect(hydrate).toHaveBeenCalledWith(name, ["valid-task", "invalid-task"]);
+  });
+
+  it("returns one ordered missing outcome from the same exact-ID hydration", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([
+      undefined,
+      {
+        task: {
+          id: "existing-task",
+          title: "Existing task",
+          description: "Compatibility text",
+          acceptanceCriteria: "Compatibility text",
+          status: "open",
+          relations: [],
+          version: "beads_existing",
+          provenance: { authority: "beads", teamName: name },
+        },
+        taskMetadata: {
+          schema: TASK_METADATA_SCHEMA,
+          goal: "Keep missing Task behavior explicit.",
+          current_context: "The Task exists.",
+        },
+      },
+    ]);
+
+    await expect(port.readTasks(leaderSessionId, ["missing-task", "existing-task", "missing-task"])).resolves.toMatchObject({
+      kind: "read",
+      tasks: [undefined, { id: "existing-task", version: taskVersionRef("beads_existing") }, undefined],
+    });
+    expect(hydrate).toHaveBeenCalledOnce();
+    expect(hydrate).toHaveBeenCalledWith(name, ["missing-task", "existing-task"]);
+  });
+
+  it("returns whole-call unavailable when exact-ID hydration fails", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockRejectedValue(new Error("simulated authority failure"));
+
+    await expect(port.readTasks(leaderSessionId, ["first-task", "second-task"])).resolves.toEqual({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+      message: "simulated authority failure",
+    });
+    expect(hydrate).toHaveBeenCalledOnce();
+    expect(hydrate).toHaveBeenCalledWith(name, ["first-task", "second-task"]);
   });
 
   it("publishes an explicit warning for updates after external context exceeds the display limit", async () => {
@@ -304,11 +351,11 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       version: "beads_context_changed",
       provenance: { authority: "beads" as const, teamName: name },
     };
-    vi.spyOn(tasks, "listCandidateTaskIds").mockResolvedValue([task.id]);
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecords").mockImplementation(async () => ([{
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue([task.id]);
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => ([{
       task,
-      candidateMetadata: {
-        schema: CANDIDATE_TASK_METADATA_SCHEMA,
+      taskMetadata: {
+        schema: TASK_METADATA_SCHEMA,
         goal: "Keep the Team observation coherent.",
         current_context: currentContext,
       },
@@ -332,9 +379,9 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     ["legacy absent version", undefined],
   ])("fails closed for a %s before any authority call", async (_caseName, implementationVersion) => {
     const { port, leaderSessionId, launchBridge, lifecycle } = await foreignPort(implementationVersion);
-    const listTasks = vi.spyOn(tasks, "listCandidateTaskIds");
-    const readTask = vi.spyOn(tasks, "readTask");
-    const updateLink = vi.spyOn(tasks, "mutateTaskLink");
+    const listTasks = vi.spyOn(authority, "listTaskIds");
+    const readTask = vi.spyOn(authority, "readTaskAuthorityRecordEnvelope");
+    const updateLink = vi.spyOn(authority, "mutateTaskLink");
     const sendAlert = vi.spyOn(alerts, "sendAlert");
     const readEvents = vi.spyOn(teamEvents, "readTeamEvents");
     const waitEvents = vi.spyOn(teamEvents, "waitForTeamEvents");
@@ -350,7 +397,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     await expect(port.updateTasks(leaderSessionId, [{
       taskId: "task-1",
       operationId: "operation-1",
-      expectedVersion: "v1",
+      expectedVersion: taskVersionRef("v1"),
       currentContext: "No write is allowed.",
     }])).resolves.toEqual({ kind: "no_active_team" });
     await expect(port.linkTask(leaderSessionId, {

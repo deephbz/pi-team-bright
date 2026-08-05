@@ -1,13 +1,11 @@
-import type { CandidateTaskAuthorityRecord, CandidateTaskMetadata, CreateTaskInput } from "../utils/beads";
+import type { TaskAuthorityRecordEnvelope, TaskMetadata, CreateTaskInput, TaskAuthorityRecord } from "../utils/beads";
 import {
   BeadsError,
-  CANDIDATE_TASK_METADATA_KEY,
-  CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
-  CANDIDATE_TASK_GOAL_MAX_LENGTH,
-  CANDIDATE_TASK_METADATA_SCHEMA,
-  assertCandidateTaskMetadataContext,
+  TASK_METADATA_KEY,
+  TASK_METADATA_SCHEMA,
+  assertTaskMetadataContext,
 } from "../utils/beads";
-import type { TaskFile, TeamEvent } from "../utils/models";
+import type { TeamEvent } from "../utils/models";
 import {
   projectTaskEventEvidence,
   type TaskEventEvidenceKind,
@@ -16,20 +14,29 @@ import {
 import {
   applySemanticTaskUpdate,
   createTask,
-  readCandidateTaskAuthorityRecord,
-  readCandidateTaskAuthorityRecords,
+  listTaskIds,
+  readTaskAuthorityRecordEnvelope,
+  readTaskAuthorityRecordEnvelopes,
+  mutateTaskLink,
+  type AgentMutationBinding,
   type InternalTaskPublicationOptions,
   type TaskCreateReceipt,
   type SemanticTaskUpdateResult,
-} from "../utils/tasks";
+  type TaskMutationReceipt,
+} from "./beads-authority-adapter";
 import type {
-  ModelToolTaskCurrent,
   ModelToolTaskJournalEntry,
-  ModelToolTaskProjectionWarning,
   ModelToolTaskUpdateInput,
 } from "./in-memory-team-port";
-import { taskVersionRef } from "./task-version-ref";
-import { MODEL_TOOL_CANDIDATE_LIMITS } from "./catalog";
+import type { TaskWriteOptions } from "../utils/beads";
+import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
+import {
+  TASK_CARD_CONTEXT_MAX_LENGTH,
+  TASK_CARD_GOAL_MAX_LENGTH,
+  TASK_CARD_TITLE_MAX_LENGTH,
+  type TaskCard,
+  type TaskCardWarning,
+} from "./task-domain";
 
 const INITIAL_CURRENT_CONTEXT = "Work has not started.";
 const JOURNAL_KINDS = new Set<TaskEventEvidenceKind>([
@@ -40,34 +47,46 @@ const JOURNAL_KINDS = new Set<TaskEventEvidenceKind>([
   "note",
 ]);
 
-export type CandidateTaskProjectionGapReason =
-  | "candidate_metadata_absent"
-  | "candidate_metadata_invalid";
+export type TaskProjectionGapReason =
+  | "task_metadata_absent"
+  | "task_metadata_invalid";
 
-export interface CandidateTaskProjectionGap {
+export interface TaskProjectionGap {
   kind: "contract_gap";
-  reason: CandidateTaskProjectionGapReason;
+  reason: TaskProjectionGapReason;
   taskId: string;
-  authorityVersion: string;
+  version: TaskVersionRef;
   message: string;
-  projectionWarning?: ModelToolTaskProjectionWarning;
 }
 
-export type CandidateTaskReadOutcome =
-  | { kind: "found"; task: ModelToolTaskCurrent }
-  | CandidateTaskProjectionGap;
+export type TaskReadOutcome =
+  | { kind: "found"; task: TaskCard }
+  | TaskProjectionGap;
 
-export type CandidateTaskCreateOutcome =
-  | { kind: "created"; operationId: string; task: ModelToolTaskCurrent; deliveryWarnings: string[] }
+export type TaskCreateOutcome =
+  | { kind: "created"; operationId: string; task: TaskCard; deliveryWarnings: string[] }
   | { kind: "operation_conflict"; operationId: string; message: string }
   | { kind: "unknown_outcome"; operationId: string; message: string };
 
-export type CandidateTaskUpdateOutcome =
+export interface TaskLinkInput {
+  taskId: string;
+  relation: "blocked_by" | "parent" | "related";
+  targetId: string;
+  action: "add" | "remove";
+  expectedVersion?: TaskVersionRef;
+}
+
+export type TaskLinkOutcome =
+  | { kind: "linked"; taskId: string; targetId: string; relation: TaskLinkInput["relation"]; action: TaskLinkInput["action"]; changed: boolean; version: TaskVersionRef }
+  | { kind: "refused"; taskId: string; reason: "task_not_found" | "version_conflict" | "graph_conflict"; message: string }
+  | { kind: "unavailable"; reason: "task_authority_unavailable"; message: string };
+
+export type TaskUpdateOutcome =
   | {
     kind: "updated";
     taskId: string;
     operationId: string;
-    task: ModelToolTaskCurrent;
+    task: TaskCard;
     journalEntries: ModelToolTaskJournalEntry[];
   }
   | {
@@ -75,43 +94,43 @@ export type CandidateTaskUpdateOutcome =
     reason: "version_conflict" | "operation_conflict";
     taskId: string;
     operationId: string;
-    currentTask: ModelToolTaskCurrent;
+    currentTask: TaskCard;
     message: string;
   }
   | {
     kind: "contract_gap";
-    reason: "beads_external_writer_atomicity_unavailable";
+    reason: "external_writer_atomicity_unavailable";
     taskId: string;
     operationId: string;
-    currentTask: ModelToolTaskCurrent;
+    currentTask: TaskCard;
     unsupported: readonly ["atomic_compare_and_swap", "task_scoped_operation_replay"];
     message: string;
   }
-  | CandidateTaskProjectionGap;
+  | TaskProjectionGap;
 
-export interface CandidateTaskAdapterAuthority {
+type TaskAuthorityUpdateInput = Omit<ModelToolTaskUpdateInput, "expectedVersion"> & {
+  expectedVersion: string;
+  claim?: boolean;
+};
+
+export interface TaskAdapterAuthority {
   create(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
-  read(taskId: string): Promise<CandidateTaskAuthorityRecord>;
-  /** Batch candidate hydration over the existing native multi-ID show seam. */
-  readMany?(taskIds: readonly string[]): Promise<CandidateTaskAuthorityRecord[]>;
-  update?(taskId: string, input: ModelToolTaskUpdateInput, metadata: CandidateTaskMetadata): Promise<SemanticTaskUpdateResult>;
+  read(taskId: string): Promise<TaskAuthorityRecordEnvelope>;
+  /** Batch Task hydration over the existing native multi-ID show seam. */
+  readMany?(taskIds: readonly string[]): Promise<Array<TaskAuthorityRecordEnvelope | undefined>>;
+  update?(taskId: string, input: TaskAuthorityUpdateInput, metadata: TaskMetadata): Promise<SemanticTaskUpdateResult>;
+  link?(taskId: string, input: TaskLinkInput, options: TaskWriteOptions & AgentMutationBinding): Promise<TaskMutationReceipt>;
 }
 
-export interface CandidateTaskChangeProjection {
+export interface TaskChangeProjection {
   taskId: string;
   changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">;
   journalEntries: ModelToolTaskJournalEntry[];
-  current: {
-    status: ModelToolTaskCurrent["status"];
-    assignee?: string;
-    current_context: string;
-    version: string;
-    projection_warnings?: ModelToolTaskProjectionWarning[];
-  };
+  current: TaskCard;
 }
 
-export type CandidateTaskChangesOutcome =
-  | { kind: "projected"; changes: CandidateTaskChangeProjection[] }
+export type TaskChangesOutcome =
+  | { kind: "projected"; changes: TaskChangeProjection[] }
   | {
     kind: "contract_gap";
     reason: "structured_task_event_evidence_absent";
@@ -120,10 +139,10 @@ export type CandidateTaskChangesOutcome =
     message: string;
   };
 
-function candidateMetadata(goal: string, currentContext: string, lastOperation?: CandidateTaskMetadata["last_operation"]): CandidateTaskMetadata {
-  assertCandidateTaskMetadataContext({ current_context: currentContext });
+function taskMetadata(goal: string, currentContext: string, lastOperation?: TaskMetadata["last_operation"]): TaskMetadata {
+  assertTaskMetadataContext({ current_context: currentContext });
   return {
-    schema: CANDIDATE_TASK_METADATA_SCHEMA,
+    schema: TASK_METADATA_SCHEMA,
     goal,
     current_context: currentContext,
     ...(lastOperation ? { last_operation: lastOperation } : {}),
@@ -131,11 +150,11 @@ function candidateMetadata(goal: string, currentContext: string, lastOperation?:
 }
 
 /** Refresh Worker-visible context without discarding the durable replay record. */
-export function refreshCandidateTaskMetadata(
-  metadata: CandidateTaskMetadata,
+export function refreshTaskMetadata(
+  metadata: TaskMetadata,
   currentContext: string,
-): CandidateTaskMetadata {
-  return candidateMetadata(metadata.goal, currentContext, metadata.last_operation);
+): TaskMetadata {
+  return taskMetadata(metadata.goal, currentContext, metadata.last_operation);
 }
 
 function updateFingerprint(input: ModelToolTaskUpdateInput): string {
@@ -149,74 +168,49 @@ function updateFingerprint(input: ModelToolTaskUpdateInput): string {
 }
 
 function projectionGap(
-  task: TaskFile,
-  reason: CandidateTaskProjectionGapReason,
+  task: TaskAuthorityRecord,
+  reason: TaskProjectionGapReason,
   message: string,
-  projectionWarning?: ModelToolTaskProjectionWarning,
-): CandidateTaskProjectionGap {
+): TaskProjectionGap {
   return {
     kind: "contract_gap",
     reason,
     taskId: task.id,
-    authorityVersion: task.version,
+    version: taskVersionRef(task.version),
     message,
-    ...(projectionWarning ? { projectionWarning } : {}),
   };
 }
 
-const MAX_TASK_TITLE = MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars;
-const MAX_TASK_GOAL = CANDIDATE_TASK_GOAL_MAX_LENGTH;
-const MAX_TASK_CONTEXT = CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH;
-
-function displayValue(value: string, max: number): { value: string; truncated: boolean } {
-  if (value.length <= max) return { value, truncated: false };
-  if (max <= 1) return { value: "…", truncated: true };
-  let end = max - 1;
-  // Keep the bounded display valid UTF-16 while counting the same JavaScript
-  // string units as the TypeBox maxLength contract.
-  if (end > 0 && end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1] ?? "")) end -= 1;
-  return { value: `${value.slice(0, end)}…`, truncated: true };
-}
-
-function projectionWarning(
-  task: TaskFile,
-  truncatedFields: ModelToolTaskProjectionWarning["truncated_fields"],
-  incompleteFields: ModelToolTaskProjectionWarning["incomplete_fields"],
-  message: string,
-): ModelToolTaskProjectionWarning {
-  return { task_id: task.id, truncated_fields: truncatedFields, incomplete_fields: incompleteFields, message };
-}
-
-export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord): CandidateTaskMetadata | CandidateTaskProjectionGap {
-  if (record.candidateMetadata === undefined) {
+export function parseTaskMetadata(record: TaskAuthorityRecordEnvelope): TaskMetadata | TaskProjectionGap {
+  if (record.taskMetadata === undefined) {
     return projectionGap(
       record.task,
-      "candidate_metadata_absent",
-      `Task ${record.task.id} has no canonical ${CANDIDATE_TASK_METADATA_KEY} metadata; compatibility fields are not a candidate Task definition.`,
+      "task_metadata_absent",
+      `Task ${record.task.id} has no canonical ${TASK_METADATA_KEY} metadata; compatibility fields are not a Task definition.`,
     );
   }
-  let value = record.candidateMetadata;
+  let value = record.taskMetadata;
   if (typeof value === "string") {
     try {
       value = JSON.parse(value);
     } catch {
       return projectionGap(
         record.task,
-        "candidate_metadata_invalid",
-        `Task ${record.task.id} has malformed canonical ${CANDIDATE_TASK_METADATA_KEY} metadata.`,
+        "task_metadata_invalid",
+        `Task ${record.task.id} has malformed canonical ${TASK_METADATA_KEY} metadata.`,
       );
     }
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return projectionGap(
       record.task,
-      "candidate_metadata_invalid",
-      `Task ${record.task.id} has non-object canonical ${CANDIDATE_TASK_METADATA_KEY} metadata.`,
+      "task_metadata_invalid",
+      `Task ${record.task.id} has non-object canonical ${TASK_METADATA_KEY} metadata.`,
     );
   }
   const metadata = value as Record<string, unknown>;
   if (
-    metadata.schema !== CANDIDATE_TASK_METADATA_SCHEMA
+    metadata.schema !== TASK_METADATA_SCHEMA
     || typeof metadata.goal !== "string"
     || metadata.goal.length === 0
     || typeof metadata.current_context !== "string"
@@ -224,8 +218,8 @@ export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord)
   ) {
     return projectionGap(
       record.task,
-      "candidate_metadata_invalid",
-      `Task ${record.task.id} has unsupported or incomplete canonical ${CANDIDATE_TASK_METADATA_KEY} metadata.`,
+      "task_metadata_invalid",
+      `Task ${record.task.id} has unsupported or incomplete canonical ${TASK_METADATA_KEY} metadata.`,
     );
   }
   const operation = metadata.last_operation as unknown;
@@ -242,121 +236,161 @@ export function parseCandidateTaskMetadata(record: CandidateTaskAuthorityRecord)
       && typeof (entry as Record<string, unknown>).actor === "string"
       && JOURNAL_KINDS.has((entry as Record<string, unknown>).kind as TaskEventEvidenceKind)
       && typeof (entry as Record<string, unknown>).text === "string")
-    ? operationRecord as unknown as CandidateTaskMetadata["last_operation"]
+    ? operationRecord as unknown as TaskMetadata["last_operation"]
     : undefined;
   if (operation !== undefined && !validOperation) {
     return projectionGap(
       record.task,
-      "candidate_metadata_invalid",
-      `Task ${record.task.id} has malformed candidate operation metadata.`,
+      "task_metadata_invalid",
+      `Task ${record.task.id} has malformed Task operation metadata.`,
     );
   }
   return {
-    schema: CANDIDATE_TASK_METADATA_SCHEMA,
+    schema: TASK_METADATA_SCHEMA,
     goal: metadata.goal,
     current_context: metadata.current_context,
     ...(validOperation ? { last_operation: validOperation } : {}),
   };
 }
 
-function projectTask(task: TaskFile, metadata: CandidateTaskMetadata): ModelToolTaskCurrent {
-  const title = displayValue(task.title, MAX_TASK_TITLE);
-  const context = displayValue(metadata.current_context, MAX_TASK_CONTEXT);
-  const truncatedFields: ModelToolTaskProjectionWarning["truncated_fields"] = [];
-  const incompleteFields: ModelToolTaskProjectionWarning["incomplete_fields"] = [];
-  if (title.truncated) truncatedFields.push("title");
-  if (context.truncated) truncatedFields.push("current_context");
-  const goalIncomplete = metadata.goal.length > MAX_TASK_GOAL;
-  if (goalIncomplete) incompleteFields.push("goal");
-  const warning = truncatedFields.length > 0 || incompleteFields.length > 0
-    ? projectionWarning(task, truncatedFields, incompleteFields, goalIncomplete
-      ? "The executable goal is incomplete in this model projection; the authority record was not changed."
-      : "One or more external display fields were truncated for the model projection; the authority record was not changed.")
+function projectTask(task: TaskAuthorityRecord, metadata: TaskMetadata): TaskCard {
+  const truncated: TaskCardWarning["truncated_fields"] = [];
+  const incomplete: TaskCardWarning["incomplete_fields"] = [];
+  const title = task.title.length > TASK_CARD_TITLE_MAX_LENGTH
+    ? `${task.title.slice(0, TASK_CARD_TITLE_MAX_LENGTH - 1)}…`
+    : task.title;
+  if (title !== task.title) truncated.push("title");
+  const context = metadata.current_context.length > TASK_CARD_CONTEXT_MAX_LENGTH
+    ? `${metadata.current_context.slice(0, TASK_CARD_CONTEXT_MAX_LENGTH - 1)}…`
+    : metadata.current_context;
+  if (context !== metadata.current_context) truncated.push("current_context");
+  const warning = (): TaskCardWarning | undefined => truncated.length || incomplete.length
+    ? {
+      task_id: task.id,
+      truncated_fields: [...truncated],
+      incomplete_fields: [...incomplete],
+      message: "Some Task meaning exceeds the bounded display contract; review the current authority record before acting.",
+    }
     : undefined;
-  const structural = {
+  const base = {
     id: task.id,
-    title: title.value,
+    title,
     status: task.status,
     ...(task.assignee ? { assignee: task.assignee } : {}),
-    current_context: context.value,
-    version: task.version,
+    current_context: context,
+    version: taskVersionRef(task.version),
   };
-  if (goalIncomplete) {
-    return {
-      ...structural,
-      goal_state: "incomplete",
-      projection_warnings: [warning!],
-    };
+  if (metadata.goal.length > TASK_CARD_GOAL_MAX_LENGTH) {
+    incomplete.push("goal");
+    return { ...base, goal_state: "incomplete", projection_warnings: [warning()!] };
+  }
+  const taskWarning = warning();
+  return taskWarning
+    ? { ...base, goal: metadata.goal, projection_warnings: [taskWarning] }
+    : { ...base, goal: metadata.goal };
+}
+
+/** Project one raw authority envelope into the canonical TaskCard boundary. */
+export function projectTaskCard(record: TaskAuthorityRecordEnvelope): TaskCard | TaskProjectionGap {
+  const metadata = parseTaskMetadata(record);
+  return "kind" in metadata ? metadata : projectTask(record.task, metadata);
+}
+
+function projectTaskRecord(record: TaskAuthorityRecordEnvelope): TaskReadOutcome {
+  const projected = projectTaskCard(record);
+  return "kind" in projected ? projected : { kind: "found", task: projected };
+}
+
+/** Read the canonical post-state evidence needed by delivery recovery. */
+export async function readTaskOwnerTransitionEvidence(
+  teamName: string,
+  taskId: string,
+): Promise<{ task: TaskCard; operationId?: string }> {
+  const record = await readTaskAuthorityRecordEnvelope(teamName, taskId);
+  const card = projectTaskCard(record);
+  if ("kind" in card) {
+    const error = new Error(card.message);
+    error.name = "upgrade_required";
+    throw error;
   }
   return {
-    ...structural,
-    goal: metadata.goal,
-    ...(warning ? { projection_warnings: [warning] } : {}),
+    task: card,
+    ...(record.ownerTransitionOperationId ? { operationId: record.ownerTransitionOperationId } : {}),
   };
 }
 
-function projectCandidateTaskRecord(record: CandidateTaskAuthorityRecord): CandidateTaskReadOutcome {
-  const metadata = parseCandidateTaskMetadata(record);
-  if ("kind" in metadata) return metadata;
-  return { kind: "found", task: projectTask(record.task, metadata) };
-}
-
-function defaultAuthority(teamName: string, actor: string): CandidateTaskAdapterAuthority {
+function defaultAuthority(teamName: string, actor: string): TaskAdapterAuthority {
   return {
-    create: (input, publication) => createTask(teamName, input, { actor }, publication),
-    read: (taskId) => readCandidateTaskAuthorityRecord(teamName, taskId),
-    readMany: (taskIds) => readCandidateTaskAuthorityRecords(teamName, taskIds),
+    create: (input, publication) => createTask(teamName, input, { actor }, {
+      ...publication,
+      taskCardProjector: projectTaskCard,
+    }),
+    read: (taskId) => readTaskAuthorityRecordEnvelope(teamName, taskId),
+    readMany: (taskIds) => readTaskAuthorityRecordEnvelopes(teamName, taskIds),
     update: (taskId, input, metadata) => applySemanticTaskUpdate(teamName, taskId, {
+      ...(input.claim ? { claim: true } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.journalEntries?.length ? { appendNote: input.journalEntries.map((entry) => `[${entry.kind}] ${entry.text}`).join("\\n") } : {}),
     }, {
       actor,
       expectedVersion: input.expectedVersion,
-      candidateTaskMetadata: metadata,
-      taskEventEvidence: candidateUpdateEventEvidence(input),
+      taskMetadata: metadata,
+      taskCardProjector: projectTaskCard,
+      taskEventEvidence: taskUpdateEventEvidence(input as ModelToolTaskUpdateInput),
     }),
+    link: (taskId, input, options) => mutateTaskLink(teamName, taskId, {
+      relation: input.relation,
+      targetId: input.targetId,
+      action: input.action,
+    }, { ...options, taskCardProjector: projectTaskCard }),
   };
 }
 
 /**
- * Unregistered candidate Task projection over the existing Beads authority.
+ * Unregistered Task projection over the existing Beads authority.
  *
  * Create and read are durable. Update fails closed until the authority can
  * prove external-writer compare-and-swap and Task-scoped operation replay.
  */
-export class CandidateBeadsTaskAdapter {
-  private readonly authority: CandidateTaskAdapterAuthority;
+export class BeadsTaskAdapter {
+  private readonly authority: TaskAdapterAuthority;
 
   constructor(
     readonly teamName: string,
     readonly actor: string,
-    authority: CandidateTaskAdapterAuthority = defaultAuthority(teamName, actor),
+    authority: TaskAdapterAuthority = defaultAuthority(teamName, actor),
   ) {
     this.authority = authority;
   }
 
-  async create(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CandidateTaskCreateOutcome> {
+  async create(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<TaskCreateOutcome> {
     return this.createWithReceipt(input);
   }
 
-  async createWithReceipt(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CandidateTaskCreateOutcome> {
-    const metadata = candidateMetadata(input.goal, INITIAL_CURRENT_CONTEXT);
+  async createWithReceipt(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<TaskCreateOutcome> {
+    const metadata = taskMetadata(input.goal, INITIAL_CURRENT_CONTEXT);
     try {
       const receipt = await this.authority.create({
         title: input.title,
-        // These are compatibility projections only. Candidate reads use metadata.
+        // These are compatibility projections only. Task reads use metadata.
         description: input.goal,
         ...(input.assignee ? { acceptanceCriteria: input.goal, assignee: input.assignee } : {}),
-        internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: metadata },
+        internalMetadata: { [TASK_METADATA_KEY]: metadata },
         // Beads persists this Team-scoped opaque operation coordinate with the
         // create itself. It is never derived from Task content or tool-call ID.
         idempotencyKey: `model-task-create:${this.teamName}:${input.operationId}`,
       }, {
         taskEventEvidence: [{ kind: "created", text: input.goal }],
+        taskMetadata: metadata,
+        taskCardProjector: projectTaskCard,
       });
-      const record = await this.authority.read(receipt.task.id);
-      const parsed = parseCandidateTaskMetadata(record);
-      const matches = !('kind' in parsed)
+      // Real authority receipts carry the exact post-state card. The read is
+      // only a compatibility seam for injected authorities that predate it.
+      const record = receipt.taskCard
+        ? { task: receipt.task, taskMetadata: metadata }
+        : receipt.taskEnvelope ?? await this.authority.read(receipt.task.id);
+      const parsed = parseTaskMetadata(record);
+      const matches = !("kind" in parsed)
         && record.task.title === input.title
         && (record.task.assignee || undefined) === input.assignee
         && parsed.goal === input.goal
@@ -372,7 +406,7 @@ export class CandidateBeadsTaskAdapter {
       return {
         kind: "created",
         operationId: input.operationId,
-        task: projectTask(record.task, parsed),
+        task: receipt.taskCard ?? projectTask(record.task, parsed),
         deliveryWarnings: receipt.deliveryWarnings,
       };
     } catch (error) {
@@ -384,26 +418,84 @@ export class CandidateBeadsTaskAdapter {
     }
   }
 
-  async read(taskId: string): Promise<CandidateTaskReadOutcome> {
+  async read(taskId: string): Promise<TaskReadOutcome> {
     const record = await this.authority.read(taskId);
-    return projectCandidateTaskRecord(record);
+    return projectTaskRecord(record);
   }
 
-  /** Project all candidate records without changing gap or version semantics. */
-  async readMany(taskIds: readonly string[]): Promise<CandidateTaskReadOutcome[]> {
+  /** Resolve one public version coordinate to raw CAS, then retain that CAS for the mutation. */
+  async link(input: TaskLinkInput, binding: Omit<AgentMutationBinding, "actor"> = {}): Promise<TaskLinkOutcome> {
+    try {
+      let expectedVersion: string | undefined;
+      if (input.expectedVersion !== undefined) {
+        const record = await this.authority.read(input.taskId);
+        expectedVersion = record.task.version;
+        if (taskVersionRef(expectedVersion) !== input.expectedVersion) {
+          return {
+            kind: "refused",
+            taskId: input.taskId,
+            reason: "version_conflict",
+            message: "The supplied Task version ref is stale; read the current Task before retrying.",
+          };
+        }
+      }
+      if (!this.authority.link) {
+        return {
+          kind: "unavailable",
+          reason: "task_authority_unavailable",
+          message: "The Task authority does not expose the conditional link capability.",
+        };
+      }
+      const result = await this.authority.link(input.taskId, input, {
+        actor: this.actor,
+        expectedVersion,
+        ...binding,
+      });
+      return {
+        kind: "linked",
+        taskId: input.taskId,
+        targetId: input.targetId,
+        relation: input.relation,
+        action: input.action,
+        changed: result.changed,
+        version: taskVersionRef(result.task.version),
+      };
+    } catch (error) {
+      if (error instanceof BeadsError) {
+        const message = error.message;
+        const reason = /not found|no issue found/i.test(message)
+          ? "task_not_found" as const
+          : /changed since version|expected(?: Task)? version|stale/i.test(message)
+            ? "version_conflict" as const
+            : "graph_conflict" as const;
+        return { kind: "refused", taskId: input.taskId, reason, message };
+      }
+      return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Project all Task records without changing gap or version semantics. */
+  async readMany(taskIds: readonly string[]): Promise<Array<TaskReadOutcome | undefined>> {
     const records = this.authority.readMany
       ? await this.authority.readMany(taskIds)
       : await Promise.all(taskIds.map((taskId) => this.authority.read(taskId)));
-    return records.map(projectCandidateTaskRecord);
+    return records.map((record) => record ? projectTaskRecord(record) : undefined);
   }
 
-  async update(input: ModelToolTaskUpdateInput): Promise<CandidateTaskUpdateOutcome> {
+  async list(): Promise<TaskCard[]> {
+    const results = await this.readMany(await listTaskIds(this.teamName));
+    return results.flatMap((result) => result && result.kind === "found" ? [result.task] : []);
+  }
+
+  async claim(input: { taskId: string; operationId: string; expectedVersion: TaskVersionRef }): Promise<TaskUpdateOutcome> {
+    return this.update({ ...input, claim: true } as ModelToolTaskUpdateInput & { claim: true });
+  }
+
+  async update(input: ModelToolTaskUpdateInput & { claim?: boolean }): Promise<TaskUpdateOutcome> {
     const record = await this.authority.read(input.taskId);
-    const projected = projectCandidateTaskRecord(record);
-    if (projected.kind === "contract_gap") return projected;
-    const metadata = parseCandidateTaskMetadata(record);
+    const metadata = parseTaskMetadata(record);
     if ("kind" in metadata) return metadata;
-    const currentTask = projected.task;
+    const currentTask = projectTask(record.task, metadata);
     const fingerprint = updateFingerprint(input);
     const prior = metadata.last_operation;
     if (prior && prior.operation_id === input.operationId) {
@@ -425,7 +517,7 @@ export class CandidateBeadsTaskAdapter {
         journalEntries: prior.journal_entries,
       };
     }
-    if (taskVersionRef(currentTask.version) !== input.expectedVersion) {
+    if (currentTask.version !== input.expectedVersion) {
       return {
         kind: "refused",
         reason: "version_conflict",
@@ -438,12 +530,12 @@ export class CandidateBeadsTaskAdapter {
     if (!this.authority.update) {
       return {
         kind: "contract_gap",
-        reason: "beads_external_writer_atomicity_unavailable",
+        reason: "external_writer_atomicity_unavailable",
         taskId: input.taskId,
         operationId: input.operationId,
         currentTask,
         unsupported: ["atomic_compare_and_swap", "task_scoped_operation_replay"],
-        message: "The Task authority does not expose the conditional candidate update capability.",
+        message: "The Task authority does not expose the conditional update capability.",
       };
     }
     const at = new Date().toISOString();
@@ -455,7 +547,16 @@ export class CandidateBeadsTaskAdapter {
       text: entry.text,
     }));
     const operation = { operation_id: input.operationId, fingerprint, journal_entries: journalEntries };
-    const nextMetadata = candidateMetadata(metadata.goal, input.currentContext ?? metadata.current_context, operation);
+    let nextMetadata: TaskMetadata;
+    try {
+      nextMetadata = taskMetadata(metadata.goal, input.currentContext ?? metadata.current_context, operation);
+    } catch (error) {
+      return projectionGap(
+        record.task,
+        "task_metadata_invalid",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
     try {
       const result = await this.authority.update(input.taskId, {
         ...input,
@@ -465,7 +566,7 @@ export class CandidateBeadsTaskAdapter {
         kind: "updated",
         taskId: input.taskId,
         operationId: input.operationId,
-        task: projectTask(result.task, nextMetadata),
+        task: result.taskCard ?? projectTask(result.task, nextMetadata),
         journalEntries,
       };
     } catch (error) {
@@ -481,8 +582,8 @@ export class CandidateBeadsTaskAdapter {
 }
 
 /** Derive Worker work from authoritative assignment and status; store no index. */
-export function projectCandidateNonterminalTaskIds(
-  tasks: readonly ModelToolTaskCurrent[],
+export function projectNonterminalTaskIds(
+  tasks: readonly TaskCard[],
   workerName: string,
 ): string[] {
   return tasks
@@ -491,7 +592,7 @@ export function projectCandidateNonterminalTaskIds(
     .sort();
 }
 
-export function projectCandidateTaskJournalEntry(event: TeamEvent): ModelToolTaskJournalEntry | undefined {
+export function projectTaskJournalEntry(event: TeamEvent): ModelToolTaskJournalEntry | undefined {
   const evidence = projectTaskEventEvidence(event);
   if (!evidence || !JOURNAL_KINDS.has(evidence.kind)) return undefined;
   return {
@@ -503,13 +604,13 @@ export function projectCandidateTaskJournalEntry(event: TeamEvent): ModelToolTas
   };
 }
 
-function changeKind(event: TeamEvent): CandidateTaskChangeProjection["changeKinds"][number] | undefined {
+function changeKind(event: TeamEvent): TaskChangeProjection["changeKinds"][number] | undefined {
   if (event.type !== "task") return undefined;
   const evidence = projectTaskEventEvidence(event);
   if (evidence) {
     if (JOURNAL_KINDS.has(evidence.kind)) return "progress";
     if (["created", "goal", "assignment", "status", "relation"].includes(evidence.kind)) {
-      return evidence.kind as CandidateTaskChangeProjection["changeKinds"][number];
+      return evidence.kind as TaskChangeProjection["changeKinds"][number];
     }
   }
   if (event.change === "created") return "created";
@@ -520,31 +621,34 @@ function changeKind(event: TeamEvent): CandidateTaskChangeProjection["changeKind
 }
 
 /** Group committed Task evidence and attach one latest canonical current state. */
-export function projectCandidateTaskChanges(
+export function projectTaskChanges(
   events: readonly TeamEvent[],
-  currentTasks: readonly ModelToolTaskCurrent[],
-): CandidateTaskChangesOutcome {
+  currentTasks: readonly TaskCard[],
+): TaskChangesOutcome {
   const currentById = new Map(currentTasks.map((task) => [task.id, task]));
-  const grouped = new Map<string, Omit<CandidateTaskChangeProjection, "current">>();
+  const grouped = new Map<string, Omit<TaskChangeProjection, "current">>();
   for (const event of events) {
     if (event.type !== "task") continue;
     const task = currentById.get(event.ref.taskId);
     if (!task) continue;
     // Structural Task events remain useful without narrative evidence. Only
-    // journal meaning requires taskEvidence; never invent a journal entry.
-    const kind = changeKind(event);
-    if (!kind && !projectTaskEventEvidence(event)) {
-      return {
-        kind: "contract_gap",
-        reason: "structured_task_event_evidence_absent",
-        taskId: task.id,
-        eventId: `task-event-${event.cursor}`,
-        message: `Task event ${event.cursor} has no structured evidence for its narrative change; candidate updates cannot reconstruct it safely.`,
-      };
+    // evidence-backed entries contribute journal content below.
+    if (!projectTaskEventEvidence(event)) {
+      if (event.change === "note") {
+        return {
+          kind: "contract_gap",
+          reason: "structured_task_event_evidence_absent",
+          taskId: task.id,
+          eventId: `task-event-${event.cursor}`,
+          message: `Task event ${event.cursor} has no structured actor/kind/text evidence; Task updates cannot reconstruct it safely.`,
+        };
+      }
+      if (!changeKind(event)) continue;
     }
     const group = grouped.get(task.id) ?? { taskId: task.id, changeKinds: [], journalEntries: [] };
+    const kind = changeKind(event);
     if (kind && !group.changeKinds.includes(kind)) group.changeKinds.push(kind);
-    const journalEntry = projectCandidateTaskJournalEntry(event);
+    const journalEntry = projectTaskJournalEntry(event);
     if (journalEntry) group.journalEntries.push(journalEntry);
     grouped.set(task.id, group);
   }
@@ -555,19 +659,13 @@ export function projectCandidateTaskChanges(
       if (!task || group.changeKinds.length === 0) return [];
       return [{
         ...group,
-        current: {
-          status: task.status,
-          ...(task.assignee ? { assignee: task.assignee } : {}),
-          current_context: task.current_context,
-          version: task.version,
-          ...(task.projection_warnings ? { projection_warnings: task.projection_warnings } : {}),
-        },
+        current: task,
       }];
     }),
   };
 }
 
 /** Construct update publication evidence without inventing identity or time. */
-export function candidateUpdateEventEvidence(input: ModelToolTaskUpdateInput): TaskEventEvidenceInput[] {
+export function taskUpdateEventEvidence(input: ModelToolTaskUpdateInput): TaskEventEvidenceInput[] {
   return (input.journalEntries ?? []).map((entry) => ({ kind: entry.kind, text: entry.text }));
 }

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { withLock } from "./lock";
 
 describe("withLock race conditions", () => {
@@ -112,11 +113,12 @@ describe("withLock race conditions", () => {
 
   it("allows exactly one stale-lock takeover at a time across 20 processes", async () => {
     const workerFile = path.join(testDir, "stale-worker.cjs");
+    const resolveFromTest = createRequire(path.join(process.cwd(), "package.json"));
     const startFile = path.join(testDir, "start");
     const eventsFile = path.join(testDir, "events.jsonl");
     const source = path.resolve(process.cwd(), "src/utils/lock.ts");
     fs.writeFileSync(workerFile, `
-require(${JSON.stringify(path.resolve(process.cwd(), "node_modules/ts-node/register/transpile-only"))});
+require(${JSON.stringify(resolveFromTest.resolve("ts-node/register/transpile-only"))});
 const fs = require("node:fs");
 const { withLock } = require(${JSON.stringify(source)});
 const [lockPath, startFile, eventsFile, id] = process.argv.slice(2);

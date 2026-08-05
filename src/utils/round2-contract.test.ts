@@ -3,7 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
+import { BeadsTaskStore, readBeadsAuthorityFingerprint, TASK_METADATA_KEY, TASK_METADATA_SCHEMA } from "./beads";
+import { projectTaskCard } from "../model-tool-contract/beads-task-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import {
@@ -13,7 +14,9 @@ import {
   suppressTaskVersionForSession,
   TaskChangeDelivery,
 } from "./task-delivery";
-import { applySemanticTaskUpdate } from "./tasks";
+import { applySemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TaskCard } from "../model-tool-contract/task-domain";
 import { recordBdCall, withSemanticTrace } from "./trace";
 
 const createdTeams: string[] = [];
@@ -67,7 +70,7 @@ describe("Round 2 Task delivery contracts", () => {
     const { name, add } = await teamFixture("suppression");
     const firstSession = "/tmp/worker-first.jsonl";
     await add("worker", firstSession);
-    const task = { id: "t1", title: "s", description: "d", acceptanceCriteria: "verified", status: "in_progress" as const, assignee: "worker", relations: [], version: "v1", provenance: { authority: "beads" as const, teamName: name } };
+    const task: TaskCard = { id: "t1", title: "s", goal: "verified", current_context: "Ready.", status: "in_progress", assignee: "worker", version: taskVersionRef("v1") };
     await suppressTaskVersionForSession(name, "worker", firstSession, task);
     expect(await enqueueTaskChangeForRecipient(name, task, "worker", "status_changed")).toBeNull();
 
@@ -103,13 +106,11 @@ describe("Round 2 Task delivery contracts", () => {
       await enqueueTaskChangeForRecipient(name, {
         id: `t${index}`,
         title: `task ${index}`,
-        description: "pending delivery",
-        acceptanceCriteria: "The delivery remains pending",
+        goal: "The delivery remains pending",
+        current_context: "Ready.",
         status: "in_progress",
         assignee: "worker",
-        relations: [],
-        version: `v${index}`,
-        provenance: { authority: "beads", teamName: name },
+        version: taskVersionRef(`v${index}`),
       }, "worker", "task_changed");
     }
     expect(await readTaskDeliveries(name, "worker")).toHaveLength(150);
@@ -135,9 +136,9 @@ describe("Round 2 Task delivery contracts", () => {
     await add("alice", "/tmp/alice.jsonl");
     await add("bob", "/tmp/bob.jsonl");
     const store = new BeadsTaskStore({ teamName: name, workspace, requireExpectedVersion: false });
-    const created = await store.create({ title: "handoff", description: "assignee change" });
+    const created = await store.create({ title: "handoff", description: "assignee change", internalMetadata: { [TASK_METADATA_KEY]: { schema: TASK_METADATA_SCHEMA, goal: "assignee change", current_context: "Ready." } } });
     const owned = await store.update(created.id, { assignee: "alice", status: "in_progress" });
-    const result = await applySemanticTaskUpdate(name, owned.id, { assignee: "bob", status: "in_progress" }, { actor: "team-lead" });
+    const result = await applySemanticTaskUpdate(name, owned.id, { assignee: "bob", status: "in_progress" }, { actor: "team-lead", taskCardProjector: projectTaskCard });
 
     expect(result.before.assignee).toBe("alice");
     expect(result.task.assignee).toBe("bob");
@@ -174,12 +175,12 @@ describe("Round 2 Task delivery contracts", () => {
     const workspace = initBeads();
     const { name } = await teamFixture("amplification", workspace);
     const store = new BeadsTaskStore({ teamName: name, workspace, requireExpectedVersion: false });
-    const created = await store.create({ title: "amplification", description: "measure semantic tool cost" });
+    const created = await store.create({ title: "amplification", description: "measure semantic tool cost", internalMetadata: { [TASK_METADATA_KEY]: { schema: TASK_METADATA_SCHEMA, goal: "measure semantic tool cost", current_context: "Ready." } } });
     const trace = path.join(root("amplification-trace"), "trace.jsonl");
     process.env.PI_TEAMS_TRACE_JSONL = trace;
 
-    await applySemanticTaskUpdate(name, created.id, { assignee: "offline-assignee", status: "in_progress" }, { actor: "team-lead" });
-    await applySemanticTaskUpdate(name, created.id, { appendNote: "one journal intent" }, { actor: "team-lead" });
+    await applySemanticTaskUpdate(name, created.id, { assignee: "offline-assignee", status: "in_progress" }, { actor: "team-lead", taskCardProjector: projectTaskCard });
+    await applySemanticTaskUpdate(name, created.id, { appendNote: "one journal intent" }, { actor: "team-lead", taskCardProjector: projectTaskCard });
 
     const records = fs.readFileSync(trace, "utf8").trim().split("\n").map((line) => JSON.parse(line));
     expect(records).toHaveLength(2);

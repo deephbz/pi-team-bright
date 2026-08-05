@@ -1,35 +1,36 @@
 import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import {
-  CandidateEnsureWorkerParametersSchema,
-  CandidateEnsureWorkerResultSchema,
-  CandidateTaskCardSchema,
-  CandidateTaskCreateParametersSchema,
-  CandidateTaskCreateResultSchema,
-  CandidateTaskReadParametersSchema,
-  CandidateTaskReadResultSchema,
-  CandidateTaskUpdateParametersSchema,
-  CandidateTaskUpdateResultSchema,
-  CandidateTeamCreateParametersSchema,
-  CandidateTeamCreateResultSchema,
-  CandidateTeamSyncParametersSchema,
-  CandidateTeamSyncResultSchema,
-  CandidateTeamSyncUnavailableResultSchema,
-  CandidateWorkerStopParametersSchema,
-  CandidateWorkerStopResultSchema,
-  CandidateTeamShutdownParametersSchema,
-  CandidateTeamShutdownResultSchema,
-  CandidateTaskLinkParametersSchema,
-  CandidateTaskLinkResultSchema,
-  CandidateAlertSendParametersSchema,
-  CandidateAlertSendResultSchema,
-  candidateModelToolCatalog,
+  EnsureWorkerParametersSchema,
+  EnsureWorkerResultSchema,
+  TaskCreateParametersSchema,
+  TaskCreateResultSchema,
+  TaskReadParametersSchema,
+  TaskReadResultSchema,
+  TaskUpdateParametersSchema,
+  TaskUpdateResultSchema,
+  TeamCreateParametersSchema,
+  TeamCreateResultSchema,
+  TeamSyncParametersSchema,
+  TeamSyncResultSchema,
+  TeamSyncUnavailableResultSchema,
+  WorkerStopParametersSchema,
+  WorkerStopResultSchema,
+  TeamShutdownParametersSchema,
+  TeamShutdownResultSchema,
+  TaskLinkParametersSchema,
+  TaskLinkResultSchema,
+  AlertSendParametersSchema,
+  AlertSendResultSchema,
+  modelToolCatalog,
 } from "./catalog";
+import { TaskCardSchema } from "./task-domain";
+import { taskVersionRef } from "./task-version-ref";
 import {
-  CandidateModelResultSchemas,
-  parseCandidateToolResult,
-  projectCandidateToolResult,
-  serializeCandidateToolResult,
+  ModelResultSchemas,
+  parseToolResult,
+  projectToolResult,
+  serializeToolResult,
 } from "./result-projection";
 import { renderModelToolContractReview, type ContractReviewGovernance } from "./render-review-html";
 
@@ -52,30 +53,30 @@ const provenance = {
 
 function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "task_link" | "alert_send") {
   if (tool === "team_create") {
-    return { parameters: CandidateTeamCreateParametersSchema, result: CandidateTeamCreateResultSchema };
+    return { parameters: TeamCreateParametersSchema, result: TeamCreateResultSchema };
   }
   if (tool === "team_sync") {
-    return { parameters: CandidateTeamSyncParametersSchema, result: CandidateTeamSyncResultSchema };
+    return { parameters: TeamSyncParametersSchema, result: TeamSyncResultSchema };
   }
   if (tool === "ensure_worker") {
-    return { parameters: CandidateEnsureWorkerParametersSchema, result: CandidateEnsureWorkerResultSchema };
+    return { parameters: EnsureWorkerParametersSchema, result: EnsureWorkerResultSchema };
   }
   if (tool === "task_create") {
-    return { parameters: CandidateTaskCreateParametersSchema, result: CandidateTaskCreateResultSchema };
+    return { parameters: TaskCreateParametersSchema, result: TaskCreateResultSchema };
   }
-  if (tool === "task_read") return { parameters: CandidateTaskReadParametersSchema, result: CandidateTaskReadResultSchema };
-  if (tool === "task_update") return { parameters: CandidateTaskUpdateParametersSchema, result: CandidateTaskUpdateResultSchema };
-  if (tool === "worker_stop") return { parameters: CandidateWorkerStopParametersSchema, result: CandidateWorkerStopResultSchema };
-  if (tool === "team_shutdown") return { parameters: CandidateTeamShutdownParametersSchema, result: CandidateTeamShutdownResultSchema };
-  if (tool === "task_link") return { parameters: CandidateTaskLinkParametersSchema, result: CandidateTaskLinkResultSchema };
-  return { parameters: CandidateAlertSendParametersSchema, result: CandidateAlertSendResultSchema };
+  if (tool === "task_read") return { parameters: TaskReadParametersSchema, result: TaskReadResultSchema };
+  if (tool === "task_update") return { parameters: TaskUpdateParametersSchema, result: TaskUpdateResultSchema };
+  if (tool === "worker_stop") return { parameters: WorkerStopParametersSchema, result: WorkerStopResultSchema };
+  if (tool === "team_shutdown") return { parameters: TeamShutdownParametersSchema, result: TeamShutdownResultSchema };
+  if (tool === "task_link") return { parameters: TaskLinkParametersSchema, result: TaskLinkResultSchema };
+  return { parameters: AlertSendParametersSchema, result: AlertSendResultSchema };
 }
 
 describe("candidate model-tool catalog", () => {
   it("creates a Team from its stable identity, purpose, and optional pane policy", () => {
     const valid = { name: "release-team", purpose: "Prepare and verify the public release." };
-    expect(Check(CandidateTeamCreateParametersSchema, valid)).toBe(true);
-    expect(Check(CandidateTeamCreateParametersSchema, {
+    expect(Check(TeamCreateParametersSchema, valid)).toBe(true);
+    expect(Check(TeamCreateParametersSchema, {
       ...valid,
       pane_layout: { leader_share: 0.7, worker_tiling: "grid" },
     })).toBe(true);
@@ -89,7 +90,7 @@ describe("candidate model-tool catalog", () => {
       { ...valid, pane_layout: { leader_share: 0.59, worker_tiling: "linear" } },
       { ...valid, pane_layout: { leader_share: 0.7, worker_tiling: "diagonal" } },
     ]) {
-      expect(Check(CandidateTeamCreateParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
+      expect(Check(TeamCreateParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
     }
   });
 
@@ -99,15 +100,15 @@ describe("candidate model-tool catalog", () => {
       operation_id: "context-boundary",
       expected_version: "v_0123456789abcdef",
     };
-    expect(Check(CandidateTaskUpdateParametersSchema, {
+    expect(Check(TaskUpdateParametersSchema, {
       updates: [{ ...base, current_context: "a".repeat(2_000) }],
     })).toBe(true);
-    expect(Check(CandidateTaskUpdateParametersSchema, {
+    expect(Check(TaskUpdateParametersSchema, {
       updates: [{ ...base, current_context: "a".repeat(2_001) }],
     })).toBe(false);
     const multiCodeUnit = "👩🏽‍🚀".repeat(1_001);
     expect([...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(multiCodeUnit)]).toHaveLength(1_001);
-    expect(Check(CandidateTaskUpdateParametersSchema, {
+    expect(Check(TaskUpdateParametersSchema, {
       updates: [{ ...base, current_context: multiCodeUnit }],
     })).toBe(false);
   });
@@ -116,26 +117,26 @@ describe("candidate model-tool catalog", () => {
     const createItem = { operation_id: "goal-boundary", title: "Goal boundary" };
     for (const length of [160, 161, 1_000]) {
       const goal = "g".repeat(length);
-      expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
-      expect(Check(CandidateTaskCardSchema, {
+      expect(Check(TaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
+      expect(Check(TaskCardSchema, {
         id: "task-1",
         title: createItem.title,
         goal,
         status: "open",
         current_context: "Not started.",
-        version: "raw-version",
+        version: taskVersionRef("raw-version"),
       }), String(length)).toBe(true);
     }
 
     const goal = "g".repeat(1_001);
-    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] })).toBe(false);
-    expect(Check(CandidateTaskCardSchema, {
+    expect(Check(TaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] })).toBe(false);
+    expect(Check(TaskCardSchema, {
       id: "task-1",
       title: createItem.title,
       goal,
       status: "open",
       current_context: "Not started.",
-      version: "raw-version",
+      version: taskVersionRef("raw-version"),
     })).toBe(false);
   });
 
@@ -145,7 +146,7 @@ describe("candidate model-tool catalog", () => {
       title: "Verify",
       status: "open" as const,
       current_context: "Not started.",
-      version: "raw-version",
+      version: taskVersionRef("raw-version"),
     };
     const warning = {
       task_id: "task-1",
@@ -153,18 +154,18 @@ describe("candidate model-tool catalog", () => {
       incomplete_fields: ["goal"],
       message: "The goal is incomplete.",
     };
-    expect(Check(CandidateTaskCardSchema, { ...base, goal: "Verify the release." })).toBe(true);
-    expect(Check(CandidateTaskCardSchema, { ...base, goal_state: "incomplete", projection_warnings: [warning] })).toBe(true);
-    expect(Check(CandidateTaskCardSchema, { ...base })).toBe(false);
-    expect(Check(CandidateTaskCardSchema, { ...base, goal: "Verify the release.", goal_state: "incomplete", projection_warnings: [warning] })).toBe(false);
+    expect(Check(TaskCardSchema, { ...base, goal: "Verify the release." })).toBe(true);
+    expect(Check(TaskCardSchema, { ...base, goal_state: "incomplete", projection_warnings: [warning] })).toBe(true);
+    expect(Check(TaskCardSchema, { ...base })).toBe(false);
+    expect(Check(TaskCardSchema, { ...base, goal: "Verify the release.", goal_state: "incomplete", projection_warnings: [warning] })).toBe(false);
 
     const modelIncomplete = {
       kind: "found",
       task: { ...base, version: "v_0123456789abcdef", goal_state: "incomplete", projection_warnings: [warning] },
     };
-    expect(Check(CandidateModelResultSchemas.task_read, modelIncomplete)).toBe(true);
-    expect(Check(CandidateModelResultSchemas.task_read, { kind: "found", task: { ...modelIncomplete.task } })).toBe(true);
-    expect(Check(CandidateModelResultSchemas.task_read, { kind: "found", task: { ...modelIncomplete.task, goal: "not allowed" } })).toBe(false);
+    expect(Check(ModelResultSchemas.task_read, modelIncomplete)).toBe(true);
+    expect(Check(ModelResultSchemas.task_read, { kind: "found", task: { ...modelIncomplete.task } })).toBe(true);
+    expect(Check(ModelResultSchemas.task_read, { kind: "found", task: { ...modelIncomplete.task, goal: "not allowed" } })).toBe(false);
   });
 
   it("keeps observation outcomes distinct from authority unavailability", () => {
@@ -173,22 +174,22 @@ describe("candidate model-tool catalog", () => {
       state_changed: false,
       observation_advanced: false,
     } as const;
-    expect(Check(CandidateTeamSyncResultSchema, { kind: "snapshot_required", ...common })).toBe(true);
-    expect(Check(CandidateTeamSyncResultSchema, { kind: "cancelled", ...common })).toBe(true);
-    expect(Check(CandidateTeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "snapshot_required", ...common })).toBe(false);
-    expect(Check(CandidateTeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "cancelled", ...common })).toBe(false);
+    expect(Check(TeamSyncResultSchema, { kind: "snapshot_required", ...common })).toBe(true);
+    expect(Check(TeamSyncResultSchema, { kind: "cancelled", ...common })).toBe(true);
+    expect(Check(TeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "snapshot_required", ...common })).toBe(false);
+    expect(Check(TeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "cancelled", ...common })).toBe(false);
   });
 
   it("requires a caller-chosen create operation ID", () => {
     const task = { operation_id: "create-release", title: "Verify", goal: "Verify the release." };
-    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [task] })).toBe(true);
-    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
-    expect(Check(CandidateTaskCreateParametersSchema, { tasks: [{ ...task, operation_id: "" }] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { tasks: [task] })).toBe(true);
+    expect(Check(TaskCreateParametersSchema, { tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { tasks: [{ ...task, operation_id: "" }] })).toBe(false);
   });
 
   it("keeps Team identity implicit in both team_sync call forms", () => {
-    expect(Check(CandidateTeamSyncParametersSchema, { view: "snapshot" })).toBe(true);
-    expect(Check(CandidateTeamSyncParametersSchema, { view: "updates" })).toBe(true);
+    expect(Check(TeamSyncParametersSchema, { view: "snapshot" })).toBe(true);
+    expect(Check(TeamSyncParametersSchema, { view: "updates" })).toBe(true);
 
     for (const invalid of [
       {},
@@ -199,21 +200,21 @@ describe("candidate model-tool catalog", () => {
       { view: "snapshot", continuation: "opaque" },
       { view: "updates", task_ids: ["task-1"] },
     ]) {
-      expect(Check(CandidateTeamSyncParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
+      expect(Check(TeamSyncParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
     }
 
-    expect(CandidateTeamSyncParametersSchema).toMatchObject({
+    expect(TeamSyncParametersSchema).toMatchObject({
       type: "object",
       additionalProperties: false,
       required: ["view"],
     });
-    expect(Object.keys(CandidateTeamSyncParametersSchema.properties)).toEqual(["view"]);
-    expect(CandidateTeamSyncParametersSchema.properties.view).toMatchObject({ enum: ["snapshot", "updates"] });
+    expect(Object.keys(TeamSyncParametersSchema.properties)).toEqual(["view"]);
+    expect(TeamSyncParametersSchema.properties.view).toMatchObject({ enum: ["snapshot", "updates"] });
   });
 
   it("accepts only a Worker name and deep semantic scope", () => {
     const valid = { name: "release-verifier", scope: "Own independent release verification." };
-    expect(Check(CandidateEnsureWorkerParametersSchema, valid)).toBe(true);
+    expect(Check(EnsureWorkerParametersSchema, valid)).toBe(true);
 
     for (const invalid of [
       {},
@@ -222,26 +223,26 @@ describe("candidate model-tool catalog", () => {
       { ...valid, team_name: "release-team" },
       { ...valid, task_id: "task-1" },
     ]) {
-      expect(Check(CandidateEnsureWorkerParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
+      expect(Check(EnsureWorkerParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
     }
 
-    expect(CandidateEnsureWorkerParametersSchema).toMatchObject({
+    expect(EnsureWorkerParametersSchema).toMatchObject({
       type: "object",
       additionalProperties: false,
       required: ["name", "scope"],
     });
-    expect(Object.keys(CandidateEnsureWorkerParametersSchema.properties)).toEqual(["name", "scope"]);
+    expect(Object.keys(EnsureWorkerParametersSchema.properties)).toEqual(["name", "scope"]);
   });
 
   it("keeps all calls and raw results executable against the matching schema", () => {
-    expect(candidateModelToolCatalog.status).toBe("candidate");
-    expect(candidateModelToolCatalog.modelResultProjection).toMatchObject({
+    expect(modelToolCatalog.status).toBe("candidate");
+    expect(modelToolCatalog.modelResultProjection).toMatchObject({
       status: "accepted",
       version: "2",
     });
-    expect(candidateModelToolCatalog.tools.map((tool) => tool.name)).toEqual(["team_create", "task_create", "task_read", "task_update", "team_sync", "ensure_worker", "worker_stop", "team_shutdown", "task_link", "alert_send"]);
+    expect(modelToolCatalog.tools.map((tool) => tool.name)).toEqual(["team_create", "task_create", "task_read", "task_update", "team_sync", "ensure_worker", "worker_stop", "team_shutdown", "task_link", "alert_send"]);
 
-    for (const tool of candidateModelToolCatalog.tools) {
+    for (const tool of modelToolCatalog.tools) {
       const schemas = schemasFor(tool.name);
       for (const example of tool.examples) {
         expect(Check(schemas.parameters, example.call), `${example.id} call`).toBe(true);
@@ -249,7 +250,7 @@ describe("candidate model-tool catalog", () => {
       }
     }
 
-    for (const scenario of candidateModelToolCatalog.scenarios) {
+    for (const scenario of modelToolCatalog.scenarios) {
       const schemas = schemasFor(scenario.tool);
       expect(Check(schemas.parameters, scenario.call), `${scenario.id} call`).toBe(true);
       expect(Check(schemas.result, scenario.result), `${scenario.id} result`).toBe(true);
@@ -258,10 +259,10 @@ describe("candidate model-tool catalog", () => {
 
   it("projects raw semantic results into validated named model JSON", () => {
     const cases = [
-      ...candidateModelToolCatalog.tools.flatMap((tool) =>
+      ...modelToolCatalog.tools.flatMap((tool) =>
         tool.examples.map((example) => ({ tool: tool.name, id: example.id, result: example.result })),
       ),
-      ...candidateModelToolCatalog.scenarios.map((scenario) => ({
+      ...modelToolCatalog.scenarios.map((scenario) => ({
         tool: scenario.tool,
         id: scenario.id,
         result: scenario.result,
@@ -269,17 +270,17 @@ describe("candidate model-tool catalog", () => {
     ];
 
     for (const candidate of cases) {
-      const projection = projectCandidateToolResult(candidate.tool, candidate.result);
-      const content = serializeCandidateToolResult(candidate.tool, candidate.result);
+      const projection = projectToolResult(candidate.tool, candidate.result);
+      const content = serializeToolResult(candidate.tool, candidate.result);
       expect(projection, `${candidate.id} model projection`).toBeDefined();
       expect(content, `${candidate.id} named JSON`).toBe(JSON.stringify(projection));
-      expect(parseCandidateToolResult(candidate.tool, content), candidate.id).toEqual(projection);
+      expect(parseToolResult(candidate.tool, content), candidate.id).toEqual(projection);
     }
   });
 
   it("renders a scenario-first review artifact for both calls", () => {
-    const html = renderModelToolContractReview(candidateModelToolCatalog, governance, provenance);
-    expect(html).toContain("Candidate · not registered with Pi");
+    const html = renderModelToolContractReview(modelToolCatalog, governance, provenance);
+    expect(html).toContain("Not registered with Pi");
     expect(html).toContain('meta name="scope"');
     expect(html).toContain(governance.scope);
     expect(html).toContain("start-team");
@@ -288,7 +289,7 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("routine-supervision-update");
     expect(html).toContain("catalog-sha");
     expect(html).toContain("design-sha");
-    expect(html.indexOf("Leader scenarios first")).toBeLessThan(html.indexOf("Candidate function 1 of 10"));
+    expect(html.indexOf("Leader scenarios first")).toBeLessThan(html.indexOf("Function 1 of 10"));
     expect(html).toContain("team_create({ name, purpose })");
     expect(html).toContain("team_sync({ view })");
     expect(html).toContain("ensure_worker({ name, scope })");

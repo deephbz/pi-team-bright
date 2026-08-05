@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BeadsAuthorityFingerprint, TaskFile, TaskStatus, TeamConfig } from "./models";
+import { BeadsAuthorityFingerprint, TaskStatus, TeamConfig } from "./models";
+import type { TaskAuthorityRecord } from "./beads";
 import { taskDir, teamDir, sanitizeName } from "./paths";
 import { configureBeadsTaskBackend, readConfig, readLatestCutoverMarker } from "./teams";
 import {
@@ -21,7 +22,7 @@ const MIGRATION_SCHEMA = "pi-teams-task-migration/1";
 const MIGRATION_LOCK_RETRIES = 3000;
 
 /** Exact historical JSON shape. It is migration evidence, never runtime Task API. */
-export interface LegacyTaskFile {
+export interface LegacyTaskAuthorityRecord {
   id: string;
   subject: string;
   description: string;
@@ -40,7 +41,7 @@ export interface MigrationInventoryTask {
   fileName: string;
   sha256: string;
   raw: string;
-  task: LegacyTaskFile;
+  task: LegacyTaskAuthorityRecord;
 }
 
 export interface MigrationInventory {
@@ -145,7 +146,7 @@ function inventoryFromLegacy(teamName: string, sourceDir: string, now: Date): Mi
     .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
     .map(fileName => {
       const raw = fs.readFileSync(path.join(sourceDir, fileName), "utf8");
-      const task = JSON.parse(raw) as LegacyTaskFile;
+      const task = JSON.parse(raw) as LegacyTaskAuthorityRecord;
       return { legacyId: task.id, fileName, sha256: sha256(raw), raw, task };
     });
   const duplicateIds = duplicateValues(tasks.map(task => task.legacyId));
@@ -168,9 +169,9 @@ function readInventory(filePath: string): MigrationInventory {
     if (!item || typeof item.raw !== "string" || typeof item.sha256 !== "string" || item.sha256 !== sha256(item.raw)) {
       throw new Error(`Migration inventory raw bytes failed authentication: ${filePath}`);
     }
-    let parsed: LegacyTaskFile;
+    let parsed: LegacyTaskAuthorityRecord;
     try {
-      parsed = JSON.parse(item.raw) as LegacyTaskFile;
+      parsed = JSON.parse(item.raw) as LegacyTaskAuthorityRecord;
     } catch {
       throw new Error(`Migration inventory contains invalid task JSON: ${filePath}`);
     }
@@ -193,7 +194,7 @@ function duplicateValues(values: string[]): string[] {
   return [...duplicates].sort();
 }
 
-function assertDependencyTargets(tasks: LegacyTaskFile[]): void {
+function assertDependencyTargets(tasks: LegacyTaskAuthorityRecord[]): void {
   const ids = new Set(tasks.map(task => task.id));
   const missing = new Set<string>();
   for (const task of tasks) {
@@ -232,14 +233,14 @@ function legacyOrphans(inventory: MigrationInventory, sourceDir: string): Orphan
     }, []);
 }
 
-function beadsStatus(status: LegacyTaskFile["status"]): TaskStatus {
+function beadsStatus(status: LegacyTaskAuthorityRecord["status"]): TaskStatus {
   if (status === "completed" || status === "deleted") return "closed";
   if (status === "in_progress") return "in_progress";
   if (status === "blocked") return "blocked";
   return "open";
 }
 
-function comparable(task: TaskFile): Record<string, unknown> {
+function comparable(task: TaskAuthorityRecord): Record<string, unknown> {
   return {
     title: task.title,
     description: task.description,
@@ -250,7 +251,7 @@ function comparable(task: TaskFile): Record<string, unknown> {
   };
 }
 
-function collectMismatches(legacy: LegacyTaskFile, actual: TaskFile, expectedBlockers: string[]): MigrationMismatch[] {
+function collectMismatches(legacy: LegacyTaskAuthorityRecord, actual: TaskAuthorityRecord, expectedBlockers: string[]): MigrationMismatch[] {
   const expected: Record<string, unknown> = {
     title: legacy.subject,
     description: legacy.description,
@@ -316,7 +317,7 @@ async function reconcileCutoverAuthority(
     ...(options.beadsOptions || {}),
     requireExpectedVersion: false,
   });
-  const actualByLegacy = new Map<string, TaskFile>();
+  const actualByLegacy = new Map<string, TaskAuthorityRecord>();
   try {
     // This is intentionally unconditional: an empty migration inventory must
     // still prove that the configured Beads authority is initialized,
@@ -439,7 +440,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       // separate pass after dependency import. This keeps the migration inside
       // the same contract enforced for normal runtime writes and lets a rerun
       // resume safely after any individual committed step.
-      const fields: Partial<TaskFile> = {
+      const fields: Partial<TaskAuthorityRecord> = {
         title: legacy.subject,
         description: legacy.description,
         design: legacy.plan,
@@ -498,7 +499,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
       }
     }
 
-    const actualByLegacy = new Map<string, TaskFile>();
+    const actualByLegacy = new Map<string, TaskAuthorityRecord>();
     for (const item of inventory.tasks) {
       const beadsId = idMap.get(item.legacyId);
       if (!beadsId) continue;

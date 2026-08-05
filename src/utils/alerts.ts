@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import * as messaging from "./messaging";
 import { appendTeamEvent } from "./team-events";
+import { type TaskVersionRef } from "../model-tool-contract/task-version-ref";
 
 export const ALERT_KINDS = ["clarification", "attention", "announcement"] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 
 export interface AlertTaskReference {
   taskId: string;
-  version?: string;
+  version?: TaskVersionRef;
 }
 
 export interface SendAlertInput {
@@ -53,11 +54,20 @@ function validateAlert(input: SendAlertInput): void {
   }
 }
 
+function assertTaskVersionRef(value: string): TaskVersionRef {
+  if (/^v_[0-9a-f]{16}$/.test(value)) return value as TaskVersionRef;
+  const error = new Error("Alert Task references require the canonical opaque TaskVersionRef.");
+  error.name = "upgrade_required";
+  throw error;
+}
+
 function taskReference(input: SendAlertInput): AlertTaskReference | undefined {
   if (!input.taskId) return undefined;
   return {
     taskId: input.taskId,
-    ...(input.taskVersion ? { version: input.taskVersion } : {}),
+    ...(input.taskVersion
+      ? { version: assertTaskVersionRef(input.taskVersion) }
+      : {}),
   };
 }
 

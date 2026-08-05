@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { TaskFile } from "./models";
+import type { TaskAuthorityRecord } from "./beads";
 import { configPath, taskDir, teamDir } from "./paths";
-import { LegacyTaskFile, migrateTeamTasks } from "./task-migration";
+import { LegacyTaskAuthorityRecord, migrateTeamTasks } from "./task-migration";
 
 class MigrationBeadsFixture {
   tasks = new Map<string, any>();
@@ -32,7 +32,7 @@ class MigrationBeadsFixture {
     return task;
   }
 
-  async update(id: string, updates: Partial<TaskFile>): Promise<any> {
+  async update(id: string, updates: Partial<TaskAuthorityRecord>): Promise<any> {
     if (updates.status === "closed" && Object.keys(updates).some(key => key !== "status")) {
       throw new Error(`terminal ${updates.status} must be a separate mutation`);
     }
@@ -78,8 +78,8 @@ describe("task migration contract", () => {
   });
 
   function writeLegacy(): void {
-    const blocker: LegacyTaskFile = { id: "1", subject: "Blocker", description: "first", status: "completed", blocks: ["2"], blockedBy: [], owner: "human", plan: "ship", planFeedback: "", metadata: { source: "legacy" } };
-    const task: LegacyTaskFile = { id: "2", subject: "Task", description: "second", status: "in_progress", blocks: [], blockedBy: ["1"], owner: "worker", activeForm: "Doing", metadata: {} };
+    const blocker: LegacyTaskAuthorityRecord = { id: "1", subject: "Blocker", description: "first", status: "completed", blocks: ["2"], blockedBy: [], owner: "human", plan: "ship", planFeedback: "", metadata: { source: "legacy" } };
+    const task: LegacyTaskAuthorityRecord = { id: "2", subject: "Task", description: "second", status: "in_progress", blocks: [], blockedBy: ["1"], owner: "worker", activeForm: "Doing", metadata: {} };
     fs.writeFileSync(path.join(taskDir(team), "1.json"), JSON.stringify(blocker, null, 2));
     fs.writeFileSync(path.join(taskDir(team), "2.json"), JSON.stringify(task, null, 2));
   }

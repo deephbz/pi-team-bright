@@ -1,27 +1,31 @@
 import { Type } from "typebox";
 import { TeamPaneLayoutSchema } from "../utils/team-pane-layout";
+import { TaskVersionRefSchema, taskVersionRef } from "./task-version-ref";
 import {
-  CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
-  CandidateTaskCurrentContextSchema,
-} from "../utils/beads";
+  TASK_CARD_CONTEXT_MAX_LENGTH,
+  TASK_CARD_GOAL_MAX_LENGTH,
+  TASK_CARD_TITLE_MAX_LENGTH,
+  TaskCardContextSchema,
+  TaskCardSchema,
+  TaskCardWarningSchema,
+} from "./task-domain";
 
 /**
- * Candidate model-facing contract shaped in
+ * Model-facing contract shaped in
  * docs/projects/model-invoked-tool-contract.md.
  *
  * This catalog is proposal authority only. It is not registered with Pi until
  * an accepted vertical slice imports the same catalog entry.
  */
 
-export const MODEL_TOOL_CANDIDATE_LIMITS = {
-  maxTaskTitleChars: 80,
-  maxTaskGoalChars: 1_000,
-  maxTaskCurrentContextChars: CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
+export const MODEL_TOOL_LIMITS = {
+  maxTaskTitleChars: TASK_CARD_TITLE_MAX_LENGTH,
+  maxTaskGoalChars: TASK_CARD_GOAL_MAX_LENGTH,
+  maxTaskCurrentContextChars: TASK_CARD_CONTEXT_MAX_LENGTH,
 } as const;
 
 const TaskId = Type.String({ minLength: 1, maxLength: 128 });
-const TaskAuthorityVersion = Type.String({ minLength: 1, maxLength: 128 });
-export const TaskVersionRefSchema = Type.String({ pattern: "^v_[0-9a-f]{16}$", minLength: 18, maxLength: 18 });
+export { TaskVersionRefSchema } from "./task-version-ref";
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const Timestamp = Type.String({ minLength: 1, maxLength: 64 });
 const TaskStatus = Type.Enum(["open", "in_progress", "blocked", "closed"], {
@@ -31,95 +35,61 @@ const WorkerCarrier = Type.Enum(["starting", "connected", "absent"], {
   description: "Current carrier observation. It is not Task progress or readiness.",
 });
 
-export const CandidateTaskProjectionWarningSchema = Type.Object({
-  task_id: TaskId,
-  truncated_fields: Type.Array(Type.Enum(["title", "goal", "current_context"])),
-  incomplete_fields: Type.Array(Type.Enum(["title", "goal", "current_context"])),
-  message: Type.String({ minLength: 1 }),
-}, { additionalProperties: false, description: "Structured evidence that an external Task display projection was truncated or incomplete." });
-
 const TeamCurrent = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   purpose: Type.String({ minLength: 1 }),
   lifecycle: Type.Enum(["active", "stopped"]),
 }, { additionalProperties: false });
 
-export const CandidateWorkerCurrentSchema = Type.Object({
+export const WorkerCurrentSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1, description: "Concise semantic area owned by this Worker, not its current Task." }),
   carrier: WorkerCarrier,
   nonterminal_task_ids: Type.Array(TaskId),
 }, { additionalProperties: false });
 
-const CandidateTaskCardBase = {
-  id: TaskId,
-  title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars }),
-  status: TaskStatus,
-  assignee: Type.Optional(WorkerName),
-  current_context: CandidateTaskCurrentContextSchema,
-  // Raw semantic details retain this authority version. Model projection maps it to TaskVersionRefSchema.
-  version: TaskAuthorityVersion,
-};
-
-const CandidateTaskCardCompleteSchema = Type.Object({
-  ...CandidateTaskCardBase,
-  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and success signal in one field." }),
-  projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
-}, { additionalProperties: false });
-
-const CandidateTaskCardIncompleteSchema = Type.Object({
-  ...CandidateTaskCardBase,
-  goal_state: Type.Literal("incomplete"),
-  projection_warnings: Type.Array(CandidateTaskProjectionWarningSchema, { minItems: 1 }),
-}, { additionalProperties: false });
-
-export const CandidateTaskCardSchema = Type.Union([
-  CandidateTaskCardCompleteSchema,
-  CandidateTaskCardIncompleteSchema,
-], { description: "Current Task projection. Complete cards have executable goal prose; incomplete cards preserve structure but cannot execute." });
-
-const CandidateTaskCreateItemSchema = Type.Object({
+const TaskCreateItemSchema = Type.Object({
   operation_id: Type.String({ minLength: 1, maxLength: 128, description: "Opaque caller-chosen create operation identity. Reuse it only to reconcile an unknown create outcome." }),
-  title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskTitleChars }),
-  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_CANDIDATE_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and external success signal in one field." }),
+  title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_LIMITS.maxTaskTitleChars }),
+  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and external success signal in one field." }),
   assignee: Type.Optional(WorkerName),
 }, { additionalProperties: false });
 
-export const CandidateTaskCreateParametersSchema = Type.Object({
-  tasks: Type.Array(CandidateTaskCreateItemSchema, { minItems: 1 }),
+export const TaskCreateParametersSchema = Type.Object({
+  tasks: Type.Array(TaskCreateItemSchema, { minItems: 1 }),
 }, {
   additionalProperties: false,
   description: "Create independent assigned Task work contracts in input order. Each item commits separately.",
 });
 
-const CandidateTaskCreateOutcomeBase = {
+const TaskCreateOutcomeBase = {
   input_index: Type.Integer({ minimum: 0 }),
   operation_id: Type.String({ minLength: 1, maxLength: 128 }),
 };
 
-export const CandidateTaskCreateResultSchema = Type.Object({
+export const TaskCreateResultSchema = Type.Object({
   kind: Type.Literal("task_create_batch"),
   outcomes: Type.Array(Type.Union([
     Type.Object({
-      ...CandidateTaskCreateOutcomeBase,
+      ...TaskCreateOutcomeBase,
       kind: Type.Literal("created"),
-      task: CandidateTaskCardSchema,
+      task: TaskCardSchema,
       delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
     }, { additionalProperties: false }),
     Type.Object({
-      ...CandidateTaskCreateOutcomeBase,
+      ...TaskCreateOutcomeBase,
       kind: Type.Literal("refused"),
       reason: Type.Enum(["worker_unavailable", "operation_conflict"]),
       message: Type.String({ minLength: 1 }),
       state_changed: Type.Literal(false),
     }, { additionalProperties: false }),
     Type.Object({
-      ...CandidateTaskCreateOutcomeBase,
+      ...TaskCreateOutcomeBase,
       kind: Type.Literal("unknown_outcome"),
       message: Type.String({ minLength: 1 }),
     }, { additionalProperties: false }),
     Type.Object({
-      ...CandidateTaskCreateOutcomeBase,
+      ...TaskCreateOutcomeBase,
       kind: Type.Literal("unavailable"),
       reason: Type.Enum(["no_active_team", "task_authority_unavailable"]),
       message: Type.String({ minLength: 1 }),
@@ -131,21 +101,21 @@ export const CandidateTaskCreateResultSchema = Type.Object({
   description: "Independent ordered outcomes. A batch is not atomic.",
 });
 
-export const CandidateTaskReadParametersSchema = Type.Object({
+export const TaskReadParametersSchema = Type.Object({
   task_ids: Type.Array(TaskId, { minItems: 1 }),
 }, {
   additionalProperties: false,
   description: "Read current Task cards by ID without changing Team or observation state.",
 });
 
-const CandidateTaskReadFoundSchema = Type.Object({
+const TaskReadFoundSchema = Type.Object({
   kind: Type.Literal("found"),
   input_index: Type.Integer({ minimum: 0 }),
   task_id: TaskId,
-  task: CandidateTaskCardSchema,
+  task: TaskCardSchema,
 }, { additionalProperties: false });
 
-const CandidateTaskReadMissingSchema = Type.Object({
+const TaskReadMissingSchema = Type.Object({
   kind: Type.Literal("missing"),
   input_index: Type.Integer({ minimum: 0 }),
   task_id: TaskId,
@@ -153,21 +123,21 @@ const CandidateTaskReadMissingSchema = Type.Object({
   state_changed: Type.Literal(false),
 }, { additionalProperties: false });
 
-const CandidateTaskReadContractGapSchema = Type.Object({
+const TaskReadContractGapSchema = Type.Object({
   kind: Type.Literal("contract_gap"),
   input_index: Type.Integer({ minimum: 0 }),
   task_id: TaskId,
-  reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid"]),
-  authority_version: TaskAuthorityVersion,
+  reason: Type.Enum(["task_metadata_absent", "task_metadata_invalid"]),
+  version: TaskVersionRefSchema,
   message: Type.String({ minLength: 1 }),
-  projection_warning: Type.Optional(CandidateTaskProjectionWarningSchema),
+  projection_warning: Type.Optional(TaskCardWarningSchema),
   state_changed: Type.Literal(false),
 }, { additionalProperties: false });
 
-export const CandidateTaskReadResultSchema = Type.Union([
+export const TaskReadResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("task_read_batch"),
-    outcomes: Type.Array(Type.Union([CandidateTaskReadFoundSchema, CandidateTaskReadMissingSchema, CandidateTaskReadContractGapSchema])),
+    outcomes: Type.Array(Type.Union([TaskReadFoundSchema, TaskReadMissingSchema, TaskReadContractGapSchema])),
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("unavailable"),
@@ -177,28 +147,28 @@ export const CandidateTaskReadResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-const CandidateTaskUpdateJournalEntrySchema = Type.Object({
+const TaskUpdateJournalEntrySchema = Type.Object({
   kind: Type.Enum(["progress", "decision", "blocker", "result", "note"]),
   text: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
-const CandidateTaskUpdateItemSchema = Type.Object({
+const TaskUpdateItemSchema = Type.Object({
   task_id: TaskId,
   operation_id: Type.String({ minLength: 1, maxLength: 128 }),
   expected_version: TaskVersionRefSchema,
-  current_context: Type.Optional(CandidateTaskCurrentContextSchema),
-  journal_entries: Type.Optional(Type.Array(CandidateTaskUpdateJournalEntrySchema, { minItems: 1 })),
+  current_context: Type.Optional(TaskCardContextSchema),
+  journal_entries: Type.Optional(Type.Array(TaskUpdateJournalEntrySchema, { minItems: 1 })),
   status: Type.Optional(TaskStatus),
 }, { additionalProperties: false, minProperties: 4 });
 
-export const CandidateTaskUpdateParametersSchema = Type.Object({
-  updates: Type.Array(CandidateTaskUpdateItemSchema, { minItems: 1 }),
+export const TaskUpdateParametersSchema = Type.Object({
+  updates: Type.Array(TaskUpdateItemSchema, { minItems: 1 }),
 }, {
   additionalProperties: false,
   description: "Apply one or more supplied Task changes. Omit current_context when it remains relevant; omit journal_entries when no evidence or rationale changes.",
 });
 
-export const CandidateTaskJournalEntrySchema = Type.Object({
+export const TaskJournalEntrySchema = Type.Object({
   id: Type.String({ minLength: 1, maxLength: 128 }),
   at: Timestamp,
   actor: Type.String({ minLength: 1, maxLength: 64 }),
@@ -206,42 +176,42 @@ export const CandidateTaskJournalEntrySchema = Type.Object({
   text: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
-const CandidateTaskUpdateOutcomeBase = {
+const TaskUpdateOutcomeBase = {
   input_index: Type.Integer({ minimum: 0 }),
   task_id: TaskId,
   operation_id: Type.String({ minLength: 1, maxLength: 128 }),
 };
 
-export const CandidateTaskUpdateResultSchema = Type.Union([
+export const TaskUpdateResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("task_update_batch"),
     outcomes: Type.Array(Type.Union([
       Type.Object({
-        ...CandidateTaskUpdateOutcomeBase,
+        ...TaskUpdateOutcomeBase,
         kind: Type.Literal("updated"),
-        task: CandidateTaskCardSchema,
-        journal_entries: Type.Array(CandidateTaskJournalEntrySchema),
+        task: TaskCardSchema,
+        journal_entries: Type.Array(TaskJournalEntrySchema),
         delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
       }, { additionalProperties: false }),
       Type.Object({
-        ...CandidateTaskUpdateOutcomeBase,
+        ...TaskUpdateOutcomeBase,
         kind: Type.Literal("refused"),
         reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"]),
         message: Type.String({ minLength: 1 }),
-        current_task: Type.Optional(CandidateTaskCardSchema),
+        current_task: Type.Optional(TaskCardSchema),
         state_changed: Type.Literal(false),
       }, { additionalProperties: false }),
       Type.Object({
-        ...CandidateTaskUpdateOutcomeBase,
+        ...TaskUpdateOutcomeBase,
         kind: Type.Literal("contract_gap"),
-        reason: Type.Enum(["candidate_metadata_absent", "candidate_metadata_invalid", "beads_external_writer_atomicity_unavailable"]),
-        current_task: Type.Optional(CandidateTaskCardSchema),
+        reason: Type.Enum(["task_metadata_absent", "task_metadata_invalid", "external_writer_atomicity_unavailable"]),
+        current_task: Type.Optional(TaskCardSchema),
         unsupported: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
         message: Type.String({ minLength: 1 }),
         state_changed: Type.Literal(false),
       }, { additionalProperties: false }),
       Type.Object({
-        ...CandidateTaskUpdateOutcomeBase,
+        ...TaskUpdateOutcomeBase,
         kind: Type.Literal("unavailable"),
         reason: Type.Enum(["no_active_team", "task_authority_unavailable"]),
         message: Type.String({ minLength: 1 }),
@@ -263,37 +233,29 @@ export const CandidateTaskUpdateResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-const TaskDeltaCurrent = Type.Object({
-  status: TaskStatus,
-  assignee: Type.Optional(WorkerName),
-  current_context: CandidateTaskCurrentContextSchema,
-  version: TaskAuthorityVersion,
-  projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
-}, { additionalProperties: false });
-
-export const CandidateTaskDeltaSchema = Type.Object({
+export const TaskDeltaSchema = Type.Object({
   task_id: TaskId,
   change_kinds: Type.Array(Type.Enum(["created", "goal", "assignment", "progress", "status", "relation"]), {
     minItems: 1,
     uniqueItems: true,
   }),
-  journal_entries: Type.Array(CandidateTaskJournalEntrySchema),
-  current: TaskDeltaCurrent,
+  journal_entries: Type.Array(TaskJournalEntrySchema),
+  current: TaskCardSchema,
 }, { additionalProperties: false, description: "All new Task journal entries grouped with the latest current state." });
 
-export const CandidateTeamDeltaSchema = Type.Object({
+export const TeamDeltaSchema = Type.Object({
   kind: Type.Enum(["created", "lifecycle", "purpose"]),
   text: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
-export const CandidateWorkerDeltaSchema = Type.Object({
+export const WorkerDeltaSchema = Type.Object({
   worker: WorkerName,
   scope: Type.String({ minLength: 1 }),
   kind: Type.Enum(["created", "connected", "stopped", "failed", "scope_changed"]),
   text: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
-export const CandidateAlertDeltaSchema = Type.Object({
+export const AlertDeltaSchema = Type.Object({
   alert_id: Type.String({ minLength: 1, maxLength: 128 }),
   from: Type.String({ minLength: 1, maxLength: 64 }),
   kind: Type.Enum(["clarification", "attention", "announcement"]),
@@ -301,7 +263,7 @@ export const CandidateAlertDeltaSchema = Type.Object({
   text: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
-export const CandidateTeamCreateParametersSchema = Type.Object({
+export const TeamCreateParametersSchema = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   purpose: Type.String({ minLength: 1, description: "The long-lived Team outcome and operating boundary." }),
   pane_layout: Type.Optional(TeamPaneLayoutSchema),
@@ -310,7 +272,7 @@ export const CandidateTeamCreateParametersSchema = Type.Object({
   description: "Create one long-lived Team and bind the exact calling Session as its leader.",
 });
 
-export const CandidateTeamCreateResultSchema = Type.Union([
+export const TeamCreateResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("team_created"),
     team: TeamCurrent,
@@ -329,7 +291,7 @@ export const CandidateTeamCreateResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-export const CandidateTeamSyncParametersSchema = Type.Object({
+export const TeamSyncParametersSchema = Type.Object({
   view: Type.Enum(["snapshot", "updates"], {
     description: "Use snapshot to restore current context; use updates for routine supervision and waiting.",
   }),
@@ -338,24 +300,24 @@ export const CandidateTeamSyncParametersSchema = Type.Object({
   description: "Read the active Team's snapshot or incremental updates. Team identity is resolved from the exact leader Session binding.",
 });
 
-export const CandidateTeamSnapshotResultSchema = Type.Object({
+export const TeamSnapshotResultSchema = Type.Object({
   kind: Type.Literal("snapshot"),
   team: TeamCurrent,
-  workers: Type.Array(CandidateWorkerCurrentSchema),
-  tasks: Type.Array(CandidateTaskCardSchema),
-  task_projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
+  workers: Type.Array(WorkerCurrentSchema),
+  tasks: Type.Array(TaskCardSchema),
+  task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
 }, { additionalProperties: false });
 
-export const CandidateTeamUpdatesResultSchema = Type.Object({
+export const TeamUpdatesResultSchema = Type.Object({
   kind: Type.Literal("updates"),
-  team_changes: Type.Array(CandidateTeamDeltaSchema),
-  worker_changes: Type.Array(CandidateWorkerDeltaSchema),
-  task_changes: Type.Array(CandidateTaskDeltaSchema),
-  alerts: Type.Array(CandidateAlertDeltaSchema),
-  task_projection_warnings: Type.Optional(Type.Array(CandidateTaskProjectionWarningSchema)),
+  team_changes: Type.Array(TeamDeltaSchema),
+  worker_changes: Type.Array(WorkerDeltaSchema),
+  task_changes: Type.Array(TaskDeltaSchema),
+  alerts: Type.Array(AlertDeltaSchema),
+  task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
 }, { additionalProperties: false });
 
-export const CandidateTeamSyncUnavailableResultSchema = Type.Object({
+export const TeamSyncUnavailableResultSchema = Type.Object({
   kind: Type.Literal("unavailable"),
   reason: Type.Enum(["no_active_team", "team_state_unavailable", "task_authority_unavailable"]),
   message: Type.String({ minLength: 1 }),
@@ -363,38 +325,38 @@ export const CandidateTeamSyncUnavailableResultSchema = Type.Object({
   observation_advanced: Type.Literal(false),
 }, { additionalProperties: false });
 
-export const CandidateTeamSyncSnapshotRequiredResultSchema = Type.Object({
+export const TeamSyncSnapshotRequiredResultSchema = Type.Object({
   kind: Type.Literal("snapshot_required"),
   message: Type.String({ minLength: 1 }),
   state_changed: Type.Literal(false),
   observation_advanced: Type.Literal(false),
 }, { additionalProperties: false });
 
-export const CandidateTeamSyncCancelledResultSchema = Type.Object({
+export const TeamSyncCancelledResultSchema = Type.Object({
   kind: Type.Literal("cancelled"),
   message: Type.String({ minLength: 1 }),
   state_changed: Type.Literal(false),
   observation_advanced: Type.Literal(false),
 }, { additionalProperties: false });
 
-export const CandidateTeamSyncContractGapResultSchema = Type.Object({
+export const TeamSyncContractGapResultSchema = Type.Object({
   kind: Type.Literal("contract_gap"),
-  reason: Type.Enum(["team_epoch_missing", "logical_workers_missing", "candidate_metadata_absent", "candidate_metadata_invalid", "structured_task_event_evidence_absent"]),
+  reason: Type.Enum(["team_epoch_missing", "logical_workers_missing", "task_metadata_absent", "task_metadata_invalid", "structured_task_event_evidence_absent"]),
   message: Type.String({ minLength: 1 }),
   state_changed: Type.Literal(false),
   observation_advanced: Type.Literal(false),
 }, { additionalProperties: false });
 
-export const CandidateTeamSyncResultSchema = Type.Union([
-  CandidateTeamSnapshotResultSchema,
-  CandidateTeamUpdatesResultSchema,
-  CandidateTeamSyncSnapshotRequiredResultSchema,
-  CandidateTeamSyncCancelledResultSchema,
-  CandidateTeamSyncContractGapResultSchema,
-  CandidateTeamSyncUnavailableResultSchema,
+export const TeamSyncResultSchema = Type.Union([
+  TeamSnapshotResultSchema,
+  TeamUpdatesResultSchema,
+  TeamSyncSnapshotRequiredResultSchema,
+  TeamSyncCancelledResultSchema,
+  TeamSyncContractGapResultSchema,
+  TeamSyncUnavailableResultSchema,
 ]);
 
-export const CandidateEnsureWorkerParametersSchema = Type.Object({
+export const EnsureWorkerParametersSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({
     minLength: 1,
@@ -411,7 +373,7 @@ const EnsuredWorker = Type.Object({
   carrier: WorkerCarrier,
 }, { additionalProperties: false });
 
-export const CandidateEnsureWorkerResultSchema = Type.Union([
+export const EnsureWorkerResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("worker_ensured"),
     effect: Type.Enum(["created", "reused", "reconnected"]),
@@ -431,14 +393,14 @@ export const CandidateEnsureWorkerResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-export const CandidateWorkerStopParametersSchema = Type.Object({
+export const WorkerStopParametersSchema = Type.Object({
   worker: WorkerName,
 }, {
   additionalProperties: false,
   description: "Stop one Worker after its nonterminal Tasks are resolved and exact terminal stop evidence is available.",
 });
 
-export const CandidateWorkerStopResultSchema = Type.Union([
+export const WorkerStopResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("worker_stopped"),
     worker: WorkerName,
@@ -460,12 +422,12 @@ export const CandidateWorkerStopResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-export const CandidateTeamShutdownParametersSchema = Type.Object({}, {
+export const TeamShutdownParametersSchema = Type.Object({}, {
   additionalProperties: false,
   description: "Stop every Worker and close the exact leader Team. Failed stops keep the Team active for retry.",
 });
 
-export const CandidateTeamShutdownResultSchema = Type.Union([
+export const TeamShutdownResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("team_shutdown"),
     lifecycle: Type.Literal("stopped"),
@@ -488,7 +450,7 @@ export const CandidateTeamShutdownResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-export const CandidateTaskLinkParametersSchema = Type.Object({
+export const TaskLinkParametersSchema = Type.Object({
   task_id: TaskId,
   relation: Type.Enum(["blocked_by", "parent", "related"]),
   target_id: TaskId,
@@ -499,7 +461,7 @@ export const CandidateTaskLinkParametersSchema = Type.Object({
   description: "Add or remove one typed Task relation with graph and version validation. Closed Tasks can still receive relation or evidence writes, so use the latest receipt or read before another conditional mutation.",
 });
 
-export const CandidateTaskLinkResultSchema = Type.Union([
+export const TaskLinkResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("task_linked"),
     task_id: TaskId,
@@ -507,7 +469,7 @@ export const CandidateTaskLinkResultSchema = Type.Union([
     relation: Type.Enum(["blocked_by", "parent", "related"]),
     action: Type.Enum(["add", "remove"]),
     changed: Type.Boolean(),
-    version: TaskAuthorityVersion,
+    version: TaskVersionRefSchema,
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
@@ -524,28 +486,28 @@ export const CandidateTaskLinkResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-const CandidateAlertFields = {
+const AlertFields = {
   text: Type.String({ minLength: 1 }),
   task_id: Type.Optional(TaskId),
   task_version: Type.Optional(TaskVersionRefSchema),
 };
 
-export const CandidateAlertSendParametersSchema = Type.Union([
+export const AlertSendParametersSchema = Type.Union([
   Type.Object({
     target: Type.Object({ kind: Type.Literal("worker"), name: WorkerName }, { additionalProperties: false }),
     kind: Type.Enum(["clarification", "attention"]),
-    ...CandidateAlertFields,
+    ...AlertFields,
   }, { additionalProperties: false }),
   Type.Object({
     target: Type.Object({ kind: Type.Literal("team") }, { additionalProperties: false }),
     kind: Type.Literal("announcement"),
-    ...CandidateAlertFields,
+    ...AlertFields,
   }, { additionalProperties: false }),
 ], {
   description: "Send exceptional clarification, attention, or announcement. Team targets are valid only for announcements; Worker targets are valid for clarification and attention. An Alert never changes Task state.",
 });
 
-export const CandidateAlertSendResultSchema = Type.Union([
+export const AlertSendResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("alert_sent"),
     alert_id: Type.String({ minLength: 1, maxLength: 128 }),
@@ -602,7 +564,7 @@ const taskCreateResult = {
       status: "open",
       assignee: "release-verifier",
       current_context: "Work has not started.",
-      version: "task_v1",
+      version: taskVersionRef("task_v1"),
     },
   }],
 } as const;
@@ -671,7 +633,7 @@ const snapshotResult = {
       status: "in_progress",
       assignee: "release-builder",
       current_context: "Package is built. Dry-run publication is next; no blocker is known.",
-      version: "task_v7",
+      version: taskVersionRef("task_v7"),
     },
     {
       id: "task-23",
@@ -680,7 +642,7 @@ const snapshotResult = {
       status: "open",
       assignee: "release-verifier",
       current_context: "Waiting for the candidate digest from task-17.",
-      version: "task_v2",
+      version: taskVersionRef("task_v2"),
     },
   ],
 } as const;
@@ -703,10 +665,13 @@ const updatesResult = {
         },
       ],
       current: {
+        id: "task-17",
+        title: "Build release candidate",
+        goal: "Build and verify the release candidate.",
         status: "closed",
         assignee: "release-builder",
         current_context: "Candidate delivered and verified locally. No further action remains.",
-        version: "task_v8",
+        version: taskVersionRef("task_v8"),
       },
     },
     {
@@ -722,10 +687,13 @@ const updatesResult = {
         },
       ],
       current: {
+        id: "task-23",
+        title: "Verify release provenance",
+        goal: "Verify the release provenance digest.",
         status: "blocked",
         assignee: "release-verifier",
         current_context: "Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.",
-        version: "task_v3",
+        version: taskVersionRef("task_v3"),
       },
     },
   ],
@@ -787,7 +755,7 @@ const taskUpdateResult = {
     task: {
       ...taskCreateResult.outcomes[0].task,
       current_context: "Task is assigned but awaits a Worker carrier.",
-      version: "task_v2",
+      version: taskVersionRef("task_v2"),
     },
     journal_entries: [{
       id: "journal-task-23-1",
@@ -812,7 +780,7 @@ const taskUpdateConflictResult = {
   }],
 } as const;
 
-export const candidateModelToolCatalog = {
+export const modelToolCatalog = {
   schema: "pi-team-bright-model-tool-catalog/1",
   status: "candidate",
   sourceDocument: "docs/projects/model-invoked-tool-contract.md",
@@ -841,8 +809,8 @@ export const candidateModelToolCatalog = {
         "Does not create Workers, Tasks, or Alerts.",
         "Refusal or unavailable authority changes no state.",
       ],
-      parameters: CandidateTeamCreateParametersSchema,
-      result: CandidateTeamCreateResultSchema,
+      parameters: TeamCreateParametersSchema,
+      result: TeamCreateResultSchema,
       examples: [
         { id: "create-team", title: "Create and lead a long-lived Team", call: createTeamCall, result: createdTeamResult },
       ],
@@ -865,8 +833,8 @@ export const candidateModelToolCatalog = {
         "Creates open Tasks with current_context set to Work has not started.",
         "A refused or unavailable item changes no state.",
       ],
-      parameters: CandidateTaskCreateParametersSchema,
-      result: CandidateTaskCreateResultSchema,
+      parameters: TaskCreateParametersSchema,
+      result: TaskCreateResultSchema,
       examples: [
         { id: "create-task", title: "Assign one verification Task", call: taskCreateCall, result: taskCreateResult },
         { id: "task-worker-unavailable", title: "Refuse a missing Worker", call: taskCreateCall, result: taskCreateRefusedResult },
@@ -890,8 +858,8 @@ export const candidateModelToolCatalog = {
         "Returns one unavailable result without partial Task cards when authority cannot provide a coherent read.",
         "Changes no Team, Task, or observation state.",
       ],
-      parameters: CandidateTaskReadParametersSchema,
-      result: CandidateTaskReadResultSchema,
+      parameters: TaskReadParametersSchema,
+      result: TaskReadResultSchema,
       examples: [
         { id: "read-task", title: "Read one current Task", call: taskReadCall, result: taskReadResult },
         { id: "read-missing-task", title: "Report a missing Task", call: { task_ids: ["task-missing"] }, result: taskReadMissingResult },
@@ -916,8 +884,8 @@ export const candidateModelToolCatalog = {
         "Rejects duplicate Task IDs before mutation and refuses version or operation conflicts.",
         "Does not claim Worker execution or carrier readiness.",
       ],
-      parameters: CandidateTaskUpdateParametersSchema,
-      result: CandidateTaskUpdateResultSchema,
+      parameters: TaskUpdateParametersSchema,
+      result: TaskUpdateResultSchema,
       examples: [
         { id: "update-task", title: "Record a coordination decision", call: taskUpdateCall, result: taskUpdateResult },
         { id: "update-conflict", title: "Refuse a stale version", call: taskUpdateCall, result: taskUpdateConflictResult },
@@ -943,8 +911,8 @@ export const candidateModelToolCatalog = {
         "A persisted updates result advances the hidden baseline through all returned changes.",
         "Cancellation or unavailable authority advances no baseline and publishes no Team observation.",
       ],
-      parameters: CandidateTeamSyncParametersSchema,
-      result: CandidateTeamSyncResultSchema,
+      parameters: TeamSyncParametersSchema,
+      result: TeamSyncResultSchema,
       examples: [
         { id: "snapshot", title: "Current snapshot", call: snapshotCall, result: snapshotResult },
         { id: "updates", title: "Incremental updates", call: updatesCall, result: updatesResult },
@@ -970,8 +938,8 @@ export const candidateModelToolCatalog = {
         "Does not assign a Task or claim model readiness.",
         "The same name with a materially different scope is refused rather than silently redefined.",
       ],
-      parameters: CandidateEnsureWorkerParametersSchema,
-      result: CandidateEnsureWorkerResultSchema,
+      parameters: EnsureWorkerParametersSchema,
+      result: EnsureWorkerResultSchema,
       examples: [
         { id: "create-worker", title: "Create a deep-area Worker", call: ensureWorkerCall, result: ensuredWorkerResult },
         { id: "scope-conflict", title: "Refuse a conflicting existing scope", call: ensureWorkerCall, result: refusedWorkerResult },
@@ -986,8 +954,8 @@ export const candidateModelToolCatalog = {
       commonUseCases: ["Retire a completed semantic Worker area without changing Task history."],
       whenNotToUse: ["Do not stop the leader or a Worker with nonterminal assigned Tasks."],
       sideEffects: ["Deactivates only the exact current Membership after terminal stop evidence.", "Never changes Task state."],
-      parameters: CandidateWorkerStopParametersSchema,
-      result: CandidateWorkerStopResultSchema,
+      parameters: WorkerStopParametersSchema,
+      result: WorkerStopResultSchema,
       examples: [],
     },
     {
@@ -998,8 +966,8 @@ export const candidateModelToolCatalog = {
       commonUseCases: ["Close a completed Team while retaining Task authority and history."],
       whenNotToUse: ["Do not recreate a Team while current Memberships remain."],
       sideEffects: ["Stops Workers with exact terminal evidence, then deactivates the leader Membership only after all stops succeed.", "Retains Task authority and unfinished Tasks."],
-      parameters: CandidateTeamShutdownParametersSchema,
-      result: CandidateTeamShutdownResultSchema,
+      parameters: TeamShutdownParametersSchema,
+      result: TeamShutdownResultSchema,
       examples: [],
     },
     {
@@ -1010,8 +978,8 @@ export const candidateModelToolCatalog = {
       commonUseCases: ["Record a blocking, parent, or related relation between current Tasks."],
       whenNotToUse: ["Do not use a relation as a substitute for assignment, progress, or an Alert."],
       sideEffects: ["Changes only the requested relation when graph and version checks pass.", "A no-op or refusal changes no graph state."],
-      parameters: CandidateTaskLinkParametersSchema,
-      result: CandidateTaskLinkResultSchema,
+      parameters: TaskLinkParametersSchema,
+      result: TaskLinkResultSchema,
       examples: [],
     },
     {
@@ -1022,8 +990,8 @@ export const candidateModelToolCatalog = {
       commonUseCases: ["Escalate exceptional coordination to one current Worker or announce to the Team."],
       whenNotToUse: ["Do not use an Alert to assign, advance, block, or complete a Task."],
       sideEffects: ["Delivers through exact current Memberships and appends one Alert event.", "A refused Alert creates no delivery, event, or Task change."],
-      parameters: CandidateAlertSendParametersSchema,
-      result: CandidateAlertSendResultSchema,
+      parameters: AlertSendParametersSchema,
+      result: AlertSendResultSchema,
       examples: [],
     },
   ],
@@ -1107,4 +1075,4 @@ export const candidateModelToolCatalog = {
   ],
 } as const;
 
-export type CandidateModelToolCatalog = typeof candidateModelToolCatalog;
+export type ModelToolCatalog = typeof modelToolCatalog;

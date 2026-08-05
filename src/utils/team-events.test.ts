@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TaskFile, TeamConfig } from "./models";
+import type { TeamConfig } from "./models";
+import type { TaskCard } from "../model-tool-contract/task-domain";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import { configPath, teamDir } from "./paths";
 import {
   InvalidTeamSnapshotContinuationError,
@@ -50,7 +52,7 @@ describe("Team event cursor and pagination contract", () => {
   it("batches requested and event-referenced Task hydration into one authority read", async () => {
     const readTasks = vi.fn(async () => []);
     await hydrateTeamSyncTasks([
-      { type: "task", cursor: "1", ref: { authorityId: "beads", taskId: "event-task", version: "v1" }, change: "created", actor: "team-lead", at: "2026-01-01T00:00:00.000Z" },
+      { type: "task", cursor: "1", ref: { taskId: "event-task", version: taskVersionRef("v1") }, change: "created", actor: "team-lead", at: "2026-01-01T00:00:00.000Z" },
       { type: "alert", cursor: "2", alertId: "alert-1", from: "team-lead", to: "worker", kind: "attention", text: "Review", taskRef: { taskId: "alert-task" }, at: "2026-01-01T00:00:00.000Z" },
     ], ["requested-task", "event-task"], readTasks);
 
@@ -95,7 +97,7 @@ describe("Team event cursor and pagination contract", () => {
     }
     await appendTeamEvent(teamName, {
       type: "task",
-      ref: { authorityId: "authority", taskId: "task-requested", version: "v2" },
+      ref: { taskId: "task-requested", version: taskVersionRef("v2") },
       change: "relation",
       actor: "team-lead",
     });
@@ -104,7 +106,7 @@ describe("Team event cursor and pagination contract", () => {
       alertId: "alert-task",
       from: "team-lead",
       to: "reviewer",
-      taskRef: { taskId: "task-requested", version: "v2" },
+      taskRef: { taskId: "task-requested", version: taskVersionRef("v2") },
       kind: "clarification",
       text: "Resolve the blocker.",
     });
@@ -123,15 +125,13 @@ describe("Team event cursor and pagination contract", () => {
       leadSessionId: "lead-session",
       members: [],
     };
-    const tasks = [1, 2, 3].map((index): TaskFile => ({
+    const tasks = [1, 2, 3].map((index): TaskCard => ({
       id: `task-${index}`,
       title: `Task ${index}`,
-      description: "goal",
-      acceptanceCriteria: "verified",
+      goal: "Verify the Task.",
+      current_context: "Work has not started.",
       status: "open",
-      relations: [],
-      version: `v${index}`,
-      provenance: { authority: "beads", teamName },
+      version: taskVersionRef(`v${index}`),
     }));
     const projection = projectTeamCurrentState(config, tasks);
     const first = pageTeamCurrentProjection(projection, { headCursor: "7", limit: 2 });

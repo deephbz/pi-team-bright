@@ -277,7 +277,7 @@ bounded for display and carry `projection_warnings`; an oversized goal keeps
 its Task identity and structural coordinates but is marked incomplete and
 non-executable, never presented as ordinary executable goal prose.
 
-Native Beads notes remain unbounded raw evidence. A marked Worker `append_note`
+Native task notes remain unbounded raw evidence. A marked Worker evidence write
 that would exceed the candidate context limit refuses without mutation. Worker
 candidate receipts use validated canonical metadata, or return a typed metadata
 gap; they never copy native notes into `current_context`.

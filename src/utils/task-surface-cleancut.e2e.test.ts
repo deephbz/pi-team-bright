@@ -12,6 +12,10 @@ import * as teams from "./teams";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
+function expectedVersionRef(value: string): string {
+  return /^v_[0-9a-f]{16}$/.test(value) ? value : taskVersionRef(value);
+}
+
 type RegisteredTool = {
   name: string;
   parameters: { properties?: Record<string, unknown> };
@@ -110,7 +114,7 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
           args.tasks = [{ operation_id: `cleancut-${id}`, title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
           for (const key of ["team_name", "title", "description", "acceptance_criteria", "assignee", "design", "idempotency_key"]) delete args[key];
         } else if (name === "task_update" && !args.updates) {
-          args.updates = [{ task_id: args.task_id, operation_id: `cleancut-${id}`, expected_version: taskVersionRef(args.expected_version || ""), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
+          args.updates = [{ task_id: args.task_id, operation_id: `cleancut-${id}`, expected_version: expectedVersionRef(args.expected_version || ""), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
           for (const key of ["team_name", "task_id", "claim", "assignee", "description", "design", "append_note", "expected_version", "status", "title"]) delete args[key];
         } else if (name === "task_read" && args.task_id) {
           args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
@@ -118,7 +122,7 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
           args.view = args.view || (args.cursor ? "updates" : "snapshot"); delete args.team_name; delete args.cursor; delete args.wait_ms; delete args.event_types; delete args.task_ids; delete args.limit; delete args.continuation;
         } else if (name === "task_link") {
           delete args.team_name;
-          if (typeof args.expected_version === "string") args.expected_version = taskVersionRef(args.expected_version);
+          if (typeof args.expected_version === "string") args.expected_version = expectedVersionRef(args.expected_version);
         }
         return originalExecute(id, args, signal, update, ctx);
       } });
@@ -305,14 +309,16 @@ describe("clean-cut Task public surface", () => {
       updateA.execute("claim-a", {
         team_name: teamName,
         task_id: direct.id,
+        operation_id: "claim-a",
         claim: true,
-        expected_version: taskVersionRef(direct.version),
+        expected_version: expectedVersionRef(direct.version),
       }, undefined, undefined, workerACtx),
       updateB.execute("claim-b", {
         team_name: teamName,
         task_id: direct.id,
+        operation_id: "claim-b",
         claim: true,
-        expected_version: taskVersionRef(direct.version),
+        expected_version: expectedVersionRef(direct.version),
       }, undefined, undefined, workerBCtx),
     ]);
     const acceptedClaims = claimResults.filter((result) => result.details.kind === "task_update_batch" && result.details.outcomes.some((outcome: any) => outcome.kind === "updated"));
@@ -356,25 +362,28 @@ describe("clean-cut Task public surface", () => {
     const designedResult = await updateA.execute("supplement-design", {
       team_name: teamName,
       task_id: complexCreated.id,
-      design: "First characterize existing writes, then replace one boundary and run the durability evaluator.",
-      append_note: "Evidence gathered from the current write path.\n\nRequesting leader review of the proposed design.",
-      expected_version: taskVersionRef(complexCreated.version),
+      operation_id: "supplement-design",
+      current_context: "First characterize existing writes, then replace one boundary and run the durability evaluator.",
+      journal_entries: [{ kind: "note", text: "Evidence gathered from the current write path.\n\nRequesting leader review of the proposed design." }],
+      expected_version: expectedVersionRef(complexCreated.version),
     }, undefined, undefined, workerACtx);
     const designed = taskFrom(designedResult);
     expect(designed).toMatchObject({ status: "open", assignee: "worker-a" });
-    expect(designed.design).toContain("Evidence gathered from the current write path.");
+    expect(designed.notes).toContain("Evidence gathered from the current write path.");
 
     const oversizedContext = await updateA.execute("oversized-context", {
       team_name: teamName,
       task_id: designed.id,
-      append_note: "👩🏽‍🚀".repeat(2_001),
-      expected_version: taskVersionRef(designed.version),
+      operation_id: "oversized-context",
+      current_context: "👩🏽‍🚀".repeat(2_001),
+      journal_entries: [{ kind: "note", text: "oversized context" }],
+      expected_version: expectedVersionRef(designed.version),
     }, undefined, undefined, workerACtx);
     expect(oversizedContext.details).toMatchObject({
       kind: "task_update_batch",
       outcomes: [{
         kind: "contract_gap",
-        reason: "candidate_metadata_invalid",
+        reason: "task_metadata_invalid",
         task_id: designed.id,
         state_changed: false,
       }],
@@ -405,8 +414,10 @@ describe("clean-cut Task public surface", () => {
     const staleWrite = await updateA.execute("stale-write", {
       team_name: teamName,
       task_id: designed.id,
-      append_note: "This must not overwrite the accepted version.",
-      expected_version: taskVersionRef(designed.version),
+      operation_id: "stale-write",
+      current_context: "This must not overwrite the accepted version.",
+      journal_entries: [{ kind: "note", text: "This must not overwrite the accepted version." }],
+      expected_version: expectedVersionRef(designed.version),
     }, undefined, undefined, workerACtx);
     expect(staleWrite.content[0].text).toMatch(/not updated|stale|review it and retry/i);
     expect(staleWrite.details).toMatchObject({
@@ -430,9 +441,10 @@ describe("clean-cut Task public surface", () => {
     const rejectedDesign = taskFrom(await updateA.execute("design-for-rejection", {
       team_name: teamName,
       task_id: rejectedCreated.id,
-      design: "Delete every generated directory in one pass.",
-      append_note: "Requesting review because this cleanup is destructive.",
-      expected_version: taskVersionRef(rejectedCreated.version),
+      operation_id: "design-for-rejection",
+      current_context: "Delete every generated directory in one pass.",
+      journal_entries: [{ kind: "note", text: "Requesting review because this cleanup is destructive." }],
+      expected_version: expectedVersionRef(rejectedCreated.version),
     }, undefined, undefined, workerACtx));
     const rejected = taskFrom(await updateLead.execute("reject-by-feedback", {
       team_name: teamName,
@@ -652,9 +664,15 @@ describe("clean-cut Task public surface", () => {
     execFileSync("bd", ["--directory", taskWorkspace, "--json", "update", deferred.id, "--status", "deferred"], {
       stdio: "ignore",
     });
-    await expect(read.execute("read-deferred", {
+    const deferredRead = await read.execute("read-deferred", {
       team_name: teamName,
       task_id: deferred.id,
-    }, undefined, undefined, leadCtx)).rejects.toThrow(/deferred|unsupported|status/i);
+    }, undefined, undefined, leadCtx);
+    expect(deferredRead.details).toMatchObject({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+      state_changed: false,
+    });
+    expect(deferredRead.details.message).toMatch(/deferred|unsupported|status/i);
   });
 });

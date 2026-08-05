@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { taskVersionRef } from "./task-version-ref";
+import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
+import type { TaskCard, TaskCardWarning } from "./task-domain";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
 
 declare const exactLeaderSessionIdBrand: unique symbol;
@@ -28,36 +29,6 @@ export interface ModelToolWorkerCurrent {
 
 export type ModelToolTaskProjectionField = "title" | "goal" | "current_context";
 
-/** Explicit evidence when an external authority record cannot fit the model projection. */
-export interface ModelToolTaskProjectionWarning {
-  task_id: string;
-  truncated_fields: ModelToolTaskProjectionField[];
-  incomplete_fields: ModelToolTaskProjectionField[];
-  message: string;
-}
-
-interface ModelToolTaskCurrentBase {
-  id: string;
-  title: string;
-  status: "open" | "in_progress" | "blocked" | "closed";
-  assignee?: string;
-  current_context: string;
-  version: string;
-}
-
-export type ModelToolTaskCurrent =
-  | (ModelToolTaskCurrentBase & {
-    goal: string;
-    projection_warnings?: ModelToolTaskProjectionWarning[];
-    goal_state?: never;
-  })
-  /** Incomplete cards preserve structural coordinates but cannot execute. */
-  | (ModelToolTaskCurrentBase & {
-    goal_state: "incomplete";
-    projection_warnings: ModelToolTaskProjectionWarning[];
-    goal?: never;
-  });
-
 export type CreateTeamPortResult =
   | { kind: "created"; team: ModelToolTeamCurrent }
   | { kind: "refused"; reason: "active_team_exists" | "name_unavailable" }
@@ -75,14 +46,14 @@ export type TeamSnapshotPortResult =
     kind: "snapshot";
     team: ModelToolTeamCurrent;
     workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>;
-    tasks: ModelToolTaskCurrent[];
-    taskProjectionWarnings?: ModelToolTaskProjectionWarning[];
+    tasks: TaskCard[];
+    taskProjectionWarnings?: TaskCardWarning[];
   }
   | { kind: "no_active_team" }
-  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "candidate_metadata_absent" | "candidate_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
+  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
 
 export type CreateTaskPortResult =
-  | { kind: "created"; operationId: string; task: ModelToolTaskCurrent; deliveryWarnings?: string[] }
+  | { kind: "created"; operationId: string; task: TaskCard; deliveryWarnings?: string[] }
   | { kind: "operation_conflict"; operationId: string; message: string }
   | { kind: "unknown_outcome"; operationId: string; message: string }
   | { kind: "worker_unavailable"; operationId: string }
@@ -91,20 +62,21 @@ export type CreateTaskPortResult =
 
 export type ReadTaskContractGap = {
   kind: "contract_gap";
-  reason: "candidate_metadata_absent" | "candidate_metadata_invalid";
-  authorityVersion: string;
+  reason: "task_metadata_absent" | "task_metadata_invalid";
+  version: TaskVersionRef;
   message: string;
-  projectionWarning?: ModelToolTaskProjectionWarning;
+  projectionWarning?: TaskCardWarning;
 };
 
 export type ReadTasksPortResult =
-  | { kind: "read"; tasks: Array<ModelToolTaskCurrent | undefined | ReadTaskContractGap> }
+  | { kind: "read"; tasks: Array<TaskCard | undefined | ReadTaskContractGap> }
+  | { kind: "unavailable"; reason: "task_authority_unavailable"; message: string }
   | { kind: "no_active_team" };
 
 export interface ModelToolTaskUpdateInput {
   taskId: string;
   operationId: string;
-  expectedVersion: string;
+  expectedVersion: TaskVersionRef;
   currentContext?: string;
   journalEntries?: Array<{ kind: "progress" | "decision" | "blocker" | "result" | "note"; text: string }>;
   status?: "open" | "in_progress" | "blocked" | "closed";
@@ -119,9 +91,9 @@ export interface ModelToolTaskJournalEntry {
 }
 
 export type TaskUpdatePortOutcome =
-  | { kind: "updated"; taskId: string; operationId: string; task: ModelToolTaskCurrent; journalEntries: ModelToolTaskJournalEntry[] }
-  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict"; message: string; currentTask?: ModelToolTaskCurrent }
-  | { kind: "contract_gap"; taskId: string; operationId: string; reason: "candidate_metadata_absent" | "candidate_metadata_invalid" | "beads_external_writer_atomicity_unavailable"; message: string; currentTask?: ModelToolTaskCurrent; unsupported: string[] }
+  | { kind: "updated"; taskId: string; operationId: string; task: TaskCard; journalEntries: ModelToolTaskJournalEntry[] }
+  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict"; message: string; currentTask?: TaskCard }
+  | { kind: "contract_gap"; taskId: string; operationId: string; reason: "task_metadata_absent" | "task_metadata_invalid" | "external_writer_atomicity_unavailable"; message: string; currentTask?: TaskCard; unsupported: string[] }
   | { kind: "unavailable"; taskId: string; operationId: string; reason: "task_authority_unavailable"; message: string };
 
 export type UpdateTasksPortResult =
@@ -144,11 +116,11 @@ export interface TaskLinkPortInput {
   relation: "blocked_by" | "parent" | "related";
   targetId: string;
   action: "add" | "remove";
-  expectedVersion?: string;
+  expectedVersion?: TaskVersionRef;
 }
 
 export type TaskLinkPortResult =
-  | { kind: "linked"; taskId: string; targetId: string; relation: TaskLinkPortInput["relation"]; action: TaskLinkPortInput["action"]; changed: boolean; version: string }
+  | { kind: "linked"; taskId: string; targetId: string; relation: TaskLinkPortInput["relation"]; action: TaskLinkPortInput["action"]; changed: boolean; version: TaskVersionRef }
   | { kind: "refused"; taskId: string; reason: "task_not_found" | "version_conflict" | "graph_conflict"; message: string }
   | { kind: "unavailable"; reason: "no_active_team" | "task_authority_unavailable"; message: string };
 
@@ -166,11 +138,11 @@ export interface ModelToolTeamEvent {
 }
 
 export type TeamSyncPortResult =
-  | { kind: "snapshot"; team: ModelToolTeamCurrent; workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: ModelToolTaskCurrent[]; taskProjectionWarnings?: ModelToolTaskProjectionWarning[]; head: number; epochId: string }
-  | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: { status: ModelToolTaskCurrent["status"]; assignee?: string; current_context: string; version: string } }>; taskProjectionWarnings?: ModelToolTaskProjectionWarning[]; alerts: []; head: number; epochId: string }
+  | { kind: "snapshot"; team: ModelToolTeamCurrent; workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: TaskCard[]; taskProjectionWarnings?: TaskCardWarning[]; head: number; epochId: string }
+  | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: TaskCard }>; taskProjectionWarnings?: TaskCardWarning[]; alerts: []; head: number; epochId: string }
   | { kind: "snapshot_required"; message: string }
   | { kind: "cancelled"; message: string }
-  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "candidate_metadata_absent" | "candidate_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }
+  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }
   | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string };
 
 export interface PendingObservation {
@@ -218,7 +190,7 @@ export interface ModelToolTeamPort {
   stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult>;
   shutdownTeam(leaderSessionId: ExactLeaderSessionId): Promise<TeamShutdownPortResult>;
   linkTask(leaderSessionId: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult>;
-  sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: string }): Promise<AlertSendPortResult>;
+  sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult>;
   readTeamSync(
     leaderSessionId: ExactLeaderSessionId,
     view: "snapshot" | "updates",
@@ -247,7 +219,7 @@ interface StoredTeam {
   lifecycle: "active";
   workersByName: Map<string, ModelToolWorkerCurrent>;
   taskIdsByWorkerName: Map<string, Set<string>>;
-  tasksById: Map<string, ModelToolTaskCurrent>;
+  tasksById: Map<string, TaskCard>;
   journalEntriesByTaskId: Map<string, ModelToolTaskJournalEntry[]>;
   operationsByTaskAndId: Map<string, { taskId: string; fingerprint: string; outcome: Extract<TaskUpdatePortOutcome, { kind: "updated" }> }>;
   createOperationsById: Map<string, { fingerprint: string; taskId: string }>;
@@ -284,9 +256,8 @@ function canonical(value: unknown): unknown {
   return value;
 }
 
-function nextTaskVersion(version: string): string {
-  const number = Number(version.match(/^task_v(\d+)$/)?.[1] ?? "0");
-  return `task_v${Number.isFinite(number) ? number + 1 : 1}`;
+function nextTaskVersion(version: string): TaskVersionRef {
+  return taskVersionRef(version);
 }
 
 function operationKey(taskId: string, operationId: string): string {
@@ -402,14 +373,14 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
       return { kind: "worker_unavailable", operationId: input.operationId };
     }
 
-    const task: ModelToolTaskCurrent = {
+    const task: TaskCard = {
       id: `task-${this.nextTaskNumber}`,
       title: input.title,
       goal: input.goal,
       status: "open",
       ...(input.assignee ? { assignee: input.assignee } : {}),
       current_context: "Work has not started.",
-      version: "task_v1",
+      version: taskVersionRef("task_v1"),
     };
     const taskIds = input.assignee
       ? team.taskIdsByWorkerName.get(input.assignee) ?? new Set<string>()
@@ -478,7 +449,10 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
         });
         continue;
       }
-      if (taskVersionRef(task.version) !== input.expectedVersion) {
+      const currentVersion = /^v_[0-9a-f]{16}$/.test(task.version)
+        ? task.version as TaskVersionRef
+        : taskVersionRef(task.version);
+      if (currentVersion !== input.expectedVersion) {
         outcomes.push({
           kind: "refused",
           taskId: input.taskId,
@@ -490,7 +464,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
         continue;
       }
 
-      const updatedTask: ModelToolTaskCurrent = {
+      const updatedTask: TaskCard = {
         ...task,
         ...(input.currentContext !== undefined ? { current_context: input.currentContext } : {}),
         ...(input.status ? { status: input.status } : {}),
@@ -562,7 +536,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
     return { kind: "unavailable", reason: "task_authority_unavailable", message: `The in-memory model-tool port has no relation authority for ${input.taskId}.` };
   }
 
-  async sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: string }): Promise<AlertSendPortResult> {
+  async sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult> {
     const team = this.activeTeamFor(leaderSessionId);
     if (!team) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
     if (input.target.kind === "team" && input.kind !== "announcement") return { kind: "refused", reason: "invalid_fanout", message: "Only announcement Alerts may target the whole Team." };
@@ -707,7 +681,7 @@ export class InMemoryModelToolTeamPort implements ModelToolTeamPort {
           taskId,
           changeKinds: change.changeKinds,
           journalEntries: change.journalEntries,
-          current: { status: task.status, ...(task.assignee ? { assignee: task.assignee } : {}), current_context: task.current_context, version: task.version },
+          current: task,
         };
       }),
       alerts: [],
