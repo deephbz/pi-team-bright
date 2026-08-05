@@ -79,8 +79,8 @@ based substitute for Tasks.
   cross-Team router, universal chat bus, or freeform work-by-message system.
 - **Terminal capabilities vary.** Herdr and tmux enforce the Team pane-placement
   invariant: the first Worker splits the exact leader pane right with a measured
-  ratio that keeps the leader at least 60% wide. Linear placement splits an exact
-  current Worker pane down; Herdr grid placement creates a deterministic Worker
+  ratio that keeps the leader at least at its configured share. Linear placement
+  splits an exact current Worker pane down; Herdr grid placement creates a deterministic Worker
   grid. Every target is checked against the leader tab and Worker region. They never use terminal
   focus, select a whole-window layout, or close another pane during
   Worker stop. iTerm2, Zellij, cmux, WezTerm, and Windows preserve their existing
@@ -115,7 +115,7 @@ based substitute for Tasks.
 After npm lists this release candidate, pin the exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.7
+pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.8
 ```
 
 The package owns its local Task backend through the exact runtime dependency
@@ -129,18 +129,34 @@ is live.
 ## Team pane layout settings
 
 Set the optional Team policy under `pi_team_bright.team` in global
-`settings.json` or a trusted project's `.pi/settings.json`:
+`settings.json` or a trusted project's `.pi/settings.json`. This complete
+example also shows the related Worker settings:
 
 ```json
 {
   "pi_team_bright": {
     "team": {
-      "pane_layout": { "leader_share": 0.65, "worker_tiling": "grid" }
+      "pane_layout": {
+        "leader_share": 0.6,
+        "worker_tiling": "grid"
+      }
+    },
+    "worker": {
+      "default_model": "openai-codex/gpt-5.6-luna",
+      "agents": {
+        "append_global": "/absolute/path/to/worker-AGENTS.md"
+      },
+      "tools": {
+        "enable": ["tool-name"],
+        "disable": ["tool-name"]
+      }
     }
   }
 }
 ```
 
+`leader_share` is the fraction kept by the leader after the first Worker split.
+It must be greater than `0.1` and less than `1.0`; the default is `0.6`.
 `team_create.pane_layout` takes precedence over trusted project settings, then
 global settings, then `{ "leader_share": 0.6, "worker_tiling": "linear" }`.
 Herdr supports `linear` and `grid`; other pane backends support `linear` only.
@@ -154,21 +170,8 @@ Worker-only prompt, tool, and default-model projection uses Pi settings. Put it 
 (`PI_CODING_AGENT_DIR`, normally `~/.pi/agent`), or in a trusted project's
 `.pi/settings.json`. Pi applies its normal global/project merge, so the trusted
 project's nested Worker values take precedence. No Pi Team Bright settings file exists.
-
-```json
-{
-  "pi_team_bright": {
-    "worker": {
-      "default_model": "provider/model",
-      "agents": {
-        "replace_global": "/absolute/path/to/worker-global.md",
-        "append_global": "/absolute/path/to/worker-append.md"
-      },
-      "tools": { "enable": ["grep"], "disable": ["bash"] }
-    }
-  }
-}
-```
+Replace the example's model, absolute prompt path, and tool names with values
+available in the Worker environment.
 
 `default_model` is optional and applies only to new Workers. Its first slash
 separates a provider from a nonempty model ID; the model ID can contain later
@@ -193,9 +196,20 @@ An unreadable `replace_global` warns and restores the native global contribution
 An unreadable `append_global` warns and skips only the append file. Pi Team Bright
 serializes an active aggregate in a private temporary file and launches Workers
 with `--no-context-files --append-system-prompt`; Pi reports appended content and
-`getAgentsFiles` is empty. Tool disable wins over enable. Tool projection changes
-only the model-visible active set. It never grants authorization: core services,
-including Alert authorization, still reject forged or prohibited calls.
+`getAgentsFiles` is empty.
+
+### Tool-list precedence
+
+Tool projection starts with the Worker's inherited active tool list. It then
+adds registered tools named in `enable` and removes registered tools named in
+`disable`. Thus, `[A, B, C]` with `enable: [E]` and `disable: [C]` becomes
+`[A, B, E]`, not `[E]`. If both lists name the same tool, `disable` wins.
+Unknown names are ignored with a Worker diagnostic. Settings cannot restore
+leader-only tools to a Worker.
+
+Tool projection changes only the model-visible active set. It never grants
+authorization: core services, including Alert authorization, still reject
+forged or prohibited calls.
 
 A saved Pi trust decision controls project settings. A trusted Worker gets
 `--approve`. An untrusted or unknown Worker gets `--no-approve`; an unknown cwd

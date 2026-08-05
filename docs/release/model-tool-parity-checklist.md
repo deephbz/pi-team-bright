@@ -1,9 +1,9 @@
 # Model-tool release parity checklist
 
-Release: `0.17.0-rc.7`
+Release: `0.17.0-rc.8`
 Source surface: shipped main extension
 
-This checklist maps each `0.17.0-rc.7` coordination capability to the
+This checklist maps each `0.17.0-rc.8` coordination capability to the
 single durable model-tool leader surface. The leader uses exact Session binding,
 so the surface omits `team_name` and carrier controls. Worker processes keep
 their existing `task_read`, `task_update`, and `alert_send` registrations.
@@ -42,8 +42,9 @@ their existing `task_read`, `task_update`, and `alert_send` registrations.
 
 - `src/model-tool-contract/catalog.test.ts` validates the ten-tool catalog and
   result schemas, including `team_create.pane_layout`.
-- `src/utils/team-pane-layout.test.ts` validates policy precedence, trust-gated
-  project settings, backend support, and immutable default resolution.
+- `src/utils/team-pane-layout.test.ts` validates the exclusive
+  `0.1 < leader_share < 1.0` range, policy precedence, trust-gated project
+  settings, backend support, and immutable default resolution.
 - `src/adapters/herdr-adapter.test.ts` validates exact pane placement and the
   deterministic four-Worker 2x2 grid sequence.
 - `src/model-tool-contract/first-journey.test.ts` validates registration,
