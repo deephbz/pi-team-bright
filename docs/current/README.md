@@ -64,7 +64,8 @@ restating executable definitions.
 - Pane placement is a typed terminal-adapter responsibility. Herdr and tmux
   receive the durable leader pane plus current Worker panes from
   [`src/utils/team-pane-placement.ts`](../../src/utils/team-pane-placement.ts),
-  rather than terminal focus. They keep the leader left at at least 60% width,
+  rather than terminal focus. They keep the leader left at at least the configured
+  share, which must be greater than 0.1 and less than 1 and defaults to 0.6. They
   prove later targets still share its tab and Worker region before splitting,
   and stop only exact Worker
   panes. Pi 0.83.0 support now loads the exact working-tree extension while
@@ -96,7 +97,7 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.7` release candidate uses the real main extension as its local
+- The `0.17.0-rc.8` release candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
@@ -129,18 +130,15 @@ restating executable definitions.
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
 - `@hypercarrier/pi-team-bright@0.17.0-rc.7` is published, npm `next` points
-  to it, and `latest` remains on rc.1. Its [GitHub
-  prerelease](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.0-rc.7)
-  points to the same source tag. The `v0.17.0-rc.6` source tag was aborted
-  before npm publication because final review found a release-specific
-  generated-dist verifier exception. No rc.6 npm package or GitHub Release
-  exists. Rc.7 removes that exception and tracks each generated dependency. It
-  batches Team-scoped snapshot hydration, projects externally oversized Task
-  fields without hiding structural work, and retains the accepted trust and
-  pane-layout contracts. The [aborted rc.6
-  receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md) and [published
-  rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md) preserve
-  their separate evidence.
+  to it, and `latest` remains on rc.1. Rc.8 is the prepared higher follow-up. It
+  accepts `0.1 < leader_share < 1.0` while keeping the default at `0.6`. The
+  README now shows one complete Team and Worker settings example and makes tool
+  precedence explicit: `enable` adds to the inherited Worker list, then
+  `disable` removes from it. The [aborted rc.6
+  receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md), [published
+  rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and [rc.8
+  receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) preserve
+  separate release evidence.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the

@@ -78,7 +78,7 @@ describe("candidate model-tool catalog", () => {
     expect(Check(TeamCreateParametersSchema, valid)).toBe(true);
     expect(Check(TeamCreateParametersSchema, {
       ...valid,
-      pane_layout: { leader_share: 0.7, worker_tiling: "grid" },
+      pane_layout: { leader_share: 0.1001, worker_tiling: "grid" },
     })).toBe(true);
 
     for (const invalid of [
@@ -87,7 +87,8 @@ describe("candidate model-tool catalog", () => {
       { purpose: "Prepare and verify the public release." },
       { ...valid, separate_windows: true },
       { ...valid, task_backend: "beads" },
-      { ...valid, pane_layout: { leader_share: 0.59, worker_tiling: "linear" } },
+      { ...valid, pane_layout: { leader_share: 0.1, worker_tiling: "linear" } },
+      { ...valid, pane_layout: { leader_share: 1, worker_tiling: "linear" } },
       { ...valid, pane_layout: { leader_share: 0.7, worker_tiling: "diagonal" } },
     ]) {
       expect(Check(TeamCreateParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);

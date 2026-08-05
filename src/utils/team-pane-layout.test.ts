@@ -52,8 +52,12 @@ describe("Team pane layout policy", () => {
     expect(resolveTeamPaneLayout({ ...loaded, backend: "tmux" })).toEqual({ leader_share: 0.8, worker_tiling: "linear" });
   });
 
-  it("refuses invalid and unsupported policies before creation", () => {
-    expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 0.59, worker_tiling: "linear" }, backend: "tmux" }))
+  it("accepts shares above 0.1 and refuses invalid or unsupported policies before creation", () => {
+    expect(resolveTeamPaneLayout({ explicit: { leader_share: 0.1001, worker_tiling: "linear" }, backend: "tmux" }))
+      .toEqual({ leader_share: 0.1001, worker_tiling: "linear" });
+    expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 0.1, worker_tiling: "linear" }, backend: "tmux" }))
+      .toThrow(/Invalid pane_layout/);
+    expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 1, worker_tiling: "linear" }, backend: "tmux" }))
       .toThrow(/Invalid pane_layout/);
     expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 0.6, worker_tiling: "grid" }, backend: "tmux" }))
       .toThrow(/unsupported.*tmux/i);

@@ -6,7 +6,7 @@ import { Type, type Static } from "typebox";
 
 /** Durable pane placement policy captured by a Team epoch. */
 export const TeamPaneLayoutSchema = Type.Object({
-  leader_share: Type.Number({ minimum: 0.6, exclusiveMaximum: 1 }),
+  leader_share: Type.Number({ exclusiveMinimum: 0.1, exclusiveMaximum: 1 }),
   worker_tiling: Type.Enum(["linear", "grid"]),
 }, { additionalProperties: false });
 
@@ -24,7 +24,7 @@ const isRecord = (value: unknown): value is JsonRecord => !!value && typeof valu
 
 function parsePolicy(value: unknown, source: TeamPaneLayoutSource): TeamPaneLayout {
   if (!Check(TeamPaneLayoutSchema, value)) {
-    let detail = "must contain leader_share >= 0.6 and < 1, and worker_tiling linear or grid";
+    let detail = "must contain leader_share > 0.1 and < 1, and worker_tiling linear or grid";
     try {
       detail = Value.Errors(TeamPaneLayoutSchema, value).at(0)?.message ?? detail;
     } catch {
