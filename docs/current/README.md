@@ -129,14 +129,15 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.7` is published, npm `next` points
-  to it, and `latest` remains on rc.1. Rc.8 is the prepared higher follow-up. It
-  accepts `0.1 < leader_share < 1.0` while keeping the default at `0.6`. The
-  README now shows one complete Team and Worker settings example and makes tool
-  precedence explicit: `enable` adds to the inherited Worker list, then
-  `disable` removes from it. The [aborted rc.6
+- `@hypercarrier/pi-team-bright@0.17.0-rc.8` is published, npm `next` points
+  to it, and `latest` remains on rc.1. It accepts
+  `0.1 < leader_share < 1.0` while keeping the default at `0.6`. The README
+  shows one complete Team and Worker settings example and makes tool precedence
+  explicit: `enable` adds to the inherited Worker list, then `disable` removes
+  from it. The [aborted rc.6
   receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md), [published
-  rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and [rc.8
+  rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and
+  [published rc.8
   receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) preserve
   separate release evidence.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
