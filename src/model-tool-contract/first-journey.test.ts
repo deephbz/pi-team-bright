@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import {
-  CandidateEnsureWorkerParametersSchema,
-  CandidateTaskCreateParametersSchema,
-  CandidateTaskReadParametersSchema,
-  CandidateTaskUpdateParametersSchema,
-  CandidateTeamCreateParametersSchema,
-  CandidateTeamSyncParametersSchema,
+  EnsureWorkerParametersSchema,
+  TaskCreateParametersSchema,
+  TaskReadParametersSchema,
+  TaskUpdateParametersSchema,
+  TeamCreateParametersSchema,
+  TeamSyncParametersSchema,
 } from "./catalog";
 import {
   InMemoryModelToolTeamPort,
   exactLeaderSessionId,
   registerModelToolJourney,
 } from "./runtime";
-import { assembleCandidateToolResult } from "./result-projection";
+import { assembleToolResult } from "./result-projection";
 import { taskVersionRef } from "./task-version-ref";
 
 type ToolResult = {
@@ -80,12 +80,12 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     const { tools, invoke } = registerJourney();
 
     expect([...tools.keys()]).toEqual(["team_create", "team_sync", "ensure_worker", "task_create", "task_read", "task_update", "worker_stop", "team_shutdown", "task_link", "alert_send"]);
-    expect(tools.get("team_create")!.parameters).toBe(CandidateTeamCreateParametersSchema);
-    expect(tools.get("ensure_worker")!.parameters).toBe(CandidateEnsureWorkerParametersSchema);
-    expect(tools.get("team_sync")!.parameters).toBe(CandidateTeamSyncParametersSchema);
-    expect(tools.get("task_create")!.parameters).toBe(CandidateTaskCreateParametersSchema);
-    expect(tools.get("task_read")!.parameters).toBe(CandidateTaskReadParametersSchema);
-    expect(tools.get("task_update")!.parameters).toBe(CandidateTaskUpdateParametersSchema);
+    expect(tools.get("team_create")!.parameters).toBe(TeamCreateParametersSchema);
+    expect(tools.get("ensure_worker")!.parameters).toBe(EnsureWorkerParametersSchema);
+    expect(tools.get("team_sync")!.parameters).toBe(TeamSyncParametersSchema);
+    expect(tools.get("task_create")!.parameters).toBe(TaskCreateParametersSchema);
+    expect(tools.get("task_read")!.parameters).toBe(TaskReadParametersSchema);
+    expect(tools.get("task_update")!.parameters).toBe(TaskUpdateParametersSchema);
 
     const exactSessionId = "019fc274-f97e-7910-b6b6-579a20b3b1d0";
     const rejectedCalls = [
@@ -117,7 +117,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     let emitted: ToolResult | undefined;
 
     expect(() => {
-      emitted = assembleCandidateToolResult("team_create", {
+      emitted = assembleToolResult("team_create", {
         kind: "team_created",
         team: {
           name: "release-team",
@@ -167,7 +167,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
             goal: "Create this independent open Task and report its receipt.",
             status: "open",
             current_context: "Work has not started.",
-            version: "task_v1",
+            version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
           },
         },
       ],
@@ -251,14 +251,14 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       updates: [{
         task_id: "task-1",
         operation_id: "close-one",
-        expected_version: taskVersionRef("task_v2"),
+        expected_version: first.outcomes[0].task.version,
         current_context: "Task one is closed after coordination review.",
         journal_entries: [{ kind: "decision" as const, text: "Close Task one." }],
         status: "closed" as const,
       }],
     };
     const closed = canonicalDetails(await invoke("task_update", "close-one", closeInput, leaderSessionId));
-    expect(closed).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: "task-1", status: "closed", version: "task_v3" } }] });
+    expect(closed).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: "task-1", status: "closed", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } }] });
     const afterClose = canonicalDetails(await invoke("team_sync", "sync-after-close", { view: "snapshot" }, leaderSessionId));
     expect(afterClose.workers[0].nonterminal_task_ids).toEqual(["task-2"]);
     port.acknowledgePendingObservation(exactLeaderSessionId(leaderSessionId), "after-close", ["after-close"]);
@@ -274,13 +274,13 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       updates: [{
         task_id: "task-1",
         operation_id: "reopen-one",
-        expected_version: taskVersionRef("task_v3"),
+        expected_version: closed.outcomes[0].task.version,
         current_context: "Task one is nonterminal and awaits follow-up.",
         journal_entries: [{ kind: "decision", text: "Reopen Task one for follow-up." }],
         status: "in_progress",
       }],
     }, leaderSessionId));
-    expect(reopened).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: "task-1", status: "in_progress", version: "task_v4" } }] });
+    expect(reopened).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: "task-1", status: "in_progress", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } }] });
     const afterReopen = canonicalDetails(await invoke("team_sync", "sync-after-reopen", { view: "snapshot" }, leaderSessionId));
     expect(afterReopen.workers[0].nonterminal_task_ids).toEqual(["task-1", "task-2"]);
   });
@@ -313,7 +313,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       }],
     }, leaderSessionId));
     const updates = canonicalDetails(await invoke("team_sync", "updates", { view: "updates" }, leaderSessionId));
-    expect(updates).toMatchObject({ kind: "updates", task_changes: [{ task_id: "task-1", change_kinds: ["progress"], current: { version: "task_v2" } }] });
+    expect(updates).toMatchObject({ kind: "updates", task_changes: [{ task_id: "task-1", change_kinds: ["progress"], current: { version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } }] });
     const updatesReplay = canonicalDetails(await invoke("team_sync", "updates-replay", { view: "updates" }, leaderSessionId));
     expect(updatesReplay).toEqual(updates);
     port.setBranchContext(session, ["updates-entry"]);
@@ -383,7 +383,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       updates: [{
         task_id: "task-1",
         operation_id: "progress-only",
-        expected_version: taskVersionRef("task_v2"),
+        expected_version: statusChange.task_changes[0].current.version,
         current_context: "Verification continues.",
         journal_entries: [{ kind: "progress", text: "Verification continues." }],
         status: "in_progress",
@@ -532,7 +532,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
           status: "open",
           assignee: worker.name,
           current_context: "Work has not started.",
-          version: "task_v1",
+          version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
         },
       }],
     });
@@ -559,7 +559,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
             status: "open",
             assignee: worker.name,
             current_context: "Work has not started.",
-            version: "task_v1",
+            version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
           },
         },
         {
@@ -573,7 +573,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
             status: "open",
             assignee: worker.name,
             current_context: "Work has not started.",
-            version: "task_v1",
+            version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
           },
         },
         {
@@ -611,7 +611,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
           status: "open",
           assignee: worker.name,
           current_context: "Task is assigned but awaits a Worker carrier.",
-          version: "task_v2",
+          version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
         },
         journal_entries: [{
           id: expect.any(String),
@@ -635,7 +635,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
         task_id: "task-1",
         operation_id: "decision-conflict",
         reason: "version_conflict",
-        current_task: { id: "task-1", version: "task_v2", current_context: "Task is assigned but awaits a Worker carrier." },
+        current_task: { id: "task-1", version: expect.stringMatching(/^v_[0-9a-f]{16}$/), current_context: "Task is assigned but awaits a Worker carrier." },
         state_changed: false,
       }],
     });
@@ -657,7 +657,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
         status: "open",
         assignee: worker.name,
         current_context: "Task is assigned but awaits a Worker carrier.",
-        version: "task_v2",
+        version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
       }],
     });
   });

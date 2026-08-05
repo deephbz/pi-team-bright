@@ -2,20 +2,19 @@ import { getTerminalAdapter } from "../adapters/terminal-registry";
 import crypto from "node:crypto";
 import * as paths from "../utils/paths";
 import * as teams from "../utils/teams";
-import * as tasks from "../utils/tasks";
+import { listTaskIds, resolveTeamTaskAuthority } from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
-import { BeadsError } from "../utils/beads";
 import * as alerts from "../utils/alerts";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../utils/worker-launch-bridge";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
-import { taskVersionRef } from "./task-version-ref";
+import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 import {
-  CandidateBeadsTaskAdapter,
-  projectCandidateNonterminalTaskIds,
-  projectCandidateTaskChanges,
-  type CandidateTaskChangeProjection,
+  BeadsTaskAdapter,
+  projectNonterminalTaskIds,
+  projectTaskChanges,
+  type TaskChangeProjection,
 } from "./beads-task-adapter";
 import {
   commitHiddenObservationProjection,
@@ -25,9 +24,7 @@ import {
 import type {
   ExactLeaderSessionId,
   ModelToolLeaderLaunchContext,
-  ModelToolTaskCurrent,
   ModelToolTaskJournalEntry,
-  ModelToolTaskProjectionWarning,
   ModelToolTeamCurrent,
   ModelToolTeamPort,
   ModelToolWorkerCurrent,
@@ -48,6 +45,7 @@ import type {
   TaskLinkPortResult,
   AlertSendPortResult,
 } from "./in-memory-team-port";
+import type { TaskCard, TaskCardWarning } from "./task-domain";
 import type { Member, TeamConfig, TeamEvent } from "../utils/models";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 const WAIT_MS = 120_000;
@@ -67,7 +65,7 @@ export interface ModelToolLifecycle {
   shutdownTeam(teamName: string): Promise<TeamShutdownPortResult>;
 }
 
-function taskProjectionRevision(tasks: readonly ModelToolTaskCurrent[], warnings: readonly ModelToolTaskProjectionWarning[] = []): string {
+function taskProjectionRevision(tasks: readonly TaskCard[], warnings: readonly TaskCardWarning[] = []): string {
   return crypto.createHash("sha256").update(JSON.stringify({ tasks, warnings })).digest("hex");
 }
 
@@ -93,11 +91,6 @@ function workerCarrier(member: Member | undefined): ModelToolWorkerCurrent["carr
 function resolveWorkerAggregate(cwd: string, leaderCwd: string, leaderProjectTrusted?: boolean) {
   const resources = resolveWorkerLaunchResources({ cwd, leaderCwd, leaderProjectTrusted });
   return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
-}
-
-function isMissingTask(error: unknown): boolean {
-  if (error instanceof BeadsError) return /not found|missing|does not exist/i.test(error.message);
-  return error instanceof Error && /not found|missing|does not exist/i.test(error.message);
 }
 
 function isAbort(error: unknown): boolean {
@@ -182,7 +175,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     }
     let authority;
     try {
-      authority = await tasks.resolveTeamTaskAuthority(teamName);
+      authority = await resolveTeamTaskAuthority(teamName);
     } catch (error) {
       return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) };
     }
@@ -272,7 +265,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       const logical = await teams.readLogicalWorker(bound.teamName, input.assignee);
       if (logical.kind !== "found") return { kind: "worker_unavailable", operationId: input.operationId };
     }
-    const outcome = await new CandidateBeadsTaskAdapter(bound.teamName, "team-lead").createWithReceipt(input);
+    const outcome = await new BeadsTaskAdapter(bound.teamName, "team-lead").createWithReceipt(input);
     if (outcome.kind === "created") {
       return { kind: "created", operationId: outcome.operationId, task: outcome.task, ...(outcome.deliveryWarnings.length > 0 ? { deliveryWarnings: outcome.deliveryWarnings } : {}) };
     }
@@ -283,18 +276,25 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   async readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "no_active_team" };
-    const adapter = new CandidateBeadsTaskAdapter(bound.teamName, "team-lead");
-    const results: Array<ModelToolTaskCurrent | undefined | ReadTaskContractGap> = [];
-    for (const taskId of taskIds) {
-      try {
-        const result = await adapter.read(taskId);
-        results.push(result.kind === "found" ? result.task : result);
-      } catch (error) {
-        if (isMissingTask(error)) results.push(undefined);
-        else throw error;
-      }
+    const uniqueTaskIds = [...new Set(taskIds)];
+    const adapter = new BeadsTaskAdapter(bound.teamName, "team-lead");
+    try {
+      const hydrated = await adapter.readMany(uniqueTaskIds);
+      const byId = new Map(uniqueTaskIds.map((taskId, index) => [taskId, hydrated[index]]));
+      return {
+        kind: "read",
+        tasks: taskIds.map((taskId) => {
+          const result = byId.get(taskId);
+          return result === undefined || result.kind === "found" ? result?.task : result;
+        }),
+      };
+    } catch (error) {
+      return {
+        kind: "unavailable",
+        reason: "task_authority_unavailable",
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
-    return { kind: "read", tasks: results };
   }
 
   async updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolTaskUpdateInput[]): Promise<UpdateTasksPortResult> {
@@ -307,7 +307,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     if (duplicate.size > 0) return { kind: "duplicate_task_id" };
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "no_active_team" };
-    const adapter = new CandidateBeadsTaskAdapter(bound.teamName, "team-lead");
+    const adapter = new BeadsTaskAdapter(bound.teamName, "team-lead");
     const outcomes: TaskUpdatePortOutcome[] = [];
     for (const input of updates) {
       const result = await adapter.update(input);
@@ -332,7 +332,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
           operationId: input.operationId,
           reason: result.reason,
           message: result.message,
-          unsupported: ["candidate_metadata"],
+          unsupported: ["task_metadata"],
         });
       }
     }
@@ -357,37 +357,14 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
     const lead = [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.isActive !== false);
-    try {
-      const current = await tasks.readTask(bound.teamName, input.taskId);
-      if (input.expectedVersion && taskVersionRef(current.version) !== input.expectedVersion) {
-        return { kind: "refused", taskId: input.taskId, reason: "version_conflict", message: "The supplied Task version ref is stale; read the current Task before retrying." };
-      }
-      const result = await tasks.mutateTaskLink(bound.teamName, input.taskId, {
-        relation: input.relation,
-        targetId: input.targetId,
-        action: input.action,
-      }, {
-        actor: "team-lead",
-        expectedVersion: input.expectedVersion ? current.version : undefined,
-        actingSessionFile: bound.sessionFile,
-        actingMembershipId: lead?.membershipId,
-      });
-      return { kind: "linked", taskId: input.taskId, targetId: input.targetId, relation: input.relation, action: input.action, changed: result.changed, version: result.task.version };
-    } catch (error) {
-      if (error instanceof BeadsError) {
-        const message = error.message;
-        const reason = /not found|no issue found/i.test(message)
-          ? "task_not_found" as const
-          : /changed since version|expected(?: Task)? version|stale/i.test(message)
-            ? "version_conflict" as const
-            : "graph_conflict" as const;
-        return { kind: "refused", taskId: input.taskId, reason, message };
-      }
-      return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) };
-    }
+    const result = await new BeadsTaskAdapter(bound.teamName, "team-lead").link(input, {
+      actingSessionFile: bound.sessionFile,
+      actingMembershipId: lead?.membershipId,
+    });
+    return result;
   }
 
-  async sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: import("./in-memory-team-port").AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: string }): Promise<AlertSendPortResult> {
+  async sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: import("./in-memory-team-port").AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
     const lead = [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.isActive !== false);
@@ -524,37 +501,34 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     return { teamName: binding.teamName, config, sessionFile };
   }
 
-  private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: ModelToolTaskCurrent[]; warnings: ModelToolTaskProjectionWarning[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
-    const taskIds = await tasks.listCandidateTaskIds(teamName);
-    const adapter = new CandidateBeadsTaskAdapter(teamName, "team-lead");
+  private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: TaskCard[]; warnings: TaskCardWarning[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
+    const taskIds = await listTaskIds(teamName);
+    const adapter = new BeadsTaskAdapter(teamName, "team-lead");
     const records = await adapter.readMany(taskIds);
-    const projected: ModelToolTaskCurrent[] = [];
-    const warnings: ModelToolTaskProjectionWarning[] = [];
+    const projected: TaskCard[] = [];
+    const warnings: TaskCardWarning[] = [];
     for (const result of records) {
-      if (result.kind === "contract_gap") {
-        if (result.projectionWarning) warnings.push(result.projectionWarning);
-        else return result;
-        continue;
-      }
+      if (!result) throw new Error("A listed Task disappeared before exact hydration completed.");
+      if (result.kind === "contract_gap") return result;
       projected.push(result.task);
     }
     for (const task of projected) warnings.push(...(task.projection_warnings ?? []));
     return { kind: "tasks", tasks: projected, warnings };
   }
 
-  private readWorkers(bound: BoundTeam, taskProjection: ModelToolTaskCurrent[]): Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }> {
+  private readWorkers(bound: BoundTeam, taskProjection: TaskCard[]): Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }> {
     return (bound.config.logicalWorkers ?? []).map((logical) => {
       const member = latestMember(bound.config, logical.name);
       return {
         name: logical.name,
         scope: logical.scope,
         carrier: workerCarrier(member),
-        nonterminalTaskIds: projectCandidateNonterminalTaskIds(taskProjection, logical.name),
+        nonterminalTaskIds: projectNonterminalTaskIds(taskProjection, logical.name),
       };
     }).sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: ModelToolTaskCurrent[], taskRevisionChanged = false, taskWarnings: ModelToolTaskProjectionWarning[] = []): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
+  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = []): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
     const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection, warnings: taskWarnings } : await this.readModelToolTasks(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
     const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];
@@ -565,17 +539,12 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       workerChanges.push({ worker: logical.name, scope: logical.scope, kind: workerEventChange(event), text: `Worker ${logical.name} ${event.phase.replaceAll("_", " ")}.` });
     }
     const taskChanges = events.length > 0
-      ? projectCandidateTaskChanges(events, taskResult.tasks)
+      ? projectTaskChanges(events, taskResult.tasks)
       : { kind: "projected" as const, changes: taskRevisionChanged ? taskResult.tasks.map((task) => ({
         taskId: task.id,
         changeKinds: ["progress" as const],
         journalEntries: [],
-        current: {
-          status: task.status,
-          ...(task.assignee ? { assignee: task.assignee } : {}),
-          current_context: task.current_context,
-          version: task.version,
-        },
+        current: task,
       })) : [] };
     if (taskChanges.kind === "contract_gap") return taskChanges;
     const result: Extract<TeamSyncPortResult, { kind: "updates" }> = {

@@ -10,9 +10,9 @@ exhaustive parameter reference.
 - The release candidate leader surface is the ten-tool catalog in
   [`src/model-tool-contract/catalog.ts`](../src/model-tool-contract/catalog.ts),
   registered by [`pi-registration.ts`](../src/model-tool-contract/pi-registration.ts).
-  [`CandidateProjectedTool`](../src/model-tool-contract/result-projection.ts)
+  [`ProjectedTool`](../src/model-tool-contract/result-projection.ts)
   and [`tui-projection.ts`](../src/model-tool-contract/tui-projection.ts) own
-  the candidate result and TUI projection boundaries.
+  the model result and TUI projection boundaries.
 - [`extensions/index.ts`](../extensions/index.ts) owns each tool's TypeBox
   parameter schema, agent-facing description, authorization, execution, and
   semantic result content.
@@ -52,9 +52,15 @@ exhaustive parameter reference.
   answers only Rarebit's versioned automatic-Summary inhibition query, using
   the exact current teammate Membership-generation and durable-Session resolver
   in `teams.ts`; it exposes no general policy registry.
-- [`src/utils/tasks.ts`](../src/utils/tasks.ts) and
-  [`src/utils/beads.ts`](../src/utils/beads.ts) own Task reads, mutations,
-  relations, versions, evidence guards, and Beads authority integration.
+- [`src/model-tool-contract/task-domain.ts`](../src/model-tool-contract/task-domain.ts)
+  owns the neutral Task card and bounded card schema. [`task-version-ref.ts`](../src/model-tool-contract/task-version-ref.ts)
+  owns opaque public TaskVersionRef values.
+- [`src/model-tool-contract/beads-task-adapter.ts`](../src/model-tool-contract/beads-task-adapter.ts)
+  and [`beads-authority-adapter.ts`](../src/model-tool-contract/beads-authority-adapter.ts)
+  form the Beads adapter boundary for native records, metadata, revisions, and
+  mutations. [`src/utils/tasks.ts`](../src/utils/tasks.ts) exposes only semantic
+  Task operations; the delivery stopped-epoch migration is
+  [`src/utils/task-delivery-migration.ts`](../src/utils/task-delivery-migration.ts).
 - [`src/utils/team-events.ts`](../src/utils/team-events.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
 - [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)

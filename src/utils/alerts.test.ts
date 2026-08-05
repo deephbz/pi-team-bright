@@ -12,6 +12,7 @@ vi.mock("./team-events", () => ({
 import * as messaging from "./messaging";
 import { appendTeamEvent } from "./team-events";
 import { sendAlert } from "./alerts";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 
 describe("typed Alert acceptance", () => {
   beforeEach(() => {
@@ -45,7 +46,7 @@ describe("typed Alert acceptance", () => {
       to: "worker",
       kind: "attention",
       taskId: "pt-42",
-      taskVersion: "v3",
+      taskVersion: taskVersionRef("v3"),
       text: "Please resolve the open question.",
       expectedSender: {
         membershipId: "membership_lead",
@@ -57,7 +58,7 @@ describe("typed Alert acceptance", () => {
       "dogfood",
       "team-lead",
       "worker",
-      expect.stringMatching(/PiTeams attention Alert[\s\S]*Task: pt-42 @ v3[\s\S]*does not assign/),
+      expect.stringMatching(new RegExp(`PiTeams attention Alert[\\s\\S]*Task: pt-42 @ ${taskVersionRef("v3")}[\\s\\S]*does not assign`)),
       "attention for Task pt-42",
       undefined,
       { membershipId: "membership_lead", sessionFile: "/tmp/lead.jsonl" },
@@ -67,7 +68,7 @@ describe("typed Alert acceptance", () => {
       alertId: expect.stringMatching(/^alert_/),
       from: "team-lead",
       to: "worker",
-      taskRef: { taskId: "pt-42", version: "v3" },
+      taskRef: { taskId: "pt-42", version: taskVersionRef("v3") },
       kind: "attention",
       text: "Please resolve the open question.",
     }));
@@ -76,6 +77,11 @@ describe("typed Alert acceptance", () => {
       accepted: [{ recipient: "worker", messageId: "message_1" }],
       failures: [],
     });
+  });
+
+  it("rejects a raw Task version before delivery", async () => {
+    await expect(sendAlert({ teamName: "dogfood", from: "team-lead", to: "worker", kind: "attention", taskId: "pt-42", taskVersion: "raw-version", text: "Review the Task." })).rejects.toThrowError(expect.objectContaining({ name: "upgrade_required" }));
+    expect(messaging.sendPlainMessage).not.toHaveBeenCalled();
   });
 
   it("combines broadcast into one announcement Alert event while preserving per-recipient receipts", async () => {

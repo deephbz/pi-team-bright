@@ -6,6 +6,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TeamConfig } from "./models";
+import type { TaskCard } from "../../src/model-tool-contract/task-domain";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -19,7 +20,7 @@ import {
   enqueueTaskChange,
   readTaskDeliveries,
 } from "./task-delivery";
-import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
+import { BeadsTaskStore, TASK_METADATA_KEY, TASK_METADATA_SCHEMA, readBeadsAuthorityFingerprint } from "./beads";
 import * as teams from "./teams";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
@@ -291,16 +292,14 @@ describe("clean-cut public contract", () => {
     await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: Date.now() }, worker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", name);
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    const task = {
+    const task: TaskCard = {
       id: "task-1",
       title: "Act on the Task authority",
-      description: "complete payload",
-      acceptanceCriteria: "The authoritative change is applied",
-      status: "in_progress" as const,
-      relations: [],
+      goal: "Apply the authoritative change.",
+      current_context: "The accepted change is ready.",
+      status: "in_progress",
       assignee: "worker",
-      version: "v1",
-      provenance: { authority: "beads" as const, teamName: name },
+      version: taskVersionRef("v1"),
     };
     await enqueueTaskChange(name, task, "assigned", "team-lead");
 
@@ -316,10 +315,10 @@ describe("clean-cut public contract", () => {
       details: {
         teamName: name,
         recipient: "worker",
-        changes: [{ ref: { nativeId: task.id, version: task.version } }],
+        changes: [{ ref: { taskId: task.id, version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } }],
       },
     });
-    expect(taskCall?.[0].content).toContain("complete payload");
+    expect(taskCall?.[0].content).toContain("Apply the authoritative change.");
     expect(taskCall?.[1]).toEqual({ triggerTurn: true, deliverAs: "steer" });
     expect(await messaging.readInbox(name, "worker", false, false)).toEqual([]);
     expect(harness.sendUserMessage).not.toHaveBeenCalled();
@@ -435,18 +434,18 @@ describe("Beads-only authority and migration boundary", () => {
     const record = await enqueueTaskChange(name, {
       id: "task-opaque",
       title: "opaque authority",
-      description: "workspace path is adapter config",
-      acceptanceCriteria: "The authority reference stays opaque",
+      goal: "Keep the authority reference opaque.",
+      current_context: "The delivery is ready.",
       status: "in_progress",
       assignee: "worker",
-      relations: [],
-      version: "v1",
-      provenance: { authority: "beads", teamName: name },
-    }, "assigned", "team-lead");
+      version: taskVersionRef("v1"),
+    } satisfies TaskCard, "assigned", "team-lead");
 
-    expect(record?.ref.authorityId).toBe(created.taskAuthorityId);
-    expect(record?.ref.authorityId).not.toContain(workspace);
-    expect(record?.ref.authorityId).not.toContain(alias);
+    expect(record?.ref).toEqual({
+      kind: "task",
+      taskId: "task-opaque",
+      version: expect.stringMatching(/^v_[0-9a-f]{16}$/),
+    });
   });
 
   it("rejects an old public-release Team with one actionable migration command", async () => {
@@ -498,16 +497,14 @@ describe("durability and recovery", () => {
     const name = uniqueTeam("atomic-task-spool");
     const sessionFile = `/tmp/${name}.jsonl`;
     writeTeam(name, { workerSession: sessionFile });
-    const base = {
+    const base: TaskCard = {
       id: "task-1",
       title: "first",
-      description: "first snapshot",
-      acceptanceCriteria: "The snapshot is delivered atomically",
-      status: "in_progress" as const,
-      relations: [],
+      goal: "Deliver the snapshot atomically.",
+      current_context: "The first snapshot is ready.",
+      status: "in_progress",
       assignee: "worker",
-      version: "v1",
-      provenance: { authority: "beads" as const, teamName: name },
+      version: taskVersionRef("v1"),
     };
     await enqueueTaskChange(name, base, "assigned", "team-lead");
     const file = paths.taskDeliveryPath(name, "worker");
@@ -518,7 +515,7 @@ describe("durability and recovery", () => {
       return originalRename(source, target);
     });
 
-    await expect(enqueueTaskChange(name, { ...base, description: "second", version: "v2" }, "status_changed", "team-lead"))
+    await expect(enqueueTaskChange(name, { ...base, goal: "Deliver the second snapshot.", version: taskVersionRef("v2") }, "status_changed", "team-lead"))
       .rejects.toThrow("simulated rename failure");
     expect(fs.readFileSync(file, "utf8")).toBe(before);
     expect(JSON.parse(before)).toHaveLength(1);
@@ -540,7 +537,17 @@ describe("durability and recovery", () => {
       actor: "team-lead",
       requireExpectedVersion: false,
     });
-    const created = await store.create({ title: "committed", description: "survives fault" });
+    const created = await store.create({
+      title: "committed",
+      description: "survives fault",
+      internalMetadata: {
+        [TASK_METADATA_KEY]: {
+          schema: TASK_METADATA_SCHEMA,
+          goal: "Reconcile the committed assigned Task.",
+          current_context: "The Task is ready for recovery.",
+        },
+      },
+    });
     const assigned = await store.update(created.id, { assignee: "worker", status: "in_progress" });
     expect(await readTaskDeliveries(name, "worker")).toEqual([]);
 
@@ -551,9 +558,9 @@ describe("durability and recovery", () => {
     const rebuilt = await readTaskDeliveries(name, "worker");
     expect(rebuilt).toEqual([
       expect.objectContaining({
-        ref: expect.objectContaining({ nativeId: assigned.id, version: assigned.version }),
+        ref: expect.objectContaining({ kind: "task", taskId: assigned.id, version: taskVersionRef(assigned.version) }),
         recipientSessionFile: sessionFile,
-        taskSnapshot: expect.objectContaining({ description: "survives fault" }),
+        taskProjection: expect.objectContaining({ id: assigned.id, status: "in_progress", goal: "Reconcile the committed assigned Task." }),
       }),
     ]);
     expect(harness.sendMessage.mock.calls.some(
@@ -569,14 +576,12 @@ describe("durability and recovery", () => {
     const record = await enqueueTaskChange(name, {
       id: "task-once",
       title: "retry across crash",
-      description: "same logical delivery may be attempted again",
-      acceptanceCriteria: "The delivery survives a retry",
+      goal: "Survive a delivery retry.",
+      current_context: "The retry boundary is active.",
       status: "in_progress",
       assignee: "worker",
-      relations: [],
-      version: "v1",
-      provenance: { authority: "beads", teamName: name },
-    }, "assigned", "team-lead");
+      version: taskVersionRef("v1"),
+    } satisfies TaskCard, "assigned", "team-lead");
     expect(record).not.toBeNull();
 
     const firstSend = vi.fn();
@@ -646,7 +651,7 @@ describe("durability and recovery", () => {
         status: "closed",
         current_context: "Acceptance criteria verified; closing the Task.",
         journal_entries: [{ kind: "result", text: "Acceptance criteria verified; closing the Task." }],
-        expected_version: taskVersionRef(created.version),
+        expected_version: created.version,
       }],
     }, undefined, undefined, {
       sessionManager: { getSessionFile: () => "lead-session" },

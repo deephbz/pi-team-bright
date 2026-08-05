@@ -5,6 +5,7 @@ import { BeadsTaskStore, type BdRunner } from "./beads";
 import type { Member, TeamConfig } from "./models";
 import * as paths from "./paths";
 import { enqueueTaskChangeForRecipient, readTaskDeliveries } from "./task-delivery";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import * as teams from "./teams";
 
 const createdTeams: string[] = [];
@@ -142,17 +143,26 @@ describe("Round 3 canonical Task revision and delivery dedupe", () => {
 
     const team = `version-r3-${process.pid}-${Date.now()}`;
     configureDeliveryTeam(team, `/tmp/${team}-worker.jsonl`);
+    const card = (task: typeof firstA) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      assignee: task.assignee,
+      goal: task.description,
+      current_context: "The revision is ready for delivery.",
+      version: taskVersionRef(task.version),
+    });
     const deliveries = [
-      await enqueueTaskChangeForRecipient(team, firstA, "worker", "task_changed"),
-      await enqueueTaskChangeForRecipient(team, middleB, "worker", "task_changed"),
-      await enqueueTaskChangeForRecipient(team, secondA, "worker", "task_changed"),
+      await enqueueTaskChangeForRecipient(team, card(firstA), "worker", "task_changed"),
+      await enqueueTaskChangeForRecipient(team, card(middleB), "worker", "task_changed"),
+      await enqueueTaskChangeForRecipient(team, card(secondA), "worker", "task_changed"),
     ];
     expect(deliveries.every(Boolean)).toBe(true);
     expect(new Set(deliveries.map((delivery) => delivery!.deliveryId))).toHaveLength(3);
     expect((await readTaskDeliveries(team, "worker")).map((delivery) => delivery.ref.version)).toEqual([
-      firstA.version,
-      middleB.version,
-      secondA.version,
+      taskVersionRef(firstA.version),
+      taskVersionRef(middleB.version),
+      taskVersionRef(secondA.version),
     ]);
   });
 });

@@ -2,15 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BeadsTaskStore } from "./beads";
-import type { TaskFile } from "./models";
+import type { TaskAuthorityRecord } from "./beads";
 import { teamDir } from "./paths";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
-import { applySemanticTaskUpdate, mutateTaskLink } from "./tasks";
+import { applySemanticTaskUpdate, mutateTaskLink } from "../model-tool-contract/beads-authority-adapter";
 
 const createdTeams: string[] = [];
 
-function task(teamName: string, overrides: Partial<TaskFile> = {}): TaskFile {
+function task(teamName: string, overrides: Partial<TaskAuthorityRecord> = {}): TaskAuthorityRecord {
   return {
     id: "task-1",
     title: "Verify publication",

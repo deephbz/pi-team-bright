@@ -3,9 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BeadsTaskStore } from "./beads";
-import type { Member, TaskFile } from "./models";
+import type { Member } from "./models";
+import type { TaskAuthorityRecord } from "./beads";
 import * as paths from "./paths";
-import { applySemanticTaskUpdate } from "./tasks";
+import { applySemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import * as teams from "./teams";
 
 type Deferred = {
@@ -82,7 +83,7 @@ async function fixture(suffix: string): Promise<Fixture> {
   return { teamName, lead: config.members[0], alpha, beta };
 }
 
-function task(id: string, version = "v1"): TaskFile {
+function task(id: string, version = "v1"): TaskAuthorityRecord {
   return {
     id,
     title: id,

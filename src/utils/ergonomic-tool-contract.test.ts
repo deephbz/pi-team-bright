@@ -927,7 +927,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(guarded.details).toMatchObject({ kind: "refused", worker: "worker", reason: "nonterminal_tasks_assigned", guarding_task_ids: [taskCard.id], state_changed: false });
 
     const closed = await tools.get("task_update")!.execute("close", {
-      updates: [{ task_id: taskCard.id, operation_id: "close", status: "closed", current_context: "Restarted the store and verified the committed terminal state.", journal_entries: [{ kind: "result", text: "Restarted the store and verified the committed terminal state." }], expected_version: taskVersionRef(taskCard.version) }],
+      updates: [{ task_id: taskCard.id, operation_id: "close", status: "closed", current_context: "Restarted the store and verified the committed terminal state.", journal_entries: [{ kind: "result", text: "Restarted the store and verified the committed terminal state." }], expected_version: taskCard.version }],
     }, undefined, undefined, leadContext);
     expect(closed.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { status: "closed", assignee: "worker" } }] });
 

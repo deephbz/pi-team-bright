@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import type { TaskFile } from "./models";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TaskCard } from "../model-tool-contract/task-domain";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import {
@@ -41,22 +42,20 @@ async function fixture(suffix: string) {
       subscriptions: [],
     });
   }
-  const before: TaskFile = {
+  const before: TaskCard = {
     id: "bd-task",
     title: "Long work",
-    description: "Exercise crash recovery",
-    acceptanceCriteria: "Crash recovery preserves ownership",
+    goal: "Preserve ownership during crash recovery.",
+    current_context: "Ownership transition is in progress.",
     status: "in_progress",
     assignee: "old-assignee",
-    relations: [],
-    version: "beads_v1",
-    provenance: { authority: "beads", teamName },
+    version: taskVersionRef("beads_v1"),
   };
   return { teamName, before };
 }
 
-function after(before: TaskFile, assignee: string, version: string): TaskFile {
-  return { ...structuredClone(before), assignee, version };
+function after(before: TaskCard, assignee: string, version: string): TaskCard {
+  return { ...structuredClone(before), assignee, version: taskVersionRef(version) };
 }
 
 afterEach(() => {
@@ -84,8 +83,8 @@ describe("assignee-transition authority-linked outbox", () => {
       readEvidence: async () => ({ task: committed, operationId }),
     });
     expect(await readOwnerTransitionIntents(teamName)).toMatchObject([{ operationId, state: "committed" }]);
-    expect(await readTaskDeliveries(teamName, "old-assignee")).toMatchObject([{ changeKind: "ownership_lost", taskSnapshot: committed }]);
-    expect(await readTaskDeliveries(teamName, "new-assignee")).toMatchObject([{ changeKind: "assigned", taskSnapshot: committed }]);
+    expect(await readTaskDeliveries(teamName, "old-assignee")).toMatchObject([{ changeKind: "ownership_lost", taskProjection: { id: committed.id, assignee: "new-assignee", status: committed.status } }]);
+    expect(await readTaskDeliveries(teamName, "new-assignee")).toMatchObject([{ changeKind: "assigned", taskProjection: { id: committed.id, assignee: "new-assignee", status: committed.status } }]);
   });
 
   it("recovers both exact recipients after commit-before-enqueue", async () => {
@@ -165,8 +164,8 @@ describe("assignee-transition authority-linked outbox", () => {
       readEvidence: async () => ({ task: secondCommitted, operationId: secondOperation }),
     });
     expect(await readTaskDeliveries(teamName, "new-assignee")).toMatchObject([
-      { changeKind: "assigned", taskSnapshot: { version: "beads_v2" } },
-      { changeKind: "ownership_lost", taskSnapshot: { version: "beads_v3" } },
+      { changeKind: "assigned", taskProjection: { id: firstCommitted.id, assignee: "new-assignee" } },
+      { changeKind: "ownership_lost", taskProjection: { id: secondCommitted.id, assignee: "third-assignee" } },
     ]);
     expect(await readTaskDeliveries(teamName, "third-assignee")).toMatchObject([{ changeKind: "assigned" }]);
     expect(await readOwnerTransitionIntents(teamName)).toEqual(expect.arrayContaining([
@@ -199,7 +198,8 @@ describe("assignee-transition authority-linked outbox", () => {
     expect(await readOwnerTransitionIntents(teamName)).toMatchObject([{
       operationId: firstOperation,
       state: "committed",
-      committedTaskSnapshot: { assignee: "new-assignee", version: "beads_v2" },
+      committedTaskProjection: { id: committed.id, assignee: "new-assignee" },
+      committedTaskVersion: taskVersionRef("beads_v2"),
     }]);
     expect(await readTaskDeliveries(teamName, "old-assignee")).toMatchObject([{ changeKind: "ownership_lost" }]);
     expect(await readTaskDeliveries(teamName, "new-assignee")).toMatchObject([{ changeKind: "assigned" }]);

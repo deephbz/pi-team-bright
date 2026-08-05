@@ -1,0 +1,76 @@
+{
+  "schema": "pi-team-bright-native-beads-multi-id-probe/1",
+  "recorded_at": "2026-08-05",
+  "purpose": "Isolated native Beads semantics and small Team-sync command-count probe for call-minimization work.",
+  "environment": {
+    "pi_team_bright_source_head": "27a532d1c9c9696afe3790c081028aae8af77d76",
+    "pi_team_bright_package_version": "0.17.0-rc.5",
+    "source_tree_note": "The Team-sync run loaded the current source extension from a shared working tree with concurrent uncommitted changes. The trace is command-count evidence, not a release benchmark.",
+    "beads_package_version": "1.1.0",
+    "beads_build": "8e4e59d39f34",
+    "node": "v25.6.0",
+    "platform": "Darwin arm64",
+    "storage": "isolated embedded Dolt authority",
+    "live_team_access": false
+  },
+  "native_fixture": {
+    "writes": [
+      "bd --sandbox init --non-interactive --skip-hooks --skip-agents --prefix probe",
+      "bd --sandbox create --id probe-open --metadata '{\"team\":\"alpha\",\"rank\":7,\"nested\":{\"flag\":true}}'",
+      "bd --sandbox create --id probe-related",
+      "bd --sandbox create --id probe-closed --metadata '{\"team\":\"archive\",\"rank\":9}'",
+      "bd --sandbox create --id probe-plain",
+      "bd --sandbox dep add probe-related probe-open --type blocks",
+      "bd --sandbox close probe-closed --reason 'probe fixture'"
+    ],
+    "all_query_commands_used_readonly": true,
+    "semantic_results": {
+      "show_existing_multi_id": "exit 0; preserves positional input order",
+      "show_mixed_existing_missing": "exit 0; returns found records in input order and writes the missing ID to stderr",
+      "show_only_missing": "exit 1; stdout is a JSON error object, not an array",
+      "show_duplicate_id": "exit 0; preserves duplicate records",
+      "show_closed": "exit 0; includes closed records without an --all flag",
+      "show_relation": "dependencies contain full target records and dependency_type; reverse details require --include-dependents",
+      "show_metadata": "nested and numeric metadata values retain JSON types; absent metadata is omitted",
+      "list_existing_multi_id": "exit 0; returns priority order, not positional input order",
+      "list_mixed_existing_missing": "exit 0; silently omits missing IDs",
+      "list_only_missing": "exit 0; returns []",
+      "list_duplicate_id": "exit 0; returns one record for each unique ID",
+      "list_closed_default": "exit 0; omits closed records unless --all is supplied",
+      "list_relation": "returns compact dependency edges, not full target records",
+      "list_metadata_filters": "--has-metadata-key team and --metadata-field team=alpha both exit 0"
+    },
+    "warm_timing_ms": {
+      "method": "one unreported warm-up, then seven round-robin trials; stdout and stderr discarded",
+      "show_one": { "median": 343, "min": 339, "max": 519, "native_cli_calls": 1 },
+      "show_three_ids": { "median": 792, "min": 762, "max": 1280, "native_cli_calls": 1 },
+      "list_three_ids_all": { "median": 301, "min": 290, "max": 415, "native_cli_calls": 1 },
+      "show_three_separate": { "median": 1044, "min": 1034, "max": 1537, "native_cli_calls": 3 }
+    }
+  },
+  "team_sync_fixture": {
+    "setup": "A fresh Herdr Pi agent loaded the explicit rc.5 source extension in an isolated authority. It initialized that authority, created one Team and three unassigned fixture Tasks, then requested two snapshot views. No Worker was created.",
+    "trace_records": [
+      { "operation": "candidate_task_list", "duration_ms": 394, "bd_call_count": 1, "bd_total_ms": 392, "commands": [{ "command": "list", "duration_ms": 392 }] },
+      { "operation": "candidate_task_read_many", "duration_ms": 905, "bd_call_count": 1, "bd_total_ms": 904, "commands": [{ "command": "show", "duration_ms": 904 }] },
+      { "operation": "candidate_task_list", "duration_ms": 329, "bd_call_count": 1, "bd_total_ms": 329, "commands": [{ "command": "list", "duration_ms": 329 }] },
+      { "operation": "candidate_task_read_many", "duration_ms": 884, "bd_call_count": 1, "bd_total_ms": 883, "commands": [{ "command": "show", "duration_ms": 883 }] }
+    ],
+    "snapshot_command_chain": {
+      "fixture_task_count": 3,
+      "per_snapshot_native_cli_calls": 2,
+      "commands": ["Team-scoped list", "one multi-ID show"],
+      "first_nested_trace_ms": 1299,
+      "second_nested_trace_ms": 1213,
+      "outer_agent_wall_ms": [5538.87, 8782.15],
+      "outer_wall_limit": "The manually bracketed values include Pi model/tool response overhead. The trace has no parent operation correlation, so do not treat them as a benchmark of Team-sync latency."
+    }
+  },
+  "conclusions": [
+    "Native multi-ID show minimizes process invocations but is not set semantics: it preserves order and duplicates, accepts closed Tasks, and has a different missing-ID contract from list.",
+    "list is faster in this three-Task fixture but changes order, duplicate, missing, closed, and relation semantics. It cannot replace detailed hydration.",
+    "The three-Task Team-sync path used exactly one list and one multi-ID show per snapshot. No per-Task show appears in its payload-free trace.",
+    "Use the native trace durations only as a small local diagnostic. A representative latency claim needs the planned parent-correlated outer trace and controlled workload.",
+    "The isolated authority and both temporary Herdr workspaces were removed after evidence collection."
+  ]
+}

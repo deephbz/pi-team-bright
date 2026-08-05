@@ -1,9 +1,9 @@
 import { Text } from "@earendil-works/pi-tui";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { projectCandidateToolResult, type CandidateProjectedTool } from "./result-projection";
+import { projectToolResult, type ProjectedTool } from "./result-projection";
 
-export interface CandidateTuiInput {
-  tool: CandidateProjectedTool;
+export interface TuiInput {
+  tool: ProjectedTool;
   content?: unknown;
   details: unknown;
   expanded: boolean;
@@ -36,7 +36,7 @@ function recoveryLine(value: any): string | undefined {
   return undefined;
 }
 
-function toolLines(tool: CandidateProjectedTool, raw: any, model: any, expanded: boolean): string[] {
+function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean): string[] {
   const lines: string[] = [];
   if (tool === "team_create") {
     if (model.kind === "team_created") lines.push(`Team ${quoted(model.team.name)} is active.`);
@@ -133,7 +133,7 @@ function toolLines(tool: CandidateProjectedTool, raw: any, model: any, expanded:
   return lines;
 }
 
-function rawErrorLines(input: CandidateTuiInput, issue: "execution_error" | "result_projection_error"): string[] {
+function rawErrorLines(input: TuiInput, issue: "execution_error" | "result_projection_error"): string[] {
   const report = {
     tool: input.tool,
     issue,
@@ -148,10 +148,10 @@ function rawErrorLines(input: CandidateTuiInput, issue: "execution_error" | "res
   ];
 }
 
-export function projectCandidateTui(input: CandidateTuiInput): string[] {
+export function projectTui(input: TuiInput): string[] {
   if (input.isError) return rawErrorLines(input, "execution_error");
   try {
-    const model = projectCandidateToolResult(input.tool, input.details) as any;
+    const model = projectToolResult(input.tool, input.details) as any;
     const kind = model.kind;
     const mixedTaskBatch = (input.tool === "task_create" || input.tool === "task_update")
       && kind.endsWith("_batch")
@@ -167,11 +167,11 @@ export function projectCandidateTui(input: CandidateTuiInput): string[] {
   }
 }
 
-export type CandidateRenderResult = NonNullable<ToolDefinition["renderResult"]>;
+export type RenderResult = NonNullable<ToolDefinition["renderResult"]>;
 
-export function createCandidateToolResultRenderer(tool: CandidateProjectedTool): CandidateRenderResult {
+export function createToolResultRenderer(tool: ProjectedTool): RenderResult {
   return (result, options, _theme, context) => {
-    const lines = projectCandidateTui({ tool, content: result.content, details: result.details, expanded: options.expanded, isError: (context as any)?.isError === true });
+    const lines = projectTui({ tool, content: result.content, details: result.details, expanded: options.expanded, isError: (context as any)?.isError === true });
     return new Text(lines.join("\n"), 0, 0);
   };
 }

@@ -6,7 +6,7 @@ import type { TerminalAdapter } from "./terminal-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as tasks from "./tasks";
-import { projectCandidateTui } from "../../src/model-tool-contract/tui-projection";
+import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { createWorkerLaunchBridge } from "./worker-launch-bridge";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
@@ -420,12 +420,10 @@ describe("compensated Worker launch", () => {
     vi.mocked(tasks.listTasksWithVersions).mockResolvedValue([{
       id: "task-open",
       title: "Retained unfinished work",
-      description: "Keep this Task across partial shutdown.",
-      acceptanceCriteria: "The retry preserves the Task authority.",
+      goal: "Keep this Task across partial shutdown.",
+      current_context: "Work has not started.",
       status: "open",
-      relations: [],
-      version: "task-version-1",
-      provenance: { authority: "beads", teamName: f.name },
+      version: "v_0123456789abcdef",
     }]);
 
     const result = await tools.get("team_shutdown")!.execute(
@@ -447,7 +445,7 @@ describe("compensated Worker launch", () => {
       state_changed: true,
     });
 
-    const human = projectCandidateTui({
+    const human = projectTui({
       tool: "team_shutdown",
       details: result.details,
       expanded: false,

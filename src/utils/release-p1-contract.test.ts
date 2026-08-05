@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { BeadsTaskStore } from "./beads";
 import * as messaging from "./messaging";
-import type { Member, TaskFile } from "./models";
+import type { Member } from "./models";
+import type { TaskAuthorityRecord } from "./beads";
+import type { TaskCard } from "../model-tool-contract/task-domain";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import {
@@ -13,9 +16,10 @@ import {
   readTaskDeliveries,
   TaskChangeDelivery,
 } from "./task-delivery";
-import { migrateTeamTasks, type LegacyTaskFile } from "./task-migration";
-import { applySemanticTaskUpdate } from "./tasks";
-import * as taskAuthority from "./tasks";
+import { migrateTeamTasks, type LegacyTaskAuthorityRecord } from "./task-migration";
+import { applySemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
+import * as taskAuthority from "../model-tool-contract/beads-authority-adapter";
+import * as tasks from "./tasks";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
@@ -96,7 +100,7 @@ function registerSessionExtension(): Map<string, (...args: any[]) => any> {
 async function createBeadsTeam(name: string, leadSession: string) {
   const suffix = `lifecycle-${testWorkspaces.length}`;
   const taskWorkspace = workspace(suffix);
-  vi.spyOn(taskAuthority, "listTasksWithVersions").mockResolvedValue([]);
+  vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
   return teams.createTeam(
     name,
     leadSession,
@@ -137,7 +141,7 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
   }
 }
 
-function task(id: string, owner?: string): LegacyTaskFile {
+function task(id: string, owner?: string): LegacyTaskAuthorityRecord {
   return {
     id,
     subject: id,
@@ -150,7 +154,7 @@ function task(id: string, owner?: string): LegacyTaskFile {
   };
 }
 
-function currentTask(id: string, assignee?: string): TaskFile {
+function currentTask(id: string, assignee?: string): TaskAuthorityRecord {
   return {
     id,
     title: id,
@@ -187,7 +191,7 @@ class MigrationFixture {
     return structuredClone(created);
   }
 
-  async update(id: string, updates: Partial<TaskFile>): Promise<any> {
+  async update(id: string, updates: Partial<TaskAuthorityRecord>): Promise<any> {
     const current = this.tasks.get(id)!;
     const accepted = updates;
     Object.assign(current, accepted, { version: `v${++this.next}` });
@@ -541,7 +545,15 @@ describe("release P1 public contracts", () => {
     });
     const oldMember = member("worker", oldSession);
     await teams.addMember(name, oldMember);
-    const record = await enqueueTaskChangeForRecipient(name, currentTask("task-1", "worker"), "worker", "assigned");
+    const record = await enqueueTaskChangeForRecipient(name, {
+      id: "task-1",
+      title: "task-1",
+      goal: "Verify the release contract.",
+      current_context: "The release verification is ready.",
+      status: "in_progress",
+      assignee: "worker",
+      version: taskVersionRef("v1"),
+    } satisfies TaskCard, "worker", "assigned");
     expect(record?.recipientMembershipId).toBe(oldMember.membershipId);
 
     await teams.deactivateMember(name, "worker", "replaced");

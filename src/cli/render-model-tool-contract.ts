@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { candidateModelToolCatalog } from "../model-tool-contract/catalog";
+import { modelToolCatalog } from "../model-tool-contract/catalog";
 import {
   renderModelToolContractReview,
   type ContractReviewGovernance,
@@ -10,7 +10,7 @@ import {
 } from "../model-tool-contract/render-review-html";
 
 const root = process.cwd();
-const designRelative = candidateModelToolCatalog.sourceDocument;
+const designRelative = modelToolCatalog.sourceDocument;
 const catalogRelative = "src/model-tool-contract/catalog.ts";
 const outputRelative = "docs/generated/model-tool-contract-review.html";
 
@@ -65,7 +65,7 @@ const provenance: ContractReviewProvenance = {
   catalogSha256: sha256(catalogSource),
   designSha256: sha256(design),
 };
-const html = renderModelToolContractReview(candidateModelToolCatalog, governance, provenance);
+const html = renderModelToolContractReview(modelToolCatalog, governance, provenance);
 const output = path.join(root, outputRelative);
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, html, "utf8");

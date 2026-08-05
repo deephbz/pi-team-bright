@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { TaskFile, TeamConfig } from "./models";
+import type { TeamConfig } from "./models";
 import { withLock } from "./lock";
 import {
   taskDeliveryPath,
@@ -12,7 +12,9 @@ import {
 } from "./paths";
 import { readConfig, withCurrentSessionBinding } from "./teams";
 import { writeJsonAtomic } from "./atomic-json";
-import { BeadsTaskStore } from "./beads";
+import { Check } from "typebox/value";
+import { TaskCardSchema, type TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
 
 export const TASK_CHANGE_CUSTOM_TYPE = "pi-teams.task-change";
 export const TASK_CHANGE_RESUME_TYPE = "pi-teams.task-change-resume";
@@ -30,10 +32,14 @@ export type TaskChangeKind =
 
 export interface TaskChangeRef {
   kind: "task";
-  authorityId: string;
-  nativeId: string;
-  version: string;
+  /** Canonical Task identity and opaque public revision. */
+  taskId: string;
+  version: TaskVersionRef;
 }
+
+export type TaskChangeTaskProjection = TaskCard;
+/** Coordinates used only while preparing an ownership transition. */
+type TaskCoordinates = Pick<TaskCard, "id" | "title" | "status" | "assignee" | "version">;
 
 export interface TaskDeliveryRecord {
   deliveryId: string;
@@ -46,8 +52,8 @@ export interface TaskDeliveryRecord {
   /** Current adapter binding. Generic identity remains the Session trace. */
   recipientSessionFile: string;
   targetAgentRef: { kind: "session-trace"; nativeId: string };
-  /** Immutable payload at this Task version; never the Task authority. */
-  taskSnapshot: TaskFile;
+  /** Canonical task_read card captured at publication. */
+  taskProjection: TaskChangeTaskProjection;
   queuedAt: string;
   attemptedAt?: string;
   attemptCount: number;
@@ -67,12 +73,13 @@ export interface TaskDeliveryTombstone {
 export interface TaskDeliveryRecoveryRecord {
   teamName: string;
   taskId: string;
-  taskVersion: string;
+  taskVersion: TaskVersionRef;
   recipients: string[];
   changeKind: TaskChangeKind;
   recordedAt: string;
   reason: "enqueue-failed";
-  taskSnapshot: TaskFile;
+  /** Canonical task_read card captured before the enqueue attempt. */
+  taskProjection: TaskChangeTaskProjection;
   resolvedRecipients?: string[];
 }
 
@@ -87,21 +94,24 @@ export interface OwnerTransitionIntent {
   operationId: string;
   teamName: string;
   taskId: string;
-  beforeVersion: string;
+  beforeVersion: TaskVersionRef;
   beforeOwner?: string;
   afterOwner?: string;
   targets: OwnerTransitionTarget[];
   createdAt: string;
   state: "prepared" | "committed" | "abandoned";
-  committedTaskSnapshot?: TaskFile;
+  /** Canonical task_read card captured with the committed Task. */
+  committedTaskProjection?: TaskChangeTaskProjection;
+  /** Raw authority revision needed to reconstruct the internal delivery ref. */
+  committedTaskVersion?: TaskVersionRef;
   resolvedTargetKeys?: string[];
 }
 
 export interface OwnerTransitionOutboxDependencies {
-  readEvidence?: (taskId: string) => Promise<{ task: TaskFile; operationId?: string }>;
+  readEvidence?: (taskId: string) => Promise<{ task: TaskCard; operationId?: string }>;
   enqueueExact?: (
     config: TeamConfig,
-    task: TaskFile,
+    task: TaskCard,
     target: OwnerTransitionTarget,
   ) => Promise<TaskDeliveryRecord | null>;
 }
@@ -151,25 +161,15 @@ function sessionRef(sessionFile: string) {
   };
 }
 
-function authorityId(config: TeamConfig): string {
-  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
-    throw new Error(`Team ${config.name} has no configured Beads Task authority; Task delivery refuses legacy fallback.`);
+/** Validate the exact canonical card supplied by the Task adapter. */
+export function projectTaskForAgent(task: TaskCard): TaskChangeTaskProjection {
+  if (!Check(TaskCardSchema, task)) {
+    const error = new Error("Task delivery requires the canonical TaskCard supplied by the adapter.");
+    error.name = "upgrade_required";
+    throw error;
   }
-  return config.taskAuthorityId;
-}
-
-function taskStore(config: TeamConfig, requireExpectedVersion: boolean): BeadsTaskStore {
-  authorityId(config);
-  return new BeadsTaskStore({
-    teamName: config.name,
-    workspace: config.taskWorkspace!,
-    authorityFingerprint: config.taskAuthorityFingerprint!,
-    requireExpectedVersion,
-  });
-}
-
-function effectiveVersion(task: TaskFile): string {
-  return task.version || `snapshot_${digest(task).slice(0, 24)}`;
+  assertTaskVersionRef(task.version);
+  return structuredClone(task);
 }
 
 function recipientBinding(config: TeamConfig, recipient: string): { membershipId: string; sessionFile: string } | null {
@@ -187,31 +187,17 @@ export function taskPollMs(env: NodeJS.ProcessEnv = process.env): number {
  * Persist Task-adapter delivery evidence after a successful Task mutation.
  * The Task backend remains the only authority for Task business state.
  */
-export async function enqueueTaskChange(
-  teamName: string,
-  task: TaskFile,
-  changeKind: TaskChangeKind,
-  actor?: string,
-): Promise<TaskDeliveryRecord | null> {
+export async function enqueueTaskChange(teamName: string, task: TaskCard, changeKind: TaskChangeKind, actor?: string): Promise<TaskDeliveryRecord | null> {
   if (!task.assignee) return null;
   return enqueueTaskChangeForRecipient(teamName, task, task.assignee, changeKind);
 }
 
-export async function enqueueTaskChangeForRecipient(
-  teamName: string,
-  task: TaskFile,
-  recipient: string,
-  changeKind: TaskChangeKind,
-): Promise<TaskDeliveryRecord | null> {
+export async function enqueueTaskChangeForRecipient(teamName: string, task: TaskCard, recipient: string, changeKind: TaskChangeKind): Promise<TaskDeliveryRecord | null> {
   const config = await readConfig(teamName);
   return enqueueTaskChangeWithConfig(config, task, recipient, changeKind);
 }
 
-export async function enqueueTaskChangeForExactRecipient(
-  config: TeamConfig,
-  task: TaskFile,
-  target: OwnerTransitionTarget,
-): Promise<TaskDeliveryRecord | null> {
+export async function enqueueTaskChangeForExactRecipient(config: TeamConfig, task: TaskCard, target: OwnerTransitionTarget): Promise<TaskDeliveryRecord | null> {
   return enqueueTaskChangeWithConfig(
     config,
     task,
@@ -223,11 +209,25 @@ export async function enqueueTaskChangeForExactRecipient(
 
 async function enqueueTaskChangeWithConfig(
   config: TeamConfig,
-  task: TaskFile,
+  task: TaskCard,
   recipient: string,
   changeKind: TaskChangeKind,
   exactBinding?: { membershipId: string; sessionFile: string },
 ): Promise<TaskDeliveryRecord | null> {
+  const card = projectTaskForAgent(task);
+  return enqueueTaskProjectionWithConfig(config, card, recipient, changeKind, exactBinding);
+}
+
+async function enqueueTaskProjectionWithConfig(
+  config: TeamConfig,
+  taskProjection: TaskChangeTaskProjection,
+  recipient: string,
+  changeKind: TaskChangeKind,
+  exactBinding?: { membershipId: string; sessionFile: string },
+): Promise<TaskDeliveryRecord | null> {
+  const card = projectTaskForAgent(taskProjection);
+  const taskId = card.id;
+  const version = assertTaskVersionRef(card.version);
   const teamName = config.name;
   const binding = recipientBinding(config, recipient);
   if (!binding) return null;
@@ -239,9 +239,8 @@ async function enqueueTaskChangeWithConfig(
   const recipientMembershipId = binding.membershipId;
   const ref: TaskChangeRef = {
     kind: "task",
-    authorityId: authorityId(config),
-    nativeId: task.id,
-    version: effectiveVersion(task),
+    taskId,
+    version,
   };
   const targetAgentRef = sessionRef(recipientSessionFile);
   const deliveryId = `task_delivery_${digest({ ref, recipient, recipientMembershipId, targetAgentRef }).slice(0, 32)}`;
@@ -254,7 +253,7 @@ async function enqueueTaskChangeWithConfig(
     recipientMembershipId,
     recipientSessionFile,
     targetAgentRef,
-    taskSnapshot: structuredClone(task),
+    taskProjection: structuredClone(taskProjection),
     queuedAt: new Date().toISOString(),
     attemptCount: 0,
   };
@@ -265,14 +264,19 @@ async function enqueueTaskChangeWithConfig(
     const tombstones = readTombstonesUnsafe(taskDeliveryTombstonePath(teamName, recipient));
     if (tombstones.some((item) => item.deliveryId === deliveryId)) return null;
     const existing = records.find((item) => item.deliveryId === deliveryId || (
-      item.ref.authorityId === ref.authorityId
-      && item.ref.nativeId === ref.nativeId
+      item.ref.taskId === ref.taskId
       && item.ref.version === ref.version
       && item.recipient === recipient
       && item.recipientMembershipId === recipientMembershipId
       && item.recipientSessionFile === recipientSessionFile
     ));
-    if (existing) return existing;
+    if (existing) {
+      if (!existing.taskProjection) {
+        existing.taskProjection = record.taskProjection;
+        writeJsonAtomic(file, compactRecords(records));
+      }
+      return existing;
+    }
     records.push(record);
     writeJsonAtomic(file, compactRecords(records));
     return record;
@@ -286,7 +290,13 @@ function ownerTargetKey(target: OwnerTransitionTarget): string {
 function readOwnerTransitionIntentsUnsafe(file: string): OwnerTransitionIntent[] {
   if (!fs.existsSync(file)) return [];
   const value = JSON.parse(fs.readFileSync(file, "utf8"));
-  return Array.isArray(value) ? value : [];
+  if (!Array.isArray(value)) return [];
+  if (value.some((record) =>
+    (record?.state === "committed" && (!record.committedTaskProjection || !Check(TaskCardSchema, record.committedTaskProjection)
+      || (record.committedTaskVersion !== undefined && record.committedTaskProjection.version !== record.committedTaskVersion)))
+    || !isTaskVersionRef(record?.beforeVersion)
+    || (record?.committedTaskVersion !== undefined && !isTaskVersionRef(record.committedTaskVersion)))) throw upgradeRequired(file);
+  return value as OwnerTransitionIntent[];
 }
 
 function compactOwnerTransitionIntents(records: OwnerTransitionIntent[]): OwnerTransitionIntent[] {
@@ -328,7 +338,7 @@ function ownerTransitionTargets(
 export async function prepareOwnerTransitionIntent(input: {
   operationId: string;
   teamName: string;
-  before: TaskFile;
+  before: TaskCard;
   afterOwner?: string;
   previousOperationId?: string;
 }): Promise<boolean> {
@@ -347,7 +357,8 @@ export async function prepareOwnerTransitionIntent(input: {
       );
       if (prior) {
         prior.state = "committed";
-        prior.committedTaskSnapshot = structuredClone(input.before);
+        prior.committedTaskVersion = assertTaskVersionRef(input.before.version);
+        prior.committedTaskProjection = projectTaskForAgent(input.before);
         writeJsonAtomic(file, compactOwnerTransitionIntents(records));
       }
     });
@@ -355,7 +366,9 @@ export async function prepareOwnerTransitionIntent(input: {
     return false;
   }
   const config = await readConfig(input.teamName);
-  authorityId(config);
+  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
+    throw new Error(`Team ${config.name} has no configured Beads Task authority; Task delivery refuses legacy fallback.`);
+  }
   const file = taskOwnerTransitionOutboxPath(input.teamName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await withLock(file, async () => {
@@ -367,9 +380,10 @@ export async function prepareOwnerTransitionIntent(input: {
         && record.afterOwner === input.before.assignee
       ) {
         record.state = "committed";
-        record.committedTaskSnapshot = structuredClone(input.before);
+        record.committedTaskVersion = assertTaskVersionRef(input.before.version);
+        record.committedTaskProjection = projectTaskForAgent(input.before);
       } else if (
-        record.beforeVersion === effectiveVersion(input.before)
+        record.beforeVersion === assertTaskVersionRef(input.before.version)
         && record.beforeOwner === input.before.assignee
       ) {
         record.state = "abandoned";
@@ -380,7 +394,7 @@ export async function prepareOwnerTransitionIntent(input: {
         operationId: input.operationId,
         teamName: input.teamName,
         taskId: input.before.id,
-        beforeVersion: effectiveVersion(input.before),
+        beforeVersion: assertTaskVersionRef(input.before.version),
         beforeOwner: input.before.assignee,
         afterOwner,
         targets: ownerTransitionTargets(config, input.before.assignee, afterOwner),
@@ -400,9 +414,10 @@ export async function prepareOwnerTransitionIntent(input: {
 export async function completeOwnerTransitionIntent(
   teamName: string,
   operationId: string,
-  task: TaskFile,
+  task: TaskCard,
   dependencies: OwnerTransitionOutboxDependencies = {},
 ): Promise<string[]> {
+  const postStateCard = projectTaskForAgent(task);
   const file = taskOwnerTransitionOutboxPath(teamName);
   if (!fs.existsSync(file)) return [`Owner transition ${operationId} committed without a local delivery intent`];
   await withLock(file, async () => {
@@ -413,7 +428,8 @@ export async function completeOwnerTransitionIntent(
       throw new Error(`Owner transition ${operationId} post-state does not match its prepared intent.`);
     }
     record.state = "committed";
-    record.committedTaskSnapshot = structuredClone(task);
+    record.committedTaskVersion = assertTaskVersionRef(postStateCard.version);
+    record.committedTaskProjection = structuredClone(postStateCard);
     writeJsonAtomic(file, compactOwnerTransitionIntents(records));
   });
   return deliverCommittedOwnerTransitionIntents(teamName, dependencies);
@@ -429,20 +445,16 @@ export async function reconcileOwnerTransitionOutbox(
   dependencies: OwnerTransitionOutboxDependencies = {},
 ): Promise<string[]> {
   const config = await readConfig(teamName);
-  if (config.taskBackend !== "beads" || !config.taskWorkspace) return [];
-  authorityId(config);
+  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) return [];
   const file = taskOwnerTransitionOutboxPath(teamName);
   if (!fs.existsSync(file)) return [];
-  const store = dependencies.readEvidence
-    ? undefined
-    : taskStore(config, false);
   const prepared = readOwnerTransitionIntentsUnsafe(file).filter((record) => record.state === "prepared");
-  const evidence = new Map<string, { task: TaskFile; operationId?: string }>();
+  const evidence = new Map<string, { task: TaskCard; operationId?: string }>();
   for (const record of prepared) {
     if (!evidence.has(record.taskId)) {
       evidence.set(
         record.taskId,
-        await (dependencies.readEvidence?.(record.taskId) ?? store!.readOwnerTransitionEvidence(record.taskId)),
+        await (dependencies.readEvidence?.(record.taskId) ?? (await import("../model-tool-contract/beads-task-adapter.js")).readTaskOwnerTransitionEvidence(teamName, record.taskId)),
       );
     }
   }
@@ -457,7 +469,8 @@ export async function reconcileOwnerTransitionOutbox(
         && current.task.assignee === record.afterOwner
       ) {
         record.state = "committed";
-        record.committedTaskSnapshot = structuredClone(current.task);
+        record.committedTaskVersion = assertTaskVersionRef(current.task.version);
+        record.committedTaskProjection = projectTaskForAgent(current.task);
       }
     }
     writeJsonAtomic(file, compactOwnerTransitionIntents(records));
@@ -472,12 +485,13 @@ async function deliverCommittedOwnerTransitionIntents(
   const file = taskOwnerTransitionOutboxPath(teamName);
   if (!fs.existsSync(file)) return [];
   const config = await readConfig(teamName);
-  authorityId(config);
   const warnings: string[] = [];
   await withLock(file, async () => {
     const records = readOwnerTransitionIntentsUnsafe(file);
     for (const record of records) {
-      if (record.state !== "committed" || !record.committedTaskSnapshot) continue;
+      if (record.state !== "committed") continue;
+      const projection = record.committedTaskProjection;
+      if (!projection) continue;
       for (const target of record.targets) {
         const key = ownerTargetKey(target);
         if (record.resolvedTargetKeys?.includes(key)) continue;
@@ -491,8 +505,17 @@ async function deliverCommittedOwnerTransitionIntents(
           continue;
         }
         try {
-          await (dependencies.enqueueExact?.(config, record.committedTaskSnapshot, target)
-            ?? enqueueTaskChangeForExactRecipient(config, record.committedTaskSnapshot, target));
+          if (dependencies.enqueueExact) {
+            await dependencies.enqueueExact(config, projection, target);
+          } else {
+            await enqueueTaskProjectionWithConfig(
+              config,
+              projection,
+              target.recipient,
+              target.changeKind,
+              { membershipId: target.recipientMembershipId, sessionFile: target.recipientSessionFile },
+            );
+          }
           record.resolvedTargetKeys = [...new Set([...(record.resolvedTargetKeys || []), key])];
         } catch (error) {
           warnings.push(
@@ -515,17 +538,24 @@ export async function readOwnerTransitionIntents(teamName: string): Promise<Owne
 /** Rebuild latest assignee-addressed delivery intent after a commit/spool crash gap. */
 export async function reconcileTaskChanges(teamName: string, recipient: string): Promise<number> {
   const config = await readConfig(teamName);
-  if (config.taskBackend !== "beads" || !config.taskWorkspace) {
+  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
     return 0;
   }
-  authorityId(config);
   await reconcileOwnerTransitionOutbox(teamName);
-  const tasks = await taskStore(config, true).list();
+  const { BeadsTaskAdapter } = await import("../model-tool-contract/beads-task-adapter.js");
+  const { listTaskIds } = await import("../model-tool-contract/beads-authority-adapter.js");
+  const hydrated = await new BeadsTaskAdapter(teamName, "task-delivery-reconciliation")
+    .readMany(await listTaskIds(teamName));
   const existing = await readTaskDeliveries(teamName, recipient);
   const tombstones = await readTaskDeliveryTombstones(teamName, recipient);
   const known = new Set([...existing.map((record) => record.deliveryId), ...tombstones.map((record) => record.deliveryId)]);
   let reconciled = 0;
-  for (const task of tasks) {
+  for (const result of hydrated) {
+    if (!result || result.kind === "contract_gap") {
+      if (result?.kind === "contract_gap") throw upgradeRequired(`Task ${result.taskId} cannot be reconciled without canonical Task metadata.`);
+      continue;
+    }
+    const task = result.task;
     if (task.assignee !== recipient) continue;
     const record = await enqueueTaskChangeWithConfig(config, task, recipient, "task_changed");
     if (record && !known.has(record.deliveryId)) {
@@ -541,12 +571,20 @@ async function reconcileRecoveryRecords(config: TeamConfig, recipient: string): 
   const file = taskDeliveryRecoveryPath(config.name);
   if (!fs.existsSync(file)) return 0;
   return withLock(file, async () => {
-    const records: TaskDeliveryRecoveryRecord[] = JSON.parse(fs.readFileSync(file, "utf8"));
+    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    const records: TaskDeliveryRecoveryRecord[] = Array.isArray(raw)
+      ? raw.map((record) => {
+        if (!record?.taskProjection || !isTaskVersionRef(record?.taskVersion) || !Check(TaskCardSchema, record.taskProjection) || record.taskProjection.version !== record.taskVersion) throw upgradeRequired(file);
+        return record as TaskDeliveryRecoveryRecord;
+      })
+      : [];
     let count = 0;
     let changed = false;
     for (const record of records) {
       if (!record.recipients.includes(recipient) || record.resolvedRecipients?.includes(recipient)) continue;
-      const delivered = await enqueueTaskChangeWithConfig(config, record.taskSnapshot, recipient, record.changeKind);
+      const delivered = record.taskProjection
+        ? await enqueueTaskProjectionWithConfig(config, record.taskProjection, recipient, record.changeKind)
+        : null;
       if (!delivered) continue;
       record.resolvedRecipients = [...new Set([...(record.resolvedRecipients || []), recipient])];
       changed = true;
@@ -563,6 +601,9 @@ async function reconcileRecoveryRecords(config: TeamConfig, recipient: string): 
 }
 
 export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRecord): Promise<void> {
+  if (!Check(TaskCardSchema, record.taskProjection) || !isTaskVersionRef(record.taskVersion) || record.taskProjection.version !== record.taskVersion) {
+    throw upgradeRequired(taskDeliveryRecoveryPath(record.teamName));
+  }
   const file = taskDeliveryRecoveryPath(record.teamName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await withLock(file, async () => {
@@ -607,16 +648,39 @@ async function mutateRecords(
   });
 }
 
+function isTaskVersionRef(value: unknown): value is TaskVersionRef {
+  return typeof value === "string" && /^v_[0-9a-f]{16}$/.test(value);
+}
+
+function assertTaskVersionRef(value: string): TaskVersionRef {
+  if (!isTaskVersionRef(value)) {
+    const error = new Error("Task delivery requires the canonical opaque TaskVersionRef supplied by the adapter.");
+    error.name = "upgrade_required";
+    throw error;
+  }
+  return value;
+}
+
+function upgradeRequired(file: string): Error {
+  const error = new Error(`Task delivery records at ${file} require the stopped-epoch migration before this runtime can start.`);
+  error.name = "upgrade_required";
+  return error;
+}
+
 function readRecordsUnsafe(file: string): TaskDeliveryRecord[] {
   if (!fs.existsSync(file)) return [];
   const value = JSON.parse(fs.readFileSync(file, "utf8"));
-  return Array.isArray(value) ? value : [];
+  if (!Array.isArray(value)) return [];
+  if (value.some((record) => !record?.taskProjection || !Check(TaskCardSchema, record.taskProjection) || !isTaskVersionRef(record?.ref?.version) || record.taskProjection.version !== record.ref.version || "authorityId" in (record?.ref ?? {}) || "nativeId" in (record?.ref ?? {}))) throw upgradeRequired(file);
+  return value as TaskDeliveryRecord[];
 }
 
 function readTombstonesUnsafe(file: string): TaskDeliveryTombstone[] {
   if (!fs.existsSync(file)) return [];
   const value = JSON.parse(fs.readFileSync(file, "utf8"));
-  return Array.isArray(value) ? value : [];
+  if (!Array.isArray(value)) return [];
+  if (value.some((record) => !isTaskVersionRef(record?.ref?.version) || "authorityId" in (record?.ref ?? {}) || "nativeId" in (record?.ref ?? {}))) throw upgradeRequired(file);
+  return value as TaskDeliveryTombstone[];
 }
 
 function compactRecords(records: TaskDeliveryRecord[]): TaskDeliveryRecord[] {
@@ -638,7 +702,7 @@ async function persistTombstones(
     const existing = readTombstonesUnsafe(file);
     const byTaskSession = new Map<string, TaskDeliveryTombstone>();
     for (const item of [...existing, ...tombstones]) {
-      byTaskSession.set(`${item.ref.authorityId}:${item.ref.nativeId}:${item.recipientMembershipId}:${item.recipientSessionFile}`, item);
+      byTaskSession.set(`${item.ref.taskId}:${item.recipientMembershipId}:${item.recipientSessionFile}`, item);
     }
     writeJsonAtomic(file, [...byTaskSession.values()]);
   });
@@ -648,14 +712,14 @@ export async function suppressTaskVersionForSession(
   teamName: string,
   recipient: string,
   sessionFile: string,
-  task: TaskFile,
+  task: TaskCard | TaskCoordinates,
 ): Promise<void> {
   const config = await readConfig(teamName);
   const binding = recipientBinding(config, recipient);
   if (!binding || binding.sessionFile !== sessionFile) {
     throw new Error(`Cannot suppress Task delivery for ${recipient}: the acting Session is not its current active binding.`);
   }
-  const ref: TaskChangeRef = { kind: "task", authorityId: authorityId(config), nativeId: task.id, version: effectiveVersion(task) };
+  const ref: TaskChangeRef = { kind: "task", taskId: task.id, version: assertTaskVersionRef(task.version) };
   const targetAgentRef = sessionRef(sessionFile);
   const deliveryId = `task_delivery_${digest({ ref, recipient, recipientMembershipId: binding.membershipId, targetAgentRef }).slice(0, 32)}`;
   await persistTombstones(teamName, recipient, [{
@@ -733,10 +797,7 @@ function formatBatch(records: TaskDeliveryRecord[]): string {
     "These changes were already accepted by the Task authority. The payload is a versioned snapshot for action, not a substitute for task_read/task_list when you need current state.",
     JSON.stringify({
       changes: records.map((record) => ({
-        deliveryId: record.deliveryId,
-        ref: record.ref,
-        changeKind: record.changeKind,
-        task: record.taskSnapshot,
+        task: record.taskProjection,
       })),
     }, null, 2),
   ].join("\n");
@@ -822,7 +883,7 @@ export class TaskChangeDelivery {
       if (this.stopped || generation !== this.generation) return;
       if (records.length > 0) this.sink.sendMessage({
         customType: TASK_CHANGE_RESUME_TYPE,
-        content: `Resume the already-recorded Task changes with delivery IDs: ${records.map((r) => r.deliveryId).join(", ")}. Full payloads are in preceding canonical custom entries.`,
+        content: "Resume the already-recorded Task changes. Full payloads are in preceding canonical custom entries.",
         display: false,
         details: this.details(records),
       }, { triggerTurn: true, deliverAs: "steer" });

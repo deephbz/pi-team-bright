@@ -1,10 +1,28 @@
 import { execFile } from "node:child_process";
 import { Type } from "typebox";
-import { Check } from "typebox/value";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { BeadsAuthorityFingerprint, TaskFile, TaskRelation, TaskRelationType } from "./models";
+import { BeadsAuthorityFingerprint, TaskRelation, TaskRelationType, TaskStatus } from "./models";
+export interface TaskAuthorityRecord {
+  id: string;
+  title: string;
+  description: string;
+  acceptanceCriteria: string;
+  design?: string;
+  status: TaskStatus;
+  assignee?: string;
+  notes?: string;
+  relations: TaskRelation[];
+  version: string;
+  provenance: {
+    authority: "beads";
+    teamName: string;
+  };
+}
+
+export type TaskAuthorityListItem = Omit<TaskAuthorityRecord, "version">;
+import { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH, isTaskCardContext, isTaskCardGoal } from "../model-tool-contract/task-domain";
 import { withLock } from "./lock";
 import { teamDir, sanitizeName } from "./paths";
 import { runHook } from "./hooks";
@@ -16,58 +34,40 @@ const execFileAsync = promisify(execFile);
 export const DEFAULT_BD_TIMEOUT_MS = 10_000;
 export const DEFAULT_BD_INIT_TIMEOUT_MS = 30_000;
 export const PI_TEAMS_SCHEMA = "1";
-export const CANDIDATE_TASK_METADATA_KEY = "pi_teams_candidate_task";
-export const CANDIDATE_TASK_METADATA_SCHEMA = "pi-teams-candidate-task/1" as const;
-/** Standard TypeBox length limit for model-facing candidate Task context. */
-export const CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH = 2_000;
-export const CANDIDATE_TASK_GOAL_MAX_LENGTH = 1_000;
-export const CandidateTaskGoalSchema = Type.String({ minLength: 1, maxLength: CANDIDATE_TASK_GOAL_MAX_LENGTH });
-export const CandidateTaskCurrentContextSchema = Type.String({
-  minLength: 1,
-  maxLength: CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH,
-});
-
-/** Use the exported schema for every runtime candidate-context validation. */
-export function isCandidateTaskCurrentContext(value: unknown): value is string {
-  return typeof value === "string"
-    && value.length <= CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH
-    && Check(CandidateTaskCurrentContextSchema, value);
-}
-
-/** Enforce the model contract in JavaScript string-length units before writes. */
-export function isCandidateTaskGoal(value: unknown): value is string {
-  return typeof value === "string"
-    && value.length <= CANDIDATE_TASK_GOAL_MAX_LENGTH
-    && Check(CandidateTaskGoalSchema, value);
-}
+export const TASK_METADATA_KEY = "pi_teams_task";
+export const TASK_METADATA_SCHEMA = "pi-teams-task/1" as const;
+/** Task-card limits are owned by the neutral domain module. */
+export { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH } from "../model-tool-contract/task-domain";
 
 /** Reject invalid canonical context before a Beads command can mutate it. */
-export function assertCandidateTaskMetadataContext(value: unknown): asserts value is CandidateTaskMetadata {
-  if (!value || typeof value !== "object" || Array.isArray(value) || !isCandidateTaskCurrentContext((value as Record<string, unknown>).current_context)) {
-    throw new Error(`Candidate Task current_context must contain 1 to ${CANDIDATE_TASK_CURRENT_CONTEXT_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
+export function assertTaskMetadataContext(value: unknown): asserts value is TaskMetadata {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !isTaskCardContext((value as Record<string, unknown>).current_context)) {
+    throw new Error(`Task current_context must contain 1 to ${TASK_CARD_CONTEXT_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
   }
   const goal = (value as Record<string, unknown>).goal;
-  if (goal !== undefined && !isCandidateTaskGoal(goal)) {
-    throw new Error(`Candidate Task goal must contain 1 to ${CANDIDATE_TASK_GOAL_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
+  if (goal !== undefined && !isTaskCardGoal(goal)) {
+    throw new Error(`Task goal must contain 1 to ${TASK_CARD_GOAL_MAX_LENGTH.toLocaleString("en-US")} TypeBox string-length units.`);
   }
 }
 
-export interface CandidateTaskOperationRecord {
+export interface TaskOperationRecord {
   operation_id: string;
   fingerprint: string;
   journal_entries: Array<{ id: string; at: string; actor: string; kind: "progress" | "decision" | "blocker" | "result" | "note"; text: string }>;
 }
 
-export interface CandidateTaskMetadata {
-  schema: typeof CANDIDATE_TASK_METADATA_SCHEMA;
+export interface TaskMetadata {
+  schema: typeof TASK_METADATA_SCHEMA;
   goal: string;
   current_context: string;
-  last_operation?: CandidateTaskOperationRecord;
+  last_operation?: TaskOperationRecord;
 }
 
-export interface CandidateTaskAuthorityRecord {
-  task: TaskFile;
-  candidateMetadata?: unknown;
+export interface TaskAuthorityRecordEnvelope {
+  task: TaskAuthorityRecord;
+  taskMetadata?: unknown;
+  /** Adapter-only owner-transition marker; never enters a TaskCard. */
+  ownerTransitionOperationId?: string;
 }
 
 /** Internal adapter evidence. It is intentionally excluded from Task metadata. */
@@ -333,12 +333,12 @@ export interface TaskWriteOptions {
   /** Semantic payload combined into the same native Beads update command. */
   appendNote?: string;
   /** Internal candidate projection committed with the same native update. */
-  candidateTaskMetadata?: CandidateTaskMetadata;
+  taskMetadata?: TaskMetadata;
   retries?: number;
   /** Internal precommit hook; never part of the agent-facing Task contract. */
   internalOwnerTransition?: {
     operationId: string;
-    prepare(before: TaskFile, previousOperationId?: string): Promise<boolean>;
+    prepare(before: TaskAuthorityRecordEnvelope, previousOperationId?: string): Promise<boolean>;
   };
 }
 
@@ -360,14 +360,19 @@ export interface BeadsTaskLink {
 }
 
 export interface TaskMutationResult {
-  before: TaskFile;
-  after: TaskFile;
+  before: TaskAuthorityRecord;
+  after: TaskAuthorityRecord;
+  /** Raw envelopes from the same authority reads that produced before/after. */
+  beforeEnvelope?: TaskAuthorityRecordEnvelope;
+  afterEnvelope?: TaskAuthorityRecordEnvelope;
   appliedOperations: string[];
 }
 
 /** Result of a create, including whether an idempotency replay supplied the Task. */
 export interface TaskCreateResult {
-  task: TaskFile;
+  task: TaskAuthorityRecord;
+  /** Raw envelope from the committed create/replay read. */
+  taskEnvelope?: TaskAuthorityRecordEnvelope;
   replayed: boolean;
 }
 
@@ -392,7 +397,7 @@ function dependencyType(dependency: NonNullable<RawBead["dependencies"]>[number]
   return dependency.dependency_type || dependency.type || "blocks";
 }
 
-function mapStatus(raw: RawBead): TaskFile["status"] {
+function mapStatus(raw: RawBead): TaskAuthorityRecord["status"] {
   if (raw.status === "closed") return "closed";
   if (raw.status === "in_progress") return "in_progress";
   if (raw.status === "blocked") return "blocked";
@@ -449,7 +454,7 @@ function authorityVersion(raw: RawBead): string {
   return `beads_${crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex")}`;
 }
 
-function mapTask(raw: RawBead): TaskFile {
+function mapTask(raw: RawBead): TaskAuthorityRecord {
   const relationFromDependency = (dependency: NonNullable<RawBead["dependencies"]>[number]): TaskRelation[] => {
     const targetId = dependencyId(dependency);
     if (!targetId) return [];
@@ -484,7 +489,7 @@ function mapTask(raw: RawBead): TaskFile {
   };
 }
 
-function mapWithReverseDependencies(raws: RawBead[]): TaskFile[] {
+function mapWithReverseDependencies(raws: RawBead[]): TaskAuthorityRecord[] {
   return raws.map(mapTask);
 }
 
@@ -609,27 +614,51 @@ export class BeadsTaskStore {
     }
   }
 
-  private async showManyRaw(taskIds: readonly string[]): Promise<RawBead[]> {
+  /** Beads 1.1 reports mixed missing IDs on stderr but exits successfully. */
+  private isNativeShowMissing(error: unknown): boolean {
+    return error instanceof BeadsError
+      && error.kind === "command"
+      && /(?:error fetching .+: no issue found matching|no issues found matching the provided ids)/i.test(error.message);
+  }
+
+  /**
+   * Hydrate exact IDs in one native show. Beads returns found IDs and omits
+   * mixed missing IDs; all-missing IDs return the same documented error form.
+   */
+  private async showManyRawAllowMissing(taskIds: readonly string[]): Promise<Array<RawBead | undefined>> {
     const safeIds = [...new Set(taskIds.map((taskId) => sanitizeName(taskId)))];
     if (safeIds.length === 0) return [];
-    const result = await this.command<RawBead[]>([
-      "show", ...safeIds, "--include-dependents",
-    ]);
+    let result: RawBead[];
+    try {
+      result = await this.command<RawBead[]>(["show", ...safeIds, "--include-dependents"]);
+    } catch (error) {
+      if (this.isNativeShowMissing(error)) return safeIds.map(() => undefined);
+      throw error;
+    }
     if (!Array.isArray(result)) {
       throw new BeadsError("Beads show returned a non-array JSON value.", "malformed", `bd show ${safeIds.join(" ")}`);
     }
+    const requested = new Set(safeIds);
     const byId = new Map<string, RawBead>();
     for (const raw of result) {
       if (!raw?.id) continue;
+      if (!requested.has(raw.id)) {
+        throw new BeadsError(`Beads show returned unrequested task ${raw.id}.`, "scope", `bd show ${safeIds.join(" ")}`);
+      }
       this.verifyScope(raw);
       if (byId.has(raw.id)) {
         throw new BeadsError(`Beads show returned duplicate task ${raw.id}.`, "conflict", `bd show ${safeIds.join(" ")}`);
       }
       byId.set(raw.id, raw);
     }
-    return safeIds.map((taskId) => {
-      const raw = byId.get(taskId);
-      if (!raw) throw new BeadsError(`Beads task ${taskId} was not found.`, "command", `bd show ${taskId}`);
+    return safeIds.map((taskId) => byId.get(taskId));
+  }
+
+  private async showManyRaw(taskIds: readonly string[]): Promise<RawBead[]> {
+    const safeIds = [...new Set(taskIds.map((taskId) => sanitizeName(taskId)))];
+    const raws = await this.showManyRawAllowMissing(safeIds);
+    return raws.map((raw, index) => {
+      if (!raw) throw new BeadsError(`Beads task ${safeIds[index]} was not found.`, "command", `bd show ${safeIds[index]}`);
       return raw;
     });
   }
@@ -645,7 +674,7 @@ export class BeadsTaskStore {
     return result;
   }
 
-  async findByLegacyId(legacyId: string): Promise<TaskFile | undefined> {
+  async findByLegacyId(legacyId: string): Promise<TaskAuthorityRecord | undefined> {
     const matches = (await this.listRaw()).filter(raw => metadataValue(raw, "pi_teams_legacy_id") === legacyId);
     if (matches.length > 1) {
       throw new BeadsError(
@@ -657,13 +686,13 @@ export class BeadsTaskStore {
     return matches[0] ? mapTask(matches[0]) : undefined;
   }
 
-  async create(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskFile> {
+  async create(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskAuthorityRecord> {
     return (await this.createWithResult(input, options)).task;
   }
 
   async createWithResult(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskCreateResult> {
-    if (input.internalMetadata && CANDIDATE_TASK_METADATA_KEY in input.internalMetadata) {
-      assertCandidateTaskMetadataContext(input.internalMetadata[CANDIDATE_TASK_METADATA_KEY]);
+    if (input.internalMetadata && TASK_METADATA_KEY in input.internalMetadata) {
+      assertTaskMetadataContext(input.internalMetadata[TASK_METADATA_KEY]);
     }
     if (!input.title || !input.title.trim()) throw new Error("Task title must not be empty");
     if (input.assignee && !input.acceptanceCriteria?.trim() && !input.internalMetadata) {
@@ -674,7 +703,7 @@ export class BeadsTaskStore {
       if (idempotencyKey) {
         const existing = (await this.listRaw()).filter(raw => metadataValue(raw, "pi_teams_idempotency_key") === idempotencyKey);
         if (existing.length > 1) throw new BeadsError(`Duplicate Beads tasks share idempotency key ${idempotencyKey}; refusing to choose a mapping.`, "conflict", `bd list ${idempotencyKey}`);
-        if (existing[0]) return { task: mapTask(existing[0]), replayed: true };
+        if (existing[0]) return { task: mapTask(existing[0]), taskEnvelope: this.taskAuthorityRecordEnvelope(existing[0]), replayed: true };
       }
       const metadata = {
         ...(input.internalMetadata || {}),
@@ -698,7 +727,8 @@ export class BeadsTaskStore {
       const created = Array.isArray(raw) ? raw[0] : raw;
       if (!created?.id) throw new BeadsError("Beads create returned no task ID.", "malformed", "bd create");
       this.verifyScope(created);
-      return { task: mapTask(await this.showRaw(created.id)), replayed: false };
+      const committed = await this.showRaw(created.id);
+      return { task: mapTask(committed), taskEnvelope: this.taskAuthorityRecordEnvelope(committed), replayed: false };
     };
     if (!idempotencyKey) return create();
     fs.mkdirSync(teamDir(this.teamName), { recursive: true });
@@ -737,44 +767,75 @@ export class BeadsTaskStore {
     );
   }
 
-  async read(taskId: string): Promise<TaskFile> {
+  async read(taskId: string): Promise<TaskAuthorityRecord> {
     return mapTask(await this.showRaw(taskId));
   }
 
-  private candidateTaskAuthorityRecord(raw: RawBead): CandidateTaskAuthorityRecord {
+  private taskAuthorityRecordEnvelope(raw: RawBead): TaskAuthorityRecordEnvelope {
     return {
       task: mapTask(raw),
-      ...(raw.metadata && CANDIDATE_TASK_METADATA_KEY in raw.metadata
-        ? { candidateMetadata: raw.metadata[CANDIDATE_TASK_METADATA_KEY] }
+      ...(raw.metadata && TASK_METADATA_KEY in raw.metadata
+        ? { taskMetadata: raw.metadata[TASK_METADATA_KEY] }
+        : {}),
+      ...(metadataValue(raw, OWNER_TRANSITION_OPERATION_METADATA)
+        ? { ownerTransitionOperationId: metadataValue(raw, OWNER_TRANSITION_OPERATION_METADATA) }
         : {}),
     };
   }
 
-  /** Read the canonical candidate payload without projecting compatibility fields. */
-  async readCandidateTaskAuthorityRecord(taskId: string): Promise<CandidateTaskAuthorityRecord> {
-    return this.candidateTaskAuthorityRecord(await this.showRaw(taskId));
+  /** Read the canonical Task payload without projecting compatibility fields. */
+  async readTaskAuthorityRecordEnvelope(taskId: string): Promise<TaskAuthorityRecordEnvelope> {
+    return this.taskAuthorityRecordEnvelope(await this.showRaw(taskId));
   }
 
-  /** Hydrate candidate payloads with one Beads authority query. */
-  async readCandidateTaskAuthorityRecords(taskIds: readonly string[]): Promise<CandidateTaskAuthorityRecord[]> {
-    return (await this.showManyRaw(taskIds)).map((raw) => this.candidateTaskAuthorityRecord(raw));
+  /**
+   * Hydrate exact Task payloads with one Beads authority query.
+   * Each returned position matches the unique requested-ID order; a missing
+   * authority record is undefined rather than a second native show.
+   */
+  async readTaskAuthorityRecordEnvelopes(taskIds: readonly string[]): Promise<Array<TaskAuthorityRecordEnvelope | undefined>> {
+    return (await this.showManyRawAllowMissing(taskIds)).map((raw) =>
+      raw ? this.taskAuthorityRecordEnvelope(raw) : undefined);
   }
 
   /** Hydrate several exact Task revisions with one Beads authority query. */
-  async readMany(taskIds: readonly string[]): Promise<TaskFile[]> {
+  async readMany(taskIds: readonly string[]): Promise<TaskAuthorityRecord[]> {
     return (await this.showManyRaw(taskIds)).map(mapTask);
   }
 
   /** Read authority evidence used only to settle the delivery outbox. */
-  async readOwnerTransitionEvidence(taskId: string): Promise<{ task: TaskFile; operationId?: string }> {
+  async readOwnerTransitionEvidence(taskId: string): Promise<{
+    task: TaskAuthorityRecord;
+    operationId?: string;
+    taskProjection?: { goal?: string; current_context?: string };
+  }> {
     const raw = await this.showRaw(taskId);
+    let taskMetadata: unknown = raw.metadata?.[TASK_METADATA_KEY];
+    if (typeof taskMetadata === "string") {
+      try {
+        taskMetadata = JSON.parse(taskMetadata);
+      } catch {
+        taskMetadata = undefined;
+      }
+    }
+    const taskProjection = taskMetadata && typeof taskMetadata === "object"
+      ? {
+        ...(typeof (taskMetadata as Record<string, unknown>).goal === "string"
+          ? { goal: (taskMetadata as Record<string, unknown>).goal as string }
+          : {}),
+        ...(typeof (taskMetadata as Record<string, unknown>).current_context === "string"
+          ? { current_context: (taskMetadata as Record<string, unknown>).current_context as string }
+          : {}),
+      }
+      : undefined;
     return {
       task: mapTask(raw),
       operationId: metadataValue(raw, OWNER_TRANSITION_OPERATION_METADATA),
+      ...(taskProjection ? { taskProjection } : {}),
     };
   }
 
-  async list(): Promise<TaskFile[]> {
+  async list(): Promise<TaskAuthorityRecord[]> {
     const raws = (await this.listRaw()).filter(raw => metadataValue(raw, "pi_teams_deleted") !== "true");
     return mapWithReverseDependencies(raws)
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -782,7 +843,7 @@ export class BeadsTaskStore {
 
   private async updateWithResultLocked(
     safeId: string,
-    updates: Partial<TaskFile>,
+    updates: Partial<TaskAuthorityRecord>,
     options: TaskWriteOptions,
     beforeRaw: RawBead,
   ): Promise<TaskMutationResult> {
@@ -799,8 +860,8 @@ export class BeadsTaskStore {
     if (options.internalOwnerTransition) {
       args.push("--set-metadata", `${OWNER_TRANSITION_OPERATION_METADATA}=${options.internalOwnerTransition.operationId}`);
     }
-    if (options.candidateTaskMetadata) {
-      args.push("--set-metadata", `${CANDIDATE_TASK_METADATA_KEY}=${JSON.stringify(options.candidateTaskMetadata)}`);
+    if (options.taskMetadata) {
+      args.push("--set-metadata", `${TASK_METADATA_KEY}=${JSON.stringify(options.taskMetadata)}`);
     }
     if (updates.status === "open") args.push("--status", "open");
     if (updates.status === "in_progress") args.push("--status", "in_progress");
@@ -821,16 +882,18 @@ export class BeadsTaskStore {
     return {
       before: mapTask(beforeRaw),
       after: mapped,
+      beforeEnvelope: this.taskAuthorityRecordEnvelope(beforeRaw),
+      afterEnvelope: this.taskAuthorityRecordEnvelope(after),
       appliedOperations: [
         ...Object.keys(updates).map((field) => `set:${field}`),
         ...(options.appendNote !== undefined ? ["append:note"] : []),
-        ...(options.candidateTaskMetadata !== undefined ? ["set:candidateTaskMetadata"] : []),
+        ...(options.taskMetadata !== undefined ? ["set:taskMetadata"] : []),
       ],
     };
   }
 
-  async updateWithResult(taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
-    if (options.candidateTaskMetadata !== undefined) assertCandidateTaskMetadataContext(options.candidateTaskMetadata);
+  async updateWithResult(taskId: string, updates: Partial<TaskAuthorityRecord>, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
+    if (options.taskMetadata !== undefined) assertTaskMetadataContext(options.taskMetadata);
     const safeId = sanitizeName(taskId);
     return withLock(this.lockPath(safeId), async () => {
       const beforeRaw = await this.showRaw(safeId);
@@ -840,7 +903,7 @@ export class BeadsTaskStore {
         updates.assignee !== undefined
         && options.internalOwnerTransition
         && await options.internalOwnerTransition.prepare(
-          mapTask(beforeRaw),
+          this.taskAuthorityRecordEnvelope(beforeRaw),
           metadataValue(beforeRaw, OWNER_TRANSITION_OPERATION_METADATA),
         )
       );
@@ -853,7 +916,7 @@ export class BeadsTaskStore {
     }, options.retries);
   }
 
-  async update(taskId: string, updates: Partial<TaskFile>, options: TaskWriteOptions = {}): Promise<TaskFile> {
+  async update(taskId: string, updates: Partial<TaskAuthorityRecord>, options: TaskWriteOptions = {}): Promise<TaskAuthorityRecord> {
     return (await this.updateWithResult(taskId, updates, options)).after;
   }
 
@@ -868,7 +931,7 @@ export class BeadsTaskStore {
       }
       const prepared = options.internalOwnerTransition
         ? await options.internalOwnerTransition.prepare(
-          mapTask(beforeRaw),
+          this.taskAuthorityRecordEnvelope(beforeRaw),
           metadataValue(beforeRaw, OWNER_TRANSITION_OPERATION_METADATA),
         )
         : false;
@@ -878,15 +941,18 @@ export class BeadsTaskStore {
       }
       const result = await this.command<RawBead | RawBead[]>(args);
       const after = Array.isArray(result) ? result[0] : result;
+      const committed = await this.showRaw(after?.id || safeId);
       return {
         before: mapTask(beforeRaw),
-        after: mapTask(await this.showRaw(after?.id || safeId)),
+        after: mapTask(committed),
+        beforeEnvelope: this.taskAuthorityRecordEnvelope(beforeRaw),
+        afterEnvelope: this.taskAuthorityRecordEnvelope(committed),
         appliedOperations: ["claim"],
       };
     }, options.retries);
   }
 
-  async claim(taskId: string, actor?: string, options: TaskWriteOptions = {}): Promise<TaskFile> {
+  async claim(taskId: string, actor?: string, options: TaskWriteOptions = {}): Promise<TaskAuthorityRecord> {
     return (await this.claimWithResult(taskId, actor, options)).after;
   }
 
@@ -894,10 +960,12 @@ export class BeadsTaskStore {
     const safeTaskId = sanitizeName(taskId);
     const safeTargetId = sanitizeName(link.targetId);
     if (safeTaskId === safeTargetId) throw new Error("A task cannot link to itself");
-    let before!: TaskFile;
+    let before!: TaskAuthorityRecord;
+    let beforeEnvelope!: TaskAuthorityRecordEnvelope;
     let changed = false;
     await withLock(this.lockPath(safeTaskId), async () => {
       const taskRaw = await this.showRaw(safeTaskId);
+      beforeEnvelope = this.taskAuthorityRecordEnvelope(taskRaw);
       this.assertExpectedVersion(taskRaw, options, "link");
       await this.showRaw(safeTargetId);
       const task = mapTask(taskRaw);
@@ -933,11 +1001,18 @@ export class BeadsTaskStore {
       }
       changed = true;
     }, options.retries);
-    const after = await this.read(safeTaskId);
-    return { before, after, appliedOperations: changed ? [`${link.action}:${link.relation}:${safeTargetId}`] : [] };
+    const afterEnvelope = await this.readTaskAuthorityRecordEnvelope(safeTaskId);
+    const after = afterEnvelope.task;
+    return {
+      before,
+      after,
+      beforeEnvelope,
+      afterEnvelope,
+      appliedOperations: changed ? [`${link.action}:${link.relation}:${safeTargetId}`] : [],
+    };
   }
 
-  async mutateLink(taskId: string, link: BeadsTaskLink, options: TaskWriteOptions = {}): Promise<TaskFile> {
+  async mutateLink(taskId: string, link: BeadsTaskLink, options: TaskWriteOptions = {}): Promise<TaskAuthorityRecord> {
     return (await this.mutateLinkWithResult(taskId, link, options)).after;
   }
 

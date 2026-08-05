@@ -1,8 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
-import type { Member, TaskFile, TaskTeamEvent, TeamConfig, TeamEvent, TeamEventInput, TeamEventType } from "./models";
+import type { Member, TaskTeamEvent, TeamConfig, TeamEvent, TeamEventInput, TeamEventType } from "./models";
+import type { TaskCard } from "../model-tool-contract/task-domain";
 import { configPath, teamEventCursorStatePath, teamEventJournalPath } from "./paths";
+import { type TaskVersionRef } from "../model-tool-contract/task-version-ref";
 
 // Event/wait intent and authority boundaries: docs/current/README.md and
 // docs/reference.md.
@@ -70,16 +72,16 @@ export interface TeamEventWaitResult extends TeamEventBatch {
 export interface TeamTaskSummary {
   id: string;
   title: string;
-  status: TaskFile["status"];
+  status: TaskCard["status"];
   assignee?: string;
-  version?: string;
+  version?: TaskVersionRef;
 }
 
 export interface TeamWorkerProjection {
   name: string;
   membershipId?: string;
   carrier: "prepared" | "session_bound" | "absent";
-  nonterminalTasks: Array<{ id: string; status: TaskFile["status"] }>;
+  nonterminalTasks: Array<{ id: string; status: TaskCard["status"] }>;
 }
 
 export interface TeamCurrentProjection {
@@ -139,6 +141,12 @@ function assertString(value: unknown, field: string): asserts value is string {
   }
 }
 
+function upgradeRequiredVersion(lineNumber: number, field: string): Error {
+  const error = new Error(`Team event journal at line ${lineNumber} contains a non-canonical ${field}; run the stopped-epoch migration.`);
+  error.name = "upgrade_required";
+  return error;
+}
+
 function parseEvent(line: string, lineNumber: number): TeamEvent {
   let value: unknown;
   try {
@@ -159,11 +167,10 @@ function parseEvent(line: string, lineNumber: number): TeamEvent {
       throw new Error(`Malformed Team event journal at line ${lineNumber}: task ref is required.`);
     }
     const ref = event.ref as Record<string, unknown>;
-    assertString(ref.authorityId, "ref.authorityId");
     assertString(ref.taskId, "ref.taskId");
     assertString(ref.version, "ref.version");
     assertString(event.actor, "actor");
-    if (!["created", "assigned", "design", "note", "status", "relation"].includes(String(event.change))) {
+    if (!["created", "assigned", "goal", "note", "status", "relation"].includes(String(event.change))) {
       throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid task change.`);
     }
     if (event.taskEvidence !== undefined) {
@@ -207,6 +214,31 @@ function parseEvent(line: string, lineNumber: number): TeamEvent {
     }
   } else {
     throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid event type.`);
+  }
+  if (event.type === "task") {
+    const ref = event.ref as Record<string, unknown>;
+    if (!/^v_[0-9a-f]{16}$/.test(ref.version as string)) throw upgradeRequiredVersion(lineNumber, "task ref version");
+    return {
+      ...event,
+      ref: {
+        taskId: ref.taskId as string,
+        version: ref.version as TaskVersionRef,
+      },
+    } as TeamEvent;
+  }
+  if (event.type === "alert" && event.taskRef) {
+    const taskRef = event.taskRef as Record<string, unknown>;
+    return {
+      ...event,
+      taskRef: {
+        taskId: taskRef.taskId as string,
+        ...(taskRef.version !== undefined
+          ? ( !/^v_[0-9a-f]{16}$/.test(taskRef.version as string)
+            ? (() => { throw upgradeRequiredVersion(lineNumber, "alert task ref version"); })()
+            : { version: taskRef.version as TaskVersionRef })
+          : {}),
+      },
+    } as TeamEvent;
   }
   return value as TeamEvent;
 }
@@ -266,7 +298,7 @@ export async function appendTeamEvent(teamName: string, input: TeamEventInput): 
   });
 }
 
-/** Append structured candidate evidence and return its committed identity/time. */
+/** Append structured Task evidence and return its committed identity/time. */
 export async function appendTaskEvidenceEvent(
   teamName: string,
   input: Omit<TaskTeamEvent, "cursor" | "at"> & { taskEvidence: TaskEventEvidenceInput },
@@ -416,13 +448,13 @@ function latestWorkerMemberships(members: readonly Member[]): Map<string, Member
  * by the caller. This stays pure so the event journal never imports the Task
  * adapter and Task mutations can append events without a dependency cycle.
  */
-export function projectTeamCurrentState(config: TeamConfig, tasks: ReadonlyArray<TaskFile | Omit<TaskFile, "version">>): TeamCurrentProjection {
+export function projectTeamCurrentState(config: TeamConfig, tasks: ReadonlyArray<TaskCard>): TeamCurrentProjection {
   const taskSummaries: TeamTaskSummary[] = tasks.map((task) => ({
     id: task.id,
     title: task.title,
     status: task.status,
     ...(task.assignee ? { assignee: task.assignee } : {}),
-    ...("version" in task && task.version ? { version: task.version } : {}),
+    ...(task.version ? { version: task.version as TaskVersionRef } : {}),
   })).sort((left, right) => left.id.localeCompare(right.id));
   const workers = [...latestWorkerMemberships(config.members).values()].map((member): TeamWorkerProjection => {
     const current = member.isActive !== false;
@@ -532,8 +564,8 @@ export function pageTeamCurrentProjection(
 export async function hydrateTeamSyncTasks(
   events: readonly TeamEvent[],
   requestedTaskIds: readonly string[] | undefined,
-  readTasks: (taskIds: readonly string[]) => Promise<TaskFile[]>,
-): Promise<TaskFile[]> {
+  readTasks: (taskIds: readonly string[]) => Promise<TaskCard[]>,
+): Promise<TaskCard[]> {
   const ids = new Set(requestedTaskIds ?? []);
   for (const event of events) {
     if (event.type === "task") ids.add(event.ref.taskId);

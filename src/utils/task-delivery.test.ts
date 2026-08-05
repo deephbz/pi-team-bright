@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import type { TaskFile } from "./models";
+import type { TaskCard } from "../model-tool-contract/task-domain";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import {
   enqueueTaskChange,
   prepareOwnerTransitionIntent,
@@ -36,18 +37,21 @@ async function fixture(suffix: string) {
     cwd: process.cwd(),
     subscriptions: [],
   });
-  const task: TaskFile = {
+  const task: TaskCard = {
     id: "1",
     title: "Investigate",
-    description: "Find the cause",
-    acceptanceCriteria: "The cause is identified",
+    goal: "Find the cause",
+    current_context: "Work has not started.",
     status: "in_progress",
     assignee: "worker",
-    relations: [],
-    version: "v2",
-    provenance: { authority: "beads", teamName },
+    version: taskVersionRef("v2"),
   };
-  return { teamName, sessionFile, task, authorityId };
+  return {
+    teamName,
+    sessionFile,
+    task,
+    authorityId,
+  };
 }
 
 afterEach(() => {
@@ -60,7 +64,7 @@ afterEach(() => {
 
 describe("Task-native delivery", () => {
   it("persists an authority-scoped Session-targeted change without creating a Message", async () => {
-    const { teamName, sessionFile, task, authorityId } = await fixture("authority");
+    const { teamName, sessionFile, task } = await fixture("authority");
     const first = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
     const duplicate = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
 
@@ -69,11 +73,10 @@ describe("Task-native delivery", () => {
     expect(first).toMatchObject({
       recipient: "worker",
       recipientSessionFile: sessionFile,
-      ref: { kind: "task", nativeId: "1", version: "v2" },
+      ref: { kind: "task", taskId: "1", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) },
       changeKind: "assigned",
       attemptCount: 0,
     });
-    expect(first?.ref.authorityId).toBe(authorityId);
     expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
     expect(await messaging.readInbox(teamName, "worker", false, false)).toEqual([]);
   });
@@ -98,10 +101,17 @@ describe("Task-native delivery", () => {
       customType: TASK_CHANGE_CUSTOM_TYPE,
       details: {
         deliveryIds: [record?.deliveryId],
-        changes: [{ ref: expect.objectContaining({ authorityId: record?.ref.authorityId, nativeId: "1", version: "v2" }) }],
+        changes: [{ ref: expect.objectContaining({ taskId: "1", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) }) }],
       },
     });
     expect(batch.content).toContain("Find the cause");
+    expect(batch.content).toContain('"current_context": "Work has not started."');
+    expect(batch.content).toMatch(/"version": "v_[0-9a-f]{16}"/);
+    expect(batch.content).not.toContain("description");
+    expect(batch.content).not.toContain("acceptanceCriteria");
+    expect(batch.content).not.toContain("provenance");
+    expect(batch.content).not.toContain(record?.deliveryId);
+    expect(batch.content).not.toContain('"version": "v2"');
     expect(options).toEqual({ triggerTurn: true, deliverAs: "steer" });
 
     await delivery.observeContext([{ role: "custom", customType: batch.customType, details: batch.details }]);
@@ -113,7 +123,8 @@ describe("Task-native delivery", () => {
     );
     const persisted = await readTaskDeliveries(teamName, "worker");
     expect(persisted[0].successfulTurnAckAt).toEqual(expect.any(String));
-    expect(persisted[0].taskSnapshot.status).toBe("in_progress");
+    expect(persisted[0]).not.toHaveProperty("taskSnapshot");
+    expect(persisted[0].taskProjection?.status).toBe("in_progress");
     delivery.stop();
   });
 
@@ -145,6 +156,7 @@ describe("Task-native delivery", () => {
     await source.start(entries);
     expect(sourceSend).toHaveBeenCalledTimes(1);
     expect(sourceSend.mock.calls[0][0].customType).toBe(TASK_CHANGE_RESUME_TYPE);
+    expect(sourceSend.mock.calls[0][0].content).not.toContain(record?.deliveryId);
     source.stop();
 
     const forkSend = vi.fn();
@@ -210,7 +222,7 @@ describe("Task-native delivery", () => {
   });
 
   it("scopes Beads Task references to the configured authority without exposing its path", async () => {
-    const { teamName, task, authorityId } = await fixture("beads-authority");
+    const { teamName, task } = await fixture("beads-authority");
     const config = await teams.readConfig(teamName);
     const workspace = `/tmp/${teamName}-beads-workspace`;
     fs.writeFileSync(paths.configPath(teamName), JSON.stringify({
@@ -220,7 +232,7 @@ describe("Task-native delivery", () => {
     }, null, 2));
 
     const record = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
-    expect(record?.ref.authorityId).toBe(authorityId);
+    expect(record?.ref).toMatchObject({ kind: "task", taskId: task.id, version: expect.stringMatching(/^v_[0-9a-f]{16}$/) });
     expect(JSON.stringify(record)).not.toContain(workspace);
   });
 
@@ -273,12 +285,12 @@ describe("Task-native delivery", () => {
     const before = {
       ...task,
       assignee: "team-lead",
-      version: "assignee-v1",
+      version: taskVersionRef("assignee-v1"),
     };
     const committed = {
       ...before,
       assignee: "worker",
-      version: "assignee-v2",
+      version: taskVersionRef("assignee-v2"),
     };
     const operationId = "assignee-transition-after-mutator-crash";
     let evidence = { task: before, operationId: undefined as string | undefined };
@@ -316,7 +328,7 @@ describe("Task-native delivery", () => {
       details: {
         changes: [{
           changeKind: "assigned",
-          ref: expect.objectContaining({ nativeId: task.id, version: committed.version }),
+          ref: expect.objectContaining({ taskId: task.id, version: expect.stringMatching(/^v_[0-9a-f]{16}$/) }),
         }],
       },
     });

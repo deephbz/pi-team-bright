@@ -10,9 +10,11 @@ import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import * as tasks from "./tasks";
+import { createTask } from "../model-tool-contract/beads-authority-adapter";
+import * as authority from "../model-tool-contract/beads-authority-adapter";
 import * as teams from "./teams";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
-import { CandidateBeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import { readTaskDeliveries } from "./task-delivery";
 import { readTeamEvents } from "./team-events";
@@ -113,9 +115,24 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(Check(update.parameters as any, {
       team_name: teamName,
       task_id: "task-1",
+      operation_id: "update-version-safe",
       status: "in_progress",
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(true);
+    expect(Check(update.parameters as any, {
+      team_name: teamName,
+      task_id: "task-1",
+      operation_id: "claim-version-safe",
+      claim: true,
+      expected_version: taskVersionRef("beads_v1"),
+    })).toBe(true);
+    expect(Check(update.parameters as any, {
+      team_name: teamName,
+      task_id: "task-1",
+      claim: true,
+      status: "in_progress",
+      expected_version: taskVersionRef("beads_v1"),
+    })).toBe(false);
     expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", status: "in_progress" })).toBe(false);
     expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", status: "in_progress", expected_version: "beads_v1" })).toBe(false);
 
@@ -125,31 +142,33 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const task = created.details.outcomes[0].task;
     const readResult = await read.execute("read", { team_name: teamName, task_id: task.id }, undefined, undefined, workerCtx);
     const modelVersion = JSON.parse(readResult.content[0].text).task.version;
-    expect(modelVersion).toBe(taskVersionRef(task.version));
+    expect(modelVersion).toBe(task.version);
 
-    const originalApply = tasks.applySemanticTaskUpdate;
+    const originalApply = authority.applySemanticTaskUpdate;
     const expectedVersions: string[] = [];
-    vi.spyOn(tasks, "applySemanticTaskUpdate").mockImplementation(async (...args: any[]) => {
+    vi.spyOn(authority, "applySemanticTaskUpdate").mockImplementation(async (...args: any[]) => {
       expectedVersions.push(args[3].expectedVersion);
-      return originalApply(...args as Parameters<typeof tasks.applySemanticTaskUpdate>);
+      return originalApply(...args as Parameters<typeof authority.applySemanticTaskUpdate>);
     });
     const updated = await update.execute("first", {
       team_name: teamName,
       task_id: task.id,
+      operation_id: "worker-first-update",
       status: "in_progress",
       expected_version: modelVersion,
     }, undefined, undefined, workerCtx);
-    expect(expectedVersions).toEqual([task.version]);
+    expect(expectedVersions).toEqual([expect.stringMatching(/^beads_[0-9a-f]{64}$/)]);
     expect(updated.details).toMatchObject({
       kind: "task_update_batch",
       outcomes: [{ kind: "updated", task_id: task.id, task: { status: "in_progress" } }],
     });
     const updatedRaw = updated.details.outcomes[0].task.version;
-    expect(JSON.parse(updated.content[0].text)).toMatchObject({ kind: "updated", task: { version: taskVersionRef(updatedRaw) } });
+    expect(JSON.parse(updated.content[0].text)).toMatchObject({ kind: "updated", task: { version: updatedRaw } });
 
     const noVersion = await update.execute("no-version", {
       team_name: teamName,
       task_id: task.id,
+      operation_id: "worker-no-version",
       append_note: "This must not bypass CAS.",
     }, undefined, undefined, workerCtx);
     expect(noVersion.details).toMatchObject({
@@ -159,23 +178,25 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(JSON.parse(noVersion.content[0].text)).toMatchObject({
       kind: "refused",
       reason: "version_conflict",
-      current_task: { version: taskVersionRef(updatedRaw) },
-      recovery: { action: "reconcile_and_retry", expected_version: taskVersionRef(updatedRaw) },
+      current_task: { version: updatedRaw },
+      recovery: { action: "reconcile_and_retry", expected_version: updatedRaw },
     });
 
     const rawVersion = await update.execute("raw-version", {
       team_name: teamName,
       task_id: task.id,
+      operation_id: "worker-raw-version",
       append_note: "Raw authority versions are not model input.",
-      expected_version: updatedRaw,
+      expected_version: "beads_raw_version",
     }, undefined, undefined, workerCtx);
     expect(rawVersion.details.outcomes[0]).toMatchObject({ kind: "refused", reason: "version_conflict", current_task: { version: updatedRaw }, state_changed: false });
 
     const appended = await update.execute("append", {
       team_name: teamName,
       task_id: task.id,
+      operation_id: "worker-append",
       append_note: "Append-note-only Worker mutations remain valid.",
-      expected_version: taskVersionRef(updatedRaw),
+      expected_version: updatedRaw,
     }, undefined, undefined, workerCtx);
     expect(appended.details.outcomes[0]).toMatchObject({ kind: "updated", task: { status: "in_progress" } });
 
@@ -187,15 +208,16 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       team_name: teamName,
       task_id: claimTask.id,
     }, undefined, undefined, workerCtx)).content[0].text).task.version;
-    const claimed = await update.execute("claim", {
+    const claimed = await update.execute("status", {
       team_name: teamName,
       task_id: claimTask.id,
-      claim: true,
+      operation_id: "worker-claim-status",
+      status: "in_progress",
       expected_version: claimVersion,
     }, undefined, undefined, workerCtx);
     expect(claimed.details.outcomes[0]).toMatchObject({
       kind: "updated",
-      task: { id: claimTask.id, status: "in_progress", assignee: "worker" },
+      task: { id: claimTask.id, status: "in_progress" },
     });
   // This scenario makes several serial real-Beads mutations and reads. It normally
   // completes in 28 seconds, but aggregate workers can contend on the Beads
@@ -208,14 +230,17 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const root = workspace();
     writeTeam(teamName, root);
     let failPostCreateRead = true;
-    const adapter = new CandidateBeadsTaskAdapter(teamName, "team-lead", {
-      create: (input, publication) => tasks.createTask(teamName, input, { actor: "team-lead" }, publication),
+    const adapter = new BeadsTaskAdapter(teamName, "team-lead", {
+      create: async (input, publication) => {
+        const receipt = await createTask(teamName, input, { actor: "team-lead" }, publication);
+        return { ...receipt, taskCard: undefined };
+      },
       read: async (taskId) => {
         if (failPostCreateRead) {
           failPostCreateRead = false;
           throw new Error("injected post-create read fault");
         }
-        return tasks.readCandidateTaskAuthorityRecord(teamName, taskId);
+        return authority.readTaskAuthorityRecordEnvelope(teamName, taskId);
       },
     });
     const input = {
@@ -246,6 +271,32 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
   }, 60_000);
 
+  it("uses one Task authority read through the Worker adapter", async () => {
+    const teamName = uniqueTeam();
+    const root = workspace();
+    writeTeam(teamName, root);
+    const lead = harness(teamName, "team-lead");
+    const worker = harness(teamName, "worker");
+    const leadCtx = context(teamName, "team-lead");
+    const workerCtx = context(teamName, "worker");
+    const created = await lead.get("task_create")!.execute("create", {
+      tasks: [{ operation_id: "create-worker-read", title: "Worker read", goal: "Read one exact Task authority record.", assignee: "worker" }],
+    }, undefined, undefined, leadCtx);
+    const task = created.details.outcomes[0].task;
+    const taskAuthorityRead = vi.spyOn(authority, "readTaskAuthorityRecordEnvelope");
+    const genericRead = vi.spyOn(tasks, "readTask");
+
+    const result = await worker.get("task_read")!.execute("read", {
+      team_name: teamName,
+      task_id: task.id,
+    }, undefined, undefined, workerCtx);
+
+    expect(taskAuthorityRead).toHaveBeenCalledOnce();
+    expect(taskAuthorityRead).toHaveBeenCalledWith(teamName, task.id);
+    expect(genericRead).not.toHaveBeenCalled();
+    expect(JSON.parse(result.content[0].text)).toMatchObject({ kind: "found", task: { id: task.id, version: expect.any(String) } });
+  }, 60_000);
+
   it("keeps the raw conditional preflight after model-ref resolution", async () => {
     const teamName = uniqueTeam();
     const root = workspace();
@@ -260,9 +311,9 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const task = created.details.outcomes[0].task;
     const visibleVersion = JSON.parse((await worker.get("task_read")!.execute("read", { team_name: teamName, task_id: task.id }, undefined, undefined, workerCtx)).content[0].text).task.version;
     const store = new BeadsTaskStore({ teamName, workspace: root, authorityFingerprint: config.taskAuthorityFingerprint!, requireExpectedVersion: true });
-    const originalRead = tasks.readCandidateTaskAuthorityRecord;
-    vi.spyOn(tasks, "readCandidateTaskAuthorityRecord").mockImplementationOnce(async (...args: any[]) => {
-      const record = await originalRead(...args as Parameters<typeof tasks.readCandidateTaskAuthorityRecord>);
+    const originalRead = authority.readTaskAuthorityRecordEnvelope;
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelope").mockImplementationOnce(async (...args: any[]) => {
+      const record = await originalRead(...args as Parameters<typeof authority.readTaskAuthorityRecordEnvelope>);
       await store.update(record.task.id, { description: "External writer won the race." }, { actor: "team-lead", expectedVersion: record.task.version });
       return record;
     });
@@ -270,11 +321,12 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const raced = await worker.get("task_update")!.execute("raced", {
       team_name: teamName,
       task_id: task.id,
+      operation_id: "worker-raced-update",
       append_note: "This write must lose the raw preflight race.",
       expected_version: visibleVersion,
     }, undefined, undefined, workerCtx);
     const current = await tasks.readTask(teamName, task.id);
     expect(raced.details.outcomes[0]).toMatchObject({ kind: "refused", reason: "version_conflict", current_task: { id: task.id, version: current.version }, state_changed: false });
-    expect(JSON.parse(raced.content[0].text)).toMatchObject({ recovery: { action: "reconcile_and_retry", expected_version: taskVersionRef(current.version) } });
+    expect(JSON.parse(raced.content[0].text)).toMatchObject({ recovery: { action: "reconcile_and_retry", expected_version: current.version } });
   }, 60_000);
 });

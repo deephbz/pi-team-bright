@@ -37,7 +37,8 @@ variables do not.
 | Team authority, exact Session binding, and logical Worker persistence | [`src/utils/teams.ts`](../../src/utils/teams.ts) |
 | Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
 | Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation` |
-| Task authority and mutation semantics | [`src/utils/tasks.ts`](../../src/utils/tasks.ts) and [`src/utils/beads.ts`](../../src/utils/beads.ts) |
+| Canonical Task card and opaque TaskVersionRef | [`src/model-tool-contract/task-domain.ts`](../../src/model-tool-contract/task-domain.ts) and [`src/model-tool-contract/task-version-ref.ts`](../../src/model-tool-contract/task-version-ref.ts) |
+| Task authority, mutation semantics, and Beads translation | [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts); [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Human operating introduction | [Repository README](../../README.md) |
 | Agent operating procedure | [`skills/pi-team-bright/SKILL.md`](../../skills/pi-team-bright/SKILL.md) |
@@ -47,6 +48,11 @@ restating executable definitions.
 
 ## Decisions still in force
 
+- The strict Task/Beads cutover keeps native records, metadata, revisions, and
+  mutation syntax inside the Beads adapter modules. `TaskCard` and opaque
+  `TaskVersionRef` are the only Task contracts above that boundary; `tasks.ts`
+  is a semantic facade. Architecture impact: **none** to the depicted
+  Structurizr responsibility or topology, so the canonical DSL is unchanged.
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
   exceptional coordination.
 - Task authority, Team/Membership authority, Pi Session identity, event
@@ -90,7 +96,7 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.5` release candidate uses the real main extension as its local
+- The `0.17.0-rc.6` release candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
@@ -123,12 +129,12 @@ restating executable definitions.
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
 - `@hypercarrier/pi-team-bright@0.17.0-rc.5` is published, and npm `next`
-  points to it. It batches candidate snapshot hydration, projects externally
+  still points to it. `0.17.0-rc.6` is prepared but not published. It batches candidate snapshot hydration, projects externally
   oversized Task fields without hiding structural work, inherits explicit Pi
   trust for Worker launch, adds immutable Team pane policy with a deterministic
   Herdr grid, and adds last-resort stale-Team rescue guidance. The exact source,
   workflow, registry-byte, provenance, and GitHub prerelease evidence is in the
-  [`v0.17.0-rc.5` release receipt](../journal/2026-08-04-v0.17.0-rc.5-release-receipt.md).
+  [`v0.17.0-rc.5` release receipt](../journal/2026-08-04-v0.17.0-rc.5-release-receipt.md). The prepared [`v0.17.0-rc.6` receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md) records pending VCS and publication evidence.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -189,12 +195,27 @@ context or the executable contract sources.
   model-tool surface composes Team epochs, logical Worker meaning, exact
   lead-Session binding, Beads model-tool metadata, structured events, hidden
   branch position, authoritative Task rescan, and the existing Worker launch
-  bridge through the real main extension. Leader Task updates use
-  expected-version preflight plus durable operation metadata replay; stale and
-  conflicting operations refuse without a second model-tool mutation. The
-  redacted receipt is [`2026-08-02-durable-preview-local-canary.json`](../journal/artifacts/2026-08-02-durable-preview-local-canary.json).
+  bridge through the real main extension. The Beads adapter modules are the only
+  translation boundary for authority records; Team events, sync actions, and
+  Task reads above them use canonical Task cards. The semantic Task facade now
+  delegates mutation authority below that adapter, and Worker claim execution
+  uses the adapter's canonical claim path. Delivery accepts opaque
+  TaskVersionRef coordinates and refuses raw revisions; stopped epochs use the
+  bounded adapter-backed delivery-record migration in
+  [`src/utils/task-delivery-migration.ts`](../../src/utils/task-delivery-migration.ts). Run the explicit stopped-epoch operation with `npm run migrate:task-delivery -- <team-name>`; it refuses any active Membership and never runs during normal delivery.
+  Normal runtime records are canonical-only and refuse with `upgrade_required`
+  until a stopped epoch completes migration. Recovery reconciliation hydrates
+  listed IDs through one adapter multi-ID read and refuses metadata gaps; it
+  never inserts placeholder Task meaning. Delivery publication also refuses
+  when the adapter cannot provide canonical current context or goal evidence. The adapter owns expected-version
+  checks and operation replay, while publication reuses its canonical post-state
+  card and adds no authority read. Stale and conflicting operations refuse
+  without a second model-tool mutation. The redacted receipt is [`2026-08-02-durable-preview-local-canary.json`](../journal/artifacts/2026-08-02-durable-preview-local-canary.json).
   The public rc.3 release now proves package delivery and provenance; the
-  Worker mutation surface remains the bounded three-tool projection.
+  Worker mutation surface remains the bounded three-tool projection. The
+  strict Task boundary is now enforced by the adapter-owned claim path,
+  canonical delivery coordinates, and the semantic facade split; do not treat
+  raw authority records as Task contracts.
 - [Task-engine performance](../projects/task-engine-performance.md) is in
   hardening measurement. It owns trace repair, benchmark design, current
   performance assessment, and optimization selection.

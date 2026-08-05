@@ -2,34 +2,34 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BeadsTaskStore,
-  CANDIDATE_TASK_METADATA_KEY,
-  CANDIDATE_TASK_METADATA_SCHEMA,
+  TASK_METADATA_KEY,
+  TASK_METADATA_SCHEMA,
   type BdRunner,
-  type CandidateTaskAuthorityRecord,
-  type CandidateTaskMetadata,
+  type TaskAuthorityRecordEnvelope,
+  type TaskMetadata,
   type CreateTaskInput,
 } from "../utils/beads";
-import type { TaskFile } from "../utils/models";
+import type { TaskAuthorityRecord } from "../utils/beads";
 import { configPath, teamDir } from "../utils/paths";
 import {
   appendTaskEvidenceEvent,
   readTeamEvents,
 } from "../utils/team-events";
-import type { InternalTaskPublicationOptions, TaskCreateReceipt } from "../utils/tasks";
+import type { InternalTaskPublicationOptions, TaskCreateReceipt } from "./beads-authority-adapter";
 import {
-  CandidateBeadsTaskAdapter,
-  candidateUpdateEventEvidence,
-  projectCandidateNonterminalTaskIds,
-  refreshCandidateTaskMetadata,
-  projectCandidateTaskChanges,
-  projectCandidateTaskJournalEntry,
-  type CandidateTaskAdapterAuthority,
+  BeadsTaskAdapter,
+  taskUpdateEventEvidence,
+  projectNonterminalTaskIds,
+  refreshTaskMetadata,
+  projectTaskChanges,
+  projectTaskJournalEntry,
+  type TaskAdapterAuthority,
 } from "./beads-task-adapter";
 import { taskVersionRef } from "./task-version-ref";
 
 const createdTeams: string[] = [];
 
-function task(overrides: Partial<TaskFile> = {}): TaskFile {
+function task(overrides: Partial<TaskAuthorityRecord> = {}): TaskAuthorityRecord {
   return {
     id: "candidate-task-1",
     title: "Verify candidate",
@@ -44,7 +44,7 @@ function task(overrides: Partial<TaskFile> = {}): TaskFile {
   };
 }
 
-function receipt(value: TaskFile): TaskCreateReceipt {
+function receipt(value: TaskAuthorityRecord): TaskCreateReceipt {
   return {
     task: value,
     changed: true,
@@ -63,18 +63,18 @@ function receipt(value: TaskFile): TaskCreateReceipt {
   };
 }
 
-function metadata(currentContext = "Work has not started."): CandidateTaskMetadata {
+function metadata(currentContext = "Work has not started."): TaskMetadata {
   return {
-    schema: CANDIDATE_TASK_METADATA_SCHEMA,
+    schema: TASK_METADATA_SCHEMA,
     goal: "Verify the exact release digest.",
     current_context: currentContext,
   };
 }
 
-function authorityRecord(candidateMetadata?: unknown): CandidateTaskAuthorityRecord {
+function authorityRecord(taskMetadata?: unknown): TaskAuthorityRecordEnvelope {
   return {
     task: task(),
-    ...(candidateMetadata === undefined ? {} : { candidateMetadata }),
+    ...(taskMetadata === undefined ? {} : { taskMetadata }),
   };
 }
 
@@ -85,11 +85,11 @@ afterEach(() => {
   }
 });
 
-describe("durable candidate Task adapter", () => {
+describe("durable Task adapter", () => {
   it("creates through the existing Task authority and keeps metadata canonical", async () => {
     const create = vi.fn(async (_input: CreateTaskInput, _publication: InternalTaskPublicationOptions) => receipt(task()));
     const read = vi.fn(async () => authorityRecord(metadata()));
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", { create, read });
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", { create, read });
 
     const created = await adapter.create({
       operationId: "create-candidate",
@@ -106,11 +106,13 @@ describe("durable candidate Task adapter", () => {
       acceptanceCriteria: "Verify the exact release digest.",
       assignee: "verifier",
       internalMetadata: {
-        [CANDIDATE_TASK_METADATA_KEY]: metadata(),
+        [TASK_METADATA_KEY]: metadata(),
       },
     });
     expect(create.mock.calls[0][1]).toEqual({
       taskEventEvidence: [{ kind: "created", text: "Verify the exact release digest." }],
+      taskMetadata: metadata(),
+      taskCardProjector: expect.any(Function),
     });
     expect(created).toEqual({
       kind: "created",
@@ -122,14 +124,14 @@ describe("durable candidate Task adapter", () => {
         status: "open",
         assignee: "verifier",
         current_context: "Work has not started.",
-        version: "beads_authority_version",
+        version: taskVersionRef("beads_authority_version"),
       },
       deliveryWarnings: [],
     });
   });
 
   it("recovers an unknown create outcome only through the same Team-scoped operation", async () => {
-    let stored: CandidateTaskAuthorityRecord | undefined;
+    let stored: TaskAuthorityRecordEnvelope | undefined;
     let failAfterCreate = true;
     let authorityMutations = 0;
     const create = vi.fn(async (input: CreateTaskInput) => {
@@ -147,7 +149,7 @@ describe("durable candidate Task adapter", () => {
       }
       return stored!;
     });
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", { create, read });
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", { create, read });
     const input = { operationId: "create-safe-1", title: "Verify candidate", goal: "Verify the exact release digest.", assignee: "verifier" };
 
     await expect(adapter.create(input)).resolves.toMatchObject({
@@ -173,11 +175,11 @@ describe("durable candidate Task adapter", () => {
       authorityRecord(JSON.stringify(metadata("String context."))),
       authorityRecord(),
     ];
-    const authority: CandidateTaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = {
       create,
       read: vi.fn(async () => records.shift()!),
     };
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", authority);
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
 
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
       kind: "found",
@@ -189,8 +191,8 @@ describe("durable candidate Task adapter", () => {
     });
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
       kind: "contract_gap",
-      reason: "candidate_metadata_absent",
-      authorityVersion: "beads_authority_version",
+      reason: "task_metadata_absent",
+      version: taskVersionRef("beads_authority_version"),
     });
   });
 
@@ -210,7 +212,7 @@ describe("durable candidate Task adapter", () => {
               labels: ["pi-teams:candidate-team"],
               metadata: {
                 pi_teams_team: "candidate-team",
-                [CANDIDATE_TASK_METADATA_KEY]: metadata(),
+                [TASK_METADATA_KEY]: metadata(),
               },
             }))),
             stderr: "",
@@ -226,7 +228,7 @@ describe("durable candidate Task adapter", () => {
               labels: ["pi-teams:candidate-team"],
               metadata: {
                 pi_teams_team: "candidate-team",
-                ...(id === "candidate-task-1" ? { [CANDIDATE_TASK_METADATA_KEY]: metadata() } : {}),
+                ...(id === "candidate-task-1" ? { [TASK_METADATA_KEY]: metadata() } : {}),
               },
             }))),
             stderr: "",
@@ -238,7 +240,7 @@ describe("durable candidate Task adapter", () => {
     };
     const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
     const listed = await store.list();
-    const records = await store.readCandidateTaskAuthorityRecords(listed.map((candidate) => candidate.id));
+    const records = await store.readTaskAuthorityRecordEnvelopes(listed.map((candidate) => candidate.id));
 
     const listCommands = commands.filter((args) => args[3] === "list");
     const showCommands = commands.filter((args) => args[3] === "show");
@@ -254,17 +256,49 @@ describe("durable candidate Task adapter", () => {
     ]);
     expect(showCommands.filter((args) => ids.filter((id) => args.includes(id)).length === 1)).toHaveLength(0);
     expect(records).toHaveLength(2);
-    expect(records[0].candidateMetadata).toEqual(metadata());
-    expect(records[1]).not.toHaveProperty("candidateMetadata");
+    expect(records[0]!.taskMetadata).toEqual(metadata());
+    expect(records[1]).not.toHaveProperty("taskMetadata");
   });
 
-  it("projects batched candidate records with the same found and gap semantics", async () => {
+  it("uses one exact native show for mixed missing candidate IDs", async () => {
+    const run = vi.fn(async () => ({
+      stdout: JSON.stringify([{
+        id: "candidate-task-1",
+        title: "Candidate task",
+        description: "Compatibility text",
+        acceptance_criteria: "Compatibility text",
+        status: "open",
+        labels: ["pi-teams:candidate-team"],
+        metadata: {
+          pi_teams_team: "candidate-team",
+          [TASK_METADATA_KEY]: metadata(),
+        },
+      }]),
+      stderr: "Error fetching candidate-task-missing: no issue found matching \"candidate-task-missing\"",
+      exitCode: 0,
+    }));
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner: { run } });
+
+    await expect(store.readTaskAuthorityRecordEnvelopes([
+      "candidate-task-1", "candidate-task-missing", "candidate-task-1",
+    ])).resolves.toMatchObject([
+      { task: { id: "candidate-task-1" }, taskMetadata: metadata() },
+      undefined,
+    ]);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith([
+      "--directory", "/tmp/candidate-team-authority", "--json",
+      "show", "candidate-task-1", "candidate-task-missing", "--include-dependents",
+    ], { cwd: "/tmp/candidate-team-authority", timeoutMs: 10_000 });
+  });
+
+  it("projects batched Task records with the same found and gap semantics", async () => {
     const read = vi.fn(async (taskId: string) => authorityRecord(metadata(`${taskId} context`)));
     const readMany = vi.fn(async (taskIds: readonly string[]) => taskIds.map((taskId) => ({
       ...authorityRecord(taskId === "candidate-task-2" ? undefined : metadata(`${taskId} context`)),
       task: task({ id: taskId }),
     })));
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", {
       create: vi.fn(async () => receipt(task())),
       read,
       readMany,
@@ -272,7 +306,7 @@ describe("durable candidate Task adapter", () => {
 
     await expect(adapter.readMany(["candidate-task-1", "candidate-task-2"])).resolves.toMatchObject([
       { kind: "found", task: { id: "candidate-task-1", current_context: "candidate-task-1 context" } },
-      { kind: "contract_gap", reason: "candidate_metadata_absent", taskId: "candidate-task-2" },
+      { kind: "contract_gap", reason: "task_metadata_absent", taskId: "candidate-task-2" },
     ]);
     expect(readMany).toHaveBeenCalledOnce();
     expect(read).not.toHaveBeenCalled();
@@ -285,7 +319,7 @@ describe("durable candidate Task adapter", () => {
       authorityRecord({ ...metadata(), goal: "😀".repeat(501) }),
       { ...authorityRecord(metadata()), task: task({ title: "😀".repeat(41) }) },
     ];
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", {
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => records.shift()!),
     });
@@ -309,7 +343,7 @@ describe("durable candidate Task adapter", () => {
         projection_warnings: [{ incomplete_fields: ["goal"] }],
         status: "open",
         assignee: "verifier",
-        version: "beads_authority_version",
+        version: taskVersionRef("beads_authority_version"),
       },
     });
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
@@ -319,11 +353,11 @@ describe("durable candidate Task adapter", () => {
   });
 
   it("returns a typed no-write gap instead of claiming CAS or operation replay", async () => {
-    const authority: CandidateTaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = {
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => authorityRecord(metadata("Ready to update."))),
     };
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", authority);
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
 
     await expect(adapter.update({
       taskId: "candidate-task-1",
@@ -333,30 +367,30 @@ describe("durable candidate Task adapter", () => {
       journalEntries: [{ kind: "decision", text: "Refuse the unsafe write." }],
     })).resolves.toMatchObject({
       kind: "contract_gap",
-      reason: "beads_external_writer_atomicity_unavailable",
+      reason: "external_writer_atomicity_unavailable",
       unsupported: ["atomic_compare_and_swap", "task_scoped_operation_replay"],
-      currentTask: { version: "beads_authority_version" },
+      currentTask: { version: taskVersionRef("beads_authority_version") },
     });
   });
 
   it("commits a candidate update and replays the durable operation record", async () => {
-    let stored: CandidateTaskMetadata = metadata("Before update.");
-    const update = vi.fn(async (_taskId: string, _input: any, nextMetadata: CandidateTaskMetadata) => {
+    let stored: TaskMetadata = metadata("Before update.");
+    const update = vi.fn(async (_taskId: string, _input: any, nextMetadata: TaskMetadata) => {
       stored = nextMetadata;
       return {
         task: task({ version: "beads_authority_version_next", status: "in_progress" }),
         before: task(),
-        appliedOperations: ["set:status", "append:note", "set:candidateTaskMetadata"],
+        appliedOperations: ["set:status", "append:note", "set:taskMetadata"],
         deliveryDegraded: false,
         deliveryWarnings: [],
       };
     });
-    const authority: CandidateTaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = {
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => authorityRecord(stored)),
       update,
     };
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", authority);
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
     const input = {
       taskId: "candidate-task-1",
       operationId: "operation-safe-1",
@@ -366,7 +400,7 @@ describe("durable candidate Task adapter", () => {
       status: "in_progress" as const,
     };
     const first = await adapter.update(input);
-    expect(first).toMatchObject({ kind: "updated", operationId: "operation-safe-1", task: { version: "beads_authority_version_next" } });
+    expect(first).toMatchObject({ kind: "updated", operationId: "operation-safe-1", task: { version: taskVersionRef("beads_authority_version_next") } });
     const replay = await adapter.update(input);
     expect(replay).toMatchObject({ kind: "updated", operationId: "operation-safe-1" });
     expect(update).toHaveBeenCalledTimes(1);
@@ -374,8 +408,8 @@ describe("durable candidate Task adapter", () => {
 
   it("preserves replay metadata across a Worker context refresh", async () => {
     let storedTask = task({ version: "beads_v1" });
-    let storedMetadata: CandidateTaskMetadata = metadata("Before update.");
-    const update = vi.fn(async (_taskId: string, input: any, nextMetadata: CandidateTaskMetadata) => {
+    let storedMetadata: TaskMetadata = metadata("Before update.");
+    const update = vi.fn(async (_taskId: string, input: any, nextMetadata: TaskMetadata) => {
       storedMetadata = nextMetadata;
       storedTask = task({
         version: input.operationId === "operation-a" ? "beads_v2" : "beads_v3",
@@ -384,17 +418,17 @@ describe("durable candidate Task adapter", () => {
       return {
         task: storedTask,
         before: task(),
-        appliedOperations: ["set:status", "append:note", "set:candidateTaskMetadata"],
+        appliedOperations: ["set:status", "append:note", "set:taskMetadata"],
         deliveryDegraded: false,
         deliveryWarnings: [],
       };
     });
-    const authority: CandidateTaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = {
       create: vi.fn(async () => receipt(task())),
-      read: vi.fn(async () => ({ task: storedTask, candidateMetadata: storedMetadata })),
+      read: vi.fn(async () => ({ task: storedTask, taskMetadata: storedMetadata })),
       update,
     };
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", authority);
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
     const operationA = {
       taskId: "candidate-task-1",
       operationId: "operation-a",
@@ -406,7 +440,7 @@ describe("durable candidate Task adapter", () => {
 
     await expect(adapter.update(operationA)).resolves.toMatchObject({ kind: "updated", operationId: "operation-a" });
     const parsed = storedMetadata;
-    const refreshed = refreshCandidateTaskMetadata(parsed, "Worker metadata refreshed.");
+    const refreshed = refreshTaskMetadata(parsed, "Worker metadata refreshed.");
     await update("candidate-task-1", {
       taskId: "candidate-task-1",
       operationId: "worker-refresh",
@@ -420,7 +454,7 @@ describe("durable candidate Task adapter", () => {
     expect(replay).toMatchObject({
       kind: "updated",
       operationId: "operation-a",
-      task: { version: "beads_v3", current_context: "Worker metadata refreshed." },
+      task: { version: taskVersionRef("beads_v3"), current_context: "Worker metadata refreshed." },
       journalEntries: [{ text: "Leader operation committed." }],
     });
     const conflict = await adapter.update({ ...operationA, currentContext: "Conflicting reuse." });
@@ -428,16 +462,16 @@ describe("durable candidate Task adapter", () => {
       kind: "refused",
       reason: "operation_conflict",
       operationId: "operation-a",
-      currentTask: { version: "beads_v3" },
+      currentTask: { version: taskVersionRef("beads_v3") },
     });
     expect(update).toHaveBeenCalledTimes(2);
     expect(storedMetadata.last_operation).toMatchObject({ operation_id: "operation-a" });
     expect(storedMetadata.last_operation?.journal_entries).toHaveLength(1);
   });
 
-  it("rejects an oversized leader context before invoking its authority", async () => {
+  it("returns a typed gap for oversized leader context before invoking its authority", async () => {
     const update = vi.fn();
-    const adapter = new CandidateBeadsTaskAdapter("candidate-team", "team-lead", {
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", {
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => authorityRecord(metadata("Ready to update."))),
       update,
@@ -448,7 +482,13 @@ describe("durable candidate Task adapter", () => {
       operationId: "context-too-large",
       expectedVersion: taskVersionRef("beads_authority_version"),
       currentContext: "👩🏽‍🚀".repeat(2_001),
-    })).rejects.toThrow("2,000 TypeBox string");
+    })).resolves.toMatchObject({
+      kind: "contract_gap",
+      reason: "task_metadata_invalid",
+      taskId: "candidate-task-1",
+      version: taskVersionRef("beads_authority_version"),
+      message: expect.stringContaining("2,000 TypeBox string"),
+    });
     expect(update).not.toHaveBeenCalled();
   });
 
@@ -462,7 +502,7 @@ describe("durable candidate Task adapter", () => {
       current_context: "Open.",
       version: "v1",
     };
-    expect(projectCandidateNonterminalTaskIds([
+    expect(projectNonterminalTaskIds([
       current,
       { ...current, id: "task-closed", status: "closed" },
       { ...current, id: "task-other", assignee: "other" },
@@ -471,7 +511,7 @@ describe("durable candidate Task adapter", () => {
 });
 
 describe("candidate Beads metadata and Team event evidence", () => {
-  it("rejects direct candidate metadata writes before any Beads command", async () => {
+  it("rejects direct Task metadata writes before any Beads command", async () => {
     const run = vi.fn();
     const store = new BeadsTaskStore({
       teamName: "candidate-store",
@@ -484,15 +524,15 @@ describe("candidate Beads metadata and Team event evidence", () => {
     await expect(store.create({
       title: "Invalid candidate",
       description: "No Beads write is allowed.",
-      internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: invalid },
+      internalMetadata: { [TASK_METADATA_KEY]: invalid },
     })).rejects.toThrow("2,000 TypeBox string");
     await expect(store.updateWithResult("candidate-task-1", {}, {
-      candidateTaskMetadata: invalid,
+      taskMetadata: invalid,
     })).rejects.toThrow("2,000 TypeBox string");
     await expect(store.create({
       title: "Invalid goal",
       description: "No Beads write is allowed.",
-      internalMetadata: { [CANDIDATE_TASK_METADATA_KEY]: invalidGoal },
+      internalMetadata: { [TASK_METADATA_KEY]: invalidGoal },
     })).rejects.toThrow("1,000 TypeBox string");
     expect(run).not.toHaveBeenCalled();
   });
@@ -508,7 +548,7 @@ describe("candidate Beads metadata and Team event evidence", () => {
       labels: ["pi-teams:candidate-store"],
       metadata: {
         pi_teams_team: "candidate-store",
-        [CANDIDATE_TASK_METADATA_KEY]: metadata(),
+        [TASK_METADATA_KEY]: metadata(),
       },
       updated_at: "2026-08-02T00:00:00Z",
       dependencies: [],
@@ -522,7 +562,7 @@ describe("candidate Beads metadata and Team event evidence", () => {
       notes: "Digest mismatch observed.",
       metadata: {
         ...before.metadata,
-        [CANDIDATE_TASK_METADATA_KEY]: JSON.stringify(updatedMetadata),
+        [TASK_METADATA_KEY]: JSON.stringify(updatedMetadata),
       },
       updated_at: "2026-08-02T00:00:01Z",
     };
@@ -538,22 +578,22 @@ describe("candidate Beads metadata and Team event evidence", () => {
     const mutation = await store.updateWithResult("candidate-task-1", { status: "blocked" }, {
       actor: "team-lead",
       appendNote: "Digest mismatch observed.",
-      candidateTaskMetadata: updatedMetadata,
+      taskMetadata: updatedMetadata,
     });
-    const record = await store.readCandidateTaskAuthorityRecord("candidate-task-1");
+    const record = await store.readTaskAuthorityRecordEnvelope("candidate-task-1");
 
     const updateArgs = run.mock.calls.map((call) => call[0]).find((args) => args.includes("update"))!;
     expect(updateArgs).toEqual(expect.arrayContaining([
       "--append-notes", "Digest mismatch observed.",
-      "--set-metadata", `${CANDIDATE_TASK_METADATA_KEY}=${JSON.stringify(updatedMetadata)}`,
+      "--set-metadata", `${TASK_METADATA_KEY}=${JSON.stringify(updatedMetadata)}`,
       "--status", "blocked",
     ]));
     expect(mutation.appliedOperations).toEqual([
       "set:status",
       "append:note",
-      "set:candidateTaskMetadata",
+      "set:taskMetadata",
     ]);
-    expect(record.candidateMetadata).toBe(JSON.stringify(updatedMetadata));
+    expect(record.taskMetadata).toBe(JSON.stringify(updatedMetadata));
     expect(record.task.version).toMatch(/^beads_[a-f0-9]{64}$/);
   });
 
@@ -565,21 +605,21 @@ describe("candidate Beads metadata and Team event evidence", () => {
 
     const committed = await appendTaskEvidenceEvent(teamName, {
       type: "task",
-      ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
+      ref: { taskId: "candidate-task-1", version: taskVersionRef("beads_v2") },
       change: "note",
       actor: "team-lead",
       taskEvidence: { kind: "decision", text: "Keep the Task blocked." },
     });
     const event = readTeamEvents(teamName, { afterCursor: "0" }).events[0];
-    const entry = projectCandidateTaskJournalEntry(event);
-    const changes = projectCandidateTaskChanges([event], [{
+    const entry = projectTaskJournalEntry(event);
+    const changes = projectTaskChanges([event], [{
       id: "candidate-task-1",
       title: "Verify candidate",
       goal: "Verify the exact release digest.",
       status: "blocked",
       assignee: "verifier",
       current_context: "Digest mismatch requires a leader decision.",
-      version: "beads_v2",
+      version: taskVersionRef("beads_v2"),
     }]);
 
     expect(entry).toEqual({
@@ -596,17 +636,20 @@ describe("candidate Beads metadata and Team event evidence", () => {
         changeKinds: ["progress"],
         journalEntries: [entry],
         current: {
+          id: "candidate-task-1",
+          title: "Verify candidate",
+          goal: "Verify the exact release digest.",
           status: "blocked",
           assignee: "verifier",
           current_context: "Digest mismatch requires a leader decision.",
-          version: "beads_v2",
+          version: taskVersionRef("beads_v2"),
         },
       }],
     });
-    expect(projectCandidateTaskChanges([{
+    expect(projectTaskChanges([{
       type: "task",
       cursor: "99",
-      ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
+      ref: { taskId: "candidate-task-1", version: taskVersionRef("beads_v2") },
       change: "status",
       actor: "external",
       at: "2026-08-02T00:00:00.000Z",
@@ -616,40 +659,40 @@ describe("candidate Beads metadata and Team event evidence", () => {
       goal: "Verify the exact release digest.",
       status: "blocked",
       current_context: "Current.",
-      version: "beads_v2",
+      version: taskVersionRef("beads_v2"),
     }])).toEqual({
       kind: "projected",
       changes: [{
         taskId: "candidate-task-1",
         changeKinds: ["status"],
         journalEntries: [],
-        current: { status: "blocked", current_context: "Current.", version: "beads_v2" },
+        current: { id: "candidate-task-1", title: "Verify candidate", goal: "Verify the exact release digest.", status: "blocked", current_context: "Current.", version: taskVersionRef("beads_v2") },
       }],
     });
     const structural = (["created", "assigned", "status", "relation"] as const).map((change, index) => ({
       type: "task" as const,
       cursor: String(index + 1),
-      ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
+      ref: { taskId: "candidate-task-1", version: taskVersionRef("beads_v2") },
       change,
       actor: "external",
       at: "2026-08-02T00:00:00.000Z",
     }));
-    expect(projectCandidateTaskChanges(structural, [{
+    expect(projectTaskChanges(structural, [{
       id: "candidate-task-1",
       title: "Verify candidate",
       goal: "Verify the exact release digest.",
       status: "blocked",
       current_context: "Current.",
-      version: "beads_v2",
+      version: taskVersionRef("beads_v2"),
     }])).toMatchObject({
       kind: "projected",
       changes: [{ changeKinds: ["created", "assignment", "status", "relation"], journalEntries: [] }],
     });
 
-    expect(projectCandidateTaskChanges([{
+    expect(projectTaskChanges([{
       type: "task",
       cursor: "100",
-      ref: { authorityId: "task-authority", taskId: "candidate-task-1", version: "beads_v2" },
+      ref: { taskId: "candidate-task-1", version: taskVersionRef("beads_v2") },
       change: "note",
       actor: "external",
       at: "2026-08-02T00:00:00.000Z",
@@ -659,14 +702,14 @@ describe("candidate Beads metadata and Team event evidence", () => {
       goal: "Verify the exact release digest.",
       status: "blocked",
       current_context: "Current.",
-      version: "beads_v2",
+      version: taskVersionRef("beads_v2"),
     }])).toMatchObject({
       kind: "contract_gap",
       reason: "structured_task_event_evidence_absent",
       eventId: "task-event-100",
     });
 
-    expect(candidateUpdateEventEvidence({
+    expect(taskUpdateEventEvidence({
       taskId: "candidate-task-1",
       operationId: "operation-1",
       expectedVersion: taskVersionRef("beads_v2"),

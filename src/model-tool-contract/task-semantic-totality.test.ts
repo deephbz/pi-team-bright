@@ -1,27 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
 import { Check } from "typebox/value";
 import {
-  CandidateModelResultSchemas,
-  assembleCandidateToolResult,
-  projectCandidateToolResult,
+  ModelResultSchemas,
+  assembleToolResult,
+  projectToolResult,
 } from "./result-projection";
-import { projectCandidateTui } from "./tui-projection";
+import { projectTui } from "./tui-projection";
 import { InMemoryModelToolTeamPort, exactLeaderSessionId, type ModelToolTeamPort } from "./in-memory-team-port";
 import { registerModelToolJourney, type ModelToolRegistration } from "./pi-registration";
-import { CandidateBeadsTaskAdapter } from "./beads-task-adapter";
+import { BeadsTaskAdapter } from "./beads-task-adapter";
+import { taskVersionRef } from "./task-version-ref";
 
 const task = {
   id: "task-1", title: "Verify", goal: "Verify the release.", status: "open" as const,
-  current_context: "Work has not started.", version: "beads_task_1",
+  current_context: "Work has not started.", version: taskVersionRef("beads_task_1"),
 };
 const session = exactLeaderSessionId("totality-session");
 
 function assertTotal(tool: "task_create" | "task_update", raw: any) {
-  const assembly = assembleCandidateToolResult(tool, raw);
-  const model = projectCandidateToolResult(tool, raw);
-  expect(Check(CandidateModelResultSchemas[tool], model)).toBe(true);
+  const assembly = assembleToolResult(tool, raw);
+  const model = projectToolResult(tool, raw);
+  expect(Check(ModelResultSchemas[tool], model)).toBe(true);
   expect(assembly.content[0].text).toBe(JSON.stringify(model));
-  const tui = projectCandidateTui({ tool, details: raw, expanded: true }).join("\n");
+  const tui = projectTui({ tool, details: raw, expanded: true }).join("\n");
   expect(tui).not.toContain("did not produce a semantic result");
   expect(tui).not.toContain("semantic details could not be validated");
 }
@@ -54,7 +55,7 @@ describe("task semantic-result totality", () => {
     const update = [
       { kind: "updated", input_index: 0, task_id: task.id, operation_id: "update-ok", task, journal_entries: [] },
       ...["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"].map((reason) => ({ kind: "refused", input_index: 0, task_id: task.id, operation_id: `update-${reason}`, reason, message: `${reason}.`, current_task: task, state_changed: false })),
-      { kind: "contract_gap", input_index: 0, task_id: task.id, operation_id: "update-gap", reason: "candidate_metadata_invalid", message: "Metadata is invalid.", unsupported: ["candidate_metadata"], current_task: task, state_changed: false },
+      { kind: "contract_gap", input_index: 0, task_id: task.id, operation_id: "update-gap", reason: "task_metadata_invalid", message: "Metadata is invalid.", unsupported: ["task_metadata"], current_task: task, state_changed: false },
       { kind: "unavailable", input_index: 0, task_id: task.id, operation_id: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
     ];
     for (const outcome of update) assertTotal("task_update", { kind: "task_update_batch", outcomes: [outcome] });
@@ -66,7 +67,7 @@ describe("task semantic-result totality", () => {
       create: vi.fn().mockResolvedValue({ task: { id: "task-1" }, deliveryWarnings: [] }),
       read,
     };
-    const adapter = new CandidateBeadsTaskAdapter("totality-team", "team-lead", authority as any);
+    const adapter = new BeadsTaskAdapter("totality-team", "team-lead", authority as any);
     await expect(adapter.create({ operationId: "create-unknown", title: "Verify", goal: "Verify the release." })).resolves.toMatchObject({
       kind: "unknown_outcome",
       operationId: "create-unknown",
@@ -101,7 +102,7 @@ describe("task semantic-result totality", () => {
     for (const outcome of [
       { kind: "updated", taskId: task.id, operationId: "update-ok", task, journalEntries: [] },
       ...["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"].map((reason) => ({ kind: "refused", taskId: task.id, operationId: `update-${reason}`, reason, message: `${reason}.`, currentTask: task })),
-      { kind: "contract_gap", taskId: task.id, operationId: "update-gap", reason: "candidate_metadata_invalid", message: "Metadata is invalid.", currentTask: task, unsupported: ["candidate_metadata"] },
+      { kind: "contract_gap", taskId: task.id, operationId: "update-gap", reason: "task_metadata_invalid", message: "Metadata is invalid.", currentTask: task, unsupported: ["task_metadata"] },
       { kind: "unavailable", taskId: task.id, operationId: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable." },
     ]) {
       update.mockResolvedValueOnce({ kind: "batch", outcomes: [outcome] } as any);

@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { IdentifiedInboxMessage, Member, TaskFile, TeamConfig } from "./models";
+import type { IdentifiedInboxMessage, Member, TeamConfig } from "./models";
+import type { TaskCard } from "../model-tool-contract/task-domain";
+import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import {
   DIRECT_MESSAGE_ACK_ENTRY_TYPE,
   DIRECT_MESSAGE_CUSTOM_TYPE,
@@ -126,17 +128,15 @@ function messageHarness(messages = [inboxMessage()]) {
   return { delivery, sink, markRead };
 }
 
-function taskSnapshot(id: string, assignee = "worker"): TaskFile {
+function taskCard(id: string, assignee = "worker"): TaskCard {
   return {
     id,
     title: "Task delivery",
-    description: "durable snapshot",
-    acceptanceCriteria: "The durable snapshot is delivered",
+    goal: "Deliver the canonical Task card.",
     status: "in_progress",
-    relations: [],
+    current_context: "The Task is ready for delivery.",
     assignee,
-    version: `version-${id}`,
-    provenance: { authority: "beads", teamName: "round3-fixture" },
+    version: taskVersionRef(`version-${id}`),
   };
 }
 
@@ -226,7 +226,7 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
     const team = teamName("task-error");
     const sessionFile = `/tmp/${team}-worker.jsonl`;
     configureTeam(team, sessionFile);
-    const record = await enqueueTaskChangeForRecipient(team, taskSnapshot("task-error"), "worker", "assigned");
+    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-error"), "worker", "assigned");
     expect(record).not.toBeNull();
 
     const first = taskDelivery(team, sessionFile);
@@ -257,7 +257,7 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
     const team = teamName("task-success");
     const sessionFile = `/tmp/${team}-worker.jsonl`;
     configureTeam(team, sessionFile);
-    const record = await enqueueTaskChangeForRecipient(team, taskSnapshot("task-success"), "worker", "assigned");
+    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-success"), "worker", "assigned");
     const current = taskDelivery(team, sessionFile);
     await current.delivery.start([]);
     const presented = current.sink.sendMessage.mock.calls[0][0];

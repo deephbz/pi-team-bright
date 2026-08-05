@@ -1,65 +1,67 @@
 import type { Static } from "typebox";
 import {
-  CandidateEnsureWorkerParametersSchema,
-  CandidateEnsureWorkerResultSchema,
-  CandidateTaskCreateParametersSchema,
-  CandidateTaskCreateResultSchema,
-  CandidateTaskReadParametersSchema,
-  CandidateTaskReadResultSchema,
-  CandidateTaskUpdateParametersSchema,
-  CandidateTaskUpdateResultSchema,
-  CandidateTeamCreateParametersSchema,
-  CandidateTeamCreateResultSchema,
-  CandidateTeamSyncParametersSchema,
-  CandidateTeamSyncResultSchema,
-  CandidateWorkerStopParametersSchema,
-  CandidateWorkerStopResultSchema,
-  CandidateTeamShutdownParametersSchema,
-  CandidateTeamShutdownResultSchema,
-  CandidateTaskLinkParametersSchema,
-  CandidateTaskLinkResultSchema,
-  CandidateAlertSendParametersSchema,
-  CandidateAlertSendResultSchema,
+  EnsureWorkerParametersSchema,
+  EnsureWorkerResultSchema,
+  TaskCreateParametersSchema,
+  TaskCreateResultSchema,
+  TaskReadParametersSchema,
+  TaskReadResultSchema,
+  TaskUpdateParametersSchema,
+  TaskUpdateResultSchema,
+  TeamCreateParametersSchema,
+  TeamCreateResultSchema,
+  TeamSyncParametersSchema,
+  TeamSyncResultSchema,
+  WorkerStopParametersSchema,
+  WorkerStopResultSchema,
+  TeamShutdownParametersSchema,
+  TeamShutdownResultSchema,
+  TaskLinkParametersSchema,
+  TaskLinkResultSchema,
+  AlertSendParametersSchema,
+  AlertSendResultSchema,
 } from "./catalog";
-import type { AlertTarget, ExactLeaderSessionId, ModelToolTeamPort, ReadTaskContractGap, ModelToolTaskCurrent } from "./in-memory-team-port";
-import { projectCandidateToolResult } from "./result-projection";
+import type { AlertTarget, ExactLeaderSessionId, ModelToolTeamPort, ReadTaskContractGap } from "./in-memory-team-port";
+import type { TaskCard } from "./task-domain";
+import type { TaskVersionRef } from "./task-version-ref";
+import { projectToolResult } from "./result-projection";
 
-export type CandidateTeamCreateParameters = Static<typeof CandidateTeamCreateParametersSchema>;
-export type CandidateTeamCreateResult = Static<typeof CandidateTeamCreateResultSchema>;
-export type CandidateEnsureWorkerParameters = Static<typeof CandidateEnsureWorkerParametersSchema>;
-export type CandidateEnsureWorkerResult = Static<typeof CandidateEnsureWorkerResultSchema>;
-export type CandidateTaskCreateParameters = Static<typeof CandidateTaskCreateParametersSchema>;
-export type CandidateTaskCreateResult = Static<typeof CandidateTaskCreateResultSchema>;
-export type CandidateTaskReadParameters = Static<typeof CandidateTaskReadParametersSchema>;
-export type CandidateTaskReadResult = Static<typeof CandidateTaskReadResultSchema>;
-export type CandidateTaskUpdateParameters = Static<typeof CandidateTaskUpdateParametersSchema>;
-export type CandidateTaskUpdateResult = Static<typeof CandidateTaskUpdateResultSchema>;
-export type CandidateTeamSyncParameters = Static<typeof CandidateTeamSyncParametersSchema>;
-export type CandidateTeamSyncResult = Static<typeof CandidateTeamSyncResultSchema>;
-export type CandidateWorkerStopParameters = Static<typeof CandidateWorkerStopParametersSchema>;
-export type CandidateWorkerStopResult = Static<typeof CandidateWorkerStopResultSchema>;
-export type CandidateTeamShutdownParameters = Static<typeof CandidateTeamShutdownParametersSchema>;
-export type CandidateTeamShutdownResult = Static<typeof CandidateTeamShutdownResultSchema>;
-export type CandidateTaskLinkParameters = Static<typeof CandidateTaskLinkParametersSchema>;
-export type CandidateTaskLinkResult = Static<typeof CandidateTaskLinkResultSchema>;
-export type CandidateAlertSendParameters = Static<typeof CandidateAlertSendParametersSchema>;
-export type CandidateAlertSendResult = Static<typeof CandidateAlertSendResultSchema>;
+export type TeamCreateParameters = Static<typeof TeamCreateParametersSchema>;
+export type TeamCreateResult = Static<typeof TeamCreateResultSchema>;
+export type EnsureWorkerParameters = Static<typeof EnsureWorkerParametersSchema>;
+export type EnsureWorkerResult = Static<typeof EnsureWorkerResultSchema>;
+export type TaskCreateParameters = Static<typeof TaskCreateParametersSchema>;
+export type TaskCreateResult = Static<typeof TaskCreateResultSchema>;
+export type TaskReadParameters = Static<typeof TaskReadParametersSchema>;
+export type TaskReadResult = Static<typeof TaskReadResultSchema>;
+export type TaskUpdateParameters = Static<typeof TaskUpdateParametersSchema>;
+export type TaskUpdateResult = Static<typeof TaskUpdateResultSchema>;
+export type TeamSyncParameters = Static<typeof TeamSyncParametersSchema>;
+export type TeamSyncResult = Static<typeof TeamSyncResultSchema>;
+export type WorkerStopParameters = Static<typeof WorkerStopParametersSchema>;
+export type WorkerStopResult = Static<typeof WorkerStopResultSchema>;
+export type TeamShutdownParameters = Static<typeof TeamShutdownParametersSchema>;
+export type TeamShutdownResult = Static<typeof TeamShutdownResultSchema>;
+export type TaskLinkParameters = Static<typeof TaskLinkParametersSchema>;
+export type TaskLinkResult = Static<typeof TaskLinkResultSchema>;
+export type AlertSendParameters = Static<typeof AlertSendParametersSchema>;
+export type AlertSendResult = Static<typeof AlertSendResultSchema>;
 
-function isReadTaskContractGap(value: ModelToolTaskCurrent | ReadTaskContractGap): value is ReadTaskContractGap {
+function isReadTaskContractGap(value: TaskCard | ReadTaskContractGap): value is ReadTaskContractGap {
   return (value as ReadTaskContractGap).kind === "contract_gap";
 }
 
 export interface ModelToolJourneyExecutors {
-  teamCreate(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTeamCreateParameters): Promise<CandidateTeamCreateResult>;
-  ensureWorker(leaderSessionId: ExactLeaderSessionId, parameters: CandidateEnsureWorkerParameters): Promise<CandidateEnsureWorkerResult>;
-  taskCreate(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTaskCreateParameters): Promise<CandidateTaskCreateResult>;
-  taskRead(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTaskReadParameters): Promise<CandidateTaskReadResult>;
-  taskUpdate(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTaskUpdateParameters): Promise<CandidateTaskUpdateResult>;
-  workerStop(leaderSessionId: ExactLeaderSessionId, parameters: CandidateWorkerStopParameters): Promise<CandidateWorkerStopResult>;
-  teamShutdown(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTeamShutdownParameters): Promise<CandidateTeamShutdownResult>;
-  taskLink(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTaskLinkParameters): Promise<CandidateTaskLinkResult>;
-  alertSend(leaderSessionId: ExactLeaderSessionId, parameters: CandidateAlertSendParameters): Promise<CandidateAlertSendResult>;
-  teamSync(leaderSessionId: ExactLeaderSessionId, parameters: CandidateTeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<CandidateTeamSyncResult>;
+  teamCreate(leaderSessionId: ExactLeaderSessionId, parameters: TeamCreateParameters): Promise<TeamCreateResult>;
+  ensureWorker(leaderSessionId: ExactLeaderSessionId, parameters: EnsureWorkerParameters): Promise<EnsureWorkerResult>;
+  taskCreate(leaderSessionId: ExactLeaderSessionId, parameters: TaskCreateParameters): Promise<TaskCreateResult>;
+  taskRead(leaderSessionId: ExactLeaderSessionId, parameters: TaskReadParameters): Promise<TaskReadResult>;
+  taskUpdate(leaderSessionId: ExactLeaderSessionId, parameters: TaskUpdateParameters): Promise<TaskUpdateResult>;
+  workerStop(leaderSessionId: ExactLeaderSessionId, parameters: WorkerStopParameters): Promise<WorkerStopResult>;
+  teamShutdown(leaderSessionId: ExactLeaderSessionId, parameters: TeamShutdownParameters): Promise<TeamShutdownResult>;
+  taskLink(leaderSessionId: ExactLeaderSessionId, parameters: TaskLinkParameters): Promise<TaskLinkResult>;
+  alertSend(leaderSessionId: ExactLeaderSessionId, parameters: AlertSendParameters): Promise<AlertSendResult>;
+  teamSync(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult>;
 }
 
 export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelToolJourneyExecutors {
@@ -100,7 +102,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async taskCreate(leaderSessionId, parameters) {
-      const outcomes: CandidateTaskCreateResult["outcomes"] = [];
+      const outcomes: TaskCreateResult["outcomes"] = [];
       for (const [inputIndex, input] of parameters.tasks.entries()) {
         const outcome = await port.createTask(leaderSessionId, {
           operationId: input.operation_id,
@@ -152,6 +154,14 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           state_changed: false,
         };
       }
+      if (outcome.kind === "unavailable") {
+        return {
+          kind: "unavailable",
+          reason: outcome.reason,
+          message: outcome.message,
+          state_changed: false,
+        };
+      }
       return {
         kind: "task_read_batch",
         outcomes: outcome.tasks.map((task, inputIndex) => {
@@ -165,7 +175,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
               input_index: inputIndex,
               task_id: taskId,
               reason: task.reason,
-              authority_version: task.authorityVersion,
+              version: task.version,
               message: task.message,
               ...(task.projectionWarning ? { projection_warning: task.projectionWarning } : {}),
               state_changed: false as const,
@@ -195,7 +205,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
       const outcome = await port.updateTasks(leaderSessionId, parameters.updates.map((update) => ({
         taskId: update.task_id,
         operationId: update.operation_id,
-        expectedVersion: update.expected_version,
+        expectedVersion: update.expected_version as TaskVersionRef,
         currentContext: update.current_context,
         journalEntries: update.journal_entries,
         status: update.status,
@@ -301,7 +311,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
         relation: parameters.relation,
         targetId: parameters.target_id,
         action: parameters.action,
-        expectedVersion: parameters.expected_version,
+        expectedVersion: parameters.expected_version as TaskVersionRef,
       });
       if (outcome.kind === "linked") return {
         kind: "task_linked",
@@ -325,7 +335,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
         kind: parameters.kind,
         text: parameters.text,
         taskId: parameters.task_id,
-        taskVersion: parameters.task_version,
+        taskVersion: parameters.task_version as TaskVersionRef,
       });
       if (outcome.kind === "sent") return {
         kind: "alert_sent",
@@ -390,7 +400,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           alerts: outcome.alerts,
           ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
         };
-      port.setPendingObservationResult(leaderSessionId, projectCandidateToolResult("team_sync", result));
+      port.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
       return result;
     },
   };
