@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-04
+Updated: 2026-08-05
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -128,18 +128,19 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.5` is published, and npm `next`
-  still points to it. The `v0.17.0-rc.6` source tag was aborted before npm
-  publication because final review found a release-specific generated-dist
-  verifier exception. No rc.6 npm package or GitHub Release exists.
-  `0.17.0-rc.7` removes that exception and tracks each generated dependency.
-  It batches Team-scoped snapshot hydration, projects externally oversized Task
+- `@hypercarrier/pi-team-bright@0.17.0-rc.7` is published, npm `next` points
+  to it, and `latest` remains on rc.1. Its [GitHub
+  prerelease](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.0-rc.7)
+  points to the same source tag. The `v0.17.0-rc.6` source tag was aborted
+  before npm publication because final review found a release-specific
+  generated-dist verifier exception. No rc.6 npm package or GitHub Release
+  exists. Rc.7 removes that exception and tracks each generated dependency. It
+  batches Team-scoped snapshot hydration, projects externally oversized Task
   fields without hiding structural work, and retains the accepted trust and
-  pane-layout contracts. The published rc.5 evidence is in its
-  [release receipt](../journal/2026-08-04-v0.17.0-rc.5-release-receipt.md).
-  The [aborted rc.6 receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md)
-  and [prepared rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md)
-  keep their separate evidence.
+  pane-layout contracts. The [aborted rc.6
+  receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md) and [published
+  rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md) preserve
+  their separate evidence.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
