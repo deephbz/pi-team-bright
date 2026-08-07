@@ -631,7 +631,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     }
     for (let index = 0; index < taskIds.length; index++) {
       const record = records[index];
-      if (!record) throw new Error(`The Task authority returned no outcome for ${subject} ${taskIds[index]}.`);
+      if (!record) throw new Error(`Task ${taskIds[index]} could not be hydrated; the Task authority returned no outcome for ${subject}.`);
       if (record.kind === "contract_gap") throw new Error(record.message);
       if (record.task.id !== taskIds[index]) {
         throw new Error(`The Task authority returned ${record.task.id} for requested ${subject} ${taskIds[index]}.`);
