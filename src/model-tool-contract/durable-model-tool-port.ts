@@ -576,8 +576,9 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const projected: TaskCard[] = [];
     const warnings: TaskCardWarning[] = [];
     for (const result of records) {
-      if (result!.kind === "contract_gap") return result;
-      projected.push(result!.task);
+      if (!result) throw new Error("A listed Task disappeared before exact hydration completed.");
+      if (result.kind === "contract_gap") return result;
+      projected.push(result.task);
     }
     for (const task of projected) warnings.push(...(task.projection_warnings ?? []));
     return { kind: "tasks", tasks: projected, warnings };
@@ -644,7 +645,12 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const adapter = new BeadsTaskAdapter(teamName, "team-lead");
     const records = await adapter.readMany(taskIds);
     this.assertCompleteTaskBatch(taskIds, records, "event Task");
-    const tasks = records.map((record) => record!.task);
+    const tasks = records.map((record, index) => {
+      if (!record || record.kind !== "found") {
+        throw new Error(`Task ${taskIds[index]} referenced by a Team event could not be hydrated.`);
+      }
+      return record.task;
+    });
     return { tasks, warnings: tasks.flatMap((task) => task.projection_warnings ?? []) };
   }
 
