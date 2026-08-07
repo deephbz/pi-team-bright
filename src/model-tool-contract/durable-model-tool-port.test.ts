@@ -374,6 +374,95 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     expect(port.getPendingObservation(leaderSessionId)).toBeDefined();
   });
 
+  it("acknowledges only the returned event page cursor", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    const config = await teams.readConfig(name);
+    config.logicalWorkers = [{ name: "worker", scope: "page test" }];
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+    for (let index = 0; index < 60; index++) {
+      await teamEvents.appendTeamEvent(name, {
+        type: "worker",
+        worker: "worker",
+        membershipId: `membership-${index}`,
+        phase: "failed",
+      });
+    }
+
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "page-one")).resolves.toMatchObject({
+      kind: "updates",
+      head: 50,
+      workerChanges: { length: 50 },
+    });
+    expect(await readHiddenObservationProjection(name, {
+      teamEpochId: (await teams.readConfig(name)).epochId!,
+      exactSessionId: `/tmp/${name}-lead.jsonl`,
+      branchLineage: ["snapshot-entry"],
+    })).toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
+    port.setBranchContext(leaderSessionId, ["snapshot-entry", "page-one-entry"]);
+    await expect(port.acknowledgePendingObservationAsync(leaderSessionId, "page-one-entry", ["snapshot-entry", "page-one-entry"])).resolves.toBe(true);
+    expect(await readHiddenObservationProjection(name, {
+      teamEpochId: (await teams.readConfig(name)).epochId!,
+      exactSessionId: `/tmp/${name}-lead.jsonl`,
+      branchLineage: ["snapshot-entry", "page-one-entry"],
+    })).toMatchObject({ kind: "found", projection: { teamEventCursor: "50" } });
+
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "page-two")).resolves.toMatchObject({
+      kind: "updates",
+      head: 60,
+      workerChanges: { length: 10 },
+    });
+  });
+
+  it("does not advance a paged watermark when page hydration fails", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const record = {
+      task: {
+        id: "baseline-task",
+        title: "Baseline task",
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version: "beads_baseline-task",
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep page failure safe.", current_context: "Current context." },
+    };
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+    hydrate.mockResolvedValue([undefined]);
+    await teamEvents.appendTeamEvent(name, {
+      type: "task",
+      ref: { taskId: "missing-page-task", version: taskVersionRef("missing-page-v1") },
+      change: "created",
+      actor: "team-lead",
+    });
+    for (let index = 0; index < 59; index++) {
+      await teamEvents.appendTeamEvent(name, {
+        type: "worker",
+        worker: "worker",
+        membershipId: `membership-${index}`,
+        phase: "failed",
+      });
+    }
+
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-page")).rejects.toThrow();
+    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+    await expect(readHiddenObservationProjection(name, {
+      teamEpochId: (await teams.readConfig(name)).epochId!,
+      exactSessionId: `/tmp/${name}-lead.jsonl`,
+      branchLineage: ["snapshot-entry"],
+    })).resolves.toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
+  });
+
   it("recovers a complete baseline after a port restart before applying event references", async () => {
     const { name, leaderSessionId, port } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const sessionFile = `/tmp/${name}-lead.jsonl`;
