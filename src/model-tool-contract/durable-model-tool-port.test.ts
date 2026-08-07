@@ -470,14 +470,22 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
 
-    version = "quiet-v2";
-    vi.spyOn(teamEvents, "waitForTeamEvents").mockResolvedValue({
-      cursor: "1",
-      headCursor: "1",
-      events: [{ type: "worker", cursor: "1", worker: "worker", membershipId: "membership-worker", phase: "failed", at: "2026-01-01T00:00:00.000Z" }],
-      truncated: false,
-      remaining: 0,
-      timedOut: false,
+    vi.spyOn(teamEvents, "waitForTeamEvents").mockImplementation(async () => {
+      version = "quiet-v2";
+      const event = await teamEvents.appendTeamEvent(name, {
+        type: "worker",
+        worker: "worker",
+        membershipId: "membership-worker",
+        phase: "failed",
+      });
+      return {
+        cursor: event.cursor,
+        headCursor: event.cursor,
+        events: [event],
+        truncated: false,
+        remaining: 0,
+        timedOut: false,
+      };
     });
     await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "quiet-update")).resolves.toMatchObject({
       kind: "updates",
