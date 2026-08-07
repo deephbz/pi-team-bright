@@ -11,7 +11,7 @@ import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { commitHiddenObservationProjection, readHiddenObservationProjection } from "../../src/utils/hidden-observation";
-import { loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
+import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../../src/utils/sync-nudge-conductor";
 import {
   createSyncNudgeRecord,
@@ -207,7 +207,7 @@ describe("hardened coordination liveness boundaries", () => {
   it("uses settings defaults and overrides for bounded wait and delayed nudge policy", () => {
     const agentDir = tempAgentDir();
     fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({}));
-    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 1_200 });
+    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
     fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { wait_seconds: 7.5, nudge_enabled: true, nudge_delay_seconds: 3 } } }));
     expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 7.5, nudgeEnabled: true, nudgeDelaySeconds: 3 });
   });
