@@ -134,6 +134,8 @@ const SyncRecovery = Type.Object({ action: Type.Literal("request_snapshot") }, {
 export const TeamSyncModelResultSchema = Type.Union([
   Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(TeamDeltaSchema), worker_changes: Type.Array(WorkerDeltaSchema), task_changes: Type.Array(TaskDeltaSchema), alerts: Type.Array(AlertDeltaSchema), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("caught_up"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("indeterminate"), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Enum(["snapshot_required", "cancelled"]), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("contract_gap"), reason: Type.Enum(["team_epoch_missing", "logical_workers_missing", "task_metadata_absent", "task_metadata_invalid", "structured_task_event_evidence_absent"]), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("team_state_unavailable"), Type.Literal("task_authority_unavailable")])),
@@ -288,12 +290,16 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
       ...raw,
       tasks: raw.tasks.map((task: any) => ({ ...task, version: publicTaskVersion(task.version) })),
     };
-    if (raw.kind === "updates") return {
+      if (raw.kind === "updates") return {
       ...raw,
       task_changes: raw.task_changes.map((change: any) => ({
         ...change,
         current: { ...change.current, version: publicTaskVersion(change.current.version) },
       })),
+    };
+    if (raw.kind === "caught_up" || raw.kind === "indeterminate") {
+      const { state_changed: _stateChanged, observation_advanced: _observationAdvanced, ...rest } = raw;
+      return rest;
     };
   }
   if (tool === "team_create" && raw.kind === "team_created") {
@@ -332,7 +338,7 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
     const { state_changed: _stateChanged, ...rest } = raw;
     return { ...rest, recovery: { action: "retry_team_shutdown" } };
   }
-  if (raw.kind === "refused" || raw.kind === "unavailable" || raw.kind === "contract_gap" || raw.kind === "cancelled" || raw.kind === "snapshot_required") {
+  if (raw.kind === "refused" || raw.kind === "unavailable" || raw.kind === "contract_gap" || raw.kind === "cancelled" || raw.kind === "snapshot_required" || raw.kind === "indeterminate") {
     const { state_changed: _stateChanged, observation_advanced: _observationAdvanced, ...rest } = raw;
     if (tool === "team_sync" && (raw.kind === "contract_gap" || raw.kind === "snapshot_required" || raw.kind === "cancelled")) {
       return { ...rest, ...(raw.kind === "contract_gap" || raw.kind === "snapshot_required" ? { recovery: { action: "request_snapshot" } } : {}) };

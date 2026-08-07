@@ -29,6 +29,8 @@ export interface AgentRuntimeStatus {
   lastHeartbeatAt?: number;
   lastInboxReadAt?: number;
   ready?: boolean;
+  /** Exact Pi 0.83 agent lifecycle evidence for the current generation. */
+  runState?: "active" | "settled";
   lastError?: RuntimeError;
 }
 

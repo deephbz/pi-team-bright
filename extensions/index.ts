@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type, type TSchema } from "typebox";
 import { Check } from "typebox/value";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -17,6 +18,9 @@ import {
   taskPollMs,
 } from "../src/utils/task-delivery";
 import * as runtime from "../src/utils/runtime";
+import { loadSyncLivenessSettings } from "../src/utils/sync-liveness-settings";
+import { createSyncNudgeRecord, findSyncNudgeReservation, presentSyncNudge, readSyncNudges, reserveSyncNudge, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent, syncNudgeTuiLine } from "../src/utils/sync-nudge";
+import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { IdentifiedInboxMessage, Member, TeamConfig } from "../src/utils/models";
@@ -33,7 +37,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/utils/worker-launch-bridge";
 import { BeadsTaskAdapter } from "../src/model-tool-contract/beads-task-adapter";
@@ -349,6 +353,10 @@ export function inspectAgentSessionCleanup(
 }
 
 export default function (pi: ExtensionAPI) {
+  pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, (message: any) => {
+    const record = validateSyncNudgeRecord(message.details);
+    return record ? new Text(syncNudgeTuiLine(record), 0, 0) : undefined;
+  });
   registerAutomaticSummaryPolicyProvider(pi);
   // Leader and Worker tools are separate role projections. The leader owns
   // the current model-tool journey; Workers own the three Task/Alert tools.
@@ -396,6 +404,10 @@ export default function (pi: ExtensionAPI) {
 
   let directMessageDelivery: DirectMessageDelivery | null = null;
   let taskChangeDelivery: TaskChangeDelivery | null = null;
+  let syncNudgeConductor: SyncNudgeConductor | null = null;
+  let stopSyncNudgeMonitor: (() => void) | null = null;
+  let leaderRunSettled = false;
+  let leaderContext: any;
   let directMessageSessionEligible = true;
   let taskChangeSessionEligible = true;
   let footerModel: any;
@@ -628,7 +640,97 @@ export default function (pi: ExtensionAPI) {
     };
   }
 
+  function stopSyncNudgeConductor() {
+    syncNudgeConductor?.stop();
+    syncNudgeConductor = null;
+    stopSyncNudgeMonitor?.();
+    stopSyncNudgeMonitor = null;
+  }
+
+  function syncNudgeMessageDelivered(ctx: any, record: { id: string; branchLineage: readonly string[] }): boolean {
+    const branch = ctx?.sessionManager?.getBranch?.() ?? [];
+    const ids = branch.map((entry: any) => entry.id);
+    if (record.branchLineage.some((id, index) => ids[index] !== id)) return false;
+    return branch.some((entry: any) => {
+      if (entry.type !== "custom_message" || entry.customType !== SYNC_NUDGE_CUSTOM_TYPE) return false;
+      const details = validateSyncNudgeRecord(entry.details);
+      return details?.kind === "presented" && details.id === record.id
+        && details.branchLineage.length === record.branchLineage.length
+        && details.branchLineage.every((value, index) => value === record.branchLineage[index]);
+    });
+  }
+
+  function startSyncNudgeConductor(ctx: any) {
+    stopSyncNudgeConductor();
+    if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney?.port.readSyncNudgeDebt) return;
+    let config: TeamConfig;
+    try { config = JSON.parse(fs.readFileSync(paths.configPath(teamName), "utf8")) as TeamConfig; } catch { return; }
+    const policy = config.syncLiveness;
+    if (!policy?.nudgeEnabled || policy.nudgeDelaySeconds === undefined) return;
+    const delayMs = Math.max(0, policy.nudgeDelaySeconds * 1000);
+    const debt = async (): Promise<SyncNudgeDebt> => {
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      const branch = modelToolBranchIds(ctx);
+      if (!sessionId || branch.length === 0) return { kind: "none" };
+      return modelToolJourney!.port.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
+    };
+    const busy = (): boolean => {
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      return !leaderRunSettled || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
+        || (!!sessionId && !!modelToolJourney?.port.getPendingObservation?.(exactLeaderSessionId(sessionId)));
+    };
+    syncNudgeConductor = new SyncNudgeConductor({
+      clock: { setTimeout: (callback, ms) => setTimeout(callback, ms), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
+      delayMs,
+      readDebt: debt,
+      isSettled: () => leaderRunSettled,
+      isBusy: busy,
+      alreadyPresented: (debtKey, branchLineage) => readSyncNudges(teamName!).some((record) => record.debtKey === debtKey && record.branchLineage.length === branchLineage.length && record.branchLineage.every((value, index) => value === branchLineage[index])),
+      present: async (candidate) => {
+        const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+        const sessionId = ctx?.sessionManager?.getSessionId?.();
+        const branch = modelToolBranchIds(ctx);
+        if (!sessionFile || !sessionId || branch.length === 0 || busy()) return;
+        const current = await teams.readConfig(teamName!);
+        if (current.epochId !== candidate.teamEpochId || current.leadSessionId !== sessionFile) return;
+        const currentLead = await teams.assertCurrentSessionBinding(teamName!, "team-lead", sessionFile);
+        if (currentLead.membershipId !== candidate.leaderMembershipId) return;
+        const latest = await modelToolJourney!.port.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
+        if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value, index) => value !== candidate.branchLineage[index]) || busy()) return;
+        const existing = findSyncNudgeReservation(teamName!, candidate.debtKey, candidate.branchLineage);
+        if (existing && syncNudgeMessageDelivered(ctx, existing)) {
+          presentSyncNudge(existing);
+          return;
+        }
+        const record = existing ?? createSyncNudgeRecord({
+          kind: "reserved",
+          id: randomUUID(), teamName: teamName!, teamEpochId: candidate.teamEpochId,
+          leaderSessionId: candidate.leaderSessionId, leaderMembershipId: candidate.leaderMembershipId,
+          branchLineage: [...candidate.branchLineage], branchId: candidate.branchId, debtKey: candidate.debtKey,
+          requestedView: candidate.requestedView, reservedAt: new Date().toISOString(), policyVersion: candidate.policyVersion,
+        });
+        if (!existing) reserveSyncNudge(record);
+        const presented = createSyncNudgeRecord({ ...record, kind: "presented", presentedAt: new Date().toISOString() });
+        // Reservation is internal. The model receives only the validated
+        // presented semantic record; persistence follows exact Session proof.
+        pi.sendMessage({ customType: SYNC_NUDGE_CUSTOM_TYPE, content: syncNudgeContent(presented), display: true, details: presented }, { triggerTurn: true, deliverAs: "followUp" });
+        // Promote only after the durable Session contains this exact custom
+        // message on the same full branch lineage.
+        if (syncNudgeMessageDelivered(ctx, presented)) presentSyncNudge(record, presented.presentedAt);
+      },
+    });
+    const eventDirectory = path.join(paths.teamDir(teamName), "events");
+    fs.mkdirSync(eventDirectory, { recursive: true });
+    const watcher = fs.watch(eventDirectory, () => syncNudgeConductor?.notify());
+    watcher.on("error", () => syncNudgeConductor?.notify());
+    const interval = setInterval(() => syncNudgeConductor?.notify(), Math.max(5_000, Math.min(30_000, Math.max(100, delayMs))));
+    interval.unref?.();
+    syncNudgeConductor.start();
+    stopSyncNudgeMonitor = () => { watcher.close(); clearInterval(interval); };
+  }
+
   function stopDeliveries() {
+    stopSyncNudgeConductor();
     directMessageDelivery?.stop();
     directMessageDelivery = null;
     taskChangeDelivery?.stop();
@@ -763,6 +865,8 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (event, ctx) => {
     paths.ensureDirs();
     stopDeliveries();
+    leaderRunSettled = false;
+    leaderContext = ctx;
     footerModel = ctx.model;
     clearTeamFooter(ctx);
     directMessageSessionEligible = event.reason !== "fork";
@@ -915,6 +1019,12 @@ export default function (pi: ExtensionAPI) {
       await startDirectMessageDelivery(ctx);
       await startTaskChangeDelivery(ctx);
     }
+    if (!isTeammate) {
+      // A resumed/reloaded idle Session has no active agent run. This is
+      // positive settled evidence, unlike a fresh startup before agent_start.
+      leaderRunSettled = event.reason === "resume" || event.reason === "reload";
+      startSyncNudgeConductor(ctx);
+    }
     await refreshTeamFooter(ctx);
   });
 
@@ -948,6 +1058,23 @@ export default function (pi: ExtensionAPI) {
   pi.on("context", async (event) => {
     await directMessageDelivery?.observeContext(event.messages);
     await taskChangeDelivery?.observeContext(event.messages);
+  });
+
+  pi.on("agent_start", async (_event, ctx) => {
+    leaderRunSettled = false;
+    syncNudgeConductor?.notify();
+    if (isTeammate && teamName) {
+      await writeCurrentTeammateRuntime(ctx, { runState: "active", lastHeartbeatAt: Date.now() });
+    }
+  });
+
+  pi.on("agent_settled", async (_event, ctx) => {
+    if (isTeammate && teamName) {
+      await writeCurrentTeammateRuntime(ctx, { runState: "settled", lastHeartbeatAt: Date.now() });
+    } else {
+      leaderRunSettled = true;
+      syncNudgeConductor?.notify();
+    }
   });
 
   pi.on("turn_end", async (event, ctx) => {
@@ -1144,6 +1271,7 @@ export default function (pi: ExtensionAPI) {
         const config = await teams.readConfig(targetTeamName);
         currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
         await registerLeadSession(targetTeamName, sessionFile, undefined, true, currentMembershipId);
+        startSyncNudgeConductor(leaderContext);
       },
       async stopWorker(targetTeamName, worker) {
         const safeTeamName = paths.sanitizeName(targetTeamName);

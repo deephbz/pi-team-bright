@@ -332,6 +332,21 @@ export const TeamSyncSnapshotRequiredResultSchema = Type.Object({
   observation_advanced: Type.Literal(false),
 }, { additionalProperties: false });
 
+export const TeamSyncCaughtUpResultSchema = Type.Object({
+  kind: Type.Literal("caught_up"),
+  head: Type.Integer({ minimum: 0 }),
+  epoch_id: Type.String({ minLength: 1 }),
+  state_changed: Type.Literal(false),
+  observation_advanced: Type.Literal(true),
+}, { additionalProperties: false });
+
+export const TeamSyncIndeterminateResultSchema = Type.Object({
+  kind: Type.Literal("indeterminate"),
+  message: Type.String({ minLength: 1 }),
+  state_changed: Type.Literal(false),
+  observation_advanced: Type.Literal(false),
+}, { additionalProperties: false });
+
 export const TeamSyncCancelledResultSchema = Type.Object({
   kind: Type.Literal("cancelled"),
   message: Type.String({ minLength: 1 }),
@@ -350,6 +365,8 @@ export const TeamSyncContractGapResultSchema = Type.Object({
 export const TeamSyncResultSchema = Type.Union([
   TeamSnapshotResultSchema,
   TeamUpdatesResultSchema,
+  TeamSyncCaughtUpResultSchema,
+  TeamSyncIndeterminateResultSchema,
   TeamSyncSnapshotRequiredResultSchema,
   TeamSyncCancelledResultSchema,
   TeamSyncContractGapResultSchema,

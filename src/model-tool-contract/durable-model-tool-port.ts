@@ -48,7 +48,10 @@ import type {
 import type { TaskCard, TaskCardWarning } from "./task-domain";
 import type { Member, TeamConfig, TeamEvent } from "../utils/models";
 import { exactLeaderSessionId } from "./in-memory-team-port";
-const WAIT_MS = 120_000;
+import { currentMember, livenessIsComplete, livenessIsProductive, readWorkerRunObservation, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";
+import { DEFAULT_SYNC_WAIT_SECONDS, loadSyncLivenessSettings } from "../utils/sync-liveness-settings";
+import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
+import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hints";
 
 type TaskProjection = { tasks: TaskCard[]; warnings: TaskCardWarning[] };
 
@@ -78,7 +81,7 @@ export interface ModelToolLifecycle {
   shutdownTeam(teamName: string): Promise<TeamShutdownPortResult>;
 }
 
-function taskProjectionRevision(tasks: readonly TaskCard[], warnings: readonly TaskCardWarning[] = []): string {
+export function taskProjectionRevision(tasks: readonly TaskCard[], warnings: readonly TaskCardWarning[] = []): string {
   return crypto.createHash("sha256").update(JSON.stringify({ tasks, warnings })).digest("hex");
 }
 
@@ -174,6 +177,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const terminal = getTerminalAdapter();
     if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the model-tool Worker." };
     let paneLayout: TeamPaneLayout;
+    let syncLiveness: TeamConfig["syncLiveness"];
     try {
       const launchContext = this.leaderLaunchContexts.get(leaderSessionId);
       const leaderCwd = launchContext?.cwd ?? process.cwd();
@@ -185,6 +189,14 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
         global: settings.global,
         backend: terminal.name,
       });
+      const policy = loadSyncLivenessSettings();
+      syncLiveness = {
+        waitSeconds: policy.waitSeconds,
+        nudgeEnabled: policy.nudgeEnabled,
+        ...(policy.nudgeDelaySeconds === undefined ? {} : { nudgeDelaySeconds: policy.nudgeDelaySeconds }),
+        policyVersion: policy.policyVersion,
+        ...(policy.diagnostics.length ? { diagnostics: policy.diagnostics } : {}),
+      };
     } catch (error) {
       return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) };
     }
@@ -212,6 +224,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
         },
         MODEL_TOOL_IMPLEMENTATION_VERSION,
         paneLayout,
+        syncLiveness,
       ));
       await this.lifecycle?.teamCreated?.(teamName, sessionFile);
       return { kind: "created", team: currentTeam(config) };
@@ -445,19 +458,86 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
         tasksResult = complete;
         taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
         if (!taskRevisionChanged) {
+          const observations = await this.workerRunObservations(bound);
+          if (livenessIsComplete(observations)) {
+            // Keep the hardened eventless Task rescan path for logical Workers
+            // whose current Membership is absent. A zero-delay authority read
+            // preserves the old event check without adding a liveness wait.
+            const allAbsent = observations.length > 0 && observations.every((item) => item.state === "absent");
+            if (allAbsent) {
+              try {
+                batch = await teamEvents.waitForTeamEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: 0, signal });
+                const beforeWait = tasksResult;
+                const rechecked = await this.readModelToolTasks(bound.teamName);
+                if (rechecked.kind === "contract_gap") return rechecked;
+                tasksResult = rechecked;
+                externallyChangedTaskIds = beforeWait ? this.changedTaskIds(beforeWait, rechecked) : [];
+                taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
+              } catch (error) {
+                if (isAbort(error)) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
+                throw error;
+              }
+              if (batch.events.length > 0 || taskRevisionChanged) {
+                // Continue through canonical event hydration and projection.
+              } else {
+                const result: Extract<TeamSyncPortResult, { kind: "caught_up" }> = { kind: "caught_up", head: asNumber(batch.headCursor), epochId: bound.config.epochId! };
+                this.stage(leaderSessionId, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
+                  team_events: String(asNumber(batch.headCursor)),
+                  task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
+                  task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
+                }, tasksResult);
+                return result;
+              }
+            } else {
+              const result: Extract<TeamSyncPortResult, { kind: "caught_up" }> = { kind: "caught_up", head: asNumber(batch.headCursor), epochId: bound.config.epochId! };
+              this.stage(leaderSessionId, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
+                team_events: String(asNumber(batch.headCursor)),
+                task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
+                task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
+              }, tasksResult);
+              return result;
+            }
+          }
+          if (!livenessIsProductive(observations) && !(batch.events.length > 0 || taskRevisionChanged)) return { kind: "indeterminate", message: "Worker run-state evidence is incomplete; no observation was published." };
+          if (batch.events.length === 0 && !taskRevisionChanged) {
           try {
-            batch = await teamEvents.waitForTeamEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: WAIT_MS, signal });
-            // A Task can commit without a Team event while the wait is active.
-            // Recheck after every successful wake before applying event refs.
+            const waitMs = Math.max(0, (bound.config.syncLiveness?.waitSeconds ?? DEFAULT_SYNC_WAIT_SECONDS) * 1000);
+            const producerHint = async (): Promise<boolean> => {
+              const next = teamEvents.readTeamEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
+              if (next.events.length > 0) return true;
+              const current = await this.workerRunObservations(bound);
+              return current.some((item, index) => item.state !== observations[index]?.state || item.actuationPending !== observations[index]?.actuationPending);
+            };
+            const authorityHint = async (): Promise<boolean> => {
+              if (await producerHint()) return true;
+              const currentTasks = await this.readModelToolTasks(bound.teamName);
+              return currentTasks.kind === "tasks" && observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(currentTasks.tasks, currentTasks.warnings);
+            };
+            await waitForLivenessHint({ teamName: bound.teamName, waitMs, signal, authorityCheckMs: 5_000, check: producerHint, checkAuthority: authorityHint });
+            batch = teamEvents.readTeamEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
             const beforeWait = tasksResult;
             const rechecked = await this.readModelToolTasks(bound.teamName);
             if (rechecked.kind === "contract_gap") return rechecked;
             tasksResult = rechecked;
             externallyChangedTaskIds = beforeWait ? this.changedTaskIds(beforeWait, rechecked) : [];
             taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
+            if (batch.events.length === 0 && !taskRevisionChanged) {
+              const afterWait = await this.workerRunObservations(bound);
+              if (livenessIsComplete(afterWait)) {
+                const result: Extract<TeamSyncPortResult, { kind: "caught_up" }> = { kind: "caught_up", head: asNumber(batch.headCursor), epochId: bound.config.epochId! };
+                this.stage(leaderSessionId, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
+                  team_events: String(asNumber(batch.headCursor)),
+                  task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
+                  task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
+                }, tasksResult);
+                return result;
+              }
+              return { kind: "indeterminate", message: "Worker run-state evidence is incomplete after the bounded wait; no observation was published." };
+            }
           } catch (error) {
             if (isAbort(error)) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
             throw error;
+          }
           }
         }
       }
@@ -490,6 +570,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       this.stage(leaderSessionId, bound.sessionFile, toolCallId, projected, pageCursor, bound.config.epochId!, bound.teamName, view, {
         team_events: String(pageCursor),
         task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
+        task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
       }, tasksResult);
       return projected;
     }
@@ -503,8 +584,61 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     this.stage(leaderSessionId, bound.sessionFile, toolCallId, result, asNumber(head), bound.config.epochId!, bound.teamName, view, {
       team_events: String(asNumber(head)),
       task_projection: taskProjectionRevision(result.tasks, result.taskProjectionWarnings),
+      task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, result.tasks, "0"),
     }, { tasks: result.tasks, warnings: result.taskProjectionWarnings ?? [] });
     return result;
+  }
+
+  async readSyncNudgeDebt(leaderSessionId: ExactLeaderSessionId, branchLineage: string[]): Promise<SyncNudgeDebt> {
+    const bound = await this.boundTeam(leaderSessionId);
+    if (!bound || !bound.config.syncLiveness?.nudgeEnabled || bound.config.syncLiveness.nudgeDelaySeconds === undefined) return { kind: "none" };
+    const branchId = branchLineage.at(-1);
+    if (!branchId || new Set(branchLineage).size !== branchLineage.length) return { kind: "none" };
+    const lead = [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === bound.sessionFile);
+    if (!lead?.membershipId) return { kind: "none" };
+    const branchKey = JSON.stringify(branchLineage);
+    const observation = await readHiddenObservationProjection(bound.teamName, {
+      teamEpochId: bound.config.epochId!,
+      exactSessionId: bound.sessionFile,
+      branchLineage,
+    });
+    if (observation.kind === "contract_gap") return { kind: "unavailable", message: `Model-tool ${observation.reason.replaceAll("_", " ")} is unavailable.` };
+    const tasksResult = await this.readModelToolTasks(bound.teamName);
+    if (tasksResult.kind === "contract_gap") return { kind: "unavailable", message: tasksResult.message };
+    const events = this.readAllNudgeEvents(bound.teamName, observation.kind === "found" ? observation.projection.teamEventCursor : undefined);
+    const currentRevision = taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
+    const currentCursor = events.headCursor;
+    const policyVersion = bound.config.syncLiveness.policyVersion;
+    if (observation.kind !== "found") {
+      const debtKey = `${bound.config.epochId}|${bound.sessionFile}|${lead.membershipId}|${branchKey}|snapshot|${currentCursor}|${currentRevision}|${policyVersion}`;
+      return { kind: "eligible", debtKey, requestedView: "snapshot", teamEpochId: bound.config.epochId!, leaderSessionId: bound.sessionFile, leaderMembershipId: lead.membershipId, branchLineage: [...branchLineage], branchId, policyVersion };
+    }
+    const acknowledgedRevision = observation.projection.authorityRevisions.task_projection;
+    const acknowledgedHintCursor = observation.projection.authorityRevisions.task_event_failure_hints ?? "0";
+    let hintBatch: ReturnType<typeof readTaskEventFailureHintsAfter>;
+    try {
+      hintBatch = readTaskEventFailureHintsAfter(bound.teamName, acknowledgedHintCursor, {
+        teamEpochId: bound.config.epochId!,
+        taskReferences: tasksResult.tasks.map((task) => ({ taskId: task.id, taskVersion: taskVersionRef(task.version) })),
+      });
+    } catch (error) {
+      return { kind: "indeterminate", message: `Failed-event hint evidence is unavailable; automatic sync nudge is suppressed. ${error instanceof Error ? error.message : String(error)}` };
+    }
+    const hintCursorChanged = hintBatch.headCursor !== acknowledgedHintCursor;
+    const externalHint = hintBatch.hints.some((match) => match.actorKind === "non-leader/external");
+    const leaderHint = hintBatch.hints.some((match) => match.actorKind === "team-lead");
+    const taskEvents = events.events.filter((event) => event.type === "task");
+    const nonLeaderTaskChange = taskEvents.some((event) => event.actor !== "team-lead");
+    const leaderTaskChange = taskEvents.some((event) => event.actor === "team-lead");
+    const pairChanged = observation.projection.teamEventCursor !== currentCursor || acknowledgedRevision !== currentRevision || hintCursorChanged;
+    if (!pairChanged) return { kind: "none" };
+    if (acknowledgedRevision === currentRevision && !hintCursorChanged && !nonLeaderTaskChange && !leaderTaskChange) return { kind: "none" };
+    if (nonLeaderTaskChange || externalHint) {
+      const debtKey = `${bound.config.epochId}|${bound.sessionFile}|${lead.membershipId}|${branchKey}|updates|${observation.projection.teamEventCursor}:${acknowledgedRevision}:${acknowledgedHintCursor}->${currentCursor}:${currentRevision}:${hintBatch.headCursor}|${policyVersion}`;
+      return { kind: "eligible", debtKey, requestedView: "updates", teamEpochId: bound.config.epochId!, leaderSessionId: bound.sessionFile, leaderMembershipId: lead.membershipId, branchLineage: [...branchLineage], branchId, policyVersion };
+    }
+    if (leaderTaskChange || leaderHint) return { kind: "none" };
+    return { kind: "indeterminate", message: "Task or failed-event evidence changed without actor evidence; automatic sync nudge is suppressed." };
   }
 
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void {
@@ -566,6 +700,27 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const config = await teams.readConfig(binding.teamName);
     if (config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) return undefined;
     return { teamName: binding.teamName, config, sessionFile };
+  }
+
+  private taskEventFailureHintCursor(teamName: string, teamEpochId: string, tasks: readonly TaskCard[], afterCursor: string): string {
+    return readTaskEventFailureHintsAfter(teamName, afterCursor, {
+      teamEpochId,
+      taskReferences: tasks.map((task) => ({ taskId: task.id, taskVersion: taskVersionRef(task.version) })),
+    }).headCursor;
+  }
+
+  private readAllNudgeEvents(teamName: string, afterCursor?: string): { events: TeamEvent[]; headCursor: string } {
+    const events: TeamEvent[] = [];
+    let cursor = afterCursor;
+    let page: teamEvents.TeamEventBatch;
+    do {
+      page = teamEvents.readTeamEvents(teamName, { ...(cursor === undefined ? {} : { afterCursor: cursor }) });
+      events.push(...page.events);
+      if (!page.truncated) return { events, headCursor: page.headCursor };
+      if (page.cursor === cursor) throw new Error("Team nudge event pagination did not advance.");
+      cursor = page.cursor;
+    } while (page.truncated);
+    return { events, headCursor: page.headCursor };
   }
 
   private async readModelToolTasks(teamName: string): Promise<{ kind: "tasks"; tasks: TaskCard[]; warnings: TaskCardWarning[] } | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
@@ -678,6 +833,14 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
         nonterminalTaskIds: projectNonterminalTaskIds(taskProjection, logical.name),
       };
     }).sort((left, right) => left.name.localeCompare(right.name));
+  }
+
+  private async workerRunObservations(bound: BoundTeam): Promise<WorkerRunObservation[]> {
+    const workers = bound.config.logicalWorkers ?? [];
+    return Promise.all(workers.map(async (worker) => {
+      const member = currentMember(bound.config.members, worker.name);
+      return member ? readWorkerRunObservation(bound.teamName, member) : { worker: worker.name, state: "absent" as const, actuationPending: false };
+    }));
   }
 
   private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
