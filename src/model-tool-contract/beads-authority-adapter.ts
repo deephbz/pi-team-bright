@@ -40,6 +40,7 @@ import {
   appendTaskEvidenceEvent,
   type TaskEventEvidenceInput,
 } from "../utils/team-events";
+import { appendTaskEventFailureHint } from "../utils/task-event-failure-hints";
 
 export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
 
@@ -522,6 +523,7 @@ async function publishTaskMutation(
   const failedRecipients: string[] = [];
   const recoveryRecordedFor: string[] = [];
   const recoveryRecordFailedFor: string[] = [];
+  const actorName = actor ?? "external";
   const publicationVersion: import("../model-tool-contract/task-version-ref").TaskVersionRef = options.taskCard
     ? options.taskCard.version as import("../model-tool-contract/task-version-ref").TaskVersionRef
     : taskVersionRef(after.version);
@@ -535,7 +537,7 @@ async function publishTaskMutation(
       type: "task" as const,
       ref: { taskId: after.id, version: publicationVersion },
       change,
-      actor: actor ?? "external",
+      actor: actorName,
     };
     const evidenceEntries = taskEventEvidence.length > 0
       ? taskEventEvidence
@@ -550,6 +552,20 @@ async function publishTaskMutation(
     teamEventAppended = true;
   } catch (error) {
     warnings.push(`Task ${after.id} committed but its Team event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
+    try {
+      const config = await readConfig(teamName);
+      await appendTaskEventFailureHint(teamName, {
+        teamEpochId: config.epochId ?? "",
+        taskId: after.id,
+        taskVersion: publicationVersion,
+        actor: actorName,
+        at: new Date().toISOString(),
+      });
+    } catch (hintError) {
+      const warning = `Task ${after.id} committed but failed-event hint persistence also failed: ${hintError instanceof Error ? hintError.message : String(hintError)}`;
+      warnings.push(warning);
+      console.warn(`[pi-teams] ${warning}`);
+    }
   }
   const deliveryTargets = options.deliver === false ? [] : unique;
   for (const target of deliveryTargets) {

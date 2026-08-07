@@ -65,6 +65,11 @@ export function teamEventCursorStatePath(teamName: string) {
   return path.join(teamDir(teamName), "events", "cursor.json");
 }
 
+/** Durable derived hints for committed Task mutations whose event append failed. */
+export function taskEventFailureHintPath(teamName: string) {
+  return path.join(teamDir(teamName), "events", "task-event-failure-hints.jsonl");
+}
+
 export function runtimeStatusPath(teamName: string, agentName: string) {
   return path.join(teamDir(teamName), "runtime", `${sanitizeName(agentName)}.json`);
 }
