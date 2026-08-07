@@ -374,6 +374,119 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     expect(port.getPendingObservation(leaderSessionId)).toBeDefined();
   });
 
+  it("hydrates event-referenced Tasks once and merges them with the acknowledged baseline", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const record = (id: string) => ({
+      task: {
+        id,
+        title: `${id} title`,
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version: `beads_${id}`,
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: {
+        schema: TASK_METADATA_SCHEMA,
+        goal: "Keep event hydration complete.",
+        current_context: "Current Task context.",
+      },
+    });
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_teamName, taskIds) => taskIds.map(record));
+
+    await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call")).resolves.toMatchObject({
+      kind: "snapshot",
+      tasks: [{ id: "baseline-task" }],
+    });
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await expect(port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"])).resolves.toBe(true);
+    hydrate.mockClear();
+
+    await teamEvents.appendTeamEvent(name, {
+      type: "task",
+      ref: { taskId: "event-task", version: taskVersionRef("event-v1") },
+      change: "status",
+      actor: "team-lead",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "event-update")).resolves.toMatchObject({
+      kind: "updates",
+      taskChanges: [{ taskId: "event-task", current: { id: "event-task" } }],
+    });
+    expect(hydrate).toHaveBeenCalledOnce();
+    expect(hydrate).toHaveBeenCalledWith(name, ["event-task"]);
+  });
+
+  it("does not hydrate Tasks for a Worker-only event batch", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const record = {
+      task: {
+        id: "baseline-task",
+        title: "Baseline task",
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version: "beads_baseline-task",
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep the baseline.", current_context: "Current context." },
+    };
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+    hydrate.mockClear();
+
+    await teamEvents.appendTeamEvent(name, {
+      type: "worker",
+      worker: "worker",
+      membershipId: "membership-worker",
+      phase: "session_bound",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "worker-update")).resolves.toMatchObject({ kind: "updates", head: 1 });
+    expect(hydrate).not.toHaveBeenCalled();
+  });
+
+  it("fails event hydration before staging or advancing the hidden observation", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const record = {
+      task: {
+        id: "baseline-task",
+        title: "Baseline task",
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version: "beads_baseline-task",
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep the baseline.", current_context: "Current context." },
+    };
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+    hydrate.mockImplementation(async () => [undefined]);
+
+    await teamEvents.appendTeamEvent(name, {
+      type: "task",
+      ref: { taskId: "missing-task", version: taskVersionRef("missing-v1") },
+      change: "created",
+      actor: "team-lead",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-update")).rejects.toThrow(/could not be hydrated/);
+    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+    await expect(readHiddenObservationProjection(name, {
+      teamEpochId: (await teams.readConfig(name)).epochId!,
+      exactSessionId: `/tmp/${name}-lead.jsonl`,
+      branchLineage: ["snapshot-entry"],
+    })).resolves.toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
+  });
+
   it.each([
     ["foreign version", "another-model-tool-version"],
     ["legacy absent version", undefined],
