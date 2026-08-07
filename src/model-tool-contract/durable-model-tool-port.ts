@@ -484,8 +484,11 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       }
       const projected = await this.projectUpdates(bound, batch.events, observation.projection, tasksResult.tasks, taskRevisionChanged, tasksResult.warnings, externallyChangedTaskIds);
       if (projected.kind === "contract_gap") return projected;
-      this.stage(leaderSessionId, bound.sessionFile, toolCallId, projected, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
-        team_events: String(asNumber(batch.headCursor)),
+      // The page cursor is the last event represented in this result. The
+      // journal head may include later pages that have not been projected.
+      const pageCursor = asNumber(batch.cursor);
+      this.stage(leaderSessionId, bound.sessionFile, toolCallId, projected, pageCursor, bound.config.epochId!, bound.teamName, view, {
+        team_events: String(pageCursor),
         task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
       }, tasksResult);
       return projected;
