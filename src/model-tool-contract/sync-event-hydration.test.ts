@@ -218,4 +218,82 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     expect(hydrate).toHaveBeenCalledTimes(2);
     expect(fixture.port.getPendingObservation(fixture.leaderSessionId)).toBeDefined();
   });
+
+  it("rescans the complete authority after a port restart before applying event references", async () => {
+    const fixture = await makeFixture();
+    const baselineId = "restart-baseline-task";
+    const eventId = "restart-event-task";
+    const records = new Map([
+      [baselineId, taskEnvelope(fixture.name, baselineId)],
+      [eventId, taskEnvelope(fixture.name, eventId)],
+    ]);
+    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([baselineId]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_name, ids) => ids.map((id) => records.get(id)));
+    await acknowledgeSnapshot(fixture);
+    await teamEvents.appendTeamEvent(fixture.name, {
+      type: "task",
+      ref: { taskId: eventId, version: taskVersionRef(`beads-${eventId}-open`) },
+      change: "created",
+      actor: "team-lead",
+    });
+
+    list.mockResolvedValue([baselineId, eventId]);
+    const resumed = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+    resumed.setLeaderSessionFile(fixture.leaderSessionId, fixture.sessionFile);
+    resumed.setBranchContext(fixture.leaderSessionId, ["snapshot-entry"]);
+    await expect(resumed.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "restart-update"))
+      .resolves.toMatchObject({ kind: "updates", taskChanges: [{ taskId: eventId, current: { id: eventId } }] });
+    expect(hydrate).toHaveBeenCalledTimes(2);
+    expect(hydrate).toHaveBeenLastCalledWith(fixture.name, [baselineId, eventId]);
+    expect(resumed.getPendingObservation(fixture.leaderSessionId)).toBeDefined();
+  });
+
+  it("requires a fresh snapshot after a branch switch", async () => {
+    const fixture = await makeFixture();
+    const taskId = "branch-isolated-task";
+    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([taskId]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([taskEnvelope(fixture.name, taskId)]);
+    await acknowledgeSnapshot(fixture, "branch-a");
+    hydrate.mockClear();
+    list.mockClear();
+    fixture.port.setBranchContext(fixture.leaderSessionId, ["branch-b"]);
+
+    await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "wrong-branch-update"))
+      .resolves.toEqual({ kind: "snapshot_required", message: "Take a Team snapshot before requesting updates." });
+    expect(list).not.toHaveBeenCalled();
+    expect(hydrate).not.toHaveBeenCalled();
+    expect(fixture.port.getPendingObservation(fixture.leaderSessionId)).toBeUndefined();
+  });
+
+  it("rescans Task authority after a quiet wait wakes without a Task event", async () => {
+    const fixture = await makeFixture();
+    const taskId = "quiet-rescan-task";
+    let version = "quiet-v1";
+    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([taskId]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => {
+      const current = taskEnvelope(fixture.name, taskId);
+      return [{ ...current, task: { ...current.task, version } }];
+    });
+    await acknowledgeSnapshot(fixture);
+    vi.spyOn(teamEvents, "waitForTeamEvents").mockImplementation(async () => {
+      version = "quiet-v2";
+      return {
+        cursor: "1",
+        headCursor: "1",
+        events: [{ type: "worker", cursor: "1", worker: "worker", membershipId: "quiet-membership", phase: "failed", at: "2026-01-01T00:00:00.000Z" }],
+        truncated: false,
+        remaining: 0,
+        timedOut: false,
+      };
+    });
+    hydrate.mockClear();
+    list.mockClear();
+
+    await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "quiet-update"))
+      .resolves.toMatchObject({ kind: "updates", head: 1, taskChanges: [{ taskId, changeKinds: ["progress"], current: { version: taskVersionRef("quiet-v2") } }] });
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(hydrate).toHaveBeenCalledTimes(2);
+    expect(hydrate).toHaveBeenLastCalledWith(fixture.name, [taskId]);
+    expect(fixture.port.getPendingObservation(fixture.leaderSessionId)).toBeDefined();
+  });
 });
