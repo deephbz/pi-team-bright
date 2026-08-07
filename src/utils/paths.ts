@@ -81,3 +81,8 @@ export function configPath(teamName: string) {
 export function leadSessionPath(teamName: string) {
   return path.join(teamDir(teamName), "lead-session.json");
 }
+
+/** Derived presentation evidence for internal sync nudges. */
+export function syncNudgeRecordPath(teamName: string) {
+  return path.join(teamDir(teamName), "sync-nudges.jsonl");
+}

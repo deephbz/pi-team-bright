@@ -86,8 +86,8 @@ based substitute for Tasks.
   Worker stop. iTerm2, Zellij, cmux, WezTerm, and Windows preserve their existing
   placement behavior but do not guarantee this exact target-and-ratio invariant.
   Herdr owns the `pi` executable used by `agent start`; a real Herdr Team must
-  configure that executable to a supported Pi release (0.80.10, 0.82.x, or
-  0.83.x). Launching a supported local Pi only for the leader does not change
+  configure that executable to a supported Pi release (0.83.x or later). Pi 0.83 or later is required for
+  exact Worker run-state evidence. Launching a supported local Pi only for the leader does not change
   Worker Pi. Workers load the exact Pi Team Bright extension and retain Pi's
   normal unrelated extension and Skill discovery. A distinct discovered Pi Team
   Bright copy violates the one-version-epoch rule and remains a documented
@@ -129,8 +129,9 @@ is live.
 ## Team pane layout settings
 
 Set the optional Team policy under `pi_team_bright.team` in global
-`settings.json` or a trusted project's `.pi/settings.json`. This complete
-example also shows the related Worker settings:
+`settings.json` or a trusted project's `.pi/settings.json`. Pane layout values
+use Pi's normal trusted-project precedence. Sync liveness values are read from
+global settings only. This complete example also shows the related Worker settings:
 
 ```json
 {
@@ -139,7 +140,10 @@ example also shows the related Worker settings:
       "pane_layout": {
         "leader_share": 0.6,
         "worker_tiling": "grid"
-      }
+      },
+      "wait_seconds": 120,
+      "nudge_enabled": true,
+      "nudge_delay_seconds": 1200
     },
     "worker": {
       "default_model": "openai-codex/gpt-5.6-luna",
@@ -161,7 +165,9 @@ It must be greater than `0.1` and less than `1.0`; the default is `0.6`.
 global settings, then `{ "leader_share": 0.6, "worker_tiling": "linear" }`.
 Herdr supports `linear` and `grid`; other pane backends support `linear` only.
 The resolved policy is stored in `TeamConfig`, so later settings changes do not
-move a live Team. Stop and recreate the Team to apply a new policy.
+move a live Team. `wait_seconds` defaults to `120`. Nudges are enabled by
+default with a `1200`-second delay. Set both values to override the defaults.
+Stop and recreate the Team to apply a new policy.
 
 ## Worker resource settings
 

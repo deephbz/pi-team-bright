@@ -272,6 +272,7 @@ export async function createTeam(
   terminalBinding?: TeamTerminalBinding,
   implementationVersion?: string,
   paneLayout?: TeamPaneLayout,
+  syncLiveness?: TeamConfig["syncLiveness"],
 ): Promise<TeamConfig> {
   if (!topologyLease) {
     return withTeamTopologyLease(name, (lease) => createTeam(
@@ -288,6 +289,7 @@ export async function createTeam(
       terminalBinding,
       implementationVersion,
       paneLayout,
+      syncLiveness,
     ));
   }
   assertTopologyLease(name, topologyLease);
@@ -394,6 +396,7 @@ export async function createTeam(
     defaultModel,
     separateWindows,
     ...(paneLayout ? { paneLayout } : {}),
+    ...(syncLiveness ? { syncLiveness: structuredClone(syncLiveness) } : {}),
     ...(taskWorkspace ? { taskBackend: "beads" as const, taskWorkspace, taskAuthorityId, taskAuthorityFingerprint } : {}),
     ...priorAuthority,
   };

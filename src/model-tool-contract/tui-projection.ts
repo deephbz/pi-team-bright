@@ -101,6 +101,7 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
         lines.push(`Task ${quoted(change.task_id)} changed · ${change.current.status}${change.current.assignee ? ` · @ ${change.current.assignee}` : " · unassigned"}${blocker ? ` · blocker: ${compact(blocker.text)}` : ""}.`);
       }
     }
+    else if (model.kind === "caught_up") lines.push("Caught up: no current Worker producer requires a wait.");
     else lines.push(`${model.kind} · ${model.reason ?? "observation not advanced"}${model.message ? `: ${compact(model.message)}` : "."}`);
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
@@ -159,7 +160,7 @@ export function projectTui(input: TuiInput): string[] {
     const partialTaskCreate = input.tool === "task_create"
       && ((kind === "created" && model.delivery_warnings?.length) || (kind === "task_create_batch" && model.outcomes.some((item: any) => item.delivery_warnings?.length)));
     const partialAlert = input.tool === "alert_send" && kind === "alert_sent" && model.failed_recipients.length > 0;
-    const negative = ["refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "partial"].includes(kind) || mixedTaskBatch || partialTaskCreate || partialAlert;
+    const negative = ["refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "partial"].includes(kind) || mixedTaskBatch || partialTaskCreate || partialAlert;
     const tone = negative ? "!" : "✓";
     return [`${tone} ${mixedTaskBatch || partialTaskCreate || partialAlert ? "partial" : kind}`, ...toolLines(input.tool, input.details, model, input.expanded).map((line) => `  ${line}`)];
   } catch {

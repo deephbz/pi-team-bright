@@ -576,7 +576,6 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         timedOut: false,
       };
     });
-    });
     await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "quiet-update")).resolves.toMatchObject({
       kind: "updates",
       head: 1,
@@ -584,8 +583,6 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     });
     expect(hydrate).toHaveBeenCalledTimes(3);
     expect(hydrate).toHaveBeenLastCalledWith(name, ["quiet-task"]);
-
-    expect(hydrate).toHaveBeenCalledTimes(3);
   });
 
   it("hydrates event-referenced Tasks once and merges them with the acknowledged baseline", async () => {

@@ -140,6 +140,8 @@ export interface ModelToolTeamEvent {
 export type TeamSyncPortResult =
   | { kind: "snapshot"; team: ModelToolTeamCurrent; workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: TaskCard[]; taskProjectionWarnings?: TaskCardWarning[]; head: number; epochId: string }
   | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: TaskCard }>; taskProjectionWarnings?: TaskCardWarning[]; alerts: []; head: number; epochId: string }
+  | { kind: "caught_up"; head: number; epochId: string }
+  | { kind: "indeterminate"; message: string }
   | { kind: "snapshot_required"; message: string }
   | { kind: "cancelled"; message: string }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }
@@ -207,6 +209,7 @@ export interface ModelToolTeamPort {
   setLeaderSessionFile?(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void;
   setLeaderLaunchContext?(leaderSessionId: ExactLeaderSessionId, context: ModelToolLeaderLaunchContext): void;
   acknowledgePendingObservationAsync?(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): Promise<boolean>;
+  readSyncNudgeDebt?(leaderSessionId: ExactLeaderSessionId, branchLineage: string[]): Promise<import("../utils/sync-nudge-conductor").SyncNudgeDebt>;
   getPendingObservation?(leaderSessionId: ExactLeaderSessionId): PendingObservation | undefined;
   readonly readDebugRevision?: () => number;
 }

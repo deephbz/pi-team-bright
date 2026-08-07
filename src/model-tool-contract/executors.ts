@@ -384,6 +384,23 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           observation_advanced: false,
         };
       }
+      if (outcome.kind === "caught_up") {
+        const result = {
+          kind: "caught_up" as const,
+          head: outcome.head,
+          epoch_id: outcome.epochId,
+          state_changed: false as const,
+          observation_advanced: true as const,
+        };
+        port.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
+        return result;
+      }
+      if (outcome.kind === "indeterminate") return {
+        kind: "indeterminate" as const,
+        message: outcome.message,
+        state_changed: false,
+        observation_advanced: false,
+      };
       const result = outcome.kind === "snapshot"
         ? {
           kind: "snapshot" as const,
