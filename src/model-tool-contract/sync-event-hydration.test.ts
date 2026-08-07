@@ -188,7 +188,7 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     await appendTaskEvent(fixture.name, taskId);
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "failed-hydration"))
-      .rejects.toThrow("simulated event Task authority failure");
+      .resolves.toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable", message: "simulated event Task authority failure" });
     expect(fixture.port.getPendingObservation(fixture.leaderSessionId)).toBeUndefined();
     expect(list).not.toHaveBeenCalled();
     const config = await teams.readConfig(fixture.name);
@@ -210,7 +210,7 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     await appendTaskEvent(fixture.name, taskId);
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "first-retry"))
-      .rejects.toThrow("temporary Task authority failure");
+      .resolves.toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable", message: "temporary Task authority failure" });
     hydrate.mockImplementation(async (_name, ids) => ids.map((id) => taskEnvelope(fixture.name, id)));
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "second-retry"))
