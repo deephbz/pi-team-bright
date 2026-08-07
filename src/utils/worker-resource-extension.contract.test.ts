@@ -69,6 +69,9 @@ describe("Worker resource extension projection", () => {
     expect(JSON.stringify(leader.tools.get("alert_send")!.parameters)).toContain("target");
     expect(JSON.stringify(leader.tools.get("alert_send")!.parameters)).toContain("announcement");
     expect(JSON.stringify(worker.tools.get("alert_send")!.parameters)).not.toContain("announcement");
+    expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("team_name");
+    expect(worker.tools.get("task_read")!.parameters.properties).not.toHaveProperty("team_name");
+    expect(worker.tools.get("task_update")!.parameters.properties).not.toHaveProperty("team_name");
     expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("to");
     expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("target");
   });
