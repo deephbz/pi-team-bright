@@ -5,6 +5,15 @@ changelog. Versions, Git tags, npm bytes, dist-tags, and downstream
 HyperCarrier composition are separate authorities and must be recorded
 separately.
 
+Keep integration E2E verification separate from release execution. For the
+integration E2E test, use Herdr to launch a fresh independent Pi agent in a new
+tab. That agent creates its own disposable test Team and exercises all
+model-facing leader and Worker tools. Use Pi Team Bright Tasks and Alerts inside
+that test Team; use Herdr only to create, prompt, observe, and wait for the
+independent Pi agent. Do not add this agent as a release-process proxy. The
+release operator executes the steps below directly from the exact release
+repository.
+
 1. Confirm the exact release commit is merged to `main`, CI is green, the npm
    version and Git tag are absent, and the working tree is clean.
 2. Run the full tests, test-lane closure, generated/package verification, and
