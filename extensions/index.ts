@@ -668,6 +668,13 @@ export default function (pi: ExtensionAPI) {
     const policy = config.syncLiveness;
     if (!policy?.nudgeEnabled || policy.nudgeDelaySeconds === undefined) return;
     const delayMs = Math.max(0, policy.nudgeDelaySeconds * 1000);
+    // Model-tool registration normally binds lazily on the first tool call.
+    // Resume nudge reconciliation has no such call, so bind the exact current
+    // Pi Session before it can ask the port for debt.
+    const sessionId = ctx?.sessionManager?.getSessionId?.();
+    const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+    if (!sessionId || !sessionFile) return;
+    modelToolJourney.port.setLeaderSessionFile?.(exactLeaderSessionId(sessionId), sessionFile);
     const debt = async (): Promise<SyncNudgeDebt> => {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const branch = modelToolBranchIds(ctx);
