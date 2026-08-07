@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { materializeWorkerAggregate } from "./worker-resource-projection";
 
-type RegisteredTool = { name: string; parameters: { properties?: Record<string, unknown> } };
+type RegisteredTool = { name: string; parameters: { properties?: Record<string, unknown>; minProperties?: number } };
 type Handler = (event: any, ctx: any) => Promise<void>;
 
 function tempHome() {
@@ -69,9 +69,17 @@ describe("Worker resource extension projection", () => {
     expect(JSON.stringify(leader.tools.get("alert_send")!.parameters)).toContain("target");
     expect(JSON.stringify(leader.tools.get("alert_send")!.parameters)).toContain("announcement");
     expect(JSON.stringify(worker.tools.get("alert_send")!.parameters)).not.toContain("announcement");
-    expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("team_name");
     expect(worker.tools.get("task_read")!.parameters.properties).not.toHaveProperty("team_name");
     expect(worker.tools.get("task_update")!.parameters.properties).not.toHaveProperty("team_name");
+    expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("team_name");
+    expect(Object.keys(worker.tools.get("task_read")!.parameters.properties ?? {}).sort()).toEqual(["task_id"]);
+    expect(Object.keys(worker.tools.get("task_update")!.parameters.properties ?? {}).sort()).toEqual([
+      "claim", "current_context", "expected_version", "journal_entries", "operation_id", "status", "task_id",
+    ]);
+    expect(worker.tools.get("task_update")!.parameters.minProperties).toBe(3);
+    expect(Object.keys(worker.tools.get("alert_send")!.parameters.properties ?? {}).sort()).toEqual([
+      "kind", "task_id", "task_version", "text",
+    ]);
     expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("to");
     expect(worker.tools.get("alert_send")!.parameters.properties).not.toHaveProperty("target");
   });

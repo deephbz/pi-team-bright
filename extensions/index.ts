@@ -1227,7 +1227,7 @@ export default function (pi: ExtensionAPI) {
         current_context: Type.Optional(Type.String({ minLength: 1 })),
         journal_entries: Type.Optional(Type.Array(Type.Object({ kind: Type.Enum(["progress", "decision", "blocker", "result", "note"]), text: Type.String({ minLength: 1 }) }, { additionalProperties: false }), { minItems: 1 })),
         status: Type.Optional(StringEnum(["open", "in_progress", "blocked", "closed"])),
-      }, { additionalProperties: false, minProperties: 4 }),
+      }, { additionalProperties: false, minProperties: 3 }),
       async execute(_toolCallId, params: any, _signal, _onUpdate, ctx) {
         const binding = await resolveCurrentWorkerContext(ctx);
         const adapter = new BeadsTaskAdapter(binding.teamName, binding.member.name);

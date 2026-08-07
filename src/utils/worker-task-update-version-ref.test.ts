@@ -124,6 +124,13 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       claim: true,
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(true);
+    // The former team_name coordinate is gone, but the three unchanged
+    // required coordinates still accept a no-op update at the schema boundary.
+    expect(Check(update.parameters as any, {
+      task_id: "task-1",
+      operation_id: "no-op-version-safe",
+      expected_version: taskVersionRef("beads_v1"),
+    })).toBe(true);
     expect(Check(update.parameters as any, {
       task_id: "task-1",
       claim: true,
