@@ -155,3 +155,19 @@ generation, TypeScript 5.9 typecheck, 71 targeted liveness/event/model-tool
 tests, and package observation probing. The generated `dist` changes are release
 source and must remain with this commit. No broad suite, publication, tag, push,
 or merge was run.
+
+## Accepted blocker integration result
+
+Date: 2026-08-07
+
+The final release source integrates bounded sequential Beads hydration in batches
+of at most 16 IDs and returns typed `task_authority_unavailable` results without
+staging incomplete observations. It also integrates Pi 0.84 footer subscription
+auth validation and binds the exact resumed leader Session before nudge-debt
+reads. The resumed-nudge proof diagnoses fork and stale-binding suppression and
+one durable/model/TUI presentation.
+
+Integrated blocker commits: `cb6e8bbc61573b295b518e90ee225e6f649f77ff` and
+`8e56afc`. The final focused run passed 101 tests across nine files, plus model
+documentation generation, TypeScript 5.9 typecheck, JSON validation, and package
+verification. No broad suite or publication was run.

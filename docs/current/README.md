@@ -175,8 +175,14 @@ restating executable definitions.
 - Task event publication records payload-light failed-event hints. Updates use
   event and Task-authority revisions, and a failed event append cannot advance
   the hidden watermark or hide an authoritative Task change. Required Task
-  references are hydrated before publication; incomplete hydration publishes no
-  observation. See the [rc.9 coordination research handoff](../journal/2026-08-07-coordination-correctness-research-handoff.md).
+  references use bounded sequential Beads hydration batches of at most 16 IDs;
+  incomplete hydration returns typed `task_authority_unavailable` and publishes
+  no observation. See the [rc.9 coordination research handoff](../journal/2026-08-07-coordination-correctness-research-handoff.md)
+  and [implementation continuation](../journal/2026-08-07-coordination-correctness-implementation-continuation.md).
+- The release source validates the Pi 0.84 footer subscription-auth boundary
+  through the shared context registry. A resumed leader binds its exact Session
+  before nudge-debt reads; the focused proof covers one presentation, fork and
+  stale-binding suppression, and the durable/model/TUI projection boundary.
 - Worker resource settings are a Worker-process projection only. The executable
   parser plus Worker tool and CLI aggregate projection are
   [`src/utils/worker-resource-projection.ts`](../../src/utils/worker-resource-projection.ts),
