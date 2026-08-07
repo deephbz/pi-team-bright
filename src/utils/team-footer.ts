@@ -95,6 +95,13 @@ export function teamFooterFactory(
           const model = getModel();
           return model ? ctx.modelRegistry.isUsingOAuth(model) : false;
         },
+        // Pi 0.84 asks the runtime for subscription-backed auth instead of
+        // OAuth. Resolve both answers from the same ExtensionContext registry.
+        isUsingSubscription: (provider: string) => {
+          const model = getModel();
+          if (!model || model.provider !== provider || !ctx.modelRegistry.isUsingOAuth(model)) return false;
+          return (ctx.modelRegistry.getProvider(provider)?.auth.oauth as { isSubscription?: boolean } | undefined)?.isSubscription === true;
+        },
       },
       getContextUsage: () => ctx.getContextUsage(),
     };

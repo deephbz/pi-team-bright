@@ -50,6 +50,7 @@ export type TeamSnapshotPortResult =
     taskProjectionWarnings?: TaskCardWarning[];
   }
   | { kind: "no_active_team" }
+  | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
 
 export type CreateTaskPortResult =
