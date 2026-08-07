@@ -136,8 +136,11 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `0.17.0-rc.9` is source preparation only; it is not published, tagged, or
-  pushed. It keeps the [aborted rc.6
+- `0.17.0-rc.9` is published from exact tagged source `1d5124c`; npm `next`
+  points to it. The durable [rc.9 release
+  receipt](../journal/2026-08-07-v0.17.0-rc.9-release-receipt.md) records exact
+  CI, package, integration E2E, registry, and provenance evidence. It keeps the
+  [aborted rc.6
   receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md), [published
   rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and
   [published rc.8
