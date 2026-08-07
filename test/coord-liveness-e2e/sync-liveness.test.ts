@@ -207,7 +207,7 @@ describe("hardened coordination liveness boundaries", () => {
   it("uses settings defaults and overrides for bounded wait and delayed nudge policy", () => {
     const agentDir = tempAgentDir();
     fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({}));
-    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 120, nudgeEnabled: false });
+    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 1_200 });
     fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { wait_seconds: 7.5, nudge_enabled: true, nudge_delay_seconds: 3 } } }));
     expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 7.5, nudgeEnabled: true, nudgeDelaySeconds: 3 });
   });
