@@ -193,7 +193,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       syncLiveness = {
         waitSeconds: policy.waitSeconds,
         nudgeEnabled: policy.nudgeEnabled,
-        ...(policy.nudgeDelaySeconds === undefined ? {} : { nudgeDelaySeconds: policy.nudgeDelaySeconds }),
+        nudgeDelaySeconds: policy.nudgeDelaySeconds,
         policyVersion: policy.policyVersion,
         ...(policy.diagnostics.length ? { diagnostics: policy.diagnostics } : {}),
       };

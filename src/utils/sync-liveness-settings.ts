@@ -10,7 +10,7 @@ export const MAX_SYNC_TIMER_SECONDS = 3_600;
 export interface SyncLivenessSettings {
   waitSeconds: number;
   nudgeEnabled: boolean;
-  nudgeDelaySeconds?: number;
+  nudgeDelaySeconds: number;
   policyVersion: typeof SYNC_LIVENESS_POLICY_VERSION;
   diagnostics: string[];
 }
@@ -51,14 +51,14 @@ export function loadSyncLivenessSettings(input: { agentDir?: string } = {}): Syn
   const nudgeEnabled = team?.nudge_enabled === undefined
     ? true
     : typeof team.nudge_enabled === "boolean" ? team.nudge_enabled : true;
-  if (team?.nudge_enabled === undefined) diagnostics.push("pi_team_bright.team.nudge_enabled is absent; nudges are enabled by default.");
-  else if (typeof team.nudge_enabled !== "boolean") diagnostics.push("pi_team_bright.team.nudge_enabled must be boolean; nudges are enabled by default.");
+  if (team?.nudge_enabled === undefined) diagnostics.push("pi_team_bright.team.nudge_enabled is omitted; default true was used.");
+  else if (typeof team.nudge_enabled !== "boolean") diagnostics.push("pi_team_bright.team.nudge_enabled must be boolean; default true was used.");
 
   const nudgeDelaySeconds = team?.nudge_delay_seconds === undefined
     ? DEFAULT_SYNC_NUDGE_DELAY_SECONDS
     : boundedSeconds(team.nudge_delay_seconds) ? team.nudge_delay_seconds : DEFAULT_SYNC_NUDGE_DELAY_SECONDS;
-  if (team?.nudge_delay_seconds === undefined) diagnostics.push("pi_team_bright.team.nudge_delay_seconds is absent; the 1200 second default is used.");
-  else if (!boundedSeconds(team.nudge_delay_seconds)) diagnostics.push(`pi_team_bright.team.nudge_delay_seconds must be from 0 through ${MAX_SYNC_TIMER_SECONDS} seconds; the 1200 second default is used.`);
+  if (team?.nudge_delay_seconds === undefined) diagnostics.push("pi_team_bright.team.nudge_delay_seconds is omitted; default 1200 seconds was used.");
+  else if (nudgeDelaySeconds === DEFAULT_SYNC_NUDGE_DELAY_SECONDS && !boundedSeconds(team.nudge_delay_seconds)) diagnostics.push(`pi_team_bright.team.nudge_delay_seconds must be from 0 through ${MAX_SYNC_TIMER_SECONDS} seconds; default 1200 seconds was used.`);
 
-  return { waitSeconds, nudgeEnabled, ...(nudgeDelaySeconds === undefined ? {} : { nudgeDelaySeconds }), policyVersion: SYNC_LIVENESS_POLICY_VERSION, diagnostics };
+  return { waitSeconds, nudgeEnabled, nudgeDelaySeconds, policyVersion: SYNC_LIVENESS_POLICY_VERSION, diagnostics };
 }

@@ -165,8 +165,9 @@ It must be greater than `0.1` and less than `1.0`; the default is `0.6`.
 global settings, then `{ "leader_share": 0.6, "worker_tiling": "linear" }`.
 Herdr supports `linear` and `grid`; other pane backends support `linear` only.
 The resolved policy is stored in `TeamConfig`, so later settings changes do not
-move a live Team. `wait_seconds` defaults to `120`. Nudges are enabled by
-default with a `1200`-second delay. Set both values to override the defaults.
+move a live Team. `wait_seconds` defaults to `120`. Nudge settings default to
+enabled with a `1200` second delay. Malformed nudge values use these defaults and
+emit diagnostics; set `nudge_enabled` to `false` to disable nudges.
 Stop and recreate the Team to apply a new policy.
 
 ## Worker resource settings
