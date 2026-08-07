@@ -14,6 +14,7 @@ import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { registerModelToolJourney } from "./pi-registration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { taskVersionRef } from "./task-version-ref";
+import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS } from "../utils/sync-liveness-settings";
 
 const testTeams: string[] = [];
 const paneSettingsRoots: string[] = [];
@@ -66,13 +67,16 @@ afterEach(() => {
   for (const root of paneSettingsRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-async function createTeamWithPaneSettings(projectTrusted?: boolean): Promise<{ result: any; createArgs: any[] }> {
+async function createTeamWithPaneSettings(projectTrusted?: boolean, globalTeamSettings?: Record<string, unknown>): Promise<{ result: any; createArgs: any[] }> {
   const root = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "pi-team-pane-settings-"));
   paneSettingsRoots.push(root);
   const agentDir = path.join(root, "agent");
   const cwd = path.join(root, "leader-project");
   fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
   fs.mkdirSync(agentDir, { recursive: true });
+  fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({
+    ...(globalTeamSettings ? { pi_team_bright: { team: globalTeamSettings } } : {}),
+  }));
   fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
     pi_team_bright: { team: { pane_layout: { leader_share: 0.7, worker_tiling: "grid" } } },
   }));
@@ -109,6 +113,21 @@ async function createTeamWithPaneSettings(projectTrusted?: boolean): Promise<{ r
   if (!createArgs) throw new Error("Team creation was not invoked.");
   return { result, createArgs };
 }
+
+describe("DurableModelToolTeamPort sync liveness policy", () => {
+  it("persists resolved nudge defaults when a new Team epoch is created", async () => {
+    const { result, createArgs } = await createTeamWithPaneSettings(undefined, {});
+    expect(result).toMatchObject({ kind: "created" });
+    expect(createArgs[13]).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
+  });
+
+  it("falls back to nudge defaults for malformed settings and preserves explicit disable", async () => {
+    const malformed = await createTeamWithPaneSettings(undefined, { nudge_enabled: "yes", nudge_delay_seconds: -1 });
+    expect(malformed.createArgs[13]).toMatchObject({ nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
+    const disabled = await createTeamWithPaneSettings(undefined, { nudge_enabled: false });
+    expect(disabled.createArgs[13]).toMatchObject({ nudgeEnabled: false, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
+  });
+});
 
 describe("DurableModelToolTeamPort pane settings", () => {
   it.each([
