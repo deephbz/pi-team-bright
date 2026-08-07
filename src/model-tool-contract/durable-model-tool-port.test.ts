@@ -374,6 +374,134 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     expect(port.getPendingObservation(leaderSessionId)).toBeDefined();
   });
 
+  it("recovers a complete baseline after a port restart before applying event references", async () => {
+    const { name, leaderSessionId, port } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const record = (id: string, version: string) => ({
+      task: {
+        id,
+        title: `${id} title`,
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version,
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep restart recovery safe.", current_context: "Current context." },
+    });
+    const records = new Map([
+      ["baseline-task", record("baseline-task", "baseline-v1")],
+      ["event-task", record("event-task", "event-v1")],
+    ]);
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_teamName, taskIds) => taskIds.map((id) => records.get(id)));
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+
+    await teamEvents.appendTeamEvent(name, {
+      type: "task",
+      ref: { taskId: "event-task", version: taskVersionRef("event-v1") },
+      change: "status",
+      actor: "team-lead",
+    });
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task", "event-task"]);
+    const resumed = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+    resumed.setLeaderSessionFile(leaderSessionId, sessionFile);
+    resumed.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await expect(resumed.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "restart-update")).resolves.toMatchObject({
+      kind: "updates",
+      taskChanges: [{ taskId: "event-task", current: { id: "event-task" } }],
+    });
+    expect(hydrate).toHaveBeenCalledTimes(2);
+    expect(hydrate).toHaveBeenLastCalledWith(name, ["baseline-task", "event-task"]);
+  });
+
+  it("requires a fresh snapshot after a branch switch instead of using another branch baseline", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const record = {
+      task: {
+        id: "branch-task",
+        title: "Branch task",
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version: "branch-v1",
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep branches separate.", current_context: "Current context." },
+    };
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["branch-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["branch-a"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "branch-a", ["branch-a"]);
+    hydrate.mockClear();
+
+    port.setBranchContext(leaderSessionId, ["branch-b"]);
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "wrong-branch-update")).resolves.toEqual({
+      kind: "snapshot_required",
+      message: "Take a Team snapshot before requesting updates.",
+    });
+    expect(hydrate).not.toHaveBeenCalled();
+  });
+
+  it("rechecks complete Task authority after a quiet wait wakes", async () => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    let version = "quiet-v1";
+    const record = () => ({
+      task: {
+        id: "quiet-task",
+        title: "Quiet task",
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version,
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep eventless changes.", current_context: "Current context." },
+    });
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["quiet-task"]);
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => [record()]);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+
+    version = "quiet-v2";
+    vi.spyOn(teamEvents, "waitForTeamEvents").mockResolvedValue({
+      cursor: "1",
+      headCursor: "1",
+      events: [{ type: "worker", cursor: "1", worker: "worker", membershipId: "membership-worker", phase: "failed", at: "2026-01-01T00:00:00.000Z" }],
+      truncated: false,
+      remaining: 0,
+      timedOut: false,
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "quiet-update")).resolves.toMatchObject({
+      kind: "updates",
+      head: 1,
+      taskChanges: [{ taskId: "quiet-task", changeKinds: ["progress"], current: { version: taskVersionRef("quiet-v2") } }],
+    });
+    expect(hydrate).toHaveBeenCalledTimes(3);
+    expect(hydrate).toHaveBeenLastCalledWith(name, ["quiet-task"]);
+
+    port.setBranchContext(leaderSessionId, ["snapshot-entry", "quiet-update-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "quiet-update-entry", ["snapshot-entry", "quiet-update-entry"]);
+    await teamEvents.appendTeamEvent(name, {
+      type: "task",
+      ref: { taskId: "quiet-task", version: taskVersionRef("quiet-v2") },
+      change: "status",
+      actor: "team-lead",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "quiet-task-event")).resolves.toMatchObject({
+      kind: "updates",
+      taskChanges: [{ taskId: "quiet-task", current: { version: taskVersionRef("quiet-v2") } }],
+    });
+    expect(hydrate).toHaveBeenCalledTimes(3);
+  });
+
   it("hydrates event-referenced Tasks once and merges them with the acknowledged baseline", async () => {
     const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = (id: string) => ({

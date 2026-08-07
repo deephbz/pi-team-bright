@@ -52,6 +52,16 @@ const WAIT_MS = 120_000;
 
 type TaskProjection = { tasks: TaskCard[]; warnings: TaskCardWarning[] };
 
+type TaskProjectionCache = {
+  teamName: string;
+  epochId: string;
+  exactSessionId: string;
+  acknowledgedEntryId: string;
+  acknowledgedLineage: string[];
+  teamEventCursor: string;
+  projection: TaskProjection;
+};
+
 type PendingDurableObservation = PendingObservation & {
   internalResult: TeamSyncPortResult;
   teamName: string;
@@ -115,8 +125,8 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private readonly leaderLaunchContexts = new Map<ExactLeaderSessionId, ModelToolLeaderLaunchContext>();
   private readonly branchIds = new Map<ExactLeaderSessionId, string[]>();
   private readonly pending = new Map<ExactLeaderSessionId, PendingDurableObservation>();
-  /** Complete Task projections are a rebuildable, acknowledgement-gated baseline. */
-  private readonly taskProjections = new Map<ExactLeaderSessionId, { teamName: string; epochId: string; projection: TaskProjection }>();
+  /** Complete Task projections are rebuildable, keyed, and acknowledgement-gated baselines. */
+  private readonly taskProjections = new Map<string, TaskProjectionCache>();
   private readonly defaultLaunchBridge = createWorkerLaunchBridge({
     buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
       const argv = process.argv[1] ? [process.execPath, process.argv[1]] : ["pi"];
@@ -421,22 +431,30 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
         return { kind: "snapshot_required", message: "Take a Team snapshot before requesting updates." };
       }
       // Read the event batch first. Task events identify the smallest authority
-      // read needed for this update; Worker-only events do not read Tasks.
+      // read needed for this update; Worker-only events do not read Tasks when a
+      // baseline is bound to this exact Team, epoch, Session, branch, and cursor.
       let batch = teamEvents.readTeamEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
       let tasksResult: TaskProjection | undefined;
       let taskRevisionChanged = false;
+      let externallyChangedTaskIds: string[] = [];
       if (batch.events.length === 0) {
         // A quiet journal cannot prove that an external Task writer did not
-        // change state, so retain the complete snapshot rescan as the quiet
-        // path. This also gives a safe baseline if the wait later wakes.
+        // change state, so read the complete authority projection first.
         const complete = await this.readModelToolTasks(bound.teamName);
         if (complete.kind === "contract_gap") return complete;
         tasksResult = complete;
         taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
         if (!taskRevisionChanged) {
           try {
-            const waited = await teamEvents.waitForTeamEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: WAIT_MS, signal });
-            batch = waited;
+            batch = await teamEvents.waitForTeamEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: WAIT_MS, signal });
+            // A Task can commit without a Team event while the wait is active.
+            // Recheck after every successful wake before applying event refs.
+            const beforeWait = tasksResult;
+            const rechecked = await this.readModelToolTasks(bound.teamName);
+            if (rechecked.kind === "contract_gap") return rechecked;
+            tasksResult = rechecked;
+            externallyChangedTaskIds = beforeWait ? this.changedTaskIds(beforeWait, rechecked) : [];
+            taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
           } catch (error) {
             if (isAbort(error)) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
             throw error;
@@ -445,24 +463,26 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       }
 
       if (batch.events.length > 0) {
-        const refreshed = await this.hydrateEventTasks(bound.teamName, batch.events);
-        if (refreshed.tasks.length > 0) {
-          const baseline = tasksResult ?? this.cachedTaskProjection(leaderSessionId, bound);
-          if (!baseline) {
-            throw new Error("Task event hydration has no complete acknowledged baseline; request a fresh Team snapshot.");
-          }
-          tasksResult = this.mergeTaskProjection(baseline, refreshed);
+        const baseline = tasksResult ?? this.cachedTaskProjection(bound, observation.projection);
+        if (!baseline) {
+          // A restarted port has no memory cache. A complete authority rescan
+          // is the safe recovery path; it is never merged from another branch.
+          const recovered = await this.readModelToolTasks(bound.teamName);
+          if (recovered.kind === "contract_gap") return recovered;
+          tasksResult = recovered;
         } else {
-          tasksResult = tasksResult ?? this.cachedTaskProjection(leaderSessionId, bound);
-          if (!tasksResult) {
-            throw new Error("Worker event observation has no complete acknowledged Task baseline; request a fresh Team snapshot.");
-          }
+          tasksResult = baseline;
+        }
+        const idsToHydrate = this.staleEventTaskIds(batch.events, tasksResult);
+        if (idsToHydrate.length > 0) {
+          const refreshed = await this.hydrateTaskIds(bound.teamName, idsToHydrate);
+          tasksResult = this.mergeTaskProjection(tasksResult, refreshed);
         }
       }
       if (!tasksResult) {
         throw new Error("Task authority did not produce a complete Team observation.");
       }
-      const projected = await this.projectUpdates(bound, batch.events, observation.projection, tasksResult.tasks, taskRevisionChanged, tasksResult.warnings);
+      const projected = await this.projectUpdates(bound, batch.events, observation.projection, tasksResult.tasks, taskRevisionChanged, tasksResult.warnings, externallyChangedTaskIds);
       if (projected.kind === "contract_gap") return projected;
       this.stage(leaderSessionId, bound.sessionFile, toolCallId, projected, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
         team_events: String(asNumber(batch.headCursor)),
@@ -510,9 +530,14 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const committed = await commitHiddenObservationProjection(pending.teamName, coordinate);
     if (committed.kind !== "committed") return false;
     if (pending.taskProjection) {
-      this.taskProjections.set(leaderSessionId, {
+      const projection = committed.projection;
+      this.taskProjections.set(this.taskProjectionKey(pending.teamName, pending.epochId, pending.sessionId), {
         teamName: pending.teamName,
         epochId: pending.epochId,
+        exactSessionId: pending.sessionId,
+        acknowledgedEntryId: projection.acknowledgedEntryId,
+        acknowledgedLineage: [...projection.acknowledgedLineage],
+        teamEventCursor: projection.teamEventCursor,
         projection: structuredClone(pending.taskProjection),
       });
     }
@@ -555,32 +580,54 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     return { kind: "tasks", tasks: projected, warnings };
   }
 
-  private cachedTaskProjection(leaderSessionId: ExactLeaderSessionId, bound: BoundTeam): TaskProjection | undefined {
-    const cached = this.taskProjections.get(leaderSessionId);
-    if (!cached || cached.teamName !== bound.teamName || cached.epochId !== bound.config.epochId) return undefined;
+  private taskProjectionKey(teamName: string, epochId: string, exactSessionId: string): string {
+    return JSON.stringify([teamName, epochId, exactSessionId]);
+  }
+
+  private cachedTaskProjection(
+    bound: BoundTeam,
+    observation: HiddenObservationProjection,
+  ): TaskProjection | undefined {
+    const cached = this.taskProjections.get(this.taskProjectionKey(bound.teamName, bound.config.epochId!, bound.sessionFile));
+    if (
+      !cached
+      || cached.teamName !== bound.teamName
+      || cached.epochId !== bound.config.epochId
+      || cached.exactSessionId !== bound.sessionFile
+      || cached.acknowledgedEntryId !== observation.acknowledgedEntryId
+      || cached.teamEventCursor !== observation.teamEventCursor
+      || JSON.stringify(cached.acknowledgedLineage) !== JSON.stringify(observation.acknowledgedLineage)
+    ) return undefined;
     return structuredClone(cached.projection);
   }
 
-  /** Hydrate every Task named by one event batch with one canonical multi-ID read. */
-  private async hydrateEventTasks(teamName: string, events: readonly TeamEvent[]): Promise<TaskProjection> {
-    const taskIds = new Set<string>();
+  private staleEventTaskIds(events: readonly TeamEvent[], baseline: TaskProjection): string[] {
+    const currentById = new Map(baseline.tasks.map((task) => [task.id, task]));
+    const stale = new Set<string>();
     for (const event of events) {
-      if (event.type === "task") taskIds.add(event.ref.taskId);
-      if (event.type === "alert" && event.taskRef) taskIds.add(event.taskRef.taskId);
+      const reference = event.type === "task"
+        ? event.ref
+        : event.type === "alert" && event.taskRef
+          ? event.taskRef
+          : undefined;
+      if (!reference) continue;
+      const current = currentById.get(reference.taskId);
+      if (!current || (reference.version !== undefined && current.version !== reference.version)) stale.add(reference.taskId);
     }
-    if (taskIds.size === 0) return { tasks: [], warnings: [] };
+    return [...stale];
+  }
 
+  /** Hydrate selected event Task IDs with one canonical multi-ID authority read. */
+  private async hydrateTaskIds(teamName: string, taskIds: readonly string[]): Promise<TaskProjection> {
+    if (taskIds.length === 0) return { tasks: [], warnings: [] };
     const adapter = new BeadsTaskAdapter(teamName, "team-lead");
-    const tasks = await teamEvents.hydrateTeamSyncTasks(events, undefined, async (ids) => {
-      const records = await adapter.readMany(ids);
-      return records.map((record, index) => {
-        if (!record) throw new Error(`Task ${ids[index]} referenced by a Team event could not be hydrated.`);
-        if (record.kind === "contract_gap") throw new Error(record.message);
-        return record.task;
-      });
+    const records = await adapter.readMany(taskIds);
+    const tasks = records.map((record, index) => {
+      if (!record) throw new Error(`Task ${taskIds[index]} referenced by a Team event could not be hydrated.`);
+      if (record.kind === "contract_gap") throw new Error(record.message);
+      return record.task;
     });
-    const warnings = tasks.flatMap((task) => task.projection_warnings ?? []);
-    return { tasks, warnings };
+    return { tasks, warnings: tasks.flatMap((task) => task.projection_warnings ?? []) };
   }
 
   private mergeTaskProjection(base: TaskProjection, refreshed: TaskProjection): TaskProjection {
@@ -588,6 +635,13 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     for (const task of refreshed.tasks) byId.set(task.id, task);
     const warnings = [...byId.values()].flatMap((task) => task.projection_warnings ?? []);
     return { tasks: [...byId.values()], warnings };
+  }
+
+  private changedTaskIds(before: TaskProjection, after: TaskProjection): string[] {
+    const beforeById = new Map(before.tasks.map((task) => [task.id, JSON.stringify(task)]));
+    return after.tasks
+      .filter((task) => beforeById.get(task.id) !== JSON.stringify(task))
+      .map((task) => task.id);
   }
 
   private readWorkers(bound: BoundTeam, taskProjection: TaskCard[]): Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }> {
@@ -602,7 +656,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     }).sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = []): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
+  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<TeamSyncPortResult, { kind: "updates" }> | Extract<TeamSyncPortResult, { kind: "contract_gap" }>> {
     const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection, warnings: taskWarnings } : await this.readModelToolTasks(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
     const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];
@@ -621,11 +675,19 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
         current: task,
       })) : [] };
     if (taskChanges.kind === "contract_gap") return taskChanges;
+    const changes = [...taskChanges.changes];
+    const changedByEvent = new Set(changes.map((change) => change.taskId));
+    for (const taskId of externallyChangedTaskIds) {
+      if (changedByEvent.has(taskId)) continue;
+      const current = taskResult.tasks.find((task) => task.id === taskId);
+      if (!current) continue;
+      changes.push({ taskId, changeKinds: ["progress"], journalEntries: [], current });
+    }
     const result: Extract<TeamSyncPortResult, { kind: "updates" }> = {
       kind: "updates",
       teamChanges: [],
       workerChanges,
-      taskChanges: taskChanges.changes,
+      taskChanges: changes,
       alerts: [],
       head: events.length === 0 ? asNumber(observation.teamEventCursor) : Math.max(...events.map((event) => asNumber(event.cursor))),
       epochId: bound.config.epochId!,
