@@ -13,8 +13,8 @@
   <meta name="maintenance" content="Replace superseded shaping content; move exact accepted contracts to code and historical observations to the journal.">
   <meta name="catalog-schema" content="pi-team-bright-model-tool-catalog/1">
   <meta name="catalog-status" content="candidate">
-  <meta name="catalog-sha256" content="beab72f842387422c110cc09c77f8590b95180b555b4db634032a33f6b719e82">
-  <meta name="design-sha256" content="31beea2fb9c2bb61a8fc8ad7955aee0aea0ac8fd9dda0e3d80183de8a06440e2">
+  <meta name="catalog-sha256" content="5f6b823ae954008ef05572cf4842f232c26f6bd88a801f37d469b45d50c756a5">
+  <meta name="design-sha256" content="e50b6121c9ec5c46a468809f7b6d7694ffda621792833d4dd666cdb6db554ab2">
   <title>Pi Team Bright — Candidate Model Tool Contract</title>
   <style>
     :root { color-scheme: light dark; --bg:#f5f3ed; --panel:#fffdf8; --ink:#1f2a2a; --muted:#66706c; --line:#d8d5ca; --accent:#176b5b; --accent-soft:#dff1eb; --warn:#8c4f12; --warn-soft:#fff0d8; --code:#152422; --code-ink:#e9f7f2; }
@@ -398,6 +398,12 @@
     </article><article class="result-variant">
       <h4><code>updates</code></h4>
       <p><code>team_changes</code> · <code>worker_changes</code> · <code>task_changes</code> · <code>alerts</code> · <code>task_projection_warnings</code></p>
+    </article><article class="result-variant">
+      <h4><code>caught_up</code></h4>
+      <p><code>head</code> · <code>epoch_id</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
+    </article><article class="result-variant">
+      <h4><code>indeterminate</code></h4>
+      <p><code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
     </article><article class="result-variant">
       <h4><code>snapshot_required</code></h4>
       <p><code>message</code> · <code>state_changed</code> · <code>observation_advanced</code></p>
@@ -3529,6 +3535,67 @@
       &quot;type&quot;: &quot;object&quot;,
       &quot;required&quot;: [
         &quot;kind&quot;,
+        &quot;head&quot;,
+        &quot;epoch_id&quot;,
+        &quot;state_changed&quot;,
+        &quot;observation_advanced&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;caught_up&quot;
+        },
+        &quot;head&quot;: {
+          &quot;type&quot;: &quot;integer&quot;,
+          &quot;minimum&quot;: 0
+        },
+        &quot;epoch_id&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;observation_advanced&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: true
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
+        &quot;message&quot;,
+        &quot;state_changed&quot;,
+        &quot;observation_advanced&quot;
+      ],
+      &quot;properties&quot;: {
+        &quot;kind&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;const&quot;: &quot;indeterminate&quot;
+        },
+        &quot;message&quot;: {
+          &quot;type&quot;: &quot;string&quot;,
+          &quot;minLength&quot;: 1
+        },
+        &quot;state_changed&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        },
+        &quot;observation_advanced&quot;: {
+          &quot;type&quot;: &quot;boolean&quot;,
+          &quot;const&quot;: false
+        }
+      },
+      &quot;additionalProperties&quot;: false
+    },
+    {
+      &quot;type&quot;: &quot;object&quot;,
+      &quot;required&quot;: [
+        &quot;kind&quot;,
         &quot;message&quot;,
         &quot;state_changed&quot;,
         &quot;observation_advanced&quot;
@@ -4567,7 +4634,7 @@
   ]
 }</pre></details>
     </section>
-    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 908aefc2249467d632805520a05ab85eabd518ca</div><div>Catalog SHA-256: beab72f842387422c110cc09c77f8590b95180b555b4db634032a33f6b719e82</div><div>Design SHA-256: 31beea2fb9c2bb61a8fc8ad7955aee0aea0ac8fd9dda0e3d80183de8a06440e2</div></footer>
+    <footer class="provenance"><div>Catalog schema: pi-team-bright-model-tool-catalog/1 · status: candidate</div><div>Base revision: 79cea8c893a01b978f38f6e99368537697e9e3cb</div><div>Catalog SHA-256: 5f6b823ae954008ef05572cf4842f232c26f6bd88a801f37d469b45d50c756a5</div><div>Design SHA-256: e50b6121c9ec5c46a468809f7b6d7694ffda621792833d4dd666cdb6db554ab2</div></footer>
   </main>
 </div>
 </body>

@@ -1,17 +1,18 @@
 # Model-tool release parity checklist
 
-Release: `0.17.0-rc.8`
-Source surface: shipped main extension
+Release: `0.17.0-rc.9`
+Source surface: shipped main extension at the release candidate source commit
 
-This checklist maps each `0.17.0-rc.8` coordination capability to the
+This checklist maps each `0.17.0-rc.9` coordination capability to the
 single durable model-tool leader surface. The leader uses exact Session binding,
-so the surface omits `team_name` and carrier controls. Worker processes keep
-their existing `task_read`, `task_update`, and `alert_send` registrations.
+so the surface omits `team_name` and carrier controls. Worker processes keep the
+narrow `task_read`, `task_update`, and `alert_send` registrations; Worker Team
+identity comes from exact runtime binding, not model input.
 
 | Published capability | New leader mapping | Authority and verification |
 |---|---|---|
 | `team_create` | `team_create({name,purpose,pane_layout?})` | Team/Membership/Beads creation through `DurableModelToolTeamPort`; typed policy resolution and pane-layout tests |
-| `team_sync` | `team_sync({view})` | Team events, hidden observation, Team epoch, logical Workers, and Beads projection; durable model-tool tests |
+| `team_sync` | `team_sync({view})` | Team events, hidden observation, Team epoch, logical Workers, liveness state, and Beads projection; durable model-tool tests |
 | `ensure_worker` | `ensure_worker({name,scope})` | Logical Worker plus existing Worker launch bridge; resource/startup/terminal composition stays in the bridge |
 | `task_create` | `task_create({tasks})` | Team-scoped opaque per-item `operation_id` in Beads idempotency metadata; retries return only matching canonical initial Task semantics |
 | `task_read` | `task_read({task_ids})` | Model-tool metadata projection over Beads; legacy Task records fail closed as contract gaps |
@@ -60,6 +61,36 @@ their existing `task_read`, `task_update`, and `alert_send` registrations.
   Worker resource tests remain unchanged composition anchors.
 - Release verification must run the complete release lane and clean package
   install against this release without publishing or pushing from this task.
+
+## Coordination liveness and event completeness
+
+- `team_sync({view:"updates"})` returns normal `caught_up` when the leader is
+  caught up and no current Worker producer or actuation requires a wait.
+- `indeterminate` reports incomplete run-state or actuation evidence and does
+  not advance hidden observation. Pi `>=0.83` is the supported peer boundary for
+  exact `agent_start` and `agent_settled` evidence.
+- Global `pi_team_bright.team.wait_seconds` controls the bounded wait and
+  defaults to `120`. Internal sync nudges use the same global section, default
+  to enabled, and default to `1200` seconds. Nudge records project one
+  exact-leader presentation; they are not Alerts, Task mutations, or watermark
+  advances.
+- Failed Task-event appends create payload-light hints. Updates also check the
+  Task-authority revision, hydrate every referenced Task before publication, and
+  publish no observation when required hydration fails. This covers eventless
+  authority changes and the check-register race without making events a second
+  Task authority.
+
+Focused anchors:
+
+- `test/coord-liveness-e2e/sync-liveness.test.ts` covers caught-up,
+  indeterminate, settings defaults, positive hints, cancellation, nudge
+  projections, and Pi message rendering.
+- `src/utils/task-event-failure-hints.test.ts` and
+  `src/utils/tasks-event-publication.test.ts` cover failed-event hint evidence.
+- `src/model-tool-contract/durable-model-tool-port.test.ts` covers failed reads,
+  hidden-watermark safety, and complete Task hydration.
+- `src/utils/sync-nudge-conductor.test.ts` covers post-settle nudges and
+  eventless Task revision hints.
 
 Architecture impact: **changed** at the public tool contract boundary. No new
 component, authority, persistence store, process boundary, or deployment

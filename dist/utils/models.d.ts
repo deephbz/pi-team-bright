@@ -68,6 +68,14 @@ export interface TeamConfig {
     separateWindows?: boolean;
     /** Resolved once at Team creation; live epochs do not follow later settings changes. */
     paneLayout?: TeamPaneLayout;
+    /** Resolved Team-sync liveness policy for this epoch. */
+    syncLiveness?: {
+        waitSeconds: number;
+        nudgeEnabled: boolean;
+        nudgeDelaySeconds?: number;
+        policyVersion: string;
+        diagnostics?: string[];
+    };
     /** One terminal backend owns every current Member target in this Team epoch. */
     terminalBackend?: string;
     /** Task authority. Omitted means the historical local JSON store. */

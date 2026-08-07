@@ -16,6 +16,10 @@ export declare function taskOwnerTransitionOutboxPath(teamName: string): string;
 export declare function teamEventJournalPath(teamName: string): string;
 /** Disposable latest-cursor projection; the append-only journal remains authoritative. */
 export declare function teamEventCursorStatePath(teamName: string): string;
+/** Durable derived hints for committed Task mutations whose event append failed. */
+export declare function taskEventFailureHintPath(teamName: string): string;
 export declare function runtimeStatusPath(teamName: string, agentName: string): string;
 export declare function configPath(teamName: string): string;
 export declare function leadSessionPath(teamName: string): string;
+/** Derived presentation evidence for internal sync nudges. */
+export declare function syncNudgeRecordPath(teamName: string): string;

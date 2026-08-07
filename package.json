@@ -1,6 +1,6 @@
 {
   "name": "@hypercarrier/pi-team-bright",
-  "version": "0.17.0-rc.8",
+  "version": "0.17.0-rc.9",
   "description": "Task-first Pi teams, visible in terminal panes.",
   "repository": {
     "type": "git",
@@ -83,7 +83,7 @@
     "typebox": "^1.1.38"
   },
   "pi": {
-    "image": "https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.17.0-rc.8/pi-team-in-action.png",
+    "image": "https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.17.0-rc.9/pi-team-in-action.png",
     "extensions": [
       "extensions/index.ts"
     ],
