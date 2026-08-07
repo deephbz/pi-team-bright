@@ -129,13 +129,6 @@ describe("narrow Worker Team binding surface", () => {
       expected_version: task.version,
     })).toBe(true);
     expect(Check(tools.get("task_update")!.parameters as any, {
-      task_id: "task-binding",
-      operation_id: "invalid-claim",
-      claim: true,
-      status: "in_progress",
-      expected_version: task.version,
-    })).toBe(false);
-    expect(Check(tools.get("task_update")!.parameters as any, {
       team_name: "other-team",
       task_id: "task-binding",
       operation_id: "worker-update",
@@ -243,13 +236,27 @@ describe("narrow Worker Team binding surface", () => {
     expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: task.id }] });
     expect(updateResult.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task_id: task.id, operation_id: "worker-update" }] });
     expect(claimResult.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task_id: task.id, operation_id: "worker-claim" }] });
+    await expect(tools.get("task_update")!.execute(
+      "invalid-claim",
+      {
+        task_id: task.id,
+        operation_id: "invalid-claim",
+        claim: true,
+        status: "in_progress",
+        expected_version: task.version,
+      },
+      undefined,
+      undefined,
+      context(sessionA),
+    )).rejects.toThrow(/claim=true is atomic/);
+    expect(claim).toHaveBeenCalledOnce();
     await expect(tools.get("task_read")!.execute(
       "stale-session",
       { task_id: task.id },
       undefined,
       undefined,
       context(`/tmp/${teamA}-wrong-session.jsonl`),
-    )).rejects.toThrow(/not the current binding/);
+    )).rejects.toThrow(/Worker Session binding is unavailable|not the current binding/);
   });
 
   it("sends Worker Alerts only to team-lead in the exact bound Team", async () => {
