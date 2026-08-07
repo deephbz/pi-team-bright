@@ -520,9 +520,15 @@ export default function (pi: ExtensionAPI) {
   }
 
   function alertToolProjection() {
-    const fields = {
+    const workerFields = {
+      kind: StringEnum(["clarification", "attention"]),
+      text: Type.String(),
+      task_id: Type.Optional(Type.String()),
+      task_version: Type.Optional(TaskVersionRefSchema),
+    };
+    const leaderFields = {
       team_name: Type.String(),
-      kind: StringEnum(isTeammate ? ["clarification", "attention"] : ["clarification", "attention", "announcement"]),
+      kind: StringEnum(["clarification", "attention", "announcement"]),
       text: Type.String(),
       task_id: Type.Optional(Type.String()),
       task_version: Type.Optional(TaskVersionRefSchema),
@@ -532,9 +538,9 @@ export default function (pi: ExtensionAPI) {
         ? "Send exceptional clarification or attention to team-lead. Alerts never assign or complete work; update the Task when durable intent changes."
         : "Send exceptional clarification, attention, or a Team announcement. Alerts never assign or complete work; update the Task when durable intent changes.",
       parameters: isTeammate
-        ? Type.Object(fields)
+        ? Type.Object(workerFields)
         : Type.Object({
-            ...fields,
+            ...leaderFields,
             to: Type.String({ description: "Current Worker name, team-lead, or * for an announcement" }),
           }),
     };
@@ -637,6 +643,21 @@ export default function (pi: ExtensionAPI) {
       throw new Error(`Team ${requestedTeam} belongs to implementation ${config.implementationVersion}; this process cannot mutate a mixed-version Team epoch.`);
     }
     return teams.assertCurrentSessionBinding(requestedTeam, agentName, sessionFile);
+  }
+
+  /** Resolve the one exact current Team and Worker identity for Worker tools. */
+  async function resolveCurrentWorkerContext(ctx: any): Promise<{ teamName: string; member: Member }> {
+    const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+    if (!sessionFile) throw new Error("A durable Pi Session is required for every Worker tool operation.");
+    const binding = await teams.resolveCurrentTeammateSessionBinding(sessionFile);
+    if (binding.status !== "bound") {
+      throw new Error(`Current Worker Session binding is unavailable: ${binding.reason}.`);
+    }
+    const config = await teams.readConfig(binding.teamName);
+    if (config.implementationVersion && config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) {
+      throw new Error(`Team ${binding.teamName} belongs to implementation ${config.implementationVersion}; this process cannot mutate a mixed-version Team epoch.`);
+    }
+    return binding;
   }
 
   /** Mutating Team topology/lifecycle/templates is a coordinator capability. */
@@ -1180,12 +1201,11 @@ export default function (pi: ExtensionAPI) {
       label: "Read Task",
       description: "Read current Task cards by ID from the active Team.",
       parameters: Type.Object({
-        team_name: Type.String({ minLength: 1 }),
         task_id: Type.String({ minLength: 1 }),
       }, { additionalProperties: false }),
-      async execute(_toolCallId, params: { team_name: string; task_id: string }, _signal, _onUpdate, ctx) {
-        await assertCurrentSessionBinding(ctx, params.team_name);
-        const outcome = await new BeadsTaskAdapter(params.team_name, agentName).read(params.task_id);
+      async execute(_toolCallId, params: { task_id: string }, _signal, _onUpdate, ctx) {
+        const binding = await resolveCurrentWorkerContext(ctx);
+        const outcome = await new BeadsTaskAdapter(binding.teamName, binding.member.name).read(params.task_id);
         return assembleToolResult("task_read", {
           kind: "task_read_batch",
           outcomes: [outcome.kind === "found"
@@ -1200,7 +1220,6 @@ export default function (pi: ExtensionAPI) {
       label: "Update Task",
       description: "Apply current Task changes, or set claim=true alone for an atomic claim with no status change, using an exact opaque TaskVersionRef.",
       parameters: Type.Object({
-        team_name: Type.String({ minLength: 1 }),
         task_id: Type.String({ minLength: 1 }),
         operation_id: Type.String({ minLength: 1 }),
         claim: Type.Optional(Type.Literal(true, { description: "Do not include current_context, journal_entries, or status with claim=true." })),
@@ -1210,8 +1229,8 @@ export default function (pi: ExtensionAPI) {
         status: Type.Optional(StringEnum(["open", "in_progress", "blocked", "closed"])),
       }, { additionalProperties: false, minProperties: 4 }),
       async execute(_toolCallId, params: any, _signal, _onUpdate, ctx) {
-        await assertCurrentSessionBinding(ctx, params.team_name);
-        const adapter = new BeadsTaskAdapter(params.team_name, agentName);
+        const binding = await resolveCurrentWorkerContext(ctx);
+        const adapter = new BeadsTaskAdapter(binding.teamName, binding.member.name);
         if (params.claim === true && (params.current_context !== undefined || params.journal_entries !== undefined || params.status !== undefined)) {
           throw new Error("claim=true is atomic; do not include current_context, journal_entries, or status.");
         }
@@ -1239,16 +1258,16 @@ export default function (pi: ExtensionAPI) {
       label: "Send Alert",
       description: "Send exceptional clarification or attention to team-lead.",
       parameters: Type.Object({
-        team_name: Type.String({ minLength: 1 }),
         kind: StringEnum(["clarification", "attention"]),
         text: Type.String({ minLength: 1 }),
         task_id: Type.Optional(Type.String({ minLength: 1 })),
         task_version: Type.Optional(TaskVersionRefSchema),
       }),
       async execute(_toolCallId: string, params: any, _signal: any, _onUpdate: any, ctx: any) {
-        const actor = await assertCurrentSessionBinding(ctx, teamName!);
+        const binding = await resolveCurrentWorkerContext(ctx);
+        const actor = binding.member;
         try {
-          const result = await alerts.sendAlert({ teamName: teamName!, from: agentName, to: "team-lead", kind: params.kind, text: params.text, taskId: params.task_id, taskVersion: params.task_version, expectedSender: actor.membershipId && actor.sessionFile ? { membershipId: actor.membershipId, sessionFile: actor.sessionFile } : undefined });
+          const result = await alerts.sendAlert({ teamName: binding.teamName, from: actor.name, to: "team-lead", kind: params.kind, text: params.text, taskId: params.task_id, taskVersion: params.task_version, expectedSender: actor.membershipId && actor.sessionFile ? { membershipId: actor.membershipId, sessionFile: actor.sessionFile } : undefined });
           return assembleToolResult("alert_send", { kind: "alert_sent", alert_id: result.alertId, accepted_recipients: result.accepted.map((item) => item.recipient), failed_recipients: result.failures.map((item) => item.recipient), task_state_changed: false });
         } catch (error) {
           return assembleToolResult("alert_send", { kind: "refused", reason: "no_eligible_recipients", message: error instanceof Error ? error.message : String(error), state_changed: false });

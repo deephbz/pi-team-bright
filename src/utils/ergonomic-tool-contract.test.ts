@@ -819,7 +819,9 @@ describe("ergonomic agent-facing Team contracts", () => {
     await teams.addMember(team, member("worker", workerSession));
     setAdapter(terminal());
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    vi.stubEnv("PI_TEAM_NAME", team);
+    // The model-selected Team is intentionally wrong; Worker tools must use
+    // the exact current Session binding below.
+    vi.stubEnv("PI_TEAM_NAME", `${team}-model-selected`);
     const tools = registerTools();
     const workerContext = context(workerSession);
 
@@ -828,7 +830,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     }
 
     const alert = tools.get("alert_send")!;
-    expect(alert.parameters.properties).toHaveProperty("team_name");
+    expect(alert.parameters.properties).not.toHaveProperty("team_name");
     expect(alert.parameters.properties).toHaveProperty("kind");
     expect(alert.parameters.properties).toHaveProperty("text");
     expect(alert.parameters.properties).toHaveProperty("task_id");
@@ -837,9 +839,6 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(alert.parameters.properties).not.toHaveProperty("target");
 
     const sent = await alert.execute("send", {
-      team_name: team,
-      to: "worker",
-      target: { kind: "worker", name: "worker" },
       kind: "clarification",
       text: "Does the acceptance criterion include the restart case?",
     }, undefined, undefined, workerContext);
@@ -852,8 +851,6 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
 
     const attention = await alert.execute("attention", {
-      team_name: team,
-      to: "worker",
       kind: "attention",
       text: "The test setup needs owner attention.",
     }, undefined, undefined, workerContext);

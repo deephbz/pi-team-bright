@@ -113,34 +113,32 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const read = worker.get("task_read")!;
 
     expect(Check(update.parameters as any, {
-      team_name: teamName,
       task_id: "task-1",
       operation_id: "update-version-safe",
       status: "in_progress",
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(true);
     expect(Check(update.parameters as any, {
-      team_name: teamName,
       task_id: "task-1",
       operation_id: "claim-version-safe",
       claim: true,
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(true);
     expect(Check(update.parameters as any, {
-      team_name: teamName,
       task_id: "task-1",
       claim: true,
       status: "in_progress",
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(false);
-    expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", status: "in_progress" })).toBe(false);
-    expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", status: "in_progress", expected_version: "beads_v1" })).toBe(false);
+    expect(Check(update.parameters as any, { task_id: "task-1", status: "in_progress" })).toBe(false);
+    expect(Check(update.parameters as any, { task_id: "task-1", status: "in_progress", expected_version: "beads_v1" })).toBe(false);
+    expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", operation_id: "unexpected-team", status: "in_progress", expected_version: taskVersionRef("beads_v1") })).toBe(false);
 
     const created = await create.execute("create", {
       tasks: [{ operation_id: "create-version-safe-mutation", title: "Version-safe mutation", goal: "Prove Worker CAS version conversion.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
     const task = created.details.outcomes[0].task;
-    const readResult = await read.execute("read", { team_name: teamName, task_id: task.id }, undefined, undefined, workerCtx);
+    const readResult = await read.execute("read", { task_id: task.id }, undefined, undefined, workerCtx);
     const modelVersion = JSON.parse(readResult.content[0].text).task.version;
     expect(modelVersion).toBe(task.version);
 
@@ -151,7 +149,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       return originalApply(...args as Parameters<typeof authority.applySemanticTaskUpdate>);
     });
     const updated = await update.execute("first", {
-      team_name: teamName,
       task_id: task.id,
       operation_id: "worker-first-update",
       status: "in_progress",
@@ -166,7 +163,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(JSON.parse(updated.content[0].text)).toMatchObject({ kind: "updated", task: { version: updatedRaw } });
 
     const noVersion = await update.execute("no-version", {
-      team_name: teamName,
       task_id: task.id,
       operation_id: "worker-no-version",
       append_note: "This must not bypass CAS.",
@@ -183,7 +179,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     });
 
     const rawVersion = await update.execute("raw-version", {
-      team_name: teamName,
       task_id: task.id,
       operation_id: "worker-raw-version",
       append_note: "Raw authority versions are not model input.",
@@ -192,7 +187,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(rawVersion.details.outcomes[0]).toMatchObject({ kind: "refused", reason: "version_conflict", current_task: { version: updatedRaw }, state_changed: false });
 
     const appended = await update.execute("append", {
-      team_name: teamName,
       task_id: task.id,
       operation_id: "worker-append",
       append_note: "Append-note-only Worker mutations remain valid.",
@@ -205,11 +199,9 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     }, undefined, undefined, leadCtx);
     const claimTask = claimCreated.details.outcomes[0].task;
     const claimVersion = JSON.parse((await read.execute("read-claim", {
-      team_name: teamName,
       task_id: claimTask.id,
     }, undefined, undefined, workerCtx)).content[0].text).task.version;
     const claimed = await update.execute("status", {
-      team_name: teamName,
       task_id: claimTask.id,
       operation_id: "worker-claim-status",
       status: "in_progress",
@@ -287,7 +279,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const genericRead = vi.spyOn(tasks, "readTask");
 
     const result = await worker.get("task_read")!.execute("read", {
-      team_name: teamName,
       task_id: task.id,
     }, undefined, undefined, workerCtx);
 
@@ -309,7 +300,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       tasks: [{ operation_id: "create-race", title: "Race", goal: "Keep the post-resolution raw preflight.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
     const task = created.details.outcomes[0].task;
-    const visibleVersion = JSON.parse((await worker.get("task_read")!.execute("read", { team_name: teamName, task_id: task.id }, undefined, undefined, workerCtx)).content[0].text).task.version;
+    const visibleVersion = JSON.parse((await worker.get("task_read")!.execute("read", { task_id: task.id }, undefined, undefined, workerCtx)).content[0].text).task.version;
     const store = new BeadsTaskStore({ teamName, workspace: root, authorityFingerprint: config.taskAuthorityFingerprint!, requireExpectedVersion: true });
     const originalRead = authority.readTaskAuthorityRecordEnvelope;
     vi.spyOn(authority, "readTaskAuthorityRecordEnvelope").mockImplementationOnce(async (...args: any[]) => {
@@ -319,7 +310,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     });
 
     const raced = await worker.get("task_update")!.execute("raced", {
-      team_name: teamName,
       task_id: task.id,
       operation_id: "worker-raced-update",
       append_note: "This write must lose the raw preflight race.",
