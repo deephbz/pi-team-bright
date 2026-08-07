@@ -569,12 +569,12 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const taskIds = await listTaskIds(teamName);
     const adapter = new BeadsTaskAdapter(teamName, "team-lead");
     const records = await adapter.readMany(taskIds);
+    this.assertCompleteTaskBatch(taskIds, records, "listed Task");
     const projected: TaskCard[] = [];
     const warnings: TaskCardWarning[] = [];
     for (const result of records) {
-      if (!result) throw new Error("A listed Task disappeared before exact hydration completed.");
-      if (result.kind === "contract_gap") return result;
-      projected.push(result.task);
+      if (result!.kind === "contract_gap") return result;
+      projected.push(result!.task);
     }
     for (const task of projected) warnings.push(...(task.projection_warnings ?? []));
     return { kind: "tasks", tasks: projected, warnings };
@@ -617,16 +617,31 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     return [...stale];
   }
 
+  private assertCompleteTaskBatch(
+    taskIds: readonly string[],
+    records: readonly (import("./beads-task-adapter").TaskReadOutcome | undefined)[],
+    subject: string,
+  ): void {
+    if (records.length !== taskIds.length) {
+      throw new Error(`The Task authority returned ${records.length} outcomes for ${taskIds.length} requested ${subject} IDs.`);
+    }
+    for (let index = 0; index < taskIds.length; index++) {
+      const record = records[index];
+      if (!record) throw new Error(`The Task authority returned no outcome for ${subject} ${taskIds[index]}.`);
+      if (record.kind === "contract_gap") throw new Error(record.message);
+      if (record.task.id !== taskIds[index]) {
+        throw new Error(`The Task authority returned ${record.task.id} for requested ${subject} ${taskIds[index]}.`);
+      }
+    }
+  }
+
   /** Hydrate selected event Task IDs with one canonical multi-ID authority read. */
   private async hydrateTaskIds(teamName: string, taskIds: readonly string[]): Promise<TaskProjection> {
     if (taskIds.length === 0) return { tasks: [], warnings: [] };
     const adapter = new BeadsTaskAdapter(teamName, "team-lead");
     const records = await adapter.readMany(taskIds);
-    const tasks = records.map((record, index) => {
-      if (!record) throw new Error(`Task ${taskIds[index]} referenced by a Team event could not be hydrated.`);
-      if (record.kind === "contract_gap") throw new Error(record.message);
-      return record.task;
-    });
+    this.assertCompleteTaskBatch(taskIds, records, "event Task");
+    const tasks = records.map((record) => record!.task);
     return { tasks, warnings: tasks.flatMap((task) => task.projection_warnings ?? []) };
   }
 

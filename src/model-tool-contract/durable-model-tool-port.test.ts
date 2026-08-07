@@ -586,6 +586,56 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     expect(hydrate).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["short", "short"],
+    ["extra", "extra"],
+    ["misaligned", "misaligned"],
+    ["contract gap", "contract-gap"],
+  ] as const)("rejects a %s canonical Task batch and retries recovery", async (_label, shape) => {
+    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const record = (id: string) => ({
+      task: {
+        id,
+        title: `${id} title`,
+        description: "Compatibility text",
+        acceptanceCriteria: "Compatibility text",
+        status: "open" as const,
+        relations: [],
+        version: `beads_${id}`,
+        provenance: { authority: "beads" as const, teamName: name },
+      },
+      taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Require complete batches.", current_context: "Current context." },
+    });
+    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record("baseline-task")]);
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
+    port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
+    await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
+
+    await teamEvents.appendTeamEvent(name, {
+      type: "task",
+      ref: { taskId: "event-task", version: taskVersionRef("event-v1") },
+      change: "status",
+      actor: "team-lead",
+    });
+    hydrate.mockResolvedValue(shape === "short"
+      ? []
+      : shape === "extra"
+        ? [record("event-task"), record("extra-task")]
+        : shape === "misaligned"
+          ? [record("other-task")]
+          : [{ ...record("event-task"), taskMetadata: { schema: "invalid" } }] as any);
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, `${shape}-failure`)).rejects.toThrow();
+    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+
+    hydrate.mockResolvedValue([record("event-task")]);
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, `${shape}-recovery`)).resolves.toMatchObject({
+      kind: "updates",
+      taskChanges: [{ taskId: "event-task", current: { id: "event-task" } }],
+    });
+    expect(hydrate).toHaveBeenCalledTimes(3);
+  });
+
   it("fails event hydration before staging or advancing the hidden observation", async () => {
     const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = {
