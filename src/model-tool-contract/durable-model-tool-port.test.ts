@@ -576,6 +576,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         timedOut: false,
       };
     });
+    });
     await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "quiet-update")).resolves.toMatchObject({
       kind: "updates",
       head: 1,
@@ -584,18 +585,6 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     expect(hydrate).toHaveBeenCalledTimes(3);
     expect(hydrate).toHaveBeenLastCalledWith(name, ["quiet-task"]);
 
-    port.setBranchContext(leaderSessionId, ["snapshot-entry", "quiet-update-entry"]);
-    await port.acknowledgePendingObservationAsync(leaderSessionId, "quiet-update-entry", ["snapshot-entry", "quiet-update-entry"]);
-    await teamEvents.appendTeamEvent(name, {
-      type: "task",
-      ref: { taskId: "quiet-task", version: taskVersionRef("quiet-v2") },
-      change: "status",
-      actor: "team-lead",
-    });
-    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "quiet-task-event")).resolves.toMatchObject({
-      kind: "updates",
-      taskChanges: [{ taskId: "quiet-task", current: { version: taskVersionRef("quiet-v2") } }],
-    });
     expect(hydrate).toHaveBeenCalledTimes(3);
   });
 

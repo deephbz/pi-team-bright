@@ -6,8 +6,7 @@ import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
 
 export const TASK_EVENT_FAILURE_HINT_SCHEMA = "pi-teams-task-event-failure-hint/1" as const;
 
-export type TaskEventFailureHint = {
-  schema: typeof TASK_EVENT_FAILURE_HINT_SCHEMA;
+type HintCoordinates = {
   teamEpochId: string;
   taskId: string;
   taskVersion: TaskVersionRef;
@@ -15,10 +14,19 @@ export type TaskEventFailureHint = {
   at: string;
 };
 
+/** A newly written hint always has a Team-epoch-local cursor. */
+export type TaskEventFailureHint = HintCoordinates & {
+  schema: typeof TASK_EVENT_FAILURE_HINT_SCHEMA;
+  cursor: string;
+};
+
+/** Historical records may predate cursor assignment. */
+export type TaskEventFailureHintRecord = Omit<TaskEventFailureHint, "cursor"> & { cursor?: string };
+
 export type TaskEventFailureHintActorKind = "team-lead" | "non-leader/external";
 
 export type TaskEventFailureHintMatch = {
-  hint: TaskEventFailureHint;
+  hint: TaskEventFailureHintRecord;
   actorKind: TaskEventFailureHintActorKind;
 };
 
@@ -27,13 +35,32 @@ export type CurrentTaskEventReference = {
   taskVersion: TaskVersionRef;
 };
 
+export type TaskEventFailureHintBatch = {
+  cursor: string;
+  headCursor: string;
+  hints: TaskEventFailureHintMatch[];
+};
+
+export class TaskEventFailureHintCursorAheadError extends Error {
+  readonly name = "TaskEventFailureHintCursorAheadError";
+  constructor(readonly requestedCursor: string, readonly headCursor: string) {
+    super(`Task event failure hint cursor ${requestedCursor} is ahead of head ${headCursor}.`);
+  }
+}
+
 function validString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-function validHint(value: unknown): value is TaskEventFailureHint {
+function validCursor(value: unknown): value is string {
+  return typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value);
+}
+
+function validHint(value: unknown): value is TaskEventFailureHintRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const hint = value as Partial<TaskEventFailureHint>;
+  const hint = value as Partial<TaskEventFailureHintRecord>;
+  const allowedKeys = new Set(["schema", "teamEpochId", "taskId", "taskVersion", "actor", "at", "cursor"]);
+  if (Object.keys(hint).some((key) => !allowedKeys.has(key))) return false;
   return hint.schema === TASK_EVENT_FAILURE_HINT_SCHEMA
     && validString(hint.teamEpochId)
     && validString(hint.taskId)
@@ -41,10 +68,11 @@ function validHint(value: unknown): value is TaskEventFailureHint {
     && /^v_[0-9a-f]{16}$/.test(hint.taskVersion)
     && validString(hint.actor)
     && validString(hint.at)
-    && !Number.isNaN(Date.parse(hint.at));
+    && !Number.isNaN(Date.parse(hint.at))
+    && (hint.cursor === undefined || validCursor(hint.cursor));
 }
 
-function readLines(file: string): TaskEventFailureHint[] {
+function readLines(file: string): TaskEventFailureHintRecord[] {
   if (!fs.existsSync(file)) return [];
   let raw: string;
   try {
@@ -52,7 +80,7 @@ function readLines(file: string): TaskEventFailureHint[] {
   } catch {
     return [];
   }
-  const hints: TaskEventFailureHint[] = [];
+  const hints: TaskEventFailureHintRecord[] = [];
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue;
     try {
@@ -65,22 +93,36 @@ function readLines(file: string): TaskEventFailureHint[] {
   return hints;
 }
 
-function assertHint(input: Omit<TaskEventFailureHint, "schema">): void {
-  if (!validHint({ schema: TASK_EVENT_FAILURE_HINT_SCHEMA, ...input })) {
+function assertHint(input: HintCoordinates): void {
+  if (!validHint({ schema: TASK_EVENT_FAILURE_HINT_SCHEMA, ...input, cursor: "1" })) {
     throw new Error("Task event failure hint is malformed.");
   }
+}
+
+function parseCursor(value: string): bigint {
+  if (!validCursor(value)) throw new Error(`Invalid Task event failure hint cursor ${JSON.stringify(value)}.`);
+  return BigInt(value);
+}
+
+function currentEpochHead(hints: readonly TaskEventFailureHintRecord[], teamEpochId: string): bigint {
+  return hints.reduce((head, hint) => {
+    if (hint.teamEpochId !== teamEpochId || hint.cursor === undefined) return head;
+    return head > BigInt(hint.cursor) ? head : BigInt(hint.cursor);
+  }, 0n);
 }
 
 /** Append payload-light derived evidence without entering the Team event journal. */
 export async function appendTaskEventFailureHint(
   teamName: string,
-  input: Omit<TaskEventFailureHint, "schema">,
+  input: HintCoordinates,
 ): Promise<TaskEventFailureHint> {
   assertHint(input);
-  const hint: TaskEventFailureHint = { schema: TASK_EVENT_FAILURE_HINT_SCHEMA, ...input };
   const file = taskEventFailureHintPath(teamName);
+  let hint!: TaskEventFailureHint;
   await withLock(`${file}.lock`, async () => {
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    const cursor = (currentEpochHead(readLines(file), input.teamEpochId) + 1n).toString();
+    hint = { schema: TASK_EVENT_FAILURE_HINT_SCHEMA, ...input, cursor };
     const fd = fs.openSync(file, "a", 0o600);
     try {
       fs.writeSync(fd, `${JSON.stringify(hint)}\n`);
@@ -94,17 +136,13 @@ export async function appendTaskEventFailureHint(
 }
 
 /** Read only structurally valid hints. Authority and current Task matching is separate. */
-export function readTaskEventFailureHintRecords(teamName: string): TaskEventFailureHint[] {
+export function readTaskEventFailureHintRecords(teamName: string): TaskEventFailureHintRecord[] {
   return readLines(taskEventFailureHintPath(teamName));
 }
 
-/** Match hints to one acknowledged projection's current Team epoch and Task references. */
-export function readTaskEventFailureHints(
+function matchingHints(
   teamName: string,
-  options: {
-    teamEpochId: string;
-    taskReferences: readonly CurrentTaskEventReference[];
-  },
+  options: { teamEpochId: string; taskReferences: readonly CurrentTaskEventReference[] },
 ): TaskEventFailureHintMatch[] {
   const current = new Map(options.taskReferences.map((reference) => [reference.taskId, reference.taskVersion]));
   return readTaskEventFailureHintRecords(teamName)
@@ -113,4 +151,26 @@ export function readTaskEventFailureHints(
       hint,
       actorKind: hint.actor === "team-lead" ? "team-lead" : "non-leader/external",
     }));
+}
+
+/** Match hints to one acknowledged projection's current Team epoch and Task references. */
+export function readTaskEventFailureHints(
+  teamName: string,
+  options: { teamEpochId: string; taskReferences: readonly CurrentTaskEventReference[] },
+): TaskEventFailureHintMatch[] {
+  return matchingHints(teamName, options);
+}
+
+/** Read matching valid hints after a caller's acknowledged hint cursor. */
+export function readTaskEventFailureHintsAfter(
+  teamName: string,
+  afterCursor: string,
+  options: { teamEpochId: string; taskReferences: readonly CurrentTaskEventReference[] },
+): TaskEventFailureHintBatch {
+  const after = parseCursor(afterCursor);
+  const records = readTaskEventFailureHintRecords(teamName);
+  const head = currentEpochHead(records, options.teamEpochId);
+  if (after > head) throw new TaskEventFailureHintCursorAheadError(afterCursor, head.toString());
+  const matches = matchingHints(teamName, options).filter((match) => match.hint.cursor !== undefined && BigInt(match.hint.cursor) > after);
+  return { cursor: head.toString(), headCursor: head.toString(), hints: matches };
 }
