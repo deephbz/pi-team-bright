@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-05
+Updated: 2026-08-07
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -61,6 +61,12 @@ restating executable definitions.
   never OS liveness.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
+- `team_sync` treats `caught_up` as proven current quiescence, not permanent
+  absence of future events. It reports `indeterminate` when run-state or
+  actuation evidence is incomplete and does not advance observation. Pi `>=0.83`
+  is the supported boundary for exact Worker `agent_start` and `agent_settled`
+  evidence. Global `pi_team_bright.team` settings resolve the `120` second wait,
+  enabled nudges, and the `1200` second nudge delay once per Team epoch.
 - Pane placement is a typed terminal-adapter responsibility. Herdr and tmux
   receive the durable leader pane plus current Worker panes from
   [`src/utils/team-pane-placement.ts`](../../src/utils/team-pane-placement.ts),
@@ -97,14 +103,15 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.8` release candidate uses the real main extension as its local
+- The `0.17.0-rc.9` source candidate uses the real main extension as its local
   switch. Leader processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
-  Workers keep `task_read`, `task_update`, and `alert_send` over the same Team
-  and Beads authorities. Worker `alert_send` derives its only recipient,
-  `team-lead`; its schema has no recipient field. Worker launch must retain
-  normal unrelated extension and Skill discovery while loading its exact Pi Team
-  Bright extension. Worker settings cannot re-enable leader tools. No parallel
+  Workers keep the narrow `task_read`, `task_update`, and `alert_send` surface;
+  runtime Team binding supplies the Team identity, so Worker calls do not select
+  `team_name`. Worker `alert_send` derives its only recipient, `team-lead`; its
+  schema has no recipient field. Worker launch must retain normal unrelated
+  extension and Skill discovery while loading its exact Pi Team Bright
+  extension. Worker settings cannot re-enable leader tools. No parallel
   extension or store exists. A real ten-tool smoke exposed a release-blocking result-projection mismatch: model-tool
   semantic results entered the old generic renderer and could produce
   false human summaries. The accepted revamp now keeps raw semantic details as
@@ -129,17 +136,16 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `@hypercarrier/pi-team-bright@0.17.0-rc.8` is published, npm `next` points
-  to it, and `latest` remains on rc.1. It accepts
-  `0.1 < leader_share < 1.0` while keeping the default at `0.6`. The README
-  shows one complete Team and Worker settings example and makes tool precedence
-  explicit: `enable` adds to the inherited Worker list, then `disable` removes
-  from it. The [aborted rc.6
+- `0.17.0-rc.9` is source preparation only; it is not published, tagged, or
+  pushed. It keeps the [aborted rc.6
   receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md), [published
   rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and
   [published rc.8
-  receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) preserve
-  separate release evidence.
+  receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) as historical
+  evidence. It accepts `0.1 < leader_share < 1.0` while keeping the default at
+  `0.6`. The README shows one complete Team and Worker settings example and
+  makes tool precedence explicit: `enable` adds to the inherited Worker list,
+  then `disable` removes from it.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -156,6 +162,21 @@ restating executable definitions.
   `test:full` and package verification. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
+- `team_sync({view:"updates"})` now has normal liveness outcomes. It returns
+  `caught_up` when the exact leader is caught up and no current Worker producer
+  requires a wait. It returns `indeterminate` when required Worker run-state or
+  actuation evidence is incomplete; this does not advance the hidden
+  observation. Pi `>=0.83` is required for exact `agent_start` and
+  `agent_settled` evidence. Global `pi_team_bright.team.wait_seconds` controls
+  the bounded wait and keeps its `120` second default. The same global section
+  resolves internal sync nudges: `nudge_enabled` defaults to `true`, and
+  `nudge_delay_seconds` defaults to `1200`. A nudge is one exact-leader
+  presentation record, not an Alert, Task mutation, or observation advance.
+- Task event publication records payload-light failed-event hints. Updates use
+  event and Task-authority revisions, and a failed event append cannot advance
+  the hidden watermark or hide an authoritative Task change. Required Task
+  references are hydrated before publication; incomplete hydration publishes no
+  observation. See the [rc.9 coordination research handoff](../journal/2026-08-07-coordination-correctness-research-handoff.md).
 - Worker resource settings are a Worker-process projection only. The executable
   parser plus Worker tool and CLI aggregate projection are
   [`src/utils/worker-resource-projection.ts`](../../src/utils/worker-resource-projection.ts),

@@ -15,9 +15,11 @@ exports.taskDeliveryRecoveryPath = taskDeliveryRecoveryPath;
 exports.taskOwnerTransitionOutboxPath = taskOwnerTransitionOutboxPath;
 exports.teamEventJournalPath = teamEventJournalPath;
 exports.teamEventCursorStatePath = teamEventCursorStatePath;
+exports.taskEventFailureHintPath = taskEventFailureHintPath;
 exports.runtimeStatusPath = runtimeStatusPath;
 exports.configPath = configPath;
 exports.leadSessionPath = leadSessionPath;
+exports.syncNudgeRecordPath = syncNudgeRecordPath;
 const node_os_1 = __importDefault(require("node:os"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_fs_1 = __importDefault(require("node:fs"));
@@ -75,6 +77,10 @@ function teamEventJournalPath(teamName) {
 function teamEventCursorStatePath(teamName) {
     return node_path_1.default.join(teamDir(teamName), "events", "cursor.json");
 }
+/** Durable derived hints for committed Task mutations whose event append failed. */
+function taskEventFailureHintPath(teamName) {
+    return node_path_1.default.join(teamDir(teamName), "events", "task-event-failure-hints.jsonl");
+}
 function runtimeStatusPath(teamName, agentName) {
     return node_path_1.default.join(teamDir(teamName), "runtime", `${sanitizeName(agentName)}.json`);
 }
@@ -83,4 +89,8 @@ function configPath(teamName) {
 }
 function leadSessionPath(teamName) {
     return node_path_1.default.join(teamDir(teamName), "lead-session.json");
+}
+/** Derived presentation evidence for internal sync nudges. */
+function syncNudgeRecordPath(teamName) {
+    return node_path_1.default.join(teamDir(teamName), "sync-nudges.jsonl");
 }

@@ -11,7 +11,7 @@ maintenance: Replace superseded shaping content; move exact accepted contracts t
 
 # Model-invoked tool contract Project
 
-Updated: 2026-08-03
+Updated: 2026-08-07
 
 Stage: **hardening**
 
@@ -19,8 +19,10 @@ Status: active. The accepted `team_create` → `ensure_worker` →
 `task_create` → snapshot → updates journey runs through the shipped durable
 model-tool surface in the real main extension. Leaders register the complete
 ten-tool surface; the four parity tools are `worker_stop`, `team_shutdown`,
-`task_link`, and `alert_send`. Workers keep the current Worker Task surface
-over the same Team and Beads authorities. The adapter composes explicit Team
+`task_link`, and `alert_send`. Workers keep the narrow `task_read`,
+`task_update`, and `alert_send` surface over the same Team and Beads authorities;
+exact runtime binding supplies Team identity, so Worker calls do not select
+`team_name`. The adapter composes explicit Team
 epochs, logical Worker meaning, exact lead-Session resolution, the existing
 Worker launch bridge, model-tool Beads metadata, structured events,
 acknowledged branch-position storage, and authoritative Task projection
@@ -291,9 +293,14 @@ snapshot when its visible context is insufficient.
 ### Updates view
 
 Call `team_sync({view:"updates"})` for routine supervision. If unseen changes
-exist, return them. If the leader is caught up, wait for the next Team change.
-Owner input can cancel a wait without returning a Team observation or advancing
-the hidden position.
+exist, return them. If the leader is caught up and no current Worker producer or
+actuation requires a wait, return normal `caught_up` state. If required run-state
+or actuation evidence is incomplete, return `indeterminate` without advancing
+the hidden position. Otherwise, wait for a positive producer hint or the bounded
+configured timeout. Owner input can cancel a wait without returning a Team
+observation or advancing the hidden position. Pi `>=0.83` is the minimum
+supported peer for exact Worker `agent_start` and `agent_settled` evidence; the
+resolved global `pi_team_bright.team.wait_seconds` default is 120 seconds.
 
 Group changes by Task. Each Task delta contains all new journal entries and one
 latest current state:
@@ -335,9 +342,12 @@ current projection with per-authority revisions, not one global linearizable
 transaction. If a required authority cannot supply a coherent result, return
 `unavailable`, publish no observation, and advance no baseline.
 
-Events wake the reader but do not own Task truth. A durable outbox, controller
-rescan, or an equivalent mechanism must prevent a lost wake event from hiding
-an authoritative change forever.
+Events wake the reader but do not own Task truth. Failed Task-event appends
+record payload-light hints, and updates combine event and Task-authority
+revisions so an eventless authority change remains observable. Required Task
+references are hydrated before publication; a missing required card publishes no
+observation. A durable outbox, controller rescan, or an equivalent mechanism
+must prevent a lost wake event from hiding an authoritative change forever.
 
 ## No domain count caps or paging
 
