@@ -621,37 +621,49 @@ export class BeadsTaskStore {
       && /(?:error fetching .+: no issue found matching|no issues found matching the provided ids)/i.test(error.message);
   }
 
+  /** Keep native multi-ID show commands below the observed Beads timeout tail. */
+  private static readonly MAX_SHOW_IDS = 16;
+
   /**
-   * Hydrate exact IDs in one native show. Beads returns found IDs and omits
+   * Hydrate exact IDs in bounded native shows. Beads returns found IDs and omits
    * mixed missing IDs; all-missing IDs return the same documented error form.
    */
   private async showManyRawAllowMissing(taskIds: readonly string[]): Promise<Array<RawBead | undefined>> {
     const safeIds = [...new Set(taskIds.map((taskId) => sanitizeName(taskId)))];
     if (safeIds.length === 0) return [];
-    let result: RawBead[];
-    try {
-      result = await this.command<RawBead[]>(["show", ...safeIds, "--include-dependents"]);
-    } catch (error) {
-      if (this.isNativeShowMissing(error)) return safeIds.map(() => undefined);
-      throw error;
-    }
-    if (!Array.isArray(result)) {
-      throw new BeadsError("Beads show returned a non-array JSON value.", "malformed", `bd show ${safeIds.join(" ")}`);
-    }
-    const requested = new Set(safeIds);
-    const byId = new Map<string, RawBead>();
-    for (const raw of result) {
-      if (!raw?.id) continue;
-      if (!requested.has(raw.id)) {
-        throw new BeadsError(`Beads show returned unrequested task ${raw.id}.`, "scope", `bd show ${safeIds.join(" ")}`);
+
+    const hydrated: Array<RawBead | undefined> = [];
+    for (let start = 0; start < safeIds.length; start += BeadsTaskStore.MAX_SHOW_IDS) {
+      const batchIds = safeIds.slice(start, start + BeadsTaskStore.MAX_SHOW_IDS);
+      let result: RawBead[];
+      try {
+        result = await this.command<RawBead[]>(["show", ...batchIds, "--include-dependents"]);
+      } catch (error) {
+        if (this.isNativeShowMissing(error)) {
+          hydrated.push(...batchIds.map(() => undefined));
+          continue;
+        }
+        throw error;
       }
-      this.verifyScope(raw);
-      if (byId.has(raw.id)) {
-        throw new BeadsError(`Beads show returned duplicate task ${raw.id}.`, "conflict", `bd show ${safeIds.join(" ")}`);
+      if (!Array.isArray(result)) {
+        throw new BeadsError("Beads show returned a non-array JSON value.", "malformed", `bd show ${batchIds.join(" ")}`);
       }
-      byId.set(raw.id, raw);
+      const requested = new Set(batchIds);
+      const byId = new Map<string, RawBead>();
+      for (const raw of result) {
+        if (!raw?.id) continue;
+        if (!requested.has(raw.id)) {
+          throw new BeadsError(`Beads show returned unrequested task ${raw.id}.`, "scope", `bd show ${batchIds.join(" ")}`);
+        }
+        this.verifyScope(raw);
+        if (byId.has(raw.id)) {
+          throw new BeadsError(`Beads show returned duplicate task ${raw.id}.`, "conflict", `bd show ${batchIds.join(" ")}`);
+        }
+        byId.set(raw.id, raw);
+      }
+      hydrated.push(...batchIds.map((taskId) => byId.get(taskId)));
     }
-    return safeIds.map((taskId) => byId.get(taskId));
+    return hydrated;
   }
 
   private async showManyRaw(taskIds: readonly string[]): Promise<RawBead[]> {

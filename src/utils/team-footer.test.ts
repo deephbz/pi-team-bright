@@ -42,7 +42,10 @@ function context(sessionFile: string, cwd = "/tmp/footer-project", entries: any[
       getCwd: vi.fn(() => cwd),
       getSessionName: vi.fn(() => undefined),
     },
-    modelRegistry: { isUsingOAuth: vi.fn(() => false) },
+    modelRegistry: {
+      isUsingOAuth: vi.fn(() => false),
+      getProvider: vi.fn(() => undefined),
+    },
     getContextUsage: vi.fn(() => ({ tokens: 1_000, contextWindow: 100_000, percent: 1 })),
     setFooter,
     setStatus,
@@ -124,6 +127,25 @@ describe("Team identity footer projection", () => {
     expect(theme.fg).toHaveBeenCalledWith("dim", "reviewer");
     expect(lines[1]).toContain("gpt-test");
     expect(lines[2]).toBe("TPS: 60.6 tok/s");
+    component.dispose?.();
+  });
+
+  it("renders a Pi 0.84-shaped subscription runtime footer", () => {
+    const binding: TeamFooterBinding = {
+      teamName: "subscription-team",
+      role: "team-lead",
+      membershipId: "membership-subscription",
+      sessionFile: "/tmp/subscription.jsonl",
+    };
+    const ctx = context(binding.sessionFile);
+    ctx.modelRegistry.isUsingOAuth.mockReturnValue(true);
+    ctx.modelRegistry.getProvider.mockReturnValue({ auth: { oauth: { isSubscription: true } } });
+    const factory = teamFooterFactory(pi(), ctx, binding, () => model());
+    const component = factory({ requestRender: vi.fn() } as any, theme, footerData());
+
+    expect(() => component.render(140)).not.toThrow();
+    expect(plain(component.render(140)[0])).toContain("[subscription-team · team-lead]");
+    expect(ctx.modelRegistry.isUsingOAuth).toHaveBeenCalled();
     component.dispose?.();
   });
 

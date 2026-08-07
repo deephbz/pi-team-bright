@@ -177,6 +177,22 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     expect(port.getPendingObservation(leaderSessionId)).toBeDefined();
   });
 
+  it("returns typed unavailable for snapshot Task authority failure without staging", async () => {
+    const { port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    vi.spyOn(authority, "listTaskIds").mockRejectedValue(new Error("bd list timed out"));
+
+    await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+      message: "bd list timed out",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "failed-snapshot")).resolves.toMatchObject({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+    });
+    expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+  });
+
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
     const { name, port, leaderSessionId, launchBridge } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const cwd = path.join(paths.teamDir(name), "leader-cwd");
@@ -473,7 +489,10 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       });
     }
 
-    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-page")).rejects.toThrow();
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-page")).resolves.toMatchObject({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+    });
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
     await expect(readHiddenObservationProjection(name, {
       teamEpochId: (await teams.readConfig(name)).epochId!,
@@ -719,7 +738,10 @@ describe("DurableModelToolTeamPort implementation fence", () => {
         : shape === "misaligned"
           ? [record("other-task")]
           : [{ ...record("event-task"), taskMetadata: { schema: "invalid" } }] as any);
-    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, `${shape}-failure`)).rejects.toThrow();
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, `${shape}-failure`)).resolves.toMatchObject({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+    });
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
 
     hydrate.mockResolvedValue([record("event-task")]);
@@ -758,7 +780,11 @@ describe("DurableModelToolTeamPort implementation fence", () => {
       change: "created",
       actor: "team-lead",
     });
-    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-update")).rejects.toThrow(/could not be hydrated/);
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-update")).resolves.toMatchObject({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+      message: expect.stringContaining("could not be hydrated"),
+    });
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
     await expect(readHiddenObservationProjection(name, {
       teamEpochId: (await teams.readConfig(name)).epochId!,

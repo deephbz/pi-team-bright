@@ -292,6 +292,91 @@ describe("durable Task adapter", () => {
     ], { cwd: "/tmp/candidate-team-authority", timeoutMs: 10_000 });
   });
 
+  it("splits large hydrations into sequential bounded shows and restores requested order", async () => {
+    const ids = Array.from({ length: 33 }, (_, index) => `candidate-task-${index + 1}`);
+    const commands: string[][] = [];
+    const runner: BdRunner = {
+      run: vi.fn(async (args) => {
+        commands.push(args);
+        const requested = args.slice(4, -1) as string[];
+        return {
+          stdout: JSON.stringify(requested.map((id) => ({
+            id,
+            title: id,
+            status: "open",
+            labels: ["pi-teams:candidate-team"],
+            metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata(id) },
+          })).reverse()),
+          stderr: "",
+          exitCode: 0,
+        };
+      }),
+    };
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
+
+    const records = await store.readTaskAuthorityRecordEnvelopes([...ids].reverse());
+    const showCommands = commands.filter((args) => args[3] === "show");
+
+    expect(showCommands).toHaveLength(3);
+    expect(showCommands.map((args) => args.slice(4, -1).length)).toEqual([16, 16, 1]);
+    expect(showCommands.flatMap((args) => args.slice(4, -1))).toEqual([...ids].reverse());
+    expect(records.map((record) => record?.task.id)).toEqual([...ids].reverse());
+  });
+
+  it("preserves a missing value from a later bounded batch", async () => {
+    const ids = Array.from({ length: 18 }, (_, index) => `candidate-task-${index + 1}`);
+    const raw = (id: string) => ({
+      id,
+      title: id,
+      status: "open" as const,
+      labels: ["pi-teams:candidate-team"],
+      metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata(id) },
+    });
+    const runner: BdRunner = {
+      run: vi.fn(async (args) => ({
+        stdout: JSON.stringify(args.slice(4, -1).length === 16 ? ids.slice(0, 16).map(raw) : [raw(ids[16])]),
+        stderr: args.slice(4, -1).length === 16 ? "" : "Error fetching candidate-task-18: no issue found matching candidate-task-18",
+        exitCode: 0,
+      })),
+    };
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
+
+    const records = await store.readTaskAuthorityRecordEnvelopes(ids);
+
+    expect(records).toHaveLength(ids.length);
+    expect(records.slice(0, 17).map((record) => record?.task.id)).toEqual(ids.slice(0, 17));
+    expect(records[17]).toBeUndefined();
+    expect(runner.run).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["malformed", { stdout: "{}", stderr: "", exitCode: 0 }],
+    ["unrequested", { stdout: JSON.stringify([{ id: "other-task" }]), stderr: "", exitCode: 0 }],
+    ["duplicate", { stdout: JSON.stringify([
+      { id: "candidate-task-1", title: "Candidate", status: "open", labels: ["pi-teams:candidate-team"], metadata: { pi_teams_team: "candidate-team" } },
+      { id: "candidate-task-1", title: "Candidate", status: "open", labels: ["pi-teams:candidate-team"], metadata: { pi_teams_team: "candidate-team" } },
+    ]), stderr: "", exitCode: 0 }],
+    ["failure", { stdout: "", stderr: "native show failed", exitCode: 1 }],
+  ] as const)("propagates a later-batch %s without returning a partial hydration", async (_kind, result) => {
+    const ids = Array.from({ length: 17 }, (_, index) => `candidate-task-${index + 1}`);
+    const raw = (id: string) => ({
+      id,
+      title: id,
+      status: "open" as const,
+      labels: ["pi-teams:candidate-team"],
+      metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata(id) },
+    });
+    const runner: BdRunner = {
+      run: vi.fn(async (args) => args.slice(4, -1).length === 16
+        ? { stdout: JSON.stringify(ids.slice(0, 16).map(raw)), stderr: "", exitCode: 0 }
+        : result),
+    };
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
+
+    await expect(store.readTaskAuthorityRecordEnvelopes(ids)).rejects.toThrow();
+    expect(runner.run).toHaveBeenCalledTimes(2);
+  });
+
   it("projects batched Task records with the same found and gap semantics", async () => {
     const read = vi.fn(async (taskId: string) => authorityRecord(metadata(`${taskId} context`)));
     const readMany = vi.fn(async (taskIds: readonly string[]) => taskIds.map((taskId) => ({
