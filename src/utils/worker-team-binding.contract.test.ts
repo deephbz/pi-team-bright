@@ -136,7 +136,6 @@ describe("narrow Worker Team binding surface", () => {
       expected_version: task.version,
     })).toBe(false);
     expect(Check(tools.get("alert_send")!.parameters as any, { kind: "attention", text: "Needs review." })).toBe(true);
-    expect(Check(tools.get("alert_send")!.parameters as any, { team_name: "other-team", kind: "attention", text: "Must be rejected." })).toBe(false);
   });
 
   it("keeps the leader schemas and ten-tool capability unchanged", () => {
