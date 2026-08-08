@@ -41,7 +41,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/utils/worker-launch-bridge";
 import { BeadsTaskAdapter } from "../src/model-tool-contract/beads-task-adapter";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../src/model-tool-contract/model-tool-constants";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
 import { taskVersionRef } from "../src/model-tool-contract/task-version-ref";
@@ -747,10 +746,6 @@ export default function (pi: ExtensionAPI) {
   async function assertCurrentSessionBinding(ctx: any, requestedTeam: string): Promise<Member> {
     const sessionFile = ctx?.sessionManager?.getSessionFile?.();
     if (!sessionFile) throw new Error("A durable Pi Session is required for every team-scoped tool operation.");
-    const config = await teams.readConfig(requestedTeam);
-    if (config.implementationVersion && config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) {
-      throw new Error(`Team ${requestedTeam} belongs to implementation ${config.implementationVersion}; this process cannot mutate a mixed-version Team epoch.`);
-    }
     return teams.assertCurrentSessionBinding(requestedTeam, agentName, sessionFile);
   }
 
@@ -762,10 +757,6 @@ export default function (pi: ExtensionAPI) {
     if (binding.status !== "bound") {
       throw new Error(`Current Worker Session binding is unavailable: ${binding.reason}.`);
     }
-    const config = await teams.readConfig(binding.teamName);
-    if (config.implementationVersion && config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) {
-      throw new Error(`Team ${binding.teamName} belongs to implementation ${config.implementationVersion}; this process cannot mutate a mixed-version Team epoch.`);
-    }
     return binding;
   }
 
@@ -775,10 +766,6 @@ export default function (pi: ExtensionAPI) {
       throw new Error(`${operation} is lead-only; ask team-lead to perform this Team mutation.`);
     }
     if (!requestedTeam) return undefined;
-    const config = await teams.readConfig(requestedTeam);
-    if (config.implementationVersion && config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) {
-      throw new Error(`${operation} refused: Team ${requestedTeam} belongs to implementation ${config.implementationVersion}; stop the Team and restart one version epoch before mutating it.`);
-    }
     const member = await assertCurrentSessionBinding(ctx, requestedTeam);
     if (member.name !== "team-lead" || member.agentType !== "lead") {
       throw new Error(`${operation} is lead-only; current Membership ${member.name} is not the Team lead.`);

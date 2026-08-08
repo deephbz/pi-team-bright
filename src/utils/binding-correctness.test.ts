@@ -243,7 +243,7 @@ describe("current team binding correctness", () => {
     const result: any = await shutdown.execute("shutdown", {
       worker: "worker",
     }, undefined, undefined, context(leadSession));
-    expect(result.details).toMatchObject({ kind: "unavailable", state_changed: false });
+    expect(result.details).toMatchObject({ kind: "refused", reason: "stop_not_confirmed", state_changed: false });
     expect(kill).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(paths.teamDir(teamName), "worker.pid"))).toBe(true);
     expect((await teams.readConfig(teamName)).members.find((member) => member.name === "worker")?.isActive).not.toBe(false);

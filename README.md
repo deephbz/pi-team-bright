@@ -95,9 +95,10 @@ based substitute for Tasks.
   allowlist into Worker launches.
   Placement remains Team-wide policy, never a per-Worker override; an unsupported
   policy is refused.
-- **One live Team is one version epoch.** There is no rolling mix of Pi Team
-  Bright versions. Stop the Team before an upgrade or rollback, then restart
-  it on one version.
+- **Package version is not Team storage compatibility.** Existing Team records
+  remain usable across compatible upgrades and rollbacks. Historical
+  `implementationVersion` values are accepted as provenance, not used as a
+  capability gate.
 - **Visibility is not progress.** Launch, delivery, process, runtime, pane, and
   window evidence is bounded evidence about those things only. Likewise,
   `/pi-team-bright status` and `/pi-team-bright help` provide bounded local
@@ -121,10 +122,10 @@ pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.9
 The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.
 
-For an upgrade or rollback, first resolve nonterminal Tasks and stop the live
-Team. Install the chosen version for every participant, then create a new
-single-version Team epoch. Do not update members one at a time while the Team
-is live.
+For an upgrade or rollback, restart each Pi process that must load the chosen
+extension. Do not recreate the Team only because the package version changed.
+Stop or migrate a Team only when release notes identify a real persistence
+contract change, or when a Team policy requires a new epoch.
 
 ## Team pane layout settings
 

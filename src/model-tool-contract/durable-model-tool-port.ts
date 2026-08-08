@@ -8,7 +8,7 @@ import * as alerts from "../utils/alerts";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../utils/worker-launch-bridge";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION, MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
+import { MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 import {
   BeadsTaskAdapter,
@@ -225,7 +225,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
           backend: terminal.name,
           ...(terminal.currentTargetId?.() ? { leadTarget: { backend: terminal.name, kind: "pane", targetId: terminal.currentTargetId()! } } : {}),
         },
-        MODEL_TOOL_IMPLEMENTATION_VERSION,
+        undefined,
         paneLayout,
         syncLiveness,
       ));
@@ -702,7 +702,6 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const binding = await teams.resolveCurrentLeadSessionBinding(sessionFile);
     if (binding.status !== "bound") return undefined;
     const config = await teams.readConfig(binding.teamName);
-    if (config.implementationVersion !== MODEL_TOOL_IMPLEMENTATION_VERSION) return undefined;
     return { teamName: binding.teamName, config, sessionFile };
   }
 

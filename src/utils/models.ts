@@ -66,7 +66,7 @@ export interface TeamConfig {
   leadSessionId: string;
   /** Opaque identity for this stopped/restarted Team epoch. Absent on legacy records. */
   epochId?: string;
-  /** Public coordination implementation fence. Absent on legacy records. */
+  /** Historical package-build provenance. It is not a storage compatibility coordinate. */
   implementationVersion?: string;
   /** Stable logical Workers. Absent on legacy records; Memberships remain carriers. */
   logicalWorkers?: LogicalWorker[];
