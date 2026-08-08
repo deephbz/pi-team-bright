@@ -5,7 +5,6 @@ import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;
@@ -53,7 +52,7 @@ function sessionContext(sessionFile: string) {
 }
 
 async function configureLeadRecord(name: string, sessionFile: string): Promise<string> {
-  await teams.createTeam(name, sessionFile, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
+  await teams.createTeam(name, sessionFile, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
   const serialized = JSON.stringify({ pid: -1, sessionFile, startedAt: 1 });
   fs.writeFileSync(paths.leadSessionPath(name), serialized);
   return serialized;
@@ -88,7 +87,7 @@ describe("external current-binding contract", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_AGENT_NAME", "");
     const name = teamName("recipients");
-    await teams.createTeam(name, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
+    await teams.createTeam(name, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
     await teams.addMember(name, {
       agentId: `worker@${name}`,
       name: "worker",

@@ -5,7 +5,6 @@ import piTeams from "../../extensions/index";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { AlertSendParametersSchema, TaskReadParametersSchema, TaskUpdateParametersSchema } from "../model-tool-contract/catalog";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
 import * as paths from "./paths";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
@@ -73,7 +72,7 @@ async function createBoundTeam(teamName: string, workerSession: string): Promise
     undefined,
     undefined,
     undefined,
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
+    undefined,
   );
   await teams.addMember(teamName, workerMember(teamName, workerSession));
   createdTeams.push(teamName);

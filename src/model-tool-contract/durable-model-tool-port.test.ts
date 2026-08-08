@@ -7,7 +7,6 @@ import * as teamEvents from "../utils/team-events";
 import * as teams from "../utils/teams";
 import { DurableModelToolTeamPort, type ModelToolLifecycle } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
 import { TASK_METADATA_SCHEMA } from "../utils/beads";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { registerModelToolJourney } from "./pi-registration";
@@ -144,7 +143,7 @@ describe("DurableModelToolTeamPort pane settings", () => {
 
 describe("DurableModelToolTeamPort durable authority", () => {
   it("tolerates one externally oversized Task without rejecting the snapshot", async () => {
-    const { port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { port, leaderSessionId } = await teamFixture(undefined);
     vi.spyOn(authority, "listTaskIds").mockResolvedValue(["invalid-task"]);
     vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([{
       task: {
@@ -178,7 +177,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("returns typed unavailable for snapshot Task authority failure without staging", async () => {
-    const { port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { port, leaderSessionId } = await teamFixture(undefined);
     vi.spyOn(authority, "listTaskIds").mockRejectedValue(new Error("bd list timed out"));
 
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
@@ -194,7 +193,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
-    const { name, port, leaderSessionId, launchBridge } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId, launchBridge } = await teamFixture(undefined);
     const cwd = path.join(paths.teamDir(name), "leader-cwd");
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
@@ -235,7 +234,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("does not advance the hidden watermark when event consumption fails", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     const task = {
       id: "watermark-task",
@@ -295,7 +294,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("hydrates direct Task reads once for unique requested IDs and restores duplicates", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const task = (id: string) => ({
       id,
       title: `${id} title`,
@@ -330,7 +329,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("returns one ordered missing outcome from the same exact-ID hydration", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([
       undefined,
       {
@@ -361,7 +360,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("returns whole-call unavailable when exact-ID hydration fails", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockRejectedValue(new Error("simulated authority failure"));
 
     await expect(port.readTasks(leaderSessionId, ["first-task", "second-task"])).resolves.toEqual({
@@ -374,7 +373,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("publishes an explicit warning for updates after external context exceeds the display limit", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     let currentContext = "Valid candidate context.";
     const task = {
       id: "invalid-after-snapshot",
@@ -410,7 +409,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("acknowledges only the returned event page cursor", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
     vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
     const config = await teams.readConfig(name);
@@ -454,7 +453,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("does not advance a paged watermark when page hydration fails", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const record = {
       task: {
         id: "baseline-task",
@@ -502,7 +501,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("recovers a complete baseline after a port restart before applying event references", async () => {
-    const { name, leaderSessionId, port } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, leaderSessionId, port } = await teamFixture(undefined);
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     const record = (id: string, version: string) => ({
       task: {
@@ -546,7 +545,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("requires a fresh snapshot after a branch switch instead of using another branch baseline", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const record = {
       task: {
         id: "branch-task",
@@ -576,7 +575,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("rechecks complete Task authority after a quiet wait wakes", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     let version = "quiet-v1";
     const record = () => ({
       task: {
@@ -624,7 +623,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("hydrates event-referenced Tasks once and merges them with the acknowledged baseline", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const record = (id: string) => ({
       task: {
         id,
@@ -668,7 +667,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("does not hydrate Tasks for a Worker-only event batch", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const record = {
       task: {
         id: "baseline-task",
@@ -705,7 +704,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     ["misaligned", "misaligned"],
     ["contract gap", "contract-gap"],
   ] as const)("rejects a %s canonical Task batch and retries recovery", async (_label, shape) => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const record = (id: string) => ({
       task: {
         id,
@@ -753,7 +752,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   });
 
   it("fails event hydration before staging or advancing the hidden observation", async () => {
-    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
     const record = {
       task: {
         id: "baseline-task",

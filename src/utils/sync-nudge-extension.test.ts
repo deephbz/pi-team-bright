@@ -2,7 +2,6 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
 import { exactLeaderSessionId } from "../model-tool-contract/runtime";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -30,7 +29,7 @@ async function createTeam(name: string, sessionFile: string): Promise<TeamConfig
     undefined,
     undefined,
     undefined,
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
+    undefined,
     undefined,
     { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 0, policyVersion: "test" },
   );

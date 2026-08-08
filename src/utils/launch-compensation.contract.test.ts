@@ -8,7 +8,6 @@ import * as teams from "./teams";
 import * as tasks from "./tasks";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { createWorkerLaunchBridge } from "./worker-launch-bridge";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;
@@ -95,7 +94,7 @@ async function team(suffix: string, defaultModel?: string) {
     },
     undefined,
     { backend: "launch-contract-terminal", leadTarget: { backend: "launch-contract-terminal", kind: "pane", targetId: "pane-leader" } },
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
+    undefined,
   );
   return { name, leadSession };
 }

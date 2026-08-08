@@ -26,7 +26,6 @@ import {
 import { applySemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 type RegisteredTool = {
   name: string;
   parameters: { properties?: Record<string, unknown> };
@@ -83,7 +82,6 @@ function writeTeam(
   const config: TeamConfig = {
     name: teamName,
     description: "round-2 evaluator fixture",
-    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
     epochId: teams.newTeamEpochId(),
     createdAt: Date.now(),
     leadAgentId: "lead-agent",

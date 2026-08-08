@@ -3,7 +3,6 @@ import * as fs from "node:fs";
 import * as authority from "./beads-authority-adapter";
 import { DurableModelToolTeamPort } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
 import { taskVersionRef } from "./task-version-ref";
 import { TASK_METADATA_SCHEMA } from "../utils/beads";
 import * as paths from "../utils/paths";
@@ -34,7 +33,7 @@ async function makeFixture() {
     undefined,
     undefined,
     undefined,
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
+    undefined,
   );
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "fixture scope" }];

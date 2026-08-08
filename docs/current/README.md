@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-07
+Updated: 2026-08-08
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -108,8 +108,8 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The `0.17.0-rc.9` source candidate uses the real main extension as its local
-  switch. Leader processes register the ten-tool model surface, with
+- The current source uses the real main extension as its local switch. Leader
+  processes register the ten-tool model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep the narrow `task_read`, `task_update`, and `alert_send` surface;
   runtime Team binding supplies the Team identity, so Worker calls do not select
@@ -141,6 +141,9 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
+- `0.17.0-rc.10` is source preparation only. It removes the obsolete package-
+  version fixture constant and publishes the compatibility correction from
+  `2ded422`; it is not tagged or published yet.
 - `0.17.0-rc.9` is published from exact tagged source `1d5124c`; npm `next`
   points to it. The durable [rc.9 release
   receipt](../journal/2026-08-07-v0.17.0-rc.9-release-receipt.md) records exact

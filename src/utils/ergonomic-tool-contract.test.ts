@@ -12,7 +12,6 @@ import * as teamEvents from "./team-events";
 import * as taskAuthority from "./tasks";
 import * as runtime from "./runtime";
 import * as workerResources from "./worker-resource-projection";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
@@ -116,7 +115,7 @@ function createBoundTeam(name: string, leadSession: string, separateWindows?: bo
     undefined,
     undefined,
     detected ? { backend: detected.name, leadTarget: { backend: detected.name, kind: "pane", targetId: "pane-leader" } } : undefined,
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
+    undefined,
   );
 }
 
@@ -815,7 +814,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const team = uniqueTeam("worker-authority");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     const workerSession = `/tmp/${team}-worker.jsonl`;
-    await teams.createTeam(team, leadSession, "lead", "", undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
+    await teams.createTeam(team, leadSession, "lead", "", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
     await teams.addMember(team, member("worker", workerSession));
     setAdapter(terminal());
     vi.stubEnv("PI_AGENT_NAME", "worker");

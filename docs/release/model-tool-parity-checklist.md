@@ -1,9 +1,9 @@
 # Model-tool release parity checklist
 
-Release: `0.17.0-rc.9`
+Release: `0.17.0-rc.10`
 Source surface: shipped main extension at the release candidate source commit
 
-This checklist maps each `0.17.0-rc.9` coordination capability to the
+This checklist maps each `0.17.0-rc.10` coordination capability to the
 single durable model-tool leader surface. The leader uses exact Session binding,
 so the surface omits `team_name` and carrier controls. Worker processes keep the
 narrow `task_read`, `task_update`, and `alert_send` registrations; Worker Team
