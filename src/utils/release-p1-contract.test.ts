@@ -23,7 +23,6 @@ import * as tasks from "./tasks";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 
 type RegisteredTool = {
   name: string;
@@ -119,7 +118,7 @@ async function createBeadsTeam(name: string, leadSession: string) {
     },
     undefined,
     terminalBinding(),
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
+    undefined,
   );
 }
 
@@ -238,7 +237,7 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("lead-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    const before = await teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const before = await teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
     const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown-lead", {

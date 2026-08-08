@@ -22,7 +22,6 @@ import {
 } from "./task-delivery";
 import { BeadsTaskStore, TASK_METADATA_KEY, TASK_METADATA_SCHEMA, readBeadsAuthorityFingerprint } from "./beads";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 type RegisteredTool = {
@@ -74,7 +73,6 @@ function writeTeam(
   const config: TeamConfig = {
     name,
     description: "clean-cut evaluator fixture",
-    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
     createdAt: Date.now(),
     epochId: teams.newTeamEpochId(),
     leadAgentId: "lead-agent",

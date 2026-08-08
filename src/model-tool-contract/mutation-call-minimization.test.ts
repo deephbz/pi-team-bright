@@ -3,7 +3,6 @@ import * as authority from "./beads-authority-adapter";
 import * as teams from "../utils/teams";
 import { DurableModelToolTeamPort } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "./model-tool-constants";
 import { taskVersionRef } from "./task-version-ref";
 import type { TaskAuthorityRecord } from "../utils/beads";
 
@@ -26,7 +25,7 @@ async function durablePort(suffix: string): Promise<{ name: string; port: Durabl
   const name = `mutation-call-minimization-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
   const sessionFile = `/tmp/${name}-lead.jsonl`;
   createdTeams.push(name);
-  await teams.createTeam(name, sessionFile, "lead-agent", "Mutation call minimization.", undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION);
+  await teams.createTeam(name, sessionFile, "lead-agent", "Mutation call minimization.", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
   const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
   const session = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(session, sessionFile);

@@ -9,7 +9,6 @@ import { InMemoryModelToolTeamPort, exactLeaderSessionId } from "../../src/model
 import { projectToolResult } from "../../src/model-tool-contract/result-projection";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { commitHiddenObservationProjection, readHiddenObservationProjection } from "../../src/utils/hidden-observation";
 import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../../src/utils/sync-nudge-conductor";
@@ -131,7 +130,7 @@ async function durableFixture(policy: TeamConfigSyncLiveness = { waitSeconds: 12
   const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, { stopWorker: vi.fn(), shutdownTeam: vi.fn() });
   vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
   vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
-  await teams.createTeam(name, sessionFile, "leader-agent", "Liveness fixture", undefined, undefined, undefined, undefined, undefined, undefined, undefined, MODEL_TOOL_IMPLEMENTATION_VERSION, undefined, policy);
+  await teams.createTeam(name, sessionFile, "leader-agent", "Liveness fixture", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, policy);
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "liveness" }];
   teams.writeConfigAtomic(paths.configPath(name), config);

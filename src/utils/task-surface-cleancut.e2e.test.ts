@@ -9,7 +9,6 @@ import { BeadsTaskStore, readBeadsAuthorityFingerprint, type TaskWriteOptions } 
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../../src/model-tool-contract/model-tool-constants";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 
 function expectedVersionRef(value: string): string {
@@ -70,7 +69,6 @@ function writeTeam(name: string, workspace: string): TeamConfig {
     taskWorkspace: workspace,
     taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
     taskAuthorityFingerprint: readBeadsAuthorityFingerprint(workspace),
-    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
     logicalWorkers: ["worker-a", "worker-b"].map((worker) => ({ name: worker, scope: "task-surface worker capability" })),
     members: ["team-lead", "worker-a", "worker-b"].map((member, index) => ({
       membershipId: `membership_${member}_${name}`,
