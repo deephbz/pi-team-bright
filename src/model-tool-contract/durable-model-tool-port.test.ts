@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as alerts from "../utils/alerts";
 import * as paths from "../utils/paths";
 import * as authority from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
@@ -25,8 +24,8 @@ function teamName(suffix: string): string {
   return name;
 }
 
-async function foreignPort(implementationVersion: string | undefined) {
-  const name = teamName(implementationVersion ? "foreign" : "legacy");
+async function teamFixture(implementationVersion: string | undefined) {
+  const name = teamName(implementationVersion ? "historical-provenance" : "no-provenance");
   const sessionFile = `/tmp/${name}-lead.jsonl`;
   await teams.createTeam(
     name,
@@ -118,6 +117,7 @@ describe("DurableModelToolTeamPort sync liveness policy", () => {
   it("persists resolved nudge defaults when a new Team epoch is created", async () => {
     const { result, createArgs } = await createTeamWithPaneSettings(undefined, {});
     expect(result).toMatchObject({ kind: "created" });
+    expect(createArgs[11]).toBeUndefined();
     expect(createArgs[13]).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
   });
 
@@ -142,9 +142,9 @@ describe("DurableModelToolTeamPort pane settings", () => {
   });
 });
 
-describe("DurableModelToolTeamPort implementation fence", () => {
+describe("DurableModelToolTeamPort durable authority", () => {
   it("tolerates one externally oversized Task without rejecting the snapshot", async () => {
-    const { port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     vi.spyOn(authority, "listTaskIds").mockResolvedValue(["invalid-task"]);
     vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([{
       task: {
@@ -178,7 +178,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("returns typed unavailable for snapshot Task authority failure without staging", async () => {
-    const { port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     vi.spyOn(authority, "listTaskIds").mockRejectedValue(new Error("bd list timed out"));
 
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
@@ -194,7 +194,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
-    const { name, port, leaderSessionId, launchBridge } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId, launchBridge } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const cwd = path.join(paths.teamDir(name), "leader-cwd");
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
@@ -235,7 +235,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("does not advance the hidden watermark when event consumption fails", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     const task = {
       id: "watermark-task",
@@ -295,7 +295,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("hydrates direct Task reads once for unique requested IDs and restores duplicates", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const task = (id: string) => ({
       id,
       title: `${id} title`,
@@ -330,7 +330,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("returns one ordered missing outcome from the same exact-ID hydration", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([
       undefined,
       {
@@ -361,7 +361,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("returns whole-call unavailable when exact-ID hydration fails", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockRejectedValue(new Error("simulated authority failure"));
 
     await expect(port.readTasks(leaderSessionId, ["first-task", "second-task"])).resolves.toEqual({
@@ -374,7 +374,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("publishes an explicit warning for updates after external context exceeds the display limit", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     let currentContext = "Valid candidate context.";
     const task = {
       id: "invalid-after-snapshot",
@@ -410,7 +410,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("acknowledges only the returned event page cursor", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
     vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
     const config = await teams.readConfig(name);
@@ -454,7 +454,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("does not advance a paged watermark when page hydration fails", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = {
       task: {
         id: "baseline-task",
@@ -502,7 +502,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("recovers a complete baseline after a port restart before applying event references", async () => {
-    const { name, leaderSessionId, port } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, leaderSessionId, port } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     const record = (id: string, version: string) => ({
       task: {
@@ -546,7 +546,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("requires a fresh snapshot after a branch switch instead of using another branch baseline", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = {
       task: {
         id: "branch-task",
@@ -576,7 +576,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("rechecks complete Task authority after a quiet wait wakes", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     let version = "quiet-v1";
     const record = () => ({
       task: {
@@ -624,7 +624,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("hydrates event-referenced Tasks once and merges them with the acknowledged baseline", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = (id: string) => ({
       task: {
         id,
@@ -668,7 +668,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("does not hydrate Tasks for a Worker-only event batch", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = {
       task: {
         id: "baseline-task",
@@ -705,7 +705,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
     ["misaligned", "misaligned"],
     ["contract gap", "contract-gap"],
   ] as const)("rejects a %s canonical Task batch and retries recovery", async (_label, shape) => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = (id: string) => ({
       task: {
         id,
@@ -753,7 +753,7 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it("fails event hydration before staging or advancing the hidden observation", async () => {
-    const { name, port, leaderSessionId } = await foreignPort(MODEL_TOOL_IMPLEMENTATION_VERSION);
+    const { name, port, leaderSessionId } = await teamFixture(MODEL_TOOL_IMPLEMENTATION_VERSION);
     const record = {
       task: {
         id: "baseline-task",
@@ -794,54 +794,17 @@ describe("DurableModelToolTeamPort implementation fence", () => {
   });
 
   it.each([
-    ["foreign version", "another-model-tool-version"],
-    ["legacy absent version", undefined],
-  ])("fails closed for a %s before any authority call", async (_caseName, implementationVersion) => {
-    const { port, leaderSessionId, launchBridge, lifecycle } = await foreignPort(implementationVersion);
-    const listTasks = vi.spyOn(authority, "listTaskIds");
-    const readTask = vi.spyOn(authority, "readTaskAuthorityRecordEnvelope");
-    const updateLink = vi.spyOn(authority, "mutateTaskLink");
-    const sendAlert = vi.spyOn(alerts, "sendAlert");
-    const readEvents = vi.spyOn(teamEvents, "readTeamEvents");
-    const waitEvents = vi.spyOn(teamEvents, "waitForTeamEvents");
+    ["historical package value", "0.17.0-rc.3"],
+    ["absent package value", undefined],
+  ])("does not use a %s as a compatibility gate", async (_caseName, implementationVersion) => {
+    const { name, port, leaderSessionId, lifecycle } = await teamFixture(implementationVersion);
+    vi.mocked(lifecycle.stopWorker).mockResolvedValue({ kind: "stopped", worker: "worker" });
+    vi.mocked(lifecycle.shutdownTeam).mockResolvedValue({ kind: "shutdown", stoppedWorkers: ["worker"], unfinishedTaskIds: [] });
 
-    await expect(port.readSnapshot(leaderSessionId)).resolves.toEqual({ kind: "no_active_team" });
-    await expect(port.readTasks(leaderSessionId, ["task-1"])).resolves.toEqual({ kind: "no_active_team" });
-    await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "sync-1")).resolves.toMatchObject({
-      kind: "unavailable",
-      reason: "no_active_team",
-    });
-    await expect(port.ensureWorker(leaderSessionId, { name: "worker", scope: "fixture scope" })).resolves.toEqual({ kind: "no_active_team" });
-    await expect(port.createTask(leaderSessionId, { operationId: "fenced-create", title: "Task", goal: "Keep the fence closed." })).resolves.toEqual({ kind: "no_active_team", operationId: "fenced-create" });
-    await expect(port.updateTasks(leaderSessionId, [{
-      taskId: "task-1",
-      operationId: "operation-1",
-      expectedVersion: taskVersionRef("v1"),
-      currentContext: "No write is allowed.",
-    }])).resolves.toEqual({ kind: "no_active_team" });
-    await expect(port.linkTask(leaderSessionId, {
-      taskId: "task-1",
-      targetId: "task-2",
-      relation: "related",
-      action: "add",
-    })).resolves.toMatchObject({ kind: "unavailable", reason: "no_active_team" });
-    await expect(port.sendAlert(leaderSessionId, {
-      target: { kind: "worker", name: "worker" },
-      kind: "attention",
-      text: "No alert is allowed.",
-    })).resolves.toMatchObject({ kind: "unavailable", reason: "no_active_team" });
-    await expect(port.stopWorker(leaderSessionId, "worker")).resolves.toMatchObject({ kind: "unavailable", reason: "no_active_team" });
-    await expect(port.shutdownTeam(leaderSessionId)).resolves.toMatchObject({ kind: "unavailable", reason: "no_active_team" });
-
-    expect(launchBridge.ensureWorker).not.toHaveBeenCalled();
-    expect(lifecycle.stopWorker).not.toHaveBeenCalled();
-    expect(lifecycle.shutdownTeam).not.toHaveBeenCalled();
-    expect(listTasks).not.toHaveBeenCalled();
-    expect(readTask).not.toHaveBeenCalled();
-    expect(updateLink).not.toHaveBeenCalled();
-    expect(sendAlert).not.toHaveBeenCalled();
-    expect(readEvents).not.toHaveBeenCalled();
-    expect(waitEvents).not.toHaveBeenCalled();
+    await expect(port.stopWorker(leaderSessionId, "worker")).resolves.toEqual({ kind: "stopped", worker: "worker" });
+    await expect(port.shutdownTeam(leaderSessionId)).resolves.toEqual({ kind: "shutdown", stoppedWorkers: ["worker"], unfinishedTaskIds: [] });
+    expect(lifecycle.stopWorker).toHaveBeenCalledWith(name, "worker");
+    expect(lifecycle.shutdownTeam).toHaveBeenCalledWith(name);
   });
 
 });

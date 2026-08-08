@@ -36,8 +36,10 @@ identity comes from exact runtime binding, not model input.
   exhaustive allowlist.
 - Old Team records remain readable. Missing epoch or logical Worker coordinates,
   invalid model-tool metadata, and unstructured event evidence fail closed.
-- The durable model-tool port refuses to mutate a Team from another implementation epoch.
-- One live Team remains one Pi Team Bright version epoch.
+- Package release identity never acts as a Team compatibility gate. Historical
+  `implementationVersion` values and absent values remain accepted.
+- A real incompatible persistence change requires its own schema or capability
+  coordinate and an explicit migration or refusal test.
 
 ## Focused implementation evidence
 

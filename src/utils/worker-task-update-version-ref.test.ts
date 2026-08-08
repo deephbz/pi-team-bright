@@ -13,7 +13,6 @@ import * as tasks from "./tasks";
 import { createTask } from "../model-tool-contract/beads-authority-adapter";
 import * as authority from "../model-tool-contract/beads-authority-adapter";
 import * as teams from "./teams";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import { readTaskDeliveries } from "./task-delivery";
@@ -64,7 +63,7 @@ function writeTeam(teamName: string, root: string): TeamConfig {
     taskWorkspace: root,
     taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
     taskAuthorityFingerprint: readBeadsAuthorityFingerprint(root),
-    implementationVersion: MODEL_TOOL_IMPLEMENTATION_VERSION,
+    implementationVersion: "0.17.0-rc.3",
     logicalWorkers: [{ name: "worker", scope: "version-safe Worker mutations" }],
     members: [member(teamName, "team-lead", "lead"), member(teamName, "worker", "teammate")],
   };
@@ -100,7 +99,7 @@ afterEach(() => {
 });
 
 describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0)("Worker task_update TaskVersionRef boundary", () => {
-  it("requires opaque refs, resolves them to raw CAS versions, and returns current refs for reconcile", async () => {
+  it("accepts historical package provenance and preserves opaque Task version reconciliation", async () => {
     const teamName = uniqueTeam();
     const root = workspace();
     writeTeam(teamName, root);

@@ -78,17 +78,22 @@ restating executable definitions.
   retaining normal unrelated extension and Skill discovery. A disposable Herdr
   Team with a harmless discovered extension and Skill proved two Worker Session
   bindings, Task-tool use, and exact stops. A distinct globally discovered Pi
-  Team Bright copy still conflicts with explicit `-e`; it remains a documented
-  single-version-epoch installation risk, not a reason to suppress normal
-  resources. Herdr preserves its established Pi and proxy environment allowlist.
+  Team Bright copy can still conflict with explicit `-e` through duplicate tool
+  registration; it remains an installation risk, not a Team storage-version
+  boundary or a reason to suppress normal resources. Herdr preserves its
+  established Pi and proxy environment allowlist.
   Other adapters retain existing behavior without this guarantee; the executable contract is
   [`TeamPanePlacement`](../../src/utils/terminal-adapter.ts).
   This changes the Pi Team Bright adapter contract, but no depicted component,
   dependency, or topology, so the Structurizr DSL is unchanged.
-- One live Team runs one Pi Team Bright version; upgrades happen as a stopped
-  and restarted epoch, not a rolling deployment. Fresh Team epochs persist an
-  opaque epoch identity and stable logical Worker name/scope records separately
-  from replaceable Membership, Session, process, and terminal carriers. The
+- Package release identity is not a Team persistence capability. New Team
+  epochs do not persist a package version. Historical optional
+  `implementationVersion` values remain readable as provenance and never gate
+  Team operations. A future incompatible persistence change must name and test
+  its actual schema or capability plus migration behavior. Fresh Team epochs
+  persist an opaque epoch identity and stable logical Worker name/scope records
+  separately from replaceable Membership, Session, process, and terminal
+  carriers. The
   model-tool surface keeps its exact-Session branch position as locked derived
   coordination state; it never becomes Team or Task authority. Since `0.17.0-rc.3`,
   `ensure_worker.separate_window` is deliberately absent:
@@ -289,8 +294,7 @@ Next steps:
    performance epoch.
 5. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-6. Restart live Teams as one version epoch after an upgrade or rollback.
-7. Define observation and cleanup for a reserved recovery carrier that never
+6. Define observation and cleanup for a reserved recovery carrier that never
    publishes runtime evidence. Keep it pending; do not infer readiness or work.
 
 
