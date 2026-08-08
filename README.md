@@ -91,7 +91,7 @@ based substitute for Tasks.
   Worker Pi. Workers load the exact Pi Team Bright extension and retain Pi's
   normal unrelated extension and Skill discovery. A distinct discovered Pi Team
   Bright copy violates the one-version-epoch rule and remains a documented
-  installation risk. Herdr forwards the established Pi and proxy environment
+  installation risk. Herdr forwards the established Pi launch environment
   allowlist into Worker launches.
   Placement remains Team-wide policy, never a per-Worker override; an unsupported
   policy is refused.

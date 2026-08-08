@@ -81,7 +81,7 @@ restating executable definitions.
   Team Bright copy can still conflict with explicit `-e` through duplicate tool
   registration; it remains an installation risk, not a Team storage-version
   boundary or a reason to suppress normal resources. Herdr preserves its
-  established Pi and proxy environment allowlist.
+  established Pi launch environment allowlist.
   Other adapters retain existing behavior without this guarantee; the executable contract is
   [`TeamPanePlacement`](../../src/utils/terminal-adapter.ts).
   This changes the Pi Team Bright adapter contract, but no depicted component,
@@ -141,22 +141,21 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `0.17.0-rc.10` is source preparation only. It removes the obsolete package-
-  version fixture constant and publishes the compatibility correction from
-  `2ded422`; it is not tagged or published yet.
-- `0.17.0-rc.9` is published from exact tagged source `1d5124c`; npm `next`
-  points to it. The durable [rc.9 release
-  receipt](../journal/2026-08-07-v0.17.0-rc.9-release-receipt.md) records exact
-  CI, package, integration E2E, registry, and provenance evidence. It keeps the
-  [aborted rc.6
+- `0.17.0-rc.10` is published from exact tagged source `1214303`; npm `next`
+  points to it. It removes package version as a Team compatibility gate and
+  removes the obsolete fixture constant. The durable [rc.10 release
+  receipt](../journal/2026-08-08-v0.17.0-rc.10-release-receipt.md) records exact
+  CI, historical-config integration E2E, package, registry, and provenance
+  evidence. The [rc.9 release
+  receipt](../journal/2026-08-07-v0.17.0-rc.9-release-receipt.md), [aborted rc.6
   receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md), [published
   rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and
   [published rc.8
-  receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) as historical
-  evidence. It accepts `0.1 < leader_share < 1.0` while keeping the default at
-  `0.6`. The README shows one complete Team and Worker settings example and
-  makes tool precedence explicit: `enable` adds to the inherited Worker list,
-  then `disable` removes from it.
+  receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) remain
+  historical evidence. The current release accepts `0.1 < leader_share < 1.0`
+  while keeping the default at `0.6`. The README shows one complete Team and
+  Worker settings example and makes tool precedence explicit: `enable` adds to
+  the inherited Worker list, then `disable` removes from it.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
