@@ -219,6 +219,18 @@ describe("Round 3 successful-turn Message acknowledgement", () => {
     expect(current.markRead).toHaveBeenCalledTimes(1);
     current.delivery.stop();
   });
+
+  it("keeps a cancelled presented Message pending", async () => {
+    const current = messageHarness();
+    await current.delivery.start([]);
+    const presented = current.sink.sendMessage.mock.calls[0][0];
+    await current.delivery.observeContext(messageContext(presented.details));
+
+    expect(await current.delivery.commitPresentedAfterSuccessfulTurn("aborted")).toBe(0);
+    expect(current.sink.appendEntry).not.toHaveBeenCalled();
+    expect(current.markRead).not.toHaveBeenCalled();
+    current.delivery.stop();
+  });
 });
 
 describe("Round 3 successful-turn Task acknowledgement", () => {
@@ -251,6 +263,51 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
     });
     expect((await readTaskDeliveries(team, "worker"))[0].successfulTurnAckAt).toBeUndefined();
     restarted.delivery.stop();
+  });
+
+  it("keeps a cancelled presented Task change pending", async () => {
+    const team = teamName("task-aborted");
+    const sessionFile = `/tmp/${team}-worker.jsonl`;
+    configureTeam(team, sessionFile);
+    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-aborted"), "worker", "assigned");
+    const current = taskDelivery(team, sessionFile);
+    await current.delivery.start([]);
+    const presented = current.sink.sendMessage.mock.calls[0][0];
+    await current.delivery.observeContext([{
+      role: "custom",
+      customType: TASK_CHANGE_CUSTOM_TYPE,
+      details: presented.details,
+    }]);
+
+    expect(await current.delivery.commitPresentedAfterSuccessfulTurn("aborted")).toBe(0);
+    expect(current.sink.appendEntry).not.toHaveBeenCalled();
+    const pending = (await readTaskDeliveries(team, "worker"))[0];
+    expect(pending).toMatchObject({ deliveryId: record!.deliveryId });
+    expect(pending).not.toHaveProperty("successfulTurnAckAt");
+    current.delivery.stop();
+  });
+
+  it("retries a failed exact-Session Task presentation with its stable delivery ID", async () => {
+    const team = teamName("task-send-failure");
+    const sessionFile = `/tmp/${team}-worker.jsonl`;
+    configureTeam(team, sessionFile);
+    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-send-failure"), "worker", "assigned");
+    const failed = new TaskChangeDelivery({
+      sendMessage: vi.fn(() => { throw new Error("injected Session delivery failure"); }),
+      appendEntry: vi.fn(),
+    }, { teamName: team, recipient: "worker", sessionFile, pollMs: 60_000, reconcile: async () => 0 });
+
+    await expect(failed.start([])).rejects.toThrow("injected Session delivery failure");
+    failed.stop();
+    const pending = (await readTaskDeliveries(team, "worker"))[0];
+    expect(pending).toMatchObject({ deliveryId: record!.deliveryId });
+    expect(pending).not.toHaveProperty("successfulTurnAckAt");
+
+    const retried = taskDelivery(team, sessionFile);
+    await retried.delivery.start([]);
+    expect(retried.sink.sendMessage).toHaveBeenCalledTimes(1);
+    expect(retried.sink.sendMessage.mock.calls[0][0].details.deliveryIds).toEqual([record!.deliveryId]);
+    retried.delivery.stop();
   });
 
   it("commits successful Task delivery exactly once, including toolUse before later error", async () => {
