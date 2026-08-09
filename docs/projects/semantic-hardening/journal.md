@@ -460,3 +460,28 @@ changes; append a correction.
 - Required dependent hydration and opaque version meaning remain unchanged.
   Architecture impact: **none**. This adds reproducible non-functional evidence,
   not a production optimization or behavior change.
+
+## 2026-08-09 — rebased onto published 0.17.0-rc.10
+
+- A registry and remote check found that public `0.17.0-rc.9` and
+  `0.17.0-rc.10` had advanced after the original rc.8 audit baseline. The leader
+  fetched tags and rebased the seven retained Project commits onto exact
+  `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`.
+- Upstream rc.9 added event-directed sync hydration, complete Task-batch and
+  watermark handling, failed-event hints, Worker Team binding, and default sync
+  liveness/nudge policy. Rc.10 decoupled Team compatibility from package version.
+- Upstream already contained the Pi 0.84 subscription footer method and a real
+  shaped render test. The duplicate local footer commit was dropped during
+  rebase rather than retaining an unnecessary helper export.
+- Team fixtures no longer write the removed model-tool implementation version.
+  The causal fixture now records Worker run state as active. After the controlled
+  120-second deadline, rc.10 correctly returns `indeterminate` because run-state
+  evidence remains incomplete; it publishes no observation and advances no
+  hidden position. Cancellation and later Task visibility remain green.
+- Typecheck, 46 focused tests across seven files, package verification, lane
+  closure at 86 files (65 fast and 21 exhaustive), JSON checks, and diff checks
+  passed on the rebased tree. The broad aggregate lane remains reserved for the
+  final stable release tree.
+- The partially implemented Task publication port was stashed before rebase.
+  Its design evidence remains reusable, but its source patch must be reviewed
+  and reapplied against rc.10 rather than restored blindly.

@@ -9,7 +9,6 @@ import {
   assertCursorAdvanced,
   assertCursorUnchanged,
 } from "../../test/support/external-harness";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
 import { readBeadsAuthorityFingerprint, resolveBdExecutable } from "./beads";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
@@ -120,9 +119,6 @@ async function fixture() {
     workspace,
     `task_authority_${crypto.randomUUID()}`,
     readBeadsAuthorityFingerprint(workspace),
-    undefined,
-    undefined,
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
   const membershipIds: Record<string, string> = {};
   for (const worker of ["worker-a", "worker-b"]) {
