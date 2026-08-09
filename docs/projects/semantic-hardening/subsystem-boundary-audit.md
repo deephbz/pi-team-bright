@@ -1,11 +1,12 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-09
-Status: maintained audit; first Task-authority dependency seam committed and independently verified
+Status: maintained audit; Task reconciliation seam and Team lead-discovery ownership committed and independently verified
 Reviewed base revision: `e275e03` (`audit/semantic-hardening-behavior-inventory`)
 Production TypeScript baseline: `e55b4f2a9190d700a03d95cb9dee75e5c892ca0a`
-Implementation evidence: closed Tasks `semantic-hardening-direct-2el` and
-`semantic-hardening-direct-hkp`, plus their shared source and test tree
+Implementation evidence: closed Tasks `semantic-hardening-direct-2el`,
+`semantic-hardening-direct-hkp`, `semantic-hardening-direct-dvj`, and
+`semantic-hardening-direct-dol`, plus their shared source and test tree
 Architecture impact: **changed** for the internal Task dependency boundary.
 HyperCarrier's canonical diagram stays unchanged because it keeps Pi Team Bright
 internals opaque.
@@ -58,8 +59,10 @@ Runtime and Role realization is spread across `runtime.ts`,
 (`src/utils/runtime.ts:55`). Worker launch plans reuse, first-binding retry, or
 exact-Session recovery before carrier creation (`src/utils/worker-launch-bridge.ts:132`).
 The extension performs startup admission, runtime claim, Session bind, event
-publication, stop, and shutdown (`extensions/index.ts:803`,
-`extensions/index.ts:1100`).
+publication, stop, and shutdown (`extensions/index.ts:748`,
+`extensions/index.ts:1095`). Durable lead-Session discovery now lives in
+`teams.ts`; the extension calls that query without changing environment
+precedence or hook timing.
 
 Team compatibility is not isolated. `TeamConfig` also carries Beads authority,
 workspace, fingerprint, and Task-cutover fields (`src/utils/models.ts:53`).
@@ -76,7 +79,7 @@ The canonical Task card and version contracts remain `task-domain.ts` plus
 `TaskReconciliationQuery`. `BeadsTaskReconciliationQuery` implements that query
 for one Team-scoped authority in
 `src/task-authority/beads-reconciliation-query.ts`; the Pi composition root
-injects it into `TaskChangeDelivery` (`extensions/index.ts:703`).
+injects it into `TaskChangeDelivery` (`extensions/index.ts:665`).
 `BeadsTaskAdapter` owns metadata parsing, bounded TaskCard projection, opaque
 versions, replay, CAS, and semantic outcomes
 (`src/model-tool-contract/beads-task-adapter.ts:184`,
@@ -151,8 +154,8 @@ serializes the validated model view separately
 
 `extensions/index.ts` is both the Pi composition root and a second application
 layer. Its process closure holds role, Team, Membership, delivery, tool, footer,
-and model caches (`extensions/index.ts:372`). It also contains Worker schemas
-and execution beside the leader journey (`extensions/index.ts:1166`).
+and model caches (`extensions/index.ts:355`). It also contains Worker schemas
+and execution beside the leader journey (`extensions/index.ts:1146`).
 `team-status.ts` and `team-footer.ts` are human projections, but they import Team
 and Task implementations directly (`src/utils/team-status.ts:3`,
 `src/utils/team-footer.ts:6`).
@@ -183,7 +186,7 @@ to private record changes (`src/public/observation.ts:5`).
 3. **Resolved for reconciliation.** Task delivery imports the Task-owned query
    contract and receives its Beads implementation at composition. It contains
    no static or dynamic Beads Task-adapter import
-   (`src/utils/task-delivery.ts:18`, `extensions/index.ts:703`). The production
+   (`src/utils/task-delivery.ts:18`, `extensions/index.ts:665`). The production
    static file graph remains acyclic. `beads-authority-adapter.ts` still imports
    Task delivery for mutation publication, so broader Task publication
    isolation remains future work.
@@ -204,11 +207,10 @@ to private record changes (`src/public/observation.ts:5`).
    observations (`src/model-tool-contract/durable-model-tool-port.ts:111`). It
    is a useful façade, not one subsystem port.
 
-6. `extensions/index.ts` has 27 direct production dependencies. It duplicates
-   lead binding discovery instead of only using Team authority
-   (`extensions/index.ts:239`), owns lifecycle application services, starts two
-   delivery engines, and wires trio projection. Pi hook order is therefore an
-   implicit integration contract.
+6. **Resolved for durable lead discovery.** `extensions/index.ts` now delegates
+   durable lead-Session discovery to Team authority. It still owns lifecycle
+   application services, starts two delivery engines, and wires trio projection.
+   Pi hook order is therefore an implicit integration contract.
 
 7. `models.ts` and `paths.ts` act as shared registries. `models.ts` mixes Team,
    runtime carrier, Task relation, coordination event, Alert, and delivery
@@ -227,7 +229,7 @@ to private record changes (`src/public/observation.ts:5`).
 
 9. Team lifecycle and Task authority need queries in both directions. Worker
    stop checks nonterminal Tasks while holding the Team topology lease
-   (`extensions/index.ts:1132`), while Task creation validates a logical Worker
+   (`extensions/index.ts:1104`), while Task creation validates a logical Worker
    (`src/model-tool-contract/durable-model-tool-port.ts:258`). Consumer-owned
    query ports must prevent this semantic relation from becoming a source cycle.
 
@@ -256,10 +258,11 @@ to private record changes (`src/public/observation.ts:5`).
   it does not prove the remaining Task publication or other subsystem seams.
 
 The upward Task-to-trio type risk and hidden dynamic reconciliation cycle are
-closed by the first seam. The main remaining structural risks are one façade and
-one in-memory fake that combine all authorities, concrete Task publication
-imports, hook-order coupling in the Pi composition root, and public Membership
-observation reading broad private records. These risks do not authorize
+closed by the first seam, and durable lead discovery now belongs to Team
+authority. The main remaining structural risks are one façade and one in-memory
+fake that combine all authorities, concrete Task publication imports, hook-order
+coupling in the Pi composition root, and public Membership observation reading
+broad private records. These risks do not authorize
 behavior changes.
 
 ## Preserved state, timing, and ordering facts
@@ -272,7 +275,7 @@ behavior changes.
   (`src/utils/worker-launch-bridge.ts:132`). Compensation deactivates only after
   exact carrier-stop proof (`src/utils/worker-launch-bridge.ts:372`).
 - Process startup order is runtime-generation claim, Membership Session bind,
-  then `session_bound` event (`extensions/index.ts:820`). A post-claim failure
+  then `session_bound` event (`extensions/index.ts:794`). A post-claim failure
   deliberately leaves a runtime fence until PID exit.
 - Normal Task mutation commits Beads first, appends event evidence, then enqueues
   delivery. Event and delivery failures produce degraded warnings and do not
@@ -290,7 +293,7 @@ behavior changes.
 - `team_sync` waits up to 120 seconds
   (`src/model-tool-contract/durable-model-tool-port.ts:51`). It must publish one
   complete observation or none and advances hidden state only after the exact
-  result persists on the active branch (`extensions/index.ts:471`).
+  result persists on the active branch (`extensions/index.ts:463`).
 - Runtime constants of 90 seconds for heartbeat staleness, 60 seconds for
   startup stall, and five minutes for stale files are diagnostic policy, not
   work state (`src/utils/runtime.ts:9`). Membership observation has a separate
@@ -368,10 +371,11 @@ at the composition root.
 6. Make Coordination own `team_sync` composition, waits, hydration, projection
    hashes, and hidden acknowledgement state. It reads authority query ports;
    authorities no longer import `team-events.ts` concretely.
-7. Extract Team Session lifecycle and Worker carrier services from
-   `extensions/index.ts`. Keep exact hook order in one small Pi adapter. Team
-   authority retains resource resolution, startup, recovery, stop, shutdown,
-   and compatibility policy.
+7. **Partly implemented.** Durable lead-Session discovery moved verbatim into
+   Team authority. Extract the remaining Team Session lifecycle and Worker
+   carrier services from `extensions/index.ts`. Keep exact hook order in one
+   small Pi adapter. Team authority retains resource resolution, startup,
+   recovery, stop, shutdown, and compatibility policy.
 8. Keep result and TUI projection, catalog schemas, and Pi registration above
    the semantic application ports. Make status and footer consume query DTOs.
 9. Give public Membership observation a narrow read-only Team/runtime decoder.

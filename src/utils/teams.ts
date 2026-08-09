@@ -4,6 +4,7 @@ import path from "node:path";
 import { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget, LogicalWorker } from "./models";
 import { assertTerminalTargetShape } from "./terminal-target";
 import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
+import * as paths from "./paths";
 import { withLock } from "./lock";
 import { normalizeTeamPaneLayout, type TeamPaneLayout } from "./team-pane-layout";
 
@@ -469,6 +470,38 @@ export function writeConfigAtomic(p: string, config: TeamConfig): void {
     }
     throw error;
   }
+}
+
+/** Find the team this durable Pi Session leads. */
+export function findLeadTeamForSession(piSessionFile?: string): string | null {
+  const teamsDir = paths.TEAMS_DIR;
+  if (!fs.existsSync(teamsDir)) return null;
+
+  const sessionMatches: string[] = [];
+  for (const teamDir of fs.readdirSync(teamsDir)) {
+    try {
+      const recordPath = paths.configPath(teamDir);
+      if (!fs.existsSync(recordPath)) continue;
+      const config = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as {
+        members?: Member[];
+      };
+      const lead = [...(config.members || [])].reverse().find(
+        (member) => member.name === "team-lead" && member.isActive !== false,
+      );
+      if (piSessionFile && lead?.sessionFile === piSessionFile) sessionMatches.push(teamDir);
+    } catch {
+      // Ignore corrupted session files.
+    }
+  }
+
+  if (sessionMatches.length > 1) {
+    throw new Error(
+      `Ambiguous lead Session binding: this durable Pi Session is registered to multiple teams (${sessionMatches.join(", ")}). ` +
+      "Refusing to choose by filesystem order. Set PI_TEAM_NAME to the intended current team before resuming, or repair the stale lead-session records.",
+    );
+  }
+  if (sessionMatches.length === 1) return sessionMatches[0];
+  return null;
 }
 
 /**

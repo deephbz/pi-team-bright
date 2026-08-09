@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { addMember, configureBeadsTaskBackend, createTeam, deactivateMembership } from "./teams";
+import { addMember, configureBeadsTaskBackend, createTeam, deactivateMembership, findLeadTeamForSession } from "./teams";
 import * as paths from "./paths";
 
 const testDir = path.join(os.tmpdir(), `pi-teams-authority-${process.pid}`);
@@ -22,6 +22,78 @@ function marker(state: "prepared" | "active") {
     cutoverAt: new Date(0).toISOString(),
   };
 }
+
+function writeLeadDiscoveryConfig(name: string, members: unknown[]): void {
+  const file = paths.configPath(name);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ members }));
+}
+
+describe("lead Team discovery", () => {
+  beforeEach(() => {
+    fs.rmSync(paths.TEAMS_DIR, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(paths.TEAMS_DIR, { recursive: true, force: true });
+  });
+
+  it("returns no match when the teams directory is absent", () => {
+    expect(findLeadTeamForSession("/tmp/lead.jsonl")).toBeNull();
+  });
+
+  it("returns no match for an absent or different exact Session", () => {
+    writeLeadDiscoveryConfig("other", [{ name: "team-lead", isActive: true, sessionFile: "/tmp/other.jsonl" }]);
+
+    expect(findLeadTeamForSession()).toBeNull();
+    expect(findLeadTeamForSession("/tmp/missing.jsonl")).toBeNull();
+  });
+
+  it("returns one active exact lead match", () => {
+    writeLeadDiscoveryConfig("matched", [{ name: "team-lead", isActive: true, sessionFile: "/tmp/lead.jsonl" }]);
+
+    expect(findLeadTeamForSession("/tmp/lead.jsonl")).toBe("matched");
+  });
+
+  it("ignores a malformed unrelated config while finding an exact match", () => {
+    const malformed = paths.configPath("broken");
+    fs.mkdirSync(path.dirname(malformed), { recursive: true });
+    fs.writeFileSync(malformed, "not-json");
+    writeLeadDiscoveryConfig("matched", [{ name: "team-lead", sessionFile: "/tmp/lead.jsonl" }]);
+
+    expect(findLeadTeamForSession("/tmp/lead.jsonl")).toBe("matched");
+  });
+
+  it("selects the newest active lead record within a Team", () => {
+    writeLeadDiscoveryConfig("history", [
+      { name: "team-lead", isActive: true, sessionFile: "/tmp/old.jsonl" },
+      { name: "team-lead", isActive: true, sessionFile: "/tmp/current.jsonl" },
+      { name: "team-lead", isActive: false, sessionFile: "/tmp/deactivated.jsonl" },
+    ]);
+
+    expect(findLeadTeamForSession("/tmp/current.jsonl")).toBe("history");
+    expect(findLeadTeamForSession("/tmp/old.jsonl")).toBeNull();
+    expect(findLeadTeamForSession("/tmp/deactivated.jsonl")).toBeNull();
+  });
+
+  it("preserves filesystem order in the exact multiple-Team ambiguity error", () => {
+    writeLeadDiscoveryConfig("team-z", [{ name: "team-lead", sessionFile: "/tmp/lead.jsonl" }]);
+    writeLeadDiscoveryConfig("team-a", [{ name: "team-lead", sessionFile: "/tmp/lead.jsonl" }]);
+    vi.spyOn(fs, "readdirSync").mockReturnValue(["team-z", "team-a"] as any);
+
+    let failure: Error | undefined;
+    try {
+      findLeadTeamForSession("/tmp/lead.jsonl");
+    } catch (error) {
+      failure = error as Error;
+    }
+    expect(failure).toMatchObject({
+      name: "Error",
+      message: "Ambiguous lead Session binding: this durable Pi Session is registered to multiple teams (team-z, team-a). Refusing to choose by filesystem order. Set PI_TEAM_NAME to the intended current team before resuming, or repair the stale lead-session records.",
+    });
+  });
+});
 
 describe("TeamConfig authority recovery", () => {
   beforeEach(() => {

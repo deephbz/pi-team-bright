@@ -214,7 +214,7 @@
         "mechanism": "injected_task_reconciliation_query",
         "evidence": [
           "extensions/index.ts:40",
-          "extensions/index.ts:703"
+          "extensions/index.ts:665"
         ]
       },
       {
@@ -272,8 +272,8 @@
         "to": "team_core",
         "mechanism": "direct_lifecycle_orchestration",
         "evidence": [
-          "extensions/index.ts:803",
-          "extensions/index.ts:1100"
+          "extensions/index.ts:748",
+          "extensions/index.ts:1095"
         ]
       },
       {
@@ -281,7 +281,7 @@
         "to": "task_contract_and_authority_adapters",
         "mechanism": "assigned_work_guard_and_application_calls",
         "evidence": [
-          "extensions/index.ts:1132"
+          "extensions/index.ts:1104"
         ]
       },
       {
@@ -383,7 +383,7 @@
         "src/task-authority/contracts.ts"
       ],
       "beadsAdapter": "src/task-authority/beads-reconciliation-query.ts",
-      "compositionRoot": "extensions/index.ts:703",
+      "compositionRoot": "extensions/index.ts:665",
       "compatibilityReExports": [
         "src/model-tool-contract/in-memory-team-port.ts"
       ],
@@ -414,6 +414,30 @@
         "coordination_observation",
         "trio_facing_interface_and_projections",
         "additive_membership_observation"
+      ]
+    },
+    "teamLeadDiscoveryOwnership": {
+      "state": "implemented_equivalence_verified",
+      "owner": "src/utils/teams.ts",
+      "compositionCallSites": [
+        "extensions/index.ts:360",
+        "extensions/index.ts:748"
+      ],
+      "preserved": [
+        "optional_session_behavior",
+        "directory_and_malformed_record_tolerance",
+        "reverse_member_selection",
+        "active_member_rule",
+        "filesystem_match_order",
+        "ambiguity_error",
+        "environment_precedence",
+        "startup_and_resume_timing"
+      ],
+      "remainingScope": [
+        "session_lifecycle_orchestration",
+        "worker_carrier_services",
+        "stop_and_shutdown_orchestration",
+        "pi_hook_order_adapter"
       ]
     }
   },

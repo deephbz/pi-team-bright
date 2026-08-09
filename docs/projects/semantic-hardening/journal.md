@@ -380,3 +380,23 @@ changes; append a correction.
   both implementations retained the original details object.
 - Architecture impact: **none**. This is a local accidental-complexity removal.
   It changes no public schema, export, dependency, persisted record, or behavior.
+
+## 2026-08-09 — Team authority owns durable lead-Session discovery
+
+- The existing `findLeadTeamForSession` body moved verbatim from
+  `extensions/index.ts` to `src/utils/teams.ts`. The two composition-root call
+  sites still run at their original initialization and `session_start` points.
+- Six focused Team-helper cases cover a missing Team directory, absent or
+  different Session input, one active exact match, malformed unrelated records,
+  newest active lead selection, and multiple-Team ambiguity with exact order and
+  error text.
+- Existing binding and Session lifecycle tests preserve explicit `PI_TEAM_NAME`
+  precedence, unbound and ambiguous refusal, initial startup, same-Session
+  resume, and lead resume timing. The three focused files passed 36 tests and
+  typecheck.
+- Independent verification compared the old and new helper bodies through a
+  TypeScript AST and found them byte-identical. A real extension snapshot kept
+  the same ten leader tools, lead and Worker prompts, and Skill.
+- Architecture impact: **changed** for internal Team ownership. HyperCarrier's
+  canonical diagram stays unchanged because Pi Team Bright internals remain
+  opaque. No public export, schema, record, ordering, or behavior changed.
