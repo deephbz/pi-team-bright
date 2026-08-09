@@ -2,8 +2,8 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: `0.17.0-rc.11` source prepared atop implementation `15e707b`; at
-preparation it was untagged, unpublished, and not aggregate-verified
+Status: exact `0.17.0-rc.11` source `638d5934` passed its reserved aggregate and
+local release gates; it remains untagged and unpublished
 Architecture impact: changed for internal Task and Team dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -27,11 +27,16 @@ exports, persisted records, filenames, retry, timing, and default behavior are
 unchanged.
 
 The superseded rc.8 publication patch stash was removed after the reviewed rc.10
-implementation entered `15e707b`; no Project stash remains. The committed
-implementation has focused, type, QA, package, public, persistence, lane, graph,
-and diff evidence. Its result bundle and rc.11 release metadata were prepared as
-one source candidate. At preparation, no rc.11 tag, push, publication, GitHub
-release, full aggregate result, or final verification claim existed.
+implementation entered `15e707b`; no Project stash remains. Exact source commit
+`638d5934bd52c7f4a3fe18525e5d72569a227211` adds the result bundle and rc.11
+release metadata. Its one reserved Node 22.22.1 aggregate passed 88 files and 695
+tests in 253.59 seconds. Lane, package, QA, public, persistence, JSON, link,
+privacy-range, exact-tarball, observation, Beads, and Pi-load gates passed.
+
+The source remains untagged and unpublished. No push, npm publication, npm
+`next` change, registry or provenance claim, GitHub release, or published-release
+receipt exists. Full Team runtime, terminal rendering, and model interpretation
+remain outside the source-verification claim.
 
 ## Sources of truth
 
@@ -44,6 +49,9 @@ release, full aggregate result, or final verification claim existed.
 - [`behavior-inventory.json`](behavior-inventory.json) — behavior IDs,
   classifications, anchors, and proof limits.
 - [`journal.md`](journal.md) — append-only chronology and corrections.
+- The rc.11 [source verification
+  receipt](../../journal/2026-08-09-v0.17.0-rc.11-source-verification-receipt.md)
+  — exact aggregate, privacy, one-pack, artifact, canary, and publication limits.
 - The original
   [`handoff`](../../journal/2026-08-09-semantic-hardening-and-subsystem-audit-handoff.md)
   and [baseline receipt](../../journal/artifacts/2026-08-09-semantic-hardening-baseline.json)
@@ -152,11 +160,12 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 ## Next actions
 
-1. After the candidate commit, run the one reserved full aggregate lane once on
-   that exact commit.
-2. If it passes, recheck package, public surface, persisted-record compatibility,
-   privacy, provenance, JSON, links, graph, and diff evidence.
-3. Record the release-candidate outcome before any tag, push, npm publication,
-   npm `next` change, or GitHub release decision.
+1. Commit this verification receipt and maintained-context update without
+   changing the verified source identity.
+2. Keep tag, push, npm publication, npm `next`, provenance, and GitHub release as
+   separate authorized operations with external verification signals.
+3. If publication is authorized, verify the tag and registry artifact against
+   source `638d5934` and the recorded one-pack facts before writing a published-
+   release receipt.
 4. Continue remaining boundary or performance work only as separately scoped
    Projects with explicit behavior and reversal evidence.

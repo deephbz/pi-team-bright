@@ -645,3 +645,24 @@ changes; append a correction.
   `docs/journal/2026-08-09-v0.17.0-rc.11-release-plan.md` 0.
 - All 95 occurrences resolved. The correction adds no Markdown link occurrence,
   so the recomputed total remains non-self-referential.
+
+## 2026-08-09 — rc.11 exact source verification passed
+
+- Exact clean source commit `638d5934bd52c7f4a3fe18525e5d72569a227211`
+  passed its one reserved Node 22.22.1 aggregate: 88 files and 695 tests in
+  253.59 seconds. It was not rerun.
+- Lane closure reported 67 fast and 21 exhaustive files. Package and generated-
+  output checks, agent and tool-result QA, public and persistence comparisons,
+  all 48 tracked JSON files, all 95 local links, and diff checks passed.
+- The configured-baseline-to-source privacy range passed. Full-history output
+  remains the known grandfathered pre-baseline commit-metadata result and is
+  byte-identical to the configured-baseline scan; it does not certify that older
+  history for publication.
+- One clean detached checkout packed once. The exact 93-file tarball installed in
+  a temporary project and passed CommonJS and TypeScript observation, owned
+  Beads 1.1.0, and bounded no-model Pi 0.84.1 main-extension canaries. Exact
+  commands, sizes, digests, integrity, and limits are in the [source verification
+  receipt](../../journal/2026-08-09-v0.17.0-rc.11-source-verification-receipt.md).
+- The source remains untagged and unpublished. No commit, tag, push, npm
+  publication, npm `next` change, registry or provenance claim, GitHub release,
+  or full Team runtime/model-interpretation claim was produced by verification.

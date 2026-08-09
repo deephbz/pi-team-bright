@@ -152,13 +152,20 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `0.17.0-rc.11` source was prepared atop implementation `15e707b`. It carries
-  internal Task and Team dependency hardening with no public behavior change. At
-  preparation it was untagged, unpublished, and not verified by the reserved
-  aggregate. After the candidate commit, the next gate is the one full aggregate
-  on that exact commit. The dated
-  [release plan](../journal/2026-08-09-v0.17.0-rc.11-release-plan.md) owns this
-  source-preparation boundary and gate order.
+- Exact `0.17.0-rc.11` source commit
+  `638d5934bd52c7f4a3fe18525e5d72569a227211` passed its one reserved Node
+  22.22.1 aggregate: 88 files and 695 tests in 253.59 seconds. Lane closure,
+  package and generated-output checks, agent and tool-result QA, public and
+  persistence comparisons, 48 JSON files, 95 local links, the exact privacy
+  range, and installed-tarball canaries passed. The one packed artifact contains
+  93 files; its exact sizes, digests, integrity, procedure, and proof limits are
+  in the [source verification
+  receipt](../journal/2026-08-09-v0.17.0-rc.11-source-verification-receipt.md).
+  The source carries internal Task and Team dependency hardening with no public
+  behavior change. It remains untagged and unpublished: no push, npm publication,
+  npm `next` change, provenance claim, or GitHub release occurred. The dated
+  [release plan](../journal/2026-08-09-v0.17.0-rc.11-release-plan.md) keeps
+  publication operations separate.
 - `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release
@@ -252,9 +259,9 @@ artifacts; dated evidence remains in the journal. They do not replace this repos
 context or the executable contract sources.
 
 - [Semantic hardening](../projects/semantic-hardening/context.md) is in
-  consolidation and hardening. Rc.11 source was prepared atop the committed
-  implementation at `15e707b`. Task reconciliation and Task mutation publication
-  use explicit dependency seams.
+  consolidation and hardening. Exact rc.11 source `638d5934` passed the reserved
+  aggregate and local release gates but remains untagged and unpublished. Task
+  reconciliation and Task mutation publication use explicit dependency seams.
   `TASK-PUBLICATION-INVERSION` is implemented and independently verified.
   ALERT-004 remains unclassified, and Team, Alert, Coordination, Trio, and
   additive Membership-observation boundary work remains
