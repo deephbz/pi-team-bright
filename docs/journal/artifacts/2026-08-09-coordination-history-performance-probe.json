@@ -1,0 +1,80 @@
+{
+  "schema": "pi-team-bright/coordination-history-performance-probe/1",
+  "date": "2026-08-09",
+  "sourceRevision": "e55a9a5c75021be929fe327f1ce5eed6d691a463",
+  "environment": {
+    "node": "25.6.0",
+    "beads": "1.1.0"
+  },
+  "authorityState": {
+    "initialTaskCount": 21,
+    "laterTaskCount": 22,
+    "nonterminalCandidateCount": 2,
+    "traceRecords": 23
+  },
+  "measurements": {
+    "focusedOneId": {
+      "samples": 12,
+      "successes": 12,
+      "timeouts": 0,
+      "p50Ms": 425.2,
+      "p95Ms": 435.9,
+      "maxMs": 435.9
+    },
+    "fullSnapshot21": {
+      "samples": 5,
+      "successes": 5,
+      "timeouts": 0,
+      "p50Ms": 6249.1,
+      "p95Ms": 6343.8,
+      "maxMs": 6343.8
+    },
+    "batchShowScaling": {
+      "1": { "samples": 5, "successes": 5, "timeouts": 0, "p50Ms": 400.8, "p95Ms": 409.6, "maxMs": 409.6 },
+      "5": { "samples": 5, "successes": 4, "timeouts": 1, "p50Ms": 1561.9, "p95Ms": 2348.8, "maxMs": 2348.8 },
+      "10": { "samples": 5, "successes": 5, "timeouts": 0, "p50Ms": 2970.1, "p95Ms": 6211.7, "maxMs": 6211.7 },
+      "22": { "samples": 5, "successes": 5, "timeouts": 0, "p50Ms": 6188.1, "p95Ms": 6871.8, "maxMs": 6871.8 }
+    },
+    "oneIdWithDependents": {
+      "samples": 20,
+      "successes": 20,
+      "timeouts": 0,
+      "p50Ms": 417.3,
+      "p95Ms": 3852.2,
+      "maxMs": 7499.8
+    },
+    "oneIdWithoutDependents": {
+      "samples": 20,
+      "successes": 20,
+      "timeouts": 0,
+      "p50Ms": 387,
+      "p95Ms": 408.2,
+      "maxMs": 418.6
+    },
+    "nonterminalCandidateSnapshot": {
+      "samples": 10,
+      "successes": 10,
+      "timeouts": 0,
+      "p50Ms": 983,
+      "p95Ms": 1273.5,
+      "maxMs": 1273.5
+    }
+  },
+  "sourceFacts": [
+    "Focused Task reads issue one multi-ID native show.",
+    "A Team snapshot issues one Team-scoped list and one multi-ID show.",
+    "A caught-up updates call can issue that pair before and after its wait.",
+    "Each native Beads subprocess has a 10000 ms timeout.",
+    "Opaque Task versions include reverse-dependent relation identity, so removing dependent hydration can weaken stale-write refusal."
+  ],
+  "assessment": {
+    "supportedCause": "Reverse-dependent hydration plus concurrent backend state explains the observed tail; commit-history size alone was not isolated.",
+    "rejectedChanges": [
+      "Do not remove dependent hydration because it changes opaque version meaning.",
+      "Do not raise the timeout without a separate timing-contract decision.",
+      "Do not filter closed Tasks from snapshots in the current no-behavior-change scope because the current public result includes them.",
+      "Do not change updates until closed-change visibility, projection revision, external-writer detection, and complete-or-no-observation remain proved."
+    ],
+    "nextSafeTest": "Prove a cheaper authority query yields the identical TaskVersionRef under reverse-edge replacement before changing focused reads."
+  }
+}

@@ -37,3 +37,11 @@ private journal evidence to the artifact.
 ## Test lanes
 
 `npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.
+
+## Task hydration benchmark
+
+Run `npm run benchmark:task-hydration -- <team> [samples]` against an isolated or
+review-approved Team authority. The command uses the production Team-scoped list
+and exact batch hydration path. Its JSON result contains aggregate counts,
+timings, and error classes only; it omits Team names, Task data, paths, and error
+details. Keep benchmark evidence separate from semantic timeout contracts.

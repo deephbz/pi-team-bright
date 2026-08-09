@@ -44,6 +44,7 @@
     "qa:agent-surface": "vitest run --config vitest.full.config.ts scripts/snapshot-agent-surface.test.ts",
     "docs:model-tools": "ts-node --transpile-only src/cli/render-model-tool-contract.ts",
     "probe:model-tools": "ts-node --transpile-only scripts/probe-model-tool-vertical-slice.ts",
+    "benchmark:task-hydration": "ts-node --transpile-only scripts/task-hydration-benchmark.ts",
     "test:lanes": "node scripts/verify-test-lanes.cjs"
   },
   "main": "extensions/index.ts",

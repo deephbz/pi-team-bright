@@ -418,3 +418,45 @@ changes; append a correction.
   real 20-process stale-takeover case remains byte-identical.
 - Architecture impact: **none**. Only test evidence changed; production and
   public behavior remain byte-identical.
+
+## 2026-08-09 — coordination hydration measurement and Team rotation
+
+- Payload-free measurement found focused one-ID Task reads at 425.2 ms p50 and a
+  full 21-Task snapshot at 6,249.1 ms p50. Native batch show scaled to 6,188.1 ms
+  p50 for 22 IDs, and one five-ID sample reached the 10,000 ms timeout.
+- One-ID dependent hydration had a 417.3 ms p50 and 3,852.2 ms p95; the same read
+  without dependents had a 387.0 ms p50 and 408.2 ms p95. Reverse-dependent
+  identities are part of opaque Task versions, so removing that data would
+  weaken stale-write refusal and is rejected.
+- A nonterminal-only snapshot candidate measured 983.0 ms p50, but the current
+  public snapshot returns closed Tasks too. Filtering them would change current
+  visible behavior, so it is outside this Project's no-behavior-change scope.
+- The machine receipt is
+  [`../../journal/artifacts/2026-08-09-coordination-history-performance-probe.json`](../../journal/artifacts/2026-08-09-coordination-history-performance-probe.json).
+  It separates measurements, source facts, supported assessment, rejected
+  changes, and the next safe test.
+- All Tasks in `semantic-hardening-direct` were terminal. The leader stopped its
+  four Workers, shut the Team down cleanly, and created
+  `semantic-hardening-opt` with the same direct leader and four stable Worker
+  roles. This resets coordination work history without creating a second leader
+  or changing Project source.
+
+## 2026-08-09 — reusable payload-free Task hydration benchmark
+
+- Added `scripts/task-hydration-benchmark.ts` and the package command
+  `benchmark:task-hydration`. The benchmark accepts explicit Team and sample
+  arguments and calls the production Team-scoped list plus exact batch hydration
+  path.
+- The machine result schema `pi-team-bright/task-hydration-benchmark/1` emits
+  aggregate workload, success/error/timeout counts, skipped hydration, latency
+  summaries, and the 10,000 ms production timeout. It omits Team names, Task
+  identities, Task text, paths, and error details.
+- Four deterministic tests cover arguments, summary arithmetic, privacy shape,
+  and error accounting. A real one-sample Team canary produced one native list
+  and one native show through semantic trace, with both successful.
+- Independent verification passed the benchmark tests, 15 production Beads
+  adapter tests, typecheck, package verification, lane validation at 77 files
+  (57 fast and 20 exhaustive), privacy markers, error injection, and diff checks.
+- Required dependent hydration and opaque version meaning remain unchanged.
+  Architecture impact: **none**. This adds reproducible non-functional evidence,
+  not a production optimization or behavior change.

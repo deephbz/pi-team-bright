@@ -2,7 +2,7 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: Task-authority seam committed; three focused quality improvements independently verified
+Status: Task-authority seam committed; four focused quality and measurement improvements independently verified
 Architecture impact: changed for the internal Task dependency boundary; HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team Bright internals opaque
 
 ## Outcome
@@ -32,8 +32,10 @@ Baseline declaration receipt:
   ownership; public contracts, persisted records, package exports, and behavior
   remain unchanged.
 - The owner ended the redundant coordinator topology. The exact calling API
-  Session now leads Team `semantic-hardening-direct`; only the watchdog remains
-  a separate Pi agent.
+  Session leads directly; only the watchdog remains a separate Pi agent. After
+  all prior Tasks closed, the leader cleanly replaced Team
+  `semantic-hardening-direct` with `semantic-hardening-opt` to remove the
+  measured closed-Task hydration cost from the coordination work loop.
 - The registered-extension causal path covers public Task assignment, exact
   Session presentation, successful-turn acknowledgement, leader observation,
   cancellation, replay, restart, stale Membership, and delivery recovery.
@@ -93,8 +95,16 @@ Baseline declaration receipt:
   retry delays. They prove mutual exclusion and the 5–15 ms retry policy without
   random critical delays or a wall-clock pass threshold; mutation probes detect
   both lock bypass and restoration of the legacy 100 ms cadence.
-- Current blocker: none. Integrate the deterministic lock oracles, then select
-  the next bounded improvement from measured or reviewed evidence.
+- Team coordination measurements found full 21-Task snapshot hydration at
+  6,249.1 ms p50, while one-ID reads were 425.2 ms p50. Reverse-dependent
+  hydration is required for opaque version identity, so behavior-changing
+  shortcuts remain rejected.
+- `npm run benchmark:task-hydration -- <team> [samples]` now reproduces the
+  production list and exact batch-hydration path. Its stable JSON contains only
+  aggregate counts, timings, and error classes. Focused tests, a traced real
+  Team canary, package verification, and privacy checks pass.
+- Current blocker: validate the rebased characterization and optimization series
+  against public `0.17.0-rc.10` before resuming Task publication inversion.
 
 ## Constraints still in force
 
