@@ -76,8 +76,9 @@ describe("withLock race conditions", () => {
       for (let i = 0; i < iterations; i++) {
         await withLock(lockPath, async () => {
           const current = counter;
-          // Add a small delay to increase the chance of race conditions if locking fails
-          await new Promise(resolve => setTimeout(resolve, Math.random() * 10));
+          // Yield at the read/write boundary so a missing lock deterministically
+          // loses increments, without adding random timing to the oracle.
+          await Promise.resolve();
           counter = current + 1;
         });
       }
@@ -93,22 +94,60 @@ describe("withLock race conditions", () => {
     expect(counter).toBe(iterations * concurrentCount);
   });
 
-  it("keeps 20-way local contention fast while preserving mutual exclusion", async () => {
+  it("uses short retries under 20-way local contention while preserving mutual exclusion", async () => {
+    type Release = () => void;
+    const retryDelays: number[] = [];
+    const realSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      callback: (...args: any[]) => void,
+      delay?: number,
+      ...args: any[]
+    ) => {
+      if (typeof delay === "number") retryDelays.push(delay);
+      return realSetTimeout(callback, delay, ...args);
+    }) as typeof globalThis.setTimeout);
+
+    const pendingEntries: Release[] = [];
+    const entryWaiters: Array<(release: Release) => void> = [];
+    const waitForEntry = (): Promise<Release> => new Promise((resolve) => {
+      const pending = pendingEntries.shift();
+      if (pending) resolve(pending);
+      else entryWaiters.push(resolve);
+    });
+
     let active = 0;
     let maxActive = 0;
-    const startedAt = Date.now();
+    const criticalSection = async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      let release!: Release;
+      const mayExit = new Promise<void>((resolve) => { release = resolve; });
+      const waiter = entryWaiters.shift();
+      if (waiter) waiter(release);
+      else pendingEntries.push(release);
+      await mayExit;
+      active -= 1;
+    };
 
-    await Promise.all(Array.from({ length: 20 }, (_, index) =>
-      withLock(lockPath, async () => {
-        active += 1;
-        maxActive = Math.max(maxActive, active);
-        await new Promise((resolve) => setTimeout(resolve, 5 + (index % 3)));
-        active -= 1;
-      }),
-    ));
+    // Hold the first owner until all contenders have attempted acquisition.
+    // Each contender must schedule one retry while the lock is unavailable.
+    const firstOwner = withLock(lockPath, criticalSection);
+    const releaseFirstOwner = await waitForEntry();
+    const contenders = Array.from({ length: 19 }, () => withLock(lockPath, criticalSection));
+    const initialRetryDelays = [...retryDelays];
+
+    releaseFirstOwner();
+    for (let index = 0; index < contenders.length; index++) {
+      const release = await waitForEntry();
+      release();
+    }
+    await Promise.all([firstOwner, ...contenders]);
 
     expect(maxActive).toBe(1);
-    expect(Date.now() - startedAt).toBeLessThan(1_500);
+    expect(initialRetryDelays).toHaveLength(19);
+    expect(retryDelays.length).toBeGreaterThanOrEqual(19);
+    expect(retryDelays.every((delay) => delay >= 5 && delay <= 15)).toBe(true);
+    expect(retryDelays).not.toContain(100);
   });
 
   it("allows exactly one stale-lock takeover at a time across 20 processes", async () => {

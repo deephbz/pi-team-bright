@@ -400,3 +400,21 @@ changes; append a correction.
 - Architecture impact: **changed** for internal Team ownership. HyperCarrier's
   canonical diagram stays unchanged because Pi Team Bright internals remain
   opaque. No public export, schema, record, ordering, or behavior changed.
+
+## 2026-08-09 — deterministic local lock-contention oracles
+
+- The local counter-race test now yields at its read/write boundary instead of
+  using a random zero-to-ten millisecond delay. A missing lock now loses updates
+  through a deterministic interleaving.
+- The 20-way local contention test holds the first owner behind a release
+  barrier, captures all 19 initial contender retry schedules, proves only one
+  critical section is active, requires every retry in the 5–15 ms policy range,
+  and rejects the legacy 100 ms cadence. It no longer passes or fails from an
+  elapsed wall-clock threshold.
+- Seven implementation runs and three independent runs each passed both focused
+  lock files with 12 tests. Typecheck and diff checks passed.
+- Independent mutation probes bypassed lock acquisition and restored fixed
+  100 ms retries in temporary trees. Both mutations failed the new oracles. The
+  real 20-process stale-takeover case remains byte-identical.
+- Architecture impact: **none**. Only test evidence changed; production and
+  public behavior remain byte-identical.
