@@ -352,3 +352,31 @@ changes; append a correction.
 - This commit implements one narrow internal Task reconciliation boundary. It
   does not claim that Task publication, Team, Alert, Coordination, Trio, or the
   additive Membership-observation boundary is complete.
+
+## 2026-08-09 — Million Eyes quality review and first optimization
+
+- A seven-lens Million Eyes snapshot review ran from committed Task-boundary
+  revision `e55a9a5c75021be929fe327f1ce5eed6d691a463`. The accepted plan froze
+  193 selected source entries and 158 call-evidence files with no omitted UTF-8
+  source. All seven reviewer Tasks succeeded and used 1,392,053 tokens.
+- The raw reviewer records are
+  [`../../journal/artifacts/2026-08-09-million-eyes-code-quality-round-1-results.json`](../../journal/artifacts/2026-08-09-million-eyes-code-quality-round-1-results.json).
+  The adjacent
+  [`machine receipt`](../../journal/artifacts/2026-08-09-million-eyes-code-quality-round-1-receipt.json)
+  records the plan, run, source revision, artifact digest, scope, selection, and
+  rejected proposals.
+- Automatic citation checking resolved no citation because reviewers used free-
+  form source descriptions. The architecture-auditor therefore checked the five
+  ranked claims against frozen source. This manual check is review evidence, not
+  executable proof.
+- The first selected change removes two duplicate prevalidation calls from
+  `assembleToolResult`. `projectToolResult` remains the one path for canonical
+  version, semantic schema, model projection, and model-schema validation.
+- Three focused tests preserve valid content, raw details object identity,
+  invalid semantic-result error text, noncanonical-version `upgrade_required`
+  identity, and validation order. The focused file passed 11 tests and typecheck.
+- Independent verification also compared all 14 valid catalog example assemblies
+  against the committed baseline. Content and details stayed deeply equal, and
+  both implementations retained the original details object.
+- Architecture impact: **none**. This is a local accidental-complexity removal.
+  It changes no public schema, export, dependency, persisted record, or behavior.

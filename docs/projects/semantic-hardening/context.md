@@ -2,7 +2,7 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: first Task-authority dependency seam committed and independently verified; focused optimization series is next
+Status: Task-authority seam committed; focused optimization series active with the first local simplification independently verified
 Architecture impact: changed for the internal Task dependency boundary; HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team Bright internals opaque
 
 ## Outcome
@@ -65,8 +65,7 @@ Baseline declaration receipt:
 - `TASK-RECONCILIATION-INJECTION` is closed. The Alert publication-failure
   classification, restart, and later-presentation gate remains open.
 - Commits `ed7ae57` and `e275e03` contain characterization and test/docs
-  hardening. The phase-three Task-boundary refactor is committed as the next
-  branch commit.
+  hardening. Commit `e55a9a5` contains the first Task-authority dependency seam.
 - Phase-three implementation Task `semantic-hardening-direct-2el`, equivalence
   Task `semantic-hardening-direct-hkp`, docs Task
   `semantic-hardening-direct-c7g`, and verifier Task
@@ -79,7 +78,15 @@ Baseline declaration receipt:
 - Routine `team_sync` and some focused `task_read` calls intermittently timed
   out in Beads after Team history grew. Alerts and later sync calls still
   delivered records. Preserve this as a later non-functional optimization lead.
-- Current blocker: none. Select the first bounded optimization by measured risk.
+- Million Eyes review round one froze 193 selected source entries and 158 call-
+  evidence files across seven successful review lenses. Its raw results and
+  machine receipt are retained under `docs/journal/artifacts/`.
+- The first optimization removes two duplicate result-validation calls while
+  keeping `projectToolResult` as the one validation and projection path. Focused
+  tests, a 14-example baseline differential, typecheck, and independent review
+  preserve valid output, raw details, validation order, and exact errors.
+- Current blocker: none. Integrate the first optimization, then review the new
+  committed state before selecting the next candidate.
 
 ## Constraints still in force
 

@@ -1,0 +1,542 @@
+[
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "subsystem-boundaries",
+    "taskInputId": "task-input/v1/39dd8fa6e7dd535a17ca23b80f172866d3d55650be4b0fb656d1d610fe386029",
+    "disposition": "successful",
+    "payload": {
+      "summary": "Two bounded internal changes improve ownership without changing public behavior: invert Task publication collaborators, and move lead-session discovery into Team authority. Leave Alert publication and compatibility re-exports untouched.",
+      "items": [
+        {
+          "category": "boundary",
+          "claim": "Task authority still depends directly on Coordination and Task-delivery implementations for post-commit publication; a narrow injected publication collaborator would remove that upward concrete dependency while preserving the existing sequence.",
+          "citations": [
+            "production-code/src/model-tool-contract/beads-authority-adapter.ts: imports `appendTaskEvidenceEvent` from `../utils/team-events` and `enqueueTaskChangeForRecipient`/`recordTaskDeliveryRecovery` from `../utils/task-delivery`; `publishTaskMutation` calls them after the Beads mutation.",
+            "production-code/src/model-tool-contract/beads-authority-adapter.ts: `publishTaskMutation` appends event evidence first, then enqueues each recipient and records recovery warnings.",
+            "production-code/src/utils/task-delivery.ts: `TaskReconciliationQuery` is already injected for recovery, demonstrating the accepted composition direction.",
+            "subsystem-evidence/docs/projects/semantic-hardening/subsystem-boundary-audit.md: boundary assessment 2 and preserved-ordering facts identify the remaining concrete Task→Coordination/Team-delivery coupling and require Beads commit → event → delivery ordering."
+          ],
+          "risk": "Changing the collaborator boundary could reorder publication, alter degraded-warning handling, or accidentally make event/delivery failures roll back Task state.",
+          "smallestSafeChange": "Add a Task-owned internal publication interface containing only the existing event-append, recipient-enqueue, and recovery-record operations. Keep the current implementation as a composition-root adapter, inject it into `applySemanticTaskUpdate`/`createTask`/`mutateTaskLink`, and leave `publishTaskMutation` control flow, arguments, warning strings, and persisted records unchanged. Do not add an outbox or alter Alert behavior.",
+          "verification": "Run the existing Task publication, delivery, recovery, and canonical cutover suites; add an import-fence test proving the Task authority no longer imports `team-events.ts` or `task-delivery.ts`; assert the existing ordering and degraded-warning outcomes, then run typecheck and the focused real-Beads lane."
+        },
+        {
+          "category": "wayfinding",
+          "claim": "Lead-session discovery is implemented in the Pi composition root even though it is Team binding authority, while Team code already owns exact lead-session resolution; relocating the existing scan is a small ownership/wayfinding improvement.",
+          "citations": [
+            "production-code/extensions/index.ts: `findLeadTeamForSession` scans `paths.TEAMS_DIR`, parses each `config.json`, selects the active `team-lead` by `sessionFile`, and refuses ambiguous matches.",
+            "production-code/extensions/index.ts: startup uses `const detectedTeamName = envTeamName || findLeadTeamForSession();`, making the composition root responsible for Team identity discovery.",
+            "production-code/src/utils/teams.ts: `resolveCurrentLeadSessionBinding` already owns exact durable lead Session identity, strict scanning, and locked revalidation.",
+            "subsystem-evidence/docs/projects/semantic-hardening/subsystem-boundary-audit.md: current ownership fact for Team authority and boundary assessment 6 identify duplicated lead binding discovery in `extensions/index.ts`."
+          ],
+          "risk": "A supposedly mechanical move could change malformed-config tolerance, reverse-member selection, ambiguity errors, or startup fallback behavior.",
+          "smallestSafeChange": "Extract the current `findLeadTeamForSession` implementation verbatim into an internal helper in `src/utils/teams.ts` (including its optional-session and ambiguity semantics), then replace only the extension-local function with that import. Do not merge it with `resolveCurrentLeadSessionBinding` in this change; that would alter error and revalidation behavior.",
+          "verification": "Add focused Team-helper tests for no directory, no match, one active lead match, malformed team records, and multiple matches; compare startup results against the current characterization cases, then run typecheck and the session-start/resume tests."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "Two bounded internal changes improve ownership without changing public behavior: invert Task publication collaborators, and move lead-session discovery into Team authority. Leave Alert publication and compatibility re-exports untouched.",
+            "items": [
+              {
+                "category": "boundary",
+                "claim": "Task authority still depends directly on Coordination and Task-delivery implementations for post-commit publication; a narrow injected publication collaborator would remove that upward concrete dependency while preserving the existing sequence.",
+                "citations": [
+                  "production-code/src/model-tool-contract/beads-authority-adapter.ts: imports `appendTaskEvidenceEvent` from `../utils/team-events` and `enqueueTaskChangeForRecipient`/`recordTaskDeliveryRecovery` from `../utils/task-delivery`; `publishTaskMutation` calls them after the Beads mutation.",
+                  "production-code/src/model-tool-contract/beads-authority-adapter.ts: `publishTaskMutation` appends event evidence first, then enqueues each recipient and records recovery warnings.",
+                  "production-code/src/utils/task-delivery.ts: `TaskReconciliationQuery` is already injected for recovery, demonstrating the accepted composition direction.",
+                  "subsystem-evidence/docs/projects/semantic-hardening/subsystem-boundary-audit.md: boundary assessment 2 and preserved-ordering facts identify the remaining concrete Task→Coordination/Team-delivery coupling and require Beads commit → event → delivery ordering."
+                ],
+                "risk": "Changing the collaborator boundary could reorder publication, alter degraded-warning handling, or accidentally make event/delivery failures roll back Task state.",
+                "smallestSafeChange": "Add a Task-owned internal publication interface containing only the existing event-append, recipient-enqueue, and recovery-record operations. Keep the current implementation as a composition-root adapter, inject it into `applySemanticTaskUpdate`/`createTask`/`mutateTaskLink`, and leave `publishTaskMutation` control flow, arguments, warning strings, and persisted records unchanged. Do not add an outbox or alter Alert behavior.",
+                "verification": "Run the existing Task publication, delivery, recovery, and canonical cutover suites; add an import-fence test proving the Task authority no longer imports `team-events.ts` or `task-delivery.ts`; assert the existing ordering and degraded-warning outcomes, then run typecheck and the focused real-Beads lane."
+              },
+              {
+                "category": "wayfinding",
+                "claim": "Lead-session discovery is implemented in the Pi composition root even though it is Team binding authority, while Team code already owns exact lead-session resolution; relocating the existing scan is a small ownership/wayfinding improvement.",
+                "citations": [
+                  "production-code/extensions/index.ts: `findLeadTeamForSession` scans `paths.TEAMS_DIR`, parses each `config.json`, selects the active `team-lead` by `sessionFile`, and refuses ambiguous matches.",
+                  "production-code/extensions/index.ts: startup uses `const detectedTeamName = envTeamName || findLeadTeamForSession();`, making the composition root responsible for Team identity discovery.",
+                  "production-code/src/utils/teams.ts: `resolveCurrentLeadSessionBinding` already owns exact durable lead Session identity, strict scanning, and locked revalidation.",
+                  "subsystem-evidence/docs/projects/semantic-hardening/subsystem-boundary-audit.md: current ownership fact for Team authority and boundary assessment 6 identify duplicated lead binding discovery in `extensions/index.ts`."
+                ],
+                "risk": "A supposedly mechanical move could change malformed-config tolerance, reverse-member selection, ambiguity errors, or startup fallback behavior.",
+                "smallestSafeChange": "Extract the current `findLeadTeamForSession` implementation verbatim into an internal helper in `src/utils/teams.ts` (including its optional-session and ambiguity semantics), then replace only the extension-local function with that import. Do not merge it with `resolveCurrentLeadSessionBinding` in this change; that would alter error and revalidation behavior.",
+                "verification": "Add focused Team-helper tests for no directory, no match, one active lead match, malformed team records, and multiple matches; compare startup results against the current characterization cases, then run typecheck and the session-start/resume tests."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 219269,
+          "output": 1884,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 221153,
+          "cost": {
+            "input": 0.043853800000000005,
+            "output": 0.0022608,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.046114600000000006
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "duplicated-orchestration",
+    "taskInputId": "task-input/v1/d6edba695f2124b20231d04f3a0b4364059199c7cb5be7cf940a0b09c08d5b83",
+    "disposition": "successful",
+    "payload": {
+      "summary": "One high-confidence consolidation: the two recipient delivery classes duplicate the same lifecycle/state-machine mechanics, while their authority-specific behavior should remain separate.",
+      "items": [
+        {
+          "category": "duplication",
+          "claim": "Direct-message and Task-change delivery each independently implement the same start/stop, attempted/acknowledged/staged tracking, scan coalescing, filesystem-watch/poll scheduling, context observation, and successful-turn acknowledgement lifecycle. The payload and authority hooks differ, so consolidate only the mechanics—not delivery policy.",
+          "citations": [
+            "production-code/src/utils/message-delivery.ts: DirectMessageDelivery.start/stop/scan/observeContext/commitPresentedAfterSuccessfulTurn",
+            "production-code/src/utils/task-delivery.ts: TaskChangeDelivery.start/stop/scan/observeContext/commitPresentedAfterSuccessfulTurn"
+          ],
+          "risk": "A broad base class could accidentally merge distinct semantics: direct messages validate exact recipient/session bindings, while Task delivery performs reconciliation, generation checks, tombstones, and Membership-scoped writes. Changing either ordering or acknowledgement timing could duplicate or lose delivery.",
+          "smallestSafeChange": "Extract a private, non-exported delivery-attempt helper containing only identical bookkeeping and scheduling primitives (stopped state, attempted/acknowledged/staged sets, scan coalescing, watcher/timer teardown, and successful-turn staging). Keep each class's start-time reconciliation, binding checks, payload construction, persistence, and ack side effects as callbacks in the existing classes. If the helper is deleted, both classes still retain their current authority-specific orchestration.",
+          "verification": "Run focused parity tests for both classes: start/stop idempotence; watcher and timer cleanup; concurrent scan coalescing; context observation stages exactly once; error/aborted turns do not acknowledge; successful turns acknowledge exactly the presented records. Additionally verify DirectMessageDelivery still rejects stale recipient generations, and TaskChangeDelivery still runs reconciliation, preserves tombstones, and uses withCurrentSessionBinding before ack persistence. Compare emitted custom message details and persisted records before/after."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "One high-confidence consolidation: the two recipient delivery classes duplicate the same lifecycle/state-machine mechanics, while their authority-specific behavior should remain separate.",
+            "items": [
+              {
+                "category": "duplication",
+                "claim": "Direct-message and Task-change delivery each independently implement the same start/stop, attempted/acknowledged/staged tracking, scan coalescing, filesystem-watch/poll scheduling, context observation, and successful-turn acknowledgement lifecycle. The payload and authority hooks differ, so consolidate only the mechanics—not delivery policy.",
+                "citations": [
+                  "production-code/src/utils/message-delivery.ts: DirectMessageDelivery.start/stop/scan/observeContext/commitPresentedAfterSuccessfulTurn",
+                  "production-code/src/utils/task-delivery.ts: TaskChangeDelivery.start/stop/scan/observeContext/commitPresentedAfterSuccessfulTurn"
+                ],
+                "risk": "A broad base class could accidentally merge distinct semantics: direct messages validate exact recipient/session bindings, while Task delivery performs reconciliation, generation checks, tombstones, and Membership-scoped writes. Changing either ordering or acknowledgement timing could duplicate or lose delivery.",
+                "smallestSafeChange": "Extract a private, non-exported delivery-attempt helper containing only identical bookkeeping and scheduling primitives (stopped state, attempted/acknowledged/staged sets, scan coalescing, watcher/timer teardown, and successful-turn staging). Keep each class's start-time reconciliation, binding checks, payload construction, persistence, and ack side effects as callbacks in the existing classes. If the helper is deleted, both classes still retain their current authority-specific orchestration.",
+                "verification": "Run focused parity tests for both classes: start/stop idempotence; watcher and timer cleanup; concurrent scan coalescing; context observation stages exactly once; error/aborted turns do not acknowledge; successful turns acknowledge exactly the presented records. Additionally verify DirectMessageDelivery still rejects stale recipient generations, and TaskChangeDelivery still runs reconciliation, preserves tombstones, and uses withCurrentSessionBinding before ack persistence. Compare emitted custom message details and persisted records before/after."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 204314,
+          "output": 1134,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 205448,
+          "cost": {
+            "input": 0.040862800000000005,
+            "output": 0.0013608,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.04222360000000001
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "local-accidental-complexity",
+    "taskInputId": "task-input/v1/23eea89f3e725307910b8aeb77cd19d6665be9266cb6f7ccd8a2010de98ee3ec",
+    "disposition": "successful",
+    "payload": {
+      "summary": "Two small, local simplifications are well-supported without changing the public tool contracts: remove duplicated result validation and consolidate duplicated Beads-store construction.",
+      "items": [
+        {
+          "category": "complexity",
+          "claim": "assembleToolResult performs the same canonical-version and semantic-schema validation twice: once itself, then again through projectToolResult.",
+          "citations": [
+            "production-code/src/model-tool-contract/result-projection.ts: assembleToolResult calls assertCanonicalResultVersions and Check(schemaFor(tool)), then calls projectToolResult, which repeats both checks"
+          ],
+          "risk": "The duplicate checks add needless work and obscure which function owns validation; changing the order or removing the wrong check could alter thrown errors.",
+          "smallestSafeChange": "Remove the two preliminary validation statements from assembleToolResult and let projectToolResult remain its single validation/projection path.",
+          "verification": "Exercise assembleToolResult with one valid result and invalid semantic results (including a non-canonical version); assert the same returned details/content and rejection behavior."
+        },
+        {
+          "category": "duplication",
+          "claim": "beads-authority-adapter duplicates BeadsTaskStore validation and construction in storeFor and storeForConfig; both ultimately create the same store with requireExpectedVersion=false.",
+          "citations": [
+            "production-code/src/model-tool-contract/beads-authority-adapter.ts: storeFor validates taskBackend/taskWorkspace/taskAuthorityId/taskAuthorityFingerprint and constructs BeadsTaskStore",
+            "production-code/src/model-tool-contract/beads-authority-adapter.ts: storeForConfig repeats the same four-field validation and identical BeadsTaskStore construction"
+          ],
+          "risk": "A refactor that changes either error wording or option defaults could affect migration/recovery diagnostics or version enforcement.",
+          "smallestSafeChange": "Extract one private constructor helper for a validated TeamConfig, and have both entry points retain their existing pre-validation/error messages while delegating only the final BeadsTaskStore construction.",
+          "verification": "Run existing authority adapter tests for legacy, missing workspace, incomplete binding, and valid Beads configs; additionally assert both entry points produce equivalent store options."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "Two small, local simplifications are well-supported without changing the public tool contracts: remove duplicated result validation and consolidate duplicated Beads-store construction.",
+            "items": [
+              {
+                "category": "complexity",
+                "claim": "assembleToolResult performs the same canonical-version and semantic-schema validation twice: once itself, then again through projectToolResult.",
+                "citations": [
+                  "production-code/src/model-tool-contract/result-projection.ts: assembleToolResult calls assertCanonicalResultVersions and Check(schemaFor(tool)), then calls projectToolResult, which repeats both checks"
+                ],
+                "risk": "The duplicate checks add needless work and obscure which function owns validation; changing the order or removing the wrong check could alter thrown errors.",
+                "smallestSafeChange": "Remove the two preliminary validation statements from assembleToolResult and let projectToolResult remain its single validation/projection path.",
+                "verification": "Exercise assembleToolResult with one valid result and invalid semantic results (including a non-canonical version); assert the same returned details/content and rejection behavior."
+              },
+              {
+                "category": "duplication",
+                "claim": "beads-authority-adapter duplicates BeadsTaskStore validation and construction in storeFor and storeForConfig; both ultimately create the same store with requireExpectedVersion=false.",
+                "citations": [
+                  "production-code/src/model-tool-contract/beads-authority-adapter.ts: storeFor validates taskBackend/taskWorkspace/taskAuthorityId/taskAuthorityFingerprint and constructs BeadsTaskStore",
+                  "production-code/src/model-tool-contract/beads-authority-adapter.ts: storeForConfig repeats the same four-field validation and identical BeadsTaskStore construction"
+                ],
+                "risk": "A refactor that changes either error wording or option defaults could affect migration/recovery diagnostics or version enforcement.",
+                "smallestSafeChange": "Extract one private constructor helper for a validated TeamConfig, and have both entry points retain their existing pre-validation/error messages while delegating only the final BeadsTaskStore construction.",
+                "verification": "Run existing authority adapter tests for legacy, missing workspace, incomplete binding, and valid Beads configs; additionally assert both entry points produce equivalent store options."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 204314,
+          "output": 1842,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 206156,
+          "cost": {
+            "input": 0.040862800000000005,
+            "output": 0.0022104,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.043073200000000006
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "timing-concurrency-delivery-verification",
+    "taskInputId": "task-input/v1/5c24759356363c77796f1a55823e1f9e5410ef613fad0dbdeb78d508587e90a7",
+    "disposition": "successful",
+    "payload": {
+      "summary": "The main remaining oracle gap is the Pi trigger/turn boundary: current tests verify delivery sink calls and manually simulated lifecycle events, but not that the exact Session persisted the message, triggered a turn, and acknowledged only after a successful real turn.",
+      "items": [
+        {
+          "category": "verification",
+          "claim": "Task delivery acknowledgement lacks a deterministic oracle for the complete Pi boundary: tests manually call `context` and `turn_end`, while the sink only records `sendMessage`/`appendEntry`; this does not prove queued-message persistence, trigger ordering, or that the exact Session's successful turn observed the message.",
+          "citations": [
+            "docs/projects/semantic-hardening/context.md: Hard behavior and test solutions / Pi trigger and successful-turn acknowledgement",
+            "src/utils/causal-path-characterization.test.ts: outside-in causal Task delivery through the registered extension",
+            "src/utils/delivery-round3.test.ts: Round 3 successful-turn Task acknowledgement",
+            "test/support/external-harness.ts: ControlledProcess and external behavior harness"
+          ],
+          "risk": "A change can preserve all current mock expectations while silently delivering to the wrong Session, triggering before persistence, acknowledging on a failed/aborted turn, or losing the acknowledgement across restart.",
+          "smallestSafeChange": "Add one test-only `DeterministicPiHarness` in `test/support` that implements the existing sink boundary and records queued custom messages, the context entries supplied to the turn, persisted tool/session entries, the turn result, and acknowledgement entries. Add one focused causal test using it for assignment -> exact-session queue -> triggered turn -> successful acknowledgement, plus error/aborted turns remaining pending. Do not alter production APIs or persisted schemas.",
+          "verification": "Run the new harness test with deterministic barriers (no sleeps), asserting the trace order `persist custom message < trigger turn < context contains delivery < successful turn < append ack`, exact membership/session identity, and no ack for `error`/`aborted`; retain the existing real-process/headless canary as the separate runtime anchor."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "The main remaining oracle gap is the Pi trigger/turn boundary: current tests verify delivery sink calls and manually simulated lifecycle events, but not that the exact Session persisted the message, triggered a turn, and acknowledged only after a successful real turn.",
+            "items": [
+              {
+                "category": "verification",
+                "claim": "Task delivery acknowledgement lacks a deterministic oracle for the complete Pi boundary: tests manually call `context` and `turn_end`, while the sink only records `sendMessage`/`appendEntry`; this does not prove queued-message persistence, trigger ordering, or that the exact Session's successful turn observed the message.",
+                "citations": [
+                  "docs/projects/semantic-hardening/context.md: Hard behavior and test solutions / Pi trigger and successful-turn acknowledgement",
+                  "src/utils/causal-path-characterization.test.ts: outside-in causal Task delivery through the registered extension",
+                  "src/utils/delivery-round3.test.ts: Round 3 successful-turn Task acknowledgement",
+                  "test/support/external-harness.ts: ControlledProcess and external behavior harness"
+                ],
+                "risk": "A change can preserve all current mock expectations while silently delivering to the wrong Session, triggering before persistence, acknowledging on a failed/aborted turn, or losing the acknowledgement across restart.",
+                "smallestSafeChange": "Add one test-only `DeterministicPiHarness` in `test/support` that implements the existing sink boundary and records queued custom messages, the context entries supplied to the turn, persisted tool/session entries, the turn result, and acknowledgement entries. Add one focused causal test using it for assignment -> exact-session queue -> triggered turn -> successful acknowledgement, plus error/aborted turns remaining pending. Do not alter production APIs or persisted schemas.",
+                "verification": "Run the new harness test with deterministic barriers (no sleeps), asserting the trace order `persist custom message < trigger turn < context contains delivery < successful turn < append ack`, exact membership/session identity, and no ack for `error`/`aborted`; retain the existing real-process/headless canary as the separate runtime anchor."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 111060,
+          "output": 767,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 111827,
+          "cost": {
+            "input": 0.022212000000000003,
+            "output": 0.0009203999999999999,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0231324
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "test-suite-quality",
+    "taskInputId": "task-input/v1/9de284ad3889ac5043832aad001e373594618b219513212d3318e74a835e7cc7",
+    "disposition": "successful",
+    "payload": {
+      "summary": "Smallest safe hardening: make the lock contention test deterministic instead of relying on random wall-clock sleeps and a timing budget.",
+      "items": [
+        {
+          "category": "verification",
+          "claim": "The lock race suite has a flaky timing oracle: its contention test uses a random 0–10 ms sleep inside the critical section, while a separate test asserts completion using Date.now() < 1,500 ms.",
+          "citations": [
+            "tests-and-harnesses/src/utils/lock.race.test.ts: `await new Promise(resolve => setTimeout(resolve, Math.random() * 10));`",
+            "tests-and-harnesses/src/utils/lock.race.test.ts: `expect(Date.now() - startedAt).toBeLessThan(1_500);`"
+          ],
+          "risk": "Scheduler load, timer granularity, or unrelated CI contention can make the tests slow or pass/fail nondeterministically; the timing assertions do not strengthen the mutual-exclusion oracle.",
+          "smallestSafeChange": "Test-only: in `src/utils/lock.race.test.ts`, replace the random sleep and wall-clock duration assertion with a deterministic gate/barrier that holds each entered critical section until the test releases it, then assert `maxActive === 1` and the exact counter/event count. Keep production locking code unchanged.",
+          "verification": "Run the two lock-race tests repeatedly under normal and constrained CI load; verify they assert exact mutual exclusion and complete without `Date.now`, `Math.random`, or `setTimeout` in the oracle."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "Smallest safe hardening: make the lock contention test deterministic instead of relying on random wall-clock sleeps and a timing budget.",
+            "items": [
+              {
+                "category": "verification",
+                "claim": "The lock race suite has a flaky timing oracle: its contention test uses a random 0–10 ms sleep inside the critical section, while a separate test asserts completion using Date.now() < 1,500 ms.",
+                "citations": [
+                  "tests-and-harnesses/src/utils/lock.race.test.ts: `await new Promise(resolve => setTimeout(resolve, Math.random() * 10));`",
+                  "tests-and-harnesses/src/utils/lock.race.test.ts: `expect(Date.now() - startedAt).toBeLessThan(1_500);`"
+                ],
+                "risk": "Scheduler load, timer granularity, or unrelated CI contention can make the tests slow or pass/fail nondeterministically; the timing assertions do not strengthen the mutual-exclusion oracle.",
+                "smallestSafeChange": "Test-only: in `src/utils/lock.race.test.ts`, replace the random sleep and wall-clock duration assertion with a deterministic gate/barrier that holds each entered critical section until the test releases it, then assert `maxActive === 1` and the exact counter/event count. Keep production locking code unchanged.",
+                "verification": "Run the two lock-race tests repeatedly under normal and constrained CI load; verify they assert exact mutual exclusion and complete without `Date.now`, `Math.random`, or `setTimeout` in the oracle."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 259017,
+          "output": 544,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 259561,
+          "cost": {
+            "input": 0.051803400000000006,
+            "output": 0.0006527999999999999,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.05245620000000001
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "nonfunctional-amplification",
+    "taskInputId": "task-input/v1/2c2daaf18af34658228f66fef008e5e531287186d6dc82a09b9d0b0664282a2a",
+    "disposition": "successful",
+    "payload": {
+      "summary": "Static evidence shows full-history JSONL rescans and repeated full Task hydration; no runtime timings are supplied, so characterize these paths before changing production behavior.",
+      "items": [
+        {
+          "category": "performance",
+          "claim": "Measured fact from code: every Team-event append rereads and reparses the entire journal, and every event read does the same. Hypothesis: append latency grows with history length and can serialize coordination behind the journal lock.",
+          "citations": [
+            "call-entrypoints/src/utils/team-events.ts: readJournal reads the complete JSONL and parseEvent validates every line; appendTeamEvent calls readJournal while holding withLock before fsync; readTeamEvents also calls readJournal."
+          ],
+          "risk": "A large Team history makes each new event O(E) in journal length, with the scan occurring under the append lock; changing this without characterization could alter cursor recovery or malformed-record behavior.",
+          "smallestSafeChange": "Add a benchmark/characterization only: generate journals with increasing event counts and measure appendTeamEvent, readTeamEvents, and waitForTeamEvents recheck latency plus parsed-line counts. Preserve production code until the slope and acceptable bounds are known.",
+          "verification": "Run the benchmark at representative history sizes (for example 1k/10k/100k events), with concurrent append/read cases; assert cursors, truncation, malformed-record refusal, and event ordering remain unchanged."
+        },
+        {
+          "category": "performance",
+          "claim": "Measured fact from call structure: DurableModelToolTeamPort.readModelToolTasks first lists all Task IDs and then hydrates every listed ID; readSnapshot uses it, and readTeamSync can perform it before waiting and again after a wait. Hypothesis: large Task sets amplify Beads queries and projection work even when only a small number of events changed.",
+          "citations": [
+            "call-entrypoints/src/model-tool-contract/durable-model-tool-port.ts: readModelToolTasks calls listTaskIds then adapter.readMany(taskIds); readSnapshot calls readModelToolTasks; readTeamSync(view=\"updates\") reads tasks before the wait and rereads them after wait completion; src/model-tool-contract/beads-authority-adapter.ts: listTaskIds calls store.list()."
+          ],
+          "risk": "Replacing full hydration with incremental reads could omit current Task state, warnings, or externally changed Tasks and would affect snapshot/update semantics.",
+          "smallestSafeChange": "Create a characterization benchmark with E event count, T Task count, and requested/changed Task count as independent variables. Instrument list calls, readMany calls, hydrated IDs, bytes, and wall time; do not optimize the query path yet.",
+          "verification": "Compare snapshot and updates results against the existing implementation for no-change, one-change, external-change, duplicate-ID, and cursor-replay cases; require identical projections and measure whether cost is proportional to T rather than E."
+        },
+        {
+          "category": "performance",
+          "claim": "Measured fact from code: each active TaskChangeDelivery starts a 30-second interval; each scan performs owner-outbox recovery and then reads TeamConfig, tombstones, and recipient delivery records. Hypothesis: idle polling cost scales with Worker count and can add filesystem contention on large Teams, especially alongside event-journal scans.",
+          "citations": [
+            "call-entrypoints/src/utils/task-delivery.ts: DEFAULT_TASK_POLL_MS is 30_000; TaskChangeDelivery.start installs setInterval(scan); scanOnce invokes reconcileOwnerTransitionOutbox; eligible reads config, tombstones, and deliveries; task-delivery.test.ts: 'performs no authority read on fallback scans when no assignee intent is prepared' documents the intended no-Beads-read fast path."
+          ],
+          "risk": "Removing or coalescing polling could delay recovery of commit-before-enqueue gaps or local spool changes and violate delivery timing guarantees.",
+          "smallestSafeChange": "Benchmark idle and active polling with 1/10/50 Workers, empty and populated outboxes, and injected filesystem latency; count config/journal/spool reads and recovery-query calls. Treat event-driven watch notifications as hints, not authority, until the benchmark establishes a safe polling bound.",
+          "verification": "Assert that delivery latency, retry behavior, successful-turn acknowledgement, stale-membership filtering, and owner-transition recovery match current characterization tests under injected delays; only then consider a narrowly scoped poll/read reduction."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "Static evidence shows full-history JSONL rescans and repeated full Task hydration; no runtime timings are supplied, so characterize these paths before changing production behavior.",
+            "items": [
+              {
+                "category": "performance",
+                "claim": "Measured fact from code: every Team-event append rereads and reparses the entire journal, and every event read does the same. Hypothesis: append latency grows with history length and can serialize coordination behind the journal lock.",
+                "citations": [
+                  "call-entrypoints/src/utils/team-events.ts: readJournal reads the complete JSONL and parseEvent validates every line; appendTeamEvent calls readJournal while holding withLock before fsync; readTeamEvents also calls readJournal."
+                ],
+                "risk": "A large Team history makes each new event O(E) in journal length, with the scan occurring under the append lock; changing this without characterization could alter cursor recovery or malformed-record behavior.",
+                "smallestSafeChange": "Add a benchmark/characterization only: generate journals with increasing event counts and measure appendTeamEvent, readTeamEvents, and waitForTeamEvents recheck latency plus parsed-line counts. Preserve production code until the slope and acceptable bounds are known.",
+                "verification": "Run the benchmark at representative history sizes (for example 1k/10k/100k events), with concurrent append/read cases; assert cursors, truncation, malformed-record refusal, and event ordering remain unchanged."
+              },
+              {
+                "category": "performance",
+                "claim": "Measured fact from call structure: DurableModelToolTeamPort.readModelToolTasks first lists all Task IDs and then hydrates every listed ID; readSnapshot uses it, and readTeamSync can perform it before waiting and again after a wait. Hypothesis: large Task sets amplify Beads queries and projection work even when only a small number of events changed.",
+                "citations": [
+                  "call-entrypoints/src/model-tool-contract/durable-model-tool-port.ts: readModelToolTasks calls listTaskIds then adapter.readMany(taskIds); readSnapshot calls readModelToolTasks; readTeamSync(view=\"updates\") reads tasks before the wait and rereads them after wait completion; src/model-tool-contract/beads-authority-adapter.ts: listTaskIds calls store.list()."
+                ],
+                "risk": "Replacing full hydration with incremental reads could omit current Task state, warnings, or externally changed Tasks and would affect snapshot/update semantics.",
+                "smallestSafeChange": "Create a characterization benchmark with E event count, T Task count, and requested/changed Task count as independent variables. Instrument list calls, readMany calls, hydrated IDs, bytes, and wall time; do not optimize the query path yet.",
+                "verification": "Compare snapshot and updates results against the existing implementation for no-change, one-change, external-change, duplicate-ID, and cursor-replay cases; require identical projections and measure whether cost is proportional to T rather than E."
+              },
+              {
+                "category": "performance",
+                "claim": "Measured fact from code: each active TaskChangeDelivery starts a 30-second interval; each scan performs owner-outbox recovery and then reads TeamConfig, tombstones, and recipient delivery records. Hypothesis: idle polling cost scales with Worker count and can add filesystem contention on large Teams, especially alongside event-journal scans.",
+                "citations": [
+                  "call-entrypoints/src/utils/task-delivery.ts: DEFAULT_TASK_POLL_MS is 30_000; TaskChangeDelivery.start installs setInterval(scan); scanOnce invokes reconcileOwnerTransitionOutbox; eligible reads config, tombstones, and deliveries; task-delivery.test.ts: 'performs no authority read on fallback scans when no assignee intent is prepared' documents the intended no-Beads-read fast path."
+                ],
+                "risk": "Removing or coalescing polling could delay recovery of commit-before-enqueue gaps or local spool changes and violate delivery timing guarantees.",
+                "smallestSafeChange": "Benchmark idle and active polling with 1/10/50 Workers, empty and populated outboxes, and injected filesystem latency; count config/journal/spool reads and recovery-query calls. Treat event-driven watch notifications as hints, not authority, until the benchmark establishes a safe polling bound.",
+                "verification": "Assert that delivery latency, retry behavior, successful-turn acknowledgement, stale-membership filtering, and owner-transition recovery match current characterization tests under injected delays; only then consider a narrowly scoped poll/read reduction."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 109974,
+          "output": 1692,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 111666,
+          "cost": {
+            "input": 0.021994800000000002,
+            "output": 0.0020304,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.024025200000000003
+          }
+        }
+      }
+    ]
+  },
+  {
+    "schema": "million-eyes/task-terminal/1",
+    "taskId": "reachability-and-authority",
+    "taskInputId": "task-input/v1/1a83cb1b4b8c1be5030ececf07ae280cf684833c9fbfd0d938cf08565da4ee09",
+    "disposition": "successful",
+    "payload": {
+      "summary": "Found one concrete duplication and one cautious reachability candidate. The call projection is treated only as a syntactic signal; the reachability item needs an import/history audit before deletion.",
+      "items": [
+        {
+          "category": "duplication",
+          "claim": "Pi relaunch argument construction is duplicated across the extension composition root and the durable-port fallback, creating a drift risk (especially around executable selection, extension loading, trust flags, and aggregate prompts). The two paths may be intentionally different, so this is duplication rather than proof of identical behavior.",
+          "citations": [
+            "call-entrypoints/extensions/index.ts:98-107 (`buildPiArgv`)",
+            "call-entrypoints/extensions/index.ts:407-418 (worker bridge composes `buildPiArgv`)",
+            "call-entrypoints/src/model-tool-contract/durable-model-tool-port.ts:86-111 (separate `defaultLaunchBridge.buildWorkerArgv`)"
+          ],
+          "risk": "A behavioral change made in only one launcher path can make extension-launched Workers and fallback/embedded Workers observe different CLI contracts.",
+          "smallestSafeChange": "Extract only the pure shared option-appending logic into a neutral utility, keep `getPiLaunchArgv` and the durable fallback's executable-base selection separate, and have both paths use the shared helper. Preserve argument order exactly.",
+          "verification": "Run typecheck and the worker-launch/resource contract tests; add assertions covering model/thinking, shipped extension, aggregate prompt, and trust-flag ordering for both launch paths."
+        },
+        {
+          "category": "reachability",
+          "claim": "`hydrateTeamSyncTasks` is a likely compatibility/helper path with no syntactic production caller in the supplied call projection, while the current durable sync path hydrates through `listTaskIds` plus `BeadsTaskAdapter.readMany`. This does not prove it is dead: it is exported from a source file and may have omitted external/history consumers.",
+          "citations": [
+            "call-entrypoints/src/utils/team-events.ts:564-575 (`hydrateTeamSyncTasks`, exported)",
+            "call-entrypoints/src/model-tool-contract/durable-model-tool-port.ts:506-519 (`readModelToolTasks` uses `listTaskIds` and `BeadsTaskAdapter.readMany`)",
+            "package-automation/package.json:68-76 (package exports only the extension root and `./observation`, not `team-events` directly)",
+            "repository-calls.reachability-and-authority/repository-call-projection.json: omittedDefinitions=744 (external/import reachability is incomplete)"
+          ],
+          "risk": "Deleting or changing it without checking historical compatibility could break a deep import or an omitted test/tool, even though it is not part of the declared package export map.",
+          "smallestSafeChange": "Do not delete yet. First audit repository-wide imports, generated artifacts, and historical compatibility references; if none exist, move it behind an explicitly internal compatibility module or remove it in a separately verified change.",
+          "verification": "Run a literal import/reference search including tests and scripts, inspect prior compatibility requirements, then run typecheck plus the full/exhaustive test lanes and package verification before removal."
+        }
+      ]
+    },
+    "attempts": [
+      {
+        "rawText": "",
+        "toolCalls": [
+          {
+            "summary": "Found one concrete duplication and one cautious reachability candidate. The call projection is treated only as a syntactic signal; the reachability item needs an import/history audit before deletion.",
+            "items": [
+              {
+                "category": "duplication",
+                "claim": "Pi relaunch argument construction is duplicated across the extension composition root and the durable-port fallback, creating a drift risk (especially around executable selection, extension loading, trust flags, and aggregate prompts). The two paths may be intentionally different, so this is duplication rather than proof of identical behavior.",
+                "citations": [
+                  "call-entrypoints/extensions/index.ts:98-107 (`buildPiArgv`)",
+                  "call-entrypoints/extensions/index.ts:407-418 (worker bridge composes `buildPiArgv`)",
+                  "call-entrypoints/src/model-tool-contract/durable-model-tool-port.ts:86-111 (separate `defaultLaunchBridge.buildWorkerArgv`)"
+                ],
+                "risk": "A behavioral change made in only one launcher path can make extension-launched Workers and fallback/embedded Workers observe different CLI contracts.",
+                "smallestSafeChange": "Extract only the pure shared option-appending logic into a neutral utility, keep `getPiLaunchArgv` and the durable fallback's executable-base selection separate, and have both paths use the shared helper. Preserve argument order exactly.",
+                "verification": "Run typecheck and the worker-launch/resource contract tests; add assertions covering model/thinking, shipped extension, aggregate prompt, and trust-flag ordering for both launch paths."
+              },
+              {
+                "category": "reachability",
+                "claim": "`hydrateTeamSyncTasks` is a likely compatibility/helper path with no syntactic production caller in the supplied call projection, while the current durable sync path hydrates through `listTaskIds` plus `BeadsTaskAdapter.readMany`. This does not prove it is dead: it is exported from a source file and may have omitted external/history consumers.",
+                "citations": [
+                  "call-entrypoints/src/utils/team-events.ts:564-575 (`hydrateTeamSyncTasks`, exported)",
+                  "call-entrypoints/src/model-tool-contract/durable-model-tool-port.ts:506-519 (`readModelToolTasks` uses `listTaskIds` and `BeadsTaskAdapter.readMany`)",
+                  "package-automation/package.json:68-76 (package exports only the extension root and `./observation`, not `team-events` directly)",
+                  "repository-calls.reachability-and-authority/repository-call-projection.json: omittedDefinitions=744 (external/import reachability is incomplete)"
+                ],
+                "risk": "Deleting or changing it without checking historical compatibility could break a deep import or an omitted test/tool, even though it is not part of the declared package export map.",
+                "smallestSafeChange": "Do not delete yet. First audit repository-wide imports, generated artifacts, and historical compatibility references; if none exist, move it behind an explicitly internal compatibility module or remove it in a separately verified change.",
+                "verification": "Run a literal import/reference search including tests and scripts, inspect prior compatibility requirements, then run typecheck plus the full/exhaustive test lanes and package verification before removal."
+              }
+            ]
+          }
+        ],
+        "usage": {
+          "providerMessages": 1,
+          "input": 274778,
+          "output": 1464,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 276242,
+          "cost": {
+            "input": 0.10991120000000001,
+            "output": 0.0026352000000000003,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.11254640000000002
+          }
+        }
+      }
+    ]
+  }
+]

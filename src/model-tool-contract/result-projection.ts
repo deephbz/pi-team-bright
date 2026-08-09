@@ -381,8 +381,6 @@ export function serializeToolResult(tool: ProjectedTool, result: unknown): strin
 }
 
 export function assembleToolResult<TTool extends ProjectedTool>(tool: TTool, result: ToolSemanticResult<TTool>): ToolResultAssembly<TTool> {
-  assertCanonicalResultVersions(result);
-  if (!Check(schemaFor(tool), result)) throw new Error(`Invalid semantic result for ${tool}.`);
   const model = projectToolResult(tool, result);
   return { content: [{ type: "text", text: JSON.stringify(model) }], details: result } as ToolResultAssembly<TTool>;
 }

@@ -9,6 +9,7 @@ import {
 } from "./catalog";
 import {
   ModelResultSchemas,
+  assembleToolResult,
   parseToolResult,
   projectToolResult,
   serializeToolResult,
@@ -16,7 +17,74 @@ import {
 import { projectTui } from "./tui-projection";
 import { taskVersionRef } from "./task-version-ref";
 
+function captureError(action: () => unknown): Error {
+  try {
+    action();
+  } catch (error) {
+    expect(error).toBeInstanceOf(Error);
+    return error as Error;
+  }
+  throw new Error("Expected action to throw.");
+}
+
 describe("raw semantic result projections", () => {
+  it("assembles the same valid projection and preserves raw detail identity", () => {
+    const raw = {
+      kind: "team_created" as const,
+      team: { name: "review", purpose: "Review the release.", lifecycle: "active" as const },
+    };
+    const projected = projectToolResult("team_create", raw);
+    const assembled = assembleToolResult("team_create", raw);
+
+    expect(assembled.content).toEqual([{ type: "text", text: JSON.stringify(projected) }]);
+    expect(assembled.details).toBe(raw);
+  });
+
+  it("keeps assembly and projection semantic-schema errors identical", () => {
+    const invalid = {
+      kind: "team_created",
+      team: { name: "review", lifecycle: "active" },
+    } as any;
+    const projectedError = captureError(() => projectToolResult("team_create", invalid));
+    const assembledError = captureError(() => assembleToolResult("team_create", invalid));
+
+    expect({ name: assembledError.name, message: assembledError.message }).toEqual({
+      name: projectedError.name,
+      message: projectedError.message,
+    });
+    expect(assembledError.message).toBe("Invalid semantic result for team_create.");
+  });
+
+  it("keeps assembly and projection noncanonical-version errors identical and first", () => {
+    const noncanonical = {
+      kind: "task_read_batch",
+      outcomes: [{
+        kind: "found",
+        input_index: 0,
+        task_id: "task-1",
+        task: {
+          id: "task-1",
+          title: "Verify",
+          goal: "Verify the release.",
+          status: "open",
+          current_context: "Not started.",
+          version: "legacy-v1",
+        },
+      }],
+    } as any;
+    const projectedError = captureError(() => projectToolResult("task_read", noncanonical));
+    const assembledError = captureError(() => assembleToolResult("task_read", noncanonical));
+
+    expect({ name: assembledError.name, message: assembledError.message }).toEqual({
+      name: projectedError.name,
+      message: projectedError.message,
+    });
+    expect(assembledError).toMatchObject({
+      name: "upgrade_required",
+      message: "Task result contains a non-canonical version; run the stopped-epoch migration.",
+    });
+  });
+
   it("validates and projects every catalog example without changing raw details", () => {
     for (const tool of modelToolCatalog.tools) {
       for (const example of tool.examples) {
