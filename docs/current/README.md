@@ -53,10 +53,11 @@ restating executable definitions.
   `TaskVersionRef` remain the public Task coordinates above that boundary;
   Task-owned update, journal, and reconciliation-query contracts now isolate
   recovery from the trio-facing in-memory port. That old port keeps temporary
-  compatibility type re-exports. `tasks.ts` is a semantic facade. Architecture
-  impact: **changed** for the internal Task dependency boundary. HyperCarrier's
-  canonical Structurizr DSL remains unchanged because it keeps Pi Team Bright
-  internals opaque.
+  compatibility type re-exports. `tasks.ts` is a semantic facade. Team authority
+  now also owns durable lead-Session discovery; the Pi composition root keeps
+  environment precedence and hook timing. Architecture impact: **changed** for
+  these internal authority boundaries. HyperCarrier's canonical Structurizr DSL
+  remains unchanged because it keeps Pi Team Bright internals opaque.
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
   exceptional coordination.
 - Task authority, Team/Membership authority, Pi Session identity, event

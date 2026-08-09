@@ -238,38 +238,6 @@ function resolveModelWithProvider(modelName: string): string | null {
   return null;
 }
 
-/** Find the team this durable Pi Session leads. */
-function findLeadTeamForSession(piSessionFile?: string): string | null {
-  const teamsDir = paths.TEAMS_DIR;
-  if (!fs.existsSync(teamsDir)) return null;
-
-  const sessionMatches: string[] = [];
-  for (const teamDir of fs.readdirSync(teamsDir)) {
-    try {
-      const recordPath = paths.configPath(teamDir);
-      if (!fs.existsSync(recordPath)) continue;
-      const config = JSON.parse(fs.readFileSync(recordPath, "utf-8")) as {
-        members?: Member[];
-      };
-      const lead = [...(config.members || [])].reverse().find(
-        (member) => member.name === "team-lead" && member.isActive !== false,
-      );
-      if (piSessionFile && lead?.sessionFile === piSessionFile) sessionMatches.push(teamDir);
-    } catch {
-      // Ignore corrupted session files.
-    }
-  }
-
-  if (sessionMatches.length > 1) {
-    throw new Error(
-      `Ambiguous lead Session binding: this durable Pi Session is registered to multiple teams (${sessionMatches.join(", ")}). ` +
-      "Refusing to choose by filesystem order. Set PI_TEAM_NAME to the intended current team before resuming, or repair the stale lead-session records.",
-    );
-  }
-  if (sessionMatches.length === 1) return sessionMatches[0];
-  return null;
-}
-
 /** Admit and publish the lead process under its exact Membership lease. */
 async function registerLeadSession(
   teamName: string,
@@ -396,7 +364,7 @@ export default function (pi: ExtensionAPI) {
   const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
 
   // For leads without PI_TEAM_NAME, check if we're registered as lead for a team
-  const detectedTeamName = envTeamName || findLeadTeamForSession();
+  const detectedTeamName = envTeamName || teams.findLeadTeamForSession();
   let teamName = detectedTeamName;
   let currentMembershipId: string | undefined;
 
@@ -896,7 +864,7 @@ export default function (pi: ExtensionAPI) {
     // A fresh lead process has no lead environment variables either. Match
     // its resumed Pi session to the durable lead record.
     if (!isTeammate && !teamName) {
-      teamName = findLeadTeamForSession(piSessionFile);
+      teamName = teams.findLeadTeamForSession(piSessionFile);
     }
 
     if (envTeamName && !teams.teamExists(envTeamName)) {

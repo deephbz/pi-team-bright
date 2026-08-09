@@ -2,7 +2,7 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: Task-authority seam committed; focused optimization series active with the first local simplification independently verified
+Status: Task-authority seam committed; two focused internal simplifications independently verified
 Architecture impact: changed for the internal Task dependency boundary; HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team Bright internals opaque
 
 ## Outcome
@@ -85,8 +85,12 @@ Baseline declaration receipt:
   keeping `projectToolResult` as the one validation and projection path. Focused
   tests, a 14-example baseline differential, typecheck, and independent review
   preserve valid output, raw details, validation order, and exact errors.
-- Current blocker: none. Integrate the first optimization, then review the new
-  committed state before selecting the next candidate.
+- Durable lead-Session discovery moved verbatim from the Pi composition root to
+  Team authority. Six new helper cases plus existing binding/session tests and
+  an AST body comparison preserve all discovery, ambiguity, environment, and
+  lifecycle behavior.
+- Current blocker: none. Integrate the Team ownership move, then select the next
+  bounded improvement from measured or reviewed evidence.
 
 ## Constraints still in force
 
