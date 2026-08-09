@@ -1,0 +1,531 @@
+{
+  "schema": "pi-team-bright-subsystem-dependency-map/1",
+  "status": "current_facts_and_proposed_target",
+  "reviewedRevision": "ed7ae5710f77352741f2b20be823d9c59941f784",
+  "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
+  "sourceDocument": "subsystem-boundary-audit.md",
+  "evidenceBasis": {
+    "productionTypeScript": {
+      "files": 60,
+      "lines": 18145,
+      "staticLocalEdges": 204,
+      "nontrivialStaticStronglyConnectedComponents": 0,
+      "changedSinceProductionTypeScriptBaseline": false
+    },
+    "testAndSupportTypeScript": {
+      "files": 77,
+      "lines": 20585
+    },
+    "selectedPhaseTwoEvidence": [
+      {
+        "path": "src/utils/alert-publication-failure.characterization.test.ts",
+        "state": "independently_verified_characterization_pending_owner_classification",
+        "scope": "Alert delivery acceptance followed by Coordination publication failure"
+      },
+      {
+        "path": "src/utils/causal-path-characterization.test.ts",
+        "state": "independently_verified_characterization",
+        "scope": "Coordination branch-observation characterization"
+      }
+    ]
+  },
+  "ontology": {
+    "coreSubsystems": [
+      {
+        "id": "team_authority_and_role_realization",
+        "owns": "Team epochs, logical Workers, Membership generations, Role assignment and realization, exact Session and carrier lifecycle, recovery, and Team compatibility"
+      },
+      {
+        "id": "task_authority",
+        "owns": "Canonical Task state, evidence, relations, versions, replay, delivery intent and recovery, compatibility, and migration"
+      },
+      {
+        "id": "alert_authority",
+        "owns": "Typed Alert meaning, targeting, acceptance, fan-out, delivery intent and evidence, and the no-Task-mutation invariant"
+      },
+      {
+        "id": "coordination_observation",
+        "owns": "Event projection, snapshots, updates, waits, cursors, current-authority hydration, and acknowledged branch position"
+      },
+      {
+        "id": "trio_facing_interface_and_projections",
+        "owns": "Machine records, concise agent JSON, human/TUI projections, public schemas, registration, and result assembly"
+      }
+    ],
+    "additiveComponents": [
+      {
+        "id": "membership_observation",
+        "projects": "Privacy-filtered Team Membership and recorded runtime evidence for machine consumers",
+        "mustNotBecomeCoreDependency": true
+      }
+    ],
+    "supportMechanisms": [
+      "session_actuation",
+      "terminal_adapters",
+      "locks",
+      "atomic_writes",
+      "paths",
+      "tracing",
+      "diagnostics"
+    ]
+  },
+  "facts": {
+    "currentComponents": [
+      {
+        "id": "team_core",
+        "currentOwner": "team_authority_and_role_realization",
+        "sources": [
+          "src/utils/teams.ts",
+          "src/utils/runtime.ts",
+          "src/utils/worker-launch-bridge.ts",
+          "src/utils/worker-resource-projection.ts",
+          "src/utils/session-terminal.ts",
+          "src/utils/team-terminal.ts"
+        ]
+      },
+      {
+        "id": "task_contract_and_authority_adapters",
+        "currentOwner": "task_authority",
+        "sources": [
+          "src/model-tool-contract/task-domain.ts",
+          "src/model-tool-contract/task-version-ref.ts",
+          "src/model-tool-contract/beads-task-adapter.ts",
+          "src/model-tool-contract/beads-authority-adapter.ts"
+        ]
+      },
+      {
+        "id": "task_delivery_and_recovery",
+        "currentOwner": "task_authority",
+        "sources": [
+          "src/utils/task-delivery.ts",
+          "src/utils/task-delivery-migration.ts",
+          "src/utils/task-migration.ts"
+        ]
+      },
+      {
+        "id": "alert_acceptance_and_delivery",
+        "currentOwner": "alert_authority",
+        "sources": [
+          "src/utils/alerts.ts",
+          "src/utils/messaging.ts",
+          "src/utils/message-delivery.ts"
+        ]
+      },
+      {
+        "id": "coordination_journal_and_position",
+        "currentOwner": "coordination_observation",
+        "sources": [
+          "src/utils/team-events.ts",
+          "src/utils/hidden-observation.ts",
+          "src/utils/worker-startup-observation.ts"
+        ]
+      },
+      {
+        "id": "model_tool_facade_and_projections",
+        "currentOwner": "trio_facing_interface_and_projections",
+        "sources": [
+          "src/model-tool-contract/catalog.ts",
+          "src/model-tool-contract/pi-registration.ts",
+          "src/model-tool-contract/executors.ts",
+          "src/model-tool-contract/result-projection.ts",
+          "src/model-tool-contract/tui-projection.ts",
+          "src/model-tool-contract/durable-model-tool-port.ts",
+          "src/model-tool-contract/in-memory-team-port.ts"
+        ]
+      },
+      {
+        "id": "pi_composition_and_lifecycle",
+        "currentOwner": "mixed_composition",
+        "sources": [
+          "extensions/index.ts"
+        ]
+      },
+      {
+        "id": "membership_observation_projector",
+        "currentOwner": "membership_observation",
+        "sources": [
+          "src/public/observation.ts"
+        ]
+      },
+      {
+        "id": "shared_contract_and_path_registries",
+        "currentOwner": "mixed_support",
+        "sources": [
+          "src/utils/models.ts",
+          "src/utils/paths.ts"
+        ]
+      }
+    ],
+    "currentDependencies": [
+      {
+        "from": "task_contract_and_authority_adapters",
+        "to": "model_tool_facade_and_projections",
+        "mechanism": "static_type_import",
+        "evidence": [
+          "src/model-tool-contract/beads-task-adapter.ts:25"
+        ]
+      },
+      {
+        "from": "task_contract_and_authority_adapters",
+        "to": "team_core",
+        "mechanism": "static_import_and_exact_actor_fencing",
+        "evidence": [
+          "src/model-tool-contract/beads-authority-adapter.ts:4"
+        ]
+      },
+      {
+        "from": "task_contract_and_authority_adapters",
+        "to": "coordination_journal_and_position",
+        "mechanism": "static_event_publication_import",
+        "evidence": [
+          "src/model-tool-contract/beads-authority-adapter.ts:4"
+        ]
+      },
+      {
+        "from": "task_contract_and_authority_adapters",
+        "to": "task_delivery_and_recovery",
+        "mechanism": "static_import",
+        "evidence": [
+          "src/model-tool-contract/beads-authority-adapter.ts:4"
+        ]
+      },
+      {
+        "from": "task_delivery_and_recovery",
+        "to": "task_contract_and_authority_adapters",
+        "mechanism": "dynamic_import_for_reconciliation",
+        "evidence": [
+          "src/utils/task-delivery.ts:457",
+          "src/utils/task-delivery.ts:545"
+        ]
+      },
+      {
+        "from": "alert_acceptance_and_delivery",
+        "to": "team_core",
+        "mechanism": "legacy_message_delivery_resolves_exact_membership",
+        "evidence": [
+          "src/utils/alerts.ts:99",
+          "src/utils/messaging.ts"
+        ]
+      },
+      {
+        "from": "alert_acceptance_and_delivery",
+        "to": "coordination_journal_and_position",
+        "mechanism": "static_event_publication_import",
+        "evidence": [
+          "src/utils/alerts.ts:3",
+          "src/utils/alerts.ts:128"
+        ]
+      },
+      {
+        "from": "model_tool_facade_and_projections",
+        "to": "team_core",
+        "mechanism": "direct_application_composition",
+        "evidence": [
+          "src/model-tool-contract/durable-model-tool-port.ts:1"
+        ]
+      },
+      {
+        "from": "model_tool_facade_and_projections",
+        "to": "task_contract_and_authority_adapters",
+        "mechanism": "direct_application_composition",
+        "evidence": [
+          "src/model-tool-contract/durable-model-tool-port.ts:4"
+        ]
+      },
+      {
+        "from": "model_tool_facade_and_projections",
+        "to": "alert_acceptance_and_delivery",
+        "mechanism": "direct_application_composition",
+        "evidence": [
+          "src/model-tool-contract/durable-model-tool-port.ts:7"
+        ]
+      },
+      {
+        "from": "model_tool_facade_and_projections",
+        "to": "coordination_journal_and_position",
+        "mechanism": "direct_application_composition",
+        "evidence": [
+          "src/model-tool-contract/durable-model-tool-port.ts:6"
+        ]
+      },
+      {
+        "from": "pi_composition_and_lifecycle",
+        "to": "team_core",
+        "mechanism": "direct_lifecycle_orchestration",
+        "evidence": [
+          "extensions/index.ts:802",
+          "extensions/index.ts:1099"
+        ]
+      },
+      {
+        "from": "pi_composition_and_lifecycle",
+        "to": "task_contract_and_authority_adapters",
+        "mechanism": "assigned_work_guard_and_application_calls",
+        "evidence": [
+          "extensions/index.ts:1131"
+        ]
+      },
+      {
+        "from": "membership_observation_projector",
+        "to": "team_core",
+        "mechanism": "private_record_type_and_file_read",
+        "evidence": [
+          "src/public/observation.ts:5",
+          "src/public/observation.ts:138"
+        ]
+      }
+    ]
+  },
+  "assessments": [
+    {
+      "id": "ASSESS-UPWARD-TASK-TYPE",
+      "statement": "Task authority depends upward on trio-facing types through in-memory-team-port.ts."
+    },
+    {
+      "id": "ASSESS-DYNAMIC-TASK-CYCLE",
+      "statement": "Task mutation and Task-delivery reconciliation form a semantic cycle hidden from the static graph by dynamic imports."
+    },
+    {
+      "id": "ASSESS-COMBINED-FACADE",
+      "statement": "ModelToolTeamPort, DurableModelToolTeamPort, and the in-memory implementation combine all five semantic boundaries in one seam."
+    },
+    {
+      "id": "ASSESS-MIXED-PERSISTENCE-ENVELOPE",
+      "statement": "TeamConfig and models.ts preserve required current compatibility but mix facts from more than one authority."
+    },
+    {
+      "id": "ASSESS-ADDITIVE-OBSERVATION",
+      "statement": "Membership observation remains additive and core-independent, but broad private record imports increase compatibility coupling."
+    }
+  ],
+  "risks": [
+    {
+      "id": "RISK-ORDERING",
+      "statement": "Moving code can change lock, commit, event, delivery, acknowledgement, or hook order even when public schemas remain stable."
+    },
+    {
+      "id": "RISK-FAKE-ATOMICITY",
+      "statement": "One in-memory store can make cross-authority atomicity appear stronger than the durable implementation."
+    },
+    {
+      "id": "RISK-COMPATIBILITY",
+      "statement": "Splitting mixed contracts can reject or rewrite supported historical Team, Task, event, inbox, terminal, and delivery records."
+    },
+    {
+      "id": "RISK-PUBLIC-PROJECTOR",
+      "statement": "Changing private Team or runtime records can change the additive public Membership projection unless decoding is isolated."
+    }
+  ],
+  "unresolvedTestGates": [
+    {
+      "id": "ALERT-PUBLICATION-FAILURE",
+      "state": "characterized_owner_classification_required",
+      "blocks": "Alert boundary refactor and any outbox or warning decision",
+      "currentFact": "After partial Alert delivery acceptance followed by Coordination publication failure, the unavailable public result omits per-recipient outcomes, the cursor does not advance, Task state remains unchanged, and an exact retry duplicates accepted delivery under a new Alert identity.",
+      "requiredEvidence": [
+        "Obtain owner classification before selecting preservation, warning, recovery-record, outbox, or replacement behavior.",
+        "If behavior changes, preserve this characterization as historical evidence and add normative replacement tests.",
+        "Keep process restart and later exact-Session presentation outside this characterization's proof claim."
+      ],
+      "anchors": [
+        "src/utils/alerts.ts:99",
+        "src/utils/alerts.ts:128",
+        "src/utils/alerts.test.ts:32",
+        "src/utils/alerts.test.ts:87",
+        "src/utils/alert-publication-failure.characterization.test.ts"
+      ]
+    },
+    {
+      "id": "TASK-RECONCILIATION-INJECTION",
+      "state": "proposed_seam_not_equivalence_tested",
+      "blocks": "Removal of dynamic Task-adapter imports from task-delivery.ts",
+      "currentFact": "Current tests cover concrete reconciliation and the owner-transition readEvidence seam, but not the proposed full injected Task query boundary.",
+      "requiredEvidence": [
+        "Run current self-authored suppression and later external-change cases through the injected query.",
+        "Run owner-transition commit-marker recovery and concurrent recipient deduplication through the injected query.",
+        "Compare delivery records, warnings, refusal behavior, and replay results with the current concrete adapter path."
+      ],
+      "anchors": [
+        "src/utils/task-delivery.ts:443",
+        "src/utils/task-delivery.ts:539",
+        "src/utils/clean-cut-round2.test.ts:157",
+        "src/utils/owner-transition-outbox.contract.test.ts:66"
+      ]
+    }
+  ],
+  "proposed": {
+    "dependencyRules": [
+      "Pi composition root depends on trio-facing registration and projections.",
+      "The trio-facing facade depends on separate Team, Task, Alert, and Coordination application ports.",
+      "Coordination depends on read-only Team, Task, and Alert query ports.",
+      "Task and Alert each own their current-Membership resolver interface; composition-root adapters implement it by calling a Team query port.",
+      "Team owns its assigned-work guard interface; a composition-root adapter implements it by calling a Task query port.",
+      "Consumer-owned cross-authority ports create runtime collaboration, not direct authority source dependencies.",
+      "Membership observation depends only on a narrow read-only Team/runtime projection.",
+      "No authority imports trio-facing schemas, renderers, test doubles, or another authority to implement a reverse query."
+    ],
+    "currentToTarget": [
+      {
+        "current": "team_core",
+        "target": "team_authority_and_role_realization"
+      },
+      {
+        "current": "task_contract_and_authority_adapters",
+        "target": "task_authority"
+      },
+      {
+        "current": "task_delivery_and_recovery",
+        "target": "task_authority"
+      },
+      {
+        "current": "alert_acceptance_and_delivery",
+        "target": "alert_authority"
+      },
+      {
+        "current": "coordination_journal_and_position",
+        "target": "coordination_observation"
+      },
+      {
+        "current": "model_tool_facade_and_projections",
+        "target": "trio_facing_interface_and_projections",
+        "splitRequired": "Move authority application behavior behind separate semantic ports."
+      },
+      {
+        "current": "pi_composition_and_lifecycle",
+        "target": "trio_facing_interface_and_projections",
+        "splitRequired": "Move Team lifecycle and carrier policy to Team authority; retain only Pi hook adaptation and composition."
+      },
+      {
+        "current": "membership_observation_projector",
+        "target": "membership_observation"
+      },
+      {
+        "current": "shared_contract_and_path_registries",
+        "target": "support_mechanisms",
+        "splitRequired": "Move each domain record to its owning subsystem; paths retain no domain truth."
+      }
+    ],
+    "targetDependencyGraphKind": "acyclic_source_dependencies",
+    "consumerOwnedPorts": [
+      {
+        "id": "task_current_membership_resolver",
+        "owner": "task_authority",
+        "implementedBy": "composition_root_task_membership_adapter",
+        "runtimeProvider": "team_read_only_current_membership_query"
+      },
+      {
+        "id": "alert_current_membership_resolver",
+        "owner": "alert_authority",
+        "implementedBy": "composition_root_alert_membership_adapter",
+        "runtimeProvider": "team_read_only_current_membership_query"
+      },
+      {
+        "id": "team_assigned_work_guard",
+        "owner": "team_authority_and_role_realization",
+        "implementedBy": "composition_root_assigned_work_adapter",
+        "runtimeProvider": "task_read_only_assigned_work_query"
+      }
+    ],
+    "compositionAdapters": [
+      {
+        "id": "composition_root_task_membership_adapter",
+        "implements": "task_current_membership_resolver",
+        "runtimeCalls": "team_read_only_current_membership_query"
+      },
+      {
+        "id": "composition_root_alert_membership_adapter",
+        "implements": "alert_current_membership_resolver",
+        "runtimeCalls": "team_read_only_current_membership_query"
+      },
+      {
+        "id": "composition_root_assigned_work_adapter",
+        "implements": "team_assigned_work_guard",
+        "runtimeCalls": "task_read_only_assigned_work_query"
+      }
+    ],
+    "targetDependencies": [
+      {
+        "from": "pi_composition_root",
+        "to": "trio_facing_interface_and_projections",
+        "through": "registration_and_projection_wiring"
+      },
+      {
+        "from": "trio_facing_interface_and_projections",
+        "to": "team_authority_and_role_realization",
+        "through": "team_application_port"
+      },
+      {
+        "from": "trio_facing_interface_and_projections",
+        "to": "task_authority",
+        "through": "task_application_port"
+      },
+      {
+        "from": "trio_facing_interface_and_projections",
+        "to": "alert_authority",
+        "through": "alert_application_port"
+      },
+      {
+        "from": "trio_facing_interface_and_projections",
+        "to": "coordination_observation",
+        "through": "coordination_application_port"
+      },
+      {
+        "from": "coordination_observation",
+        "to": "team_authority_and_role_realization",
+        "through": "read_only_team_query"
+      },
+      {
+        "from": "coordination_observation",
+        "to": "task_authority",
+        "through": "read_only_task_query"
+      },
+      {
+        "from": "coordination_observation",
+        "to": "alert_authority",
+        "through": "read_only_alert_query"
+      },
+      {
+        "from": "membership_observation",
+        "to": "team_authority_and_role_realization",
+        "through": "narrow_read_only_team_runtime_projection"
+      }
+    ],
+    "forbiddenDependencies": [
+      {
+        "from": "task_authority",
+        "to": "team_authority_and_role_realization",
+        "reason": "Task owns its resolver interface; the composition adapter calls the Team query port."
+      },
+      {
+        "from": "alert_authority",
+        "to": "team_authority_and_role_realization",
+        "reason": "Alert owns its resolver interface; the composition adapter calls the Team query port."
+      },
+      {
+        "from": "team_authority_and_role_realization",
+        "to": "task_authority",
+        "reason": "Team owns its assigned-work guard; the composition adapter calls the Task query port."
+      },
+      {
+        "from": "team_authority_and_role_realization",
+        "to": "membership_observation"
+      },
+      {
+        "from": "task_authority",
+        "to": "trio_facing_interface_and_projections"
+      },
+      {
+        "from": "alert_authority",
+        "to": "trio_facing_interface_and_projections"
+      },
+      {
+        "from": "coordination_observation",
+        "to": "trio_facing_interface_and_projections"
+      }
+    ],
+    "firstEligibleSeam": {
+      "afterGate": "TASK-RECONCILIATION-INJECTION",
+      "change": "Move Task contracts to Task ownership and inject Task reconciliation queries while preserving temporary re-exports and persisted records."
+    }
+  }
+}

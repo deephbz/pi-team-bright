@@ -55,6 +55,22 @@
       "result": "characterized_as_successful_empty_updates_without_timeout_discriminant"
     },
     {
+      "id": "branch_safe_observation",
+      "stages": ["leader_observation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/hidden-observation.test.ts",
+          "proofLimit": "Exercises hidden observation records directly rather than registered team_sync and Pi persistence hooks."
+        },
+        {
+          "path": "src/model-tool-contract/durable-model-tool-port.test.ts",
+          "proofLimit": "Exercises the durable port directly and cannot prove provider-input acknowledgement composition in the real extension."
+        }
+      ],
+      "result": "characterized_as_snapshot_required_before_acknowledged_baseline_matching_result_replayed_until_exact_branch_persistence_and_mismatched_lineage_requires_snapshot"
+    },
+    {
       "id": "cancellation",
       "stages": ["leader_observation"],
       "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
@@ -143,7 +159,7 @@
     "No real Pi subprocess or terminal renderer receipt spans all four causal stages. The primary test loads the real extension and uses its registered tools and lifecycle hooks in one process.",
     "The test proves display=true custom-message intent and steer actuation, not terminal pixels or a model's interpretation.",
     "Task presentation has no public cancellation operation or delivery-timeout result. Cancellation and timeout are characterized at public team_sync only.",
-    "This slice establishes and acknowledges a snapshot before updates, but does not prove updates-before-snapshot refusal or exact branch-lineage behavior. COORD-002 remains missing.",
+    "COORD-002 is characterized through registered tools and Pi hooks for updates-before-snapshot refusal, exact active-branch result acknowledgement, pending replay when the result is absent from the branch, and snapshot-required on lineage mismatch. It does not prove real Pi fork identity, cross-process resume, compaction, or crash between result persistence and provider input.",
     "The single task_read projection assertion is not broad TRIO-004 coverage. It does not cover other tools, failure variants, privacy allowlists, or malformed results.",
     "Process death before custom-message persistence remains supported only by direct delivery tests; this slice does not kill a real Worker process.",
     "Concurrent Membership replacement during acknowledgement, simultaneous duplicate publishers, and exact latency distributions remain uncharacterized."

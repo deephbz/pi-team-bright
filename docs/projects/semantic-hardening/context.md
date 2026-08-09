@@ -2,7 +2,7 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: first outside-in characterization verified; production refactor has not started
+Status: test hardening and audit documentation verified; production refactor has not started
 Architecture impact: none until accepted code dependencies or depicted responsibilities change
 
 ## Outcome
@@ -39,9 +39,16 @@ Baseline declaration receipt:
 - Independent review passed the corrected 18-test slice, typecheck, lane
   validation, JSON parsing, public-source hashes, and diff checks. COORD-002 and
   broad TRIO-004 coverage remain explicitly missing rather than overclaimed.
-- The first commit contains outside-in characterization only. The later subsystem
-  audit stays outside this commit. Production refactoring has not started.
-- Current blocker: none.
+- Commit `ed7ae57` contains outside-in characterization only. Phase two adds
+  COORD-002 and Alert publication-failure evidence plus the accepted-five-part
+  [`subsystem audit`](subsystem-boundary-audit.md) and machine-operable
+  [`dependency map`](subsystem-dependency-map.json).
+- ALERT-004 records lost public recipient outcomes and duplicate delivery after
+  event-publication failure and exact retry. It remains `unclassified`; no
+  behavior change is authorized.
+- Independent phase-two verification passes. Restart and later-presentation
+  evidence for ALERT-004 and its owner classification remain open.
+- Production refactoring has not started. Current blocker: none.
 
 ## Constraints still in force
 
@@ -107,7 +114,7 @@ CLI help is the command source of truth. Require `HERDR_ENV=1` before control.
 - [ ] Expand the seed behavior inventory into rules and meaningful outcomes.
 - [ ] Implement the deterministic Pi trigger/turn harness.
 - [x] Commit outside-in characterization.
-- [ ] Record lessons, harden tests, and commit test/docs improvements.
+- [x] Record lessons, harden tests, and commit test/docs improvements.
 - [ ] Ratify current-to-target dependency changes.
 - [ ] Refactor to the five-subsystem target and commit.
 - [ ] Run bounded quality and optimization Tasks, one commit each.
@@ -117,7 +124,7 @@ CLI help is the command source of truth. Require `HERDR_ENV=1` before control.
 ## Behavior inventory coordinates
 
 The machine-operable seed is
-[`semantic-hardening-behavior-inventory.json`](semantic-hardening-behavior-inventory.json).
+[`behavior-inventory.json`](behavior-inventory.json).
 It is deliberately incomplete and keeps every initial behavior unclassified.
 
 Give each behavior a stable identifier. Record these coordinates before adding

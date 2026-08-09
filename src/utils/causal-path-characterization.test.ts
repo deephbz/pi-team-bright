@@ -295,6 +295,7 @@ describe("causal-path characterization inventory", () => {
       "stale_membership",
       "delivery_failure",
       "timeout",
+      "branch_safe_observation",
     ]));
     for (const scenario of inventory.scenarios) {
       expect(scenario.stages.length).toBeGreaterThan(0);
@@ -412,6 +413,68 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     await startWorker(restarted, restartedCtx);
     expect(taskMessages(restarted)).toHaveLength(0);
     expect(deliveryRecords(state.teamName)).toHaveLength(1);
+  }, 60_000);
+
+  it("requires an acknowledged snapshot and keeps observation position on the exact active branch", async () => {
+    const state = await fixture("branch-position");
+    const lead = leaderHarness();
+    const leadCtx = sessionContext(state.leaderSessionFile, [{
+      type: "message",
+      id: "initial-user-entry",
+      parentId: null,
+      message: { role: "user", content: [{ type: "text", text: "orient to the Team" }] },
+    }]);
+
+    const required = await invoke(lead, "team_sync", "updates-before-snapshot", { view: "updates" }, leadCtx);
+    expect(required.details).toMatchObject({
+      kind: "snapshot_required",
+      state_changed: false,
+      observation_advanced: false,
+    });
+    const stillRequired = await invoke(lead, "team_sync", "updates-before-snapshot-again", { view: "updates" }, leadCtx);
+    expect(stillRequired.details).toEqual(required.details);
+
+    const snapshot = await invoke(lead, "team_sync", "branch-snapshot", { view: "snapshot" }, leadCtx);
+    await acknowledgeSync(lead, leadCtx, "branch-snapshot", snapshot, "branch-snapshot-entry");
+    const acknowledgedSnapshotBranch = structuredClone(leadCtx.branch);
+
+    const created = await invoke(lead, "task_create", "branch-task", {
+      tasks: [{ operation_id: "branch-task", title: "Branch-visible Task", goal: "Remain visible only from an acknowledged active-branch baseline.", assignee: "worker" }],
+    }, leadCtx);
+    const task = created.details.outcomes[0].task;
+    const updates = await invoke(lead, "team_sync", "branch-updates", { view: "updates" }, leadCtx);
+    expect(updates.details).toMatchObject({
+      kind: "updates",
+      task_changes: [{ task_id: task.id, current: { version: task.version } }],
+    });
+
+    leadCtx.branch.splice(0, leadCtx.branch.length, {
+      type: "message",
+      id: "mismatched-branch-root",
+      parentId: null,
+      message: { role: "user", content: [{ type: "text", text: "different branch" }] },
+    });
+    await lead.emit("before_provider_request", {
+      payload: { persistedResult: updates.content[0].text },
+    }, leadCtx);
+    const replay = await invoke(lead, "team_sync", "branch-updates-replay", { view: "updates" }, leadCtx);
+    expect(replay.details).toEqual(updates.details);
+    expect(replay.content).toEqual(updates.content);
+
+    leadCtx.branch.splice(0, leadCtx.branch.length, ...acknowledgedSnapshotBranch);
+    await acknowledgeSync(lead, leadCtx, "branch-updates", updates, "branch-updates-entry");
+    leadCtx.branch.splice(0, leadCtx.branch.length, {
+      type: "message",
+      id: "fork-lineage-root",
+      parentId: null,
+      message: { role: "user", content: [{ type: "text", text: "fork lineage" }] },
+    });
+    const mismatched = await invoke(lead, "team_sync", "mismatched-lineage", { view: "updates" }, leadCtx);
+    expect(mismatched.details).toMatchObject({
+      kind: "snapshot_required",
+      state_changed: false,
+      observation_advanced: false,
+    });
   }, 60_000);
 
   it("characterizes public team_sync timeout and cancellation without losing later authority changes", async () => {

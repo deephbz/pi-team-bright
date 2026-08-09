@@ -266,3 +266,35 @@ changes; append a correction.
   selected content is tests, test support, machine-operable inventories,
   baseline and continuity artifacts, and the exhaustive-lane declaration.
 - No production, dependency, public schema, export, or default behavior changed.
+
+## 2026-08-09 — test hardening and subsystem-audit evidence
+
+- Phase two starts from characterization commit `ed7ae57` and changes tests,
+  inventories, and Project documentation only.
+- COORD-002 now has a registered-extension case. Updates before an acknowledged
+  snapshot require a snapshot without position advance. Exact result persistence
+  on the active branch enables updates; absent persistence replays the pending
+  result; acknowledged lineage mismatch requires a new snapshot.
+- Alert publication failure is now executable through real `alert_send`, Beads,
+  Membership, inbox, Task, and event records. One delivery can commit before
+  event publication fails. The public result then loses accepted and refused
+  recipients, the cursor does not advance, and Task state stays unchanged.
+- Exact retry after publication recovers creates a second accepted delivery with
+  a new Alert identity. Only the retry Alert reaches the event journal. Inventory
+  entry ALERT-004 records this behavior as `characterized` and `unclassified`;
+  no owner decision yet calls it intended or defective.
+- The subsystem audit and machine dependency map separate current facts,
+  assessments, risks, unresolved gates, and proposals. The target source graph
+  is acyclic: consumer-owned cross-authority interfaces stay in their consumers,
+  while composition adapters call provider query ports.
+- The leader's focused phase-two run passed two files and seven tests. Typecheck,
+  lane validation, three JSON parses, and `git diff --check` passed.
+- Independent review measured the real-Beads Alert test at 18.54 seconds, so it
+  moved to exhaustive-only. The corrected lane manifest reports 75 files: 55
+  fast and 20 exhaustive. Review also found and fixed one local inventory link.
+- Final independent recheck passed both test files, typecheck, lane validation,
+  JSON and Markdown-link checks, evidence-path checks, target-graph checks,
+  public-source hashes, and `git diff --check`.
+- Architecture impact remains **none**. These artifacts propose dependency
+  changes but do not yet change accepted production responsibilities or source
+  dependencies.
