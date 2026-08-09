@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskReconciliationQuery } from "../task-authority/contracts";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import {
@@ -14,6 +15,15 @@ import {
 } from "./task-delivery";
 
 const created: string[] = [];
+
+function reconciliationQuery(
+  readOwnerTransitionEvidence: TaskReconciliationQuery["readOwnerTransitionEvidence"],
+): TaskReconciliationQuery {
+  return {
+    readOwnerTransitionEvidence,
+    readCurrentTasks: async () => [],
+  };
+}
 
 async function fixture(suffix: string) {
   const teamName = `assignee-outbox-${suffix}-${process.pid}-${Date.now()}`;
@@ -72,7 +82,7 @@ describe("assignee-transition authority-linked outbox", () => {
     await prepareOwnerTransitionIntent({ operationId, teamName, before, afterOwner: "new-assignee" });
 
     await reconcileOwnerTransitionOutbox(teamName, {
-      readEvidence: async () => ({ task: before, operationId: undefined }),
+      query: reconciliationQuery(async () => ({ task: before, operationId: undefined })),
     });
     expect(await readOwnerTransitionIntents(teamName)).toMatchObject([{ operationId, state: "prepared" }]);
     expect(await readTaskDeliveries(teamName, "old-assignee")).toEqual([]);
@@ -80,7 +90,7 @@ describe("assignee-transition authority-linked outbox", () => {
 
     const committed = after(before, "new-assignee", "beads_v2");
     await reconcileOwnerTransitionOutbox(teamName, {
-      readEvidence: async () => ({ task: committed, operationId }),
+      query: reconciliationQuery(async () => ({ task: committed, operationId })),
     });
     expect(await readOwnerTransitionIntents(teamName)).toMatchObject([{ operationId, state: "committed" }]);
     expect(await readTaskDeliveries(teamName, "old-assignee")).toMatchObject([{ changeKind: "ownership_lost", taskProjection: { id: committed.id, assignee: "new-assignee", status: committed.status } }]);
@@ -94,7 +104,7 @@ describe("assignee-transition authority-linked outbox", () => {
     await prepareOwnerTransitionIntent({ operationId, teamName, before, afterOwner: "new-assignee" });
 
     await reconcileOwnerTransitionOutbox(teamName, {
-      readEvidence: async () => ({ task: committed, operationId }),
+      query: reconciliationQuery(async () => ({ task: committed, operationId })),
     });
 
     const config = await teams.readConfig(teamName);
@@ -130,7 +140,7 @@ describe("assignee-transition authority-linked outbox", () => {
     expect(await readTaskDeliveries(teamName, "new-assignee")).toHaveLength(0);
 
     await reconcileOwnerTransitionOutbox(teamName, {
-      readEvidence: async () => ({ task: committed, operationId }),
+      query: reconciliationQuery(async () => ({ task: committed, operationId })),
     });
     expect(await readTaskDeliveries(teamName, "old-assignee")).toHaveLength(1);
     expect(await readTaskDeliveries(teamName, "new-assignee")).toHaveLength(1);
@@ -161,7 +171,7 @@ describe("assignee-transition authority-linked outbox", () => {
     expect(await readTaskDeliveries(teamName, "new-assignee")).toMatchObject([{ changeKind: "assigned" }]);
 
     await reconcileOwnerTransitionOutbox(teamName, {
-      readEvidence: async () => ({ task: secondCommitted, operationId: secondOperation }),
+      query: reconciliationQuery(async () => ({ task: secondCommitted, operationId: secondOperation })),
     });
     expect(await readTaskDeliveries(teamName, "new-assignee")).toMatchObject([
       { changeKind: "assigned", taskProjection: { id: firstCommitted.id, assignee: "new-assignee" } },
@@ -213,8 +223,8 @@ describe("assignee-transition authority-linked outbox", () => {
     const readEvidence = async () => ({ task: committed, operationId });
 
     await Promise.all([
-      reconcileOwnerTransitionOutbox(teamName, { readEvidence }),
-      reconcileOwnerTransitionOutbox(teamName, { readEvidence }),
+      reconcileOwnerTransitionOutbox(teamName, { query: reconciliationQuery(readEvidence) }),
+      reconcileOwnerTransitionOutbox(teamName, { query: reconciliationQuery(readEvidence) }),
     ]);
 
     expect(await readTaskDeliveries(teamName, "old-assignee")).toHaveLength(1);

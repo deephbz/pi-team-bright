@@ -8,6 +8,7 @@ import piTeams from "../../extensions/index";
 import { writeJsonAtomic } from "./atomic-json";
 import { BeadsTaskStore, TASK_METADATA_KEY, TASK_METADATA_SCHEMA, readBeadsAuthorityFingerprint } from "./beads";
 import { projectTaskCard } from "../model-tool-contract/beads-task-adapter";
+import { BeadsTaskReconciliationQuery } from "../task-authority/beads-reconciliation-query";
 import type { BdRunner } from "./beads";
 import type { Member, TeamConfig } from "./models";
 import type { TaskCard } from "../model-tool-contract/task-domain";
@@ -162,6 +163,7 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "worker", sourceSession),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "worker", requireExpectedVersion: false });
+    const reconciliationQuery = new BeadsTaskReconciliationQuery(teamName);
     const created = await createTask(store, "self assignment", "same name is not identity");
 
     const selfAssigned = (await applySemanticTaskUpdate(teamName, created.id, {
@@ -176,12 +178,12 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
     })).task;
     expect(selfAssigned.assignee).toBe("worker");
     expect(await readTaskDeliveries(teamName, "worker")).toEqual([]);
-    expect(await reconcileTaskChanges(teamName, "worker")).toBe(0);
+    expect(await reconcileTaskChanges(teamName, "worker", reconciliationQuery)).toBe(0);
     expect(await readTaskDeliveries(teamName, "worker")).toEqual([]);
 
     // A fork/new Session with the same display name is a different Agent.
     await teams.updateMember(teamName, "worker", { sessionFile: sameNameOtherSession });
-    expect(await reconcileTaskChanges(teamName, "worker")).toBe(1);
+    expect(await reconcileTaskChanges(teamName, "worker", reconciliationQuery)).toBe(1);
     expect(await readTaskDeliveries(teamName, "worker")).toEqual([
       expect.objectContaining({
         recipientSessionFile: sameNameOtherSession,
@@ -200,6 +202,7 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "worker", sessionFile),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "worker", requireExpectedVersion: false });
+    const reconciliationQuery = new BeadsTaskReconciliationQuery(teamName);
     const created = await createTask(store, "post-state", "v0");
     const selfAssigned = (await applySemanticTaskUpdate(teamName, created.id, { assignee: "worker" }, {
       actor: "worker",
@@ -208,14 +211,14 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "v0", current_context: "The Task is ready for canonical delivery." },
       taskCardProjector: projectTaskCard,
     })).task;
-    expect(await reconcileTaskChanges(teamName, "worker")).toBe(0);
+    expect(await reconcileTaskChanges(teamName, "worker", reconciliationQuery)).toBe(0);
 
     const changed = await store.update(created.id, { description: "external v2" }, {
       actor: "team-lead",
       expectedVersion: selfAssigned.version,
     });
     expect(changed.version).toBeDefined();
-    expect(await reconcileTaskChanges(teamName, "worker")).toBe(1);
+    expect(await reconcileTaskChanges(teamName, "worker", reconciliationQuery)).toBe(1);
     expect(await readTaskDeliveries(teamName, "worker")).toEqual([
       expect.objectContaining({
         changeKind: "task_changed",

@@ -1,20 +1,30 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "current_facts_and_proposed_target",
-  "reviewedRevision": "ed7ae5710f77352741f2b20be823d9c59941f784",
+  "status": "first_task_boundary_implemented_and_remaining_target_proposed",
+  "reviewedRevision": "e275e03c9c6152730066e67f66af1805a6080e75",
+  "reviewedTreeState": {
+    "kind": "stable_uncommitted_working_tree",
+    "implementationTask": "semantic-hardening-direct-2el",
+    "equivalenceTask": "semantic-hardening-direct-hkp"
+  },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
+  "architectureImpact": {
+    "classification": "changed",
+    "scope": "internal Task dependency boundary",
+    "canonicalHyperCarrierDiagram": "unchanged_because_pi_team_bright_internals_are_opaque"
+  },
   "evidenceBasis": {
     "productionTypeScript": {
-      "files": 60,
-      "lines": 18145,
-      "staticLocalEdges": 204,
+      "files": 62,
+      "lines": 18225,
+      "staticLocalEdges": 213,
       "nontrivialStaticStronglyConnectedComponents": 0,
-      "changedSinceProductionTypeScriptBaseline": false
+      "changedSinceProductionTypeScriptBaseline": true
     },
     "testAndSupportTypeScript": {
-      "files": 77,
-      "lines": 20585
+      "files": 78,
+      "lines": 20888
     },
     "selectedPhaseTwoEvidence": [
       {
@@ -26,6 +36,13 @@
         "path": "src/utils/causal-path-characterization.test.ts",
         "state": "independently_verified_characterization",
         "scope": "Coordination branch-observation characterization"
+      }
+    ],
+    "selectedPhaseThreeEvidence": [
+      {
+        "path": "src/task-authority/reconciliation-equivalence.test.ts",
+        "state": "independently_verified_equivalence",
+        "scope": "Injected Task reconciliation behavior and dependency fences"
       }
     ]
   },
@@ -90,7 +107,9 @@
           "src/model-tool-contract/task-domain.ts",
           "src/model-tool-contract/task-version-ref.ts",
           "src/model-tool-contract/beads-task-adapter.ts",
-          "src/model-tool-contract/beads-authority-adapter.ts"
+          "src/model-tool-contract/beads-authority-adapter.ts",
+          "src/task-authority/contracts.ts",
+          "src/task-authority/beads-reconciliation-query.ts"
         ]
       },
       {
@@ -158,11 +177,11 @@
     ],
     "currentDependencies": [
       {
-        "from": "task_contract_and_authority_adapters",
-        "to": "model_tool_facade_and_projections",
-        "mechanism": "static_type_import",
+        "from": "task_delivery_and_recovery",
+        "to": "task_contract_and_authority_adapters",
+        "mechanism": "static_task_owned_query_contract",
         "evidence": [
-          "src/model-tool-contract/beads-task-adapter.ts:25"
+          "src/utils/task-delivery.ts:18"
         ]
       },
       {
@@ -190,12 +209,12 @@
         ]
       },
       {
-        "from": "task_delivery_and_recovery",
+        "from": "pi_composition_and_lifecycle",
         "to": "task_contract_and_authority_adapters",
-        "mechanism": "dynamic_import_for_reconciliation",
+        "mechanism": "injected_task_reconciliation_query",
         "evidence": [
-          "src/utils/task-delivery.ts:457",
-          "src/utils/task-delivery.ts:545"
+          "extensions/index.ts:40",
+          "extensions/index.ts:703"
         ]
       },
       {
@@ -253,8 +272,8 @@
         "to": "team_core",
         "mechanism": "direct_lifecycle_orchestration",
         "evidence": [
-          "extensions/index.ts:802",
-          "extensions/index.ts:1099"
+          "extensions/index.ts:803",
+          "extensions/index.ts:1100"
         ]
       },
       {
@@ -262,7 +281,7 @@
         "to": "task_contract_and_authority_adapters",
         "mechanism": "assigned_work_guard_and_application_calls",
         "evidence": [
-          "extensions/index.ts:1131"
+          "extensions/index.ts:1132"
         ]
       },
       {
@@ -279,11 +298,13 @@
   "assessments": [
     {
       "id": "ASSESS-UPWARD-TASK-TYPE",
-      "statement": "Task authority depends upward on trio-facing types through in-memory-team-port.ts."
+      "state": "resolved_in_first_task_boundary",
+      "statement": "Task update and journal types are Task-owned; in-memory-team-port.ts keeps compatibility type re-exports without becoming their authority."
     },
     {
       "id": "ASSESS-DYNAMIC-TASK-CYCLE",
-      "statement": "Task mutation and Task-delivery reconciliation form a semantic cycle hidden from the static graph by dynamic imports."
+      "state": "resolved_in_first_task_boundary",
+      "statement": "Task delivery consumes an injected TaskReconciliationQuery and no longer imports Beads Task adapters dynamically; the static production file graph remains acyclic."
     },
     {
       "id": "ASSESS-COMBINED-FACADE",
@@ -334,25 +355,68 @@
         "src/utils/alerts.test.ts:87",
         "src/utils/alert-publication-failure.characterization.test.ts"
       ]
-    },
+    }
+  ],
+  "resolvedTestGates": [
     {
       "id": "TASK-RECONCILIATION-INJECTION",
-      "state": "proposed_seam_not_equivalence_tested",
-      "blocks": "Removal of dynamic Task-adapter imports from task-delivery.ts",
-      "currentFact": "Current tests cover concrete reconciliation and the owner-transition readEvidence seam, but not the proposed full injected Task query boundary.",
-      "requiredEvidence": [
-        "Run current self-authored suppression and later external-change cases through the injected query.",
-        "Run owner-transition commit-marker recovery and concurrent recipient deduplication through the injected query.",
-        "Compare delivery records, warnings, refusal behavior, and replay results with the current concrete adapter path."
+      "state": "closed_equivalence_verified",
+      "closedBy": [
+        "semantic-hardening-direct-2el",
+        "semantic-hardening-direct-hkp"
       ],
+      "currentFact": "Task delivery consumes an injected TaskReconciliationQuery. Four deterministic equivalence tests preserve suppression, external-change delivery, owner-marker recovery, exact replacement binding, delivery deduplication, recovery replay, and metadata-gap refusal.",
+      "proofLimit": "This gate proves the reconciliation seam only. It does not prove the remaining Task publication or other subsystem migrations.",
       "anchors": [
-        "src/utils/task-delivery.ts:443",
-        "src/utils/task-delivery.ts:539",
-        "src/utils/clean-cut-round2.test.ts:157",
-        "src/utils/owner-transition-outbox.contract.test.ts:66"
+        "src/task-authority/contracts.ts:41",
+        "src/task-authority/beads-reconciliation-query.ts:12",
+        "src/utils/task-delivery.ts:544",
+        "src/task-authority/reconciliation-equivalence.test.ts",
+        "src/model-tool-contract/canonical-task-cutover.acceptance.test.ts:158"
       ]
     }
   ],
+  "implemented": {
+    "taskReconciliationBoundary": {
+      "state": "implemented_equivalence_verified",
+      "contracts": [
+        "src/task-authority/contracts.ts"
+      ],
+      "beadsAdapter": "src/task-authority/beads-reconciliation-query.ts",
+      "compositionRoot": "extensions/index.ts:703",
+      "compatibilityReExports": [
+        "src/model-tool-contract/in-memory-team-port.ts"
+      ],
+      "removedDependencies": [
+        "beads-task-adapter.ts -> in-memory-team-port.ts",
+        "task-delivery.ts dynamic import -> beads-task-adapter.ts",
+        "task-delivery.ts dynamic import -> beads-authority-adapter.ts"
+      ],
+      "cycleStatus": {
+        "staticProductionFileGraph": "acyclic",
+        "dynamicTaskAdapterCycle": "removed"
+      },
+      "unchanged": [
+        "public_tools",
+        "public_schemas",
+        "package_exports",
+        "persisted_records",
+        "filenames",
+        "ordering",
+        "retry",
+        "timing",
+        "default_behavior"
+      ],
+      "remainingScope": [
+        "task_publication_injection",
+        "team_authority_and_role_realization",
+        "alert_authority",
+        "coordination_observation",
+        "trio_facing_interface_and_projections",
+        "additive_membership_observation"
+      ]
+    }
+  },
   "proposed": {
     "dependencyRules": [
       "Pi composition root depends on trio-facing registration and projections.",
@@ -524,8 +588,10 @@
       }
     ],
     "firstEligibleSeam": {
+      "state": "implemented",
       "afterGate": "TASK-RECONCILIATION-INJECTION",
-      "change": "Move Task contracts to Task ownership and inject Task reconciliation queries while preserving temporary re-exports and persisted records."
+      "change": "Move Task update and journal contracts to Task ownership and inject Task reconciliation queries while preserving temporary re-exports and persisted records.",
+      "proofLimit": "TaskCard, TaskVersionRef, Task publication, and the other subsystem migrations remain at their current boundaries."
     }
   }
 }

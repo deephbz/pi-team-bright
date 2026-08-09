@@ -41,6 +41,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/utils/worker-launch-bridge";
 import { BeadsTaskAdapter } from "../src/model-tool-contract/beads-task-adapter";
+import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
 import { taskVersionRef } from "../src/model-tool-contract/task-version-ref";
@@ -816,6 +817,7 @@ export default function (pi: ExtensionAPI) {
       membershipId: member.membershipId,
       sessionFile,
       pollMs: taskPollMs(),
+      reconciliationQuery: new BeadsTaskReconciliationQuery(teamName),
     });
     await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
   }

@@ -4,6 +4,7 @@ import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskReconciliationQuery } from "../task-authority/contracts";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import {
   enqueueTaskChange,
@@ -17,6 +18,15 @@ import {
 } from "./task-delivery";
 
 const created: string[] = [];
+
+function reconciliationQuery(
+  readOwnerTransitionEvidence: TaskReconciliationQuery["readOwnerTransitionEvidence"],
+): TaskReconciliationQuery {
+  return {
+    readOwnerTransitionEvidence,
+    readCurrentTasks: async () => [],
+  };
+}
 
 async function fixture(suffix: string) {
   const teamName = `task-delivery-${suffix}-${process.pid}-${Date.now()}`;
@@ -303,7 +313,9 @@ describe("Task-native delivery", () => {
       sessionFile,
       pollMs: 60_000,
       reconcile: async () => 0,
-      reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, { readEvidence }),
+      reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, {
+        query: reconciliationQuery(readEvidence),
+      }),
     });
 
     await delivery.start([]);
@@ -358,7 +370,9 @@ describe("Task-native delivery", () => {
       sessionFile,
       pollMs: 60_000,
       reconcile: async () => 0,
-      reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, { readEvidence }),
+      reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, {
+        query: reconciliationQuery(readEvidence),
+      }),
     });
 
     await delivery.start([]);

@@ -24,7 +24,6 @@ import {
 import type {
   ExactLeaderSessionId,
   ModelToolLeaderLaunchContext,
-  ModelToolTaskJournalEntry,
   ModelToolTeamCurrent,
   ModelToolTeamPort,
   ModelToolWorkerCurrent,
@@ -38,7 +37,6 @@ import type {
   CreateTaskPortResult,
   UpdateTasksPortResult,
   TaskUpdatePortOutcome,
-  ModelToolTaskUpdateInput,
   WorkerStopPortResult,
   TeamShutdownPortResult,
   TaskLinkPortInput,
@@ -46,6 +44,10 @@ import type {
   AlertSendPortResult,
 } from "./in-memory-team-port";
 import type { TaskCard, TaskCardWarning } from "./task-domain";
+import type {
+  ModelToolTaskJournalEntry,
+  ModelToolTaskUpdateInput,
+} from "../task-authority/contracts";
 import type { Member, TeamConfig, TeamEvent } from "../utils/models";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { currentMember, livenessIsComplete, livenessIsProductive, readWorkerRunObservation, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";

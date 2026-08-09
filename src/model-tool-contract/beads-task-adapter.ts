@@ -27,7 +27,7 @@ import {
 import type {
   ModelToolTaskJournalEntry,
   ModelToolTaskUpdateInput,
-} from "./in-memory-team-port";
+} from "../task-authority/contracts";
 import type { TaskWriteOptions } from "../utils/beads";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 import {

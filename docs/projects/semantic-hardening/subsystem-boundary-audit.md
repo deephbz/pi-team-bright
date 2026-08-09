@@ -1,11 +1,14 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-09
-Status: source and test audit; no production change
-Reviewed source revision: `ed7ae5710f77352741f2b20be823d9c59941f784`
+Status: maintained audit; first Task-authority dependency seam committed and independently verified
+Reviewed base revision: `e275e03` (`audit/semantic-hardening-behavior-inventory`)
 Production TypeScript baseline: `e55b4f2a9190d700a03d95cb9dee75e5c892ca0a`
-(no production TypeScript changed through the reviewed revision)
-Architecture impact of this audit: **none**
+Implementation evidence: closed Tasks `semantic-hardening-direct-2el` and
+`semantic-hardening-direct-hkp`, plus their shared source and test tree
+Architecture impact: **changed** for the internal Task dependency boundary.
+HyperCarrier's canonical diagram stays unchanged because it keeps Pi Team Bright
+internals opaque.
 
 ## Scope and evidence
 
@@ -14,13 +17,15 @@ authority and Role realization, Task authority, Alert authority, Coordination
 observation, and Trio-facing interface and projections. Public Membership
 observation remains an additive machine projection of Team authority.
 
-The review covered 60 production TypeScript files with 18,145 lines. It also
-covered 77 current test and test-support files with 20,585 lines, plus the
-scripts, benchmarks, and test configuration. This includes the committed
-causal-path characterization and external test harness. A TypeScript-AST scan
-found 204 unique local static imports between production files and no static
-strongly connected component. Dynamic imports and broad composition modules
-still hide semantic cycles. Phase-two branch-observation and Alert-publication
+The initial review covered 60 production TypeScript files with 18,145 lines and
+77 test or test-support files with 20,585 lines. The implemented tree has 62
+production TypeScript files with 18,225 lines and 78 test or test-support files
+with 20,888 lines. This includes the committed causal-path characterization,
+external test harness, and reconciliation-equivalence test. A
+TypeScript-AST scan now finds 213 unique local static imports between production
+files and no static strongly connected component. The prior hidden dynamic
+Task-adapter cycle is removed; broad composition modules can still hide other
+semantic coupling. Phase-two branch-observation and Alert-publication
 characterizations were not part of the reviewed production revision. Independent
 verification accepted them as current-behavior evidence, not as intended or
 normative contracts. The machine-operable
@@ -53,8 +58,8 @@ Runtime and Role realization is spread across `runtime.ts`,
 (`src/utils/runtime.ts:55`). Worker launch plans reuse, first-binding retry, or
 exact-Session recovery before carrier creation (`src/utils/worker-launch-bridge.ts:132`).
 The extension performs startup admission, runtime claim, Session bind, event
-publication, stop, and shutdown (`extensions/index.ts:802`,
-`extensions/index.ts:1099`).
+publication, stop, and shutdown (`extensions/index.ts:803`,
+`extensions/index.ts:1100`).
 
 Team compatibility is not isolated. `TeamConfig` also carries Beads authority,
 workspace, fingerprint, and Task-cutover fields (`src/utils/models.ts:53`).
@@ -65,7 +70,13 @@ contract.
 
 ### Task authority
 
-The canonical Task contract is `task-domain.ts` plus `task-version-ref.ts`.
+The canonical Task card and version contracts remain `task-domain.ts` plus
+`task-version-ref.ts`. Task update and journal command contracts now live in
+`src/task-authority/contracts.ts`, which also owns the narrow
+`TaskReconciliationQuery`. `BeadsTaskReconciliationQuery` implements that query
+for one Team-scoped authority in
+`src/task-authority/beads-reconciliation-query.ts`; the Pi composition root
+injects it into `TaskChangeDelivery` (`extensions/index.ts:703`).
 `BeadsTaskAdapter` owns metadata parsing, bounded TaskCard projection, opaque
 versions, replay, CAS, and semantic outcomes
 (`src/model-tool-contract/beads-task-adapter.ts:184`,
@@ -77,17 +88,19 @@ publication, and Task-delivery publication.
 `task-delivery.ts` currently owns Task-delivery meaning: exact recipient intent,
 precommit owner-transition markers, committed projections, recovery records,
 tombstones, presentation attempts, and successful-turn acknowledgement
-(`src/utils/task-delivery.ts:44`, `src/utils/task-delivery.ts:338`,
-`src/utils/task-delivery.ts:817`). Session steer is actuation only. A successful
+(`src/utils/task-delivery.ts:45`, `src/utils/task-delivery.ts:340`,
+`src/utils/task-delivery.ts:824`). Session steer is actuation only. A successful
 turn acknowledges presentation but never mutates Task state
-(`src/utils/task-delivery.ts:937`). The current causal inventory maps assignment,
+(`src/utils/task-delivery.ts:950`). The current causal inventory maps assignment,
 exact-Session presentation, acknowledgement, and leader observation
 (`src/utils/causal-path.inventory.json`).
 
 Task and delivery migration remain stopped-epoch compatibility paths in
 `task-migration.ts` and `task-delivery-migration.ts`. Normal delivery refuses
 noncanonical records with an explicit migration requirement
-(`src/utils/task-delivery.ts:664`).
+(`src/utils/task-delivery.ts:671`). `in-memory-team-port.ts` temporarily
+re-exports `ModelToolTaskUpdateInput` and `ModelToolTaskJournalEntry` from the
+Task-owned contract module, so existing internal imports remain compatible.
 
 ### Alert authority
 
@@ -138,8 +151,8 @@ serializes the validated model view separately
 
 `extensions/index.ts` is both the Pi composition root and a second application
 layer. Its process closure holds role, Team, Membership, delivery, tool, footer,
-and model caches (`extensions/index.ts:371`). It also contains Worker schemas
-and execution beside the leader journey (`extensions/index.ts:1165`).
+and model caches (`extensions/index.ts:372`). It also contains Worker schemas
+and execution beside the leader journey (`extensions/index.ts:1166`).
 `team-status.ts` and `team-footer.ts` are human projections, but they import Team
 and Task implementations directly (`src/utils/team-status.ts:3`,
 `src/utils/team-footer.ts:6`).
@@ -154,11 +167,11 @@ to private record changes (`src/public/observation.ts:5`).
 
 ## Boundary assessments
 
-1. The clearest upward dependency is Task authority importing trio-facing
-   types. `beads-task-adapter.ts` imports `ModelToolTaskUpdateInput` and journal
-   types from `in-memory-team-port.ts`
-   (`src/model-tool-contract/beads-task-adapter.ts:25`). Canonical Task commands
-   therefore depend on a model-tool test double.
+1. **Resolved in the implemented Task seam.** `beads-task-adapter.ts` now
+   imports `ModelToolTaskUpdateInput` and journal types from
+   `src/task-authority/contracts.ts`. The trio-facing
+   `in-memory-team-port.ts` imports and re-exports those types for compatibility;
+   Task authority no longer depends upward on the model-tool test double.
 
 2. The Task publication path directly imports Coordination and Team authority.
    `beads-authority-adapter.ts` imports Team/session leases,
@@ -167,11 +180,13 @@ to private record changes (`src/public/observation.ts:5`).
    causal transaction boundary, but concrete imports prevent independent fault
    seams.
 
-3. A semantic Task cycle is hidden by dynamic imports. Task mutation imports
-   `task-delivery.ts`, while Task-delivery reconciliation dynamically imports
-   both Task adapters (`src/utils/task-delivery.ts:459`,
-   `src/utils/task-delivery.ts:545`). The static graph has no SCC only because
-   the cycle is deferred to runtime.
+3. **Resolved for reconciliation.** Task delivery imports the Task-owned query
+   contract and receives its Beads implementation at composition. It contains
+   no static or dynamic Beads Task-adapter import
+   (`src/utils/task-delivery.ts:18`, `extensions/index.ts:703`). The production
+   static file graph remains acyclic. `beads-authority-adapter.ts` still imports
+   Task delivery for mutation publication, so broader Task publication
+   isolation remains future work.
 
 4. `ModelToolTeamPort` combines Team, Task, Alert, Coordination, launch context,
    and observation acknowledgement in one interface
@@ -191,7 +206,7 @@ to private record changes (`src/public/observation.ts:5`).
 
 6. `extensions/index.ts` has 27 direct production dependencies. It duplicates
    lead binding discovery instead of only using Team authority
-   (`extensions/index.ts:238`), owns lifecycle application services, starts two
+   (`extensions/index.ts:239`), owns lifecycle application services, starts two
    delivery engines, and wires trio projection. Pi hook order is therefore an
    implicit integration contract.
 
@@ -212,7 +227,7 @@ to private record changes (`src/public/observation.ts:5`).
 
 9. Team lifecycle and Task authority need queries in both directions. Worker
    stop checks nonterminal Tasks while holding the Team topology lease
-   (`extensions/index.ts:1131`), while Task creation validates a logical Worker
+   (`extensions/index.ts:1132`), while Task creation validates a logical Worker
    (`src/model-tool-contract/durable-model-tool-port.ts:258`). Consumer-owned
    query ports must prevent this semantic relation from becoming a source cycle.
 
@@ -231,19 +246,21 @@ to private record changes (`src/public/observation.ts:5`).
   later-presentation evidence also remain open. The Alert boundary must not
   choose preservation, warnings, recovery records, or an outbox until the owner
   classifies this behavior.
-- `TASK-RECONCILIATION-INJECTION` is open. Existing tests anchor
-  self-authored suppression, later external changes, owner-transition recovery,
-  and concurrent recipient deduplication (`src/utils/clean-cut-round2.test.ts:157`,
-  `src/utils/owner-transition-outbox.contract.test.ts:66`). Before replacing
-  the dynamic adapter imports in `reconcileTaskChanges`, run those cases through
-  the proposed injected Task query and prove identical records, warnings, and
-  refusal behavior. The proposed dependency inversion is not itself evidence
-  of equivalence.
+- `TASK-RECONCILIATION-INJECTION` is closed. Four independent deterministic
+  tests run the injected query through self-authored suppression, a later
+  external change, owner-marker recovery, exact replacement binding, delivery
+  ID deduplication, recovery replay, and metadata-gap refusal
+  (`src/task-authority/reconciliation-equivalence.test.ts`). Source fences also
+  prove that Task delivery has no Beads adapter import and the Beads Task adapter
+  has no in-memory-port import. This evidence covers reconciliation equivalence;
+  it does not prove the remaining Task publication or other subsystem seams.
 
-The main structural risks are upward Task-to-trio type ownership, one façade and
-one in-memory fake that combine all authorities, hook-order coupling in the Pi
-composition root, and public Membership observation reading broad private
-records. These risks do not authorize behavior changes.
+The upward Task-to-trio type risk and hidden dynamic reconciliation cycle are
+closed by the first seam. The main remaining structural risks are one façade and
+one in-memory fake that combine all authorities, concrete Task publication
+imports, hook-order coupling in the Pi composition root, and public Membership
+observation reading broad private records. These risks do not authorize
+behavior changes.
 
 ## Preserved state, timing, and ordering facts
 
@@ -255,25 +272,25 @@ records. These risks do not authorize behavior changes.
   (`src/utils/worker-launch-bridge.ts:132`). Compensation deactivates only after
   exact carrier-stop proof (`src/utils/worker-launch-bridge.ts:372`).
 - Process startup order is runtime-generation claim, Membership Session bind,
-  then `session_bound` event (`extensions/index.ts:819`). A post-claim failure
+  then `session_bound` event (`extensions/index.ts:820`). A post-claim failure
   deliberately leaves a runtime fence until PID exit.
 - Normal Task mutation commits Beads first, appends event evidence, then enqueues
   delivery. Event and delivery failures produce degraded warnings and do not
   roll back Task state (`src/model-tool-contract/beads-authority-adapter.ts:500`).
 - Assignee changes first prepare delivery intent, then embed its operation ID in
   the Beads mutation, mark it committed, and dispatch exact recipients
-  (`src/utils/task-delivery.ts:338`, `src/utils/task-delivery.ts:414`). Recovery
-  trusts only the matching Beads marker (`src/utils/task-delivery.ts:443`).
+  (`src/utils/task-delivery.ts:340`, `src/utils/task-delivery.ts:417`). Recovery
+  trusts only the matching Beads marker (`src/utils/task-delivery.ts:445`).
 - Task and Alert presentation use filesystem hints plus 30-second fallback
   scans. Context observation stages IDs. Only a non-error, non-aborted turn
-  commits acknowledgement (`src/utils/task-delivery.ts:848`,
+  commits acknowledgement (`src/utils/task-delivery.ts:857`,
   `src/utils/message-delivery.ts:290`). Restart replays presented but
   unacknowledged records. Concurrent test changes now characterize aborted
   turns and failed Session sends (`src/utils/delivery-round3.test.ts`).
 - `team_sync` waits up to 120 seconds
   (`src/model-tool-contract/durable-model-tool-port.ts:51`). It must publish one
   complete observation or none and advances hidden state only after the exact
-  result persists on the active branch (`extensions/index.ts:470`).
+  result persists on the active branch (`extensions/index.ts:471`).
 - Runtime constants of 90 seconds for heartbeat staleness, 60 seconds for
   startup stall, and five minutes for stale files are diagnostic policy, not
   work state (`src/utils/runtime.ts:9`). Membership observation has a separate
@@ -328,9 +345,10 @@ at the composition root.
 
 ## Smallest coherent refactor plan
 
-1. Move `TaskCard`, `TaskVersionRef`, Task commands, journal entries, and Task
-   outcomes to a Task-owned contract directory. Keep temporary re-exports at
-   current paths. Remove Task imports from `in-memory-team-port.ts` first.
+1. **Partly implemented.** Task commands, journal entries, and the
+   reconciliation query live in a Task-owned contract directory.
+   `in-memory-team-port.ts` keeps temporary type re-exports. `TaskCard`,
+   `TaskVersionRef`, and other outcomes remain at their current paths.
 2. Split `models.ts` into Team, Coordination-event, and Alert-delivery
    contracts. Keep `models.ts` as a compatibility re-export. Do not change
    persisted shapes.
@@ -338,10 +356,11 @@ at the composition root.
    Coordination. Make `ModelToolTeamPort` a trio-facing façade. Split the
    in-memory implementation into separate fakes so tests cannot assume one-store
    atomicity.
-4. Isolate Task first. Inject current-Membership resolution,
-   coordination-event publication, and Session actuation. Keep owner-transition
-   intent, recovery, tombstones, and compatibility in Task authority. Replace
-   dynamic Task-adapter imports with an injected Task query.
+4. **Reconciliation part implemented.** Owner-transition intent, recovery,
+   tombstones, and compatibility remain in Task authority. The injected Task
+   query replaces dynamic Task-adapter imports. Current-Membership resolution,
+   coordination-event publication, and Session actuation remain concrete and
+   need later Task-boundary work.
 5. Isolate Alert next. Wrap Message inbox records as an Alert delivery adapter
    without changing filenames or schemas. Inject Team membership and
    coordination publication. Characterize accepted-delivery/event-failure
@@ -362,11 +381,12 @@ at the composition root.
     characterization suite after each step. Do not start with a directory rename
     or whole-system rewrite.
 
-The first proposed seam is Task contract ownership plus an injected Task
-reconciliation query. Start it only after `TASK-RECONCILIATION-INJECTION` proves
-the current behavior across the new boundary. It can then remove the clearest
-upward dependency and hidden dynamic cycle without changing a public operation,
-persisted record, or runtime order. Alert event-failure recovery remains the
-highest unresolved behavior question. Its characterization passed independent
+The first seam is implemented and `TASK-RECONCILIATION-INJECTION` now proves
+current behavior across the new boundary. It removes the clearest upward type
+dependency and hidden dynamic reconciliation cycle without changing a public
+operation, persisted record, or runtime order. It does not complete Team, Alert,
+Coordination, Trio, additive Membership-observation, or the remaining Task
+publication boundaries. Alert event-failure recovery remains the highest
+unresolved behavior question. Its characterization passed independent
 verification, but owner classification plus restart and later-presentation
 evidence remain required before Alert refactoring.

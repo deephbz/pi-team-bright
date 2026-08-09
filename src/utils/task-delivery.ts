@@ -15,6 +15,7 @@ import { writeJsonAtomic } from "./atomic-json";
 import { Check } from "typebox/value";
 import { TaskCardSchema, type TaskCard } from "../model-tool-contract/task-domain";
 import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TaskReconciliationQuery } from "../task-authority/contracts";
 
 export const TASK_CHANGE_CUSTOM_TYPE = "pi-teams.task-change";
 export const TASK_CHANGE_RESUME_TYPE = "pi-teams.task-change-resume";
@@ -108,7 +109,8 @@ export interface OwnerTransitionIntent {
 }
 
 export interface OwnerTransitionOutboxDependencies {
-  readEvidence?: (taskId: string) => Promise<{ task: TaskCard; operationId?: string }>;
+  /** Consumer-owned Task query. Composition supplies the Beads adapter. */
+  query?: TaskReconciliationQuery;
   enqueueExact?: (
     config: TeamConfig,
     task: TaskCard,
@@ -449,12 +451,15 @@ export async function reconcileOwnerTransitionOutbox(
   const file = taskOwnerTransitionOutboxPath(teamName);
   if (!fs.existsSync(file)) return [];
   const prepared = readOwnerTransitionIntentsUnsafe(file).filter((record) => record.state === "prepared");
+  if (prepared.length > 0 && !dependencies.query) {
+    throw new Error("Task owner-transition recovery requires an injected TaskReconciliationQuery.");
+  }
   const evidence = new Map<string, { task: TaskCard; operationId?: string }>();
   for (const record of prepared) {
     if (!evidence.has(record.taskId)) {
       evidence.set(
         record.taskId,
-        await (dependencies.readEvidence?.(record.taskId) ?? (await import("../model-tool-contract/beads-task-adapter.js")).readTaskOwnerTransitionEvidence(teamName, record.taskId)),
+        await dependencies.query!.readOwnerTransitionEvidence(record.taskId),
       );
     }
   }
@@ -536,16 +541,18 @@ export async function readOwnerTransitionIntents(teamName: string): Promise<Owne
 }
 
 /** Rebuild latest assignee-addressed delivery intent after a commit/spool crash gap. */
-export async function reconcileTaskChanges(teamName: string, recipient: string): Promise<number> {
+export async function reconcileTaskChanges(
+  teamName: string,
+  recipient: string,
+  query?: TaskReconciliationQuery,
+): Promise<number> {
   const config = await readConfig(teamName);
   if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
     return 0;
   }
-  await reconcileOwnerTransitionOutbox(teamName);
-  const { BeadsTaskAdapter } = await import("../model-tool-contract/beads-task-adapter.js");
-  const { listTaskIds } = await import("../model-tool-contract/beads-authority-adapter.js");
-  const hydrated = await new BeadsTaskAdapter(teamName, "task-delivery-reconciliation")
-    .readMany(await listTaskIds(teamName));
+  if (!query) throw new Error("Task delivery reconciliation requires an injected TaskReconciliationQuery.");
+  await reconcileOwnerTransitionOutbox(teamName, { query });
+  const hydrated = await query.readCurrentTasks();
   const existing = await readTaskDeliveries(teamName, recipient);
   const tombstones = await readTaskDeliveryTombstones(teamName, recipient);
   const known = new Set([...existing.map((record) => record.deliveryId), ...tombstones.map((record) => record.deliveryId)]);
@@ -834,7 +841,9 @@ export class TaskChangeDelivery {
       membershipId?: string;
       sessionFile: string;
       pollMs?: number;
-      /** Test/embedding seam; production defaults to Beads latest-state reconciliation. */
+      /** Task-owned query implementation supplied by the composition root. */
+      reconciliationQuery?: TaskReconciliationQuery;
+      /** Test/embedding seam; production uses the injected latest-state query. */
       reconcile?: () => Promise<number>;
       /**
        * Narrow periodic recovery seam. Unlike `reconcile`, this inspects only
@@ -872,7 +881,11 @@ export class TaskChangeDelivery {
       record.successfulTurnAckAt ||= new Date().toISOString();
     });
     if (this.stopped || generation !== this.generation) return;
-    await (this.options.reconcile?.() ?? reconcileTaskChanges(this.options.teamName, this.options.recipient));
+    await (this.options.reconcile?.() ?? reconcileTaskChanges(
+      this.options.teamName,
+      this.options.recipient,
+      this.options.reconciliationQuery,
+    ));
     if (this.stopped || generation !== this.generation) return;
     const presented = presentedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
     for (const id of presented) this.attempted.add(id);
@@ -977,7 +990,9 @@ export class TaskChangeDelivery {
     try {
       await (
         this.options.reconcileOwnerOutbox?.()
-        ?? reconcileOwnerTransitionOutbox(this.options.teamName)
+        ?? reconcileOwnerTransitionOutbox(this.options.teamName, {
+          query: this.options.reconciliationQuery,
+        })
       );
     } catch (error) {
       // Owner-transition recovery is independent of already-persisted recipient
