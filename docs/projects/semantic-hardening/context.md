@@ -19,6 +19,8 @@ behavior-change procedure.
 
 Baseline source: `e55b4f2a9190d700a03d95cb9dee75e5c892ca0a`
 Baseline package: `@hypercarrier/pi-team-bright@0.17.0-rc.8`
+Current integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
+with package `@hypercarrier/pi-team-bright@0.17.0-rc.10`
 Baseline declaration receipt:
 [`../../journal/artifacts/2026-08-09-semantic-hardening-baseline.json`](../../journal/artifacts/2026-08-09-semantic-hardening-baseline.json)
 
@@ -42,7 +44,7 @@ Baseline declaration receipt:
 - Independent review passed the corrected 18-test slice, typecheck, lane
   validation, JSON parsing, public-source hashes, and diff checks. COORD-002 and
   broad TRIO-004 coverage remain explicitly missing rather than overclaimed.
-- Commit `ed7ae57` contains outside-in characterization only. Phase two adds
+- Rebased commit `fe0cfa7` contains outside-in characterization only. Phase two adds
   COORD-002 and Alert publication-failure evidence plus the accepted-five-part
   [`subsystem audit`](subsystem-boundary-audit.md) and machine-operable
   [`dependency map`](subsystem-dependency-map.json).
@@ -66,8 +68,9 @@ Baseline declaration receipt:
   Membership-observation migrations are not complete.
 - `TASK-RECONCILIATION-INJECTION` is closed. The Alert publication-failure
   classification, restart, and later-presentation gate remains open.
-- Commits `ed7ae57` and `e275e03` contain characterization and test/docs
-  hardening. Commit `e55a9a5` contains the first Task-authority dependency seam.
+- Rebased commits `fe0cfa7` and `2635b79` contain characterization and
+  test/docs hardening. Commit `da1ca50` contains the first Task-authority
+  dependency seam.
 - Phase-three implementation Task `semantic-hardening-direct-2el`, equivalence
   Task `semantic-hardening-direct-hkp`, docs Task
   `semantic-hardening-direct-c7g`, and verifier Task
@@ -103,8 +106,15 @@ Baseline declaration receipt:
   production list and exact batch-hydration path. Its stable JSON contains only
   aggregate counts, timings, and error classes. Focused tests, a traced real
   Team canary, package verification, and privacy checks pass.
-- Current blocker: validate the rebased characterization and optimization series
-  against public `0.17.0-rc.10` before resuming Task publication inversion.
+- The eight-commit series rebased onto public `0.17.0-rc.10`. Upstream already
+  supplied the Pi 0.84 footer fix, so the duplicate local fix was dropped.
+  Characterization now supplies current Worker run-state evidence and expects
+  the rc.10 bounded-wait `indeterminate` outcome without position advance.
+- Rebase checks pass: typecheck, 46 focused tests across seven files, package
+  verification, lane closure at 86 files (65 fast and 21 exhaustive), and diff
+  checks.
+- Current blocker: refresh the maintained dependency audit for rc.10, then
+  reapply the parked Task publication inversion against that tree.
 
 ## Constraints still in force
 

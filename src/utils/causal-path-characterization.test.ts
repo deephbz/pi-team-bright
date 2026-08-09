@@ -9,7 +9,6 @@ import {
   captureTrioProjection,
   type RegisteredToolLike,
 } from "../../test/support/external-harness";
-import { MODEL_TOOL_IMPLEMENTATION_VERSION } from "../model-tool-contract/model-tool-constants";
 import { readBeadsAuthorityFingerprint } from "./beads";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -87,9 +86,6 @@ async function fixture(suffix: string) {
     workspace,
     `task_authority_${crypto.randomUUID()}`,
     readBeadsAuthorityFingerprint(workspace),
-    undefined,
-    undefined,
-    MODEL_TOOL_IMPLEMENTATION_VERSION,
   );
   await teams.ensureLogicalWorker(teamName, {
     name: "worker",
@@ -110,6 +106,7 @@ async function fixture(suffix: string) {
   await runtime.writeRuntimeStatus(teamName, "worker", {
     pid: process.pid,
     startedAt: Date.now(),
+    runState: "active",
   }, worker.membershipId);
   return { teamName, leaderSessionFile, workerSessionFile, worker };
 }
@@ -505,7 +502,7 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     let guard: ReturnType<typeof setTimeout> | undefined;
     const scheduledDelay = await Promise.race([
       deadlineScheduled,
-      waitResult.then(() => { throw new Error("team_sync settled before it scheduled its deadline"); }),
+      waitResult.then((result) => { throw new Error(`team_sync settled before it scheduled its deadline: ${JSON.stringify(result.details)}`); }),
       new Promise<never>((_resolve, reject) => {
         guard = realSetTimeout(() => reject(new Error("team_sync did not schedule its deadline within 20 seconds")), 20_000);
       }),
@@ -521,14 +518,12 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     const timedOut = await waitResult;
     expect(waitSettled).toBe(true);
     expect(timedOut.details).toEqual({
-      kind: "updates",
-      team_changes: [],
-      worker_changes: [],
-      task_changes: [],
-      alerts: [],
+      kind: "indeterminate",
+      message: "Worker run-state evidence is incomplete after the bounded wait; no observation was published.",
+      state_changed: false,
+      observation_advanced: false,
     });
     timeoutSpy.mockRestore();
-    await acknowledgeSync(lead, leadCtx, "timed-out", timedOut, "timed-out-entry");
 
     const controller = new AbortController();
     const pending = invoke(lead, "team_sync", "cancelled", { view: "updates" }, leadCtx, controller.signal);
