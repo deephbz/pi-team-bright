@@ -2,7 +2,7 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: Task-authority seam committed; four focused quality and measurement improvements independently verified
+Status: Task publication inversion implemented and independently verified on the rc.10 audit baseline
 Architecture impact: changed for the internal Task dependency boundary; HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team Bright internals opaque
 
 ## Outcome
@@ -113,12 +113,27 @@ Baseline declaration receipt:
 - Rebase checks pass: typecheck, 46 focused tests across seven files, package
   verification, lane closure at 86 files (65 fast and 21 exhaustive), and diff
   checks.
-- The maintained subsystem audit now matches rc.10: 67 production files,
-  19,418 lines, 227 static local edges, no nontrivial SCC or dynamic import,
-  and 86 tests plus two support files. Independent citation, ancestry, graph,
-  and 43-test evidence checks pass.
-- Current blocker: none. Reimplement Task publication inversion against rc.10;
-  use the parked rc.8 patch only as review evidence.
+- The committed rc.10 audit baseline recorded 67 production files, 19,418
+  lines, and 227 static local edges. The verified publication tree supersedes
+  those graph counts with 68 production files, 19,559 lines, and 231 edges;
+  neither tree has a nontrivial SCC or dynamic import.
+- Task publication inversion is implemented and independently verified from
+  baseline `8f2da7c`. `beads-authority-adapter.ts` owns a consumer-side
+  `TaskMutationPublicationPort` and no longer imports concrete Coordination,
+  failed-hint, or delivery writers. One stateless durable composition adapter
+  implements the port. One publishing Beads adapter factory reaches leader and
+  Worker mutation paths, while default Beads adapters remain read-only.
+- The exact independently verified non-self-referential 16-path Task publication
+  source/test selection has SHA-256 digest `d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219`.
+  Independent evidence passed 113 focused tests, typecheck, lane closure at 88
+  test files (67 fast and 21 exhaustive), result QA, package verification,
+  public-surface comparison, persistence checks, and diff checks. No aggregate
+  lane ran.
+- The current TypeScript graph has 68 production files, 19,559 lines, and 231
+  static local edges. It has no nontrivial SCC, self-cycle, or dynamic import.
+- Current blocker: none for the Task publication boundary. The leader still must
+  select and commit the stable implementation plus maintained documentation.
+  Do not restore the parked rc.8 stash; it is evidence only.
 
 ## Constraints still in force
 
@@ -187,9 +202,10 @@ CLI help is the command source of truth. Require `HERDR_ENV=1` before control.
 - [x] Commit outside-in characterization.
 - [x] Record lessons, harden tests, and commit test/docs improvements.
 - [x] Ratify the dependency direction and implement the first Task-owned seam.
-- [ ] Complete the remaining Team, Task publication, Alert, Coordination, Trio,
-  and additive Membership-observation boundary work, then commit the stable
-  refactor.
+- [x] Invert Task mutation publication through a consumer-owned port and verify
+  exact order, lease timing, failure continuation, and composition.
+- [ ] Complete the remaining Team, Alert, Coordination, Trio, and additive
+  Membership-observation boundary work.
 - [ ] Run bounded quality and optimization Tasks, one commit each.
 - [ ] Run final independent runtime, package, and aggregate verification.
 - [ ] Curate this context, append the journal, and write the final assessment.
@@ -380,25 +396,41 @@ corpus against real supported models. Store prompts, tool catalogs, model/provid
 versions, raw decisions, and human labels. Treat the result as external evidence,
 not a unit test.
 
-## Implemented Task boundary
+## Implemented Task boundaries
 
-The first accepted seam is narrow. `src/task-authority/contracts.ts` owns Task
-update and journal command types plus `TaskReconciliationQuery`.
-`src/task-authority/beads-reconciliation-query.ts` implements that query for one
-Team-scoped Beads authority. The Pi composition root injects it into
-`TaskChangeDelivery`; owner-transition and latest-state reconciliation consume
-only the Task-owned port.
+`src/task-authority/contracts.ts` owns Task update and journal command types plus
+`TaskReconciliationQuery`. `src/task-authority/beads-reconciliation-query.ts`
+implements that query for one Team-scoped Beads authority. The Pi composition
+root injects it into `TaskChangeDelivery`; owner-transition and latest-state
+reconciliation consume only the Task-owned port.
+
+`src/model-tool-contract/beads-authority-adapter.ts` now owns the consumer-side
+`TaskMutationPublicationPort` and canonical publication DTOs. Raw Task mutations
+require that port. `src/adapters/durable-task-mutation-publication.ts` implements
+it outside Task authority by calling Coordination event and failed-hint writers
+plus Task delivery. `extensions/index.ts` creates one publishing Beads adapter
+factory and injects it into leader and Worker mutation paths. Default
+`BeadsTaskAdapter` construction is read-only for semantic reads, reconciliation,
+and migration.
+
+Owner-transition preparation remains inside the Beads write and Membership
+lease. Commit, lease release, acting-Session suppression, event append, failed-
+event hint, serial recipient delivery, inline recovery, and transition
+completion keep their exact order. An acting-Session no-op still suppresses its
+Task version, but it appends no Team event, enqueues no recipient delivery, and
+completes no owner transition. An exact create replay calls no publication-port
+method. Warning strings and partial-failure continuation remain unchanged.
 
 `src/model-tool-contract/in-memory-team-port.ts` still re-exports
 `ModelToolTaskUpdateInput` and `ModelToolTaskJournalEntry` for internal source
 compatibility. `TaskCard` and `TaskVersionRef` remain at their current canonical
 paths. No public package export, tool schema, persisted filename, record shape,
-ordering, retry, timing, or default behavior changed.
+retry, timing, or default behavior changed.
 
-This removes the upward Beads Task-adapter dependency on the trio-facing
-in-memory port and removes Task delivery's dynamic Beads-adapter imports. It
-does not isolate Task mutation publication from Team or Coordination, split the
-combined trio façade, or implement the other subsystem migrations.
+These seams remove the upward Task type dependency, the dynamic reconciliation
+cycle, and concrete Task mutation-publication imports. They do not split the
+combined trio façade or complete Team, Alert, Coordination, Trio, or additive
+Membership-observation migrations.
 
 ## First implementation slice
 

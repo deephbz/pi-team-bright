@@ -504,3 +504,85 @@ changes; append a correction.
 - The proposed target graph has seven nodes, nine edges, and no nontrivial SCC.
   Architecture impact remains internal; HyperCarrier's canonical diagram stays
   unchanged because Pi Team Bright internals are opaque.
+
+## 2026-08-09 — Task mutation publication dependency inverted
+
+- The implementation starts from committed audit baseline
+  `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`. It implements the corrected hq6
+  design rather than i37's rejected Task-owned concrete aggregator.
+- `beads-authority-adapter.ts` now defines and requires the consumer-side
+  `TaskMutationPublicationPort`. It has no concrete import of Team events,
+  failed-event hints, or Task delivery. Raw create, update, and link mutation
+  functions have no concrete fallback or service locator.
+- `src/adapters/durable-task-mutation-publication.ts` is the stateless durable
+  composition adapter. It calls the existing Coordination event and failed-hint
+  writers plus Task delivery, recovery, suppression, and owner-transition
+  operations without changing persisted records.
+- `extensions/index.ts` constructs one publishing Beads adapter factory and
+  injects it into the leader `DurableModelToolTeamPort` and direct Worker tools.
+  Default `BeadsTaskAdapter` construction remains read-only for semantic reads,
+  reconciliation, and migration.
+- Deterministic barriers prove owner-transition preparation stays inside the
+  Beads write and Membership lease. The remaining sequence is Beads commit,
+  lease release, acting-Session suppression, serial Team event publication,
+  failed-event hint after an event failure, serial recipient delivery with
+  inline recovery, then owner-transition completion. No-op updates and exact
+  create replays do not call the publication port.
+- Failure tests preserve exact warnings and continuation after event, failed-
+  hint, enqueue, and recovery failures. Import fences prove the concrete writers
+  moved outside Task authority. Composition tests cover leader and Worker
+  mutation paths plus read-only default refusal.
+- The independently verified pre-documentation Task publication selection
+  contains exactly 17 paths. Its SHA-256 diff digest is
+  `f332bfc4b032eb995d221b6f656ab35e3f5276f181831f25dd2c8e600eeddce1`.
+- Independent verification passed 113 focused tests plus typecheck, result QA,
+  test-lane closure, package verification, public-surface comparison,
+  persistence checks, and diff checks. The lane manifest contains 88 test files:
+  67 fast and 21 exhaustive. No aggregate lane ran.
+- The refreshed TypeScript AST graph has 68 production files, 19,559 lines, and
+  231 unique static local edges. It has no nontrivial SCC, self-cycle, or dynamic
+  import. The test corpus has 88 test files plus two support files and 24,078
+  lines.
+- `TASK-PUBLICATION-INVERSION` is implemented and independently verified.
+  `ALERT-004` remains characterized and unclassified. Team, Alert, Coordination,
+  Trio, and additive Membership-observation boundary work remains incomplete.
+- Architecture impact is **changed** for the internal Task publication boundary.
+  HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
+  Bright internals opaque. No production, test, or commit change was made by the
+  documentation Task.
+
+## 2026-08-09 — no-op publication evidence corrected
+
+- This entry supersedes only the no-op wording and selected-diff digest in the
+  preceding Task mutation publication entry. It does not rewrite that historical
+  evidence.
+- An acting-Session no-op still calls publication-port suppression for its Task
+  version. It appends no Team event, enqueues no recipient delivery, and
+  completes no owner transition. An exact create replay calls no
+  publication-port method.
+- The corrected order test passes both cases: the forced lease/publication
+  interleaving and the separated no-op/create-replay behavior.
+- Before updating receipt occurrences, a temporary Git index staged the exact
+  17 selected paths from `subsystem-dependency-map.json`; the binary diff from
+  baseline `8f2da7c` has SHA-256 digest
+  `795b8c3d53ee39d0342bf85ea465179df7fe0cef0f83fd267a98b38d170e076d`.
+- JSON, selected-path, citation, Markdown-link, lane-closure, and tracked plus
+  untracked diff checks pass. No production source, package, aggregate lane, or
+  commit changed.
+
+## 2026-08-09 — source/test receipt scope corrected
+
+- This entry supersedes only the 17-path digest bullet in the immediately prior
+  correction. That provisional calculation included `context.md`, which stores
+  the digest and made the receipt self-referential.
+- The canonical receipt excludes `context.md`. A temporary index read baseline
+  `8f2da7c`, staged the exact 16 non-context paths now listed in
+  `subsystem-dependency-map.json`, and produced their binary cached diff against
+  that baseline. Its SHA-256 digest is
+  `d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219`.
+
+## 2026-08-09 — test corpus line count corrected
+
+- This entry supersedes only the prior 24,078 combined-line claim. The current
+  corpus has 88 test files with 23,647 lines and two support files with 441
+  lines: 90 files and 24,088 lines combined.

@@ -1,10 +1,31 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "rc10_tree_reviewed_first_task_boundary_implemented_remaining_boundaries_incomplete",
-  "reviewedRevision": "734bbd369e1ee177ea3bc47114a35dfb1ef61fa6",
+  "status": "rc10_task_reconciliation_and_publication_boundaries_verified_remaining_boundaries_incomplete",
+  "reviewedRevision": "8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571",
   "reviewedTreeState": {
-    "kind": "clean_committed_tree",
+    "kind": "independently_verified_uncommitted_selection",
     "branch": "audit/semantic-hardening-behavior-inventory",
+    "selectedPaths": 16,
+    "selectionScope": "independently_verified_non_self_referential_task_publication_source_test_diff",
+    "selectedPathList": [
+      "extensions/index.ts",
+      "scripts/tool-result-qa/suite.test.ts",
+      "src/adapters/durable-task-mutation-publication.test.ts",
+      "src/adapters/durable-task-mutation-publication.ts",
+      "src/model-tool-contract/beads-authority-adapter.ts",
+      "src/model-tool-contract/beads-task-adapter.test.ts",
+      "src/model-tool-contract/beads-task-adapter.ts",
+      "src/model-tool-contract/durable-model-tool-port.ts",
+      "src/model-tool-contract/mutation-call-minimization.test.ts",
+      "src/model-tool-contract/task-mutation-publication-order.test.ts",
+      "src/utils/clean-cut-round2.test.ts",
+      "src/utils/membership-mutation-lease.contract.test.ts",
+      "src/utils/release-p1-contract.test.ts",
+      "src/utils/round2-contract.test.ts",
+      "src/utils/tasks-event-publication.test.ts",
+      "src/utils/worker-task-update-version-ref.test.ts"
+    ],
+    "diffSha256": "d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219",
     "integrationBase": "7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a",
     "package": "@hypercarrier/pi-team-bright@0.17.0-rc.10"
   },
@@ -18,7 +39,8 @@
     { "revision": "34eb5b9", "scope": "Team-owned durable lead discovery" },
     { "revision": "6f47ae6", "scope": "deterministic lock contention oracles" },
     { "revision": "9a41d24", "scope": "Task hydration benchmark" },
-    { "revision": "734bbd3", "scope": "rc.10 characterization alignment" }
+    { "revision": "734bbd3", "scope": "rc.10 characterization alignment" },
+    { "revision": "8f2da7c", "scope": "rc.10 subsystem audit refresh" }
   ],
   "upstreamRc10CoordinationCommits": [
     { "revision": "a80f102", "scope": "event-directed Task hydration" },
@@ -35,27 +57,31 @@
   ],
   "architectureImpact": {
     "classification": "changed",
-    "scope": "internal Task, Team, and Coordination boundaries",
+    "scope": "internal Task publication, Task reconciliation, Team, and Coordination boundaries",
     "canonicalHyperCarrierDiagram": "unchanged_because_pi_team_bright_internals_are_opaque"
   },
   "evidenceBasis": {
     "productionTypeScript": {
-      "scope": "tracked .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 67,
-      "lines": 19418,
-      "staticLocalEdges": 227,
+      "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
+      "files": 68,
+      "lines": 19559,
+      "staticLocalEdges": 231,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
     },
     "testAndSupportTypeScript": {
-      "scope": "86 tracked *.test.ts files plus test/setup.ts and test/support/*.ts; runner-only global setup excluded",
-      "testFiles": 86,
+      "scope": "88 tracked or selected *.test.ts files plus test/setup.ts and non-test test/support/*.ts; runner-only global setup excluded",
+      "testFiles": 88,
+      "testLines": 23647,
+      "fastTestFiles": 67,
+      "exhaustiveTestFiles": 21,
       "supportFiles": 2,
-      "files": 88,
-      "lines": 23534
+      "supportLines": 441,
+      "files": 90,
+      "lines": 24088
     },
-    "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to tracked production files; unique ordered file edges; Tarjan SCC",
+    "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to tracked or selected production files; unique ordered file edges; Tarjan SCC",
     "selectedPhaseTwoEvidence": [
       {
         "path": "src/utils/alert-publication-failure.characterization.test.ts",
@@ -75,6 +101,34 @@
         "scope": "Injected Task reconciliation behavior and dependency fences"
       }
     ],
+    "selectedTaskPublicationEvidence": [
+      {
+        "path": "src/model-tool-contract/task-mutation-publication-order.test.ts",
+        "state": "independently_verified_equivalence",
+        "scope": "Forced Membership-lease and post-commit publication order, acting-Session no-op suppression without event/delivery/completion, and exact create-replay silence"
+      },
+      {
+        "path": "src/adapters/durable-task-mutation-publication.test.ts",
+        "state": "independently_verified_equivalence",
+        "scope": "Serial event, failed-hint, delivery, recovery, warning, continuation, statelessness, and import direction"
+      },
+      {
+        "path": "src/model-tool-contract/beads-task-adapter.test.ts",
+        "state": "independently_verified_equivalence",
+        "scope": "Read-only default refusal and publishing-factory capability"
+      }
+    ],
+    "independentTaskPublicationVerification": {
+      "focusedTests": 113,
+      "typecheck": "passed",
+      "resultQa": "passed",
+      "testLaneClosure": "passed_88_files_67_fast_21_exhaustive",
+      "packageVerification": "passed",
+      "publicSurfaceComparison": "passed",
+      "persistenceChecks": "passed",
+      "diffChecks": "passed",
+      "aggregateLane": "not_run_by_contract"
+    },
     "selectedRc10CoordinationEvidence": [
       {
         "path": "src/model-tool-contract/sync-event-hydration.test.ts",
@@ -176,6 +230,14 @@
         ]
       },
       {
+        "id": "durable_task_mutation_publication_adapter",
+        "currentOwner": "mixed_composition",
+        "sources": [
+          "src/adapters/durable-task-mutation-publication.ts"
+        ],
+        "currentScopeNote": "Stateless adapter outside Task authority implements its consumer-owned publication port with existing Coordination, failed-hint, and Task-delivery operations."
+      },
+      {
         "id": "alert_acceptance_and_delivery",
         "currentOwner": "alert_authority",
         "sources": [
@@ -249,37 +311,69 @@
         "to": "team_core",
         "mechanism": "static_import_and_exact_actor_fencing",
         "evidence": [
-          "src/model-tool-contract/beads-authority-adapter.ts:6",
-          "src/model-tool-contract/beads-authority-adapter.ts:167"
+          "src/model-tool-contract/beads-authority-adapter.ts:12",
+          "src/model-tool-contract/beads-authority-adapter.ts:219"
         ]
       },
       {
-        "from": "task_contract_and_authority_adapters",
+        "from": "durable_task_mutation_publication_adapter",
+        "to": "task_contract_and_authority_adapters",
+        "mechanism": "implements_consumer_owned_task_publication_port",
+        "evidence": [
+          "src/adapters/durable-task-mutation-publication.ts:15",
+          "src/adapters/durable-task-mutation-publication.ts:44"
+        ]
+      },
+      {
+        "from": "durable_task_mutation_publication_adapter",
+        "to": "team_core",
+        "mechanism": "read_team_epoch_for_failed_event_hint",
+        "evidence": [
+          "src/adapters/durable-task-mutation-publication.ts:10",
+          "src/adapters/durable-task-mutation-publication.ts:93"
+        ]
+      },
+      {
+        "from": "durable_task_mutation_publication_adapter",
         "to": "coordination_journal_and_position",
-        "mechanism": "static_event_and_failed-event-hint_publication_imports",
+        "mechanism": "static_event_and_failed_event_hint_writers",
         "evidence": [
-          "src/model-tool-contract/beads-authority-adapter.ts:40",
-          "src/model-tool-contract/beads-authority-adapter.ts:43",
-          "src/model-tool-contract/beads-authority-adapter.ts:546",
-          "src/model-tool-contract/beads-authority-adapter.ts:557"
+          "src/adapters/durable-task-mutation-publication.ts:8",
+          "src/adapters/durable-task-mutation-publication.ts:9",
+          "src/adapters/durable-task-mutation-publication.ts:83",
+          "src/adapters/durable-task-mutation-publication.ts:94"
         ]
       },
       {
-        "from": "task_contract_and_authority_adapters",
+        "from": "durable_task_mutation_publication_adapter",
         "to": "task_delivery_and_recovery",
-        "mechanism": "static_import",
+        "mechanism": "static_delivery_recovery_suppression_and_owner_transition_operations",
         "evidence": [
-          "src/model-tool-contract/beads-authority-adapter.ts:29",
-          "src/model-tool-contract/beads-authority-adapter.ts:575"
+          "src/adapters/durable-task-mutation-publication.ts:1",
+          "src/adapters/durable-task-mutation-publication.ts:45",
+          "src/adapters/durable-task-mutation-publication.ts:112",
+          "src/adapters/durable-task-mutation-publication.ts:119"
         ]
       },
       {
         "from": "pi_composition_and_lifecycle",
         "to": "task_contract_and_authority_adapters",
-        "mechanism": "injected_task_reconciliation_query",
+        "mechanism": "injected_task_reconciliation_query_and_publishing_beads_adapter_factory",
+        "evidence": [
+          "extensions/index.ts:43",
+          "extensions/index.ts:406",
+          "extensions/index.ts:435",
+          "extensions/index.ts:791",
+          "extensions/index.ts:1328"
+        ]
+      },
+      {
+        "from": "pi_composition_and_lifecycle",
+        "to": "durable_task_mutation_publication_adapter",
+        "mechanism": "construct_one_stateless_publication_adapter",
         "evidence": [
           "extensions/index.ts:44",
-          "extensions/index.ts:788"
+          "extensions/index.ts:406"
         ]
       },
       {
@@ -336,8 +430,8 @@
           "src/model-tool-contract/durable-model-tool-port.ts:54",
           "src/model-tool-contract/durable-model-tool-port.ts:55",
           "src/model-tool-contract/durable-model-tool-port.ts:56",
-          "src/model-tool-contract/durable-model-tool-port.ts:428",
-          "src/model-tool-contract/durable-model-tool-port.ts:598"
+          "src/model-tool-contract/durable-model-tool-port.ts:435",
+          "src/model-tool-contract/durable-model-tool-port.ts:605"
         ]
       },
       {
@@ -345,8 +439,8 @@
         "to": "team_core",
         "mechanism": "direct_lifecycle_orchestration",
         "evidence": [
-          "extensions/index.ts:829",
-          "extensions/index.ts:1240"
+          "extensions/index.ts:832",
+          "extensions/index.ts:1243"
         ]
       },
       {
@@ -354,8 +448,8 @@
         "to": "task_contract_and_authority_adapters",
         "mechanism": "assigned_work_guard_and_application_calls",
         "evidence": [
-          "extensions/index.ts:1243",
-          "extensions/index.ts:1248"
+          "extensions/index.ts:1246",
+          "extensions/index.ts:1251"
         ]
       },
       {
@@ -390,9 +484,9 @@
         "to": "coordination_journal_and_position",
         "mechanism": "sync_nudge_conductor_reservation_exact_branch_presentation_and_monitoring",
         "evidence": [
-          "extensions/index.ts:631",
-          "extensions/index.ts:673",
-          "extensions/index.ts:699"
+          "extensions/index.ts:634",
+          "extensions/index.ts:690",
+          "extensions/index.ts:702"
         ]
       },
       {
@@ -419,9 +513,9 @@
       "statement": "Task delivery consumes an injected TaskReconciliationQuery and no longer imports Beads Task adapters dynamically; the static production file graph remains acyclic."
     },
     {
-      "id": "ASSESS-TASK-PUBLICATION-INCOMPLETE",
-      "state": "corrected_design_only_not_implemented",
-      "statement": "Task mutation orchestration still imports Team, Coordination event, failed-event-hint, and Task delivery implementations directly. Moving those imports into a Task-owned concrete module would not invert the dependency."
+      "id": "ASSESS-TASK-PUBLICATION-INVERSION",
+      "state": "implemented_independently_verified",
+      "statement": "Task mutation orchestration depends on a consumer-owned publication port. A stateless durable adapter outside Task authority owns concrete Coordination, failed-hint, and Task-delivery calls, and Pi composition injects one publishing factory into leader and Worker mutation paths."
     },
     {
       "id": "ASSESS-COMBINED-FACADE",
@@ -487,24 +581,6 @@
       ]
     },
     {
-      "id": "TASK-PUBLICATION-INVERSION",
-      "state": "corrected_design_only_not_implemented",
-      "blocks": "claim that Task mutation publication is isolated",
-      "currentFact": "beads-authority-adapter.ts directly imports Team/session leases, Coordination event and failed-event-hint writers, and Task delivery operations.",
-      "requiredEvidence": [
-        "Inject a consumer-owned publication port from Pi composition with no Task-authority concrete fallback.",
-        "Preserve Beads commit, event append, recipient delivery, warning, partial-failure, recovery-record, and Membership-lease timing exactly.",
-        "Add source-direction and forced-interleaving gates before marking the boundary complete."
-      ],
-      "anchors": [
-        "src/model-tool-contract/beads-authority-adapter.ts:6",
-        "src/model-tool-contract/beads-authority-adapter.ts:29",
-        "src/model-tool-contract/beads-authority-adapter.ts:40",
-        "src/model-tool-contract/beads-authority-adapter.ts:43",
-        "src/model-tool-contract/beads-authority-adapter.ts:501"
-      ]
-    },
-    {
       "id": "RC10-COORDINATION-BOUNDARY",
       "state": "behavior_evidenced_boundary_incomplete",
       "blocks": "claim that Coordination is isolated behind one application port",
@@ -515,12 +591,12 @@
         "Preserve branch-safe acknowledgement and no-position-advance outcomes."
       ],
       "anchors": [
-        "src/model-tool-contract/durable-model-tool-port.ts:428",
-        "src/model-tool-contract/durable-model-tool-port.ts:598",
+        "src/model-tool-contract/durable-model-tool-port.ts:435",
+        "src/model-tool-contract/durable-model-tool-port.ts:605",
         "src/utils/sync-liveness.ts:27",
         "src/utils/task-event-failure-hints.ts:115",
         "src/utils/sync-nudge-conductor.ts:27",
-        "extensions/index.ts:631"
+        "extensions/index.ts:634"
       ]
     }
   ],
@@ -533,13 +609,43 @@
         "semantic-hardening-direct-hkp"
       ],
       "currentFact": "Task delivery consumes an injected TaskReconciliationQuery. Four deterministic equivalence tests preserve suppression, external-change delivery, owner-marker recovery, exact replacement binding, delivery deduplication, recovery replay, and metadata-gap refusal.",
-      "proofLimit": "This gate proves the reconciliation seam only. It does not prove the remaining Task publication or other subsystem migrations.",
+      "proofLimit": "This gate proves the reconciliation seam only. The separate Task publication gate proves mutation publication; other subsystem migrations remain incomplete.",
       "anchors": [
         "src/task-authority/contracts.ts:41",
         "src/task-authority/beads-reconciliation-query.ts:12",
         "src/utils/task-delivery.ts:544",
         "src/task-authority/reconciliation-equivalence.test.ts:248",
         "src/model-tool-contract/canonical-task-cutover.acceptance.test.ts:192"
+      ]
+    },
+    {
+      "id": "TASK-PUBLICATION-INVERSION",
+      "state": "closed_equivalence_independently_verified",
+      "closedBy": [
+        "semantic-hardening-opt-a9t"
+      ],
+      "currentFact": "Task mutation orchestration requires a consumer-owned TaskMutationPublicationPort. A stateless durable adapter outside Task authority owns concrete Coordination, failed-hint, Task-delivery, recovery, suppression, and owner-transition calls. Pi composition injects one publishing Beads adapter factory into leader and Worker mutation paths; default adapters remain read-only.",
+      "verification": {
+        "focusedTests": 113,
+        "typecheck": "passed",
+        "resultQa": "passed",
+        "lanes": "88_test_files_67_fast_21_exhaustive",
+        "package": "passed",
+        "publicSurface": "unchanged",
+        "persistence": "unchanged",
+        "diff": "passed",
+        "aggregate": "not_run_by_contract"
+      },
+      "proofLimit": "This gate proves Task mutation publication dependency direction and behavior equivalence. It does not isolate Team actor fencing or complete Team, Alert, Coordination, Trio, or additive Membership-observation boundaries.",
+      "anchors": [
+        "src/model-tool-contract/beads-authority-adapter.ts:196",
+        "src/adapters/durable-task-mutation-publication.ts:44",
+        "src/model-tool-contract/task-mutation-publication-order.test.ts:128",
+        "src/adapters/durable-task-mutation-publication.test.ts:79",
+        "src/adapters/durable-task-mutation-publication.test.ts:139",
+        "src/adapters/durable-task-mutation-publication.test.ts:195",
+        "src/model-tool-contract/beads-task-adapter.test.ts:90",
+        "extensions/index.ts:406"
       ]
     }
   ],
@@ -550,7 +656,7 @@
         "src/task-authority/contracts.ts"
       ],
       "beadsAdapter": "src/task-authority/beads-reconciliation-query.ts",
-      "compositionRoot": "extensions/index.ts:788",
+      "compositionRoot": "extensions/index.ts:791",
       "compatibilityReExports": [
         "src/model-tool-contract/in-memory-team-port.ts"
       ],
@@ -575,7 +681,50 @@
         "default_behavior"
       ],
       "remainingScope": [
-        "task_publication_injection",
+        "team_authority_and_role_realization",
+        "alert_authority",
+        "coordination_observation",
+        "trio_facing_interface_and_projections",
+        "additive_membership_observation"
+      ]
+    },
+    "taskMutationPublicationBoundary": {
+      "state": "implemented_equivalence_independently_verified",
+      "consumerOwnedPort": "src/model-tool-contract/beads-authority-adapter.ts:196",
+      "durableAdapter": "src/adapters/durable-task-mutation-publication.ts:44",
+      "publishingFactory": "src/model-tool-contract/beads-task-adapter.ts:362",
+      "compositionRoot": [
+        "extensions/index.ts:406",
+        "extensions/index.ts:435",
+        "extensions/index.ts:1328"
+      ],
+      "removedDependencies": [
+        "beads-authority-adapter.ts -> team-events.ts",
+        "beads-authority-adapter.ts -> task-event-failure-hints.ts",
+        "beads-authority-adapter.ts -> task-delivery.ts"
+      ],
+      "preserved": [
+        "owner_transition_prepare_inside_beads_write_and_membership_lease",
+        "beads_commit_before_publication",
+        "membership_lease_release_before_suppression_and_publication",
+        "acting_session_suppression_before_event",
+        "serial_event_before_recipient_delivery",
+        "failed_event_hint_before_delivery_after_event_failure",
+        "serial_recipient_delivery_and_inline_recovery",
+        "owner_transition_completion_after_publication",
+        "exact_warnings_and_partial_failure_continuation",
+        "acting_session_no_op_suppression_without_event_delivery_or_completion",
+        "exact_create_replay_publication_port_silence",
+        "public_tools_schemas_and_package_exports",
+        "persisted_records_and_filenames",
+        "retry_timing_and_default_behavior"
+      ],
+      "selection": {
+        "baseline": "8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571",
+        "paths": 16,
+        "diffSha256": "d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219"
+      },
+      "remainingScope": [
         "team_authority_and_role_realization",
         "alert_authority",
         "coordination_observation",
@@ -587,8 +736,8 @@
       "state": "implemented_equivalence_verified",
       "owner": "src/utils/teams.ts",
       "compositionCallSites": [
-        "extensions/index.ts:367",
-        "extensions/index.ts:867"
+        "extensions/index.ts:368",
+        "extensions/index.ts:870"
       ],
       "preserved": [
         "optional_session_behavior",
@@ -663,6 +812,10 @@
         "target": "task_authority"
       },
       {
+        "current": "durable_task_mutation_publication_adapter",
+        "target": "pi_composition_root"
+      },
+      {
         "current": "alert_acceptance_and_delivery",
         "target": "alert_authority"
       },
@@ -715,7 +868,7 @@
         "owner": "task_authority",
         "implementedBy": "composition_root_durable_task_publication_adapter",
         "runtimeProvider": "coordination_event_and_failed_hint_writers_plus_task_delivery_writer",
-        "state": "designed_not_implemented"
+        "state": "implemented_independently_verified"
       },
       {
         "id": "coordination_worker_run_observation_query",
@@ -745,7 +898,7 @@
         "id": "composition_root_durable_task_publication_adapter",
         "implements": "task_mutation_publication_port",
         "runtimeCalls": "coordination_event_and_failed_hint_writers_plus_task_delivery_writer",
-        "state": "designed_not_implemented"
+        "state": "implemented_independently_verified"
       },
       {
         "id": "composition_root_coordination_run_observation_adapter",
@@ -843,13 +996,19 @@
       "state": "implemented",
       "afterGate": "TASK-RECONCILIATION-INJECTION",
       "change": "Move Task update and journal contracts to Task ownership and inject Task reconciliation queries while preserving temporary re-exports and persisted records.",
-      "proofLimit": "TaskCard, TaskVersionRef, Task publication, and the other subsystem migrations remain at their current boundaries."
+      "proofLimit": "TaskCard and TaskVersionRef remain at their current canonical paths. The later verified publication seam is recorded separately; other subsystem migrations remain incomplete."
+    },
+    "taskPublicationSeam": {
+      "state": "implemented_independently_verified",
+      "gate": "TASK-PUBLICATION-INVERSION",
+      "change": "Task mutation orchestration consumes a consumer-owned publication port; the stateless durable Coordination and Task-delivery adapter lives outside Task authority, and Pi composition injects one mutation-capable Beads adapter factory into leader and Worker paths.",
+      "proofLimit": "This closes Task mutation publication only. Team actor fencing and the Team, Alert, Coordination, Trio, and additive Membership-observation migrations remain incomplete."
     },
     "nextEligibleSeam": {
-      "state": "corrected_design_not_implemented",
-      "gate": "TASK-PUBLICATION-INVERSION",
-      "change": "Make Task mutation orchestration consume a consumer-owned publication port; place the durable Coordination and Task-delivery adapter outside Task authority and inject one mutation-capable Beads adapter factory from Pi composition into leader and Worker paths.",
-      "proofLimit": "A Task-owned module that imports the same concrete writers only relocates dependencies and must not be reported as publication isolation."
+      "state": "requires_separate_task_and_behavior_gate",
+      "gate": "ALERT-PUBLICATION-FAILURE_or_RC10-COORDINATION-BOUNDARY",
+      "change": "Classify ALERT-004 before any Alert publication change, or isolate one Coordination read boundary while preserving rc.10 behavior.",
+      "proofLimit": "No Alert outbox or broad Coordination consolidation is authorized by the Task publication seam."
     }
   }
 }

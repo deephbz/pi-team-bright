@@ -1,26 +1,29 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-09
-Status: maintained rc.10 audit; the Task reconciliation seam and Team
-lead-discovery ownership are implemented, while Task mutation publication and
+Status: maintained rc.10 audit; Task reconciliation, Task mutation publication,
+and Team lead-discovery ownership are implemented and independently verified;
 the other subsystem migrations remain incomplete
-Reviewed revision: `734bbd369e1ee177ea3bc47114a35dfb1ef61fa6`
-(`audit/semantic-hardening-behavior-inventory`), rebased on public rc.10
-integration revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
+Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
+(`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
+revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Production TypeScript baseline: `e55b4f2a9190d700a03d95cb9dee75e5c892ca0a`
 Implemented commit evidence: characterization `fe0cfa7`, test and audit
 hardening `2635b79`, Task reconciliation boundary `da1ca50`, result-validation
 cleanup `2bbb494`, Team lead-discovery ownership `34eb5b9`, deterministic lock
-tests `6f47ae6`, Task-hydration benchmark `9a41d24`, and rc.10 alignment
-`734bbd3`
+tests `6f47ae6`, Task-hydration benchmark `9a41d24`, rc.10 alignment `734bbd3`,
+and rc.10 audit refresh `8f2da7c`
+Independently verified non-self-referential Task publication source/test
+selection: 16 paths with SHA-256 diff digest
+`d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219`
 Upstream rc.9/rc.10 Coordination evidence: event hydration `a80f102`, exact
 baselines `13d9805`, batch completeness `c2bc332`, page watermark `ca9581d`,
 failed-event hints `3576fbc` and `6411d10`, default nudge policy `fd12921` and
 `35574f4`, resumed-leader binding `0aa4d8e`, final Coordination blockers
 `0687eb7`, and package-version compatibility decoupling `2ded422`
-Architecture impact: **changed** for internal Task, Team, and Coordination
-boundaries. HyperCarrier's canonical diagram stays unchanged because it keeps
-Pi Team Bright internals opaque.
+Architecture impact: **changed** for internal Task publication, Task
+reconciliation, Team, and Coordination boundaries. HyperCarrier's canonical
+diagram stays unchanged because it keeps Pi Team Bright internals opaque.
 
 ## Scope and evidence
 
@@ -30,16 +33,19 @@ observation, and Trio-facing interface and projections. Public Membership
 observation remains an additive machine projection of Team authority.
 
 The initial review covered 60 production TypeScript files with 18,145 lines and
-77 test or test-support files with 20,585 lines. The clean rc.10 review tree has
-67 tracked production TypeScript files with 19,418 lines, plus 86 tracked test
-files and two test-support files with 23,534 lines. Production means tracked
-`.ts` files under `src/` and `extensions/`, excluding `*.test.ts`; test support
-means `test/setup.ts` and `test/support/*.ts`, while runner-only global setup is
-excluded. A TypeScript-AST scan resolves static relative import and re-export
-specifiers between those production files. It finds 227 unique local edges, no
-nontrivial strongly connected component, and no dynamic import. The prior hidden
-dynamic Task-adapter cycle remains removed, but broad composition modules still
-hide semantic coupling.
+77 test or test-support files with 20,585 lines. The verified Task publication
+tree has 68 production TypeScript files with 19,559 lines, plus 88 test files
+with 23,647 lines and two test-support files with 441 lines. The 90 test and
+support files contain 24,088 lines combined.
+The lane manifest assigns 67 test files to fast and 21 to exhaustive. Production
+means tracked or selected `.ts` files under `src/` and `extensions/`, excluding
+`*.test.ts`; test support means `test/setup.ts` and non-test
+`test/support/*.ts`, while runner-only global setup is excluded. A
+TypeScript-AST scan resolves static relative import and re-export specifiers
+between those production files. It finds 231 unique local edges, no nontrivial
+strongly connected component, no self-cycle, and no dynamic import. The prior
+hidden dynamic Task-adapter cycle remains removed, and the Task mutation path no
+longer imports concrete publication writers.
 
 The rc.10 tree also includes the rc.9/rc.10 Coordination work: event-directed
 Task hydration and page-safe watermarks, Worker run-state and actuation evidence,
@@ -78,7 +84,7 @@ Runtime and Role realization is spread across `runtime.ts`,
 first-binding retry, or exact-Session recovery before carrier creation
 (`src/utils/worker-launch-bridge.ts:132`). The extension performs startup
 admission, runtime claim, Session bind, event publication, stop, and shutdown
-(`extensions/index.ts:829`, `extensions/index.ts:1240`). Durable lead-Session
+(`extensions/index.ts:832`, `extensions/index.ts:1243`). Durable lead-Session
 discovery now lives in `findLeadTeamForSession` (`src/utils/teams.ts:476`); the
 extension calls that query without changing environment precedence or hook
 timing.
@@ -87,7 +93,8 @@ Team compatibility is not isolated. `TeamConfig` also carries resolved sync-
 liveness policy, historical implementation provenance, Beads authority,
 workspace, fingerprint, and Task-cutover fields (`src/utils/models.ts:61`).
 `createTeam` captures sync-liveness settings once for the Team epoch
-(`src/model-tool-contract/durable-model-tool-port.ts:185`), while current
+(`src/model-tool-contract/durable-model-tool-port.ts:204`,
+`src/model-tool-contract/durable-model-tool-port.ts:239`), while current
 compatibility no longer treats package version as a storage coordinate. This is
 required current behavior, but it makes TeamConfig a shared persistence
 envelope instead of a narrow Team contract.
@@ -100,19 +107,28 @@ The canonical Task card and version contracts remain `task-domain.ts` plus
 `TaskReconciliationQuery`. `BeadsTaskReconciliationQuery` implements that query
 for one Team-scoped authority in
 `src/task-authority/beads-reconciliation-query.ts`; the Pi composition root
-injects it into `TaskChangeDelivery` (`extensions/index.ts:788`).
+injects it into `TaskChangeDelivery` (`extensions/index.ts:791`).
 `BeadsTaskAdapter` owns metadata parsing, bounded TaskCard projection, opaque
 versions, replay, CAS, and semantic outcomes
-(`src/model-tool-contract/beads-task-adapter.ts:184`,
-`src/model-tool-contract/beads-task-adapter.ts:355`). `BeadsTaskStore` owns native
-CLI records and mutations. `beads-authority-adapter.ts` combines Team-scoped
-authority resolution, exact actor fencing, semantic mutation, coordination
-publication, failed-event hint publication, and Task-delivery publication. The
-corrected publication-inversion design is not implemented in this reviewed
-tree; concrete imports remain (`src/model-tool-contract/beads-authority-adapter.ts:6`,
-`src/model-tool-contract/beads-authority-adapter.ts:29`,
-`src/model-tool-contract/beads-authority-adapter.ts:40`,
-`src/model-tool-contract/beads-authority-adapter.ts:43`).
+(`src/model-tool-contract/beads-task-adapter.ts:295`,
+`src/model-tool-contract/beads-task-adapter.ts:378`). `BeadsTaskStore` owns native
+CLI records and mutations. `beads-authority-adapter.ts` owns Team-scoped
+authority resolution, exact actor fencing, semantic mutation, and the
+consumer-side `TaskMutationPublicationPort`
+(`src/model-tool-contract/beads-authority-adapter.ts:196`). Raw create, update,
+and link functions require the port (`src/model-tool-contract/beads-authority-adapter.ts:327`,
+`src/model-tool-contract/beads-authority-adapter.ts:420`,
+`src/model-tool-contract/beads-authority-adapter.ts:510`); this module no longer
+imports concrete Coordination, failed-hint, or Task-delivery writers.
+
+The stateless `DurableTaskMutationPublication` adapter lives outside Task
+authority (`src/adapters/durable-task-mutation-publication.ts:44`). It implements
+the port with the existing Team-event, failed-hint, Task-delivery, recovery,
+suppression, and owner-transition operations. The Pi composition root constructs
+one publishing Beads adapter factory and supplies it to leader and Worker paths
+(`extensions/index.ts:406`, `extensions/index.ts:435`,
+`extensions/index.ts:1328`). Default `BeadsTaskAdapter` construction remains
+read-only (`src/model-tool-contract/beads-task-adapter.ts:384`).
 
 `task-delivery.ts` currently owns Task-delivery meaning: exact recipient intent,
 precommit owner-transition markers, committed projections, recovery records,
@@ -164,9 +180,9 @@ now composes page-safe event reads, event-directed Task hydration, complete
 quiet-journal rescans, exact cached baselines, Worker run-state and actuation
 evidence, configured bounded waits, projection hashes, failed-event hint
 cursors, and pending acknowledgement
-(`src/model-tool-contract/durable-model-tool-port.ts:428`). It returns
+(`src/model-tool-contract/durable-model-tool-port.ts:435`). It returns
 `indeterminate` without position advance when run-state evidence cannot prove a
-productive or complete wait (`src/model-tool-contract/durable-model-tool-port.ts:506`).
+productive or complete wait (`src/model-tool-contract/durable-model-tool-port.ts:513`).
 
 The rc.9/rc.10 additions remain spread across current modules.
 `sync-liveness.ts` derives `active`, `settled`, `unknown`, or `absent` from exact
@@ -180,8 +196,8 @@ not; Coordination matches only the current epoch, Task identity, and version
 `src/utils/task-event-failure-hints.ts:165`). `readSyncNudgeDebt` derives branch-
 bound reconciliation debt, while `SyncNudgeConductor` and the Pi composition
 root reserve, validate, present, and persist delayed nudges only after exact
-Session-branch evidence (`src/model-tool-contract/durable-model-tool-port.ts:598`,
-`src/utils/sync-nudge-conductor.ts:27`, `extensions/index.ts:631`). These derived
+Session-branch evidence (`src/model-tool-contract/durable-model-tool-port.ts:605`,
+`src/utils/sync-nudge-conductor.ts:27`, `extensions/index.ts:634`). These derived
 records and timers never become Team, Task, or observation authority.
 
 Worker startup observation consumes coordination events, but it verifies current
@@ -204,9 +220,9 @@ Task or Worker state (`src/model-tool-contract/result-projection.ts:300`).
 
 `extensions/index.ts` is both the Pi composition root and a second application
 layer. Its process closure holds role, Team, Membership, delivery, tool, footer,
-model, and sync-nudge state (`extensions/index.ts:362`,
-`extensions/index.ts:375`). It also contains Worker
-schemas and execution beside the leader journey (`extensions/index.ts:1290`).
+model, and sync-nudge state (`extensions/index.ts:363`,
+`extensions/index.ts:376`). It also contains Worker
+schemas and execution beside the leader journey (`extensions/index.ts:1293`).
 `team-status.ts` and `team-footer.ts` are human projections, but they import Team
 and Task implementations directly (`src/utils/team-status.ts:4`,
 `src/utils/team-status.ts:6`, `src/utils/team-footer.ts:9`).
@@ -228,22 +244,24 @@ to private record changes (`src/public/observation.ts:5`).
    `in-memory-team-port.ts` imports and re-exports those types for compatibility;
    Task authority no longer depends upward on the model-tool test double.
 
-2. The Task publication path still directly imports Coordination and Team
-   authority. `beads-authority-adapter.ts` imports Team/session leases,
-   `appendTaskEvidenceEvent`, failed-event hints, and Task delivery
-   (`src/model-tool-contract/beads-authority-adapter.ts:6`,
-   `src/model-tool-contract/beads-authority-adapter.ts:43`). This module owns the
-   causal transaction boundary, but concrete imports prevent an honest
-   consumer-owned publication fault seam. Design Tasks i37/hq6 changed no source;
-   do not call publication isolation implemented.
+2. **Resolved for Task mutation publication.**
+   `beads-authority-adapter.ts` retains Task mutation and exact actor/lease
+   orchestration but depends on only its consumer-side publication port. The
+   durable adapter outside Task authority imports the concrete event, failed-
+   hint, and delivery operations (`src/adapters/durable-task-mutation-publication.ts:1`,
+   `src/adapters/durable-task-mutation-publication.ts:8`). Composition injects
+   one publishing factory into leader and Worker mutations. Import fences and
+   deterministic interleavings prove this is dependency inversion, not i37's
+   rejected relocation (`src/adapters/durable-task-mutation-publication.test.ts:195`,
+   `src/model-tool-contract/task-mutation-publication-order.test.ts:128`).
 
 3. **Resolved for reconciliation.** Task delivery imports the Task-owned query
    contract and receives its Beads implementation at composition. It contains
    no static or dynamic Beads Task-adapter import
-   (`src/utils/task-delivery.ts:18`, `extensions/index.ts:788`). The production
-   static file graph remains acyclic. `beads-authority-adapter.ts` still imports
-   Task delivery for mutation publication, so broader Task publication
-   isolation remains future work.
+   (`src/utils/task-delivery.ts:18`, `extensions/index.ts:791`). The production
+   static file graph remains acyclic. Task mutation now uses the injected
+   publication port, so reconciliation and publication dependencies both point
+   through explicit seams.
 
 4. `ModelToolTeamPort` combines Team, Task, Alert, Coordination, launch context,
    sync-nudge debt, and observation acknowledgement in one interface
@@ -267,7 +285,7 @@ to private record changes (`src/public/observation.ts:5`).
    durable lead-Session discovery to Team authority. It still owns lifecycle
    application services, starts two delivery engines, composes sync-nudge
    reservation and exact-branch presentation, and wires trio projection
-   (`extensions/index.ts:631`). Pi hook order is therefore an implicit
+   (`extensions/index.ts:634`). Pi hook order is therefore an implicit
    integration contract.
 
 7. `models.ts` and `paths.ts` act as shared registries. `models.ts` mixes Team,
@@ -294,9 +312,9 @@ to private record changes (`src/public/observation.ts:5`).
 
 9. Team lifecycle and Task authority need queries in both directions. Worker
    stop checks nonterminal Tasks while holding the Team topology lease
-   (`extensions/index.ts:1243`, `extensions/index.ts:1248`), while Task creation
+   (`extensions/index.ts:1246`, `extensions/index.ts:1251`), while Task creation
    validates a logical Worker
-   (`src/model-tool-contract/durable-model-tool-port.ts:298`). Consumer-owned
+   (`src/model-tool-contract/durable-model-tool-port.ts:305`). Consumer-owned
    query ports must prevent this semantic relation from becoming a source cycle.
 
 10. Coordination liveness currently reads Team runtime, Task delivery, and the
@@ -328,27 +346,34 @@ to private record changes (`src/public/observation.ts:5`).
   (`src/task-authority/reconciliation-equivalence.test.ts`). Source fences also
   prove that Task delivery has no Beads adapter import and the Beads Task adapter
   has no in-memory-port import. This evidence covers reconciliation equivalence;
-  it does not prove the remaining Task publication or other subsystem seams.
+  the separate publication gate covers mutation publication.
+- `TASK-PUBLICATION-INVERSION` is closed. Deterministic tests force preparation
+  inside the Membership lease and block event publication after lease release;
+  preserve event, failed-hint, serial delivery, inline recovery, suppression,
+  and completion order; preserve exact warnings and failure continuation; prove
+  that an acting-Session no-op still suppresses without event, delivery, or
+  completion while an exact create replay calls no publication-port method; and
+  fence concrete imports outside Task authority
+  (`src/model-tool-contract/task-mutation-publication-order.test.ts:128`,
+  `src/adapters/durable-task-mutation-publication.test.ts:79`,
+  `src/adapters/durable-task-mutation-publication.test.ts:139`,
+  `src/adapters/durable-task-mutation-publication.test.ts:195`). Independent
+  verification passed 113 focused tests, typecheck, result QA, lane closure,
+  package, public-surface, persistence, and diff checks. It did not run the
+  aggregate lane.
 
-- `TASK-PUBLICATION-INVERSION` has a corrected design but no implementation or
-  executable equivalence gate in this tree. Task mutation still imports Team,
-  Coordination event, failed-event-hint, and delivery implementations directly.
-  Do not mark the Task publication boundary complete until a consumer-owned port
-  is injected from composition and the commit/event/delivery and Membership-
-  lease interleavings pass.
 - The rc.10 Coordination additions have focused settings, liveness, hydration,
   failed-event-hint, nudge, extension, and E2E evidence. They preserve explicit
   `indeterminate` outcomes and branch-safe position, but they do not prove a
   separated Coordination application port or remove cross-authority read
   dependencies.
 
-The upward Task-to-trio type risk and hidden dynamic reconciliation cycle are
-closed by the first seam, and durable lead discovery now belongs to Team
-authority. The main remaining structural risks are one façade and one in-memory
-fake that combine all authorities, concrete Task publication imports,
-Coordination liveness reading three authorities, hook-order coupling in the Pi
-composition root, and public Membership observation reading broad private
-records. These risks do not authorize behavior changes.
+The upward Task-to-trio type risk, hidden dynamic reconciliation cycle, and
+concrete Task publication dependencies are closed, and durable lead discovery
+now belongs to Team authority. The main remaining structural risks are one
+façade and one in-memory fake that combine all authorities, Coordination
+liveness reading three authorities, hook-order coupling in the Pi composition
+root, and public Membership observation reading broad private records. These risks do not authorize behavior changes.
 
 ## Preserved state, timing, and ordering facts
 
@@ -360,14 +385,17 @@ records. These risks do not authorize behavior changes.
   (`src/utils/worker-launch-bridge.ts:132`). Compensation deactivates only after
   exact carrier-stop proof (`src/utils/worker-launch-bridge.ts:475`).
 - Process startup order is runtime-generation claim, Membership Session bind,
-  then `session_bound` event (`extensions/index.ts:906`,
-  `extensions/index.ts:909`, `extensions/index.ts:912`). A post-claim failure
+  then `session_bound` event (`extensions/index.ts:909`,
+  `extensions/index.ts:912`, `extensions/index.ts:915`). A post-claim failure
   deliberately leaves a runtime fence until PID exit.
-- Normal Task mutation commits Beads first, appends event evidence, then enqueues
-  delivery. Event and delivery failures produce degraded warnings and do not
-  roll back Task state (`src/model-tool-contract/beads-authority-adapter.ts:501`).
-  An event-append failure also writes a derived failed-event hint before delivery
-  (`src/model-tool-contract/beads-authority-adapter.ts:557`).
+- Normal Task mutation commits Beads first and releases the Membership lease,
+  suppresses the acting Session when needed, appends event evidence, then
+  enqueues recipients serially. Event and delivery failures produce the same
+  degraded warnings and do not roll back Task state
+  (`src/model-tool-contract/beads-authority-adapter.ts:327`,
+  `src/adapters/durable-task-mutation-publication.ts:57`). An event-append
+  failure writes a derived failed-event hint before delivery
+  (`src/adapters/durable-task-mutation-publication.ts:94`).
 - Assignee changes first prepare delivery intent, then embed its operation ID in
   the Beads mutation, mark it committed, and dispatch exact recipients
   (`src/utils/task-delivery.ts:340`, `src/utils/task-delivery.ts:416`). Recovery
@@ -382,10 +410,11 @@ records. These risks do not authorize behavior changes.
   120 seconds and settings bound it from zero through 3,600 seconds
   (`src/utils/sync-liveness-settings.ts:6`,
   `src/utils/sync-liveness-settings.ts:8`,
-  `src/model-tool-contract/durable-model-tool-port.ts:185`). `team_sync` must
+  `src/model-tool-contract/durable-model-tool-port.ts:204`,
+  `src/model-tool-contract/durable-model-tool-port.ts:239`). `team_sync` must
   publish one complete observation or none; `indeterminate` does not advance
   position, and hidden state advances only after the exact result persists on
-  the active branch (`src/model-tool-contract/durable-model-tool-port.ts:506`,
+  the active branch (`src/model-tool-contract/durable-model-tool-port.ts:513`,
   `extensions/index.ts:475`).
 - Runtime constants of 90 seconds for heartbeat staleness, 60 seconds for
   startup stall, and five minutes for stale files are diagnostic policy, not
@@ -398,7 +427,8 @@ records. These risks do not authorize behavior changes.
   combined Alert event (`src/utils/alerts.ts:109`, `src/utils/alerts.ts:137`).
 - Sync nudges reserve before send and become presented evidence only after the
   exact custom message exists on the same full branch lineage
-  (`src/utils/sync-nudge.ts:47`, `extensions/index.ts:673`). They request
+  (`src/utils/sync-nudge.ts:47`, `extensions/index.ts:690`,
+  `extensions/index.ts:697`). They request
   reconciliation and never mutate Task or Team authority.
 - Compatibility readers preserve legacy Memberships, inbox IDs, terminal
   fields, Task cutover evidence, and mixed event/delivery records.
@@ -420,6 +450,7 @@ Coordination observation
 
 Task authority
   -> consumer-owned current-Membership resolver
+  -> consumer-owned mutation-publication port, implemented by composition
   -> Task-owned delivery and recovery records
   -> shared SessionActuator interface
   -> lock, atomic write, trace, and path support
@@ -459,14 +490,15 @@ at the composition root.
    Coordination. Make `ModelToolTeamPort` a trio-facing façade. Split the
    in-memory implementation into separate fakes so tests cannot assume one-store
    atomicity.
-4. **Reconciliation part implemented; publication still concrete.** Owner-
-   transition intent, recovery, tombstones, and compatibility remain in Task
-   authority. The injected Task query replaces dynamic Task-adapter imports.
-   Current-Membership resolution, Coordination event and failed-event-hint
-   publication, and Session actuation remain concrete. Implement the corrected
-   consumer-owned publication port only with composition-root injection and
-   exact order/lease equivalence gates; do not move the concrete imports into a
-   nominally Task-owned adapter.
+4. **Implemented and independently verified.** Owner-transition intent,
+   recovery, tombstones, and compatibility remain in Task authority. The
+   injected Task query replaces dynamic Task-adapter imports. The consumer-owned
+   mutation-publication port replaces concrete Coordination and delivery imports
+   in Task mutation, while the durable adapter stays outside Task authority.
+   Composition injects one publishing factory into leader and Worker paths;
+   exact order, lease, warning, recovery, acting-Session no-op suppression
+   without event/delivery/completion, exact create-replay silence, and
+   import-direction gates pass.
 5. Isolate Alert next. Wrap Message inbox records as an Alert delivery adapter
    without changing filenames or schemas. Inject Team membership and
    coordination publication. Characterize accepted-delivery/event-failure
@@ -492,12 +524,12 @@ at the composition root.
     characterization suite after each step. Do not start with a directory rename
     or whole-system rewrite.
 
-The first seam is implemented and `TASK-RECONCILIATION-INJECTION` proves current
-behavior across that boundary. It removes the clearest upward type dependency
-and hidden dynamic reconciliation cycle without changing a public operation,
-persisted record, or runtime order. The rebased rc.10 tree adds substantial
-Coordination behavior and evidence, but it does not complete Team, Task
-publication, Alert, Coordination, Trio, or additive Membership-observation
-boundaries. The corrected Task publication inversion remains a design only.
-ALERT-004 remains unclassified; owner classification plus restart and later-
-presentation evidence remain required before Alert refactoring.
+`TASK-RECONCILIATION-INJECTION` and `TASK-PUBLICATION-INVERSION` now prove the
+implemented Task dependency boundaries. They remove the clearest upward type
+dependency, hidden dynamic reconciliation cycle, and concrete mutation-
+publication writers without changing a public operation, persisted record, or
+runtime order. The rebased rc.10 tree adds substantial Coordination behavior and
+evidence, but it does not complete Team, Alert, Coordination, Trio, or additive
+Membership-observation boundaries. ALERT-004 remains unclassified; owner
+classification plus restart and later-presentation evidence remain required
+before Alert refactoring.

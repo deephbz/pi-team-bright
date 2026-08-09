@@ -40,7 +40,8 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/utils/worker-launch-bridge";
-import { BeadsTaskAdapter } from "../src/model-tool-contract/beads-task-adapter";
+import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
+import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
@@ -402,6 +403,8 @@ export default function (pi: ExtensionAPI) {
     return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
   }
 
+  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication());
+
   const workerLaunchBridge = createWorkerLaunchBridge({
     buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
       const argv = buildPiArgv(getPiLaunchArgv(), model, thinking);
@@ -429,7 +432,7 @@ export default function (pi: ExtensionAPI) {
         ? modelToolLifecycleAdapter.shutdownTeam(name)
         : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
     };
-    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle));
+    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory));
   }
 
   function modelToolBranchIds(ctx: ExtensionContext): string[] {
@@ -1297,7 +1300,7 @@ export default function (pi: ExtensionAPI) {
       }, { additionalProperties: false }),
       async execute(_toolCallId, params: { task_id: string }, _signal, _onUpdate, ctx) {
         const binding = await resolveCurrentWorkerContext(ctx);
-        const outcome = await new BeadsTaskAdapter(binding.teamName, binding.member.name).read(params.task_id);
+        const outcome = await taskAdapterFactory(binding.teamName, binding.member.name).read(params.task_id);
         return assembleToolResult("task_read", {
           kind: "task_read_batch",
           outcomes: [outcome.kind === "found"
@@ -1322,7 +1325,7 @@ export default function (pi: ExtensionAPI) {
       }, { additionalProperties: false, minProperties: 3 }),
       async execute(_toolCallId, params: any, _signal, _onUpdate, ctx) {
         const binding = await resolveCurrentWorkerContext(ctx);
-        const adapter = new BeadsTaskAdapter(binding.teamName, binding.member.name);
+        const adapter = taskAdapterFactory(binding.teamName, binding.member.name);
         if (params.claim === true && (params.current_context !== undefined || params.journal_entries !== undefined || params.status !== undefined)) {
           throw new Error("claim=true is atomic; do not include current_context, journal_entries, or status.");
         }

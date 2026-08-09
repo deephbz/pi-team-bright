@@ -18,6 +18,7 @@ import {
 import type { InternalTaskPublicationOptions, TaskCreateReceipt } from "./beads-authority-adapter";
 import {
   BeadsTaskAdapter,
+  createPublishingBeadsTaskAdapterFactory,
   taskUpdateEventEvidence,
   projectNonterminalTaskIds,
   refreshTaskMetadata,
@@ -86,6 +87,27 @@ afterEach(() => {
 });
 
 describe("durable Task adapter", () => {
+  it("keeps default construction read-only and exposes mutation only through the publishing factory", async () => {
+    const readOnly = new BeadsTaskAdapter("candidate-team", "team-lead");
+    await expect(readOnly.create({
+      operationId: "read-only-create",
+      title: "Must not mutate",
+      goal: "Require an injected publication port.",
+    })).resolves.toEqual({
+      kind: "unknown_outcome",
+      operationId: "read-only-create",
+      message: "Task create outcome is unknown: the Task adapter is read-only.",
+    });
+
+    const factory = createPublishingBeadsTaskAdapterFactory({
+      prepareOwnerTransitionIntent: vi.fn(),
+      suppressTaskVersionForSession: vi.fn(),
+      publishTaskMutation: vi.fn(),
+      completeOwnerTransitionIntent: vi.fn(),
+    });
+    expect(factory("candidate-team", "team-lead")).toBeInstanceOf(BeadsTaskAdapter);
+  });
+
   it("creates through the existing Task authority and keeps metadata canonical", async () => {
     const create = vi.fn(async (_input: CreateTaskInput, _publication: InternalTaskPublicationOptions) => receipt(task()));
     const read = vi.fn(async () => authorityRecord(metadata()));
