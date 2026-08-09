@@ -5,9 +5,9 @@ Stage: consolidation and hardening
 Result revision: `15e707b5668af383d6949934bd8e67a35b8bc097`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
-Prepared source candidate: `@hypercarrier/pi-team-bright@0.17.0-rc.11`
-(at preparation: untagged, unpublished, and not verified by the reserved
-aggregate)
+Verified source candidate: `638d5934bd52c7f4a3fe18525e5d72569a227211`
+Package metadata: `@hypercarrier/pi-team-bright@0.17.0-rc.11`
+Publication state: untagged and unpublished
 Public behavior: unchanged
 Architecture impact: changed internally; HyperCarrier's diagram is unchanged
 because it keeps Pi Team Bright internals opaque
@@ -139,6 +139,14 @@ graph has 68 production files, 231 unique static local edges, no nontrivial SCC,
 and no dynamic import. The [audit](subsystem-boundary-audit.md) owns the detailed
 counts and citations.
 
+Exact rc.11 source `638d5934` then passed the one reserved Node 22.22.1 full
+aggregate: 88 files and 695 tests in 253.59 seconds. Follow-up lane, package, QA,
+public, persistence, JSON, link, privacy-range, and exact installed-tarball gates
+passed. The [source verification
+receipt](../../journal/2026-08-09-v0.17.0-rc.11-source-verification-receipt.md)
+records the one-pack procedure, 93-file artifact sizes and digests, observation
+and Beads canaries, Pi 0.84.1 load, privacy limitation, and publication boundary.
+
 Public tools, schemas, package exports, agent projections, persistence shapes,
 filenames, migration behavior, and supported historical records remain
 unchanged. Internal source ownership changed for Task reconciliation, Task
@@ -152,11 +160,14 @@ unclassified. Broad TRIO-004 parity, Alert restart and later-presentation
 behavior, a real Pi subprocess/rendered-terminal receipt, and model
 interpretation remain outside the proved scope.
 
-The result bundle and rc.11 metadata were prepared atop implementation
-`15e707b`. At preparation, no tag, push, npm publication, npm `next` change,
-GitHub release, reserved aggregate result, or final verification claim existed.
-After the candidate commit, the next gate is the aggregate lane once on that
-exact commit. If it passes, recheck package, public, persistence, privacy, and
-provenance evidence and record the outcome. Do not require speculative
-completion of the remaining boundaries, but do not proceed with an unexplained
-regression or an unclassified behavior change.
+The result bundle and rc.11 metadata are committed in verified source
+`638d5934`. That source remains untagged and unpublished. No push, npm
+publication, npm `next` change, registry comparison, provenance claim, GitHub
+release, or published-release receipt occurred. Publication is a separate
+authorized operation and must compare its external identities with this source
+and receipt.
+
+The installed canaries do not prove a full live Team journey, terminal rendering,
+model behavior, or model interpretation. Do not require speculative completion
+of the remaining boundaries, but do not publish an unexplained regression or an
+unclassified behavior change.
