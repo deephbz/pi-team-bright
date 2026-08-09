@@ -1,9 +1,10 @@
 # Model-tool release parity checklist
 
-Release: `0.17.0-rc.10`
-Source surface: shipped main extension at the release candidate source commit
+Release: `0.17.0-rc.11`
+Source surface: prepared main extension atop implementation `15e707b`; at
+preparation it was untagged, unpublished, and not aggregate-verified
 
-This checklist maps each `0.17.0-rc.10` coordination capability to the
+This checklist maps each `0.17.0-rc.11` coordination capability to the
 single durable model-tool leader surface. The leader uses exact Session binding,
 so the surface omits `team_name` and carrier controls. Worker processes keep the
 narrow `task_read`, `task_update`, and `alert_send` registrations; Worker Team
@@ -53,8 +54,12 @@ identity comes from exact runtime binding, not model input.
 - `src/model-tool-contract/first-journey.test.ts` validates registration,
   model JSON, exact binding, batch Task semantics, and replay/conflict behavior.
 - `src/model-tool-contract/beads-task-adapter.test.ts` proves matching create
-  replay, conflicting operation reuse refusal, and safe recovery after an
-  unknown post-authority result.
+  replay, conflicting operation reuse refusal, safe recovery after an unknown
+  post-authority result, and read-only default construction.
+- `src/adapters/durable-task-mutation-publication.test.ts` and
+  `src/model-tool-contract/task-mutation-publication-order.test.ts` protect the
+  injected Task-publication boundary, exact causal order, and failure
+  continuation. The executable port and adapter remain the contract source.
 - `src/model-tool-contract/result-projection.ts` and
   `src/model-tool-contract/tui-projection.ts` validate the raw/model/TUI
   projection boundary.
@@ -94,6 +99,7 @@ Focused anchors:
 - `src/utils/sync-nudge-conductor.test.ts` covers post-settle nudges and
   eventless Task revision hints.
 
-Architecture impact: **changed** at the public tool contract boundary. No new
-component, authority, persistence store, process boundary, or deployment
-boundary was added.
+Architecture impact: **changed internally** for Task and Team dependency
+ownership. Public behavior and the public tool boundary are unchanged from
+rc.10. HyperCarrier's diagram remains unchanged because it keeps Pi Team Bright
+internals opaque.
