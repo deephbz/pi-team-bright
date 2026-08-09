@@ -155,6 +155,15 @@
       "evidence": ["src/utils/message-delivery.ts"]
     },
     {
+      "id": "ALERT-004",
+      "subsystem": "alert_authority",
+      "summary": "After Alert delivery acceptance followed by Coordination publication failure, omit per-recipient outcomes from the unavailable public result, do not advance the cursor or mutate Task state, and let an exact retry duplicate accepted delivery under a new Alert identity.",
+      "classification": "unclassified",
+      "testState": "characterized",
+      "evidence": ["src/utils/alert-publication-failure.characterization.test.ts", "src/utils/alerts.ts", "src/utils/team-events.ts"],
+      "proofLimit": "The registered-extension characterization covers one partial Team broadcast, real native inbox writes, a filesystem event-journal failure, and an exact retry. It does not classify the behavior as intended or defective, and it does not prove process restart or later exact-Session presentation."
+    },
+    {
       "id": "COORD-001",
       "subsystem": "coordination_observation",
       "summary": "Produce one coherent current snapshot from Team, Worker, Task, and Alert evidence.",
@@ -167,9 +176,9 @@
       "subsystem": "coordination_observation",
       "summary": "Require an acknowledged snapshot before incremental updates and preserve exact branch position.",
       "classification": "unclassified",
-      "testState": "missing",
-      "evidence": ["src/utils/hidden-observation.ts"],
-      "proofLimit": "The causal slice establishes and acknowledges a snapshot before updates. It does not assert updates-before-snapshot refusal or exact branch-lineage behavior."
+      "testState": "characterized",
+      "evidence": ["src/utils/hidden-observation.ts", "src/utils/causal-path-characterization.test.ts", "src/utils/causal-path.inventory.json"],
+      "proofLimit": "Registered tools and Pi hooks prove updates-before-snapshot refusal, exact active-branch result acknowledgement, pending replay when result persistence is absent, and snapshot-required on lineage mismatch. Real Pi fork identity, cross-process resume, compaction, and crash between result persistence and provider input remain unproved."
     },
     {
       "id": "COORD-003",
