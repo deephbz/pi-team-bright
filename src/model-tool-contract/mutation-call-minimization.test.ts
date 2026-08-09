@@ -5,8 +5,11 @@ import { DurableModelToolTeamPort } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { taskVersionRef } from "./task-version-ref";
 import type { TaskAuthorityRecord } from "../utils/beads";
+import { createPublishingBeadsTaskAdapterFactory } from "./beads-task-adapter";
+import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 
 const createdTeams: string[] = [];
+const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication());
 
 function task(teamName: string, id: string, version = `beads_${id}_v1`, status: TaskAuthorityRecord["status"] = "open"): TaskAuthorityRecord {
   return {
@@ -26,7 +29,7 @@ async function durablePort(suffix: string): Promise<{ name: string; port: Durabl
   const sessionFile = `/tmp/${name}-lead.jsonl`;
   createdTeams.push(name);
   await teams.createTeam(name, sessionFile, "lead-agent", "Mutation call minimization.", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, undefined, taskAdapterFactory);
   const session = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(session, sessionFile);
   return { name, port, session };
@@ -76,7 +79,7 @@ describe("model mutation Beads call minimization", () => {
       deliveryDegraded: false,
       deliveryWarnings: [],
     });
-    const adapter = new (await import("./beads-task-adapter.js")).BeadsTaskAdapter(teamName, "team-lead");
+    const adapter = taskAdapterFactory(teamName, "team-lead");
     const result = await adapter.link({ taskId: "task-a", relation: "related", targetId: "task-b", action: "add", expectedVersion: taskVersionRef("beads_task-a_v3") });
     expect(result).toMatchObject({ kind: "linked", version: taskVersionRef("beads_task-a_v3") });
     expect(read).toHaveBeenCalledOnce();

@@ -23,6 +23,7 @@ import {
   type TaskCreateReceipt,
   type SemanticTaskUpdateResult,
   type TaskMutationReceipt,
+  type TaskMutationPublicationPort,
 } from "./beads-authority-adapter";
 import type {
   ModelToolTaskJournalEntry,
@@ -114,7 +115,7 @@ type TaskAuthorityUpdateInput = Omit<ModelToolTaskUpdateInput, "expectedVersion"
 };
 
 export interface TaskAdapterAuthority {
-  create(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
+  create?(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
   read(taskId: string): Promise<TaskAuthorityRecordEnvelope>;
   /** Batch Task hydration over the existing native multi-ID show seam. */
   readMany?(taskIds: readonly string[]): Promise<Array<TaskAuthorityRecordEnvelope | undefined>>;
@@ -319,14 +320,24 @@ export async function readTaskOwnerTransitionEvidence(
   };
 }
 
-function defaultAuthority(teamName: string, actor: string): TaskAdapterAuthority {
+function readOnlyAuthority(teamName: string): TaskAdapterAuthority {
   return {
-    create: (input, publication) => createTask(teamName, input, { actor }, {
+    read: (taskId) => readTaskAuthorityRecordEnvelope(teamName, taskId),
+    readMany: (taskIds) => readTaskAuthorityRecordEnvelopes(teamName, taskIds),
+  };
+}
+
+function publishingAuthority(
+  teamName: string,
+  actor: string,
+  publicationPort: TaskMutationPublicationPort,
+): TaskAdapterAuthority {
+  return {
+    ...readOnlyAuthority(teamName),
+    create: (input, publication) => createTask(teamName, input, publicationPort, { actor }, {
       ...publication,
       taskCardProjector: projectTaskCard,
     }),
-    read: (taskId) => readTaskAuthorityRecordEnvelope(teamName, taskId),
-    readMany: (taskIds) => readTaskAuthorityRecordEnvelopes(teamName, taskIds),
     update: (taskId, input, metadata) => applySemanticTaskUpdate(teamName, taskId, {
       ...(input.claim ? { claim: true } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
@@ -337,13 +348,25 @@ function defaultAuthority(teamName: string, actor: string): TaskAdapterAuthority
       taskMetadata: metadata,
       taskCardProjector: projectTaskCard,
       taskEventEvidence: taskUpdateEventEvidence(input as ModelToolTaskUpdateInput),
-    }),
+    }, publicationPort),
     link: (taskId, input, options) => mutateTaskLink(teamName, taskId, {
       relation: input.relation,
       targetId: input.targetId,
       action: input.action,
-    }, { ...options, taskCardProjector: projectTaskCard }),
+    }, { ...options, taskCardProjector: projectTaskCard }, publicationPort),
   };
+}
+
+export type BeadsTaskAdapterFactory = (teamName: string, actor: string) => BeadsTaskAdapter;
+
+export function createPublishingBeadsTaskAdapterFactory(
+  publicationPort: TaskMutationPublicationPort,
+): BeadsTaskAdapterFactory {
+  return (teamName, actor) => new BeadsTaskAdapter(
+    teamName,
+    actor,
+    publishingAuthority(teamName, actor, publicationPort),
+  );
 }
 
 /**
@@ -358,7 +381,7 @@ export class BeadsTaskAdapter {
   constructor(
     readonly teamName: string,
     readonly actor: string,
-    authority: TaskAdapterAuthority = defaultAuthority(teamName, actor),
+    authority: TaskAdapterAuthority = readOnlyAuthority(teamName),
   ) {
     this.authority = authority;
   }
@@ -370,7 +393,15 @@ export class BeadsTaskAdapter {
   async createWithReceipt(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<TaskCreateOutcome> {
     const metadata = taskMetadata(input.goal, INITIAL_CURRENT_CONTEXT);
     try {
-      const receipt = await this.authority.create({
+      const create = this.authority.create;
+      if (!create) {
+        return {
+          kind: "unknown_outcome",
+          operationId: input.operationId,
+          message: "Task create outcome is unknown: the Task adapter is read-only.",
+        };
+      }
+      const receipt = await create({
         title: input.title,
         // These are compatibility projections only. Task reads use metadata.
         description: input.goal,

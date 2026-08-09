@@ -38,7 +38,8 @@ variables do not.
 | Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
 | Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation` |
 | Canonical Task card and opaque TaskVersionRef | [`src/model-tool-contract/task-domain.ts`](../../src/model-tool-contract/task-domain.ts) and [`src/model-tool-contract/task-version-ref.ts`](../../src/model-tool-contract/task-version-ref.ts) |
-| Task authority, mutation semantics, and Beads translation | Task update, journal, and reconciliation-query contracts live in [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts); [`src/task-authority/beads-reconciliation-query.ts`](../../src/task-authority/beads-reconciliation-query.ts), [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts) implement the Beads boundary; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
+| Task authority, mutation semantics, and Beads translation | Task update, journal, and reconciliation-query contracts live in [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts); [`src/task-authority/beads-reconciliation-query.ts`](../../src/task-authority/beads-reconciliation-query.ts), [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts) implement the Beads boundary; [`beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts) owns the consumer-side mutation-publication port, while [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) implements its concrete Coordination and delivery bridge outside Task authority; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
+| Semantic-hardening status and dependency evidence | Maintained [`context`](../projects/semantic-hardening/context.md), [`subsystem audit`](../projects/semantic-hardening/subsystem-boundary-audit.md), and machine [`dependency map`](../projects/semantic-hardening/subsystem-dependency-map.json) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Human operating introduction | [Repository README](../../README.md) |
 | Agent operating procedure | [`skills/pi-team-bright/SKILL.md`](../../skills/pi-team-bright/SKILL.md) |
@@ -52,11 +53,16 @@ restating executable definitions.
   mutation syntax inside the Beads adapter modules. `TaskCard` and opaque
   `TaskVersionRef` remain the public Task coordinates above that boundary;
   Task-owned update, journal, and reconciliation-query contracts now isolate
-  recovery from the trio-facing in-memory port. That old port keeps temporary
-  compatibility type re-exports. `tasks.ts` is a semantic facade. Team authority
-  now also owns durable lead-Session discovery; the Pi composition root keeps
-  environment precedence and hook timing. Architecture impact: **changed** for
-  these internal authority boundaries. HyperCarrier's canonical Structurizr DSL
+  recovery from the trio-facing in-memory port. The consumer-owned
+  `TaskMutationPublicationPort` also isolates mutation orchestration from
+  concrete Coordination, failed-hint, and delivery writers. One stateless
+  durable adapter implements that port outside Task authority, and Pi composition
+  injects one publishing Beads adapter factory into leader and Worker mutation
+  paths. Default Beads adapters remain read-only. The old in-memory port keeps
+  temporary compatibility type re-exports. `tasks.ts` is a semantic facade. Team
+  authority now also owns durable lead-Session discovery; the Pi composition root
+  keeps environment precedence and hook timing. Architecture impact: **changed**
+  for these internal authority boundaries. HyperCarrier's canonical Structurizr DSL
   remains unchanged because it keeps Pi Team Bright internals opaque.
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
   exceptional coordination.
@@ -187,7 +193,16 @@ restating executable definitions.
   resolves internal sync nudges: `nudge_enabled` defaults to `true`, and
   `nudge_delay_seconds` defaults to `1200`. A nudge is one exact-leader
   presentation record, not an Alert, Task mutation, or observation advance.
-- Task event publication records payload-light failed-event hints. Updates use
+- Task mutation publication now crosses a consumer-owned port. The durable
+  adapter preserves Beads commit, Membership-lease release, acting-Session
+  suppression, serial event, failed-hint, recipient delivery, inline recovery,
+  and owner-transition completion order. Exact warnings and partial-failure
+  continuation remain unchanged. The verified tree has 68 production files and
+  231 static local edges, with no nontrivial SCC or dynamic import. Independent
+  evidence passed 113 focused tests plus type, QA, lane, package, public-surface,
+  persistence, and diff checks. The canonical non-self-referential 16-path
+  source/test digest is `d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219`.
+  Task event publication records payload-light failed-event hints. Updates use
   event and Task-authority revisions, and a failed event append cannot advance
   the hidden watermark or hide an authoritative Task change. Required Task
   references use bounded sequential Beads hydration batches of at most 16 IDs;
@@ -225,10 +240,18 @@ restating executable definitions.
 
 ## Active Projects
 
-Two audit-driven Projects are active. Each has one maintained Project artifact;
-dated evidence remains in the journal. They do not replace this repository-level
+Three audit-driven Projects are active. Each routes through maintained Project
+artifacts; dated evidence remains in the journal. They do not replace this repository-level
 context or the executable contract sources.
 
+- [Semantic hardening](../projects/semantic-hardening/context.md) is in
+  consolidation and hardening. Task reconciliation and Task mutation publication
+  now use explicit dependency seams. `TASK-PUBLICATION-INVERSION` is implemented
+  and independently verified. ALERT-004 remains unclassified, and Team, Alert,
+  Coordination, Trio, and additive Membership-observation boundary work remains
+  incomplete. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
+  and machine [dependency map](../projects/semantic-hardening/subsystem-dependency-map.json)
+  own current structural evidence.
 - [Model-invoked tool contract](../projects/model-invoked-tool-contract.md) is in
   hardening under the one-leader/multiple-Worker topology. The owner accepted
   `team_create`, `ensure_worker`, and `team_sync` as the initial end-to-end

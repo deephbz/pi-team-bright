@@ -17,11 +17,13 @@ import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import { readTaskDeliveries } from "./task-delivery";
 import { readTeamEvents } from "./team-events";
+import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 
 type Tool = { name: string; parameters: unknown; execute: (...args: any[]) => Promise<any> };
 
 const testTeams: string[] = [];
 const testRoots: string[] = [];
+const publicationPort = new DurableTaskMutationPublication();
 
 function uniqueTeam(): string {
   const name = `worker-version-ref-${process.pid}-${Date.now()}-${testTeams.length}`;
@@ -230,7 +232,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     let failPostCreateRead = true;
     const adapter = new BeadsTaskAdapter(teamName, "team-lead", {
       create: async (input, publication) => {
-        const receipt = await createTask(teamName, input, { actor: "team-lead" }, publication);
+        const receipt = await createTask(teamName, input, publicationPort, { actor: "team-lead" }, publication);
         return { ...receipt, taskCard: undefined };
       },
       read: async (taskId) => {

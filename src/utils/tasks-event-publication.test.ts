@@ -8,9 +8,20 @@ import * as teamEvents from "./team-events";
 import * as teams from "./teams";
 import * as failureHints from "./task-event-failure-hints";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
-import { applySemanticTaskUpdate, mutateTaskLink } from "../model-tool-contract/beads-authority-adapter";
+import {
+  applySemanticTaskUpdate as applyRawSemanticTaskUpdate,
+  mutateTaskLink as mutateRawTaskLink,
+} from "../model-tool-contract/beads-authority-adapter";
+import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 
 const createdTeams: string[] = [];
+const publicationPort = new DurableTaskMutationPublication();
+type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
+type TaskLinkArgs = Parameters<typeof mutateRawTaskLink>;
+const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
+  applyRawSemanticTaskUpdate(...args, publicationPort);
+const mutateTaskLink = (...args: [TaskLinkArgs[0], TaskLinkArgs[1], TaskLinkArgs[2], TaskLinkArgs[3]]) =>
+  mutateRawTaskLink(...args, publicationPort);
 
 function task(teamName: string, overrides: Partial<TaskAuthorityRecord> = {}): TaskAuthorityRecord {
   return {

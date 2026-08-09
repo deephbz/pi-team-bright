@@ -1,7 +1,7 @@
 // Project: pi-teams
 import path from "node:path";
 import crypto from "node:crypto";
-import { BeadsAuthorityFingerprint, TeamConfig, type TaskEventChange } from "../utils/models";
+import { BeadsAuthorityFingerprint, TeamConfig } from "../utils/models";
 import type { TaskAuthorityRecord } from "../utils/beads";
 import {
   teamExists,
@@ -25,22 +25,9 @@ import {
   assertBeadsAuthorityFingerprint,
 } from "../utils/beads";
 import { teamDir } from "../utils/paths";
-import {
-  completeOwnerTransitionIntent,
-  enqueueTaskChangeForRecipient,
-  prepareOwnerTransitionIntent,
-  recordTaskDeliveryRecovery,
-  suppressTaskVersionForSession,
-  TaskChangeKind,
-} from "../utils/task-delivery";
 import { withSemanticTrace } from "../utils/trace";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef, type TaskVersionRef } from "../model-tool-contract/task-version-ref";
 import type { TaskCard } from "./task-domain";
-import {
-  appendTaskEvidenceEvent,
-  type TaskEventEvidenceInput,
-} from "../utils/team-events";
-import { appendTaskEventFailureHint } from "../utils/task-event-failure-hints";
 
 export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
 
@@ -146,9 +133,76 @@ export interface AgentMutationBinding {
   taskCardProjector?: (record: TaskAuthorityRecordEnvelope) => TaskCard | { kind: "contract_gap"; message: string };
 }
 
+export type TaskMutationChangeKind =
+  | "assigned"
+  | "ownership_lost"
+  | "status_changed"
+  | "relation_changed"
+  | "note_appended"
+  | "task_changed";
+
+export type TaskMutationEventEvidenceKind =
+  | "created"
+  | "goal"
+  | "assignment"
+  | "progress"
+  | "status"
+  | "relation"
+  | "decision"
+  | "blocker"
+  | "result"
+  | "note";
+
+export interface TaskMutationEventEvidenceInput {
+  kind: TaskMutationEventEvidenceKind;
+  text: string;
+}
+
+export type TaskMutationCoordinates = Pick<TaskCard, "id" | "title" | "status" | "assignee"> & { version: TaskVersionRef };
+
+export interface TaskMutationPublicationInput {
+  teamName: string;
+  before: TaskMutationCoordinates;
+  after: TaskMutationCoordinates;
+  created: boolean;
+  kind: TaskMutationChangeKind;
+  actor?: string;
+  taskEventEvidence: readonly TaskMutationEventEvidenceInput[];
+  deliver: boolean;
+  taskCard?: TaskCard;
+}
+
+export interface TaskOwnerTransitionPreparationInput {
+  operationId: string;
+  teamName: string;
+  before: TaskCard;
+  afterOwner?: string;
+  previousOperationId?: string;
+}
+
+export interface TaskMutationSuppressionInput {
+  teamName: string;
+  recipient: string;
+  sessionFile: string;
+  task: TaskCard | TaskMutationCoordinates;
+}
+
+export interface TaskOwnerTransitionCompletionInput {
+  teamName: string;
+  operationId: string;
+  task: TaskCard;
+}
+
+export interface TaskMutationPublicationPort {
+  prepareOwnerTransitionIntent(input: TaskOwnerTransitionPreparationInput): Promise<boolean>;
+  suppressTaskVersionForSession(input: TaskMutationSuppressionInput): Promise<void>;
+  publishTaskMutation(input: TaskMutationPublicationInput): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }>;
+  completeOwnerTransitionIntent(input: TaskOwnerTransitionCompletionInput): Promise<string[]>;
+}
+
 export interface InternalTaskPublicationOptions {
   /** Structured evidence for internal Task writes. */
-  taskEventEvidence?: readonly TaskEventEvidenceInput[];
+  taskEventEvidence?: readonly TaskMutationEventEvidenceInput[];
   /** Canonical Task meaning carried to delivery without a read. */
   taskMetadata?: Pick<TaskMetadata, "goal" | "current_context">;
   /** Adapter-owned projection of the committed raw authority envelope. */
@@ -212,9 +266,7 @@ export interface TaskCreateReceipt extends TaskMutationReceipt {
   publication: TaskPublicationEvidence;
 }
 
-type TaskCoordinates = Pick<TaskCard, "id" | "title" | "status" | "assignee" | "version">;
-
-function publicationInput(task: TaskAuthorityRecord): TaskCoordinates {
+function publicationInput(task: TaskAuthorityRecord): TaskMutationCoordinates {
   return {
     id: task.id,
     title: task.title,
@@ -241,6 +293,7 @@ function projectedCard(
 function assigneeTransitionOperation(
   teamName: string,
   afterAssignee: string | undefined,
+  publicationPort: TaskMutationPublicationPort,
   taskCardProjector?: (record: TaskAuthorityRecordEnvelope) => TaskCard | { kind: "contract_gap"; message: string },
 ) {
   const operationId = `task_owner_transition_${crypto.randomUUID()}`;
@@ -259,7 +312,7 @@ function assigneeTransitionOperation(
           error.name = "upgrade_required";
           throw error;
         }
-        return prepareOwnerTransitionIntent({
+        return publicationPort.prepareOwnerTransitionIntent({
           operationId,
           teamName,
           before,
@@ -276,6 +329,7 @@ export async function applySemanticTaskUpdate(
   taskId: string,
   update: SemanticTaskUpdate,
   options: TaskWriteOptions & AgentMutationBinding & InternalTaskPublicationOptions,
+  publicationPort: TaskMutationPublicationPort,
 ): Promise<SemanticTaskUpdateResult> {
   return withSemanticTrace("task_update", { teamName, taskId }, async () => {
     const mutationFields = [update.title, update.description, update.acceptanceCriteria, update.design, update.status, update.assignee, update.appendNote]
@@ -289,7 +343,7 @@ export async function applySemanticTaskUpdate(
 
     const desiredAssignee = update.claim ? options.actor : update.assignee;
     const assigneeTransition = desiredAssignee !== undefined
-      ? assigneeTransitionOperation(teamName, desiredAssignee, options.taskCardProjector)
+      ? assigneeTransitionOperation(teamName, desiredAssignee, publicationPort, options.taskCardProjector)
       : undefined;
 
     const mutation = await withAgentMutationAuthority(teamName, options, async (store) => {
@@ -321,20 +375,27 @@ export async function applySemanticTaskUpdate(
       options.actingSessionFile
       && (firstBefore.assignee === options.actor || current.assignee === options.actor)
     ) {
-      await suppressTaskVersionForSession(teamName, options.actor, options.actingSessionFile, postStateCard ?? publicationInput(current));
+      await publicationPort.suppressTaskVersionForSession({
+        teamName,
+        recipient: options.actor,
+        sessionFile: options.actingSessionFile,
+        task: postStateCard ?? publicationInput(current),
+      });
     }
     const assigneeChanged = firstBefore.assignee !== current.assignee;
     const publication = appliedOperations.length === 0
       ? undefined
-      : await publishTaskMutation(
+      : await publicationPort.publishTaskMutation({
         teamName,
-        firstBefore,
-        current,
-        changeKindForUpdate(update),
-        options.actor,
-        options.taskEventEvidence,
-        { deliver: !assigneeChanged, taskMetadata: options.taskMetadata, taskCard: postStateCard },
-      );
+        before: publicationInput(firstBefore),
+        after: publicationInput(current),
+        created: false,
+        kind: changeKindForUpdate(update),
+        actor: options.actor,
+        taskEventEvidence: options.taskEventEvidence ?? [],
+        deliver: !assigneeChanged,
+        ...(postStateCard ? { taskCard: postStateCard } : {}),
+      });
     if (assigneeChanged && assigneeTransition && !postStateCard) {
       const error = new Error(`Task ${current.id} has no canonical post-state card for owner-transition delivery.`);
       error.name = "upgrade_required";
@@ -343,7 +404,7 @@ export async function applySemanticTaskUpdate(
     const deliveryWarnings = appliedOperations.length === 0
       ? []
       : assigneeChanged && assigneeTransition && postStateCard
-        ? [...publication!.warnings, ...await completeOwnerTransitionIntent(teamName, assigneeTransition.operationId, postStateCard, {})]
+        ? [...publication!.warnings, ...await publicationPort.completeOwnerTransitionIntent({ teamName, operationId: assigneeTransition.operationId, task: postStateCard })]
         : publication!.warnings;
     return {
       task: current,
@@ -359,6 +420,7 @@ export async function applySemanticTaskUpdate(
 export async function createTask(
   teamName: string,
   input: CreateTaskInput,
+  publicationPort: TaskMutationPublicationPort,
   binding?: AgentMutationBinding,
   internalPublication: InternalTaskPublicationOptions = {},
 ): Promise<TaskCreateReceipt> {
@@ -392,17 +454,24 @@ export async function createTask(
     }
     const postStateCard = projectedCard(result.taskEnvelope, internalPublication);
     if (binding?.actingSessionFile && result.task.assignee === binding.actor) {
-      await suppressTaskVersionForSession(teamName, binding.actor, binding.actingSessionFile!, result.taskEnvelope && postStateCard ? postStateCard : publicationInput(result.task));
+      await publicationPort.suppressTaskVersionForSession({
+        teamName,
+        recipient: binding.actor,
+        sessionFile: binding.actingSessionFile!,
+        task: result.taskEnvelope && postStateCard ? postStateCard : publicationInput(result.task),
+      });
     }
-    const publication = await publishTaskMutation(
+    const publication = await publicationPort.publishTaskMutation({
       teamName,
-      result.task,
-      result.task,
-      result.task.assignee ? "assigned" : "task_changed",
-      binding?.actor,
-      internalPublication.taskEventEvidence,
-      { taskMetadata: internalPublication.taskMetadata, taskCard: postStateCard },
-    );
+      before: publicationInput(result.task),
+      after: publicationInput(result.task),
+      created: true,
+      kind: result.task.assignee ? "assigned" : "task_changed",
+      actor: binding?.actor,
+      taskEventEvidence: internalPublication.taskEventEvidence ?? [],
+      deliver: true,
+      ...(postStateCard ? { taskCard: postStateCard } : {}),
+    });
     return {
       task: result.task,
       ...(postStateCard ? { taskCard: postStateCard } : {}),
@@ -443,28 +512,36 @@ export async function mutateTaskLink(
   taskId: string,
   link: BeadsTaskLink,
   options: TaskWriteOptions & AgentMutationBinding,
+  publicationPort: TaskMutationPublicationPort,
 ): Promise<TaskMutationReceipt> {
   return withSemanticTrace("task_link", { teamName, taskId }, async () => {
     const mutation = await withAgentMutationAuthority(teamName, options, (store) =>
       store.mutateLinkWithResult(taskId, link, options));
     const postStateCard = projectedCard(mutation.afterEnvelope, options);
     if (options.actingSessionFile && mutation.after.assignee === options.actor) {
-      await suppressTaskVersionForSession(teamName, options.actor, options.actingSessionFile, postStateCard ?? publicationInput(mutation.after));
+      await publicationPort.suppressTaskVersionForSession({
+        teamName,
+        recipient: options.actor,
+        sessionFile: options.actingSessionFile,
+        task: postStateCard ?? publicationInput(mutation.after),
+      });
     }
     const deliveryWarnings = mutation.appliedOperations.length === 0
       ? []
-      : (await publishTaskMutation(
+      : (await publicationPort.publishTaskMutation({
         teamName,
-        mutation.before,
-        mutation.after,
-        "relation_changed",
-        options.actor,
-        [{
+        before: publicationInput(mutation.before),
+        after: publicationInput(mutation.after),
+        created: false,
+        kind: "relation_changed",
+        actor: options.actor,
+        taskEventEvidence: [{
           kind: "relation",
           text: `Task relation ${link.action} ${link.relation} ${link.targetId}.`,
         }],
-        { taskCard: postStateCard },
-      )).warnings;
+        deliver: true,
+        ...(postStateCard ? { taskCard: postStateCard } : {}),
+      })).warnings;
     return {
       task: mutation.after,
       ...(postStateCard ? { taskCard: postStateCard } : {}),
@@ -476,139 +553,11 @@ export async function mutateTaskLink(
   });
 }
 
-function changeKindForUpdate(updates: SemanticTaskUpdate): TaskChangeKind {
+function changeKindForUpdate(updates: SemanticTaskUpdate): TaskMutationChangeKind {
   if (updates.assignee !== undefined || updates.claim) return "assigned";
   if (updates.status !== undefined) return "status_changed";
   if (updates.appendNote !== undefined) return "note_appended";
   return "task_changed";
-}
-
-function defaultTaskEventEvidence(
-  before: TaskAuthorityRecord,
-  after: TaskAuthorityRecord,
-  kind: TaskChangeKind,
-): TaskEventEvidenceInput {
-  if (before === after) return { kind: "created", text: "Task created." };
-  if (kind === "assigned" || kind === "ownership_lost") {
-    return { kind: "assignment", text: `Task assignee changed to ${after.assignee ?? "unassigned"}.` };
-  }
-  if (kind === "status_changed") return { kind: "status", text: `Task status changed to ${after.status}.` };
-  if (kind === "relation_changed") return { kind: "relation", text: "Task relation changed." };
-  if (kind === "note_appended") return { kind: "note", text: "Task note changed." };
-  return { kind: "goal", text: "Task contract changed." };
-}
-
-async function publishTaskMutation(
-  teamName: string,
-  before: TaskAuthorityRecord,
-  after: TaskAuthorityRecord,
-  kind: TaskChangeKind,
-  actor?: string,
-  taskEventEvidence: readonly TaskEventEvidenceInput[] = [],
-  options: {
-    deliver?: boolean;
-    taskMetadata?: Pick<TaskMetadata, "goal" | "current_context">;
-    /** Exact canonical post-state card supplied by the adapter caller. */
-    taskCard?: TaskCard;
-  } = {},
-): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }> {
-  const targets: Array<{ recipient: string; kind: TaskChangeKind }> = [];
-  if (before.assignee && before.assignee !== after.assignee) {
-    targets.push({ recipient: before.assignee, kind: "ownership_lost" });
-  }
-  if (after.assignee) targets.push({ recipient: after.assignee, kind });
-  const unique = [...new Map(targets.map((target) => [`${target.recipient}:${target.kind}`, target])).values()];
-  const warnings: string[] = [];
-  let teamEventAppended = false;
-  const failedRecipients: string[] = [];
-  const recoveryRecordedFor: string[] = [];
-  const recoveryRecordFailedFor: string[] = [];
-  const actorName = actor ?? "external";
-  const publicationVersion: import("../model-tool-contract/task-version-ref").TaskVersionRef = options.taskCard
-    ? options.taskCard.version as import("../model-tool-contract/task-version-ref").TaskVersionRef
-    : taskVersionRef(after.version);
-  try {
-    const change: TaskEventChange = kind === "assigned" || kind === "ownership_lost" ? "assigned"
-      : kind === "status_changed" ? "status"
-      : kind === "note_appended" ? "note"
-      : kind === "relation_changed" ? "relation"
-      : "goal";
-    const baseEvent = {
-      type: "task" as const,
-      ref: { taskId: after.id, version: publicationVersion },
-      change,
-      actor: actorName,
-    };
-    const evidenceEntries = taskEventEvidence.length > 0
-      ? taskEventEvidence
-      : [defaultTaskEventEvidence(before, after, kind)];
-    for (const [index, evidence] of evidenceEntries.entries()) {
-      await appendTaskEvidenceEvent(teamName, {
-        ...baseEvent,
-        change: index === 0 ? change : "note",
-        taskEvidence: evidence,
-      });
-    }
-    teamEventAppended = true;
-  } catch (error) {
-    warnings.push(`Task ${after.id} committed but its Team event was not recorded: ${error instanceof Error ? error.message : String(error)}`);
-    try {
-      const config = await readConfig(teamName);
-      await appendTaskEventFailureHint(teamName, {
-        teamEpochId: config.epochId ?? "",
-        taskId: after.id,
-        taskVersion: publicationVersion,
-        actor: actorName,
-        at: new Date().toISOString(),
-      });
-    } catch (hintError) {
-      const warning = `Task ${after.id} committed but failed-event hint persistence also failed: ${hintError instanceof Error ? hintError.message : String(hintError)}`;
-      warnings.push(warning);
-      console.warn(`[pi-teams] ${warning}`);
-    }
-  }
-  const deliveryTargets = options.deliver === false ? [] : unique;
-  for (const target of deliveryTargets) {
-    try {
-      const card = options.taskCard;
-      if (!card) throw new Error(`Task ${after.id} has no canonical post-state card for delivery publication.`);
-      await enqueueTaskChangeForRecipient(teamName, card, target.recipient, target.kind);
-    } catch (error) {
-      const warning = `Task ${after.id} committed but delivery enqueue for ${target.recipient} failed`;
-      warnings.push(warning);
-      failedRecipients.push(target.recipient);
-      try {
-        if (!options.taskCard) throw new Error(`Task ${after.id} has no canonical card for delivery recovery.`);
-        await recordTaskDeliveryRecovery({
-          teamName,
-          taskId: after.id,
-          taskVersion: publicationVersion,
-          recipients: [target.recipient],
-          changeKind: target.kind,
-          recordedAt: new Date().toISOString(),
-          reason: "enqueue-failed",
-          taskProjection: options.taskCard,
-        });
-        recoveryRecordedFor.push(target.recipient);
-      } catch {
-        warnings.push(`${warning}; recovery evidence could not be persisted`);
-        recoveryRecordFailedFor.push(target.recipient);
-      }
-      console.warn(`[pi-teams] ${warning}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  return {
-    warnings,
-    evidence: {
-      teamEvent: { appended: teamEventAppended },
-      delivery: {
-        attemptedRecipients: [...new Set(deliveryTargets.map((target) => target.recipient))],
-        failedRecipients: [...new Set(failedRecipients)],
-        recoveryRecordedFor: [...new Set(recoveryRecordedFor)],
-        recoveryRecordFailedFor: [...new Set(recoveryRecordFailedFor)],
-      },
-    },
-  };
 }
 
 export function createBeadsStore(options: BeadsTaskStoreOptions): BeadsTaskStore {

@@ -15,6 +15,7 @@ import {
   projectNonterminalTaskIds,
   projectTaskChanges,
   type TaskChangeProjection,
+  type BeadsTaskAdapterFactory,
 } from "./beads-task-adapter";
 import {
   commitHiddenObservationProjection,
@@ -153,10 +154,16 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   });
   private readonly launchBridge: WorkerLaunchBridge;
   private readonly lifecycle?: ModelToolLifecycle;
+  private readonly taskAdapterFactory: BeadsTaskAdapterFactory;
 
-  constructor(launchBridge?: WorkerLaunchBridge, lifecycle?: ModelToolLifecycle) {
+  constructor(
+    launchBridge?: WorkerLaunchBridge,
+    lifecycle?: ModelToolLifecycle,
+    taskAdapterFactory: BeadsTaskAdapterFactory = (teamName, actor) => new BeadsTaskAdapter(teamName, actor),
+  ) {
     this.launchBridge = launchBridge ?? this.defaultLaunchBridge;
     this.lifecycle = lifecycle;
+    this.taskAdapterFactory = taskAdapterFactory;
   }
 
   setLeaderSessionFile(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void {
@@ -298,7 +305,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       const logical = await teams.readLogicalWorker(bound.teamName, input.assignee);
       if (logical.kind !== "found") return { kind: "worker_unavailable", operationId: input.operationId };
     }
-    const outcome = await new BeadsTaskAdapter(bound.teamName, "team-lead").createWithReceipt(input);
+    const outcome = await this.taskAdapterFactory(bound.teamName, "team-lead").createWithReceipt(input);
     if (outcome.kind === "created") {
       return { kind: "created", operationId: outcome.operationId, task: outcome.task, ...(outcome.deliveryWarnings.length > 0 ? { deliveryWarnings: outcome.deliveryWarnings } : {}) };
     }
@@ -310,7 +317,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "no_active_team" };
     const uniqueTaskIds = [...new Set(taskIds)];
-    const adapter = new BeadsTaskAdapter(bound.teamName, "team-lead");
+    const adapter = this.taskAdapterFactory(bound.teamName, "team-lead");
     try {
       const hydrated = await adapter.readMany(uniqueTaskIds);
       const byId = new Map(uniqueTaskIds.map((taskId, index) => [taskId, hydrated[index]]));
@@ -340,7 +347,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     if (duplicate.size > 0) return { kind: "duplicate_task_id" };
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "no_active_team" };
-    const adapter = new BeadsTaskAdapter(bound.teamName, "team-lead");
+    const adapter = this.taskAdapterFactory(bound.teamName, "team-lead");
     const outcomes: TaskUpdatePortOutcome[] = [];
     for (const input of updates) {
       const result = await adapter.update(input);
@@ -390,7 +397,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
     const lead = [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.isActive !== false);
-    const result = await new BeadsTaskAdapter(bound.teamName, "team-lead").link(input, {
+    const result = await this.taskAdapterFactory(bound.teamName, "team-lead").link(input, {
       actingSessionFile: bound.sessionFile,
       actingMembershipId: lead?.membershipId,
     });
@@ -731,7 +738,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private async readModelToolTasks(teamName: string): Promise<TaskProjectionReadResult> {
     try {
       const taskIds = await listTaskIds(teamName);
-      const adapter = new BeadsTaskAdapter(teamName, "team-lead");
+      const adapter = this.taskAdapterFactory(teamName, "team-lead");
       const records = await adapter.readMany(taskIds);
       this.assertCompleteTaskBatch(taskIds, records, "listed Task");
       const projected: TaskCard[] = [];
@@ -807,7 +814,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private async hydrateTaskIds(teamName: string, taskIds: readonly string[]): Promise<TaskProjectionReadResult> {
     if (taskIds.length === 0) return { kind: "tasks", tasks: [], warnings: [] };
     try {
-      const adapter = new BeadsTaskAdapter(teamName, "team-lead");
+      const adapter = this.taskAdapterFactory(teamName, "team-lead");
       const records = await adapter.readMany(taskIds);
       this.assertCompleteTaskBatch(taskIds, records, "event Task");
       const tasks = records.map((record, index) => {

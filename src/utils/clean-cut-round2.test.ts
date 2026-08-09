@@ -24,7 +24,8 @@ import {
   readTaskDeliveries,
   reconcileTaskChanges,
 } from "./task-delivery";
-import { applySemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
+import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
+import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
 type RegisteredTool = {
@@ -36,6 +37,10 @@ type RegisteredTool = {
 const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 const createdTeams: string[] = [];
 const roots: string[] = [];
+const publicationPort = new DurableTaskMutationPublication();
+type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
+const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
+  applyRawSemanticTaskUpdate(...args, publicationPort);
 
 function uniqueTeam(suffix: string): string {
   const name = `clean-cut-r2-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
