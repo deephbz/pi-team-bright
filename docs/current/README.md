@@ -152,7 +152,14 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `0.17.0-rc.10` is published from exact tagged source `1214303`; npm `next`
+- `0.17.0-rc.11` source was prepared atop implementation `15e707b`. It carries
+  internal Task and Team dependency hardening with no public behavior change. At
+  preparation it was untagged, unpublished, and not verified by the reserved
+  aggregate. After the candidate commit, the next gate is the one full aggregate
+  on that exact commit. The dated
+  [release plan](../journal/2026-08-09-v0.17.0-rc.11-release-plan.md) owns this
+  source-preparation boundary and gate order.
+- `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release
   receipt](../journal/2026-08-08-v0.17.0-rc.10-release-receipt.md) records exact
@@ -245,10 +252,12 @@ artifacts; dated evidence remains in the journal. They do not replace this repos
 context or the executable contract sources.
 
 - [Semantic hardening](../projects/semantic-hardening/context.md) is in
-  consolidation and hardening. Task reconciliation and Task mutation publication
-  now use explicit dependency seams. `TASK-PUBLICATION-INVERSION` is implemented
-  and independently verified. ALERT-004 remains unclassified, and Team, Alert,
-  Coordination, Trio, and additive Membership-observation boundary work remains
+  consolidation and hardening. Rc.11 source was prepared atop the committed
+  implementation at `15e707b`. Task reconciliation and Task mutation publication
+  use explicit dependency seams.
+  `TASK-PUBLICATION-INVERSION` is implemented and independently verified.
+  ALERT-004 remains unclassified, and Team, Alert, Coordination, Trio, and
+  additive Membership-observation boundary work remains
   incomplete. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
   and machine [dependency map](../projects/semantic-hardening/subsystem-dependency-map.json)
   own current structural evidence.

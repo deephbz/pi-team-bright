@@ -586,3 +586,62 @@ changes; append a correction.
 - This entry supersedes only the prior 24,078 combined-line claim. The current
   corpus has 88 test files with 23,647 lines and two support files with 441
   lines: 90 files and 24,088 lines combined.
+
+## 2026-08-09 — semantic-hardening implementation series committed
+
+- The reviewed Task publication change and maintained audit entered committed
+  history as `15e707b5668af383d6949934bd8e67a35b8bc097` (`refactor: invert Task
+  publication dependencies`). The ten Project commits now form one rc.10-based
+  implementation series.
+- The parked rc.8 Task-publication stash was superseded by the reviewed rc.10
+  implementation and removed. `git stash list` is empty in the Project
+  worktree.
+- Added the durable concise [`result report`](result.md) and curated
+  [`context`](context.md) back to evergreen status. Per-phase chronology remains
+  in this journal; exact contracts remain in source and tests.
+- Current assessment: no public tool, schema, package-export, persisted-record,
+  filename, retry, timing, default-behavior, or canonical-diagram change. Internal
+  Task and Team dependency ownership changed as recorded by the maintained
+  audit.
+- Remaining risks are ALERT-004 classification, Coordination cross-authority
+  reads, combined Trio façades and fakes, partial Team lifecycle extraction,
+  broad private Membership-observation inputs, and measured Beads hydration
+  latency.
+- No full aggregate lane ran for the final committed tree, and rc.11 preparation
+  has not started. The next gate is one exact stable tree, one aggregate run,
+  then package, public, persistence, privacy, provenance, graph, and diff
+  verification before any release-candidate preparation.
+
+## 2026-08-09 — 0.17.0-rc.11 source candidate prepared
+
+- This entry supersedes only the prior next-action order. Owner authorization now
+  requires the complete rc.11 source candidate to be committed first, then the
+  one reserved full aggregate to run once on that exact committed source.
+- Prepared package and lock metadata, README install text and image provenance,
+  release parity metadata, maintained current and Project context, result status,
+  and the dated [rc.11 release plan](../../journal/2026-08-09-v0.17.0-rc.11-release-plan.md).
+- The candidate carries internal Task and Team dependency hardening with no
+  public tool, schema, package-export, persisted-record, filename, retry, timing,
+  or default-behavior change. Release text points to the Task-publication source
+  and focused tests instead of duplicating executable contracts.
+- Version and lock consistency passed for `0.17.0-rc.11`; 48 tracked JSON files
+  parsed; 94 local Markdown links across seven changed release and Project files
+  resolved; typecheck, packed-package verification, generated-dist comparison,
+  and diff checks passed.
+- This is source preparation only. No full aggregate, tag, push, npm publication,
+  npm `next` change, registry or provenance claim, GitHub release, final release
+  receipt, or commit was produced. Published npm `next` remains rc.10.
+
+## 2026-08-09 — rc.11 local-link count corrected
+
+- This entry supersedes only the prior 94-link occurrence claim. It does not
+  rewrite that historical source-preparation record.
+- Independent recomputation resolved 95 local Markdown link occurrences across
+  the same seven files: `README.md` 4, `docs/current/README.md` 59,
+  `docs/release/model-tool-parity-checklist.md` 0,
+  `docs/projects/semantic-hardening/context.md` 10,
+  `docs/projects/semantic-hardening/result.md` 14,
+  `docs/projects/semantic-hardening/journal.md` 8, and
+  `docs/journal/2026-08-09-v0.17.0-rc.11-release-plan.md` 0.
+- All 95 occurrences resolved. The correction adds no Markdown link occurrence,
+  so the recomputed total remains non-self-referential.
