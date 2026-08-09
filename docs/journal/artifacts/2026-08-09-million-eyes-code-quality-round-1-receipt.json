@@ -1,0 +1,53 @@
+{
+  "schema": "pi-team-bright/code-quality-review-receipt/1",
+  "date": "2026-08-09",
+  "sourceRevision": "e55a9a5c75021be929fe327f1ce5eed6d691a463",
+  "tool": {
+    "name": "million-eyes",
+    "version": "0.1.0-alpha.1",
+    "planId": "plan/v1/52ea95f33996785bc7a58eb5f62818c00eaebd56876972337c3ebb45e96368a6",
+    "runId": "run/c8f44c2d-54f8-4a63-a218-b786c06a02d8",
+    "model": {
+      "provider": "openai-codex",
+      "name": "gpt-5.6-luna"
+    }
+  },
+  "scope": {
+    "reviewTasks": 7,
+    "successfulReviewTasks": 7,
+    "frozenBundleEntries": 193,
+    "frozenCallEvidenceFiles": 158,
+    "omittedUtf8Files": 0,
+    "estimatedInputTokens": 1335847,
+    "observedTotalTokens": 1392053
+  },
+  "artifacts": {
+    "rawResults": "2026-08-09-million-eyes-code-quality-round-1-results.json",
+    "rawResultsSha256": "ea4e0480681010b7c595b92cb0c829f261ce0912c1560dded3e73f3814ea9435"
+  },
+  "citationAssessment": {
+    "automaticResolvedCitations": 0,
+    "reason": "Reviewers returned free-form source references instead of citation-shaped strings.",
+    "manualCheck": "The architecture-auditor checked the five ranked claims against the frozen source bundle. This is review evidence, not executable proof."
+  },
+  "selectedImprovement": {
+    "id": "RESULT-PROJECTION-DUPLICATE-VALIDATION",
+    "claim": "assembleToolResult repeated the same canonical-version and semantic-schema checks immediately before projectToolResult repeated them.",
+    "change": "Remove only the two duplicate prevalidation calls and retain projectToolResult as the single validation and projection path.",
+    "risk": "Validation order or exact error identity could change.",
+    "verification": "Focused parity and error tests, a 14-example baseline differential, typecheck, diff check, and independent review passed."
+  },
+  "rankedNextCandidates": [
+    "Consolidate only final BeadsTaskStore construction after existing validation paths.",
+    "Replace nondeterministic local lock-race test oracles with deterministic barriers.",
+    "Benchmark full-history Team-event scans before production optimization.",
+    "Move lead-session discovery verbatim into Team authority."
+  ],
+  "rejectedOrDeferred": [
+    "Do not extract a shared Alert and Task delivery base class because their sequencing differs.",
+    "Do not optimize Task hydration or Worker polling without measurements.",
+    "Do not delete hydrateTeamSyncTasks from incomplete static reachability evidence.",
+    "Do not unify launcher argument paths because insertion order differs.",
+    "Do not treat a synthetic Pi harness as proof of real Pi persistence."
+  ]
+}
