@@ -485,3 +485,22 @@ changes; append a correction.
 - The partially implemented Task publication port was stashed before rebase.
   Its design evidence remains reusable, but its source patch must be reviewed
   and reapplied against rc.10 rather than restored blindly.
+
+## 2026-08-09 — rc.10 subsystem audit refreshed
+
+- The maintained subsystem audit and machine dependency map now review exact
+  HEAD `734bbd369e1e` on integration base `7453ce1b2a2` and package rc.10.
+- Independent AST evidence found 67 production TypeScript files, 19,418 lines,
+  227 unique local static edges, no nontrivial SCC, no self-cycle, and no dynamic
+  import. The test corpus has 86 test files plus two support files and 23,534
+  combined lines.
+- All 176 unique source references and 127 cited line anchors resolved. Seven
+  selected Alert, Task reconciliation, hydration, liveness, failed-hint, nudge,
+  and registered-extension evidence files passed 43 tests.
+- The machine map preserves the five ordered core subsystems, additive
+  Membership observation, unclassified ALERT-004 behavior, and design-only Task
+  publication inversion. Rc.10 Coordination behavior is implemented, but its
+  source boundary remains incomplete.
+- The proposed target graph has seven nodes, nine edges, and no nontrivial SCC.
+  Architecture impact remains internal; HyperCarrier's canonical diagram stays
+  unchanged because Pi Team Bright internals are opaque.

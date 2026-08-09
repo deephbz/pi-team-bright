@@ -113,8 +113,12 @@ Baseline declaration receipt:
 - Rebase checks pass: typecheck, 46 focused tests across seven files, package
   verification, lane closure at 86 files (65 fast and 21 exhaustive), and diff
   checks.
-- Current blocker: refresh the maintained dependency audit for rc.10, then
-  reapply the parked Task publication inversion against that tree.
+- The maintained subsystem audit now matches rc.10: 67 production files,
+  19,418 lines, 227 static local edges, no nontrivial SCC or dynamic import,
+  and 86 tests plus two support files. Independent citation, ancestry, graph,
+  and 43-test evidence checks pass.
+- Current blocker: none. Reimplement Task publication inversion against rc.10;
+  use the parked rc.8 patch only as review evidence.
 
 ## Constraints still in force
 
