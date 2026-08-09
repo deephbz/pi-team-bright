@@ -2,7 +2,7 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: Task-authority seam committed; two focused internal simplifications independently verified
+Status: Task-authority seam committed; three focused quality improvements independently verified
 Architecture impact: changed for the internal Task dependency boundary; HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team Bright internals opaque
 
 ## Outcome
@@ -89,8 +89,12 @@ Baseline declaration receipt:
   Team authority. Six new helper cases plus existing binding/session tests and
   an AST body comparison preserve all discovery, ambiguity, environment, and
   lifecycle behavior.
-- Current blocker: none. Integrate the Team ownership move, then select the next
-  bounded improvement from measured or reviewed evidence.
+- Lock contention tests now use controlled owner-release barriers and captured
+  retry delays. They prove mutual exclusion and the 5–15 ms retry policy without
+  random critical delays or a wall-clock pass threshold; mutation probes detect
+  both lock bypass and restoration of the legacy 100 ms cadence.
+- Current blocker: none. Integrate the deterministic lock oracles, then select
+  the next bounded improvement from measured or reviewed evidence.
 
 ## Constraints still in force
 
