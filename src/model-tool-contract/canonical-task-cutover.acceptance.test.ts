@@ -158,6 +158,21 @@ describe("canonical Task cutover acceptance", () => {
     expect(adapter).toMatch(/async link\(/);
   });
 
+  it("keeps Task command ownership and reconciliation below the trio-facing port", () => {
+    const contracts = fs.readFileSync(path.join(process.cwd(), "src/task-authority/contracts.ts"), "utf8");
+    const inMemoryPort = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/in-memory-team-port.ts"), "utf8");
+    const taskAdapter = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/beads-task-adapter.ts"), "utf8");
+    const reconciliationAdapter = fs.readFileSync(path.join(process.cwd(), "src/task-authority/beads-reconciliation-query.ts"), "utf8");
+    const delivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
+
+    expect(contracts).not.toContain("in-memory-team-port");
+    expect(inMemoryPort).toMatch(/export type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\.\/task-authority\/contracts"/);
+    expect(taskAdapter).not.toMatch(/from "\.\/in-memory-team-port"/);
+    expect(reconciliationAdapter).toContain("implements TaskReconciliationQuery");
+    expect(delivery).not.toMatch(/import\([^)]*beads-(?:task|authority)-adapter/);
+    expect(delivery).not.toMatch(/from "[^"]*beads-(?:task|authority)-adapter"/);
+  });
+
   it("keeps delivery and historic event migration on exact canonical boundaries", () => {
     const delivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
     const migration = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery-migration.ts"), "utf8");

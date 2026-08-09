@@ -2,8 +2,8 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: test hardening and audit documentation verified; production refactor has not started
-Architecture impact: none until accepted code dependencies or depicted responsibilities change
+Status: first Task-authority dependency seam committed and independently verified; focused optimization series is next
+Architecture impact: changed for the internal Task dependency boundary; HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team Bright internals opaque
 
 ## Outcome
 
@@ -27,9 +27,10 @@ Baseline declaration receipt:
 - Worktree and branch exist from the exact baseline.
 - The handoff, baseline receipt, test strategy, and 26-entry seed behavior
   inventory exist.
-- Outside-in characterization tests, test support, and one exhaustive-lane entry
-  now exist. No dependency, production code, public contract, or behavior has
-  changed.
+- Outside-in characterization tests, test support, and exhaustive-lane entries
+  now exist. The first production refactor changes only internal Task dependency
+  ownership; public contracts, persisted records, package exports, and behavior
+  remain unchanged.
 - The owner ended the redundant coordinator topology. The exact calling API
   Session now leads Team `semantic-hardening-direct`; only the watchdog remains
   a separate Pi agent.
@@ -48,7 +49,37 @@ Baseline declaration receipt:
   behavior change is authorized.
 - Independent phase-two verification passes. Restart and later-presentation
   evidence for ALERT-004 and its owner classification remain open.
-- Production refactoring has not started. Current blocker: none.
+- Task update and journal contracts now live in
+  `src/task-authority/contracts.ts`. `in-memory-team-port.ts` keeps temporary
+  compatibility type re-exports at the old path.
+- `TaskReconciliationQuery` now owns Task-delivery recovery reads. The Beads
+  implementation is injected from `extensions/index.ts`, so
+  `task-delivery.ts` no longer imports Beads Task adapters dynamically.
+- Four deterministic equivalence tests preserve suppression, later external
+  changes, owner-marker recovery, exact replacement binding, delivery
+  deduplication, recovery replay, and metadata-gap refusal. Static import fences
+  preserve the new direction.
+- The static production import graph remains acyclic, and the hidden dynamic
+  Task-adapter cycle is removed. Team, Alert, Coordination, Trio, and additive
+  Membership-observation migrations are not complete.
+- `TASK-RECONCILIATION-INJECTION` is closed. The Alert publication-failure
+  classification, restart, and later-presentation gate remains open.
+- Commits `ed7ae57` and `e275e03` contain characterization and test/docs
+  hardening. The phase-three Task-boundary refactor is committed as the next
+  branch commit.
+- Phase-three implementation Task `semantic-hardening-direct-2el`, equivalence
+  Task `semantic-hardening-direct-hkp`, docs Task
+  `semantic-hardening-direct-c7g`, and verifier Task
+  `semantic-hardening-direct-cxm` are closed.
+- Independent final-tree evidence passed: 32 focused Task tests, seven
+  characterization tests, three targeted real-Beads tests, typecheck, package
+  verification, lane validation at 76 files (56 fast and 20 exhaustive), AST
+  dependency checks, public-surface comparison, JSON/link checks, and diff
+  checks.
+- Routine `team_sync` and some focused `task_read` calls intermittently timed
+  out in Beads after Team history grew. Alerts and later sync calls still
+  delivered records. Preserve this as a later non-functional optimization lead.
+- Current blocker: none. Select the first bounded optimization by measured risk.
 
 ## Constraints still in force
 
@@ -102,7 +133,8 @@ CLI help is the command source of truth. Require `HERDR_ENV=1` before control.
    inventory links, failure diagnostics, and lessons learned. Commit with no
    subsystem refactor.
 3. **Target subsystem refactor.** Change dependencies and ownership while the
-   accepted characterization suite stays green. Keep public behavior stable.
+   accepted characterization suite stays green. The first Task dependency seam
+   is complete; keep public behavior stable while the other boundaries remain.
 4. **Optimization series.** Use one focused commit per code-quality improvement,
    issue fix, non-functional optimization, accidental-complexity removal, or
    small local refactor. Each commit needs one named risk, focused evidence, and
@@ -115,8 +147,10 @@ CLI help is the command source of truth. Require `HERDR_ENV=1` before control.
 - [ ] Implement the deterministic Pi trigger/turn harness.
 - [x] Commit outside-in characterization.
 - [x] Record lessons, harden tests, and commit test/docs improvements.
-- [ ] Ratify current-to-target dependency changes.
-- [ ] Refactor to the five-subsystem target and commit.
+- [x] Ratify the dependency direction and implement the first Task-owned seam.
+- [ ] Complete the remaining Team, Task publication, Alert, Coordination, Trio,
+  and additive Membership-observation boundary work, then commit the stable
+  refactor.
 - [ ] Run bounded quality and optimization Tasks, one commit each.
 - [ ] Run final independent runtime, package, and aggregate verification.
 - [ ] Curate this context, append the journal, and write the final assessment.
@@ -306,6 +340,26 @@ Keep deterministic agent-surface checks, then run a small versioned model-eval
 corpus against real supported models. Store prompts, tool catalogs, model/provider
 versions, raw decisions, and human labels. Treat the result as external evidence,
 not a unit test.
+
+## Implemented Task boundary
+
+The first accepted seam is narrow. `src/task-authority/contracts.ts` owns Task
+update and journal command types plus `TaskReconciliationQuery`.
+`src/task-authority/beads-reconciliation-query.ts` implements that query for one
+Team-scoped Beads authority. The Pi composition root injects it into
+`TaskChangeDelivery`; owner-transition and latest-state reconciliation consume
+only the Task-owned port.
+
+`src/model-tool-contract/in-memory-team-port.ts` still re-exports
+`ModelToolTaskUpdateInput` and `ModelToolTaskJournalEntry` for internal source
+compatibility. `TaskCard` and `TaskVersionRef` remain at their current canonical
+paths. No public package export, tool schema, persisted filename, record shape,
+ordering, retry, timing, or default behavior changed.
+
+This removes the upward Beads Task-adapter dependency on the trio-facing
+in-memory port and removes Task delivery's dynamic Beads-adapter imports. It
+does not isolate Task mutation publication from Team or Coordination, split the
+combined trio façade, or implement the other subsystem migrations.
 
 ## First implementation slice
 

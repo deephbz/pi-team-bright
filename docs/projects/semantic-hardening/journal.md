@@ -298,3 +298,57 @@ changes; append a correction.
 - Architecture impact remains **none**. These artifacts propose dependency
   changes but do not yet change accepted production responsibilities or source
   dependencies.
+
+## 2026-08-09 — first Task-authority dependency seam implemented
+
+- Closed implementation Task `semantic-hardening-direct-2el` moved Task update
+  and journal types into `src/task-authority/contracts.ts`, added the Task-owned
+  `TaskReconciliationQuery`, implemented its Team-scoped Beads adapter in
+  `src/task-authority/beads-reconciliation-query.ts`, and injected it from
+  `extensions/index.ts` into `TaskChangeDelivery`.
+- `src/model-tool-contract/in-memory-team-port.ts` retains temporary type
+  re-exports for `ModelToolTaskUpdateInput` and
+  `ModelToolTaskJournalEntry`. `TaskCard` and `TaskVersionRef` remain at their
+  existing canonical paths. No package export or public tool surface changed.
+- `src/utils/task-delivery.ts` no longer imports the Beads Task or authority
+  adapters dynamically. The production static import graph remains acyclic, so
+  the hidden dynamic reconciliation cycle is removed without creating a static
+  file cycle. Concrete Task mutation publication still depends on Team,
+  Coordination, and delivery implementations.
+- Closed independent Task `semantic-hardening-direct-hkp` added four
+  deterministic equivalence tests. They preserve self-authored suppression,
+  later external changes, owner-marker recovery, exact replacement binding,
+  delivery-ID deduplication, recovery replay, and metadata-gap refusal. Source
+  fences reject the former Beads-adapter and in-memory-port edges.
+- The accepted Task records report focused tests and typecheck passed. This
+  documentation Task did not rerun implementation tests or change production or
+  test source.
+- `TASK-RECONCILIATION-INJECTION` is closed. Alert publication-failure owner
+  classification, restart, and later-presentation evidence remain open. The
+  Team, Alert, Coordination, Trio, additive Membership-observation, and
+  remaining Task publication migrations are not complete.
+- Updated the maintained Project context, audit, machine dependency map, and
+  repository evergreen source map. JSON parsing, local Markdown-link checks,
+  dependency-map assertions, and `git diff --check` passed.
+- Architecture impact is **changed** for the internal Task dependency boundary.
+  HyperCarrier's canonical diagram stays unchanged because it keeps Pi Team
+  Bright internals opaque. No commit was made.
+
+## 2026-08-09 — Task-authority refactor independently accepted and integrated
+
+- Independent verification accepted the exact 18-path phase-three boundary after
+  three provenance corrections. Phase-two Alert and Coordination evidence now
+  stays separate from phase-three Task reconciliation evidence, the machine map
+  keeps the exact review baseline, and the maintained evergreen date is current.
+- Final independent evidence passed 32 focused Task tests, seven causal and Alert
+  characterization tests, three targeted real-Beads tests, typecheck, package
+  verification, test-lane validation, AST dependency checks, public agent-surface
+  comparison, JSON and link checks, and `git diff --check`.
+- The AST scan found 62 production files, 18,225 lines, 213 unique local static
+  edges, no nontrivial strongly connected component, and no dynamic import.
+- The leader staged only the accepted 18 paths. The privacy gate passed, and the
+  refactor entered branch history as `refactor: isolate Task authority
+  dependencies`.
+- This commit implements one narrow internal Task reconciliation boundary. It
+  does not claim that Task publication, Team, Alert, Coordination, Trio, or the
+  additive Membership-observation boundary is complete.

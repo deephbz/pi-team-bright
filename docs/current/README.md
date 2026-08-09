@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-08
+Updated: 2026-08-09
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -38,7 +38,7 @@ variables do not.
 | Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
 | Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation` |
 | Canonical Task card and opaque TaskVersionRef | [`src/model-tool-contract/task-domain.ts`](../../src/model-tool-contract/task-domain.ts) and [`src/model-tool-contract/task-version-ref.ts`](../../src/model-tool-contract/task-version-ref.ts) |
-| Task authority, mutation semantics, and Beads translation | [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts); [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
+| Task authority, mutation semantics, and Beads translation | Task update, journal, and reconciliation-query contracts live in [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts); [`src/task-authority/beads-reconciliation-query.ts`](../../src/task-authority/beads-reconciliation-query.ts), [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts) implement the Beads boundary; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Human operating introduction | [Repository README](../../README.md) |
 | Agent operating procedure | [`skills/pi-team-bright/SKILL.md`](../../skills/pi-team-bright/SKILL.md) |
@@ -50,9 +50,13 @@ restating executable definitions.
 
 - The strict Task/Beads cutover keeps native records, metadata, revisions, and
   mutation syntax inside the Beads adapter modules. `TaskCard` and opaque
-  `TaskVersionRef` are the only Task contracts above that boundary; `tasks.ts`
-  is a semantic facade. Architecture impact: **none** to the depicted
-  Structurizr responsibility or topology, so the canonical DSL is unchanged.
+  `TaskVersionRef` remain the public Task coordinates above that boundary;
+  Task-owned update, journal, and reconciliation-query contracts now isolate
+  recovery from the trio-facing in-memory port. That old port keeps temporary
+  compatibility type re-exports. `tasks.ts` is a semantic facade. Architecture
+  impact: **changed** for the internal Task dependency boundary. HyperCarrier's
+  canonical Structurizr DSL remains unchanged because it keeps Pi Team Bright
+  internals opaque.
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
   exceptional coordination.
 - Task authority, Team/Membership authority, Pi Session identity, event

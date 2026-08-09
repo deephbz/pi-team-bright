@@ -23,6 +23,7 @@ import {
 import { BeadsTaskStore, TASK_METADATA_KEY, TASK_METADATA_SCHEMA, readBeadsAuthorityFingerprint } from "./beads";
 import * as teams from "./teams";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { BeadsTaskReconciliationQuery } from "../../src/task-authority/beads-reconciliation-query";
 
 type RegisteredTool = {
   name: string;
@@ -581,12 +582,14 @@ describe("durability and recovery", () => {
       version: taskVersionRef("v1"),
     } satisfies TaskCard, "assigned", "team-lead");
     expect(record).not.toBeNull();
+    const reconciliationQuery = new BeadsTaskReconciliationQuery(name);
 
     const firstSend = vi.fn();
     const first = new TaskChangeDelivery({ sendMessage: firstSend, appendEntry: vi.fn() }, {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      reconciliationQuery,
     });
     await first.start([]);
     expect(firstSend).toHaveBeenCalledTimes(1);
@@ -599,6 +602,7 @@ describe("durability and recovery", () => {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      reconciliationQuery,
     });
     await retry.start([]);
     expect(retrySend).toHaveBeenCalledTimes(1);
@@ -628,6 +632,7 @@ describe("durability and recovery", () => {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      reconciliationQuery,
     });
     await settled.start([presented, observed]);
     expect(settledSend).not.toHaveBeenCalled();

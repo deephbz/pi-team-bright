@@ -2,6 +2,14 @@ import { createHash } from "node:crypto";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 import type { TaskCard, TaskCardWarning } from "./task-domain";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
+import type {
+  ModelToolTaskJournalEntry,
+  ModelToolTaskUpdateInput,
+} from "../task-authority/contracts";
+export type {
+  ModelToolTaskJournalEntry,
+  ModelToolTaskUpdateInput,
+} from "../task-authority/contracts";
 
 declare const exactLeaderSessionIdBrand: unique symbol;
 
@@ -73,23 +81,6 @@ export type ReadTasksPortResult =
   | { kind: "read"; tasks: Array<TaskCard | undefined | ReadTaskContractGap> }
   | { kind: "unavailable"; reason: "task_authority_unavailable"; message: string }
   | { kind: "no_active_team" };
-
-export interface ModelToolTaskUpdateInput {
-  taskId: string;
-  operationId: string;
-  expectedVersion: TaskVersionRef;
-  currentContext?: string;
-  journalEntries?: Array<{ kind: "progress" | "decision" | "blocker" | "result" | "note"; text: string }>;
-  status?: "open" | "in_progress" | "blocked" | "closed";
-}
-
-export interface ModelToolTaskJournalEntry {
-  id: string;
-  at: string;
-  actor: string;
-  kind: "progress" | "decision" | "blocker" | "result" | "note";
-  text: string;
-}
 
 export type TaskUpdatePortOutcome =
   | { kind: "updated"; taskId: string; operationId: string; task: TaskCard; journalEntries: ModelToolTaskJournalEntry[] }
