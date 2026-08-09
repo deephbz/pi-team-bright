@@ -1,0 +1,231 @@
+{
+  "schema": "pi-team-bright-behavior-inventory/1",
+  "status": "first_causal_slice_characterized_needs_owner_classification_and_rule_expansion",
+  "baselineReceipt": "../../journal/artifacts/2026-08-09-semantic-hardening-baseline.json",
+  "classifications": [
+    "unclassified",
+    "intended",
+    "compatibility_required",
+    "implementation_only",
+    "unintended",
+    "defect",
+    "unresolved"
+  ],
+  "testStates": [
+    "missing",
+    "characterized",
+    "normative",
+    "external_anchor_required"
+  ],
+  "behaviors": [
+    {
+      "id": "TEAM-001",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Create or recreate one Team epoch and bind the exact leader Session.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/teams.ts", "src/model-tool-contract/durable-model-tool-port.ts"]
+    },
+    {
+      "id": "TEAM-002",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Keep logical Worker meaning stable across replaceable Membership and carrier generations.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/teams.ts", "src/utils/worker-ensure-lifecycle.ts"]
+    },
+    {
+      "id": "TEAM-003",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Authorize Team operations through exact current Membership and Session binding.",
+      "classification": "unclassified",
+      "testState": "characterized",
+      "evidence": ["src/utils/teams.ts", "src/utils/session-terminal.ts", "src/utils/causal-path-characterization.test.ts"]
+    },
+    {
+      "id": "TEAM-004",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Admit at most one live process generation for one current Membership.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/runtime.ts", "src/utils/runtime-startup-admission.test.ts"]
+    },
+    {
+      "id": "TEAM-005",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Resolve and apply Worker Role resources without granting leader authority.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/worker-resource-projection.ts"]
+    },
+    {
+      "id": "TEAM-006",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Bind one direct terminal backend and apply durable pane placement for the Team epoch.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/team-pane-placement.ts", "src/adapters/terminal-registry.ts"]
+    },
+    {
+      "id": "TEAM-007",
+      "subsystem": "team_authority_and_role_realization",
+      "summary": "Recover, stop, and shut down exact carriers without losing Membership history or claiming uncertain stop evidence.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/worker-launch-bridge.ts", "extensions/index.ts"]
+    },
+    {
+      "id": "TASK-001",
+      "subsystem": "task_authority",
+      "summary": "Project native authority records into canonical bounded Task cards and opaque versions.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/task-domain.ts", "src/model-tool-contract/beads-task-adapter.ts"]
+    },
+    {
+      "id": "TASK-002",
+      "subsystem": "task_authority",
+      "summary": "Create ordered, independently committed Tasks with operation replay and explicit unknown outcomes.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/beads-task-adapter.ts", "src/model-tool-contract/catalog.ts"]
+    },
+    {
+      "id": "TASK-003",
+      "subsystem": "task_authority",
+      "summary": "Apply Task updates with expected-version checks, operation replay, evidence, and no-state-change refusal.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/beads-task-adapter.ts", "src/model-tool-contract/beads-authority-adapter.ts"]
+    },
+    {
+      "id": "TASK-004",
+      "subsystem": "task_authority",
+      "summary": "Claim work atomically without combining claim with an unrelated Task mutation.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/beads-task-adapter.ts", "extensions/index.ts"]
+    },
+    {
+      "id": "TASK-005",
+      "subsystem": "task_authority",
+      "summary": "Mutate typed Task relations with graph validation, idempotency, and optional concurrency control.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/beads-authority-adapter.ts"]
+    },
+    {
+      "id": "TASK-006",
+      "subsystem": "task_authority",
+      "summary": "Retain Task-delivery intent and recovery evidence without making presentation Task authority.",
+      "classification": "unclassified",
+      "testState": "characterized",
+      "evidence": ["src/utils/task-delivery.ts", "src/utils/causal-path-characterization.test.ts", "src/utils/causal-path.inventory.json"]
+    },
+    {
+      "id": "TASK-007",
+      "subsystem": "task_authority",
+      "summary": "Refuse incompatible Task records during normal runtime and migrate them only through explicit stopped-epoch procedures.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/task-migration.ts", "src/utils/task-delivery-migration.ts"]
+    },
+    {
+      "id": "ALERT-001",
+      "subsystem": "alert_authority",
+      "summary": "Accept only valid Alert kinds, targets, actor Roles, and canonical optional Task references.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/alerts.ts"]
+    },
+    {
+      "id": "ALERT-002",
+      "subsystem": "alert_authority",
+      "summary": "Report per-recipient fan-out acceptance and partial failure without mutating Task state.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/alerts.ts", "src/utils/messaging.ts"]
+    },
+    {
+      "id": "ALERT-003",
+      "subsystem": "alert_authority",
+      "summary": "Retain Alert-delivery intent until exact Session observation and successful-turn acknowledgement.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/message-delivery.ts"]
+    },
+    {
+      "id": "COORD-001",
+      "subsystem": "coordination_observation",
+      "summary": "Produce one coherent current snapshot from Team, Worker, Task, and Alert evidence.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/team-events.ts", "src/model-tool-contract/durable-model-tool-port.ts"]
+    },
+    {
+      "id": "COORD-002",
+      "subsystem": "coordination_observation",
+      "summary": "Require an acknowledged snapshot before incremental updates and preserve exact branch position.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/utils/hidden-observation.ts"],
+      "proofLimit": "The causal slice establishes and acknowledges a snapshot before updates. It does not assert updates-before-snapshot refusal or exact branch-lineage behavior."
+    },
+    {
+      "id": "COORD-003",
+      "subsystem": "coordination_observation",
+      "summary": "Wait for relevant events with deterministic timeout and cancellation meaning.",
+      "classification": "unclassified",
+      "testState": "characterized",
+      "evidence": ["src/utils/team-events.ts", "src/utils/causal-path-characterization.test.ts", "src/utils/causal-path.inventory.json"]
+    },
+    {
+      "id": "COORD-004",
+      "subsystem": "coordination_observation",
+      "summary": "Advance no watermark and publish no semantic observation when an authority is unavailable or hydration is incomplete.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/durable-model-tool-port.ts", "src/utils/hidden-observation.ts"]
+    },
+    {
+      "id": "TRIO-001",
+      "subsystem": "trio_facing_interface_and_projections",
+      "summary": "Validate the complete raw semantic result before any audience projection.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/result-projection.ts"]
+    },
+    {
+      "id": "TRIO-002",
+      "subsystem": "trio_facing_interface_and_projections",
+      "summary": "Expose only decision-relevant schema-valid JSON to the agent while preserving recovery coordinates.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/result-projection.ts"]
+    },
+    {
+      "id": "TRIO-003",
+      "subsystem": "trio_facing_interface_and_projections",
+      "summary": "Render concise collapsed and expanded human/TUI views without inventing or hiding semantic outcomes.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/tui-projection.ts"]
+    },
+    {
+      "id": "TRIO-004",
+      "subsystem": "trio_facing_interface_and_projections",
+      "summary": "Keep machine, agent, and human projections factually consistent and privacy-bounded for success and failure.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/model-tool-contract/result-projection.ts", "scripts/tool-result-qa/harness.ts"]
+    },
+    {
+      "id": "ADD-OBS-001",
+      "component": "additive_membership_observation",
+      "summary": "Publish privacy-filtered recorded Membership evidence through pi-teams-observation/1 without becoming core authority or claiming OS liveness.",
+      "classification": "unclassified",
+      "testState": "missing",
+      "evidence": ["src/public/observation.ts", "src/public/observation.test.ts"]
+    }
+  ]
+}

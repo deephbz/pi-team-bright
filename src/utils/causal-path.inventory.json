@@ -1,0 +1,151 @@
+{
+  "schema": "pi-teams-causal-path-characterization/1",
+  "scope": "assigned Task through exact Session presentation, successful-turn acknowledgement, and leader team_sync observation",
+  "productionChanges": false,
+  "classificationPolicy": "These are observations from 0.17.0-rc.8 source. Characterized does not mean owner-accepted or normative.",
+  "stages": [
+    {
+      "id": "assigned_task",
+      "authority": "Beads Task adapter",
+      "evidence": "public task_create receipt plus canonical TaskCard and opaque TaskVersionRef"
+    },
+    {
+      "id": "exact_session_presentation",
+      "authority": "current Membership and Session binding",
+      "evidence": "display=true Pi task-change custom message addressed to exact Membership and Session"
+    },
+    {
+      "id": "successful_turn_acknowledgement",
+      "authority": "recipient Session entry and delivery tombstone",
+      "evidence": "pi-teams.task-change-successful-turn-ack plus successfulTurnAckAt"
+    },
+    {
+      "id": "leader_observation",
+      "authority": "Team event cursor, Task authority, and hidden leader observation",
+      "evidence": "public team_sync snapshot or updates result"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "happy_path",
+      "stages": ["assigned_task", "exact_session_presentation", "successful_turn_acknowledgement", "leader_observation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/task-delivery.test.ts",
+          "proofLimit": "Calls TaskChangeDelivery directly, so it cannot prove public Task assignment or leader observation."
+        },
+        {
+          "path": "src/utils/clean-cut-contract.test.ts",
+          "proofLimit": "Loads the real extension for presentation, but public Task creation and leader sync are separate tests."
+        }
+      ],
+      "result": "characterized_at_registered_extension_boundary"
+    },
+    {
+      "id": "timeout",
+      "stages": ["leader_observation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/team-events.test.ts",
+          "proofLimit": "Proves the event wait helper only, not the public team_sync semantic result."
+        }
+      ],
+      "result": "characterized_as_successful_empty_updates_without_timeout_discriminant"
+    },
+    {
+      "id": "cancellation",
+      "stages": ["leader_observation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/model-tool-contract/first-journey.test.ts",
+          "proofLimit": "Uses the in-memory model-tool port rather than the real extension and Beads authority."
+        },
+        {
+          "path": "src/utils/delivery-round3.test.ts",
+          "proofLimit": "Proves aborted presentation acknowledgement directly; Task-presentation cancellation has no public operation."
+        }
+      ],
+      "result": "characterized_as_cancelled_without_observation_advance"
+    },
+    {
+      "id": "duplicate",
+      "stages": ["assigned_task", "exact_session_presentation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/task-delivery.test.ts",
+          "proofLimit": "Proves stable delivery identity directly, not public operation replay."
+        }
+      ],
+      "result": "characterized_as_same_task_and_one_delivery_presentation"
+    },
+    {
+      "id": "restart",
+      "stages": ["exact_session_presentation", "successful_turn_acknowledgement"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/delivery-round3.test.ts",
+          "proofLimit": "Recreates TaskChangeDelivery directly, not a complete extension closure."
+        }
+      ],
+      "result": "characterized_as_no_replay_after_acknowledged_same_session_resume"
+    },
+    {
+      "id": "stale_membership",
+      "stages": ["exact_session_presentation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/session-lifecycle.test.ts",
+          "proofLimit": "Proves lifecycle admission cases separately from Task assignment and presentation."
+        }
+      ],
+      "result": "characterized_as_stale_refusal_and_replacement_reconstruction"
+    },
+    {
+      "id": "delivery_failure",
+      "stages": ["assigned_task", "exact_session_presentation"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "src/utils/delivery-round3.test.ts",
+          "proofLimit": "Injects Session send failure directly and cannot prove the public degraded Task receipt."
+        },
+        {
+          "path": "src/utils/clean-cut-contract.test.ts",
+          "proofLimit": "Proves atomic spool replacement and recovery separately, not one public assignment journey."
+        }
+      ],
+      "result": "characterized_as_committed_task_degraded_receipt_and_recoverable_delivery"
+    },
+    {
+      "id": "single_task_read_trio_projection",
+      "stages": ["assigned_task"],
+      "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
+      "supportingAnchors": [
+        {
+          "path": "test/support/external-harness.test.ts",
+          "proofLimit": "Proves the projection capture harness with a fixture tool, not a real registered extension result."
+        },
+        {
+          "path": "src/model-tool-contract/result-projection.test.ts",
+          "proofLimit": "Covers the pure projector broadly, but not its composition through this Task-delivery journey."
+        }
+      ],
+      "result": "one_registered_task_read_shares_id_status_assignee_and_version_across_machine_model_collapsed_and_expanded_views"
+    }
+  ],
+  "realRuntimeGaps": [
+    "No real Pi subprocess or terminal renderer receipt spans all four causal stages. The primary test loads the real extension and uses its registered tools and lifecycle hooks in one process.",
+    "The test proves display=true custom-message intent and steer actuation, not terminal pixels or a model's interpretation.",
+    "Task presentation has no public cancellation operation or delivery-timeout result. Cancellation and timeout are characterized at public team_sync only.",
+    "This slice establishes and acknowledges a snapshot before updates, but does not prove updates-before-snapshot refusal or exact branch-lineage behavior. COORD-002 remains missing.",
+    "The single task_read projection assertion is not broad TRIO-004 coverage. It does not cover other tools, failure variants, privacy allowlists, or malformed results.",
+    "Process death before custom-message persistence remains supported only by direct delivery tests; this slice does not kill a real Worker process.",
+    "Concurrent Membership replacement during acknowledgement, simultaneous duplicate publishers, and exact latency distributions remain uncharacterized."
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schema": "pi-team-bright-semantic-hardening-baseline/1",
+  "capturedAt": "2026-08-09T14:34:04Z",
+  "source": {
+    "commit": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
+    "package": "@hypercarrier/pi-team-bright",
+    "version": "0.17.0-rc.8"
+  },
+  "publicSurface": {
+    "leaderTools": [
+      "team_create",
+      "ensure_worker",
+      "task_create",
+      "task_read",
+      "task_update",
+      "team_sync",
+      "worker_stop",
+      "team_shutdown",
+      "task_link",
+      "alert_send"
+    ],
+    "workerTools": [
+      "task_read",
+      "task_update",
+      "alert_send"
+    ],
+    "packageExports": {
+      ".": "./extensions/index.ts",
+      "./observation": {
+        "types": "./dist/public/observation.d.ts",
+        "default": "./dist/public/observation.js"
+      }
+    },
+    "observationSchema": "pi-teams-observation/1"
+  },
+  "runtimeCompatibility": {
+    "ownedBeads": "1.1.0",
+    "piAi": "^0.80.10 || ^0.82.0 || ^0.83.0",
+    "piCodingAgent": "^0.80.10 || ^0.82.0 || ^0.83.0",
+    "piTui": "^0.80.10 || ^0.82.0 || ^0.83.0",
+    "typebox": "^1.1.38"
+  },
+  "testLanes": {
+    "manifestVersion": 1,
+    "exhaustiveOnlyCount": 18,
+    "runtimeReceipt": null,
+    "note": "This receipt freezes declarations and source bytes. Focused and aggregate runtime results must be recorded separately."
+  },
+  "sha256": {
+    "package.json": "c04cae3f361b15e24896964ac50154dbccbbe9bb66addef4e4253b3937e3d5d1",
+    "extensions/index.ts": "4715fcd616b184cc7b3ffa8f4daf992484bb708d8e7d5efbba5266f3eaea59ac",
+    "src/model-tool-contract/catalog.ts": "beab72f842387422c110cc09c77f8590b95180b555b4db634032a33f6b719e82",
+    "src/model-tool-contract/result-projection.ts": "0631f7c49bf2402f1af7f924e6ff733650cabb9ea297504faf9fe52f0b69cbde",
+    "src/model-tool-contract/tui-projection.ts": "38b35f535d1c842f38c8c9df175826466b146299cfeaf7d5dee67a7753ba6f9b",
+    "src/public/observation.ts": "6916b6133ef16efcdf917865d2a1b4a054037aa34d92e9e5da02d9c91a625b82",
+    "test-lanes.json": "0a50920c3577d11c27daad0b7a9ef41b4fb6e9ac26b6af0d71c36571c6ceebfa"
+  }
+}
