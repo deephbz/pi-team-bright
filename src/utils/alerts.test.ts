@@ -111,29 +111,23 @@ describe("typed Alert acceptance", () => {
     expect(result.accepted).toHaveLength(2);
   });
 
-  it("rejects ambiguous Alert shapes before touching delivery or event state", async () => {
+  it.each([
+    ["invalid kind", { kind: "other" }, "Invalid Alert kind 'other'. Expected clarification, attention, or announcement."],
+    ["blank text", { text: " \t" }, "Alert text must not be empty."],
+    ["blank recipient", { to: " " }, "Alert recipient must not be empty."],
+    ["Task version without Task ID", { taskVersion: "v3" }, "taskVersion requires taskId so the Alert has an unambiguous Task reference."],
+    ["nonannouncement broadcast", { to: "*", kind: "clarification" }, "Only announcement Alerts may target the whole Team."],
+    ["nonlead broadcast", { to: "*", from: "worker" }, "Only team-lead may send a Team announcement."],
+    ["direct announcement", { to: "worker" }, "Announcement Alerts must target the whole Team with to: '*'."],
+  ] as const)("rejects %s before touching delivery or event state", async (_case, changes, message) => {
     await expect(sendAlert({
       teamName: "dogfood",
       from: "team-lead",
-      to: "*",
-      kind: "clarification",
-      text: "Can everyone answer?",
-    })).rejects.toThrow(/Only announcement Alerts/);
-    await expect(sendAlert({
-      teamName: "dogfood",
-      from: "worker",
       to: "*",
       kind: "announcement",
-      text: "I should not fan this out.",
-    })).rejects.toThrow(/Only team-lead/);
-    await expect(sendAlert({
-      teamName: "dogfood",
-      from: "team-lead",
-      to: "worker",
-      kind: "attention",
-      taskVersion: "v3",
       text: "Review this.",
-    })).rejects.toThrow(/taskVersion requires taskId/);
+      ...changes,
+    } as Parameters<typeof sendAlert>[0])).rejects.toThrow(message);
 
     expect(messaging.sendPlainMessage).not.toHaveBeenCalled();
     expect(messaging.broadcastMessage).not.toHaveBeenCalled();

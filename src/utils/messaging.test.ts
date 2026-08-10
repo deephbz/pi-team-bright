@@ -1,5 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
+
+const lockControl = vi.hoisted(() => ({
+  handler: undefined as undefined | (<T>(lockPath: string, fn: () => Promise<T>) => Promise<T>),
+}));
+
+vi.mock("./lock", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./lock")>();
+  return {
+    ...actual,
+    withLock: <T>(lockPath: string, fn: () => Promise<T>, retries?: number): Promise<T> => (
+      lockControl.handler ? lockControl.handler(lockPath, fn) : actual.withLock(lockPath, fn, retries)
+    ),
+  };
+});
 import path from "node:path";
 import os from "node:os";
 import {
@@ -19,6 +33,7 @@ const testDir = path.join(os.tmpdir(), "pi-teams-test-" + Date.now());
 
 describe("Messaging Utilities", () => {
   beforeEach(() => {
+    lockControl.handler = undefined;
     if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true });
     fs.mkdirSync(testDir, { recursive: true });
     
@@ -229,6 +244,64 @@ describe("Messaging Utilities", () => {
     // Check sender's inbox (should be empty)
     const inboxSender = await readInbox("test-team", "sender", false, false);
     expect(inboxSender.length).toBe(0);
+  });
+
+  it("starts every current-roster delivery before it settles and retains roster receipt order", async () => {
+    fs.writeFileSync(path.join(testDir, "config.json"), JSON.stringify({
+      name: "test-team",
+      members: [
+        { name: "sender", membershipId: "membership_sender" },
+        { name: "worker-a", membershipId: "membership_a" },
+        { name: "worker-b", membershipId: "membership_b" },
+        { name: "worker-c", membershipId: "membership_c" },
+      ],
+    }));
+
+    const started: string[] = [];
+    const gates = new Map<string, { promise: Promise<void>; resolve: () => void; reject: (error: Error) => void }>();
+    let resolveAllStarted!: () => void;
+    const allStarted = new Promise<void>((resolve) => { resolveAllStarted = resolve; });
+    for (const recipient of ["worker-a", "worker-b", "worker-c"]) {
+      let resolve!: () => void;
+      let reject!: (error: Error) => void;
+      const promise = new Promise<void>((onResolve, onReject) => {
+        resolve = onResolve;
+        reject = onReject;
+      });
+      gates.set(recipient, { promise, resolve, reject });
+    }
+    lockControl.handler = async <T>(lockPath: string, fn: () => Promise<T>): Promise<T> => {
+      const delivery = await fn();
+      const recipient = path.basename(lockPath, ".json");
+      const gate = gates.get(recipient);
+      if (!gate) return delivery;
+      started.push(recipient);
+      if (started.length === 3) resolveAllStarted();
+      await gate.promise;
+      return delivery;
+    };
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const resultPromise = broadcastMessage("test-team", "sender", "broadcast text", "summary");
+    await allStarted;
+    expect(started).toEqual(["worker-a", "worker-b", "worker-c"]);
+
+    gates.get("worker-c")!.reject(new Error("worker-c delivery failed"));
+    gates.get("worker-b")!.resolve();
+    gates.get("worker-a")!.reject(new Error("worker-a delivery failed"));
+
+    await expect(resultPromise).resolves.toEqual({
+      accepted: [
+        { recipient: "worker-b", messageId: expect.stringMatching(/^message_/) },
+      ],
+      failures: [
+        { recipient: "worker-a", error: "worker-a delivery failed" },
+        { recipient: "worker-c", error: "worker-c delivery failed" },
+      ],
+    });
+    expect(error).toHaveBeenNthCalledWith(1, "Broadcast partially failed: 2 messages could not be delivered.");
+    expect(error).toHaveBeenNthCalledWith(2, "- worker-a: worker-a delivery failed");
+    expect(error).toHaveBeenNthCalledWith(3, "- worker-c: worker-c delivery failed");
   });
 
   it("returns accepted Message IDs and recipient-specific partial failures", async () => {

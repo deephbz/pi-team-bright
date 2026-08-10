@@ -93,6 +93,7 @@ function harness(unread: IdentifiedInboxMessage[]) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -304,5 +305,136 @@ describe("DirectMessageDelivery", () => {
     });
     await delivery.start([]);
     expect(sink.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("coalesces a watch hint for 20ms before it rescans the exact binding", async () => {
+    vi.useFakeTimers();
+    const unread: IdentifiedInboxMessage[] = [];
+    let onHint: (() => void) | undefined;
+    const stopWatch = vi.fn();
+    const readUnread = vi.fn(async () => unread);
+    const markRead = vi.fn(async () => 0);
+    const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha",
+      recipient: "worker",
+      membershipId: MEMBERSHIP_ID,
+      sessionFile: SESSION_FILE,
+      dependencies: {
+        readUnread,
+        markRead,
+        isCurrentBinding: vi.fn(async () => true),
+        watch: vi.fn((hint: () => void) => {
+          onHint = hint;
+          return stopWatch;
+        }),
+      },
+    });
+
+    await delivery.start([]);
+    unread.push(inboxMessage("message_watch", "watch delivery"));
+    onHint?.();
+    onHint?.();
+
+    await vi.advanceTimersByTimeAsync(19);
+    expect(readUnread).toHaveBeenCalledTimes(1);
+    expect(sink.sendMessage).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(readUnread).toHaveBeenCalledTimes(2);
+    expect(sink.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({
+        recipientMembershipId: MEMBERSHIP_ID,
+        recipientSessionFile: SESSION_FILE,
+        messageIds: ["message_watch"],
+      }),
+    }), { triggerTurn: true, deliverAs: "steer" });
+    expect(markRead).not.toHaveBeenCalled();
+    delivery.stop();
+    expect(stopWatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the 30-second fallback scan when no watch hint arrives", async () => {
+    vi.useFakeTimers();
+    const unread: IdentifiedInboxMessage[] = [];
+    const readUnread = vi.fn(async () => unread);
+    const markRead = vi.fn(async () => 0);
+    const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha",
+      recipient: "worker",
+      membershipId: MEMBERSHIP_ID,
+      sessionFile: SESSION_FILE,
+      dependencies: {
+        readUnread,
+        markRead,
+        isCurrentBinding: vi.fn(async () => true),
+        watch: vi.fn(() => () => undefined),
+      },
+    });
+
+    await delivery.start([]);
+    unread.push(inboxMessage("message_fallback", "fallback delivery"));
+    await vi.advanceTimersByTimeAsync(DEFAULT_MESSAGE_POLL_MS - 1);
+    expect(readUnread).toHaveBeenCalledTimes(1);
+    expect(sink.sendMessage).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(readUnread).toHaveBeenCalledTimes(2);
+    expect(sink.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      details: expect.objectContaining({
+        recipientMembershipId: MEMBERSHIP_ID,
+        recipientSessionFile: SESSION_FILE,
+        messageIds: ["message_fallback"],
+      }),
+    }), { triggerTurn: true, deliverAs: "steer" });
+    expect(markRead).not.toHaveBeenCalled();
+    delivery.stop();
+  });
+
+  it("stops without a steer when replacement occurs after inbox read and before the effect recheck", async () => {
+    let current = true;
+    let releaseRead: ((messages: IdentifiedInboxMessage[]) => void) | undefined;
+    let signalReadStarted: (() => void) | undefined;
+    const readStarted = new Promise<void>((resolve) => {
+      signalReadStarted = resolve;
+    });
+    const unread = [inboxMessage("message_replaced", "must not steer")];
+    const readUnread = vi.fn(async () => {
+      if (readUnread.mock.calls.length === 1) return [];
+      signalReadStarted?.();
+      return await new Promise<IdentifiedInboxMessage[]>((resolve) => {
+        releaseRead = resolve;
+      });
+    });
+    const markRead = vi.fn(async () => 0);
+    const stopWatch = vi.fn();
+    const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha",
+      recipient: "worker",
+      membershipId: MEMBERSHIP_ID,
+      sessionFile: SESSION_FILE,
+      dependencies: {
+        readUnread,
+        markRead,
+        isCurrentBinding: vi.fn(async () => current),
+        watch: vi.fn(() => stopWatch),
+      },
+    });
+
+    await delivery.start([]);
+    const scan = delivery.scan();
+    await readStarted;
+    current = false;
+    releaseRead?.(unread);
+    await scan;
+
+    expect(sink.sendMessage).not.toHaveBeenCalled();
+    expect(markRead).not.toHaveBeenCalled();
+    expect(stopWatch).toHaveBeenCalledTimes(1);
+    current = true;
+    await delivery.scan();
+    expect(readUnread).toHaveBeenCalledTimes(2);
   });
 });
