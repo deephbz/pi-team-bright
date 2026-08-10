@@ -1,6 +1,6 @@
 # Semantic hardening result
 
-Date: 2026-08-09
+Date: 2026-08-10
 Stage: consolidation and hardening
 Result revision: `15e707b5668af383d6949934bd8e67a35b8bc097`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -83,6 +83,23 @@ authority. Focused Team and Session tests plus an AST body comparison preserve
 missing, exact-match, newest-active, malformed-record, ambiguity, environment,
 and lifecycle behavior.
 
+Accepted source commit `b4bf6dee91cf25532cbc33a397167567ba6d347e`
+(`refactor: isolate Coordination nudge boundary`) gives Coordination ownership of debt
+meaning, exact debt identity, event pagination, Task-projection revision, and
+failed-hint provenance. Durable Coordination adapters retain JSONL reservation
+and promotion storage. `SyncNudgeConductor` owns timers only. Pi alone
+revalidates exact Team epoch, lead Membership, Session, and full branch; it
+reserves, sends the unchanged custom message, proves that exact persisted
+message, and promotes the record. When logical Workers exist, missing optional
+policy version remains eligible with its legacy undefined interpolation. The
+nudge-specific outer binding avoids an early `none` or no-active-Team result,
+but its durable hidden-observation read still applies `teamModelToolContractGap`.
+Absent logical Workers therefore returns the exact legacy unavailable result.
+Snapshot and update observation also require logical Workers. The next
+structural seam is the combined Trio façade and fake. A separately reproduced
+baseline terminal-admission defect is the next own-commit issue, not a nudge
+regression.
+
 ## Optimization report
 
 The Million Eyes review froze 193 source entries and 158 call-evidence files
@@ -134,10 +151,10 @@ separate behavior or measurement gate.
 
 Independent focused evidence passed 113 tests plus typecheck, result QA, lane
 closure at 88 test files (67 fast and 21 exhaustive), package verification,
-public-surface comparison, persistence checks, and diff checks. The current AST
-graph has 68 production files, 231 unique static local edges, no nontrivial SCC,
-and no dynamic import. The [audit](subsystem-boundary-audit.md) owns the detailed
-counts and citations.
+public-surface comparison, persistence checks, and diff checks. The accepted nudge selection has 99 production TypeScript files and 334 unique
+resolved static local edges, with no nontrivial SCC, self-cycle, or runtime
+dynamic import. The [audit](subsystem-boundary-audit.md) owns detailed counts
+and citations.
 
 Exact rc.11 source `638d5934` then passed the one reserved Node 22.22.1 full
 aggregate: 88 files and 695 tests in 253.59 seconds. Follow-up lane, package, QA,
@@ -154,8 +171,8 @@ publication, and Team lead discovery. These internals are opaque in the
 canonical HyperCarrier view, so no diagram update is required.
 
 This is not full subsystem isolation. Team lifecycle, Alert authority,
-Coordination application boundaries, Trio separation, and additive Membership
-observation still have documented coupling. ALERT-004 remains characterized and
+Coordination's remaining integration reads, Trio separation, and additive
+Membership observation still have documented coupling. ALERT-004 remains characterized and
 unclassified. Broad TRIO-004 parity, Alert restart and later-presentation
 behavior, a real Pi subprocess/rendered-terminal receipt, and model
 interpretation remain outside the proved scope.
@@ -167,7 +184,8 @@ release, or published-release receipt occurred. Publication is a separate
 authorized operation and must compare its external identities with this source
 and receipt.
 
-The installed canaries do not prove a full live Team journey, terminal rendering,
-model behavior, or model interpretation. Do not require speculative completion
-of the remaining boundaries, but do not publish an unexplained regression or an
-unclassified behavior change.
+Current nudge evidence is deterministic and one-process. It does not prove real
+Pi persistence, external Beads/Dolt contention, cross-process forks, native
+watcher delivery, OS scheduling, concurrent external writers, or terminal
+pixels. Do not require speculative completion of remaining boundaries, but do
+not publish an unexplained regression or an unclassified behavior change.
