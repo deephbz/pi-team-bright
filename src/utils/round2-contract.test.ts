@@ -16,6 +16,7 @@ import {
 } from "./task-delivery";
 import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import type { TaskCard } from "../model-tool-contract/task-domain";
 import { recordBdCall, withSemanticTrace } from "./trace";
@@ -23,9 +24,10 @@ import { recordBdCall, withSemanticTrace } from "./trace";
 const createdTeams: string[] = [];
 const roots: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
+const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
 const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort);
+  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
 const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 
 function root(prefix: string): string {

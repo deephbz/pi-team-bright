@@ -45,6 +45,9 @@ import {
   type TaskMutationPublicationPort,
 } from "./beads-authority-adapter";
 import { taskVersionRef } from "./task-version-ref";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
+
+const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 
 const beforeTask: TaskAuthorityRecord = {
   id: "task-1",
@@ -185,7 +188,7 @@ describe("Task mutation publication port order", () => {
       expectedVersion: beforeTask.version,
       taskMetadata: metadata,
       taskCardProjector: card,
-    }, port);
+    }, port, taskAuthorityTeamPort);
 
     await prepareEntered.promise;
     expect(fixture.order).toEqual(["lease:start", "publication:prepare:start"]);
@@ -234,7 +237,7 @@ describe("Task mutation publication port order", () => {
       expectedVersion: beforeTask.version,
       taskMetadata: metadata,
       taskCardProjector: card,
-    }, noOpPort);
+    }, noOpPort, taskAuthorityTeamPort);
     expect(noOp.appliedOperations).toEqual([]);
     expect(noOpPort.suppressTaskVersionForSession).toHaveBeenCalledOnce();
     expect(noOpPort.suppressTaskVersionForSession).toHaveBeenCalledWith({
@@ -255,7 +258,7 @@ describe("Task mutation publication port order", () => {
     const replay = await createTask(fixture.config.name, {
       title: beforeTask.title,
       description: beforeTask.description,
-    }, replayPort);
+    }, replayPort, undefined, undefined, taskAuthorityTeamPort);
 
     expect(replay).toMatchObject({
       changed: false,

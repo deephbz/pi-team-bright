@@ -8,6 +8,7 @@ import type { TaskAuthorityRecord } from "./beads";
 import * as paths from "./paths";
 import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 import * as teams from "./teams";
 
 type Deferred = {
@@ -25,9 +26,10 @@ type Fixture = {
 const testTeams: string[] = [];
 const testWorkspaces: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
+const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
 const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort);
+  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
 
 function deferred(): Deferred {
   let resolve!: () => void;

@@ -7,9 +7,10 @@ import { taskVersionRef } from "./task-version-ref";
 import type { TaskAuthorityRecord } from "../utils/beads";
 import { createPublishingBeadsTaskAdapterFactory } from "./beads-task-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 
 const createdTeams: string[] = [];
-const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication());
+const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), createTaskAuthorityTeamPort());
 
 function task(teamName: string, id: string, version = `beads_${id}_v1`, status: TaskAuthorityRecord["status"] = "open"): TaskAuthorityRecord {
   return {

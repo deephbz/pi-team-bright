@@ -13,15 +13,17 @@ import {
   mutateTaskLink as mutateRawTaskLink,
 } from "../model-tool-contract/beads-authority-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 
 const createdTeams: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
+const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
 type TaskLinkArgs = Parameters<typeof mutateRawTaskLink>;
 const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort);
+  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
 const mutateTaskLink = (...args: [TaskLinkArgs[0], TaskLinkArgs[1], TaskLinkArgs[2], TaskLinkArgs[3]]) =>
-  mutateRawTaskLink(...args, publicationPort);
+  mutateRawTaskLink(...args, publicationPort, taskAuthorityTeamPort);
 
 function task(teamName: string, overrides: Partial<TaskAuthorityRecord> = {}): TaskAuthorityRecord {
   return {
