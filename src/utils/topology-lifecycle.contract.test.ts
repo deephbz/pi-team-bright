@@ -3,10 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
+import type { TaskCard } from "../task-authority/task-domain";
+import { projectTui } from "../model-tool-contract/tui-projection";
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as taskAuthority from "./tasks";
+import * as teamEvents from "./team-events";
 import * as teams from "./teams";
 
 type RegisteredTool = {
@@ -191,6 +194,114 @@ describe("Team topology/lifecycle lease", () => {
     expect(killed).toEqual(["pane-old"]);
     expect(spawned).toEqual(["new"]);
     expect((await teams.readConfig(name)).members.filter((candidate) => candidate.isActive !== false).map((candidate) => candidate.name)).toContain("new");
+  });
+
+  it("characterizes registered stop and shutdown guards without changing Task authority", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const killed: string[] = [];
+    const alive = new Set(["pane-uncertain", "pane-fails"]);
+    setAdapter({
+      name: "lifecycle-characterization-terminal",
+      isDirectCarrier: () => true,
+      detect: () => true,
+      spawn: () => "unused",
+      kill: (paneId) => { killed.push(paneId); },
+      isAlive: (paneId) => alive.has(paneId),
+      setTitle() {},
+      supportsWindows: () => false,
+      spawnWindow: () => "unused",
+      setWindowTitle() {},
+      killWindow() {},
+      isWindowAlive: () => false,
+    });
+    const name = uniqueTeam("public-lifecycle");
+    const leadSession = `/tmp/${name}-lead.jsonl`;
+    await createBeadsTeam(name, leadSession);
+    const guarded = member("guarded", `/tmp/${name}-guarded.jsonl`, "pane-guarded");
+    const uncertain = member("uncertain", `/tmp/${name}-uncertain.jsonl`, "pane-uncertain");
+    const ready = member("ready", `/tmp/${name}-ready.jsonl`, "pane-ready");
+    const fails = member("fails", `/tmp/${name}-fails.jsonl`, "pane-fails");
+    const succeeds = member("succeeds", `/tmp/${name}-succeeds.jsonl`, "pane-succeeds");
+    for (const candidate of [guarded, uncertain, ready, fails, succeeds]) {
+      await teams.addMember(name, candidate);
+    }
+
+    const guardedTask: TaskCard = {
+      id: "task-guarded",
+      title: "Guard lifecycle",
+      goal: "Keep this Task open until its Worker stops.",
+      current_context: "The Task is open.",
+      status: "in_progress",
+      assignee: "guarded",
+      version: "v_0123456789abcdef",
+    };
+    const taskBefore = structuredClone(guardedTask);
+    const listed = vi.spyOn(taskAuthority, "listTasksWithVersions").mockImplementation(async (_team, filter = {}) =>
+      filter.assignee === "guarded" ? [structuredClone(guardedTask)] : [],
+    );
+    const tools = registerExtension();
+    const stop = tools.get("worker_stop")!;
+    const shutdown = tools.get("team_shutdown")!;
+
+    const guardedResult = await stop.execute("stop-guarded", { team_name: name, worker: "guarded" }, undefined, undefined, context(leadSession));
+    expect(guardedResult.details).toMatchObject({
+      kind: "refused", worker: "guarded", reason: "nonterminal_tasks_assigned",
+      guarding_task_ids: ["task-guarded"], state_changed: false,
+    });
+    expect(projectTui({ tool: "worker_stop", details: guardedResult.details, expanded: false })).toEqual([
+      "! refused",
+      "  Worker \"guarded\" was not stopped · nonterminal_tasks_assigned · guarding Tasks task-guarded.",
+    ]);
+
+    const leaderResult = await stop.execute("stop-leader", { team_name: name, worker: "team-lead" }, undefined, undefined, context(leadSession));
+    expect(leaderResult.details).toMatchObject({ kind: "refused", worker: "team-lead", reason: "leader_reserved", state_changed: false });
+
+    const uncertainResult = await stop.execute("stop-uncertain", { team_name: name, worker: "uncertain" }, undefined, undefined, context(leadSession));
+    expect(uncertainResult.details).toMatchObject({ kind: "refused", worker: "uncertain", reason: "stop_not_confirmed", state_changed: false });
+    expect((await teams.readConfig(name)).members.find((candidate) => candidate.membershipId === uncertain.membershipId)?.isActive).toBe(true);
+
+    const stoppedResult = await stop.execute("stop-ready", { team_name: name, worker: "ready" }, undefined, undefined, context(leadSession));
+    expect(stoppedResult.details).toEqual({ kind: "worker_stopped", worker: "ready", state_changed: true });
+    expect(projectTui({ tool: "worker_stop", details: stoppedResult.details, expanded: false })).toEqual([
+      "✓ worker_stopped",
+      "  Worker \"ready\" stopped; Task state unchanged.",
+    ]);
+    const afterStop = await teams.readConfig(name);
+    expect(afterStop.members.find((candidate) => candidate.membershipId === ready.membershipId)).toMatchObject({
+      name: "ready", isActive: false, deactivationReason: "process_shutdown",
+    });
+    expect(afterStop.members.some((candidate) => candidate.membershipId === ready.membershipId)).toBe(true);
+    const lifecycleEvents = teamEvents.readTeamEvents(name).events.filter((event) => event.type === "worker");
+    expect(lifecycleEvents.map((event) => [event.type, event.worker, event.phase])).toEqual([
+      ["worker", "ready", "stopped"],
+    ]);
+
+    const partial = await shutdown.execute("shutdown-partial", { team_name: name }, undefined, undefined, context(leadSession));
+    expect(partial.details).toMatchObject({
+      kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: [], state_changed: true,
+    });
+    expect(projectTui({ tool: "team_shutdown", details: partial.details, expanded: false })).toEqual([
+      "! partial",
+      "  Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: none.",
+      "  Next: resolve the named Worker stop failures, then retry Team shutdown.",
+    ]);
+    expect((await teams.readConfig(name)).members.find((candidate) => candidate.membershipId === fails.membershipId)?.isActive).toBe(true);
+
+    alive.delete("pane-fails");
+    alive.delete("pane-uncertain");
+    const final = await shutdown.execute("shutdown-final", { team_name: name }, undefined, undefined, context(leadSession));
+    expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: [] });
+    expect(projectTui({ tool: "team_shutdown", details: final.details, expanded: false })).toEqual([
+      "✓ team_shutdown",
+      "  Team stopped · 2 Workers stopped · 0 unfinished Tasks retained.",
+    ]);
+    expect((await teams.readConfig(name)).members.filter((candidate) => candidate.isActive !== false)).toEqual([]);
+    expect(killed.slice(0, 2)).toEqual(["pane-uncertain", "pane-ready"]);
+    expect(killed.slice(2).sort()).toEqual(["pane-fails", "pane-fails", "pane-guarded", "pane-succeeds", "pane-uncertain", "pane-uncertain"]);
+    expect(guardedTask).toEqual(taskBefore);
+    expect(listed).toHaveBeenCalledWith(name, { assignee: "guarded", nonterminalOnly: true });
+    expect(listed).toHaveBeenLastCalledWith(name, { nonterminalOnly: true });
   });
 
   it("serializes one Team while allowing another Team to progress without deadlock", async () => {
