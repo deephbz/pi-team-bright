@@ -40,7 +40,8 @@ import * as os from "node:os";
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
-import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/utils/worker-launch-bridge";
+import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/team-authority/worker-launch-bridge";
+import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-lifecycle-publication";
 import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
@@ -419,6 +420,7 @@ export default function (pi: ExtensionAPI) {
     // No leader context exists on this fallback path; the resolver applies the
     // authorized always-trust default instead of manufacturing false.
     workerAggregate: (cwd) => workerAggregate(cwd, { cwd }),
+    lifecyclePublication: new DurableTeamLifecyclePublication(),
   });
 
   let modelToolLifecycleAdapter: ModelToolLifecycle | undefined;

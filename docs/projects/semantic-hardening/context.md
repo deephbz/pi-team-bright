@@ -65,7 +65,9 @@ The isolated worktree and local audit branch were restored at documentation HEAD
 `origin/main` and npm `next` remain on rc.10. The current direct leader Session
 has the required proxy environment and Herdr control. Dedicated watchdog
 `ptb-full-split-watchdog` and direct-leader Team
-`semantic-hardening-full-split` are active. Worker-authored Task evidence now
+`semantic-hardening-boundaries` are active. The first continuation Team shut down
+only after all Tasks became terminal, which reset expensive Task-history
+hydration without changing the direct leader. Worker-authored Task evidence now
 covers the current source graph, all 27 behavior entries, Alert hook-level replay,
 Team carrier replacement, and Trio projection parity. All 27 entries are
 characterized with explicit proof limits; characterization does not make them
@@ -126,7 +128,16 @@ Commit `6b7fb14` gives Team, Task, Alert delivery, and Coordination events
 canonical contract homes. Historical `utils/models.ts`, Task card, and Task
 version paths remain exact compatibility re-exports. Production imports use the
 canonical owners where this does not create a cross-authority implementation
-edge. Persisted shapes and public package exports remain unchanged.
+edge. Persisted shapes and public package exports remain unchanged. Commit
+`32e12b5` keeps historical generated observation filenames while adding required
+canonical contract outputs; the packed CommonJS and TypeScript probes pass.
+
+The current Team boundary selection moves Worker carrier realization into Team
+authority. A required Team-owned publication port replaces concrete
+Coordination imports, and a durable adapter outside Team owns event publication
+and bounded startup observation. The old utility path is a compatibility re-
+export. Session hooks, assigned-work guards, stop/shutdown orchestration, and the
+durable Trio façade remain open.
 
 ## Decisions and constraints still in force
 
@@ -212,10 +223,10 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Implement and independently verify the remaining coherent boundaries in this
-   order unless source evidence requires a safer dependency order: Team
-   lifecycle/Role realization, Alert, Coordination, Trio façade and fakes, then
-   additive Membership observation.
+3. Commit the accepted Team carrier publication slice, then complete Team
+   Session lifecycle, assigned-work guard, stop/shutdown, and Pi hook adaptation.
+   Continue with Alert, Coordination, Trio façade and fakes, then additive
+   Membership observation unless source evidence requires a safer order.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after

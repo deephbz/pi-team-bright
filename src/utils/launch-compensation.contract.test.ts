@@ -7,6 +7,7 @@ import * as paths from "./paths";
 import * as teams from "./teams";
 import * as tasks from "./tasks";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
+import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
 import { createWorkerLaunchBridge } from "./worker-launch-bridge";
 
 type RegisteredTool = {
@@ -119,6 +120,7 @@ describe("compensated Worker launch", () => {
       resolveModel: () => null,
       resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
     const member = {
       membershipId: teams.newMembershipId(),
@@ -161,6 +163,7 @@ describe("compensated Worker launch", () => {
       resolveModel: () => null,
       resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
 
     await bridge.ensureWorker({ teamName: f.name, workerName: "worker-1", scope: "First area", cwd: process.cwd() });
@@ -191,6 +194,7 @@ describe("compensated Worker launch", () => {
         projectTrusted: false,
         defaultModel: { scope: "global", value: "setting/provider" },
       }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
 
     const settingsTeam = await team("settings-model");
@@ -239,6 +243,7 @@ describe("compensated Worker launch", () => {
       resolveModel: () => null,
       resolveSettingsModel: (model) => model === nested ? model : null,
       workerAggregate: () => ({ projectTrusted: false, defaultModel: { scope: "global", value: nested } }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
 
     const worker = await bridge.ensureWorker({ teamName: f.name, workerName: "nested", scope: "Nested model", cwd: process.cwd() });
@@ -260,6 +265,7 @@ describe("compensated Worker launch", () => {
       resolveModel: () => null,
       resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
 
     const worker = await bridge.ensureWorker({ teamName: f.name, workerName: "native", scope: "Native model", cwd: process.cwd() });
@@ -279,6 +285,7 @@ describe("compensated Worker launch", () => {
         projectTrusted: false,
         defaultModel: { scope: "project", value: "bare-model" },
       }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
 
     await expect(bridge.ensureWorker({
@@ -300,6 +307,7 @@ describe("compensated Worker launch", () => {
         projectTrusted: false,
         defaultModel: { scope: "global", value: "missing/model" },
       }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
 
     await expect(bridge.ensureWorker({

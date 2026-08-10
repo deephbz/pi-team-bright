@@ -761,3 +761,46 @@ changes; append a correction.
   architecture only. It does not complete Team lifecycle, Alert, Coordination,
   Trio façade/fakes, or additive Membership-observation isolation.
 - The continuation's reserved final aggregate has not run.
+
+## 2026-08-10 — generated observation compatibility corrected
+
+- Package verification after the contract split found that the observation-only
+  TypeScript build no longer rooted historical internal declaration files. A
+  clean build deleted two tracked compatibility pairs and added ignored
+  canonical Team contract outputs, so generated verification correctly failed.
+- Preserved the historical generated filenames by rooting the public observation
+  entry plus the Task-version and mixed-model compatibility entries in
+  `tsconfig.observation.json`. The build now retains every prior tracked path and
+  adds canonical Alert, Coordination, Task, and Team contract outputs.
+- The public observation declaration has the same structural API and schema but
+  resolves `TerminalTarget` from its canonical Team contract. Packed CommonJS
+  and TypeScript observation probes pass, all declaration dependencies ship,
+  and generated-dist verification passes on the staged exact output set.
+- The correction entered commit `32e12b5`. It is derived-output continuity for
+  the contract split, not a public behavior or subsystem change.
+
+## 2026-08-10 — Team Worker carrier publication isolated
+
+- Moved Worker carrier realization into Team authority and retained the old
+  utility module as a compatibility re-export.
+- Team carrier policy now requires an injected `TeamLifecyclePublication` port.
+  A durable adapter outside Team owns concrete event-journal, runtime, Team-read,
+  and bounded startup-observation calls. Missing injection is a type error; no
+  concrete or hidden fallback remains.
+- Preserved Membership preparation, cursor capture, prepared-event publication,
+  carrier spawn, terminal placement, bounded observation, recovery, and
+  compensation order. Production composition and every focused test factory
+  inject an explicit durable adapter or bounded fake.
+- Added registered public-tool characterization for nonterminal-work refusal,
+  leader reservation, uncertain carrier stop, retained Membership history,
+  stopped events, partial shutdown, eligible retry, unchanged Task state, and
+  TUI facts. Terminal and Task authorities are deterministic doubles, so this
+  does not prove OS process behavior or live Beads behavior.
+- Independent verification passed 38 focused carrier, compensation, topology,
+  Session, and Worker lifecycle tests; typecheck; lane closure at 91 files (70
+  fast and 21 exhaustive); public-source, normalized-body, import-fence, and
+  diff checks. Architecture review confirms this is coherent but only a partial
+  Team boundary.
+- Session hook services, assigned-work guard, stop/shutdown orchestration, and
+  durable façade composition remain open. The reserved final aggregate has not
+  run.

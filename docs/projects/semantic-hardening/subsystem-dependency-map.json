@@ -1,33 +1,26 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "full_split_recomputed_task_reconciliation_and_publication_verified_remaining_boundaries_incomplete",
-  "reviewedRevision": "8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571",
+  "status": "full_split_recomputed_task_reconciliation_publication_and_team_carrier_publication_verified_remaining_boundaries_incomplete",
+  "reviewedRevision": "32e12b559ff925aca20362162bdd281db9c92696",
   "reviewedTreeState": {
-    "kind": "independently_verified_uncommitted_selection",
+    "kind": "independently_accepted_uncommitted_team_carrier_publication_selection_on_committed_contract_and_dist_base",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "selectedPaths": 16,
-    "selectionScope": "independently_verified_non_self_referential_task_publication_source_test_diff",
+    "baseRevision": "32e12b559ff925aca20362162bdd281db9c92696",
+    "selectedPaths": 9,
+    "selectionScope": "worker_carrier_publication_and_bounded_startup_observation_only",
     "selectedPathList": [
       "extensions/index.ts",
-      "scripts/tool-result-qa/suite.test.ts",
-      "src/adapters/durable-task-mutation-publication.test.ts",
-      "src/adapters/durable-task-mutation-publication.ts",
-      "src/model-tool-contract/beads-authority-adapter.ts",
-      "src/model-tool-contract/beads-task-adapter.test.ts",
-      "src/model-tool-contract/beads-task-adapter.ts",
+      "src/adapters/durable-team-lifecycle-publication.ts",
       "src/model-tool-contract/durable-model-tool-port.ts",
-      "src/model-tool-contract/mutation-call-minimization.test.ts",
-      "src/model-tool-contract/task-mutation-publication-order.test.ts",
-      "src/utils/clean-cut-round2.test.ts",
-      "src/utils/membership-mutation-lease.contract.test.ts",
-      "src/utils/release-p1-contract.test.ts",
-      "src/utils/round2-contract.test.ts",
-      "src/utils/tasks-event-publication.test.ts",
-      "src/utils/worker-task-update-version-ref.test.ts"
+      "src/team-authority/team-lifecycle-publication.ts",
+      "src/team-authority/worker-launch-bridge.boundary.test.ts",
+      "src/team-authority/worker-launch-bridge.ts",
+      "src/utils/launch-compensation.contract.test.ts",
+      "src/utils/topology-lifecycle.contract.test.ts",
+      "src/utils/worker-launch-bridge.ts"
     ],
-    "diffSha256": "d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219",
-    "integrationBase": "7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a",
-    "package": "@hypercarrier/pi-team-bright@0.17.0-rc.10"
+    "review": "independently_accepted_38_focused_tests",
+    "proofLimit": "This selection isolates only Worker carrier publication and bounded startup observation. It does not isolate Team Session lifecycle, assigned-work guarding, stop/shutdown, Pi hook adaptation, or durable facade composition."
   },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
@@ -63,25 +56,25 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 68,
-      "lines": 19559,
-      "staticLocalEdges": 231,
+      "files": 76,
+      "lines": 19705,
+      "staticLocalEdges": 249,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
     },
     "testAndSupportTypeScript": {
       "scope": "88 tracked or selected *.test.ts files plus test/setup.ts and non-test test/support/*.ts; runner-only global setup excluded",
-      "testFiles": 88,
-      "testLines": 23647,
-      "fastTestFiles": 67,
-      "exhaustiveTestFiles": 21,
+      "testFiles": 91,
+      "testLines": 23866,
+      "fastTestFiles": null,
+      "exhaustiveTestFiles": null,
       "supportFiles": 2,
       "supportLines": 441,
-      "files": 90,
-      "lines": 24088
+      "files": 93,
+      "lines": 24307
     },
-    "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to tracked or selected production files; unique ordered file edges; Tarjan SCC",
+    "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
     "selectedPhaseTwoEvidence": [
       {
         "path": "src/utils/alert-publication-failure.characterization.test.ts",
@@ -129,6 +122,12 @@
       "diffChecks": "passed",
       "aggregateLane": "not_run_by_contract"
     },
+    "selectedTeamCarrierPublicationEvidence": [
+      {"path":"src/team-authority/worker-launch-bridge.boundary.test.ts","state":"independently_accepted","scope":"Injected TeamLifecyclePublication startup-observation delegation and Team carrier source import fence."},
+      {"path":"src/utils/topology-lifecycle.contract.test.ts","state":"independently_accepted_characterization","scope":"Registered stop and shutdown guards retain Task state and existing lifecycle outcomes."},
+      {"path":"src/utils/launch-compensation.contract.test.ts","state":"independently_accepted_equivalence","scope":"Prepared carrier compensation and Team pane placement with the durable lifecycle adapter."}
+    ],
+    "independentTeamCarrierPublicationVerification": {"focusedTests":38,"state":"passed_by_independent_review","aggregateLane":"not_run_by_contract","proofLimit":"The review proves the Worker carrier publication/observation seam only; it does not prove Team lifecycle or full authority isolation."},
     "selectedRc10CoordinationEvidence": [
       {
         "path": "src/model-tool-contract/sync-event-hydration.test.ts",
@@ -202,11 +201,14 @@
         "sources": [
           "src/utils/teams.ts",
           "src/utils/runtime.ts",
+          "src/team-authority/team-lifecycle-publication.ts",
+          "src/team-authority/worker-launch-bridge.ts",
           "src/utils/worker-launch-bridge.ts",
           "src/utils/worker-resource-projection.ts",
           "src/utils/session-terminal.ts",
           "src/utils/team-terminal.ts"
-        ]
+        ],
+        "currentScopeNote": "Worker carrier realization consumes a Team-owned lifecycle publication/observation port. The utils path is a compatibility re-export only; other Team lifecycle policy remains outside this completed seam."
       },
       {
         "id": "task_contract_and_authority_adapters",
@@ -278,8 +280,10 @@
         "id": "pi_composition_and_lifecycle",
         "currentOwner": "mixed_composition",
         "sources": [
-          "extensions/index.ts"
-        ]
+          "extensions/index.ts",
+          "src/adapters/durable-team-lifecycle-publication.ts"
+        ],
+        "currentScopeNote": "The durable adapter implements the Team-owned carrier publication port using existing Coordination writers and runtime observation. Pi composition injects it for the extension path; DurableModelToolTeamPort still constructs it directly."
       },
       {
         "id": "membership_observation_projector",
@@ -527,6 +531,11 @@
       "statement": "The rc.10 tree implements page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, and branch-bound nudges, but Coordination still reads Team runtime, Task delivery, and Alert inbox records concretely and remains split across the facade and Pi composition."
     },
     {
+      "id": "ASSESS-TEAM-CARRIER-PUBLICATION",
+      "state": "implemented_independently_accepted_partial_team_boundary",
+      "statement": "Worker carrier realization consumes the Team-owned TeamLifecyclePublication port. The durable adapter stays outside Team authority, calls existing Coordination/runtime operations, and the former utils module is a compatibility re-export. This isolates carrier publication and bounded startup observation only."
+    },
+    {
       "id": "ASSESS-MIXED-PERSISTENCE-ENVELOPE",
       "statement": "TeamConfig and models.ts preserve required current compatibility but mix facts from more than one authority."
     },
@@ -755,6 +764,16 @@
         "stop_and_shutdown_orchestration",
         "pi_hook_order_adapter"
       ]
+    },
+    "teamCarrierPublicationBoundary": {
+      "state": "implemented_independently_accepted",
+      "consumerOwnedPort": "src/team-authority/team-lifecycle-publication.ts:16",
+      "teamCarrierConsumer": "src/team-authority/worker-launch-bridge.ts:17",
+      "durableAdapter": "src/adapters/durable-team-lifecycle-publication.ts:14",
+      "compositionRoot": "extensions/index.ts:410-424",
+      "compatibilityReExport": "src/utils/worker-launch-bridge.ts:1-2",
+      "verification": {"focusedTests":38,"state":"independently_accepted","aggregate":"not_run_by_contract"},
+      "proofLimit": "DurableModelToolTeamPort directly constructs the durable adapter. Team Session lifecycle, assigned-work guard, stop/shutdown orchestration, Pi hook adaptation, and facade composition remain incomplete."
     },
     "rc10CoordinationBehavior": {
       "state": "implemented_behavior_boundary_incomplete",
@@ -1015,34 +1034,37 @@
     "schema": "pi-team-bright-full-split-completion-matrix/1",
     "computedAt": "2026-08-10",
     "input": {
-      "gitHead": "a3c51d78c3e95549768a91a36535bee0b5c94755",
-      "productionSourceDigestSha256": "89e6bd6788b822ae11fef1a267757f73e10c91979e3bce5ee21b427205886f43",
-      "scope": "68 TypeScript production files under src/ and extensions/, excluding *.test.ts; the source digest excludes concurrent test and documentation changes.",
+      "gitHead": "32e12b559ff925aca20362162bdd281db9c92696",
+      "productionSourceDigestSha256": "not_recorded_for_uncommitted_team_carrier_selection",
+      "scope": "76 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts; current tree includes committed contract/dist work plus the selected uncommitted Team carrier seam.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 68,
-      "uniqueLocalEdges": 231,
+      "files": 76,
+      "uniqueLocalEdges": 249,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
       "componentEdges": [
-        { "from": "team_authority_and_role_realization", "to": "coordination_observation", "edges": 2, "files": ["src/utils/worker-launch-bridge.ts"] },
-        { "from": "task_authority", "to": "team_authority_and_role_realization", "edges": 4, "files": ["src/model-tool-contract/beads-authority-adapter.ts", "src/utils/task-delivery.ts", "src/utils/task-delivery-migration.ts", "src/utils/task-migration.ts"] },
-        { "from": "task_authority", "to": "coordination_observation", "edges": 1, "files": ["src/model-tool-contract/beads-task-adapter.ts"] },
-        { "from": "alert_authority", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/utils/messaging.ts", "src/utils/message-delivery.ts"] },
-        { "from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/utils/alerts.ts"] },
-        { "from": "coordination_observation", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/utils/hidden-observation.ts", "src/utils/sync-liveness.ts"] },
-        { "from": "coordination_observation", "to": "task_authority", "edges": 3, "files": ["src/utils/team-events.ts", "src/utils/task-event-failure-hints.ts"] },
-        { "from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "edges": 3, "files": ["src/model-tool-contract/durable-model-tool-port.ts"] },
-        { "from": "trio_facing_interface_and_projections", "to": "task_authority", "edges": 14, "files": ["src/model-tool-contract/catalog.ts", "src/model-tool-contract/durable-model-tool-port.ts", "src/model-tool-contract/executors.ts", "src/model-tool-contract/in-memory-team-port.ts", "src/model-tool-contract/result-projection.ts"] },
-        { "from": "trio_facing_interface_and_projections", "to": "alert_authority", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"] },
-        { "from": "trio_facing_interface_and_projections", "to": "coordination_observation", "edges": 6, "files": ["src/model-tool-contract/durable-model-tool-port.ts"] },
-        { "from": "pi_composition_root", "to": "team_authority_and_role_realization", "edges": 6, "files": ["extensions/index.ts"] },
-        { "from": "pi_composition_root", "to": "task_authority", "edges": 7, "files": ["extensions/index.ts"] },
-        { "from": "pi_composition_root", "to": "alert_authority", "edges": 2, "files": ["extensions/index.ts"] },
-        { "from": "pi_composition_root", "to": "coordination_observation", "edges": 5, "files": ["extensions/index.ts"] },
-        { "from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 1, "files": ["src/public/observation.ts"] }
+        {"from": "pi_composition_root", "to": "team_authority_and_role_realization", "edges": 12, "files": ["extensions/index.ts", "src/adapters/durable-task-mutation-publication.ts", "src/adapters/durable-team-lifecycle-publication.ts"]},
+        {"from": "pi_composition_root", "to": "task_authority", "edges": 11, "files": ["extensions/index.ts", "src/adapters/durable-task-mutation-publication.ts", "src/cli/migrate-task-delivery.ts", "src/cli/migrate-tasks.ts"]},
+        {"from": "pi_composition_root", "to": "alert_authority", "edges": 3, "files": ["extensions/index.ts"]},
+        {"from": "pi_composition_root", "to": "coordination_observation", "edges": 8, "files": ["extensions/index.ts", "src/adapters/durable-task-mutation-publication.ts", "src/adapters/durable-team-lifecycle-publication.ts"]},
+        {"from": "pi_composition_root", "to": "trio_facing_interface_and_projections", "edges": 9, "files": ["extensions/index.ts", "src/cli/render-model-tool-contract.ts"]},
+        {"from": "task_authority", "to": "team_authority_and_role_realization", "edges": 8, "files": ["src/model-tool-contract/beads-authority-adapter.ts", "src/utils/beads.ts", "src/utils/task-delivery-migration.ts", "src/utils/task-delivery.ts", "src/utils/task-migration.ts"]},
+        {"from": "task_authority", "to": "coordination_observation", "edges": 2, "files": ["src/model-tool-contract/beads-task-adapter.ts"]},
+        {"from": "trio_facing_interface_and_projections", "to": "task_authority", "edges": 18, "files": ["src/model-tool-contract/catalog.ts", "src/model-tool-contract/durable-model-tool-port.ts", "src/model-tool-contract/executors.ts", "src/model-tool-contract/in-memory-team-port.ts", "src/model-tool-contract/result-projection.ts", "src/model-tool-contract/runtime.ts", "src/model-tool-contract/task-domain.ts", "src/model-tool-contract/task-version-ref.ts", "src/utils/team-status.ts"]},
+        {"from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "edges": 8, "files": ["src/model-tool-contract/durable-model-tool-port.ts", "src/utils/team-footer.ts", "src/utils/team-status.ts"]},
+        {"from": "trio_facing_interface_and_projections", "to": "coordination_observation", "edges": 7, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
+        {"from": "trio_facing_interface_and_projections", "to": "alert_authority", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
+        {"from": "trio_facing_interface_and_projections", "to": "pi_composition_root", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
+        {"from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/public/observation.ts"]},
+        {"from": "team_authority_and_role_realization", "to": "alert_authority", "edges": 1, "files": ["src/team-authority/worker-launch-bridge.ts"]},
+        {"from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/utils/alerts.ts"]},
+        {"from": "alert_authority", "to": "task_authority", "edges": 1, "files": ["src/utils/alerts.ts"]},
+        {"from": "coordination_observation", "to": "team_authority_and_role_realization", "edges": 4, "files": ["src/utils/hidden-observation.ts", "src/utils/sync-liveness.ts", "src/utils/team-events.ts"]},
+        {"from": "alert_authority", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/utils/message-delivery.ts", "src/utils/messaging.ts"]},
+        {"from": "coordination_observation", "to": "task_authority", "edges": 3, "files": ["src/utils/task-event-failure-hints.ts", "src/utils/team-events.ts"]}
       ],
       "supportMediatedDependencies": [
         { "from": "coordination_observation", "to": "task_authority", "path": "src/utils/sync-liveness.ts", "mechanism": "taskDeliveryPath reads Task-delivery records through src/utils/paths.ts" },
@@ -1054,11 +1076,11 @@
     "authorities": [
       {
         "id": "team_authority_and_role_realization",
-        "completion": "partial",
-        "remainingSeams": ["extensions/index.ts lifecycle, startup admission, Session binding, stop, shutdown, and Worker carrier orchestration", "src/utils/worker-launch-bridge.ts directly appends and waits on Coordination events", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
-        "violations": ["team_authority_and_role_realization -> coordination_observation: src/utils/worker-launch-bridge.ts:3 and :18", "team_authority_and_role_realization -> task_authority behavior at extensions/index.ts:1246 and :1251 lacks a Team-owned assigned-work guard port"],
-        "staticGate": "For Team-owned sources, deny imports of task-authority, model-tool-contract, coordination utilities, public observation, and Trio renderers. Permit only Team contracts, carrier adapters, and consumer-owned guard interfaces.",
-        "focusedVerification": ["npx vitest run src/utils/worker-ensure-lifecycle.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts src/utils/launch-compensation.contract.test.ts", "npm run typecheck"]
+        "completion": "partial_worker_carrier_publication_and_observation_isolated",
+        "remainingSeams": ["extensions/index.ts lifecycle, startup admission, Session binding, stop, shutdown, and Worker carrier orchestration", "Team Session lifecycle and Pi hook adaptation remain in extensions/index.ts", "extensions/index.ts stop/shutdown directly reads Task state without a Team-owned assigned-work guard", "DurableModelToolTeamPort constructs DurableTeamLifecyclePublication directly", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
+        "violations": ["team_authority_and_role_realization -> task_authority behavior at extensions/index.ts:1246 and :1251 lacks a Team-owned assigned-work guard port", "durable facade composition: src/model-tool-contract/durable-model-tool-port.ts:141-157 constructs the Team lifecycle adapter outside Pi composition"],
+        "staticGate": "For Team-owned carrier sources, deny concrete Coordination imports including utils/team-events and utils/worker-startup-observation. Permit Team contracts, carrier adapters, and the Team-owned TeamLifecyclePublication port only. Keep the compatibility re-export at utils/worker-launch-bridge.ts.",
+        "focusedVerification": ["Independent 38-test Team carrier review: passed", "npx vitest run src/team-authority/worker-launch-bridge.boundary.test.ts src/utils/worker-ensure-lifecycle.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts src/utils/launch-compensation.contract.test.ts", "npm run typecheck"]
       },
       {
         "id": "task_authority",
@@ -1105,7 +1127,7 @@
     "safestCoherentOrder": [
       { "step": 0, "seam": "behavior_inventory_completion", "precondition": "All inventory entries are characterized. ALERT-004 is compatibility-required with one-Node-process hook-level later-presentation and replay evidence; external process, fork, Pi Session, and OS restart evidence remains a proof limit, not a behavior-identical seam gate.", "verification": ["npx vitest run src/utils/alert-publication-failure.characterization.test.ts src/utils/causal-path-characterization.test.ts"] },
       { "step": 1, "seam": "shared_domain_contracts", "precondition": "Keep compatibility re-exports and persisted shapes. Split src/utils/models.ts by authority before moving behavior.", "verification": ["npm run typecheck", "npm run test:lanes"] },
-      { "step": 2, "seam": "team_role_lifecycle_and_consumer_guard", "precondition": "Introduce the Team-owned assigned-work guard and extract lifecycle/carrier application services from extensions/index.ts without changing hook order.", "verification": ["npx vitest run src/utils/worker-ensure-lifecycle.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts"] },
+      { "step": 2, "seam": "team_session_lifecycle_assigned_work_guard_and_pi_adapter", "precondition": "Worker carrier publication/observation is isolated. Introduce the Team-owned assigned-work guard, extract remaining Session lifecycle and stop/shutdown services from extensions/index.ts, and leave Pi hook adaptation small without changing hook order or durable facade composition.", "verification": ["npx vitest run src/utils/worker-ensure-lifecycle.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts"] },
       { "step": 3, "seam": "alert_delivery_and_publication", "precondition": "Only after step 0. Wrap Message records in an Alert adapter and inject Membership resolution and Coordination publication.", "verification": ["npx vitest run src/utils/alerts.test.ts src/utils/alert-publication-failure.characterization.test.ts src/utils/message-delivery.test.ts"] },
       { "step": 4, "seam": "coordination_read_ports_and_application_boundary", "precondition": "Replace direct Team/runtime, Task-delivery, and Alert-inbox reads with Coordination-owned read queries. Keep hints, timers, and nudges derived.", "verification": ["npx vitest run src/model-tool-contract/sync-event-hydration.test.ts src/utils/sync-liveness.test.ts src/utils/task-event-failure-hints.test.ts src/utils/sync-nudge-extension.test.ts test/coord-liveness-e2e/sync-liveness.test.ts"] },
       { "step": 5, "seam": "trio_ports_and_separate_fakes", "precondition": "Split ModelToolTeamPort and StoredTeam only after the four authority ports exist. Preserve model and TUI output contracts.", "verification": ["npx vitest run src/model-tool-contract/first-journey.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/model-tool-contract/result-projection.test.ts", "npm run qa:tool-results"] },

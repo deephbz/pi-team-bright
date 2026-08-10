@@ -7,7 +7,8 @@ import * as teamEvents from "../utils/team-events";
 import * as alerts from "../utils/alerts";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
-import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../utils/worker-launch-bridge";
+import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
+import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
 import { MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import {
@@ -152,6 +153,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     resolveModel: () => null,
     resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
     workerAggregate: (cwd) => resolveWorkerAggregate(cwd, process.cwd()),
+    lifecyclePublication: new DurableTeamLifecyclePublication(),
   });
   private readonly launchBridge: WorkerLaunchBridge;
   private readonly lifecycle?: ModelToolLifecycle;
