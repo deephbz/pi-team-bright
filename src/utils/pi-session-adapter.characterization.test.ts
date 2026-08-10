@@ -1,5 +1,6 @@
 import fs from "node:fs";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { initTheme } from "@earendil-works/pi-coding-agent";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
@@ -13,6 +14,8 @@ import * as teamEvents from "./team-events";
 import * as teams from "./teams";
 
 const createdTeams: string[] = [];
+
+beforeAll(() => initTheme());
 
 function teamName(suffix: string): string {
   const name = `pi-session-adapter-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
@@ -51,6 +54,7 @@ function context(sessionFile: string) {
       getBranch: vi.fn(() => []),
       getEntries: vi.fn(() => []),
       buildContextEntries: vi.fn(() => []),
+      getCwd: vi.fn(() => "/tmp/pi-team-bright-project"),
       getSessionName: vi.fn(() => undefined),
     },
     modelRegistry: { isUsingOAuth: vi.fn(() => false), getProvider: vi.fn(() => undefined) },
@@ -61,20 +65,23 @@ function context(sessionFile: string) {
 
 function extension(activeTools = ["foreign_extension_tool", "team_create", "team_sync"]) {
   const handlers = new Map<string, (event: any, ctx: any) => Promise<void>>();
+  const commands = new Map<string, { handler(args: string, ctx: any): Promise<void> }>();
   const registrations: string[] = [];
   let active = [...activeTools];
   const setActiveTools = vi.fn((names: string[]) => { active = [...names]; });
   piTeams({
     on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
+    registerCommand(name: string, command: { handler(args: string, ctx: any): Promise<void> }) { commands.set(name, command); },
     registerTool(tool: { name: string }) { registrations.push(tool.name); },
     registerMessageRenderer() {},
     sendMessage() {},
     sendUserMessage() {},
+    getThinkingLevel: () => "high",
     getActiveTools: () => active,
     getAllTools: () => registrations.map((name) => ({ name })),
     setActiveTools,
   } as never);
-  return Object.assign(handlers, { registrations, setActiveTools });
+  return Object.assign(handlers, { commands, registrations, setActiveTools });
 }
 
 async function createTeam(name: string, sessionFile: string) {
@@ -181,6 +188,68 @@ describe("registered Pi Session adapter characterization", () => {
     expect(order.indexOf("task")).toBeLessThan(order.lastIndexOf("footer"));
   });
 
+  it("projects only public Team status and footer data through registered lifecycle and command hooks", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("projection-boundaries");
+    const sessionFile = "/private/sessions/lead-secret.jsonl";
+    const taskWorkspace = "/shown/task-workspace";
+    const config = await createTeam(name, sessionFile);
+    const lead = config.members[0];
+    config.taskBackend = "beads";
+    config.taskWorkspace = taskWorkspace;
+    config.taskAuthorityId = "private-task-authority";
+    config.taskAuthorityFingerprint = {
+      schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt",
+      doltDatabase: "private-database", projectId: "private-project",
+    };
+    config.members[0].tmuxPaneId = "%private-pane";
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: 1 }, lead.membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const ctx = context(sessionFile);
+    ctx.sessionManager.getCwd.mockReturnValue(taskWorkspace);
+    const harness = extension();
+
+    await harness.get("session_start")!({ reason: "resume" }, ctx);
+    const footer = ctx.ui.setFooter.mock.calls.at(-1)?.[0];
+    const component = footer({ requestRender: vi.fn() }, { fg: (_tone: string, text: string) => text }, {
+      getGitBranch: () => "main", getExtensionStatuses: () => new Map(), getAvailableProviderCount: () => 1, onBranchChange: () => () => undefined,
+    });
+    const footerText = component.render(140).join("\n");
+    component.dispose();
+    await harness.commands.get("pi-team-bright")!.handler("status", ctx);
+    const statusText = ctx.ui.notify.mock.calls.at(-1)?.[0] as string;
+
+    expect(statusText).toContain("Task authority: beads · degraded");
+    expect(statusText).toContain(`Beads workspace: ${taskWorkspace}`);
+    expect(footerText).toContain(taskWorkspace);
+    for (const privateValue of [sessionFile, lead.membershipId!, "%private-pane"]) {
+      expect(footerText).not.toContain(privateValue);
+      expect(statusText).not.toContain(privateValue);
+    }
+    expect(ctx.ui.setFooter.mock.calls.map((call: unknown[]) => call[0])).toContain(undefined);
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
+  });
+
+  it("suppresses stale fork identity through the registered Session hook", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("fork-footer");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    await createTeam(name, sessionFile);
+    const ctx = context(sessionFile);
+    const harness = extension();
+
+    await harness.get("session_start")!({ reason: "fork" }, ctx);
+    await harness.commands.get("pi-team-bright")!.handler("status", ctx);
+
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
+    expect(ctx.ui.setFooter.mock.calls.some((call: unknown[]) => typeof call[0] === "function")).toBe(false);
+    expect(ctx.ui.notify).toHaveBeenLastCalledWith(expect.stringMatching(/No current Team is bound/), "warning");
+  });
+
   it("keeps a resumed Worker alive when foreign placement refuses its Team binding", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
@@ -252,10 +321,12 @@ describe("registered Pi Session adapter characterization", () => {
     const ctx = context(sessionFile);
     const handlers = extension();
     await handlers.get("session_start")!({ reason: "resume" }, ctx);
+    const footerCallsBeforeShutdown = ctx.ui.setFooter.mock.calls.length;
     await handlers.get("session_shutdown")!({ reason: "quit" }, ctx);
 
     expect(directStop).toHaveBeenCalledOnce();
     expect(taskStop).toHaveBeenCalledOnce();
+    expect(ctx.ui.setFooter.mock.calls.length).toBeGreaterThan(footerCallsBeforeShutdown);
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
   });
 
