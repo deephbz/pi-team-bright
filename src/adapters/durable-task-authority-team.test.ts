@@ -89,13 +89,22 @@ describe("DurableTaskAuthorityTeam", () => {
     const source = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
     const contracts = source("src/task-authority/contracts.ts");
     const adapter = source("src/model-tool-contract/beads-task-adapter.ts");
+    const authority = source("src/model-tool-contract/beads-authority-adapter.ts");
     const extension = source("extensions/index.ts");
 
     expect(contracts).not.toMatch(/(?:import|export).*TeamConfig/);
-    expect(adapter).toContain("teamPort?: TaskAuthorityTeamPort");
-    expect(adapter).toContain("createTask(teamName, input, publicationPort, { actor }");
+    expect(adapter).toContain("teamPort: TaskAuthorityTeamPort,");
+    expect(adapter).toContain("publicationPort: TaskMutationPublicationPort,\n  teamPort: TaskAuthorityTeamPort,");
+    expect(adapter).toContain("createTask(teamName, input, publicationPort, { actor,");
     expect(adapter).toContain("}, publicationPort, teamPort)");
-    expect(adapter).toContain("}, { ...options, taskCardProjector: projectTaskCard }, publicationPort, teamPort)");
+    expect(adapter).toContain("}, { ...options, ...(actorFence ? { authoritySessionFile: actorFence.sessionFile, authorityMembershipId: actorFence.membershipId } : {}), taskCardProjector: projectTaskCard }, publicationPort, teamPort)");
+    const authorityStart = authority.indexOf("async function withAgentMutationAuthority");
+    const authorityEnd = authority.indexOf("export interface SemanticTaskUpdate", authorityStart);
+    expect(authorityStart).toBeGreaterThanOrEqual(0);
+    expect(authorityEnd).toBeGreaterThan(authorityStart);
+    const authorityBody = authority.slice(authorityStart, authorityEnd);
+    expect(authorityBody).not.toMatch(/if\s*\(teamPort\)/);
+    expect(authorityBody).not.toContain("withCurrentSessionBinding");
     expect(extension.match(/const taskAuthorityTeam = new DurableTaskAuthorityTeam\(\);/g)).toHaveLength(1);
     expect(extension.match(/createPublishingBeadsTaskAdapterFactory\(new DurableTaskMutationPublication\(\), taskAuthorityTeam\)/g)).toHaveLength(1);
   });
