@@ -218,7 +218,8 @@ describe("Team lifecycle service boundary", () => {
     expect(source).not.toMatch(/utils\/tasks|model-tool-contract|team-events|extensions\/|\.\.\/adapters/);
     expect(source).toContain("assignedWorkGuard: AssignedWorkGuard");
     expect(source).toContain("lifecyclePublication: TeamLifecyclePublication");
-    expect(adapter).toContain('import * as tasks from "../utils/tasks"');
+    expect(adapter).not.toMatch(/utils\/tasks/);
+    expect(adapter).toContain('import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter"');
     expect(adapter).toContain('import type { AssignedWorkGuard } from "../team-authority/assigned-work-guard"');
   });
 });
