@@ -6,6 +6,10 @@ import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-t
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import type { CoordinationQueryBundle, CoordinationTaskReadOutcome } from "./queries";
 import { readWorkerRunObservation } from "../utils/sync-liveness";
+import { CoordinationObservationService } from "./observation-service";
+import { taskProjectionRevision } from "./task-projection-revision";
+import { projectToolResult } from "../model-tool-contract/result-projection";
+import { projectTui } from "../model-tool-contract/tui-projection";
 
 const teamName = "coordination-query-equivalence";
 const task = {
@@ -71,7 +75,81 @@ describe("durable Coordination query equivalence", () => {
     const root = process.cwd();
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
     expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(\);/g)).toHaveLength(1);
-    expect(extension).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries, coordinationObservationService)");
+    expect(extension).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
+  });
+
+  it("keeps query transition failures unacknowledged until a persisted caught-up result", async () => {
+    const calls: string[] = [];
+    let binding: any = {
+      teamName,
+      epochId: "epoch-1",
+      sessionFile: "/sessions/leader.jsonl",
+      purpose: "Characterize query transitions.",
+      logicalWorkers: [{ name: "worker", scope: "verify" }],
+      members: [{ name: "team-lead", agentType: "lead", membershipId: "lead-1", sessionFile: "/sessions/leader.jsonl", isActive: true }, { name: "worker", agentType: "teammate", membershipId: "worker-1", sessionFile: "/sessions/worker.jsonl", isActive: true }],
+    };
+    let taskRead: "ok" | "unavailable" = "ok";
+    let runtime: any = { membershipId: "other-membership", pid: 42, startedAt: 1, runState: "settled" };
+    let commits = 0;
+    const queries: CoordinationQueryBundle = {
+      teamRuntime: {
+        readLeaderBinding: vi.fn(async () => { calls.push("binding"); return binding; }),
+        readRuntime: vi.fn(async () => { calls.push("runtime"); return runtime; }),
+      },
+      taskStateDelivery: {
+        listTaskIds: vi.fn(async () => { calls.push("task:list"); if (taskRead === "unavailable") throw new Error("Task authority unavailable."); return []; }),
+        readTasks: vi.fn(async () => { calls.push("task:read"); return []; }),
+        readDeliveryEvidence: vi.fn(async () => { calls.push("delivery"); return { known: true, pending: false }; }),
+      },
+      alertActuation: { readInboxEvidence: vi.fn(async () => { calls.push("alert"); return { known: true, pending: false }; }) },
+    };
+    const hidden = {
+      schema: "pi-teams-hidden-observation/1" as const,
+      teamEpochId: "epoch-1", exactSessionId: "/sessions/leader.jsonl", acknowledgedEntryId: "base",
+      acknowledgedLineage: ["base"], teamEventCursor: "0", authorityRevisions: { task_projection: taskProjectionRevision([], []) }, updatedAt: new Date(0).toISOString(),
+    };
+    const service = new CoordinationObservationService(queries, {
+      projectNonterminalTaskIds: () => [],
+      projectTaskChanges: () => ({ kind: "projected", changes: [] }),
+    }, {
+      readHidden: vi.fn(async () => ({ kind: "found", projection: hidden })),
+      commitHidden: vi.fn(async () => { commits++; return { kind: "committed", projection: { ...hidden, acknowledgedEntryId: "success", acknowledgedLineage: ["base", "success"] } }; }),
+      readEvents: vi.fn(() => ({ events: [], cursor: "0", headCursor: "0" })),
+      readEventCursor: vi.fn(() => "0"), waitEvents: vi.fn(), readFailureHints: vi.fn(() => ({ hints: [], headCursor: "0" })),
+    } as any);
+    service.setBranchContext("leader", ["base"]);
+
+    const unknown = await service.readTeamSync("leader", "updates", new AbortController().signal, "unknown");
+    expect(unknown).toEqual({ kind: "indeterminate", message: "Worker run-state evidence is incomplete; no observation was published." });
+    expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime"]);
+    expect(service.pending("leader")).toBeUndefined();
+    expect(commits).toBe(0);
+
+    calls.length = 0;
+    taskRead = "unavailable";
+    const unavailable = await service.readTeamSync("leader", "updates", new AbortController().signal, "unavailable");
+    expect(unavailable).toEqual({ kind: "unavailable", reason: "task_authority_unavailable", message: "Task authority unavailable." });
+    expect(calls).toEqual(["binding", "task:list"]);
+    expect(service.pending("leader")).toBeUndefined();
+    expect(commits).toBe(0);
+
+    calls.length = 0;
+    taskRead = "ok";
+    runtime = { membershipId: "worker-1", pid: 42, startedAt: 1, runState: "settled" };
+    const caughtUp = await service.readTeamSync("leader", "updates", new AbortController().signal, "success");
+    expect(caughtUp).toEqual({ kind: "caught_up", head: 0, epochId: "epoch-1" });
+    expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime"]);
+    expect(commits).toBe(0);
+    expect(projectToolResult("team_sync", { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true })).toEqual({ kind: "caught_up", head: 0, epoch_id: "epoch-1" });
+    expect(projectTui({ tool: "team_sync", details: { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true }, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("caught_up")]));
+    await expect(service.acknowledge("leader", "success", ["base", "success"])).resolves.toBe(true);
+    expect(commits).toBe(1);
+    expect(service.pending("leader")).toBeUndefined();
+
+    binding = undefined;
+    await expect(service.readTeamSync("leader", "updates", new AbortController().signal, "replacement"))
+      .resolves.toEqual({ kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." });
+    expect(commits).toBe(1);
   });
 
   it("fences canonical contracts and each durable query to its owner record boundary", () => {

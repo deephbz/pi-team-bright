@@ -83,14 +83,18 @@ function harness(teamName: string, actor: "team-lead" | "worker"): Map<string, T
   return registered;
 }
 
-function context(teamName: string, actor: string) {
+function context(teamName: string, actor: string, sessionFile = `/tmp/${teamName}-${actor}.jsonl`) {
   return {
     sessionManager: {
-      getSessionFile: () => `/tmp/${teamName}-${actor}.jsonl`,
+      getSessionFile: () => sessionFile,
       buildContextEntries: () => [],
     },
     ui: { setStatus: vi.fn(), notify: vi.fn(), setTitle: vi.fn() },
   };
+}
+
+function fileBytesOrAbsent(file: string): Buffer | undefined {
+  return fs.existsSync(file) ? fs.readFileSync(file) : undefined;
 }
 
 afterEach(() => {
@@ -294,6 +298,94 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(taskAuthorityRead).toHaveBeenCalledWith(teamName, task.id);
     expect(genericRead).not.toHaveBeenCalled();
     expect(JSON.parse(result.content[0].text)).toMatchObject({ kind: "found", task: { id: task.id, version: expect.any(String) } });
+  }, 60_000);
+
+  // Current evidence only: this records the observed defect before its separate
+  // fix. It must not be read as the intended stale-actor contract.
+  it("currently lets a replaced Worker mutate and publish after public context resolution", async () => {
+    const teamName = uniqueTeam();
+    const root = workspace();
+    writeTeam(teamName, root);
+    const lead = harness(teamName, "team-lead");
+    const worker = harness(teamName, "worker");
+    const leadCtx = context(teamName, "team-lead");
+    const staleSessionFile = `/tmp/${teamName}-worker.jsonl`;
+    const staleWorkerCtx = context(teamName, "worker", staleSessionFile);
+    const created = await lead.get("task_create")!.execute("create", {
+      tasks: [{ operation_id: "create-stale-actor", title: "Stale actor", goal: "Record current stale Worker mutation behavior.", assignee: "worker" }],
+    }, undefined, undefined, leadCtx);
+    const task = created.details.outcomes[0].task;
+    const beforeEvents = readTeamEvents(teamName).events;
+    const beforeDeliveries = await readTaskDeliveries(teamName, "worker");
+    const hintPath = paths.taskEventFailureHintPath(teamName);
+    const beforeHints = fileBytesOrAbsent(hintPath);
+    const updateCalls = vi.spyOn(BeadsTaskStore.prototype, "updateWithResult");
+    const originalApply = authority.applySemanticTaskUpdate;
+    const replacementSessionFile = `/tmp/${teamName}-worker-replacement.jsonl`;
+    let replacementMembershipId: string | undefined;
+    vi.spyOn(authority, "applySemanticTaskUpdate").mockImplementationOnce(async (...args: any[]) => {
+      const staleMembership = await teams.currentMembership(teamName, "worker");
+      await teams.deactivateMembership(teamName, staleMembership.membershipId!, "replaced");
+      const replacement = member(teamName, "worker", "teammate");
+      replacement.membershipId = teams.newMembershipId();
+      replacement.agentId = `replacement@${teamName}`;
+      replacement.sessionFile = replacementSessionFile;
+      replacementMembershipId = replacement.membershipId;
+      await teams.addMember(teamName, replacement);
+      return originalApply(...args as Parameters<typeof authority.applySemanticTaskUpdate>);
+    });
+
+    const mutated = await worker.get("task_update")!.execute("stale-update", {
+      task_id: task.id,
+      operation_id: "stale-actor-update",
+      status: "in_progress",
+      expected_version: task.version,
+    }, undefined, undefined, staleWorkerCtx);
+
+    const outcome = mutated.details.outcomes[0];
+    expect(outcome).toMatchObject({
+      kind: "updated",
+      task_id: task.id,
+      operation_id: "stale-actor-update",
+      task: { status: "in_progress" },
+    });
+    const mutatedVersion = outcome.task.version;
+    expect(JSON.parse(mutated.content[0].text)).toMatchObject({
+      kind: "updated",
+      task: { id: task.id, version: mutatedVersion, status: "in_progress" },
+    });
+    expect(updateCalls).toHaveBeenCalledOnce();
+    expect(readTeamEvents(teamName).events).toEqual([
+      ...beforeEvents,
+      expect.objectContaining({ type: "task", ref: { taskId: task.id, version: mutatedVersion }, actor: "worker" }),
+    ]);
+    expect(fileBytesOrAbsent(hintPath)).toEqual(beforeHints);
+    const deliveries = await readTaskDeliveries(teamName, "worker");
+    expect(deliveries).toEqual([
+      ...beforeDeliveries,
+      expect.objectContaining({
+        ref: { kind: "task", taskId: task.id, version: mutatedVersion },
+        recipientMembershipId: replacementMembershipId,
+        recipientSessionFile: replacementSessionFile,
+      }),
+    ]);
+
+    const replacementWorker = harness(teamName, "worker");
+    const replay = await replacementWorker.get("task_update")!.execute("replacement-replay", {
+      task_id: task.id,
+      operation_id: "stale-actor-update",
+      status: "in_progress",
+      expected_version: task.version,
+    }, undefined, undefined, context(teamName, "worker", replacementSessionFile));
+    expect(replay.details.outcomes[0]).toMatchObject({
+      kind: "updated",
+      task_id: task.id,
+      operation_id: "stale-actor-update",
+      task: { version: mutatedVersion, status: "in_progress" },
+    });
+    expect(updateCalls).toHaveBeenCalledOnce();
+    expect(readTeamEvents(teamName).events).toHaveLength(beforeEvents.length + 1);
+    expect(await readTaskDeliveries(teamName, "worker")).toEqual(deliveries);
   }, 60_000);
 
   it("keeps the raw conditional preflight after model-ref resolution", async () => {
