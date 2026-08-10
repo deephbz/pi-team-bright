@@ -181,7 +181,34 @@ describe("registered Pi Session adapter characterization", () => {
     expect(order.indexOf("task")).toBeLessThan(order.lastIndexOf("footer"));
   });
 
-  it("refuses foreign resumed-lead placement without delivery or nudge and shuts down the candidate", async () => {
+  it("keeps a resumed Worker alive when foreign placement refuses its Team binding", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    setAdapter(terminal("tmux"));
+    const name = teamName("worker-refusal");
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    const config = await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    config.terminalBackend = "herdr";
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), terminalTarget: { backend: "herdr", kind: "pane", targetId: "herdr-worker" },
+      sessionFile, cwd: process.cwd(), subscriptions: [],
+    });
+    const direct = vi.spyOn(DirectMessageDelivery.prototype, "start");
+    const task = vi.spyOn(TaskChangeDelivery.prototype, "start");
+    const ctx = context(sessionFile);
+
+    await extension().get("session_start")!({ reason: "resume" }, ctx);
+
+    expect(direct).not.toHaveBeenCalled();
+    expect(task).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringMatching(/bound to terminal backend herdr/i), "error");
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
+    expect(ctx.shutdown).not.toHaveBeenCalled();
+  });
+
+  it("keeps a resumed lead alive when foreign placement refuses its Team binding", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     setAdapter(terminal("tmux"));
@@ -203,7 +230,7 @@ describe("registered Pi Session adapter characterization", () => {
     expect(nudge).not.toHaveBeenCalled();
     expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringMatching(/bound to terminal backend herdr/i), "error");
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
-    expect(ctx.shutdown).toHaveBeenCalledOnce();
+    expect(ctx.shutdown).not.toHaveBeenCalled();
   });
 
   it("stops both deliveries and clears the footer on session shutdown", async () => {
