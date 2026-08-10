@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { initializeBeadsWorkspace } from "./beads";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -52,7 +53,19 @@ function sessionContext(sessionFile: string) {
 }
 
 async function configureLeadRecord(name: string, sessionFile: string): Promise<string> {
-  await teams.createTeam(name, sessionFile, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+  const taskWorkspace = paths.teamDir(name);
+  const taskAuthorityFingerprint = await initializeBeadsWorkspace(taskWorkspace);
+  await teams.createTeam(
+    name,
+    sessionFile,
+    "lead-agent",
+    undefined,
+    undefined,
+    undefined,
+    taskWorkspace,
+    `task_authority_${name}`,
+    taskAuthorityFingerprint,
+  );
   const serialized = JSON.stringify({ pid: -1, sessionFile, startedAt: 1 });
   fs.writeFileSync(paths.leadSessionPath(name), serialized);
   return serialized;
