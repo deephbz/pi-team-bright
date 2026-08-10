@@ -2,8 +2,9 @@
 
 Date: 2026-08-10
 Stage: consolidation and hardening
-Result revision: `69c30acf5db23be8f656b2a6821b0ea032ae04cb`
+Result revision: `5950f3b3f17124b9baf38afa48d839dc503d847b`
 Trio baseline: `c54dc25b34770b70afedffc7e87728da6376ee0f`
+Membership baseline: `6997dce`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
 Verified source candidate: `638d5934bd52c7f4a3fe18525e5d72569a227211`
@@ -17,9 +18,11 @@ because it keeps Pi Team Bright internals opaque
 
 The Project produced an evidence-backed internal hardening series without a
 public tool, schema, package-export, persisted-record, filename, retry, timing,
-or default-behavior change. Accepted commit
-`69c30acf5db23be8f656b2a6821b0ea032ae04cb` splits the Trio seam from clean
-baseline `c54dc25b34770b70afedffc7e87728da6376ee0f`. It characterized the main Task-delivery causal path,
+or default-behavior change. Accepted commits `69c30acf5db23be8f656b2a6821b0ea032ae04cb` and
+`5950f3b3f17124b9baf38afa48d839dc503d847b` complete the accepted Trio and
+additive Membership projection boundaries. The latter splits its private reader
+from the unchanged public projection. Team/Task reverse dependencies and the
+proposed Coordination worker-run query remain target gates. The Project also characterized the main Task-delivery causal path,
 made two Task dependency seams explicit, moved durable lead discovery to Team
 authority, removed duplicate result validation, replaced nondeterministic lock
 test oracles, and added a reproducible Task-hydration benchmark.
@@ -147,10 +150,34 @@ implementation attempts rejected during design remain historical evidence.
 Focused acceptance gates passed, but they prove deterministic local behavior
 only. They do not prove real Pi persistence, external Beads/Dolt contention,
 cross-process forks, native watcher delivery, OS scheduling, external writers,
-or terminal pixels. The next boundary is additive Membership observation. The
-canonical graph is 111 production files and 426 local edges, with zero
-nontrivial SCC and zero runtime dynamic imports; a narrower 109-file/379-edge
-probe corroborates only its narrower scope.
+or terminal pixels. The additive Membership boundary is now complete. The historical Trio graph is
+111 production files and 426 local edges. The current canonical graph is 112
+production files and 425 resolved static import/re-export edges, with zero
+nontrivial SCC, self-cycle, or runtime dynamic relative import.
+
+## Accepted Membership observation boundary
+
+`5950f3b` makes
+[`membership-observation-reader.ts`](../../../src/team-authority/membership-observation-reader.ts)
+the only private Team/runtime filesystem decoder. Public
+[`observation.ts`](../../../src/public/observation.ts) retains the exact
+`pi-teams-observation/1` DTO, JSON Schema, export path, deadline, AbortSignal,
+retry, ordering, diagnosis, mixed-record, and privacy behavior. The reader is
+lock-free and read-only; it does not claim OS liveness or repair the separate
+Beads/Dolt resource-contention risk.
+
+The focused public observation and reader suites passed 22 tests. TypeScript,
+package/export, generated-output, static-fence, and diff checks passed. The
+CommonJS and TypeScript package probe retained
+`@hypercarrier/pi-team-bright/observation`. Generated output adds the reader
+closure and removes unreachable observation-only runtime, paths, lock, and
+trace closure files. Core imports of the public projector remain zero.
+
+This is an internal dependency-direction change only. It adds no public API,
+persistence, authority, deployment, or HyperCarrier topology change. The
+current structural claim remains limited to deterministic local evidence; it
+does not prove OS process state, external writers, cross-process contention, or
+terminal pixels.
 
 ## Optimization report
 
@@ -195,9 +222,11 @@ Rejected changes would have changed behavior or lacked evidence:
 - Restoring the old rc.8 patch would bypass the reviewed rc.10 implementation.
 
 Deferred work includes an equivalent cheaper authority query, actual Beads
-contention reduction, full-history Team-event scan measurement, immutable Task-
-create operation identity, and the remaining subsystem boundaries. Each needs a
-separate behavior or measurement gate.
+contention reduction, full-history Team-event scan measurement, and immutable
+Task-create operation identity. Each needs a separate behavior or measurement
+gate. Membership observation, Alert ports, and Trio are complete; Team and Task
+reverse dependencies plus the Coordination worker-run query remain structural
+target gates.
 
 ## Equivalence, architecture, and limits
 
@@ -222,10 +251,9 @@ unchanged. Internal source ownership changed for Task reconciliation, Task
 publication, and Team lead discovery. These internals are opaque in the
 canonical HyperCarrier view, so no diagram update is required.
 
-This is not full subsystem isolation. Team lifecycle, Alert authority,
-Coordination's remaining integration reads, Trio separation, and additive
-Membership observation still have documented coupling. ALERT-004 remains characterized and
-unclassified. Broad TRIO-004 parity, Alert restart and later-presentation
+This completes the Membership observation, Alert-port, and Trio boundaries, not
+the remaining Team, Task, and Coordination target gates or all system proof.
+ALERT-004 remains characterized and unclassified. Broad TRIO-004 parity, Alert restart and later-presentation
 behavior, a real Pi subprocess/rendered-terminal receipt, and model
 interpretation remain outside the proved scope.
 

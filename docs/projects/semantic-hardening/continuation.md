@@ -1,73 +1,67 @@
 # Semantic hardening continuation
 
-Updated: 2026-08-10 during Trio continuation.
+Updated: 2026-08-10 after the Membership observation boundary.
 
 ## Owner contract
 
-Continue the full subsystem hardening project without stopping at a release
-increment. Lead directly and use assigned Tasks for all Worker work. Keep the
-Herdr watchdog active. Do not push, tag, publish, or run the reserved aggregate
-until the full target is stable and the owner authorizes publication.
+Keep public tools, schemas, exports, persisted records, filenames, ordering,
+errors, timing, and default behavior stable. A behavior change needs an owner
+decision, evidence, replacement tests, and its own commit. Work only in this
+isolated Project worktree. Do not use the original checkout.
 
-Preserve public tools, schemas, results, package exports, persisted records,
-filenames, ordering, errors, timing, terminal behavior, and undocumented
-observable behavior by default. A behavior change needs explicit evidence,
-classification, replacement tests, and its own commit.
-
-The full target remains Team authority, Task authority, Alert authority,
-Coordination observation, Trio-facing projections, and the additive read-only
-Membership observation component. Session, process, pane, delivery, locks,
-files, timers, and traces are support mechanisms, not authorities.
+The additive read-only Membership observation boundary is complete. Alert and
+Trio have proven accepted boundaries. Team and Task retain concrete reverse
+dependencies, and Coordination lacks its accepted worker-run observation query,
+so the five-target split remains open. Session, process, pane, delivery, locks, files, timers, and
+traces remain support mechanisms, not authorities.
 
 ## Current source state
 
-Use only `the isolated Project worktree` on branch
-`audit/semantic-hardening-behavior-inventory`. Do not use the original checkout.
+Accepted source commit `5950f3b3f17124b9baf38afa48d839dc503d847b`
+(`refactor: isolate Membership observation reader`) follows Trio commit
+`69c30acf5db23be8f656b2a6821b0ea032ae04cb`. It adds the private
+`src/team-authority/membership-observation-reader.ts` as the only Team/runtime
+filesystem decoder. Public `src/public/observation.ts` retains the existing
+`pi-teams-observation/1` DTO, JSON Schema, package subpath, and projector.
 
-Clean accepted baseline `c54dc25b34770b70afedffc7e87728da6376ee0f` now
-precedes accepted Trio commit
-`69c30acf5db23be8f656b2a6821b0ea032ae04cb` (`refactor: split Trio application
-ports`). The accepted continuation chain is `b4bf6de`, `e50eb68`, `3b265ea`,
-`cafdf2d`, `b3b2b22`, `c54dc25`, and `69c30ac`.
+The reader keeps lock-free config/runtime reads, sorted Team order, stored
+Membership order, config/runtime/config retry, one total deadline, AbortSignal,
+typed diagnoses, mixed-record compatibility, and privacy filtering. The public
+module imports only the reader and package metadata. Core source imports of the
+public module remain forbidden.
 
-The accepted architecture is a `ModelToolJourneyPort` facade over four neutral
-application contracts: Team, Task, Alert, and Coordination. Durable owners are
-`durable-model-tool-team-application.ts`,
-`durable-model-tool-task-application.ts`,
-`durable-model-tool-alert-application.ts`, and
-`durable-model-tool-coordination-application.ts`; bindings are in
-`durable-model-tool-bindings.ts`. Opaque in-memory authority state and ports
-replace the one-store fake. Compatibility wrappers remain thin.
+Focused evidence passed 22 tests in the public observation and reader test
+files, TypeScript checks, package/export verification, generated-output checks,
+static fences, and diff checks. The package probe kept the CommonJS and
+TypeScript `@hypercarrier/pi-team-bright/observation` subpath. Generated output
+adds the reader closure and removes unreachable observation-only runtime,
+paths, lock, and trace closure files. The reader neither creates producer
+artifacts nor repairs the separate Beads/Dolt resource-contention risk.
 
-Task and Alert authority commits precede Coordination publication. Publication
-failure remains a partial outcome and does not roll back authority state. The
-rejected nominal implementation attempts remain historical evidence.
+The canonical TypeScript-AST graph is 112 production files and 425 resolved
+static import/re-export edges, with zero nontrivial SCC, self-cycle, or runtime
+dynamic relative import. The 111-file/426-edge Trio graph is historical.
 
-No public behavior, schema, package export, persistence contract, or deployment
-shape changed. The final aggregate remains reserved for one exact stable final
-tree; do not run it during individual Task work.
+## Remaining gates
 
-## Active Team and Task state
+The Membership boundary is complete, but the structural split and Project
+completion are not. Keep these gates open:
 
-The Trio Team work is accepted. Keep the Herdr watchdog active until final
-Project completion. Design Tasks `semantic-hardening-trio-o6p` and
-`semantic-hardening-trio-c76` are closed; nominal attempts
-`semantic-hardening-trio-fbp` and `semantic-hardening-trio-tey` remain rejected
-history; durable slice `semantic-hardening-trio-8bs` is accepted. The prior
-in-memory rewrite and Trio acceptance gates are no longer active blockers.
-
-## Next actions
-
-1. Start the additive Membership observation decoder boundary.
-2. Preserve the accepted neutral four-port Trio contracts, opaque-state fakes,
-   thin wrappers, and Task/Alert partial-failure semantics.
-3. Stabilize one exact final tree before the one reserved aggregate.
-4. Refresh final acceptance artifacts, run the required privacy scan, and get
-   watchdog completion review before any release operation.
+1. Replace Task direct Team helpers with the Task-owned current-membership
+   resolver or an accepted narrow port.
+2. Implement and inject the Coordination-owned worker-run observation query,
+   then remove concrete Team/runtime/path reads from its observation paths.
+3. Classify the Team worker-launch Alert delivery type edge as neutral DTO
+   support, or move it behind an accepted Team-owned port.
+4. Measure and repair Beads/Dolt hydration and list contention without weakening
+   Task-version or snapshot meaning.
+5. Stabilize one exact final tree, then run the reserved aggregate, privacy
+   scan, and watchdog review. Keep release operations outside this Project.
 
 ## Proof limits
 
-Current evidence is deterministic local source and test evidence. It does not
-prove real Pi persistence, external Beads/Dolt contention, cross-process forks,
-native watcher delivery, OS scheduling, concurrent external writers, or
-terminal pixels.
+The completed structural evidence is deterministic and local. It does not prove
+real Pi persistence, external Beads/Dolt contention, cross-process forks,
+native watcher delivery, OS scheduling, external writers, terminal pixels, or
+model interpretation. The Membership reader reports recorded evidence; it never
+asserts OS liveness.

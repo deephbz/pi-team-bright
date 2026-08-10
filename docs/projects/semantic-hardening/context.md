@@ -2,10 +2,10 @@
 
 Updated: 2026-08-10
 Stage: consolidation and hardening
-Status: Trio split is accepted in commit
-`69c30acf5db23be8f656b2a6821b0ea032ae04cb` from clean baseline
-`c54dc25b34770b70afedffc7e87728da6376ee0f`; Membership observation is the
-next boundary
+Status: Membership observation is accepted through
+`5950f3b3f17124b9baf38afa48d839dc503d847b`; Team/Task reverse dependencies
+and the proposed Coordination worker-run query remain structural gates before
+optimization, aggregate, privacy, and watchdog review
 Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -44,7 +44,8 @@ outside the source-verification claim.
 ## Active continuation
 
 The accepted Trio split closes the combined durable facade and one-store fake
-seam. `ModelToolJourneyPort` is the named facade over neutral Team, Task, Alert,
+seam. Accepted commit `5950f3b3f17124b9baf38afa48d839dc503d847b` closes the
+final additive Membership-observation boundary. `ModelToolJourneyPort` is the named facade over neutral Team, Task, Alert,
 and Coordination application contracts. The durable owners are
 `durable-model-tool-team-application.ts`, `durable-model-tool-task-application.ts`,
 `durable-model-tool-alert-application.ts`, and
@@ -65,11 +66,9 @@ requires the complete agreed request, not another bounded release increment:
 
 - expand the behavior inventory and outside-in tests across functional and non-
   functional behavior for all five subsystems;
-- complete the remaining Team authority and Role realization, Alert authority,
-  Coordination observation, and Trio-facing boundaries;
-- isolate the additive Membership observation projector behind a narrow Team/
-  runtime reader while keeping it core-independent and its public contract
-  unchanged;
+- preserve the completed Alert-port, Trio, and Membership-observation boundaries while closing the remaining Team, Task, and Coordination target gates;
+- keep the completed additive Membership observation reader core-independent
+  and its public contract unchanged;
 - split mixed contracts and the combined durable/in-memory façade only through
   behavior-preserving, consumer-owned seams with static dependency gates;
 - preserve public surfaces and observable behavior by default, and handle each
@@ -118,7 +117,7 @@ boundary or behavior gate remains open.
 
 ## Subsystem target and implemented seams
 
-The five accepted core subsystems remain:
+The five accepted core subsystems remain target boundaries:
 
 1. Team authority and Role realization.
 2. Task authority.
@@ -126,9 +125,12 @@ The five accepted core subsystems remain:
 4. Coordination observation.
 5. Trio-facing interface and projections.
 
-Public Membership observation remains additive and core-independent. Session
-actuation, terminal adapters, locks, atomic writes, paths, tracing, diagnostics,
-watch hints, and timers remain support mechanisms, not authorities.
+Public Membership observation is also complete, additive, and core-independent.
+`src/team-authority/membership-observation-reader.ts` alone decodes private
+Team/runtime filesystem records; `src/public/observation.ts` owns only the
+unchanged allowlisted `pi-teams-observation/1` DTO, schema, and projection.
+Session actuation, terminal adapters, locks, atomic writes, paths, tracing,
+diagnostics, watch hints, and timers remain support mechanisms, not authorities.
 
 Implemented Task seams are narrow. Task update and journal contracts plus
 `TaskReconciliationQuery` are Task-owned, and Task delivery consumes the
@@ -349,7 +351,8 @@ Open boundary risks:
 - Team lifecycle policy is in Team services, Worker-launch capability is
   injected, and one Pi Session adapter owns hook/refusal/delivery/title/footer/
   nudge integration. Its direct Team record reads remain a narrow integration
-  seam. Public Membership observation still reads broad private record shapes.
+  seam. The completed public Membership projection reads only its narrow
+  Team/runtime reader and remains non-authoritative.
 - Beads hydration has a measured latency tail. Removing reverse-dependent
   hydration, filtering closed Tasks, or raising the timeout would change current
   meaning or policy. Actual optimization remains deferred.
@@ -384,16 +387,13 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Start the additive Membership observation decoder boundary. Keep the
-   accepted four-port Trio split and nudge boundary stable unless source evidence
-   requires a safer order.
-4. Commit each coherent boundary separately. Keep later optimizations as one
-   measured problem per commit.
-5. Run focused checks during implementation. Run one final aggregate only after
-   every target boundary and inventory completion gate is closed on the exact
-   stable source.
-6. Update the audit, dependency map, result report, current context, and append-
-   only journal. Independent verification and watchdog review must both confirm
-   that the original request is complete before shutdown or final reporting.
+3. Keep the accepted four-port Trio split, nudge boundary, and additive
+   Membership reader stable unless source evidence requires a correction.
+4. Keep later optimizations to one measured problem per commit.
+5. Run one final aggregate only after the exact stable source includes every
+   remaining authorized optimization or correction.
+6. Update the audit, dependency map, result report, current context, and
+   append-only journal at each accepted milestone. Independent verification and
+   watchdog review must confirm final completion before shutdown or reporting.
 7. Keep tag, main-branch integration, npm publication, provenance, and GitHub
    release outside this continuation unless the owner authorizes them again.
