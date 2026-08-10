@@ -37,8 +37,25 @@ export type CoordinationTaskReadOutcome =
   | undefined;
 
 /** Team-owned carrier and exact runtime evidence. */
+export interface CoordinationLogicalWorkerEvidence {
+  name: string;
+  scope: string;
+}
+
+/** Exact active leader binding and logical Worker evidence for observation. */
+export interface CoordinationLeaderBindingEvidence {
+  teamName: string;
+  epochId?: string;
+  sessionFile: string;
+  purpose?: string;
+  syncLiveness?: { waitSeconds: number };
+  members: CoordinationMemberEvidence[];
+  logicalWorkers?: CoordinationLogicalWorkerEvidence[];
+}
+
 export interface CoordinationTeamRuntimeQuery {
   readRuntime(teamName: string, member: CoordinationMemberEvidence): Promise<CoordinationRuntimeEvidence | null>;
+  readLeaderBinding?(sessionFile: string): Promise<CoordinationLeaderBindingEvidence | undefined>;
 }
 
 /** Task authority state plus its pending delivery evidence. */

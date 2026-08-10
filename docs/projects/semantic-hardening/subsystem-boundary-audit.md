@@ -42,11 +42,11 @@ selection from baseline `1686ac1` has 81 production TypeScript files with
 `src/` and `extensions/`, excluding `*.test.ts`; test support means
 `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global setup
 is excluded. A TypeScript-AST scan resolves static relative import and re-export
-specifiers between those production files. The stable slice-B Coordination query
-tree has 92 production TypeScript files and 304 unique resolved static local
-edges. It has no nontrivial strongly connected component, no self-cycle, and no
-dynamic import expression. The prior 87/285 Alert-port count remains historical
-evidence for that earlier slice. The prior hidden dynamic Task-adapter cycle remains removed, and the
+specifiers between those production files. The stable accepted slice-C
+Coordination service tree has 94 production TypeScript files and 320 unique
+resolved static local edges. It has no nontrivial strongly connected component,
+no self-cycle, and no dynamic import expression. The prior 87/285 Alert-port and
+92/304 slice-B query counts remain historical evidence for earlier slices. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
 
@@ -253,8 +253,15 @@ usable. `sync-liveness.ts` now derives `active`, `settled`, `unknown`, or
 `absent` purely from those inputs, while `waitForLivenessHint` retains its event/
 runtime hints and periodic Task-authority recheck (`src/utils/sync-liveness.ts:27`,
 `src/utils/sync-liveness.ts:87`). No observation service or nudge actuator moved.
-Outputs, cursor progression, bounded waits, acknowledgement, and the quiet
-five-second cadence remain unchanged. `task-event-failure-hints.ts` stores
+Slice C moves the observation algorithm into
+`CoordinationObservationService`. It owns snapshot/update/page/hydration/wait
+control, revisions, pending presentation, cached Task projections, branch
+lineage, and acknowledgement. Its injected dependencies are the query bundle,
+durable observation store, liveness waiter, and projection functions. The
+model-tool facade delegates while preserving result aliases and default
+construction compatibility. Outputs, cursor progression, bounded waits,
+acknowledgement, and the quiet five-second cadence remain unchanged.
+`task-event-failure-hints.ts` stores
 payload-light derived evidence when Task state commits but its Team event does
 not; Coordination matches only the current epoch, Task identity, and version
 (`src/utils/task-event-failure-hints.ts:115`,
@@ -328,8 +335,12 @@ to private record changes (`src/public/observation.ts:5`).
    publication port, so reconciliation and publication dependencies both point
    through explicit seams.
 
-4. `ModelToolTeamPort` combines Team, Task, Alert, Coordination, launch context,
-   sync-nudge debt, and observation acknowledgement in one interface
+4. Slice C removes snapshot/update observation algorithm ownership from the
+   durable model-tool facade: it delegates to `CoordinationObservationService`.
+   The service owns pending, cache, branch, and acknowledgement state through
+   injected query/store/wait/projection dependencies. `ModelToolTeamPort` still
+   combines Team, Task, Alert, Coordination, launch context, sync-nudge debt,
+   and the public observation entry points in one interface
    (`src/model-tool-contract/in-memory-team-port.ts:162`). Its in-memory
    implementation stores Team state, Task state, replay records, event history,
    branch baselines, pending observations, and waiters in one `StoredTeam` and
@@ -395,10 +406,10 @@ to private record changes (`src/public/observation.ts:5`).
    and `DurableAlertPublication` keep Team and Coordination calls outside Alert
    authority. `extensions/index.ts` composes one explicit `AlertSender` for
    leader and Worker direct-delivery use. No Team mirror, `membershipId`-leaking
-   port shape, or compatibility singleton remains. The current slice-B source
-   graph has 92 production files, 304 unique resolved static local edges, zero
-   cycles, and zero dynamic imports. This is a behavior-preserving dependency
-   change: public behavior is
+   port shape, or compatibility singleton remains. The slice-B source graph had
+   92 production files, 304 unique resolved static local edges, zero cycles, and
+   zero dynamic imports. This is historical behavior-preserving dependency
+   evidence; the current slice-C graph is 94/320. Public behavior is
    unchanged. ALERT-004 remains compatibility-required and needs a separate
    owner-visible decision for any semantic change.
 
@@ -635,15 +646,15 @@ at the composition root.
    adapters sit outside Alert authority; composition injects one sender without
    a singleton. Keep the retained ALERT-004 characterization. Do not add an
    outbox, operation ID, recovery record, or warning change.
-6. **Partly implemented in slice B.** Coordination has consumer-owned Team
-   runtime, Task state/delivery, and Alert actuation query DTOs. One explicit
-   durable bundle composes three adapters outside Coordination, and liveness is
-   pure over that bundle. Preserve page-safe `team_sync`, event-directed
-   hydration, complete quiet-journal rescans, failed-event hints, nudge debt,
-   projection hashes, hidden acknowledgement, outputs, cursors, waits, and the
-   five-second cadence. Do not extract a service or nudge actuator yet; the
-   combined durable façade, Pi composition, and hidden-observation Team query
-   remain later seams.
+6. **Partly implemented in slice C.** `CoordinationObservationService` owns
+   page-safe `team_sync`, event-directed hydration, complete quiet-journal
+   rescans, liveness/wait control, revisions, pending/cache/branch state, and
+   hidden acknowledgement. It receives Coordination queries, durable storage,
+   wait, and projection dependencies; the facade delegates. Preserve failed-event
+   hints, nudge debt, outputs, cursors, waits, acknowledgement, and the
+   five-second cadence. Nudge actuation, the Trio facade, and the
+   hidden-observation Team query remain later seams. The unused
+   `readAllNudgeEvents` helper is later local cleanup.
 7. **Partly implemented.** Durable lead-Session discovery, Worker carrier
    publication/observation, Team stop/shutdown policy, and Team Session
    admission/claim/bind/runtime realization now use Team-owned contracts. The
