@@ -170,14 +170,36 @@ describe("Team Session lifecycle boundary", () => {
     expect(fixture.events).toEqual(["current-lookup", "failed-event"]);
   });
 
-  it("keeps Team startup realization free of Pi hooks and concrete Coordination", () => {
+  it("keeps Team startup realization free of Pi hooks, extensions, and concrete Coordination", () => {
     const source = fs.readFileSync(path.join(__dirname, "team-session-lifecycle-service.ts"), "utf8");
+    const adapter = fs.readFileSync(path.join(__dirname, "../../extensions/pi-team-session-adapter.ts"), "utf8");
     const extension = fs.readFileSync(path.join(__dirname, "../../extensions/index.ts"), "utf8");
     expect(source).toContain("class TeamSessionLifecycleService");
     expect(source).toContain("lifecyclePublication: TeamLifecyclePublication");
-    expect(source).not.toMatch(/extensions\/|team-events|model-tool-contract/);
+    expect(source).not.toMatch(/@earendil-works\/pi|extensions\/|team-events|model-tool-contract/);
+
+    expect(adapter).toContain("export function createPiTeamSessionAdapter");
+    expect(adapter).toContain("let isTeammate");
+    expect(adapter).toContain("let agentName");
+    expect(adapter).toContain("let teamName");
+    expect(adapter).toContain("let currentMembershipId");
+    expect(adapter).toContain("function registerSessionHooks()");
+    expect(adapter).toContain('pi.on("session_start"');
+    expect(adapter).toContain('pi.on("session_shutdown"');
+    expect(adapter).toContain('pi.on("agent_start"');
+    expect(adapter).toContain('pi.on("agent_settled"');
+    expect(adapter).toContain("teamCreated: async (targetTeamName, sessionFile)");
+    expect(adapter).toContain("await teamSessionLifecycleService.admitLead({ teamName: targetTeamName");
+
+    expect(extension).toContain('import { createPiTeamSessionAdapter } from "./pi-team-session-adapter"');
     expect(extension).toContain("const teamSessionLifecycleService = new TeamSessionLifecycleService(lifecyclePublication)");
-    expect(extension).toContain("await teamSessionLifecycleService.admitLead({");
+    expect(extension).toContain("sessionAdapter = createPiTeamSessionAdapter({");
+    expect(extension).toContain("modelToolLifecycleAdapter = sessionAdapter.modelToolLifecycle");
+    expect(extension).toContain("sessionAdapter.register()");
+    expect(extension).toContain("function modelToolBranchIds");
+    expect(extension).toContain('pi.on("before_provider_request"');
+    expect(extension).toContain("Type.Object(");
+    expect(extension).not.toMatch(/pi\.on\("(session_start|session_shutdown|agent_start|agent_settled|turn_start|turn_end|context|model_select|before_agent_start)"/);
     expect(extension).not.toContain("registerLeadSession(");
   });
 });

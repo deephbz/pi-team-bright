@@ -1,9 +1,9 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-09
-Status: maintained rc.10 audit; Task reconciliation, Task mutation publication,
-and Team lead-discovery ownership are implemented and independently verified;
-the other subsystem migrations remain incomplete
+Status: maintained semantic-hardening audit; Task reconciliation, Task mutation
+publication, Team lifecycle slices, and the Pi Session adapter selection are
+independently verified; the other subsystem migrations remain incomplete
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -33,29 +33,31 @@ observation, and Trio-facing interface and projections. Public Membership
 observation remains an additive machine projection of Team authority.
 
 The initial review covered 60 production TypeScript files with 18,145 lines and
-77 test or test-support files with 20,585 lines. The current selected tree has
-80 production TypeScript files with 19,721 lines, plus 93 test files with 24,323
-lines and two test-support files with 441 lines. The 95 test and support files
-contain 24,764 lines combined. Production means current tracked or selected
-`.ts` files under `src/` and `extensions/`, excluding `*.test.ts`; test support
-means `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global
-setup is excluded. A TypeScript-AST scan resolves static relative import and
-re-export specifiers between those production files. It finds 267 unique local
-edges, no nontrivial strongly connected component, no self-cycle, and no
-dynamic import expression. The prior hidden dynamic Task-adapter cycle remains
-removed, and the Task mutation path no longer imports concrete publication
-writers. Type-query `import("...")` syntax is not a dynamic import expression.
+77 test or test-support files with 20,585 lines. The Pi Session adapter
+selection from baseline `1686ac1` has 81 production TypeScript files with
+19,693 lines and 94 test files with 25,207 lines; two test-support files add
+596 lines. Production means current tracked or selected `.ts` files under
+`src/` and `extensions/`, excluding `*.test.ts`; test support means
+`test/setup.ts` and non-test `test/support/*.ts`, while runner-only global setup
+is excluded. A TypeScript-AST scan resolves static relative import and re-export
+specifiers between those production files. It finds 249 unique local edges, no
+nontrivial strongly connected component, no self-cycle, and no dynamic import
+expression. The prior hidden dynamic Task-adapter cycle remains removed, and the
+Task mutation path no longer imports concrete publication writers. Type-query
+`import("...")` syntax is not a dynamic import expression.
 
-This graph records clean baseline `57c8e02d672eddad0aa955961cef5628b7bb4421`
-plus the independently accepted uncommitted Worker-launch injection selection.
-That selection has two paths, 32 focused tests, a passed typecheck, 93 passing
-test lanes, package verification, static fences, and a diff check. Its sorted
-per-file SHA-256 digest is
-`fe846971e975860b93362f0a0cb421870b56ef042d9cb6fec3abc58495c51bcf`.
-The full selected production-source digest is
-`93225593e8d49880c926e84470f277702c53f667404271d7bc4bcf3835985bbb`.
-It has internal Team-boundary architecture impact, but it does not establish full
-Team authority isolation.
+The independently accepted uncommitted Pi Session selection has four paths:
+`extensions/index.ts`, `extensions/pi-team-session-adapter.ts`,
+`src/team-authority/team-session-lifecycle-service.boundary.test.ts`, and
+`src/utils/pi-session-adapter.characterization.test.ts`. It passed 114 focused
+tests, typecheck, 94 test lanes, package, agent-surface, static, and diff
+checks. Its selection diff digest is
+`f723a75a1defd74a897294993be513471cf134ded8e8499ffabcca5946b5c6d4`.
+The sorted selected production-source digest is
+`51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40`.
+This has internal Team-boundary architecture impact, but it does not establish
+full Team authority isolation. Real Pi and terminal-carrier operation remains
+outside this focused source and harness evidence.
 
 The rc.10 tree also includes the rc.9/rc.10 Coordination work: event-directed
 Task hydration and page-safe watermarks, Worker run-state and actuation evidence,
@@ -89,7 +91,8 @@ under its mutation lease (`src/utils/teams.ts:624`).
 Runtime and Role realization is spread across `runtime.ts`,
 `worker-resource-projection.ts`, `session-terminal.ts`, `team-terminal.ts`,
 terminal adapters, Team carrier realization, and lifecycle code in
-`extensions/index.ts`. One current Membership admits one live process generation
+`extensions/pi-team-session-adapter.ts`. `extensions/index.ts` now retains Pi
+composition, tool schemas/execution, and leader branch observation only. One current Membership admits one live process generation
 (`src/utils/runtime.ts:78`). `WorkerLaunchBridge.ensureWorker` now lives in
 `src/team-authority/worker-launch-bridge.ts` and plans reuse, first-binding
 retry, or exact-Session recovery before carrier creation. It consumes the
@@ -312,8 +315,10 @@ to private record changes (`src/public/observation.ts:5`).
    acknowledged Task projections (`src/model-tool-contract/durable-model-tool-port.ts:132`).
    It is a useful façade, not one subsystem port.
 
-6. **Resolved for durable lead discovery and Worker carrier
-   publication/observation only.** `extensions/index.ts` delegates durable
+6. **Resolved for durable lead discovery, Worker carrier
+   publication/observation, and the Pi Session adapter selection.**
+   `extensions/pi-team-session-adapter.ts` is the one mutable Pi hook and
+   identity boundary. It delegates durable
    lead-Session discovery to Team authority. Team carrier realization consumes
    the required `TeamLifecyclePublication` port, and the external durable
    adapter preserves prepared-event, cursor, bounded-observation, and exact
@@ -329,9 +334,14 @@ to private record changes (`src/public/observation.ts:5`).
    nudge adaptation, while durable façade composition remains open. The accepted
    two-file launch-capability injection removes the façade's direct durable
    lifecycle-adapter construction, but it does not split the combined façade or
-   move Pi Session adaptation. The extension starts delivery engines, composes
-   sync-nudge reservation and exact-branch presentation, and wires Trio projection
-   (`extensions/index.ts:634`). Pi hook order remains an implicit integration contract.
+   move Pi Session adaptation. The adapter starts delivery engines, composes sync-nudge reservation and
+   exact-branch presentation, and owns hook order. `extensions/index.ts` wires
+   composition, tool schemas, and leader branch observation. Envless Worker
+   recovery re-projects only the Worker tool surface and suppresses leader branch
+   hooks (`src/utils/pi-session-adapter.characterization.test.ts`). The adapter
+   still directly queries Team configuration and exact Membership for resume,
+   delivery, status, and nudge revalidation; this is a remaining Team seam, not
+   a completed Team query boundary.
 
 7. `models.ts` and `paths.ts` act as shared registries. `models.ts` mixes Team,
    runtime carrier, Task relation, Coordination event, sync-liveness policy,
@@ -484,8 +494,9 @@ root, and public Membership observation reading broad private records. These ris
   combined Alert event (`src/utils/alerts.ts:109`, `src/utils/alerts.ts:137`).
 - Sync nudges reserve before send and become presented evidence only after the
   exact custom message exists on the same full branch lineage
-  (`src/utils/sync-nudge.ts:47`, `extensions/index.ts:690`,
-  `extensions/index.ts:697`). They request
+  (`src/utils/sync-nudge.ts:47`,
+  `extensions/pi-team-session-adapter.ts:199`,
+  `extensions/pi-team-session-adapter.ts:212`). They request
   reconciliation and never mutate Task or Team authority.
 - Compatibility readers preserve legacy Memberships, inbox IDs, terminal
   fields, Task cutover evidence, and mixed event/delivery records.
@@ -494,12 +505,12 @@ root, and public Membership observation reading broad private records. These ris
 
 The recomputed machine-operable completion matrix is
 [`subsystem-dependency-map.json`](subsystem-dependency-map.json) under
-`completionMatrix`. Its source input is clean baseline
-`57c8e02d672eddad0aa955961cef5628b7bb4421` plus the accepted two-file
-Worker-launch injection selection: 80 production TypeScript files, 267 unique
-resolved static local edges, no literal relative dynamic import, no self-cycle,
-and no nontrivial SCC. The source digest is
-`93225593e8d49880c926e84470f277702c53f667404271d7bc4bcf3835985bbb`.
+`completionMatrix`. Its source input is baseline
+`1686ac19dc83143e55c7a68062e1a30c1e53fa6d` plus the accepted four-path Pi
+Session adapter selection: 81 production TypeScript files, 266 unique resolved
+static local edges, no literal relative dynamic import, no self-cycle, and no
+nontrivial SCC. The source digest is
+`51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40`.
 
 Task reconciliation and mutation publication remain the only closed Task
 seams. Team, Alert, Coordination, Trio, and additive Membership observation

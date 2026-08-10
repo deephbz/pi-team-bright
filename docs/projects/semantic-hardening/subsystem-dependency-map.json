@@ -50,25 +50,40 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 80,
-      "lines": 19721,
-      "staticLocalEdges": 267,
+      "files": 81,
+      "lines": 19693,
+      "staticLocalEdges": 266,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
     },
     "testAndSupportTypeScript": {
-      "scope": "88 tracked or selected *.test.ts files plus test/setup.ts and non-test test/support/*.ts; runner-only global setup excluded",
-      "testFiles": 93,
-      "testLines": 24323,
+      "scope": "94 tracked or selected *.test.ts files plus test/setup.ts and non-test test/support/*.ts; runner-only global setup excluded",
+      "testFiles": 94,
+      "testLines": 25207,
       "fastTestFiles": null,
       "exhaustiveTestFiles": null,
       "supportFiles": 2,
-      "supportLines": 441,
-      "files": 95,
-      "lines": 24764
+      "supportLines": 596,
+      "files": 96,
+      "lines": 25803
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
+    "piSessionAdapterSelection": {
+      "baseline": "1686ac19dc83143e55c7a68062e1a30c1e53fa6d",
+      "paths": ["extensions/index.ts", "extensions/pi-team-session-adapter.ts", "src/team-authority/team-session-lifecycle-service.boundary.test.ts", "src/utils/pi-session-adapter.characterization.test.ts"],
+      "focusedTests": 114,
+      "typecheck": "passed",
+      "lanes": "94_test_files",
+      "package": "passed",
+      "agentSurface": "passed",
+      "staticChecks": "passed",
+      "diffChecks": "passed",
+      "aggregate": "not_run_by_contract",
+      "selectionDiffSha256": "f723a75a1defd74a897294993be513471cf134ded8e8499ffabcca5946b5c6d4",
+      "productionSourceDigestSha256": "51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40",
+      "proofLimit": "Focused source and harness evidence does not prove operation in a real Pi process or terminal carrier."
+    },
     "selectedPhaseTwoEvidence": [
       {
         "path": "src/utils/alert-publication-failure.characterization.test.ts",
@@ -292,10 +307,11 @@
         "currentOwner": "mixed_composition",
         "sources": [
           "extensions/index.ts",
+          "extensions/pi-team-session-adapter.ts",
           "src/adapters/durable-assigned-work-guard.ts",
           "src/adapters/durable-team-lifecycle-publication.ts"
         ],
-        "currentScopeNote": "Durable adapters implement the Team-owned assigned-work and lifecycle-publication ports with existing Task, Coordination, runtime, and terminal support. Pi composition injects one WorkerLaunchBridge for the extension path. DurableModelToolTeamPort no longer constructs lifecycle publication or a launch bridge; its optional capability preserves read-only/nudge calls and refuses missing launch capability before logical Worker mutation."
+        "currentScopeNote": "The Pi Session adapter is the one mutable hook and identity boundary. Index retains composition, tool schemas/execution, and leader branch observation. Durable adapters implement the Team-owned assigned-work and lifecycle-publication ports with existing Task, Coordination, runtime, and terminal support. The adapter's direct Team configuration and exact Membership queries remain an open Team seam; this selection does not complete Team, Alert, Coordination, Trio, or Membership-observation boundaries."
       },
       {
         "id": "membership_observation_projector",
@@ -453,10 +469,12 @@
       {
         "from": "pi_composition_and_lifecycle",
         "to": "team_core",
-        "mechanism": "direct_lifecycle_orchestration",
+        "mechanism": "pi_session_adapter_direct_membership_and_configuration_queries",
         "evidence": [
-          "extensions/index.ts:832",
-          "extensions/index.ts:1243"
+          "extensions/pi-team-session-adapter.ts:50",
+          "extensions/pi-team-session-adapter.ts:109",
+          "extensions/pi-team-session-adapter.ts:351",
+          "extensions/pi-team-session-adapter.ts:426"
         ]
       },
       {
@@ -546,6 +564,11 @@
       "id": "ASSESS-TEAM-CARRIER-PUBLICATION",
       "state": "implemented_independently_accepted_partial_team_boundary",
       "statement": "Worker carrier realization consumes the Team-owned TeamLifecyclePublication port. The durable adapter stays outside Team authority, calls existing Coordination/runtime operations, and the former utils module is a compatibility re-export. This isolates carrier publication and bounded startup observation only."
+    },
+    {
+      "id": "ASSESS-PI-SESSION-ADAPTER",
+      "state": "implemented_independently_verified_boundary_partial",
+      "statement": "extensions/pi-team-session-adapter.ts owns mutable Pi Session identity and hook adaptation. extensions/index.ts retains composition, tool schemas/execution, and leader branch observation; Team admission, binding, runtime, stop, and shutdown policy stay in Team services. Direct adapter Team configuration and Membership queries remain open."
     },
     {
       "id": "ASSESS-MIXED-PERSISTENCE-ENVELOPE",
@@ -1067,19 +1090,19 @@
     "schema": "pi-team-bright-full-split-completion-matrix/1",
     "computedAt": "2026-08-10",
     "input": {
-      "gitHead": "57c8e02d672eddad0aa955961cef5628b7bb4421",
-      "productionSourceDigestSha256": "93225593e8d49880c926e84470f277702c53f667404271d7bc4bcf3835985bbb",
-      "scope": "80 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts; digest is sorted sha256(content) plus two spaces plus path plus newline. Current tree includes the selected uncommitted Worker-launch injection seam.",
+      "gitHead": "1686ac19dc83143e55c7a68062e1a30c1e53fa6d",
+      "productionSourceDigestSha256": "51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40",
+      "scope": "81 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts; digest is sorted sha256(content) plus two spaces plus path plus newline. Current tree includes the independently accepted uncommitted Pi Session adapter selection.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 80,
-      "uniqueLocalEdges": 267,
+      "files": 81,
+      "uniqueLocalEdges": 266,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
       "componentEdges": [
-        {"from": "pi_composition_root", "to": "team_authority_and_role_realization", "edges": 15, "files": ["extensions/index.ts", "src/adapters/durable-assigned-work-guard.ts", "src/adapters/durable-task-mutation-publication.ts", "src/adapters/durable-team-lifecycle-publication.ts"]},
+        {"from": "pi_composition_root", "to": "team_authority_and_role_realization", "edges": 15, "files": ["extensions/index.ts", "extensions/pi-team-session-adapter.ts", "src/adapters/durable-assigned-work-guard.ts", "src/adapters/durable-task-mutation-publication.ts", "src/adapters/durable-team-lifecycle-publication.ts"], "note": "The adapter retains direct Team configuration and exact Membership queries; this is an open Team seam."},
         {"from": "pi_composition_root", "to": "task_authority", "edges": 12, "files": ["extensions/index.ts", "src/adapters/durable-assigned-work-guard.ts", "src/adapters/durable-task-mutation-publication.ts", "src/cli/migrate-task-delivery.ts", "src/cli/migrate-tasks.ts"]},
         {"from": "pi_composition_root", "to": "alert_authority", "edges": 3, "files": ["extensions/index.ts"]},
         {"from": "pi_composition_root", "to": "coordination_observation", "edges": 8, "files": ["extensions/index.ts", "src/adapters/durable-task-mutation-publication.ts", "src/adapters/durable-team-lifecycle-publication.ts"]},
@@ -1109,10 +1132,10 @@
       {
         "id": "team_authority_and_role_realization",
         "completion": "partial_carrier_stop_shutdown_and_session_lifecycle_isolated",
-        "remainingSeams": ["extensions/index.ts Pi hook/refusal/delivery/title/footer/nudge adaptation", "DurableModelToolTeamPort remains a combined Team/Task/Alert/Coordination/Trio façade", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
-        "violations": ["Pi Session adaptation and durable Trio façade composition remain in extensions/index.ts and src/model-tool-contract/durable-model-tool-port.ts"],
+        "remainingSeams": ["extensions/pi-team-session-adapter.ts directly queries Team configuration and exact Membership for resume, delivery, status, and nudge revalidation", "DurableModelToolTeamPort remains a combined Team/Task/Alert/Coordination/Trio façade", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
+        "violations": ["Pi Session adaptation is isolated in extensions/pi-team-session-adapter.ts, but its direct Team queries remain; durable Trio façade composition remains in src/model-tool-contract/durable-model-tool-port.ts"],
         "staticGate": "For Team-owned lifecycle sources, deny concrete Task, Coordination, Trio, and Pi-hook imports. Permit Team contracts, terminal/runtime support, and Team-owned AssignedWorkGuard and TeamLifecyclePublication ports only. Keep the compatibility re-export at utils/worker-launch-bridge.ts. DurableModelToolTeamPort must not import or construct DurableTeamLifecyclePublication or createWorkerLaunchBridge.",
-        "focusedVerification": ["Independent 52-test Team Session lifecycle review: passed", "Independent 32-test Worker-launch injection review: passed", "typecheck: passed", "test lanes: passed_93_files", "package verification: passed", "static fences and diff checks: passed"]
+        "focusedVerification": ["Independent Pi Session adapter selection: 114 focused tests passed", "typecheck: passed", "test lanes: passed_94_files", "package and agent-surface verification: passed", "static and diff checks: passed", "real Pi and terminal-carrier operation: proof limit"]
       },
       {
         "id": "task_authority",
