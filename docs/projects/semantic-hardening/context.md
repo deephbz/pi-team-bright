@@ -227,6 +227,23 @@ ALERT-004 exactly: accepted delivery can survive publication failure, the outer
 result remains unavailable, and retry creates a new Alert identity with duplicate
 delivery. Do not add an outbox, operation ID, recovery record, or warning change.
 
+Coordination observation is the active boundary after clean commit `a960bf8`.
+Read-only Tasks `semantic-hardening-coordination-oza` and
+`semantic-hardening-coordination-s68` shaped one observation service with
+consumer-owned Team runtime, Task state/delivery, and Alert actuation query
+ports. Characterization Tasks `semantic-hardening-coordination-qjp`,
+`semantic-hardening-coordination-3bq`, and
+`semantic-hardening-coordination-trt` added registered failure/retry, quiet
+rescan, mixed-record, exact acknowledgement, and nudge-lineage race gates.
+Independent Task `semantic-hardening-coordination-hzz` accepted the three test
+paths, typecheck, all 97 lanes, agent/tool projections, and static checks.
+Current quiet waiting performs one complete Task read by 4,999 ms and three by
+5,000 ms: initial, authority-cadence, and post-wake recheck. Preserve this in the
+structural refactor; treat the third read only as a later measured optimization
+candidate. Evidence is one-process deterministic harness evidence, not proof of
+real Pi persistence, cross-process forks, native watchers, OS timing, or terminal
+pixels.
+
 ## Decisions and constraints still in force
 
 - Preserve observable behavior by default. A behavior change needs a separate
