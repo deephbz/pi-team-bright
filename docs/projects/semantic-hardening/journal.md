@@ -899,3 +899,20 @@ changes; append a correction.
   checks, and diff checks. Audit Task `semantic-hardening-authorities-ojq`
   recomputed an acyclic 80-file, 267-edge graph. Pi Session adaptation remains
   open, and the reserved final aggregate has not run.
+
+## 2026-08-10 — Pi Session adapter behavior characterized
+
+- Task `semantic-hardening-authorities-tl7` added five registered-extension
+  characterizations for already-current Worker delivery, resumed-lead delivery,
+  foreign-placement refusal and candidate shutdown, shutdown cleanup, and
+  immediate plus 500/2000/5000-millisecond Worker title refresh.
+- Task `semantic-hardening-authorities-ewv` added deterministic durable lifecycle
+  callback tests. Team creation commits before `teamCreated`, the public result
+  waits for callback completion, and callback failure returns the existing
+  unavailable result while the created Team remains.
+- Task `semantic-hardening-authorities-f09` corrected one test title that falsely
+  said the refused lead Session remained open; assertions and production did
+  not change. Independent Task `semantic-hardening-authorities-qqa` accepted the
+  corrected selection. Focused tests, typecheck, 94 lane files, and diff checks
+  passed. The tests simulate registered hooks in one process; they do not prove
+  a real Pi process, terminal, or OS timer. The final aggregate has not run.

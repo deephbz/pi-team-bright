@@ -112,6 +112,44 @@ async function createTeamWithPaneSettings(projectTrusted?: boolean, globalTeamSe
   return { result, createArgs };
 }
 
+async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle) {
+  const root = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "pi-team-lifecycle-callback-"));
+  paneSettingsRoots.push(root);
+  const agentDir = path.join(root, "agent");
+  const cwd = path.join(root, "leader-project");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.mkdirSync(cwd, { recursive: true });
+  vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+  setAdapter({
+    name: "herdr",
+    isDirectCarrier: () => true,
+    detect: () => true,
+    currentTargetId: () => "leader-pane",
+    spawn: () => "worker-pane",
+    kill() {},
+    isAlive: () => true,
+    setTitle() {},
+    supportsWindows: () => false,
+    spawnWindow: () => { throw new Error("unused"); },
+    setWindowTitle() {},
+    killWindow() {},
+    isWindowAlive: () => false,
+  });
+  const name = teamName("lifecycle-callback");
+  vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "abstain", reason: "not_bound" });
+  vi.spyOn(authority, "resolveTeamTaskAuthority").mockResolvedValue({
+    workspace: path.join(root, "tasks"),
+    authorityId: "authority-lifecycle-callback",
+    fingerprint: { schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: name, projectId: name },
+  });
+  const sessionFile = path.join(root, "leader.jsonl");
+  const leaderSessionId = exactLeaderSessionId(`lifecycle-callback-${Date.now()}-${Math.random()}`);
+  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, lifecycle);
+  port.setLeaderSessionFile(leaderSessionId, sessionFile);
+  port.setLeaderLaunchContext(leaderSessionId, { cwd, projectTrusted: true });
+  return { name, port, leaderSessionId, sessionFile };
+}
+
 describe("DurableModelToolTeamPort sync liveness policy", () => {
   it("persists resolved nudge defaults when a new Team epoch is created", async () => {
     const { result, createArgs } = await createTeamWithPaneSettings(undefined, {});
@@ -138,6 +176,55 @@ describe("DurableModelToolTeamPort pane settings", () => {
     expect(result).toMatchObject({ kind: "created" });
     expect(createArgs[12]).toEqual({ leader_share: share, worker_tiling: tiling });
     if (expectedTiling === undefined) expect(createArgs[12].worker_tiling).toBe("linear");
+  });
+});
+
+describe("DurableModelToolTeamPort lifecycle callback", () => {
+  it("creates durably before the callback and returns only after it completes", async () => {
+    let enterCallback!: () => void;
+    let releaseCallback!: () => void;
+    const entered = new Promise<void>((resolve) => { enterCallback = resolve; });
+    const released = new Promise<void>((resolve) => { releaseCallback = resolve; });
+    const lifecycle: ModelToolLifecycle = {
+      teamCreated: vi.fn(async () => {
+        enterCallback();
+        await released;
+      }),
+      stopWorker: vi.fn(),
+      shutdownTeam: vi.fn(),
+    };
+    const { name, port, leaderSessionId, sessionFile } = await lifecycleCreateFixture(lifecycle);
+    let settled = false;
+    const result = port.createTeam(leaderSessionId, { name, purpose: "Characterize callback order." }).then((value) => {
+      settled = true;
+      return value;
+    });
+
+    await entered;
+    expect(teams.teamExists(name)).toBe(true);
+    expect(await teams.readConfig(name)).toMatchObject({ name, members: [{ name: "team-lead", sessionFile }] });
+    expect(settled).toBe(false);
+    releaseCallback();
+
+    await expect(result).resolves.toMatchObject({ kind: "created", team: { name } });
+    expect(lifecycle.teamCreated).toHaveBeenCalledWith(name, sessionFile);
+  });
+
+  it("maps callback rejection while retaining the already-created Team", async () => {
+    const lifecycle: ModelToolLifecycle = {
+      teamCreated: vi.fn(async () => { throw new Error("callback publication failed"); }),
+      stopWorker: vi.fn(),
+      shutdownTeam: vi.fn(),
+    };
+    const { name, port, leaderSessionId, sessionFile } = await lifecycleCreateFixture(lifecycle);
+
+    await expect(port.createTeam(leaderSessionId, { name, purpose: "Characterize callback rejection." })).resolves.toEqual({
+      kind: "unavailable",
+      reason: "team_authority_unavailable",
+      message: "callback publication failed",
+    });
+    expect(teams.teamExists(name)).toBe(true);
+    expect(await teams.readConfig(name)).toMatchObject({ name, members: [{ name: "team-lead", sessionFile }] });
   });
 });
 
@@ -842,6 +929,23 @@ describe("DurableModelToolTeamPort durable authority", () => {
       exactSessionId: `/tmp/${name}-lead.jsonl`,
       branchLineage: ["snapshot-entry"],
     })).resolves.toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
+  });
+
+  it("requires an injected lifecycle for Worker stop and Team shutdown", async () => {
+    const { name, leaderSessionId } = await teamFixture(undefined);
+    const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+    port.setLeaderSessionFile(leaderSessionId, `/tmp/${name}-lead.jsonl`);
+
+    await expect(port.stopWorker(leaderSessionId, "worker")).resolves.toEqual({
+      kind: "unavailable",
+      reason: "carrier_unavailable",
+      message: "The model-tool lifecycle adapter is not attached to the main extension.",
+    });
+    await expect(port.shutdownTeam(leaderSessionId)).resolves.toEqual({
+      kind: "unavailable",
+      reason: "team_authority_unavailable",
+      message: "The model-tool lifecycle adapter is not attached to the main extension.",
+    });
   });
 
   it.each([

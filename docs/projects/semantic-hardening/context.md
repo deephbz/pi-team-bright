@@ -171,6 +171,15 @@ Implementation Task `semantic-hardening-authorities-92l`, independent test Task
 `semantic-hardening-authorities-ojq` are closed. Pi Session hook adaptation
 remains the final Team seam.
 
+The current source bundle adds registered characterization for the Pi adapter
+before extraction. It anchors already-current Worker and resumed-lead delivery
+order, lead refusal and candidate shutdown, delivery/footer cleanup, Worker
+title timers, durable `teamCreated` callback order, and callback-failure state.
+Characterization Tasks `semantic-hardening-authorities-tl7` and
+`semantic-hardening-authorities-ewv`, wording correction Task
+`semantic-hardening-authorities-f09`, and independent review Task
+`semantic-hardening-authorities-qqa` are closed.
+
 ## Decisions and constraints still in force
 
 - Preserve observable behavior by default. A behavior change needs a separate
