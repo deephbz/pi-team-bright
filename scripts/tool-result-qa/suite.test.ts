@@ -67,7 +67,9 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     const authorityAdapter = await import("../../src/model-tool-contract/beads-authority-adapter");
     const taskAdapter = await import("../../src/model-tool-contract/beads-task-adapter");
     const { DurableTaskMutationPublication } = await import("../../src/adapters/durable-task-mutation-publication");
+    const { createTaskAuthorityTeamPort } = await import("../../test/support/task-authority-team-port");
     const publicationPort = new DurableTaskMutationPublication();
+    const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
     const teamEvents = await import("../../src/utils/team-events");
     const terminalRegistry = await import("../../src/adapters/terminal-registry");
 
@@ -507,7 +509,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       actingSessionFile: leadSession,
       actingMembershipId: leadMembership.membershipId,
       taskCardProjector: taskAdapter.projectTaskCard,
-    }, publicationPort);
+    }, publicationPort, taskAuthorityTeamPort);
     fixtureTransitions.push({
       action: "release the Worker from the synthetic delivery-warning Task through real Task authority",
       evidence: {

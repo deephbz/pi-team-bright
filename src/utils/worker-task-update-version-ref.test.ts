@@ -19,12 +19,14 @@ import { taskVersionRef, type TaskVersionRef } from "../model-tool-contract/task
 import { readTaskDeliveries } from "./task-delivery";
 import { readTeamEvents } from "./team-events";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 
 type Tool = { name: string; parameters: unknown; execute: (...args: any[]) => Promise<any> };
 
 const testTeams: string[] = [];
 const testRoots: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
+const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 
 function uniqueTeam(): string {
   const name = `worker-version-ref-${process.pid}-${Date.now()}-${testTeams.length}`;
@@ -237,7 +239,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     let failPostCreateRead = true;
     const adapter = new BeadsTaskAdapter(teamName, "team-lead", {
       create: async (input, publication) => {
-        const receipt = await createTask(teamName, input, publicationPort, { actor: "team-lead" }, publication);
+        const receipt = await createTask(teamName, input, publicationPort, { actor: "team-lead" }, publication, taskAuthorityTeamPort);
         return { ...receipt, taskCard: undefined };
       },
       read: async (taskId) => {
@@ -483,7 +485,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const compatibilityTeam = uniqueTeam();
     const compatibilityRoot = workspace();
     writeTeam(compatibilityTeam, compatibilityRoot);
-    const compatibilityFactory = createPublishingBeadsTaskAdapterFactory(publicationPort);
+    const compatibilityFactory = createPublishingBeadsTaskAdapterFactory(publicationPort, taskAuthorityTeamPort);
     const compatibilityLeader = compatibilityFactory(compatibilityTeam, "team-lead");
     const compatibilityWorker = compatibilityFactory(compatibilityTeam, "worker");
     const compatibilityCreated = await compatibilityLeader.create({

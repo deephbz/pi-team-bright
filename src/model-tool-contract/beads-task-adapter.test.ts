@@ -27,6 +27,7 @@ import {
   type TaskAdapterAuthority,
 } from "./beads-task-adapter";
 import { taskVersionRef } from "./task-version-ref";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 
 const createdTeams: string[] = [];
 
@@ -104,7 +105,7 @@ describe("durable Task adapter", () => {
       suppressTaskVersionForSession: vi.fn(),
       publishTaskMutation: vi.fn(),
       completeOwnerTransitionIntent: vi.fn(),
-    });
+    }, createTaskAuthorityTeamPort());
     expect(factory("candidate-team", "team-lead")).toBeInstanceOf(BeadsTaskAdapter);
   });
 

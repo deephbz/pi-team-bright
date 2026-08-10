@@ -19,6 +19,7 @@ import {
 import { migrateTeamTasks, type LegacyTaskAuthorityRecord } from "./task-migration";
 import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 import * as taskAuthority from "../model-tool-contract/beads-authority-adapter";
 import * as tasks from "./tasks";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
@@ -26,9 +27,10 @@ import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
 
 const publicationPort = new DurableTaskMutationPublication();
+const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
 const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort);
+  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
 
 type RegisteredTool = {
   name: string;
