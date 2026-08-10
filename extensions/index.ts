@@ -17,10 +17,13 @@ import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-li
 import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
+import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
 import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
+import { CoordinationObservationService } from "../src/coordination/observation-service";
+import type { TaskCard, TaskCardWarning } from "../src/task-authority/task-domain";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
@@ -322,6 +325,7 @@ export default function (pi: ExtensionAPI) {
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
   const coordinationQueries = createDurableCoordinationQueries();
+  const coordinationObservationService = new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges });
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const teamLifecycleService = new TeamLifecycleService({
@@ -357,7 +361,7 @@ export default function (pi: ExtensionAPI) {
         ? modelToolLifecycleAdapter.shutdownTeam(name)
         : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
     };
-    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries));
+    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries, coordinationObservationService));
   }
 
   function modelToolBranchIds(ctx: ExtensionContext): string[] {

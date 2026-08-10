@@ -1,4 +1,5 @@
 import { readRuntimeStatus } from "../utils/runtime";
+import { readConfig, resolveCurrentLeadSessionBinding } from "../utils/teams";
 import type {
   CoordinationMemberEvidence,
   CoordinationRuntimeEvidence,
@@ -15,6 +16,27 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
       ...(status.pid !== undefined ? { pid: status.pid } : {}),
       ...(status.startedAt !== undefined ? { startedAt: status.startedAt } : {}),
       ...(status.runState !== undefined ? { runState: status.runState } : {}),
+    };
+  }
+
+  async readLeaderBinding(sessionFile: string) {
+    const binding = await resolveCurrentLeadSessionBinding(sessionFile);
+    if (binding.status !== "bound") return undefined;
+    const config = await readConfig(binding.teamName);
+    return {
+      teamName: binding.teamName,
+      purpose: config.description,
+      epochId: config.epochId,
+      sessionFile,
+      ...(config.syncLiveness ? { syncLiveness: { waitSeconds: config.syncLiveness.waitSeconds } } : {}),
+      members: config.members.map((member) => ({
+        name: member.name,
+        membershipId: member.membershipId,
+        pendingLaunchId: member.pendingLaunchId,
+        sessionFile: member.sessionFile,
+        isActive: member.isActive,
+      })),
+      logicalWorkers: config.logicalWorkers?.map((worker) => ({ name: worker.name, scope: worker.scope })),
     };
   }
 }

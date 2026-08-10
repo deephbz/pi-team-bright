@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
+import type { CoordinationPendingPresentation, CoordinationSnapshotResult, CoordinationSyncResult, CoordinationTeamCurrent, CoordinationWorkerCurrent } from "../coordination/observation-contracts";
 import type {
   ModelToolTaskJournalEntry,
   ModelToolTaskUpdateInput,
@@ -23,17 +24,9 @@ export function exactLeaderSessionId(value: string): ExactLeaderSessionId {
   return value as ExactLeaderSessionId;
 }
 
-export interface ModelToolTeamCurrent {
-  name: string;
-  purpose: string;
-  lifecycle: "active";
-}
+export type ModelToolTeamCurrent = CoordinationTeamCurrent;
 
-export interface ModelToolWorkerCurrent {
-  name: string;
-  scope: string;
-  carrier: "starting" | "connected" | "absent";
-}
+export type ModelToolWorkerCurrent = CoordinationWorkerCurrent;
 
 export type ModelToolTaskProjectionField = "title" | "goal" | "current_context";
 
@@ -49,17 +42,7 @@ export type EnsureWorkerPortResult =
   | { kind: "unavailable"; reason: "carrier_unavailable" | "team_authority_unavailable"; message: string }
   | { kind: "no_active_team" };
 
-export type TeamSnapshotPortResult =
-  | {
-    kind: "snapshot";
-    team: ModelToolTeamCurrent;
-    workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>;
-    tasks: TaskCard[];
-    taskProjectionWarnings?: TaskCardWarning[];
-  }
-  | { kind: "no_active_team" }
-  | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string }
-  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
+export type TeamSnapshotPortResult = CoordinationSnapshotResult;
 
 export type CreateTaskPortResult =
   | { kind: "created"; operationId: string; task: TaskCard; deliveryWarnings?: string[] }
@@ -129,24 +112,9 @@ export interface ModelToolTeamEvent {
   statusChanged?: boolean;
 }
 
-export type TeamSyncPortResult =
-  | { kind: "snapshot"; team: ModelToolTeamCurrent; workers: Array<ModelToolWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: TaskCard[]; taskProjectionWarnings?: TaskCardWarning[]; head: number; epochId: string }
-  | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: TaskCard }>; taskProjectionWarnings?: TaskCardWarning[]; alerts: []; head: number; epochId: string }
-  | { kind: "caught_up"; head: number; epochId: string }
-  | { kind: "indeterminate"; message: string }
-  | { kind: "snapshot_required"; message: string }
-  | { kind: "cancelled"; message: string }
-  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }
-  | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string };
+export type TeamSyncPortResult = CoordinationSyncResult;
 
-export interface PendingObservation {
-  sessionId: string;
-  toolCallId: string;
-  resultText: string;
-  resultDigest: string;
-  head: number;
-  epochId: string;
-}
+export type PendingObservation = CoordinationPendingPresentation;
 
 export type AlertTarget =
   | { kind: "worker"; name: string }

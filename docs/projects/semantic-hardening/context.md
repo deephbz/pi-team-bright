@@ -228,25 +228,29 @@ result remains unavailable, and retry creates a new Alert identity with duplicat
 delivery. Do not add an outbox, operation ID, recovery record, or warning change.
 
 Coordination observation is the active boundary after clean commit `a960bf8`.
-Slice B implements minimal Coordination-owned Team runtime, Task state/delivery,
-and Alert actuation query DTOs with three durable authority adapters. Pi
-composition constructs one explicit query bundle. Liveness is now a pure
-derivation over that bundle, while the optional durable-port constructor
-preserves direct construction and default compatibility. No observation service
-or nudge actuator moved. Characterization Tasks
-`semantic-hardening-coordination-qjp`, `semantic-hardening-coordination-3bq`,
-and `semantic-hardening-coordination-trt` added registered failure/retry, quiet
-rescan, mixed-record, exact acknowledgement, and nudge-lineage race gates.
-Independent Task `semantic-hardening-coordination-hzz` accepted the three test
-paths, typecheck, all 97 lanes, agent/tool projections, and static checks.
-Current quiet waiting still performs one complete Task read by 4,999 ms and
-three by 5,000 ms: initial, authority-cadence, and post-wake recheck. Preserve
-outputs, cursor/wait/acknowledgement behavior, and this cadence; treat the third
-read only as a later measured optimization candidate. The slice-B graph has 92
-production TypeScript files and 304 unique resolved static local edges, with
-zero nontrivial cycles or dynamic imports. Evidence is one-process deterministic
-harness evidence, not proof of real Pi persistence, cross-process forks, native
-watchers, OS timing, or terminal pixels.
+Slice C makes `CoordinationObservationService` the owner of snapshot and update
+observation, pages, hydration, waits, revisions, pending presentation, cached
+Task projections, branch lineage, and acknowledgement. It receives explicit
+query, durable-store, wait, and projection dependencies. The durable model-tool
+facade delegates this algorithm and keeps stable model-tool aliases and default
+constructor compatibility. Pi composition constructs the service once.
+
+Slice B query DTOs and three durable authority adapters remain its read boundary,
+and liveness remains pure over them. Outputs, cursors, acknowledgement, bounded
+waits, and the quiet cadence remain unchanged: one complete Task read by 4,999
+ms and three by 5,000 ms. Do not extract nudge actuation or the Trio facade yet.
+The source graph has 94 production TypeScript files and 320 unique resolved
+static local edges, with zero nontrivial cycles or dynamic imports. An unused
+`readAllNudgeEvents` helper is later local cleanup, not a behavior change.
+
+Characterization Tasks `semantic-hardening-coordination-qjp`,
+`semantic-hardening-coordination-3bq`, and
+`semantic-hardening-coordination-trt` remain the behavior gates. A forwarding
+shell and a partial-worker continuity approach were rejected: the accepted
+service owns the complete observation state and the existing facade delegates.
+Evidence remains one-process deterministic harness evidence, not proof of real
+Pi persistence, cross-process forks, native watchers, OS timing, or terminal
+pixels.
 
 ## Decisions and constraints still in force
 

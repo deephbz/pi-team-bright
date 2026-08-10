@@ -58,9 +58,9 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 92,
+      "files": 94,
       "lines": null,
-      "staticLocalEdges": 304,
+      "staticLocalEdges": 320,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -77,7 +77,7 @@
       "lines": 25803
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
-    "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. The stable slice-B Coordination query tree has 92 production TypeScript files and 304 unique resolved static local edges, with zero nontrivial cycles and zero dynamic imports.",
+    "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. The stable accepted slice-C Coordination service tree has 94 production TypeScript files and 320 unique resolved static local edges, with zero nontrivial cycles and zero dynamic imports.",
     "piSessionAdapterSelection": {
       "baseline": "1686ac19dc83143e55c7a68062e1a30c1e53fa6d",
       "paths": ["extensions/index.ts", "extensions/pi-team-session-adapter.ts", "src/team-authority/team-session-lifecycle-service.boundary.test.ts", "src/utils/pi-session-adapter.characterization.test.ts"],
@@ -311,9 +311,11 @@
           "src/adapters/durable-coordination-queries.ts",
           "src/adapters/durable-coordination-team-runtime.ts",
           "src/adapters/durable-coordination-task-state-delivery.ts",
-          "src/adapters/durable-coordination-alert-actuation.ts"
+          "src/adapters/durable-coordination-alert-actuation.ts",
+          "src/coordination/observation-contracts.ts",
+          "src/coordination/observation-service.ts"
         ],
-        "currentScopeNote": "Slice B gives Coordination minimal consumer-owned Team runtime, Task state/delivery, and Alert actuation query DTOs. Three durable adapters retain concrete reads outside Coordination; composition constructs one explicit bundle, liveness is pure over it, and the optional durable-port dependency preserves constructor/default compatibility. No service or nudge actuator moved; the durable facade, Pi composition, and hidden observation remain later seams."
+        "currentScopeNote": "Slice C gives CoordinationObservationService snapshot/update/page/hydration/wait/revision ownership plus pending presentation, Task cache, branch lineage, and acknowledgement. It receives query, durable-store, wait, and projection dependencies; the facade delegates and stable aliases/default compatibility remain. Nudge actuation, Trio, and the hidden-observation Team query remain later seams; unused readAllNudgeEvents is local cleanup."
       },
       {
         "id": "model_tool_facade_and_projections",
@@ -583,9 +585,9 @@
       "statement": "Alert owns name-only roster, current-delivery lease, exact Session-binding, and publication ports. Durable Team and Coordination adapters remain outside Alert authority; composition injects one sender for leader and Worker direct delivery. No Team mirror, membershipId-leaking port, or compatibility singleton is present."
     },
     {
-      "id": "ASSESS-COORDINATION-QUERY-SLICE-B",
-      "state": "implemented_behavior_preserving_read_boundary",
-      "statement": "Coordination owns minimal Team runtime, Task state/delivery, and Alert actuation query DTOs. Three durable adapters retain authority reads outside Coordination; one explicit composition bundle injects them, and liveness is pure over the bundle. Constructor/default compatibility, outputs, cursors, waits, acknowledgement, and quiet cadence remain unchanged. No observation service or nudge actuator was extracted."
+      "id": "ASSESS-COORDINATION-SERVICE-SLICE-C",
+      "state": "implemented_behavior_preserving_observation_boundary",
+      "statement": "CoordinationObservationService owns snapshot/update/page/hydration/wait/revision logic, pending presentation, cache, branch lineage, and acknowledgement through injected query/store/wait/projection dependencies. The model-tool facade delegates, aliases/default compatibility remain stable, and outputs, cursors, acknowledgement, and the one-read/three-read quiet cadence remain unchanged. Nudge actuation and Trio remain later seams."
     },
     {
       "id": "ASSESS-COMBINED-FACADE",
@@ -1158,12 +1160,12 @@
     "input": {
       "gitHead": "ab7f591",
       "productionSourceDigestSha256": null,
-      "scope": "92 selected TypeScript production files under src/ and extensions/, excluding *.test.ts. Current tree is the stable slice-B Coordination query graph; the 87-file Alert-port tree remains historical baseline evidence.",
+      "scope": "94 selected TypeScript production files under src/ and extensions/, excluding *.test.ts. Current tree is the stable accepted slice-C Coordination service graph; the 87-file Alert-port tree remains historical baseline evidence.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 92,
-      "uniqueLocalEdges": 304,
+      "files": 94,
+      "uniqueLocalEdges": 320,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
@@ -1222,8 +1224,8 @@
       },
       {
         "id": "coordination_observation",
-        "completion": "slice_b_read_queries_implemented_application_boundary_later",
-        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts still own combined Coordination application behavior and nudge actuation", "No separate observation service or nudge actuator exists by design in slice B"],
+        "completion": "slice_c_observation_service_implemented_nudge_and_trio_later",
+        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts retain nudge actuation and broader Trio-facing behavior", "No separate nudge actuator exists by design in slice C", "Unused readAllNudgeEvents is later local cleanup"],
         "violations": ["coordination_observation -> team_authority_and_role_realization: src/utils/hidden-observation.ts:6 remains a concrete Team configuration read"],
         "staticGate": "Coordination liveness may import only its consumer-owned Team runtime, Task state/delivery, and Alert actuation query interfaces. Concrete reads stay in the three durable adapters; deny utils/runtime, taskDeliveryPath, inboxPath, and concrete Team configuration imports from Coordination liveness sources.",
         "focusedVerification": ["npx vitest run src/coordination/queries.equivalence.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/utils/sync-liveness.test.ts test/coord-liveness-e2e/sync-liveness.test.ts", "npm run typecheck", "npm run test:lanes"]

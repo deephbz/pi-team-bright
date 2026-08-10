@@ -71,7 +71,7 @@ describe("durable Coordination query equivalence", () => {
     const root = process.cwd();
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
     expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(\);/g)).toHaveLength(1);
-    expect(extension).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries)");
+    expect(extension).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries, coordinationObservationService)");
   });
 
   it("fences canonical contracts and each durable query to its owner record boundary", () => {
@@ -81,7 +81,7 @@ describe("durable Coordination query equivalence", () => {
     const teamRuntime = source("src/adapters/durable-coordination-team-runtime.ts");
     const taskState = source("src/adapters/durable-coordination-task-state-delivery.ts");
     const alertActuation = source("src/adapters/durable-coordination-alert-actuation.ts");
-    const port = source("src/model-tool-contract/durable-model-tool-port.ts");
+    const observationService = source("src/coordination/observation-service.ts");
 
     expect(contracts).not.toMatch(/(?:Beads|TaskAuthorityRecord|Member\b|AgentRuntimeStatus|InboxMessage)/);
     expect(teamRuntime).toMatch(/from "\.\.\/utils\/runtime"/);
@@ -91,8 +91,8 @@ describe("durable Coordination query equivalence", () => {
     expect(taskState).not.toMatch(/inboxPath|readRuntimeStatus/);
     expect(alertActuation).toMatch(/inboxPath/);
     expect(alertActuation).not.toMatch(/taskDeliveryPath|readRuntimeStatus|BeadsTaskAdapter/);
-    expect(port).toContain("this.coordinationQueries.taskStateDelivery.listTaskIds(teamName)");
-    expect(port).toContain("this.coordinationQueries.taskStateDelivery.readTasks(teamName, taskIds)");
-    expect(port).toContain("readWorkerRunObservation(bound.teamName, member, this.coordinationQueries)");
+    expect(observationService).toContain("this.coordinationQueries.taskStateDelivery.listTaskIds(teamName)");
+    expect(observationService).toContain("this.coordinationQueries.taskStateDelivery.readTasks(teamName, taskIds)");
+    expect(observationService).toContain("deriveWorkerRunObservation(member, { runtime, taskDelivery, alertInbox })");
   });
 });

@@ -1097,3 +1097,25 @@ changes; append a correction.
   persistence, process or fork recovery, native watcher delivery, operating
   system scheduling, external writer concurrency, or terminal pixels. No
   aggregate ran.
+
+## 2026-08-10 — Coordination observation service slice C recorded
+
+- The accepted slice-C shape gives `CoordinationObservationService` ownership of
+  snapshot/update/page/hydration/wait/revision behavior, pending presentation,
+  Task-projection cache, branch lineage, and acknowledgement. It receives query,
+  durable-store, wait, and projection dependencies.
+- `DurableModelToolTeamPort` now delegates observation behavior. Model-tool
+  result aliases and default constructor compatibility remain stable. Outputs,
+  cursors, acknowledgement, waits, and the quiet one-read-by-4,999-ms /
+  three-reads-by-5,000-ms cadence remain unchanged.
+- The forwarding-shell approach was rejected because it left state split across
+  facade and service. A partial-worker continuity approach was also rejected;
+  the accepted service owns the complete observation state. These are historical
+  design corrections, not new runtime behavior.
+- Nudge actuation and the Trio-facing facade remain later seams. The duplicate
+  unused `readAllNudgeEvents` helper is later local cleanup.
+- The canonical slice-C graph is 94 production TypeScript files and 320 unique
+  resolved static local edges, with zero nontrivial cycles and zero dynamic
+  imports. Focused evidence remains one-process and does not prove real Pi
+  persistence, process or fork recovery, watcher delivery, OS scheduling,
+  external writers, or terminal pixels. No aggregate ran.
