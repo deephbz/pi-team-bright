@@ -12,6 +12,8 @@ import {
 import { readBeadsAuthorityFingerprint, resolveBdExecutable } from "./beads";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
+import * as runtime from "./runtime";
+import { DIRECT_MESSAGE_CUSTOM_TYPE, DIRECT_MESSAGE_RESUME_TYPE } from "./message-delivery";
 import { readTeamEventCursor, readTeamEvents } from "./team-events";
 import * as teams from "./teams";
 
@@ -50,7 +52,8 @@ function initBeadsWorkspace(): string {
   return workspace;
 }
 
-function sessionContext(sessionFile: string) {
+function sessionContext(sessionFile: string, entries: any[] = []) {
+  const branch = [...entries];
   return {
     cwd: process.cwd(),
     mode: "tui",
@@ -60,9 +63,9 @@ function sessionContext(sessionFile: string) {
     sessionManager: {
       getSessionId: vi.fn(() => sessionFile),
       getSessionFile: vi.fn(() => sessionFile),
-      getBranch: vi.fn(() => []),
-      buildContextEntries: vi.fn(() => []),
-      getEntries: vi.fn(() => []),
+      getBranch: vi.fn(() => branch),
+      buildContextEntries: vi.fn(() => branch),
+      getEntries: vi.fn(() => branch),
     },
     ui: {
       notify: vi.fn(),
@@ -73,19 +76,16 @@ function sessionContext(sessionFile: string) {
   };
 }
 
-function leaderHarness() {
-  vi.stubEnv("PI_TEAM_NAME", "");
-  vi.stubEnv("PI_AGENT_NAME", "");
-  vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
-  vi.stubEnv("TMUX", "");
+function extensionHarness() {
   const tools = new Map<string, RegisteredTool>();
   const handlers = new Map<string, Handler[]>();
+  const sendMessage = vi.fn();
   piTeams({
     registerTool(tool: RegisteredTool) { tools.set(tool.name, tool); },
     on(event: string, handler: Handler) {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
     },
-    sendMessage: vi.fn(),
+    sendMessage,
     appendEntry: vi.fn(),
     sendUserMessage: vi.fn(),
     getActiveTools: vi.fn(() => []),
@@ -94,6 +94,10 @@ function leaderHarness() {
   } as never);
   return {
     tools,
+    sendMessage,
+    async emit(event: string, payload: unknown, context: ReturnType<typeof sessionContext>) {
+      for (const handler of handlers.get(event) ?? []) await handler(payload, context);
+    },
     async invoke(toolName: string, callId: string, params: Record<string, unknown>, context: ReturnType<typeof sessionContext>) {
       const tool = tools.get(toolName);
       expect(tool, `missing registered public tool ${toolName}`).toBeDefined();
@@ -101,6 +105,22 @@ function leaderHarness() {
       return tool!.execute(callId, params, new AbortController().signal, undefined, context);
     },
   };
+}
+
+function leaderHarness() {
+  vi.stubEnv("PI_TEAM_NAME", "");
+  vi.stubEnv("PI_AGENT_NAME", "");
+  vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
+  vi.stubEnv("TMUX", "");
+  return extensionHarness();
+}
+
+function workerHarness(teamName: string) {
+  vi.stubEnv("PI_TEAM_NAME", teamName);
+  vi.stubEnv("PI_AGENT_NAME", "worker-a");
+  vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
+  vi.stubEnv("TMUX", "");
+  return extensionHarness();
 }
 
 async function fixture() {
@@ -216,7 +236,6 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
       text: expect.stringContaining(`Task: ${task.id} @ ${task.version}`),
     })]);
     const firstAlertId = alertIdFromDelivery(acceptedAfterFailure[0].text);
-
     assertCursorUnchanged(beforeCursor, readTeamEventCursor(state.teamName));
     expect(readTeamEvents(state.teamName, { afterCursor: beforeCursor })).toMatchObject({
       cursor: beforeCursor,
@@ -224,6 +243,58 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
       events: [],
     });
     expect(JSON.parse(fs.readFileSync(paths.teamEventCursorStatePath(state.teamName), "utf8"))).toMatchObject({ cursor: beforeCursor });
+
+    // The registered lifecycle admits only a current Session binding with its
+    // matching live process generation. This fixture creates that real startup
+    // prerequisite; direct delivery itself remains unmocked.
+    await runtime.writeRuntimeStatus(state.teamName, "worker-a", {
+      pid: process.pid,
+      startedAt: Date.now(),
+      runState: "active",
+    }, state.membershipIds["worker-a"]);
+
+    // A new process for the exact accepted recipient still presents the retained
+    // Alert even though the Alert event was never appended. An error-stopped
+    // presentation stays unacknowledged and resumes after the next process start.
+    const worker = workerHarness(state.teamName);
+    const workerContext = sessionContext(path.join(path.dirname(state.leaderSessionFile), "worker-a.jsonl"));
+    await worker.emit("session_start", { reason: "resume" }, workerContext);
+    const firstPresentation = worker.sendMessage.mock.calls
+      .map(([message]) => message)
+      .find((message) => message.customType === DIRECT_MESSAGE_CUSTOM_TYPE);
+    expect(firstPresentation).toMatchObject({
+      display: true,
+      details: {
+        recipient: "worker-a",
+        recipientMembershipId: state.membershipIds["worker-a"],
+        messageIds: [firstDelivery.accepted[0].messageId],
+      },
+    });
+    expect(firstPresentation.content).toContain(firstAlertId);
+    await worker.emit("context", {
+      messages: [{ role: "custom", customType: firstPresentation.customType, details: firstPresentation.details }],
+    }, workerContext);
+    await worker.emit("turn_end", { message: { role: "assistant", stopReason: "error" } }, workerContext);
+    await worker.emit("session_shutdown", { reason: "quit" }, workerContext);
+
+    const restarted = workerHarness(state.teamName);
+    const restartedContext = sessionContext(workerContext.sessionManager.getSessionFile(), [{
+      type: "custom_message",
+      id: "failed-alert-presentation",
+      parentId: null,
+      timestamp: new Date().toISOString(),
+      customType: firstPresentation.customType,
+      content: firstPresentation.content,
+      display: firstPresentation.display,
+      details: firstPresentation.details,
+    }]);
+    await restarted.emit("session_start", { reason: "resume" }, restartedContext);
+    expect(restarted.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: DIRECT_MESSAGE_RESUME_TYPE,
+      details: expect.objectContaining({ messageIds: [firstDelivery.accepted[0].messageId] }),
+    }), { triggerTurn: true, deliverAs: "steer" });
+    await restarted.emit("session_shutdown", { reason: "quit" }, restartedContext);
+
     const afterFailureTask = await lead.invoke("task_read", "read-after-failure", { task_ids: [task.id] }, context);
     expect(afterFailureTask.details.outcomes[0].task).toEqual(beforeCard);
 
@@ -256,13 +327,13 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
     const afterRetryCursor = readTeamEventCursor(state.teamName);
     assertCursorAdvanced(beforeCursor, afterRetryCursor);
     const published = readTeamEvents(state.teamName, { afterCursor: beforeCursor });
-    expect(published.events).toEqual([expect.objectContaining({
+    expect(published.events).toEqual(expect.arrayContaining([expect.objectContaining({
       type: "alert",
       cursor: afterRetryCursor,
       alertId: retried.details.alert_id,
       to: "*",
       taskRef: { taskId: task.id, version: task.version },
-    })]);
+    })]));
     expect(published.events).not.toEqual(expect.arrayContaining([expect.objectContaining({ alertId: firstAlertId })]));
 
     const afterRetryTask = await lead.invoke("task_read", "read-after-retry", { task_ids: [task.id] }, context);

@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, test } from "vitest";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { projectToolResult } from "../../src/model-tool-contract/result-projection";
 import {
   captureToolCase,
   writeQaBundle,
@@ -246,6 +247,37 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     }
 
     const detailsOf = (item: QaCase): any => item.projections.machine.details as any;
+
+    // Each non-create public operation requires an exact leader Team binding.
+    // Exercise the unavailable boundary through registered tools before setup.
+    const unavailableCalls: Array<{ id: string; tool: string; args: Record<string, unknown> }> = [
+      { id: "task-create-no-team", tool: "task_create", args: { tasks: [{ operation_id: "qa-no-team-create", title: "Unavailable Task", goal: "Prove the unavailable Team boundary." }] } },
+      { id: "task-read-no-team", tool: "task_read", args: { task_ids: ["unavailable-task"] } },
+      { id: "task-update-no-team", tool: "task_update", args: { updates: [{ task_id: "unavailable-task", operation_id: "qa-no-team-update", expected_version: taskVersionRef("unavailable"), status: "in_progress" }] } },
+      { id: "sync-no-team", tool: "team_sync", args: { view: "snapshot" } },
+      { id: "ensure-worker-no-team", tool: "ensure_worker", args: { name: "unavailable-worker", scope: "Prove unavailable Team binding." } },
+      { id: "worker-stop-no-team", tool: "worker_stop", args: { worker: "unavailable-worker" } },
+      { id: "team-shutdown-no-team", tool: "team_shutdown", args: {} },
+      { id: "task-link-no-team", tool: "task_link", args: { task_id: "unavailable-task", relation: "related", target_id: "other-task", action: "add", expected_version: taskVersionRef("unavailable") } },
+      { id: "alert-no-team", tool: "alert_send", args: { target: { kind: "worker", name: "unavailable-worker" }, kind: "attention", text: "Prove unavailable Team binding." } },
+    ];
+    for (const unavailable of unavailableCalls) {
+      await capture({
+        ...unavailable,
+        scenario: "unavailable-team-binding",
+        actor: "team-lead",
+        tools: leadTools,
+        ctx: leadCtx,
+        qaBrief: brief(
+          "The exact leader Session has no active Team binding.",
+          "Create or resume the correct Team before retrying.",
+          "Did this call change state, and what must I do before retrying?",
+          ["unavailable outcome", "no state changed", "active Team binding required"],
+          ["unavailable reason", "state_changed false"],
+        ),
+      });
+    }
+
     const postStateOf = (item: QaCase): any => {
       const details = detailsOf(item);
       if (details.postState) return details.postState;
@@ -513,7 +545,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     const taskCreated = postStateOf(createdTask);
 
     await capture({
-      id: "task-create-assigned-without-criteria-refused",
+      id: "task-create-assigned-without-criteria-created",
       scenario: "task-lifecycle-and-events",
       actor: "team-lead",
       tools: leadTools,
@@ -526,11 +558,11 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       },
       ctx: leadCtx,
       qaBrief: brief(
-        "An assigned Task omits required acceptance criteria.",
-        "Add independently verifiable acceptance criteria and retry.",
-        "Why wasn't this assigned work accepted?",
-        ["refused outcome", "acceptance criteria required", "retry guidance"],
-        ["no Task created"],
+        "An assigned Task supplies a goal but no separately structured acceptance field.",
+        "Use the created Task's version for any later conditional update.",
+        "Was this assigned Task created, and what contract field carried its outcome?",
+        ["created outcome", "Task ID", "assignee", "write version"],
+        ["full authoritative Task post-state", "goal"],
       ),
     });
 
@@ -620,7 +652,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     });
 
     await capture({
-      id: "task-terminal-without-evidence-refused",
+      id: "task-terminal-without-evidence-execution-error",
       scenario: "task-lifecycle-and-events",
       actor: "reviewer",
       tools: workerTools,
@@ -1244,7 +1276,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       "worker-reserved-name-refused",
       "worker-stop-missing",
       "task-update-stale-version",
-      "task-terminal-without-evidence-refused",
+      "task-terminal-without-evidence-execution-error",
       "task-link-stale-version",
       "alert-invalid-team-target",
       "alert-missing-recipient",
@@ -1260,7 +1292,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
         else expect(details, id).toMatchObject({ kind: expect.stringMatching(/refused|unavailable/) });
       }
     }
-    const executionErrorCaseIds: string[] = [];
+    const executionErrorCaseIds = ["task-terminal-without-evidence-execution-error"];
     for (const id of executionErrorCaseIds) {
       expect(cases.find((item) => item.id === id)?.execution, id).toEqual({ threw: true, isError: true });
     }
@@ -1268,7 +1300,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       const details = detailsOf(item);
       expect(details, item.id).toMatchObject({ kind: expect.any(String) });
     }
-    expect(cases).toHaveLength(39);
+    expect(cases).toHaveLength(48);
     const caseAfter = (id: string) => cases.find((item) => item.id === id)?.oracle.after as any;
     expect(caseAfter("alert-zero-recipients")).toEqual(
       cases.find((item) => item.id === "alert-zero-recipients")?.oracle.before,
@@ -1339,6 +1371,92 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     const partialAfter = caseAfter("team-shutdown-partial");
     expect(partialAfter.workers).toContainEqual(expect.objectContaining({ name: "delivery-broken", membership: "current" }));
     expect(cases.at(-1)?.oracle.after).toMatchObject({ team: { lifecycle: expect.stringMatching(/shut_down|active/) } });
+
+    // These presentation checks use decision facts from the registered outcome,
+    // not the model projection oracle. Each fact must survive both TUI modes.
+    const semanticTuiCases: Array<{
+      id: string;
+      facts: (item: QaCase) => string[];
+    }> = [
+      {
+        id: "task-created-assigned",
+        facts: (item) => {
+          const task = detailsOf(item).outcomes[0].task;
+          return ["created", JSON.stringify(task.id), "@ reviewer", task.version];
+        },
+      },
+      {
+        id: "task-update-stale-version",
+        facts: (item) => {
+          const outcome = detailsOf(item).outcomes[0];
+          return ["refused", outcome.reason, `retry at version ${outcome.current_task.version}`];
+        },
+      },
+      {
+        id: "alert-announcement-partial",
+        facts: () => ["partial", "reviewer", "failed recipients: delivery-broken", "Task state unchanged"],
+      },
+      {
+        id: "task-read-no-team",
+        facts: () => ["unavailable", "no_active_team"],
+      },
+      {
+        id: "task-terminal-without-evidence-execution-error",
+        facts: () => ["task_update execution error", "Raw report follows", "requires a nonempty evidence note"],
+      },
+    ];
+    for (const semanticCase of semanticTuiCases) {
+      const item = cases.find((candidate) => candidate.id === semanticCase.id)!;
+      for (const projection of [item.projections.human.compact, item.projections.human.expanded]) {
+        for (const fact of semanticCase.facts(item)) expect(projection, `${semanticCase.id}: ${fact}`).toContain(fact);
+      }
+    }
+
+    const trioCoverage = [
+      ["team_create", "team-created"],
+      ["task_create", "task-created-assigned"],
+      ["task_read", "task-read-full"],
+      ["task_update", "task-started"],
+      ["team_sync", "sync-snapshot"],
+      ["ensure_worker", "worker-started"],
+      ["worker_stop", "worker-stopped"],
+      ["team_shutdown", "team-shutdown"],
+      ["task_link", "task-linked"],
+      ["alert_send", "alert-task-clarification"],
+    ] as const;
+    const privatePresentationValues = [fakeHome, leadSession, workerSession, "qa-pane-"];
+    for (const [tool, successCase] of trioCoverage) {
+      expect(cases.find((item) => item.id === successCase)?.call.tool).toBe(tool);
+    }
+    for (const unavailable of unavailableCalls) {
+      const item = cases.find((candidate) => candidate.id === unavailable.id)!;
+      const details = detailsOf(item);
+      if (Array.isArray(details.outcomes)) {
+        expect(details.outcomes).toEqual([expect.objectContaining({ kind: "unavailable", state_changed: false })]);
+      } else {
+        expect(details).toMatchObject({ kind: "unavailable", state_changed: false });
+      }
+    }
+    for (const item of cases) {
+      expect(item.projections.human.compact, item.id).not.toBe("");
+      expect(item.projections.human.expanded, item.id).not.toBe("");
+      if (!item.execution.threw) {
+        expect(item.execution, item.id).toEqual({ threw: false, isError: false });
+        const raw = detailsOf(item);
+        const model = JSON.parse(item.projections.model.text);
+        // This is the parity oracle: raw semantic truth produces exactly the
+        // agent JSON from the registered tool, including recovery coordinates.
+        expect(model, item.id).toEqual(projectToolResult(item.call.tool, raw));
+      } else {
+        expect(item.execution.isError, item.id).toBe(true);
+        expect(item.projections.model.text, item.id).not.toBe("");
+      }
+      for (const privateValue of privatePresentationValues) {
+        expect(item.projections.model.text, item.id).not.toContain(privateValue);
+        expect(item.projections.human.compact, item.id).not.toContain(privateValue);
+        expect(item.projections.human.expanded, item.id).not.toContain(privateValue);
+      }
+    }
 
     const qaPromptPath = path.join(process.cwd(), "scripts", "tool-result-qa", "QA-PROMPT.md");
     writeQaBundle(outputPath, {

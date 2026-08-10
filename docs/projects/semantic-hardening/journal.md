@@ -696,3 +696,44 @@ changes; append a correction.
   designs deterministic Alert restart and failure characterization.
 - Production implementation remains gated on these current-tree audits. The
   reserved full aggregate has not run for this continuation.
+
+## 2026-08-10 — full behavior inventory independently characterized
+
+- The source audit found 27 behavior entries, correcting the earlier seed count
+  of 26. Existing executable anchors already characterized much of Team, Task,
+  Alert, Coordination, Trio, and additive Membership observation behavior.
+- Added registered-extension characterization for logical Worker meaning across
+  Membership/carrier replacement and exact process-generation admission. The
+  deterministic tests assert trigger, refusal, durable records, historical
+  Membership retention, replacement binding, event order, and proof limits.
+- Extended ALERT-004 through two registered extension harnesses in one Node
+  process. It preserves partial native fan-out, post-delivery event failure,
+  unavailable result, unchanged Task state, new-identity duplicate retry, later
+  exact-Session presentation, and hook-level replay after an error.
+- Classified ALERT-004 as `compatibility_required` for this behavior-identical
+  Project. This does not call the behavior ideal. Process, fork, Pi Session, and
+  OS restart remain outside the proof, and any semantic change needs a separate
+  owner-visible decision and normative replacement tests.
+- Expanded the registered-tool QA bundle from 39 to 48 cases. All ten tools have
+  success anchors, nine Team-bound tools have no-Team unavailable cases, raw
+  machine results reproduce exact agent JSON, and agent plus TUI projections
+  exclude fixture home, Session, and pane values.
+- Independent compact and expanded TUI assertions cover representative success,
+  stale-version refusal with recovery version, partial Alert, unavailable, and
+  execution-error outcomes. The evidence does not claim every human-view
+  coordinate, real Pi or model interpretation, or terminal pixels.
+- Corrected one QA scenario that described an accepted Task creation as a
+  refusal. The scenario and brief now state its actual created outcome. An
+  existing close-without-evidence throw is the explicit execution-error case.
+- The final inventory has 27 characterized entries and zero missing entries.
+  Each keeps a classification and proof limit; characterization alone does not
+  make current behavior normative.
+- Independent verification passed the 48-case QA bundle, the Alert and Worker
+  characterization slices, 46 focused runtime/Worker tests, 30 focused causal,
+  Alert, delivery, and projection tests, lane closure at 90 files (69 fast and
+  21 exhaustive), JSON, anchor, link, production-scope, and diff checks.
+- The shared domain-contract split was reviewed separately. Its one missing
+  legacy `AlertKind` re-export was restored before independent review passed.
+  That refactor remains outside this characterization commit and retains its own
+  commit boundary.
+- The continuation's reserved final aggregate has not run.

@@ -23,7 +23,7 @@
       "subsystem": "team_authority_and_role_realization",
       "summary": "Create or recreate one Team epoch and bind the exact leader Session.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/teams.ts", "src/model-tool-contract/durable-model-tool-port.ts"]
     },
     {
@@ -31,8 +31,8 @@
       "subsystem": "team_authority_and_role_realization",
       "summary": "Keep logical Worker meaning stable across replaceable Membership and carrier generations.",
       "classification": "unclassified",
-      "testState": "missing",
-      "evidence": ["src/utils/teams.ts", "src/utils/worker-ensure-lifecycle.ts"]
+      "testState": "characterized",
+      "evidence": ["src/utils/teams.ts", "src/utils/worker-ensure-lifecycle.ts", "src/utils/worker-identity-process-admission.characterization.test.ts"]
     },
     {
       "id": "TEAM-003",
@@ -47,15 +47,15 @@
       "subsystem": "team_authority_and_role_realization",
       "summary": "Admit at most one live process generation for one current Membership.",
       "classification": "unclassified",
-      "testState": "missing",
-      "evidence": ["src/utils/runtime.ts", "src/utils/runtime-startup-admission.test.ts"]
+      "testState": "characterized",
+      "evidence": ["src/utils/runtime.ts", "src/utils/runtime-startup-admission.test.ts", "src/utils/worker-identity-process-admission.characterization.test.ts"]
     },
     {
       "id": "TEAM-005",
       "subsystem": "team_authority_and_role_realization",
       "summary": "Resolve and apply Worker Role resources without granting leader authority.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/worker-resource-projection.ts"]
     },
     {
@@ -63,7 +63,7 @@
       "subsystem": "team_authority_and_role_realization",
       "summary": "Bind one direct terminal backend and apply durable pane placement for the Team epoch.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/team-pane-placement.ts", "src/adapters/terminal-registry.ts"]
     },
     {
@@ -71,7 +71,7 @@
       "subsystem": "team_authority_and_role_realization",
       "summary": "Recover, stop, and shut down exact carriers without losing Membership history or claiming uncertain stop evidence.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/worker-launch-bridge.ts", "extensions/index.ts"]
     },
     {
@@ -79,7 +79,7 @@
       "subsystem": "task_authority",
       "summary": "Project native authority records into canonical bounded Task cards and opaque versions.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/task-domain.ts", "src/model-tool-contract/beads-task-adapter.ts"]
     },
     {
@@ -87,7 +87,7 @@
       "subsystem": "task_authority",
       "summary": "Create ordered, independently committed Tasks with operation replay and explicit unknown outcomes.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/beads-task-adapter.ts", "src/model-tool-contract/catalog.ts"]
     },
     {
@@ -95,7 +95,7 @@
       "subsystem": "task_authority",
       "summary": "Apply Task updates with expected-version checks, operation replay, evidence, and no-state-change refusal.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/beads-task-adapter.ts", "src/model-tool-contract/beads-authority-adapter.ts"]
     },
     {
@@ -103,7 +103,7 @@
       "subsystem": "task_authority",
       "summary": "Claim work atomically without combining claim with an unrelated Task mutation.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/beads-task-adapter.ts", "extensions/index.ts"]
     },
     {
@@ -111,7 +111,7 @@
       "subsystem": "task_authority",
       "summary": "Mutate typed Task relations with graph validation, idempotency, and optional concurrency control.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/beads-authority-adapter.ts"]
     },
     {
@@ -127,7 +127,7 @@
       "subsystem": "task_authority",
       "summary": "Refuse incompatible Task records during normal runtime and migrate them only through explicit stopped-epoch procedures.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/task-migration.ts", "src/utils/task-delivery-migration.ts"]
     },
     {
@@ -135,7 +135,7 @@
       "subsystem": "alert_authority",
       "summary": "Accept only valid Alert kinds, targets, actor Roles, and canonical optional Task references.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/alerts.ts"]
     },
     {
@@ -143,7 +143,7 @@
       "subsystem": "alert_authority",
       "summary": "Report per-recipient fan-out acceptance and partial failure without mutating Task state.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/alerts.ts", "src/utils/messaging.ts"]
     },
     {
@@ -151,24 +151,24 @@
       "subsystem": "alert_authority",
       "summary": "Retain Alert-delivery intent until exact Session observation and successful-turn acknowledgement.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/message-delivery.ts"]
     },
     {
       "id": "ALERT-004",
       "subsystem": "alert_authority",
       "summary": "After Alert delivery acceptance followed by Coordination publication failure, omit per-recipient outcomes from the unavailable public result, do not advance the cursor or mutate Task state, and let an exact retry duplicate accepted delivery under a new Alert identity.",
-      "classification": "unclassified",
+      "classification": "compatibility_required",
       "testState": "characterized",
       "evidence": ["src/utils/alert-publication-failure.characterization.test.ts", "src/utils/alerts.ts", "src/utils/team-events.ts"],
-      "proofLimit": "The registered-extension characterization covers one partial Team broadcast, real native inbox writes, a filesystem event-journal failure, and an exact retry. It does not classify the behavior as intended or defective, and it does not prove process restart or later exact-Session presentation."
+      "proofLimit": "One Node process directly drives two registered extension harnesses and same-Session lifecycle hooks. It proves later exact-Session presentation and hook-level replay after an error, not a process, fork, Pi Session, or OS restart. External process evidence remains a proof limit; compatibility preservation does not assert that this behavior is ideal."
     },
     {
       "id": "COORD-001",
       "subsystem": "coordination_observation",
       "summary": "Produce one coherent current snapshot from Team, Worker, Task, and Alert evidence.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/utils/team-events.ts", "src/model-tool-contract/durable-model-tool-port.ts"]
     },
     {
@@ -193,7 +193,7 @@
       "subsystem": "coordination_observation",
       "summary": "Advance no watermark and publish no semantic observation when an authority is unavailable or hydration is incomplete.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/durable-model-tool-port.ts", "src/utils/hidden-observation.ts"]
     },
     {
@@ -201,7 +201,7 @@
       "subsystem": "trio_facing_interface_and_projections",
       "summary": "Validate the complete raw semantic result before any audience projection.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/result-projection.ts"]
     },
     {
@@ -209,7 +209,7 @@
       "subsystem": "trio_facing_interface_and_projections",
       "summary": "Expose only decision-relevant schema-valid JSON to the agent while preserving recovery coordinates.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/model-tool-contract/result-projection.ts"]
     },
     {
@@ -217,23 +217,25 @@
       "subsystem": "trio_facing_interface_and_projections",
       "summary": "Render concise collapsed and expanded human/TUI views without inventing or hiding semantic outcomes.",
       "classification": "unclassified",
-      "testState": "missing",
-      "evidence": ["src/model-tool-contract/tui-projection.ts"]
+      "testState": "characterized",
+      "evidence": ["src/model-tool-contract/tui-projection.ts", "scripts/tool-result-qa/suite.test.ts"],
+      "proofLimit": "Independent compact and expanded semantic assertions cover representative success, refusal with recovery version, partial, unavailable, and execution-error outcomes. They do not prove every human-view coordinate, real Pi or model interpretation, or terminal pixels."
     },
     {
       "id": "TRIO-004",
       "subsystem": "trio_facing_interface_and_projections",
       "summary": "Keep machine, agent, and human projections factually consistent and privacy-bounded for success and failure.",
       "classification": "unclassified",
-      "testState": "missing",
-      "evidence": ["src/model-tool-contract/result-projection.ts", "scripts/tool-result-qa/harness.ts"]
+      "testState": "characterized",
+      "evidence": ["src/model-tool-contract/result-projection.ts", "scripts/tool-result-qa/harness.ts", "scripts/tool-result-qa/suite.test.ts"],
+      "proofLimit": "Independent compact and expanded semantic assertions cover representative success, refusal with recovery version, partial, unavailable, and execution-error outcomes. All 48 cases retain raw-to-agent parity and fixture home, Session, and pane-value privacy checks. The suite does not prove every human-view coordinate, real Pi or model interpretation, or terminal pixels."
     },
     {
       "id": "ADD-OBS-001",
       "component": "additive_membership_observation",
       "summary": "Publish privacy-filtered recorded Membership evidence through pi-teams-observation/1 without becoming core authority or claiming OS liveness.",
       "classification": "unclassified",
-      "testState": "missing",
+      "testState": "characterized",
       "evidence": ["src/public/observation.ts", "src/public/observation.test.ts"]
     }
   ]
