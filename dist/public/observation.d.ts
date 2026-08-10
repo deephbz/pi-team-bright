@@ -1,4 +1,4 @@
-import { type TerminalTarget } from "../utils/models";
+import type { TerminalTarget } from "../team-authority/contracts";
 export declare const OBSERVATION_SCHEMA: "pi-teams-observation/1";
 export declare const OBSERVATION_SCHEMA_VERSION: 1;
 export declare const OBSERVATION_PRODUCER_VERSION: string;
