@@ -26,11 +26,9 @@ import {
   type AlertSendResult,
   type ModelToolJourneyExecutors,
 } from "./executors";
-import {
-  exactLeaderSessionId,
-  InMemoryModelToolTeamPort,
-  type ModelToolTeamPort,
-} from "./in-memory-team-port";
+import { InMemoryModelToolTeamPort } from "./in-memory-team-port";
+import { exactLeaderSessionId, type ModelToolTeamPort } from "./model-tool-contracts";
+import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import { assembleToolResult } from "./result-projection";
 import { createToolResultRenderer } from "./tui-projection";
 
@@ -52,7 +50,7 @@ const taskLinkCatalogEntry = catalogEntry("task_link");
 const alertSendCatalogEntry = catalogEntry("alert_send");
 
 export interface RegisteredModelToolJourney {
-  port: ModelToolTeamPort;
+  port: ModelToolJourneyPort;
   executors: ModelToolJourneyExecutors;
 }
 
@@ -74,9 +72,12 @@ type PiRegistrationCompatibility = Assert<ExtensionAPI extends ModelToolRegistra
 /** Register only the accepted first model-tool journey against one runtime port. */
 export function registerModelToolJourney(
   pi: ModelToolRegistrationSink,
-  port: ModelToolTeamPort = new InMemoryModelToolTeamPort(),
+  port: ModelToolJourneyPort | ModelToolTeamPort = new InMemoryModelToolTeamPort(),
 ): RegisteredModelToolJourney {
-  const executors = createModelToolJourneyExecutors(port);
+  const journeyPort = "team" in port
+    ? port as ModelToolJourneyPort
+    : { team: port as any, task: port as any, alert: port as any, coordination: port as any } satisfies ModelToolJourneyPort;
+  const executors = createModelToolJourneyExecutors(journeyPort);
   const leaderSessionId = (ctx: {
     sessionManager: { getSessionId?: () => string; getSessionFile?: () => string | undefined };
     cwd?: string;
@@ -86,7 +87,7 @@ export function registerModelToolJourney(
     const rawSessionId = ctx.sessionManager.getSessionId?.() ?? sessionFile;
     if (!rawSessionId) throw new Error("A durable Pi Session identity is required for the model-tool surface.");
     const exact = exactLeaderSessionId(rawSessionId);
-    if (sessionFile) port.setLeaderSessionFile?.(exact, sessionFile);
+    if (sessionFile) journeyPort.team.setLeaderSessionFile?.(exact, sessionFile);
     let projectTrusted: boolean | undefined;
     try {
       const trust = ctx.isProjectTrusted?.();
@@ -94,7 +95,7 @@ export function registerModelToolJourney(
     } catch {
       projectTrusted = undefined;
     }
-    port.setLeaderLaunchContext?.(exact, {
+    journeyPort.team.setLeaderLaunchContext?.(exact, {
       cwd: ctx.cwd ?? process.cwd(),
       projectTrusted,
     });
@@ -275,5 +276,5 @@ export function registerModelToolJourney(
   };
   pi.registerTool(alertSendTool);
 
-  return { port, executors };
+  return { port: journeyPort, executors };
 }

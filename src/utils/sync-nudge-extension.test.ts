@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
+import { DurableModelToolBindings, DurableModelToolCoordinationApplication, DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import { exactLeaderSessionId } from "../model-tool-contract/runtime";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -110,7 +110,7 @@ describe("resumed leader sync nudge binding", () => {
     const sent: any[] = [];
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", name);
-    const readDebt = vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockResolvedValue({
+    const readDebt = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
       kind: "eligible",
       debtKey: "worker-authored-task-change",
       requestedView: "updates",
@@ -121,7 +121,7 @@ describe("resumed leader sync nudge binding", () => {
       branchId: "root",
       policyVersion: "test",
     });
-    const bind = vi.spyOn(DurableModelToolTeamPort.prototype, "setLeaderSessionFile");
+    const bind = vi.spyOn(DurableModelToolBindings.prototype, "setLeaderSessionFile");
     const handlers = registerExtension(branch, sent);
 
     const resumedContext = context(sessionFile, sessionId, branch);
@@ -158,7 +158,7 @@ describe("resumed leader sync nudge binding", () => {
     const fresh = {
       ...stale, debtKey: "fresh-debt", branchLineage: ["fork-root"], branchId: "fork-root",
     };
-    vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockImplementation(async (_session, lineage) =>
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockImplementation(async (_session, lineage) =>
       lineage[0] === "root" ? stale : lineage[0] === "fork-root" ? fresh : { kind: "none" },
     );
     let raced = false;
@@ -201,7 +201,7 @@ describe("resumed leader sync nudge binding", () => {
     const sent: any[] = [];
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", name);
-    vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockResolvedValue({
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
       kind: "eligible", debtKey: "old-lead-debt", requestedView: "updates", teamEpochId: config.epochId!,
       leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!, branchLineage: ["root"], branchId: "root", policyVersion: "test",
     });
@@ -222,7 +222,7 @@ describe("resumed leader sync nudge binding", () => {
   });
 
   it("suppresses forked Sessions and real stale/unbound port bindings", async () => {
-    const readDebt = vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockResolvedValue({ kind: "eligible", debtKey: "must-not-read", requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "test" });
+    const readDebt = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({ kind: "eligible", debtKey: "must-not-read", requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "test" });
     const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
     const sent: any[] = [];
     vi.stubEnv("PI_AGENT_NAME", "");

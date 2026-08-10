@@ -17,6 +17,7 @@ import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-li
 import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
+import { resolveTeamTaskAuthority } from "../src/model-tool-contract/beads-authority-adapter";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
@@ -29,7 +30,15 @@ import type { TaskCard, TaskCardWarning } from "../src/task-authority/task-domai
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
-import { DurableModelToolTeamPort, type ModelToolLifecycle } from "../src/model-tool-contract/durable-model-tool-port";
+import {
+  DurableModelToolAlertApplication,
+  DurableModelToolBindings,
+  DurableModelToolCoordinationApplication,
+  DurableModelToolTaskApplication,
+  DurableModelToolTeamApplication,
+  type ModelToolLifecycle,
+} from "../src/model-tool-contract/durable-model-tool-port";
+import { ModelToolJourneyFacade } from "../src/model-tool-contract/model-tool-journey-facade";
 import { exactLeaderSessionId, registerModelToolJourney } from "../src/model-tool-contract/runtime";
 import { assembleToolResult } from "../src/model-tool-contract/result-projection";
 
@@ -365,7 +374,12 @@ export default function (pi: ExtensionAPI) {
         ? modelToolLifecycleAdapter.shutdownTeam(name)
         : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
     };
-    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries, coordinationObservationService));
+    const modelToolBindings = new DurableModelToolBindings();
+    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, { resolve: resolveTeamTaskAuthority });
+    const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory);
+    const modelToolAlert = new DurableModelToolAlertApplication(modelToolBindings, alertSender);
+    const modelToolCoordination = new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService);
+    modelToolJourney = registerModelToolJourney(pi, new ModelToolJourneyFacade(modelToolTeam, modelToolTask, modelToolAlert, modelToolCoordination));
   }
 
   function modelToolBranchIds(ctx: ExtensionContext): string[] {
@@ -393,7 +407,7 @@ export default function (pi: ExtensionAPI) {
   if (modelToolJourney) {
     pi.on("tool_call", (event, ctx) => {
       if (sessionAdapter.isTeammate() || !leaderToolNames.has(event.toolName)) return;
-      modelToolJourney.port.setBranchContext(
+      modelToolJourney.port.coordination.setBranchContext(
         exactLeaderSessionId(ctx.sessionManager.getSessionId()),
         modelToolBranchIds(ctx),
       );
@@ -402,15 +416,15 @@ export default function (pi: ExtensionAPI) {
       if (sessionAdapter.isTeammate()) return;
       const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
       const lineage = modelToolBranchIds(ctx);
-      modelToolJourney.port.setBranchContext(sessionId, lineage);
-      const pending = modelToolJourney.port.getPendingObservation?.(sessionId);
+      modelToolJourney.port.coordination.setBranchContext(sessionId, lineage);
+      const pending = modelToolJourney.port.coordination.getPendingObservation?.(sessionId);
       if (!pending || !modelToolContainsExact(event.payload, pending.resultText)) return;
       const entryId = modelToolPersistedToolResult(ctx, pending.toolCallId, pending.resultText);
       if (!entryId) return;
-      if (modelToolJourney.port.acknowledgePendingObservationAsync) {
-        await modelToolJourney.port.acknowledgePendingObservationAsync(sessionId, entryId, lineage);
+      if (modelToolJourney.port.coordination.acknowledgePendingObservationAsync) {
+        await modelToolJourney.port.coordination.acknowledgePendingObservationAsync(sessionId, entryId, lineage);
       } else {
-        modelToolJourney.port.acknowledgePendingObservation(sessionId, entryId, lineage);
+        modelToolJourney.port.coordination.acknowledgePendingObservation(sessionId, entryId, lineage);
       }
     });
   }

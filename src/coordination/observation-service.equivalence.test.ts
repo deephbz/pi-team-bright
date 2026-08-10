@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
-import type { TeamSyncPortResult } from "../model-tool-contract/in-memory-team-port";
+import type { TeamSyncPortResult } from "../model-tool-contract/model-tool-contracts";
 import { CoordinationObservationService } from "./observation-service";
 import type { CoordinationSyncResult } from "./observation-contracts";
 
@@ -32,14 +32,28 @@ describe("Coordination observation service equivalence fences", () => {
     expect(source).toContain("cachedProjectionForBound");
   });
 
-  it("keeps the model-tool facade as a service delegate without a copied observation algorithm", () => {
-    const source = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-port.ts"), "utf8");
-    expect(source).toContain("await this.observationService.readTeamSync(sessionFile, view, signal, toolCallId)");
-    expect(source).toContain("this.observationService.acknowledge(");
-    expect(source).toContain("this.observationService.setBranchContext(");
+  it("keeps the Coordination application as the observation-service delegate without a copied algorithm", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-coordination-application.ts"), "utf8");
+    expect(source).toContain("this.service.readTeamSync(file, view, signal, call)");
+    expect(source).toContain("this.service.acknowledge(");
+    expect(source).toContain("this.service.setBranchContext(");
+    expect(source).toContain("this.service.pending(");
+    expect(source).toContain("this.service.readSyncNudgeDebt(file, lineage)");
     expect(source).not.toContain("readModelToolTasks(");
     expect(source).not.toContain("hydrateTaskIds(");
     expect(source).not.toContain("cachedTaskProjection(");
+  });
+
+  it("keeps the flat durable port as an exact Coordination forwarder", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-port.ts"), "utf8");
+    expect(source).toContain("return this.coordination.readTeamSync(...args);");
+    expect(source).toContain("return this.coordination.acknowledgePendingObservation(...args);");
+    expect(source).toContain("return this.coordination.acknowledgePendingObservationAsync(...args);");
+    expect(source).toContain("return this.coordination.setBranchContext(...args);");
+    expect(source).toContain("return this.coordination.getPendingObservation(...args);");
+    expect(source).toContain("return this.coordination.readSyncNudgeDebt(...args);");
+    expect(source).not.toContain("observationService.readTeamSync");
+    expect(source).not.toContain("observationService.acknowledge");
   });
 
   it("fences Coordination imports and preserves default construction compatibility", () => {

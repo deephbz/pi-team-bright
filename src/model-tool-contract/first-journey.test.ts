@@ -119,7 +119,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
 
   it("maps each registered tool through ordered leader setup to its exact port method", async () => {
     const calls: string[] = [];
-    const port = Object.fromEntries([
+    const methods = Object.fromEntries([
       ["createTeam", "team_create"],
       ["readTeamSync", "team_sync"],
       ["ensureWorker", "ensure_worker"],
@@ -133,12 +133,21 @@ describe("first model-tool journey through the Pi registration adapter", () => {
     ].map(([method, tool]) => [method, async () => {
       calls.push(method);
       throw new Error(`port:${tool}`);
-    }])) as Record<string, (...arguments_: unknown[]) => Promise<never>> & {
-      setLeaderSessionFile: (session: string, file: string) => void;
-      setLeaderLaunchContext: (session: string, context: unknown) => void;
+    }])) as Record<string, (...arguments_: unknown[]) => Promise<never>>;
+    const team = {
+      createTeam: methods.createTeam,
+      ensureWorker: methods.ensureWorker,
+      stopWorker: methods.stopWorker,
+      shutdownTeam: methods.shutdownTeam,
+      setLeaderSessionFile(session: string, file: string) { calls.push(`session:${session}:${file}`); },
+      setLeaderLaunchContext(session: string, context: unknown) { calls.push(`launch:${session}:${JSON.stringify(context)}`); },
     };
-    port.setLeaderSessionFile = (session, file) => { calls.push(`session:${session}:${file}`); };
-    port.setLeaderLaunchContext = (session, context) => { calls.push(`launch:${session}:${JSON.stringify(context)}`); };
+    const port = {
+      team,
+      task: { createTask: methods.createTask, readTasks: methods.readTasks, updateTasks: methods.updateTasks, linkTask: methods.linkTask },
+      alert: { sendAlert: methods.sendAlert },
+      coordination: { readTeamSync: methods.readTeamSync },
+    };
 
     const tools = new Map<string, RegisteredTool>();
     registerModelToolJourney({ registerTool(tool: RegisteredTool) { tools.set(tool.name, tool); } } as never, port as never);
@@ -194,7 +203,7 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       failed_recipients: [],
       task_state_changed: false,
     });
-    expect(port.readDebugRevision()).toBe(revision);
+    expect(port.readDebugRevision()).toBe(revision + 1);
   });
 
   it("rejects a malformed semantic result before model content exists", () => {
