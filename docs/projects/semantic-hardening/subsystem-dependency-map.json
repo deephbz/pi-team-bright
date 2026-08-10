@@ -1,28 +1,37 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "commit_1_ready_alert_ports_remaining_boundaries_incomplete",
-  "reviewedRevision": "57c8e02d672eddad0aa955961cef5628b7bb4421",
+  "status": "accepted_coordination_nudge_commit_remaining_trio_and_observation_boundaries",
+  "reviewedRevision": "b4bf6dee91cf25532cbc33a397167567ba6d347e",
   "reviewedTreeState": {
-    "kind": "stable_uncommitted_alert_canonical_selection",
+    "kind": "accepted_coordination_nudge_commit",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "baseRevision": "ab7f591",
-    "selectedPaths": 10,
-    "selectionScope": "alert_canonical_contract_inbox_delivery_direct_delivery_durable_ports_and_utils_compatibility",
+    "baseRevision": "3869ef6",
+    "selectedPaths": 19,
+    "selectionScope": "coordination_nudge_debt_record_storage_pi_actuation_and_focused_evidence",
     "selectedPathList": [
-      "src/alert-authority/alerts.ts",
-      "src/alert-authority/contracts.ts",
-      "src/alert-authority/delivery-contracts.ts",
-      "src/alert-authority/inbox-delivery.ts",
-      "src/alert-authority/direct-delivery.ts",
-      "src/utils/alerts.ts",
-      "src/utils/messaging.ts",
-      "src/utils/message-delivery.ts",
-      "src/adapters/durable-alert-membership.ts",
-      "src/adapters/durable-alert-publication.ts"
+      "extensions/index.ts",
+      "extensions/pi-team-session-adapter.ts",
+      "src/adapters/durable-coordination-nudge-record.ts",
+      "src/adapters/durable-coordination-nudge-store.ts",
+      "src/adapters/durable-coordination-team-runtime.ts",
+      "src/coordination/nudge-boundary.test.ts",
+      "src/coordination/nudge-debt.test.ts",
+      "src/coordination/nudge-debt.ts",
+      "src/coordination/nudge-eligibility.test.ts",
+      "src/coordination/nudge-record-port.ts",
+      "src/coordination/observation-service.ts",
+      "src/coordination/queries.ts",
+      "src/coordination/task-projection-revision.ts",
+      "src/model-tool-contract/durable-model-tool-port.test.ts",
+      "src/model-tool-contract/durable-model-tool-port.ts",
+      "src/utils/sync-nudge-conductor.test.ts",
+      "src/utils/sync-nudge-conductor.ts",
+      "src/utils/sync-nudge-extension.test.ts",
+      "src/utils/sync-nudge.test.ts"
     ],
-    "review": "stable_accepted_alert_port_production_tree_commit_1_ready",
+    "review": "accepted_behavior_preserving_coordination_nudge_commit",
     "selectedPathDigestSha256": null,
-    "proofLimit": "Focused tests establish deterministic production control flow and behavior compatibility. They do not establish native filesystem watches or locks, OS scheduling, real Pi turn delivery, process, fork, Pi Session, or OS restart."
+    "proofLimit": "Focused deterministic evidence establishes source control flow and behavior compatibility. It does not establish real Pi persistence, external Beads/Dolt contention, cross-process forks, native watcher delivery, OS scheduling, concurrent external writers, or terminal pixels."
   },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
@@ -35,7 +44,8 @@
     { "revision": "6f47ae6", "scope": "deterministic lock contention oracles" },
     { "revision": "9a41d24", "scope": "Task hydration benchmark" },
     { "revision": "734bbd3", "scope": "rc.10 characterization alignment" },
-    { "revision": "8f2da7c", "scope": "rc.10 subsystem audit refresh" }
+    { "revision": "8f2da7c", "scope": "rc.10 subsystem audit refresh" },
+    { "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e", "scope": "Coordination nudge boundary" }
   ],
   "upstreamRc10CoordinationCommits": [
     { "revision": "a80f102", "scope": "event-directed Task hydration" },
@@ -58,9 +68,9 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 94,
+      "files": 99,
       "lines": null,
-      "staticLocalEdges": 320,
+      "staticLocalEdges": 334,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -77,7 +87,17 @@
       "lines": 25803
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
-    "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. The stable accepted slice-C Coordination service tree has 94 production TypeScript files and 320 unique resolved static local edges, with zero nontrivial cycles and zero dynamic imports.",
+    "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. Accepted Coordination nudge commit b4bf6dee91cf25532cbc33a397167567ba6d347e has 99 production TypeScript files and 334 unique resolved static local edges, with zero nontrivial cycles and zero runtime dynamic imports.",
+    "nextOwnCommitIssue": "A separately reproduced baseline terminal-admission defect is the next own-commit issue. It is not a regression from the Coordination nudge commit.",
+    "acceptedNudgeBoundary": {
+      "state": "accepted_commit_behavior_preserving",
+      "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e",
+      "ownership": "Coordination owns debt meaning, exact identity, event pagination, neutral Task-projection revision, failed-hint provenance, and eligibility. Durable adapters own JSONL reservation and promotion storage. The conductor owns timers only. Pi alone owns exact-Session actuation and proof.",
+      "legacyCorrections": ["with logical Workers, retain optional policy-version undefined interpolation in eligible debt keys", "use a nudge-specific exact-leader outer binding that avoids early none/no-active-Team; its durable hidden-observation read still applies teamModelToolContractGap, so absent logicalWorkers returns the exact legacy unavailable result"],
+      "rejectedAttempts": ["early none gate for missing policyVersion", "reuse of normal observation binding for nudge debt"],
+      "proofLimit": "Deterministic one-process evidence does not prove real Pi persistence, external Beads/Dolt contention, cross-process forks, native watcher delivery, OS scheduling, concurrent external writers, or terminal pixels.",
+      "remainingSeam": "combined Trio facade and in-memory fake"
+    },
     "piSessionAdapterSelection": {
       "baseline": "1686ac19dc83143e55c7a68062e1a30c1e53fa6d",
       "paths": ["extensions/index.ts", "extensions/pi-team-session-adapter.ts", "src/team-authority/team-session-lifecycle-service.boundary.test.ts", "src/utils/pi-session-adapter.characterization.test.ts"],
@@ -307,6 +327,11 @@
           "src/utils/task-event-failure-hints.ts",
           "src/utils/sync-nudge.ts",
           "src/utils/sync-nudge-conductor.ts",
+          "src/coordination/nudge-debt.ts",
+          "src/coordination/nudge-record-port.ts",
+          "src/coordination/task-projection-revision.ts",
+          "src/adapters/durable-coordination-nudge-record.ts",
+          "src/adapters/durable-coordination-nudge-store.ts",
           "src/coordination/queries.ts",
           "src/adapters/durable-coordination-queries.ts",
           "src/adapters/durable-coordination-team-runtime.ts",
@@ -315,7 +340,7 @@
           "src/coordination/observation-contracts.ts",
           "src/coordination/observation-service.ts"
         ],
-        "currentScopeNote": "Slice C gives CoordinationObservationService snapshot/update/page/hydration/wait/revision ownership plus pending presentation, Task cache, branch lineage, and acknowledgement. It receives query, durable-store, wait, and projection dependencies; the facade delegates and stable aliases/default compatibility remain. Nudge actuation, Trio, and the hidden-observation Team query remain later seams; unused readAllNudgeEvents is local cleanup."
+        "currentScopeNote": "CoordinationObservationService owns snapshot/update/page/hydration/wait/revision behavior plus pending presentation, Task cache, branch lineage, acknowledgement, and nudge debt. Coordination nudge debt owns identity, pagination, neutral Task-projection revision, failed-hint provenance, and eligibility. Durable adapters retain JSONL nudge reservation/promotion storage; SyncNudgeConductor owns timers only; Pi retains exact-Session actuation and proof. With logical Workers, legacy policy-version undefined interpolation remains eligible. The nudge-specific outer resolver avoids early none/no-active-Team, but durable hidden observation still applies teamModelToolContractGap, so absent logicalWorkers returns the exact legacy unavailable result. The combined Trio facade/fake and hidden-observation Team query remain later seams."
       },
       {
         "id": "model_tool_facade_and_projections",
@@ -1164,8 +1189,8 @@
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 94,
-      "uniqueLocalEdges": 320,
+      "files": 99,
+      "uniqueLocalEdges": 334,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
@@ -1224,8 +1249,8 @@
       },
       {
         "id": "coordination_observation",
-        "completion": "slice_c_observation_service_implemented_nudge_and_trio_later",
-        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts retain nudge actuation and broader Trio-facing behavior", "No separate nudge actuator exists by design in slice C", "Unused readAllNudgeEvents is later local cleanup"],
+        "completion": "coordination_observation_and_nudge_boundary_implemented_trio_later",
+        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts retain broader Trio-facing behavior", "Pi exact-Session nudge actuation and proof remain deliberate integration responsibilities", "No separate nudge actuator exists by design"],
         "violations": ["coordination_observation -> team_authority_and_role_realization: src/utils/hidden-observation.ts:6 remains a concrete Team configuration read"],
         "staticGate": "Coordination liveness may import only its consumer-owned Team runtime, Task state/delivery, and Alert actuation query interfaces. Concrete reads stay in the three durable adapters; deny utils/runtime, taskDeliveryPath, inboxPath, and concrete Team configuration imports from Coordination liveness sources.",
         "focusedVerification": ["npx vitest run src/coordination/queries.equivalence.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/utils/sync-liveness.test.ts test/coord-liveness-e2e/sync-liveness.test.ts", "npm run typecheck", "npm run test:lanes"]

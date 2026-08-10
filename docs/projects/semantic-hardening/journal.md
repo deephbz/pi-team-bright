@@ -1119,3 +1119,55 @@ changes; append a correction.
   imports. Focused evidence remains one-process and does not prove real Pi
   persistence, process or fork recovery, watcher delivery, OS scheduling,
   external writers, or terminal pixels. No aggregate ran.
+
+## 2026-08-10 — accepted Coordination nudge boundary recorded
+
+- The accepted uncommitted slice moves nudge debt meaning, exact debt identity,
+  event pagination, neutral Task-projection revision, and failed-hint provenance
+  into Coordination. Durable Coordination adapters retain existing JSONL
+  reservation and promotion storage behind a narrow record port.
+- `SyncNudgeConductor` owns timers only. Pi remains the sole exact-Session
+  actuator and proof boundary: it revalidates Team epoch, lead Membership,
+  Session, and full branch; reserves; sends the unchanged custom message; proves
+  the exact persisted message; then promotes the record. Reservations remain
+  derived historical evidence and never mutate Team, Task, Alert, or acknowledged
+  observation authority.
+- The initial extraction incorrectly treated missing optional policy version as
+  no debt and reused normal observation binding, which requires logical Workers.
+  Both attempts were rejected. Legacy policy-version interpolation remains in the
+  debt key. The nudge-specific resolver requires only the former exact-leader
+  prerequisites; snapshot and update observation still require logical Workers.
+- The selected source graph has 99 production TypeScript files and 334 unique
+  resolved static local edges, with zero nontrivial cycles and zero runtime
+  dynamic imports. Focused nudge and registered Coordination evidence, typecheck,
+  package verification, and agent QA passed. No aggregate ran.
+- The evidence is deterministic and one-process. It does not prove real Pi
+  persistence, external Beads/Dolt contention, cross-process forks, native
+  watcher delivery, OS scheduling, concurrent external writers, or terminal
+  pixels. The remaining structural seam is the combined Trio façade and fake.
+- Architecture impact: **changed** for internal Coordination ownership. Public
+  behavior and HyperCarrier's opaque Structurizr topology remain unchanged.
+
+### Correction — logical-Worker nudge contract
+
+- The prior entry's phrase that the nudge-specific resolver did not require
+  logical Workers was incomplete. The outer resolver avoids an early `none` or
+  no-active-Team result, but the durable hidden-observation read still applies
+  `teamModelToolContractGap`. Absent logical Workers therefore returns the exact
+  legacy unavailable result.
+- With logical Workers, absent optional `policyVersion` remains eligible and
+  retains the legacy undefined interpolation in the debt key. This correction
+  changes no source, test, public behavior, or architecture claim.
+
+## 2026-08-10 — Coordination nudge commit receipt
+
+- Accepted source commit `b4bf6dee91cf25532cbc33a397167567ba6d347e`
+  (`refactor: isolate Coordination nudge boundary`) contains the 19-path
+  Coordination nudge selection. It supersedes only the transient selection
+  state in current artifacts; the earlier entry remains historical evidence.
+- The commit preserves the corrected logical-Worker distinction, 99-file/334-edge
+  acyclic graph, proof limits, public behavior, and the remaining Trio seam.
+  HyperCarrier's opaque Structurizr topology remains unchanged.
+- A separately reproduced baseline terminal-admission defect is the next
+  own-commit issue. It is not a regression from this nudge commit. No aggregate
+  claim follows from this receipt.

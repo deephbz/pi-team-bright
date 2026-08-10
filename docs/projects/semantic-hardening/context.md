@@ -2,8 +2,9 @@
 
 Updated: 2026-08-10
 Stage: consolidation and hardening
-Status: stable accepted Alert-port production tree is commit-1-ready; full
-five-subsystem implementation remains active
+Status: Coordination nudge boundary is accepted in commit
+`b4bf6dee91cf25532cbc33a397167567ba6d347e`; full five-subsystem
+implementation remains active
 Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -227,7 +228,8 @@ ALERT-004 exactly: accepted delivery can survive publication failure, the outer
 result remains unavailable, and retry creates a new Alert identity with duplicate
 delivery. Do not add an outbox, operation ID, recovery record, or warning change.
 
-Coordination observation is the active boundary after clean commit `a960bf8`.
+Coordination observation and its nudge boundary are accepted through commit
+`b4bf6dee91cf25532cbc33a397167567ba6d347e`.
 Slice C makes `CoordinationObservationService` the owner of snapshot and update
 observation, pages, hydration, waits, revisions, pending presentation, cached
 Task projections, branch lineage, and acknowledgement. It receives explicit
@@ -239,9 +241,22 @@ Slice B query DTOs and three durable authority adapters remain its read boundary
 and liveness remains pure over them. Outputs, cursors, acknowledgement, bounded
 waits, and the quiet cadence remain unchanged: one complete Task read by 4,999
 ms and three by 5,000 ms. Do not extract nudge actuation or the Trio facade yet.
-The source graph has 94 production TypeScript files and 320 unique resolved
-static local edges, with zero nontrivial cycles or dynamic imports. An unused
-`readAllNudgeEvents` helper is later local cleanup, not a behavior change.
+The accepted nudge selection moves debt calculation, exact debt identity,
+event pagination, neutral Task-projection revision, and failed-hint provenance
+into Coordination. Its durable record adapters own JSONL reservation and
+promotion storage. `SyncNudgeConductor` owns timers only. Pi alone revalidates
+the exact Team epoch, lead Membership, Session, and full branch, reserves,
+sends the unchanged custom message, proves that exact persisted message, and
+then promotes the record. With logical Workers, missing optional policy version
+remains eligible with legacy undefined interpolation. The nudge-specific outer
+resolver avoids an early `none` or no-active-Team result, but its durable
+hidden-observation read still applies `teamModelToolContractGap`; absent logical
+Workers therefore returns the exact legacy unavailable result. Snapshot and
+update observation also require logical Workers. The source graph has 99 production
+TypeScript files and 334 unique resolved static local edges, with zero
+nontrivial cycles or runtime dynamic imports. The remaining next boundary is the combined Trio façade and fake, not nudge
+actuation. A separately reproduced baseline terminal-admission defect is the
+next own-commit issue; it is not a nudge regression.
 
 Characterization Tasks `semantic-hardening-coordination-qjp`,
 `semantic-hardening-coordination-3bq`, and
@@ -295,10 +310,11 @@ Open boundary risks:
   Session presentation and replay after an error, not process, fork, Pi Session,
   or OS restart. Any semantic change needs a separate owner-visible decision.
 - Coordination implements rc.10 hydration, liveness, failed hints, bounded
-  waits, indeterminate outcomes, and nudges. Slice B moves Team runtime, Task
-  state/delivery, and Alert inbox actuation reads behind Coordination-owned query
-  DTOs, but the combined durable façade, Pi composition, and hidden-observation
-  Team configuration read remain later seams.
+  waits, indeterminate outcomes, and nudges. Coordination owns nudge debt,
+  identity, pagination, and eligibility; durable record adapters retain nudge
+  storage, the conductor owns timers only, and Pi retains exact-Session
+  actuation and proof. The combined durable Trio façade and fake, Pi composition,
+  and hidden-observation Team configuration read remain later seams.
 - `ModelToolTeamPort`, its durable implementation, and its in-memory fake still
   combine multiple authorities. The projection evidence is now bounded, but the
   façade and fake authority split remains incomplete.
@@ -340,8 +356,9 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Complete Alert, Coordination, Trio façade and fakes, and additive Membership
-   observation unless source evidence requires a safer order.
+3. Start the Trio façade and separate-fake split. Keep the accepted nudge
+   boundary stable, then continue additive Membership observation unless source
+   evidence requires a safer order.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after

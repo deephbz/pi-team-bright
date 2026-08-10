@@ -1,11 +1,12 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-10
-Status: maintained semantic-hardening audit; the stable accepted Alert-port
-production tree is commit-1-ready. Task reconciliation, Task mutation
-publication, Team lifecycle slices, the Pi Session adapter, and Alert's durable
-ports remain independently verified; later Coordination, Trio, and observation
-seams remain incomplete
+Status: maintained semantic-hardening audit; Coordination nudge boundary is
+accepted in `b4bf6dee91cf25532cbc33a397167567ba6d347e`. Task reconciliation,
+Task mutation publication, Team lifecycle slices, the Pi Session adapter,
+Alert's durable ports, Coordination observation, and the nudge boundary are
+independently verified; the Trio and Membership-observation seams remain
+incomplete
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -42,10 +43,10 @@ selection from baseline `1686ac1` has 81 production TypeScript files with
 `src/` and `extensions/`, excluding `*.test.ts`; test support means
 `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global setup
 is excluded. A TypeScript-AST scan resolves static relative import and re-export
-specifiers between those production files. The stable accepted slice-C
-Coordination service tree has 94 production TypeScript files and 320 unique
-resolved static local edges. It has no nontrivial strongly connected component,
-no self-cycle, and no dynamic import expression. The prior 87/285 Alert-port and
+specifiers between those production files. The accepted Coordination nudge
+commit `b4bf6dee91cf25532cbc33a397167567ba6d347e` has 99 production TypeScript
+files and 334 unique resolved static local edges. It has no nontrivial strongly
+connected component, no self-cycle, and no runtime dynamic import expression. The prior 87/285 Alert-port and
 92/304 slice-B query counts remain historical evidence for earlier slices. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
@@ -261,16 +262,29 @@ durable observation store, liveness waiter, and projection functions. The
 model-tool facade delegates while preserving result aliases and default
 construction compatibility. Outputs, cursor progression, bounded waits,
 acknowledgement, and the quiet five-second cadence remain unchanged.
-`task-event-failure-hints.ts` stores
-payload-light derived evidence when Task state commits but its Team event does
-not; Coordination matches only the current epoch, Task identity, and version
-(`src/utils/task-event-failure-hints.ts:115`,
-`src/utils/task-event-failure-hints.ts:165`). `readSyncNudgeDebt` derives branch-
-bound reconciliation debt, while `SyncNudgeConductor` and the Pi composition
-root reserve, validate, present, and persist delayed nudges only after exact
-Session-branch evidence (`src/model-tool-contract/durable-model-tool-port.ts:605`,
-`src/utils/sync-nudge-conductor.ts:27`, `extensions/index.ts:634`). These derived
-records and timers never become Team, Task, or observation authority.
+`task-event-failure-hints.ts` stores payload-light derived evidence when Task
+state commits but its Team event does not; Coordination matches only the current
+epoch, Task identity, and version (`src/utils/task-event-failure-hints.ts:115`,
+`src/utils/task-event-failure-hints.ts:165`). The accepted nudge boundary gives
+Coordination `CoordinationNudgeDebtService`, neutral Task-projection revision,
+event pagination, failed-hint provenance, exact debt identity, and eligibility
+(`src/coordination/nudge-debt.ts`, `src/coordination/task-projection-revision.ts`).
+A durable Coordination store reads derived evidence, while
+`DurableCoordinationNudgeRecord` owns the existing JSONL reservation and
+promotion storage behind the Pi-consumed record port. `SyncNudgeConductor` owns
+timers only. Pi alone revalidates the exact Team epoch, lead Membership,
+Session, and full branch; reserves; sends the unchanged custom message; proves
+that exact persisted message; and then promotes the record
+(`extensions/pi-team-session-adapter.ts`). With logical Workers, legacy records
+without policy-version provenance keep their undefined-interpolated debt-key
+shape. The nudge-specific outer binding avoids an early `none` or no-active-Team
+result, but its durable hidden-observation read still applies
+`teamModelToolContractGap`; absent logical Workers therefore returns the exact
+legacy unavailable result. Snapshot and update observation retain their
+logical-Worker requirement. Derived records and timers never become Team, Task,
+Alert, or acknowledged-observation authority. A separately reproduced baseline
+terminal-admission defect remains the next own-commit issue; it is not a nudge
+regression.
 
 Worker startup observation consumes coordination events, but it verifies current
 Team and runtime authority before claiming success. Its three-second wait is
@@ -358,7 +372,10 @@ to private record changes (`src/public/observation.ts:5`).
    logical-Worker mutation when it is absent. Its five process maps hold Session
    files, launch context, branch lineage, pending observations, and exact
    acknowledged Task projections (`src/model-tool-contract/durable-model-tool-port.ts:132`).
-   It is a useful façade, not one subsystem port.
+   It is a useful façade, not one subsystem port. The accepted nudge extraction
+   removes nudge debt, identity, pagination, and record storage from this façade,
+   but it deliberately leaves Pi exact-Session actuation and proof at the
+   integration boundary.
 
 6. **Resolved for durable lead discovery, Worker carrier
    publication/observation, and the Pi Session adapter selection.**
@@ -545,9 +562,12 @@ root, and public Membership observation reading broad private records. These ris
 - Sync nudges reserve before send and become presented evidence only after the
   exact custom message exists on the same full branch lineage
   (`src/utils/sync-nudge.ts:47`,
-  `extensions/pi-team-session-adapter.ts:199`,
-  `extensions/pi-team-session-adapter.ts:212`). They request
-  reconciliation and never mutate Task or Team authority.
+  `extensions/pi-team-session-adapter.ts`). They request reconciliation and
+  never mutate Task or Team authority. The rejected early policy-version gate
+  would have changed legacy debt keys. Reusing normal observation binding would
+  have returned early `none` for absent logical Workers; the accepted outer
+  resolver avoids that shortcut, while durable hidden observation preserves the
+  exact legacy unavailable result.
 - Compatibility readers preserve legacy Memberships, inbox IDs, terminal
   fields, Task cutover evidence, and mixed event/delivery records.
 
