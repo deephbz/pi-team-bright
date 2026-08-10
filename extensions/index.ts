@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-w
 import { Text } from "@earendil-works/pi-tui";
 import { Type, type TSchema } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
-import * as alerts from "../src/alert-authority/alerts";
+import { createAlertSender } from "../src/alert-authority/alerts";
 import { createToolResultRenderer } from "../src/model-tool-contract/tui-projection";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
 import { SYNC_NUDGE_CUSTOM_TYPE, syncNudgeTuiLine, validateSyncNudgeRecord } from "../src/utils/sync-nudge";
@@ -18,6 +18,8 @@ import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-servi
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
+import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
+import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
@@ -315,6 +317,9 @@ export default function (pi: ExtensionAPI) {
   }
 
   const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication());
+  const alertMembership = new DurableAlertMembership();
+  const alertPublication = new DurableAlertPublication();
+  const alertSender = createAlertSender(alertMembership, alertPublication);
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const teamLifecycleService = new TeamLifecycleService({
@@ -350,7 +355,7 @@ export default function (pi: ExtensionAPI) {
         ? modelToolLifecycleAdapter.shutdownTeam(name)
         : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
     };
-    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory));
+    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender));
   }
 
   function modelToolBranchIds(ctx: ExtensionContext): string[] {
@@ -444,6 +449,7 @@ export default function (pi: ExtensionAPI) {
     modelToolBranchIds,
     projectTrust,
     lifecyclePublication,
+    alertMembership,
     leaderToolNames,
     workerToolNames,
     refreshAlertToolProjection,
@@ -526,7 +532,7 @@ export default function (pi: ExtensionAPI) {
         const binding = await sessionAdapter.resolveCurrentWorkerContext(ctx);
         const actor = binding.member;
         try {
-          const result = await alerts.sendAlert({ teamName: binding.teamName, from: actor.name, to: "team-lead", kind: params.kind, text: params.text, taskId: params.task_id, taskVersion: params.task_version, expectedSender: actor.membershipId && actor.sessionFile ? { membershipId: actor.membershipId, sessionFile: actor.sessionFile } : undefined });
+          const result = await alertSender.sendAlert({ teamName: binding.teamName, from: actor.name, to: "team-lead", kind: params.kind, text: params.text, taskId: params.task_id, taskVersion: params.task_version, expectedSender: actor.membershipId && actor.sessionFile ? { membershipId: actor.membershipId, sessionFile: actor.sessionFile } : undefined });
           return assembleToolResult("alert_send", { kind: "alert_sent", alert_id: result.alertId, accepted_recipients: result.accepted.map((item) => item.recipient), failed_recipients: result.failures.map((item) => item.recipient), task_state_changed: false });
         } catch (error) {
           return assembleToolResult("alert_send", { kind: "refused", reason: "no_eligible_recipients", message: error instanceof Error ? error.message : String(error), state_changed: false });

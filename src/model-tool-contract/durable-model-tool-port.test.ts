@@ -321,7 +321,10 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../extensions/index.ts"), "utf8");
 
     expect(source.match(/const workerLaunchBridge = createWorkerLaunchBridge\(/g)).toHaveLength(1);
-    expect(source).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory)");
+    expect(source.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);
+    expect(source.match(/const alertPublication = new DurableAlertPublication\(\)/g)).toHaveLength(1);
+    expect(source).toContain("const alertSender = createAlertSender(alertMembership, alertPublication)");
+    expect(source).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender)");
   });
 
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {

@@ -4,7 +4,7 @@ import * as paths from "../utils/paths";
 import * as teams from "../utils/teams";
 import { listTaskIds, resolveTeamTaskAuthority } from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
-import * as alerts from "../alert-authority/alerts";
+import type { AlertSender } from "../alert-authority/contracts";
 import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
@@ -140,15 +140,18 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private readonly launchBridge?: WorkerLaunchBridge;
   private readonly lifecycle?: ModelToolLifecycle;
   private readonly taskAdapterFactory: BeadsTaskAdapterFactory;
+  private readonly alertSender?: AlertSender;
 
   constructor(
     launchBridge?: WorkerLaunchBridge,
     lifecycle?: ModelToolLifecycle,
     taskAdapterFactory: BeadsTaskAdapterFactory = (teamName, actor) => new BeadsTaskAdapter(teamName, actor),
+    alertSender?: AlertSender,
   ) {
     this.launchBridge = launchBridge;
     this.lifecycle = lifecycle;
     this.taskAdapterFactory = taskAdapterFactory;
+    this.alertSender = alertSender;
   }
 
   setLeaderSessionFile(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void {
@@ -400,7 +403,10 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
       if (input.target.kind === "team" && input.kind !== "announcement") {
         return { kind: "refused", reason: "invalid_fanout", message: "Only announcement Alerts may target the whole Team." };
       }
-      const result = await alerts.sendAlert({
+      if (!this.alertSender) {
+        return { kind: "unavailable", reason: "team_authority_unavailable", message: "The Alert sender is not attached to this model-tool port." };
+      }
+      const result = await this.alertSender.sendAlert({
         teamName: bound.teamName,
         from: "team-lead",
         to: input.target.kind === "team" ? "*" : input.target.name,

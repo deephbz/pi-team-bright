@@ -11,8 +11,25 @@ vi.mock("../utils/team-events", () => ({
 
 import * as messaging from "../alert-authority/inbox-delivery";
 import { appendTeamEvent } from "../utils/team-events";
-import { sendAlert } from "../alert-authority/alerts";
+import { createAlertSender } from "../alert-authority/alerts";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+
+const membership = {
+  currentRecipients: vi.fn(),
+  withCurrentDelivery: vi.fn(),
+  isCurrentSessionBinding: vi.fn(),
+};
+const sendAlert = createAlertSender(membership, {
+  appendAcceptedAlert: async (input) => appendTeamEvent(input.teamName, {
+    type: "alert",
+    alertId: input.alertId,
+    from: input.from,
+    to: input.to,
+    ...(input.taskRef ? { taskRef: input.taskRef } : {}),
+    kind: input.kind,
+    text: input.text,
+  }),
+}).sendAlert;
 
 describe("typed Alert acceptance", () => {
   beforeEach(() => {
@@ -62,6 +79,7 @@ describe("typed Alert acceptance", () => {
       "attention for Task pt-42",
       undefined,
       { membershipId: "membership_lead", sessionFile: "/tmp/lead.jsonl" },
+      membership,
     );
     expect(appendTeamEvent).toHaveBeenCalledWith("dogfood", expect.objectContaining({
       type: "alert",

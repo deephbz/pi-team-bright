@@ -1013,3 +1013,30 @@ changes; append a correction.
   `b264d13`: package verification, generated-dist comparison, compatibility
   tests, ignored-output scan, public diff, and clean-tree checks passed.
 - The reserved aggregate did not run.
+
+## 2026-08-10 — Alert membership and publication ports recorded
+
+- The stable accepted Alert-port production tree makes `AlertMembershipPort` and
+  `AlertPublicationPort` consumer-owned Alert contracts. The membership port
+  provides a name-only current roster, a current-delivery lease, and exact
+  Session-binding validation. Durable adaptation resolves Membership IDs only
+  inside the lease; no roster API leaks `membershipId`.
+- `DurableAlertMembership` retains Team configuration and lease operations, and
+  `DurableAlertPublication` retains Coordination event publication. Both sit
+  outside Alert authority. Pi composition creates one explicit `AlertSender`
+  for leader and Worker direct-delivery paths. There is no compatibility
+  singleton.
+- This preserves the current lease/inbox/publication order, lock behavior,
+  roster-order fan-out receipts, public tools, schemas, records, filenames,
+  retry, timing, errors, console behavior, and ALERT-004. The rejected Team
+  mirror and `membershipId`-leaking port attempts remain historical corrections,
+  not current design.
+- Architecture Task `semantic-hardening-alert-n5o` recomputed the canonical AST
+  map after an initial stale 302-edge record. The accepted evidence is 87
+  production TypeScript files, 285 unique resolved static local edges, zero
+  nontrivial cycles, and zero dynamic imports. Focused and runtime harness
+  evidence does not prove native watches or locks, OS scheduling, real Pi turn
+  delivery, process, fork, Pi Session, or OS restart. No aggregate ran.
+- Documentation validation is limited to JSON parsing, local links, audit/map
+  consistency, and diff review. This entry records the accepted production tree;
+  it does not stage or commit.

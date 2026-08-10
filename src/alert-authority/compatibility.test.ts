@@ -69,18 +69,14 @@ function importSpecifiers(file: string): string[] {
     .map((match) => match[1]);
 }
 
-function expectSameRuntimeExports(legacy: object, canonical: object, keys: string[]): void {
+function expectCompatibilityExports(legacy: object, keys: string[]): void {
   expect(Object.keys(legacy).sort()).toEqual(keys);
-  expect(Object.keys(canonical).sort()).toEqual(keys);
-  for (const key of keys) {
-    expect((legacy as Record<string, unknown>)[key]).toBe((canonical as Record<string, unknown>)[key]);
-  }
 }
 
 describe("Alert canonical authority compatibility", () => {
-  it("keeps every legacy runtime export identical to its canonical implementation", () => {
-    expectSameRuntimeExports(legacyAlerts, canonicalAlerts, ["ALERT_KINDS", "sendAlert"]);
-    expectSameRuntimeExports(legacyInbox, canonicalInbox, [
+  it("keeps legacy utility calls while canonical authority requires ports", () => {
+    expectCompatibilityExports(legacyAlerts, ["ALERT_KINDS", "sendAlert"]);
+    expectCompatibilityExports(legacyInbox, [
       "MessageTeamDoesNotExistError",
       "RecipientMembershipUnresolvedError",
       "RecipientNotCurrentMemberError",
@@ -93,7 +89,7 @@ describe("Alert canonical authority compatibility", () => {
       "readInboxForMembership",
       "sendPlainMessage",
     ]);
-    expectSameRuntimeExports(legacyDelivery, canonicalDelivery, [
+    expectCompatibilityExports(legacyDelivery, [
       "DEFAULT_MESSAGE_POLL_MS",
       "DIRECT_MESSAGE_ACK_ENTRY_TYPE",
       "DIRECT_MESSAGE_CUSTOM_TYPE",
@@ -106,6 +102,10 @@ describe("Alert canonical authority compatibility", () => {
       "observedMessageIdsFromContext",
       "pendingPresentedMessageIdsFromEntries",
     ]);
+    expect(legacyAlerts.ALERT_KINDS).toBe(canonicalAlerts.ALERT_KINDS);
+    expect(legacyAlerts.sendAlert).not.toBe(canonicalAlerts.sendAlert);
+    expect(legacyInbox.sendPlainMessage).not.toBe(canonicalInbox.sendPlainMessage);
+    expect(legacyDelivery.DirectMessageDelivery).not.toBe(canonicalDelivery.DirectMessageDelivery);
   });
 
   it("keeps inbox record schemas separate from Alert authority contracts", () => {
@@ -117,6 +117,30 @@ describe("Alert canonical authority compatibility", () => {
     expect(contracts).toMatch(/^export const ALERT_KINDS/m);
     expect(contracts).toMatch(/^export interface SendAlertInput/m);
     expect(contracts).toMatch(/^export interface DirectMessageDeliverySink/m);
+  });
+
+  it("keeps durable Team and Coordination imports outside Alert authority", () => {
+    const authorityFiles = [
+      "alerts.ts",
+      "inbox-delivery.ts",
+      "direct-delivery.ts",
+    ].map((file) => fs.readFileSync(path.join(root, "src/alert-authority", file), "utf8"));
+    for (const source of authorityFiles) {
+      expect(source).not.toMatch(/utils\/(teams|team-events)/);
+    }
+    const membershipAdapter = fs.readFileSync(path.join(root, "src/adapters/durable-alert-membership.ts"), "utf8");
+    const publicationAdapter = fs.readFileSync(path.join(root, "src/adapters/durable-alert-publication.ts"), "utf8");
+    expect(membershipAdapter).toContain("../utils/teams");
+    expect(publicationAdapter).toContain("../utils/team-events");
+    const contracts = fs.readFileSync(path.join(root, "src/alert-authority/contracts.ts"), "utf8");
+    expect(contracts).toContain("currentRecipients");
+    expect(contracts).toContain("withCurrentDelivery");
+    expect(contracts).toContain("isCurrentSessionBinding");
+    expect(contracts).not.toMatch(/AlertTeamConfig|readConfig|teamExists|withCurrentConfig/);
+    for (const compatibilityFile of ["alerts.ts", "messaging.ts", "message-delivery.ts"]) {
+      const source = fs.readFileSync(path.join(root, "src/utils", compatibilityFile), "utf8");
+      expect(source).not.toMatch(/^const (membership|sender) =/m);
+    }
   });
 
   it("keeps production consumers on canonical Alert authority paths", () => {

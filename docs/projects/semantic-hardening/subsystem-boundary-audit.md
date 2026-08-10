@@ -1,11 +1,11 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-10
-Status: maintained semantic-hardening audit; the stable uncommitted Alert
-canonical selection is commit-1-ready. Task reconciliation, Task mutation
-publication, Team lifecycle slices, and the Pi Session adapter selection remain
-independently verified; later Alert, Coordination, Trio, and observation seams
-remain incomplete
+Status: maintained semantic-hardening audit; the stable accepted Alert-port
+production tree is commit-1-ready. Task reconciliation, Task mutation
+publication, Team lifecycle slices, the Pi Session adapter, and Alert's durable
+ports remain independently verified; later Coordination, Trio, and observation
+seams remain incomplete
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -42,9 +42,11 @@ selection from baseline `1686ac1` has 81 production TypeScript files with
 `src/` and `extensions/`, excluding `*.test.ts`; test support means
 `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global setup
 is excluded. A TypeScript-AST scan resolves static relative import and re-export
-specifiers between those production files. It finds 249 unique local edges, no
-nontrivial strongly connected component, no self-cycle, and no dynamic import
-expression. The prior hidden dynamic Task-adapter cycle remains removed, and the
+specifiers between those production files. The stable accepted Alert-port production tree has 87 production TypeScript
+files and 285 unique resolved static local edges. Architecture Task n5o
+recomputed this canonical map count after the stale 302-edge record. It has no
+nontrivial strongly connected
+component, no self-cycle, and no dynamic import expression. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
 
@@ -182,20 +184,31 @@ Task-owned contract module, so existing internal imports remain compatible.
 
 ### Alert authority
 
-The stable uncommitted commit-1 selection places canonical Alert meaning in
+The stable accepted Alert-port production tree keeps canonical Alert meaning in
 `src/alert-authority/alerts.ts` and `contracts.ts`; durable inbox acceptance,
 fan-out, reads, acknowledgement, and legacy IDs live in `inbox-delivery.ts` and
 `delivery-contracts.ts`; exact-Membership Pi presentation and replay live in
 `direct-delivery.ts`. The old `src/utils/alerts.ts`, `messaging.ts`, and
 `message-delivery.ts` paths are compatibility re-exports only. This preserves
 public tools, schemas, package exports, inbox record shapes and filenames,
-ordering, retry, timing, exact errors, and console diagnostics.
+ordering, retry, timing, exact errors, console diagnostics, and ALERT-004.
 
-Canonical `alerts.ts` still directly calls canonical inbox delivery, imports
-`appendTeamEvent` from Coordination, and imports the Task version reference.
-Canonical inbox and direct delivery still directly read Team configuration and
-current Membership. These direct Alert-to-Team and Alert-to-Coordination edges
-are later seams. They do not establish consumer-owned durable Alert ports.
+Alert owns `AlertMembershipPort`: a name-only current-recipient roster, one
+current-delivery lease that resolves durable Membership IDs only inside the
+adapter, and an exact Session-binding check. It also owns
+`AlertPublicationPort` for accepted Alert event publication. `DurableAlertMembership`
+and `DurableAlertPublication` implement those ports outside Alert authority.
+Pi composition creates one `AlertSender` for both leader and Worker direct-
+delivery paths. Alert authority neither mirrors Team state nor exposes or
+accepts `membershipId` as a roster coordinate, and it has no compatibility
+singleton. The durable adapters retain Team configuration/lease and
+Coordination-event implementation imports.
+
+This preserves the prior lock and order: current-delivery lease and inbox
+acceptance occur before publication, fan-out remains parallel with roster-order
+receipts, and publication failure retains ALERT-004 behavior. Focused source and
+harness tests do not prove native watches or locks, OS scheduling, a real Pi
+turn, process, fork, Pi Session, or OS restart. No aggregate ran.
 
 The Message names remain implementation vocabulary. Public work uses typed
 Alerts, while durable records remain `InboxMessage` and the actuator keeps
@@ -366,16 +379,19 @@ to private record changes (`src/public/observation.ts:5`).
    `src/utils/paths.ts:69`, `src/utils/paths.ts:86`). Paths own no truth, but the mixed type file
    does.
 
-8. **Commit-1-ready Alert canonical selection.** `src/alert-authority/alerts.ts`
-   accepts typed Alerts and directly publishes a Coordination event after inbox
-   acceptance. `inbox-delivery.ts` and `direct-delivery.ts` directly resolve
-   Team Membership. The old utils paths are compatibility-only re-exports. The
-   current source graph has 85 production files, 274 unique local edges, zero
-   cycles, and zero dynamic imports. This is a source-location and compatibility
-   change only: public behavior is unchanged. The direct Team and Coordination
-   imports remain later seams; no consumer-owned durable Alert port is claimed.
-   ALERT-004 remains compatibility-required and needs a separate owner-visible
-   decision for any semantic change.
+8. **Implemented Alert ports.** Alert owns consumer-side membership and
+   publication ports in `contracts.ts`. The membership port exposes only names
+   for the roster, resolves Membership IDs only during the current-delivery
+   lease, and verifies an exact recipient Session binding. `DurableAlertMembership`
+   and `DurableAlertPublication` keep Team and Coordination calls outside Alert
+   authority. `extensions/index.ts` composes one explicit `AlertSender` for
+   leader and Worker direct-delivery use. No Team mirror, `membershipId`-leaking
+   port shape, or compatibility singleton remains. The current source graph has
+   87 production files, 285 unique resolved static local edges, zero cycles, and
+   zero dynamic
+   imports. This is a behavior-preserving dependency change: public behavior is
+   unchanged. ALERT-004 remains compatibility-required and needs a separate
+   owner-visible decision for any semantic change.
 
 9. **Resolved for the Team stop/shutdown slice.** `TeamLifecycleService` holds
    the Team topology lease, asks its consumer-owned `AssignedWorkGuard` for
@@ -523,10 +539,11 @@ static local edges, no literal relative dynamic import, no self-cycle, and no
 nontrivial SCC. The source digest is
 `51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40`.
 
-Task reconciliation and mutation publication remain the only closed Task
-seams. The Alert canonical selection is commit-1-ready but its direct Team and
-Coordination dependencies remain later seams. Team, Alert, Coordination, Trio,
-and additive Membership observation remain incomplete. The matrix records every remaining concrete or
+Task reconciliation and mutation publication remain the closed Task seams.
+Alert membership and publication ports are implemented, but Alert authority
+still owns inbox and direct-delivery behavior while its durable adapters retain
+Team and Coordination implementation imports. Team, Coordination, Trio, and
+additive Membership observation remain incomplete. The matrix records every remaining concrete or
 support-mediated seam, its source paths, required source fence, focused test
 command, blocker, and safe order. It does not treat the acyclic current file
 graph as a completed authority split: the main remaining violations are Team
@@ -601,10 +618,11 @@ at the composition root.
    exact order, lease, warning, recovery, acting-Session no-op suppression
    without event/delivery/completion, exact create-replay silence, and
    import-direction gates pass.
-5. Isolate Alert next. Wrap Message inbox records as an Alert delivery adapter
-   without changing filenames or schemas. Inject Team membership and
-   coordination publication. Characterize accepted-delivery/event-failure
-   behavior before deciding whether Alert needs an outbox.
+5. **Implemented.** Alert owns the name-only roster, current-delivery lease,
+   exact Session-binding, and publication ports. Durable Team and Coordination
+   adapters sit outside Alert authority; composition injects one sender without
+   a singleton. Keep the retained ALERT-004 characterization. Do not add an
+   outbox, operation ID, recovery record, or warning change.
 6. Consolidate the current rc.10 Coordination behavior behind one application
    boundary: page-safe `team_sync`, event-directed hydration, complete quiet-
    journal rescans, liveness and actuation reads, failed-event hints, nudge debt,

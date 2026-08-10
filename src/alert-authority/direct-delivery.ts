@@ -7,10 +7,10 @@ import {
   type DirectMessageBatchDetails,
   type DirectMessageDeliverySink,
   type DirectMessageObservation,
+  type AlertMembershipPort,
 } from "./contracts";
 import * as inboxDelivery from "./inbox-delivery";
 import { inboxPath } from "../utils/paths";
-import { readConfig } from "../utils/teams";
 
 export {
   type DirectMessageBatch,
@@ -37,12 +37,13 @@ interface DeliveryDependencies {
   watch: (onHint: () => void) => () => void;
 }
 
-interface DirectMessageDeliveryOptions {
+export interface DirectMessageDeliveryOptions {
   teamName: string;
   recipient: string;
   membershipId: string;
   sessionFile: string;
   pollMs?: number;
+  membership: AlertMembershipPort;
   dependencies?: Partial<DeliveryDependencies>;
 }
 
@@ -246,14 +247,12 @@ export class DirectMessageDelivery {
           ids,
         )),
       isCurrentBinding: options.dependencies?.isCurrentBinding
-        ?? (async () => {
-          const config = await readConfig(this.teamName);
-          const current = [...config.members].reverse().find(
-            (member) => member.name === this.recipient && member.isActive !== false,
-          );
-          return current?.membershipId === this.membershipId
-            && current.sessionFile === this.sessionFile;
-        }),
+        ?? (() => options.membership.isCurrentSessionBinding({
+          teamName: this.teamName,
+          recipient: this.recipient,
+          membershipId: this.membershipId,
+          sessionFile: this.sessionFile,
+        })),
       watch: options.dependencies?.watch
         ?? ((onHint) => watchInboxFile(this.teamName, this.recipient, onHint)),
     };
