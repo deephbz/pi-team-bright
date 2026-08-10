@@ -228,21 +228,25 @@ result remains unavailable, and retry creates a new Alert identity with duplicat
 delivery. Do not add an outbox, operation ID, recovery record, or warning change.
 
 Coordination observation is the active boundary after clean commit `a960bf8`.
-Read-only Tasks `semantic-hardening-coordination-oza` and
-`semantic-hardening-coordination-s68` shaped one observation service with
-consumer-owned Team runtime, Task state/delivery, and Alert actuation query
-ports. Characterization Tasks `semantic-hardening-coordination-qjp`,
-`semantic-hardening-coordination-3bq`, and
-`semantic-hardening-coordination-trt` added registered failure/retry, quiet
+Slice B implements minimal Coordination-owned Team runtime, Task state/delivery,
+and Alert actuation query DTOs with three durable authority adapters. Pi
+composition constructs one explicit query bundle. Liveness is now a pure
+derivation over that bundle, while the optional durable-port constructor
+preserves direct construction and default compatibility. No observation service
+or nudge actuator moved. Characterization Tasks
+`semantic-hardening-coordination-qjp`, `semantic-hardening-coordination-3bq`,
+and `semantic-hardening-coordination-trt` added registered failure/retry, quiet
 rescan, mixed-record, exact acknowledgement, and nudge-lineage race gates.
 Independent Task `semantic-hardening-coordination-hzz` accepted the three test
 paths, typecheck, all 97 lanes, agent/tool projections, and static checks.
-Current quiet waiting performs one complete Task read by 4,999 ms and three by
-5,000 ms: initial, authority-cadence, and post-wake recheck. Preserve this in the
-structural refactor; treat the third read only as a later measured optimization
-candidate. Evidence is one-process deterministic harness evidence, not proof of
-real Pi persistence, cross-process forks, native watchers, OS timing, or terminal
-pixels.
+Current quiet waiting still performs one complete Task read by 4,999 ms and
+three by 5,000 ms: initial, authority-cadence, and post-wake recheck. Preserve
+outputs, cursor/wait/acknowledgement behavior, and this cadence; treat the third
+read only as a later measured optimization candidate. The slice-B graph has 92
+production TypeScript files and 304 unique resolved static local edges, with
+zero nontrivial cycles or dynamic imports. Evidence is one-process deterministic
+harness evidence, not proof of real Pi persistence, cross-process forks, native
+watchers, OS timing, or terminal pixels.
 
 ## Decisions and constraints still in force
 
@@ -287,8 +291,10 @@ Open boundary risks:
   Session presentation and replay after an error, not process, fork, Pi Session,
   or OS restart. Any semantic change needs a separate owner-visible decision.
 - Coordination implements rc.10 hydration, liveness, failed hints, bounded
-  waits, indeterminate outcomes, and nudges, but still reads Team runtime, Task
-  delivery, and Alert inbox records concretely.
+  waits, indeterminate outcomes, and nudges. Slice B moves Team runtime, Task
+  state/delivery, and Alert inbox actuation reads behind Coordination-owned query
+  DTOs, but the combined durable façade, Pi composition, and hidden-observation
+  Team configuration read remain later seams.
 - `ModelToolTeamPort`, its durable implementation, and its in-memory fake still
   combine multiple authorities. The projection evidence is now bounded, but the
   façade and fake authority split remains incomplete.

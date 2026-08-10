@@ -58,9 +58,9 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 87,
+      "files": 92,
       "lines": null,
-      "staticLocalEdges": 285,
+      "staticLocalEdges": 304,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -77,7 +77,7 @@
       "lines": 25803
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
-    "countCorrection": "Architecture Task n5o recomputed the canonical map after the stale 302-edge record: this stable accepted Alert-port production tree has 87 files and 285 unique resolved static local edges.",
+    "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. The stable slice-B Coordination query tree has 92 production TypeScript files and 304 unique resolved static local edges, with zero nontrivial cycles and zero dynamic imports.",
     "piSessionAdapterSelection": {
       "baseline": "1686ac19dc83143e55c7a68062e1a30c1e53fa6d",
       "paths": ["extensions/index.ts", "extensions/pi-team-session-adapter.ts", "src/team-authority/team-session-lifecycle-service.boundary.test.ts", "src/utils/pi-session-adapter.characterization.test.ts"],
@@ -306,9 +306,14 @@
           "src/utils/sync-liveness.ts",
           "src/utils/task-event-failure-hints.ts",
           "src/utils/sync-nudge.ts",
-          "src/utils/sync-nudge-conductor.ts"
+          "src/utils/sync-nudge-conductor.ts",
+          "src/coordination/queries.ts",
+          "src/adapters/durable-coordination-queries.ts",
+          "src/adapters/durable-coordination-team-runtime.ts",
+          "src/adapters/durable-coordination-task-state-delivery.ts",
+          "src/adapters/durable-coordination-alert-actuation.ts"
         ],
-        "currentScopeNote": "rc.10 behavior is implemented across Coordination utilities, DurableModelToolTeamPort, and Pi composition; this source placement is not a completed application boundary"
+        "currentScopeNote": "Slice B gives Coordination minimal consumer-owned Team runtime, Task state/delivery, and Alert actuation query DTOs. Three durable adapters retain concrete reads outside Coordination; composition constructs one explicit bundle, liveness is pure over it, and the optional durable-port dependency preserves constructor/default compatibility. No service or nudge actuator moved; the durable facade, Pi composition, and hidden observation remain later seams."
       },
       {
         "id": "model_tool_facade_and_projections",
@@ -578,13 +583,18 @@
       "statement": "Alert owns name-only roster, current-delivery lease, exact Session-binding, and publication ports. Durable Team and Coordination adapters remain outside Alert authority; composition injects one sender for leader and Worker direct delivery. No Team mirror, membershipId-leaking port, or compatibility singleton is present."
     },
     {
+      "id": "ASSESS-COORDINATION-QUERY-SLICE-B",
+      "state": "implemented_behavior_preserving_read_boundary",
+      "statement": "Coordination owns minimal Team runtime, Task state/delivery, and Alert actuation query DTOs. Three durable adapters retain authority reads outside Coordination; one explicit composition bundle injects them, and liveness is pure over the bundle. Constructor/default compatibility, outputs, cursors, waits, acknowledgement, and quiet cadence remain unchanged. No observation service or nudge actuator was extracted."
+    },
+    {
       "id": "ASSESS-COMBINED-FACADE",
       "statement": "ModelToolTeamPort, DurableModelToolTeamPort, and the in-memory implementation combine all five semantic boundaries plus rc.10 liveness and sync-nudge behavior in one seam."
     },
     {
       "id": "ASSESS-RC10-COORDINATION-INCOMPLETE",
       "state": "behavior_implemented_boundary_incomplete",
-      "statement": "The rc.10 tree implements page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, and branch-bound nudges, but Coordination still reads Team runtime, Task delivery, and Alert inbox records concretely and remains split across the facade and Pi composition."
+      "statement": "Slice B preserves rc.10 page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, and branch-bound nudges while moving Team runtime, Task state/delivery, and Alert actuation reads behind minimal Coordination query DTOs. The combined durable facade, Pi composition, hidden-observation Team query, and nudge actuation remain later seams."
     },
     {
       "id": "ASSESS-TEAM-CARRIER-PUBLICATION",
@@ -653,15 +663,18 @@
       "id": "RC10-COORDINATION-BOUNDARY",
       "state": "behavior_evidenced_boundary_incomplete",
       "blocks": "claim that Coordination is isolated behind one application port",
-      "currentFact": "rc.10 page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, and sync nudges are implemented across utilities, DurableModelToolTeamPort, and Pi composition with direct cross-authority reads.",
+      "currentFact": "Slice B places Team runtime, Task state/delivery, and Alert actuation behind Coordination-owned query DTOs with three durable adapters and one explicit composition bundle. Page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, sync nudges, outputs, cursor/wait/acknowledgement behavior, and quiet cadence remain unchanged.",
       "requiredEvidence": [
-        "Retain current focused and registered-extension behavior gates while introducing consumer-owned Team, Task, and Alert read ports.",
+        "Retain current focused and registered-extension behavior gates while keeping the three consumer-owned read ports behavior-identical.",
         "Keep WorkerRunObservation, failed-event hints, timers, reservations, and nudge receipts derived and non-authoritative.",
         "Preserve branch-safe acknowledgement and no-position-advance outcomes."
       ],
       "anchors": [
         "src/model-tool-contract/durable-model-tool-port.ts:435",
         "src/model-tool-contract/durable-model-tool-port.ts:605",
+        "src/coordination/queries.ts",
+        "src/adapters/durable-coordination-queries.ts",
+        "src/coordination/queries.equivalence.test.ts",
         "src/utils/sync-liveness.ts:27",
         "src/utils/task-event-failure-hints.ts:115",
         "src/utils/sync-nudge-conductor.ts:27",
@@ -1145,12 +1158,12 @@
     "input": {
       "gitHead": "ab7f591",
       "productionSourceDigestSha256": null,
-      "scope": "87 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts. Current tree includes the stable accepted Alert-port production tree.",
+      "scope": "92 selected TypeScript production files under src/ and extensions/, excluding *.test.ts. Current tree is the stable slice-B Coordination query graph; the 87-file Alert-port tree remains historical baseline evidence.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 87,
-      "uniqueLocalEdges": 285,
+      "files": 92,
+      "uniqueLocalEdges": 304,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
@@ -1175,8 +1188,8 @@
         {"from": "coordination_observation", "to": "task_authority", "edges": 3, "files": ["src/utils/task-event-failure-hints.ts", "src/utils/team-events.ts"]}
       ],
       "supportMediatedDependencies": [
-        { "from": "coordination_observation", "to": "task_authority", "path": "src/utils/sync-liveness.ts", "mechanism": "taskDeliveryPath reads Task-delivery records through src/utils/paths.ts" },
-        { "from": "coordination_observation", "to": "alert_authority", "path": "src/utils/sync-liveness.ts", "mechanism": "inboxPath reads legacy Alert delivery records through src/utils/paths.ts" },
+        { "from": "coordination_observation", "to": "task_authority", "path": "src/adapters/durable-coordination-task-state-delivery.ts", "mechanism": "durable Task state/delivery adapter implements the Coordination-owned query outside Coordination" },
+        { "from": "coordination_observation", "to": "alert_authority", "path": "src/adapters/durable-coordination-alert-actuation.ts", "mechanism": "durable Alert actuation adapter implements the Coordination-owned query outside Coordination" },
         { "from": "membership_observation", "to": "team_authority_and_role_realization", "path": "src/public/observation.ts", "mechanism": "direct TeamConfig and Member decoding plus direct runtime file reads; only the runtime type import is a selected local edge" },
         { "from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "path": "src/utils/team-status.ts and src/utils/team-footer.ts", "mechanism": "human projection code directly reads Team implementation; these paths are classified as support by the AST grouping and remain a Trio seam" }
       ]
@@ -1209,11 +1222,11 @@
       },
       {
         "id": "coordination_observation",
-        "completion": "partial_behavior_implemented_boundary_not_isolated",
-        "remainingSeams": ["src/utils/sync-liveness.ts reads runtime, Task-delivery, and legacy Alert inbox records directly", "src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts own Coordination application behavior and nudge actuation"],
-        "violations": ["coordination_observation -> team_authority_and_role_realization: src/utils/hidden-observation.ts:6 and src/utils/sync-liveness.ts:4 are concrete reads rather than a Coordination-owned Team query", "coordination_observation -> task_authority and alert_authority: src/utils/sync-liveness.ts reads taskDeliveryPath and inboxPath through src/utils/paths.ts"],
-        "staticGate": "Coordination may import only its consumer-owned Team, Task, and Alert read-query interfaces. Deny utils/runtime, utils/task-delivery, utils/messaging, utils/message-delivery, and concrete Team configuration imports from Coordination sources.",
-        "focusedVerification": ["npx vitest run src/model-tool-contract/sync-event-hydration.test.ts src/utils/sync-liveness.test.ts src/utils/task-event-failure-hints.test.ts src/utils/sync-nudge.test.ts src/utils/sync-nudge-conductor.test.ts src/utils/sync-nudge-extension.test.ts test/coord-liveness-e2e/sync-liveness.test.ts", "npm run typecheck"]
+        "completion": "slice_b_read_queries_implemented_application_boundary_later",
+        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts still own combined Coordination application behavior and nudge actuation", "No separate observation service or nudge actuator exists by design in slice B"],
+        "violations": ["coordination_observation -> team_authority_and_role_realization: src/utils/hidden-observation.ts:6 remains a concrete Team configuration read"],
+        "staticGate": "Coordination liveness may import only its consumer-owned Team runtime, Task state/delivery, and Alert actuation query interfaces. Concrete reads stay in the three durable adapters; deny utils/runtime, taskDeliveryPath, inboxPath, and concrete Team configuration imports from Coordination liveness sources.",
+        "focusedVerification": ["npx vitest run src/coordination/queries.equivalence.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/utils/sync-liveness.test.ts test/coord-liveness-e2e/sync-liveness.test.ts", "npm run typecheck", "npm run test:lanes"]
       },
       {
         "id": "trio_facing_interface_and_projections",

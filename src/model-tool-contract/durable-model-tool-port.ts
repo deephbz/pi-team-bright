@@ -2,7 +2,7 @@ import { getTerminalAdapter } from "../adapters/terminal-registry";
 import crypto from "node:crypto";
 import * as paths from "../utils/paths";
 import * as teams from "../utils/teams";
-import { listTaskIds, resolveTeamTaskAuthority } from "./beads-authority-adapter";
+import { resolveTeamTaskAuthority } from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
 import type { AlertSender } from "../alert-authority/contracts";
 import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
@@ -53,6 +53,8 @@ import type { TeamEvent } from "../coordination/contracts";
 import type { Member, TeamConfig } from "../team-authority/contracts";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { currentMember, livenessIsComplete, livenessIsProductive, readWorkerRunObservation, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";
+import type { CoordinationQueryBundle, CoordinationTaskReadOutcome } from "../coordination/queries";
+import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 import { DEFAULT_SYNC_WAIT_SECONDS, loadSyncLivenessSettings } from "../utils/sync-liveness-settings";
 import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
 import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hints";
@@ -141,17 +143,20 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private readonly lifecycle?: ModelToolLifecycle;
   private readonly taskAdapterFactory: BeadsTaskAdapterFactory;
   private readonly alertSender?: AlertSender;
+  private readonly coordinationQueries: CoordinationQueryBundle;
 
   constructor(
     launchBridge?: WorkerLaunchBridge,
     lifecycle?: ModelToolLifecycle,
     taskAdapterFactory: BeadsTaskAdapterFactory = (teamName, actor) => new BeadsTaskAdapter(teamName, actor),
     alertSender?: AlertSender,
+    coordinationQueries: CoordinationQueryBundle = createDurableCoordinationQueries(),
   ) {
     this.launchBridge = launchBridge;
     this.lifecycle = lifecycle;
     this.taskAdapterFactory = taskAdapterFactory;
     this.alertSender = alertSender;
+    this.coordinationQueries = coordinationQueries;
   }
 
   setLeaderSessionFile(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void {
@@ -731,9 +736,8 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
 
   private async readModelToolTasks(teamName: string): Promise<TaskProjectionReadResult> {
     try {
-      const taskIds = await listTaskIds(teamName);
-      const adapter = this.taskAdapterFactory(teamName, "team-lead");
-      const records = await adapter.readMany(taskIds);
+      const taskIds = await this.coordinationQueries.taskStateDelivery.listTaskIds(teamName);
+      const records = await this.coordinationQueries.taskStateDelivery.readTasks(teamName, taskIds);
       this.assertCompleteTaskBatch(taskIds, records, "listed Task");
       const projected: TaskCard[] = [];
       const warnings: TaskCardWarning[] = [];
@@ -788,7 +792,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
 
   private assertCompleteTaskBatch(
     taskIds: readonly string[],
-    records: readonly (import("./beads-task-adapter").TaskReadOutcome | undefined)[],
+    records: readonly CoordinationTaskReadOutcome[],
     subject: string,
   ): void {
     if (records.length !== taskIds.length) {
@@ -808,8 +812,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private async hydrateTaskIds(teamName: string, taskIds: readonly string[]): Promise<TaskProjectionReadResult> {
     if (taskIds.length === 0) return { kind: "tasks", tasks: [], warnings: [] };
     try {
-      const adapter = this.taskAdapterFactory(teamName, "team-lead");
-      const records = await adapter.readMany(taskIds);
+      const records = await this.coordinationQueries.taskStateDelivery.readTasks(teamName, taskIds);
       this.assertCompleteTaskBatch(taskIds, records, "event Task");
       const tasks = records.map((record, index) => {
         if (!record || record.kind !== "found") {
@@ -853,7 +856,9 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const workers = bound.config.logicalWorkers ?? [];
     return Promise.all(workers.map(async (worker) => {
       const member = currentMember(bound.config.members, worker.name);
-      return member ? readWorkerRunObservation(bound.teamName, member) : { worker: worker.name, state: "absent" as const, actuationPending: false };
+      return member
+        ? readWorkerRunObservation(bound.teamName, member, this.coordinationQueries)
+        : { worker: worker.name, state: "absent" as const, actuationPending: false };
     }));
   }
 

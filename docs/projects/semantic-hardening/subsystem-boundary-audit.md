@@ -42,11 +42,11 @@ selection from baseline `1686ac1` has 81 production TypeScript files with
 `src/` and `extensions/`, excluding `*.test.ts`; test support means
 `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global setup
 is excluded. A TypeScript-AST scan resolves static relative import and re-export
-specifiers between those production files. The stable accepted Alert-port production tree has 87 production TypeScript
-files and 285 unique resolved static local edges. Architecture Task n5o
-recomputed this canonical map count after the stale 302-edge record. It has no
-nontrivial strongly connected
-component, no self-cycle, and no dynamic import expression. The prior hidden dynamic Task-adapter cycle remains removed, and the
+specifiers between those production files. The stable slice-B Coordination query
+tree has 92 production TypeScript files and 304 unique resolved static local
+edges. It has no nontrivial strongly connected component, no self-cycle, and no
+dynamic import expression. The prior 87/285 Alert-port count remains historical
+evidence for that earlier slice. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
 
@@ -240,12 +240,21 @@ cursors, and pending acknowledgement
 `indeterminate` without position advance when run-state evidence cannot prove a
 productive or complete wait (`src/model-tool-contract/durable-model-tool-port.ts:513`).
 
-The rc.9/rc.10 additions remain spread across current modules.
-`sync-liveness.ts` derives `active`, `settled`, `unknown`, or `absent` from exact
-runtime generation plus pending Task and Alert/Message actuation, and
-`waitForLivenessHint` watches event/runtime hints while periodically rechecking
-Task authority (`src/utils/sync-liveness.ts:27`,
-`src/utils/sync-liveness.ts:87`). `task-event-failure-hints.ts` stores
+Slice B introduces minimal Coordination-owned query DTOs in
+`src/coordination/queries.ts`: Team runtime evidence, Task state plus delivery
+evidence, Alert inbox actuation evidence, and one explicit query bundle. Three
+durable adapters retain the concrete reads outside Coordination:
+`durable-coordination-team-runtime.ts`,
+`durable-coordination-task-state-delivery.ts`, and
+`durable-coordination-alert-actuation.ts`. Pi composition constructs exactly
+one durable bundle and injects it into `DurableModelToolTeamPort`; the optional
+constructor dependency keeps existing direct constructors and default behavior
+usable. `sync-liveness.ts` now derives `active`, `settled`, `unknown`, or
+`absent` purely from those inputs, while `waitForLivenessHint` retains its event/
+runtime hints and periodic Task-authority recheck (`src/utils/sync-liveness.ts:27`,
+`src/utils/sync-liveness.ts:87`). No observation service or nudge actuator moved.
+Outputs, cursor progression, bounded waits, acknowledgement, and the quiet
+five-second cadence remain unchanged. `task-event-failure-hints.ts` stores
 payload-light derived evidence when Task state commits but its Team event does
 not; Coordination matches only the current epoch, Task identity, and version
 (`src/utils/task-event-failure-hints.ts:115`,
@@ -386,10 +395,10 @@ to private record changes (`src/public/observation.ts:5`).
    and `DurableAlertPublication` keep Team and Coordination calls outside Alert
    authority. `extensions/index.ts` composes one explicit `AlertSender` for
    leader and Worker direct-delivery use. No Team mirror, `membershipId`-leaking
-   port shape, or compatibility singleton remains. The current source graph has
-   87 production files, 285 unique resolved static local edges, zero cycles, and
-   zero dynamic
-   imports. This is a behavior-preserving dependency change: public behavior is
+   port shape, or compatibility singleton remains. The current slice-B source
+   graph has 92 production files, 304 unique resolved static local edges, zero
+   cycles, and zero dynamic imports. This is a behavior-preserving dependency
+   change: public behavior is
    unchanged. ALERT-004 remains compatibility-required and needs a separate
    owner-visible decision for any semantic change.
 
@@ -404,11 +413,13 @@ to private record changes (`src/public/observation.ts:5`).
    (`src/model-tool-contract/durable-model-tool-port.ts:305`), so consumer-owned
    ports remain necessary to prevent source cycles.
 
-10. Coordination liveness currently reads Team runtime, Task delivery, and the
-    Alert/Message inbox directly (`src/utils/sync-liveness.ts:1`). This is useful
-    read-only evidence, but its source dependency crosses three accepted
-    boundaries. Future isolation needs consumer-owned read ports; the derived
-    `WorkerRunObservation` must not become another authority.
+10. **Partly resolved in slice B.** Coordination now reads Team runtime, Task
+    state/delivery, and Alert inbox actuation through its consumer-owned query
+    DTOs. Three durable adapters keep concrete authority reads outside
+    Coordination, and `WorkerRunObservation` is a pure derivation rather than
+    another authority. `DurableModelToolTeamPort` and Pi composition still
+    combine broader Coordination behavior, while hidden observation retains its
+    concrete Team configuration check; these are later seams.
 
 11. Public Membership observation is core-independent, but it reads private
     record shapes directly. A narrow Team-observation record reader would keep
@@ -453,11 +464,12 @@ to private record changes (`src/public/observation.ts:5`).
   package, public-surface, persistence, and diff checks. It did not run the
   aggregate lane.
 
-- The rc.10 Coordination additions have focused settings, liveness, hydration,
-  failed-event-hint, nudge, extension, and E2E evidence. They preserve explicit
-  `indeterminate` outcomes and branch-safe position, but they do not prove a
-  separated Coordination application port or remove cross-authority read
-  dependencies.
+- Slice B has focused query-equivalence, liveness, hydration, nudge, extension,
+  and E2E evidence. It preserves explicit `indeterminate` outcomes, branch-safe
+  position, constructor/default compatibility, and the unchanged five-second
+  quiet cadence. It proves the three read dependencies moved behind minimal
+  Coordination query ports, not a separated Coordination application service or
+  nudge actuator.
 
 The upward Task-to-trio type risk, hidden dynamic reconciliation cycle, and
 concrete Task publication dependencies are closed, and durable lead discovery
@@ -623,13 +635,15 @@ at the composition root.
    adapters sit outside Alert authority; composition injects one sender without
    a singleton. Keep the retained ALERT-004 characterization. Do not add an
    outbox, operation ID, recovery record, or warning change.
-6. Consolidate the current rc.10 Coordination behavior behind one application
-   boundary: page-safe `team_sync`, event-directed hydration, complete quiet-
-   journal rescans, liveness and actuation reads, failed-event hints, nudge debt,
-   projection hashes, and hidden acknowledgement. It must read Team, Task, and
-   Alert state through consumer-owned query ports; derived hints and timers stay
-   non-authoritative, and authorities no longer import `team-events.ts`
-   concretely.
+6. **Partly implemented in slice B.** Coordination has consumer-owned Team
+   runtime, Task state/delivery, and Alert actuation query DTOs. One explicit
+   durable bundle composes three adapters outside Coordination, and liveness is
+   pure over that bundle. Preserve page-safe `team_sync`, event-directed
+   hydration, complete quiet-journal rescans, failed-event hints, nudge debt,
+   projection hashes, hidden acknowledgement, outputs, cursors, waits, and the
+   five-second cadence. Do not extract a service or nudge actuator yet; the
+   combined durable façade, Pi composition, and hidden-observation Team query
+   remain later seams.
 7. **Partly implemented.** Durable lead-Session discovery, Worker carrier
    publication/observation, Team stop/shutdown policy, and Team Session
    admission/claim/bind/runtime realization now use Team-owned contracts. The

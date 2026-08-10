@@ -20,6 +20,7 @@ import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contr
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
+import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
@@ -320,6 +321,7 @@ export default function (pi: ExtensionAPI) {
   const alertMembership = new DurableAlertMembership();
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
+  const coordinationQueries = createDurableCoordinationQueries();
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const teamLifecycleService = new TeamLifecycleService({
@@ -355,7 +357,7 @@ export default function (pi: ExtensionAPI) {
         ? modelToolLifecycleAdapter.shutdownTeam(name)
         : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
     };
-    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender));
+    modelToolJourney = registerModelToolJourney(pi, new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries));
   }
 
   function modelToolBranchIds(ctx: ExtensionContext): string[] {

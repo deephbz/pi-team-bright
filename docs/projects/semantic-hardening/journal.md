@@ -1074,3 +1074,26 @@ changes; append a correction.
   projections, and diff/static checks passed. The one-process harness does not
   prove real Pi persistence, cross-process forks, native watchers, OS timing,
   external writer concurrency, or terminal pixels. No aggregate ran.
+
+## 2026-08-10 — Coordination query slice B recorded
+
+- Slice B adds minimal Coordination-owned query DTOs for Team runtime, Task
+  state plus delivery evidence, and Alert actuation evidence. Three durable
+  adapters retain concrete authority reads outside Coordination. Pi composition
+  constructs one explicit durable query bundle and injects it into the durable
+  model-tool port.
+- Liveness is now a pure derivation over that bundle. The optional query-bundle
+  constructor dependency preserves direct construction and default behavior.
+  No observation service or nudge actuator moved.
+- This is a behavior-preserving boundary: public output, event cursor,
+  bounded wait, acknowledgement, and quiet cadence are unchanged. Quiet waiting
+  still has one complete Task read by 4,999 ms and three by 5,000 ms.
+- Focused query-equivalence, durable-port, liveness, and E2E checks establish
+  ordered Task hydration, typed failure behavior, pure run-state derivation,
+  one-bundle composition, and compatibility construction. The canonical static
+  graph is 92 production TypeScript files and 304 unique resolved static local
+  edges, with zero nontrivial cycles and zero dynamic imports.
+- Evidence remains one-process and deterministic. It does not prove real Pi
+  persistence, process or fork recovery, native watcher delivery, operating
+  system scheduling, external writer concurrency, or terminal pixels. No
+  aggregate ran.
