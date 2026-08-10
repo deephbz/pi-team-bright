@@ -4,7 +4,7 @@ import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
-import { DirectMessageDelivery } from "./message-delivery";
+import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import { SyncNudgeConductor } from "./sync-nudge-conductor";
