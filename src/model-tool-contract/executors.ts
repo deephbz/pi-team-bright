@@ -22,8 +22,8 @@ import {
   AlertSendResultSchema,
 } from "./catalog";
 import type { AlertTarget, ExactLeaderSessionId, ModelToolTeamPort, ReadTaskContractGap } from "./in-memory-team-port";
-import type { TaskCard } from "./task-domain";
-import type { TaskVersionRef } from "./task-version-ref";
+import type { TaskCard } from "../task-authority/task-domain";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { projectToolResult } from "./result-projection";
 
 export type TeamCreateParameters = Static<typeof TeamCreateParametersSchema>;

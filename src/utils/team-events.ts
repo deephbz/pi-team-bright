@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
-import type { Member, TaskTeamEvent, TeamConfig, TeamEvent, TeamEventInput, TeamEventType } from "./models";
-import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskTeamEvent, TeamEvent, TeamEventInput, TeamEventType } from "../coordination/contracts";
+import type { Member, TeamConfig } from "../team-authority/contracts";
+import type { TaskCard } from "../task-authority/task-domain";
 import { configPath, teamEventCursorStatePath, teamEventJournalPath } from "./paths";
-import { type TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import { type TaskVersionRef } from "../task-authority/task-version-ref";
 
 // Event/wait intent and authority boundaries: docs/current/README.md and
 // docs/reference.md.

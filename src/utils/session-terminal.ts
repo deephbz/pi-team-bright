@@ -1,4 +1,4 @@
-import type { TeamConfig, TerminalTarget } from "./models";
+import type { TeamConfig, TerminalTarget } from "../team-authority/contracts";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { terminalTarget } from "./terminal-target";
 

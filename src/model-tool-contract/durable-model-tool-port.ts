@@ -9,7 +9,7 @@ import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../utils/worker-launch-bridge";
 import { MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
-import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
+import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import {
   BeadsTaskAdapter,
   projectNonterminalTaskIds,
@@ -44,12 +44,13 @@ import type {
   TaskLinkPortResult,
   AlertSendPortResult,
 } from "./in-memory-team-port";
-import type { TaskCard, TaskCardWarning } from "./task-domain";
+import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type {
   ModelToolTaskJournalEntry,
   ModelToolTaskUpdateInput,
 } from "../task-authority/contracts";
-import type { Member, TeamConfig, TeamEvent } from "../utils/models";
+import type { TeamEvent } from "../coordination/contracts";
+import type { Member, TeamConfig } from "../team-authority/contracts";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { currentMember, livenessIsComplete, livenessIsProductive, readWorkerRunObservation, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";
 import { DEFAULT_SYNC_WAIT_SECONDS, loadSyncLivenessSettings } from "../utils/sync-liveness-settings";

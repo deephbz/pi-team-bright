@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
 import { taskEventFailureHintPath } from "./paths";
-import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 
 export const TASK_EVENT_FAILURE_HINT_SCHEMA = "pi-teams-task-event-failure-hint/1" as const;
 

@@ -1,8 +1,8 @@
 import * as teams from "./teams";
 import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
-import type { IdentifiedInboxMessage } from "./models";
-import type { Member, TeamConfig, TerminalTarget } from "./models";
+import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
+import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
 import { removeWorkerAggregate, type WorkerDefaultModelOverride } from "./worker-resource-projection";
 import {
   normalizeWorkerCarrier,

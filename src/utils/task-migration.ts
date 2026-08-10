@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BeadsAuthorityFingerprint, TaskStatus, TeamConfig } from "./models";
+import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
+import type { TaskStatus } from "../task-authority/contracts";
 import type { TaskAuthorityRecord } from "./beads";
 import { taskDir, teamDir, sanitizeName } from "./paths";
 import { configureBeadsTaskBackend, readConfig, readLatestCutoverMarker } from "./teams";

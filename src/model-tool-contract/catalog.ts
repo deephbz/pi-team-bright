@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import { TeamPaneLayoutSchema } from "../utils/team-pane-layout";
-import { TaskVersionRefSchema, taskVersionRef } from "./task-version-ref";
+import { TaskVersionRefSchema, taskVersionRef } from "../task-authority/task-version-ref";
 import {
   TASK_CARD_CONTEXT_MAX_LENGTH,
   TASK_CARD_GOAL_MAX_LENGTH,
@@ -8,7 +8,7 @@ import {
   TaskCardContextSchema,
   TaskCardSchema,
   TaskCardWarningSchema,
-} from "./task-domain";
+} from "../task-authority/task-domain";
 
 /**
  * Model-facing contract shaped in
@@ -25,7 +25,7 @@ export const MODEL_TOOL_LIMITS = {
 } as const;
 
 const TaskId = Type.String({ minLength: 1, maxLength: 128 });
-export { TaskVersionRefSchema } from "./task-version-ref";
+export { TaskVersionRefSchema } from "../task-authority/task-version-ref";
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const Timestamp = Type.String({ minLength: 1, maxLength: 64 });
 const TaskStatus = Type.Enum(["open", "in_progress", "blocked", "closed"], {

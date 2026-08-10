@@ -1,4 +1,4 @@
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 
 /** The only persisted carrier shapes a current teammate Membership may represent. */
 export type WorkerCarrierState =

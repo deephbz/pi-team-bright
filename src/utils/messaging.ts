@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
-import { IdentifiedInboxMessage, InboxMessage } from "./models";
+import type { IdentifiedInboxMessage, InboxMessage } from "../alert-authority/delivery-contracts";
 import { withLock } from "./lock";
 import { inboxPath } from "./paths";
 import { readConfig, teamExists, withCurrentConfig } from "./teams";

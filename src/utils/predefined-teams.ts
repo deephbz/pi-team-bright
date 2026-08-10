@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { Member, ThinkingLevel } from "./models";
+import type { Member, ThinkingLevel } from "../team-authority/contracts";
 
 /**
  * Represents an agent definition from a .md file

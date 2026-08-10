@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { TeamConfig } from "./models";
+import type { TeamConfig } from "../team-authority/contracts";
 import { withLock } from "./lock";
 import {
   taskDeliveryPath,
@@ -13,8 +13,8 @@ import {
 import { readConfig, withCurrentSessionBinding } from "./teams";
 import { writeJsonAtomic } from "./atomic-json";
 import { Check } from "typebox/value";
-import { TaskCardSchema, type TaskCard } from "../model-tool-contract/task-domain";
-import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import { TaskCardSchema, type TaskCard } from "../task-authority/task-domain";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskReconciliationQuery } from "../task-authority/contracts";
 
 export const TASK_CHANGE_CUSTOM_TYPE = "pi-teams.task-change";

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import packageJson from "../../package.json";
 import { type AgentRuntimeStatus, runtimeGeneration } from "../utils/runtime";
-import { type Member, type TeamConfig, type TerminalTarget } from "../utils/models";
+import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
 
 export const OBSERVATION_SCHEMA = "pi-teams-observation/1" as const;
 export const OBSERVATION_SCHEMA_VERSION = 1 as const;

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
-import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskCard } from "../task-authority/task-domain";
 import { listTaskIds } from "../model-tool-contract/beads-authority-adapter";
 import { readConfig } from "./teams";
 import { teamEventJournalPath, teamDir } from "./paths";

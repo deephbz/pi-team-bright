@@ -5,7 +5,7 @@ import {
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import { assertCurrentSessionBinding } from "./teams";
 
 export const TEAM_FOOTER_STATUS_KEYS = ["00-pi-teams", "pi-teams"] as const;

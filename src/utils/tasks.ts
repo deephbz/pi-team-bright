@@ -2,7 +2,7 @@
 //
 // Semantic Task facade. Native Beads records, metadata, revisions, and
 // mutation syntax remain inside the Beads adapter modules.
-import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskCard } from "../task-authority/task-domain";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 export async function readTask(teamName: string, taskId: string): Promise<TaskCard> {
   const result = await new BeadsTaskAdapter(teamName, "team-lead").read(taskId);

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
 import { runtimeStatusPath, teamDir } from "./paths";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 
 /**
  * Runtime constants for health checking.

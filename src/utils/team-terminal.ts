@@ -1,5 +1,5 @@
 import { getAdapterByName, getTerminalAdapter } from "../adapters/terminal-registry";
-import type { TeamConfig, TerminalTarget } from "./models";
+import type { TeamConfig, TerminalTarget } from "../team-authority/contracts";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { hasPersistedTerminalTarget } from "./terminal-target";
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { BeadsAuthorityFingerprint, TeamConfig } from "./models";
+import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
 import { verifyTaskAuthority } from "../model-tool-contract/beads-authority-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
