@@ -6,6 +6,7 @@ import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-t
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import type { CoordinationQueryBundle, CoordinationTaskReadOutcome } from "./queries";
 import { readWorkerRunObservation } from "../utils/sync-liveness";
+import { taskDeliveryPath } from "../utils/paths";
 import { CoordinationObservationService } from "./observation-service";
 import { taskProjectionRevision } from "./task-projection-revision";
 import { projectToolResult } from "../model-tool-contract/result-projection";
@@ -42,6 +43,27 @@ describe("durable Coordination query equivalence", () => {
     await expect(query.readTasks(teamName, ["task-a", "task-b", "task-c"])).resolves.toEqual(outcomes);
     expect(readMany).toHaveBeenCalledOnce();
     expect(readMany).toHaveBeenCalledWith(["task-a", "task-b", "task-c"]);
+  });
+
+  it("reads only Task-delivery evidence for Coordination and distinguishes absent, pending, settled, and malformed records", async () => {
+    const deliveryTeam = `coordination-delivery-evidence-${process.pid}-${Date.now()}`;
+    const deliveryFile = taskDeliveryPath(deliveryTeam, "worker");
+    const query = new DurableCoordinationTaskStateDeliveryQuery();
+    try {
+      await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: false });
+
+      fs.mkdirSync(path.dirname(deliveryFile), { recursive: true });
+      fs.writeFileSync(deliveryFile, JSON.stringify([{ deliveryId: "pending" }, { deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
+      await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: true });
+
+      fs.writeFileSync(deliveryFile, JSON.stringify([{ deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
+      await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: false });
+
+      fs.writeFileSync(deliveryFile, "not-json");
+      await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: false, pending: false });
+    } finally {
+      fs.rmSync(path.dirname(deliveryFile), { recursive: true, force: true });
+    }
   });
 
   it("derives exact Worker state only from injected Team runtime and Task/Alert actuation evidence", async () => {
