@@ -737,3 +737,27 @@ changes; append a correction.
   That refactor remains outside this characterization commit and retains its own
   commit boundary.
 - The continuation's reserved final aggregate has not run.
+
+## 2026-08-10 — authority-owned domain contracts integrated
+
+- Split the mixed historical model registry into canonical Team, Task, Alert-
+  delivery, and Coordination-event contract modules. Task cards and opaque
+  version references now also have canonical Task-authority homes.
+- Kept `src/utils/models.ts`, `src/model-tool-contract/task-domain.ts`, and
+  `src/model-tool-contract/task-version-ref.ts` as compatibility re-exports.
+  Existing runtime references, legacy exported names, public package exports,
+  and persisted record shapes remain unchanged.
+- Moved production type imports to their canonical owners where this creates no
+  cross-authority implementation dependency. Coordination event references use
+  bounded structural coordinates rather than importing Task or Alert behavior.
+- Added compile-time equality and runtime reference-identity tests plus contract
+  import fences. Independent review found one omitted historical `AlertKind`
+  type export; the correction restored it from Alert authority before acceptance.
+- Independent verification passed 24 focused model, catalog, Task
+  reconciliation, and event tests; typecheck; lane closure at 90 files (69 fast
+  and 21 exhaustive); persistence-interface comparison; legacy-export
+  comparison; and diff checks.
+- The reviewed contract split entered commit `6b7fb14`. It changes internal
+  architecture only. It does not complete Team lifecycle, Alert, Coordination,
+  Trio façade/fakes, or additive Membership-observation isolation.
+- The continuation's reserved final aggregate has not run.
