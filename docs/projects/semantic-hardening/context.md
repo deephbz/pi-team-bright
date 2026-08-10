@@ -69,10 +69,10 @@ has the required proxy environment and Herdr control. Dedicated watchdog
 covers the current source graph, all 27 behavior entries, Alert hook-level replay,
 Team carrier replacement, and Trio projection parity. All 27 entries are
 characterized with explicit proof limits; characterization does not make them
-normative. The shared domain-contract split also passed independent review and
-awaits its separate refactor commit. The watchdog checks both leader liveness and
-goal completion, and must not accept a release increment as Project completion
-while any target boundary or behavior gate remains open.
+normative. The shared domain-contract split passed independent review and entered
+commit `6b7fb14`. The watchdog checks both leader liveness and goal completion,
+and must not accept a release increment as Project completion while any target
+boundary or behavior gate remains open.
 
 ## Sources of truth
 
@@ -121,6 +121,12 @@ Team authority now owns durable lead-Session discovery. Pi composition retains
 environment precedence, hook timing, lifecycle orchestration, and adapter
 construction. These changes remove concrete source dependencies; they do not
 claim full Task, Team, or system isolation.
+
+Commit `6b7fb14` gives Team, Task, Alert delivery, and Coordination events
+canonical contract homes. Historical `utils/models.ts`, Task card, and Task
+version paths remain exact compatibility re-exports. Production imports use the
+canonical owners where this does not create a cross-authority implementation
+edge. Persisted shapes and public package exports remain unchanged.
 
 ## Decisions and constraints still in force
 
@@ -204,8 +210,8 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 1. Keep the active watchdog and direct-leader Team running; use their recorded
    liveness and Worker-authored Task events as launch evidence.
-2. Commit the independently verified behavior-characterization slice, then the
-   separately verified shared domain-contract split.
+2. Use the completed source graph, behavior inventory, and contract split as
+   gates for each next implementation Task.
 3. Implement and independently verify the remaining coherent boundaries in this
    order unless source evidence requires a safer dependency order: Team
    lifecycle/Role realization, Alert, Coordination, Trio façade and fakes, then
