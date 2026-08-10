@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./messaging", () => ({
+vi.mock("../alert-authority/inbox-delivery", () => ({
   sendPlainMessage: vi.fn(),
   broadcastMessage: vi.fn(),
 }));
 
-vi.mock("./team-events", () => ({
+vi.mock("../utils/team-events", () => ({
   appendTeamEvent: vi.fn(),
 }));
 
-import * as messaging from "./messaging";
-import { appendTeamEvent } from "./team-events";
-import { sendAlert } from "./alerts";
+import * as messaging from "../alert-authority/inbox-delivery";
+import { appendTeamEvent } from "../utils/team-events";
+import { sendAlert } from "../alert-authority/alerts";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 
 describe("typed Alert acceptance", () => {

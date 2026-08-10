@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import * as paths from "../src/utils/paths";
 import * as teams from "../src/utils/teams";
 import * as runtime from "../src/utils/runtime";
-import { DirectMessageDelivery, messagePollMs } from "../src/utils/message-delivery";
+import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
 import { TaskChangeDelivery, taskPollMs } from "../src/utils/task-delivery";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import { createSyncNudgeRecord, findSyncNudgeReservation, presentSyncNudge, readSyncNudges, reserveSyncNudge, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";

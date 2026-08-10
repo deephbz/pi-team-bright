@@ -976,3 +976,35 @@ changes; append a correction.
   not prove native filesystem watch delivery, operating-system scheduling,
   filesystem locks, or real Pi turn delivery. Production refactoring can now
   start from commit `ab7f591`; the reserved final aggregate has not run.
+
+## 2026-08-10 — Alert canonical audit refresh
+
+- Tasks `semantic-hardening-alert-2bm`, `semantic-hardening-alert-ou7`, and
+  `semantic-hardening-alert-7ku` produced one stable uncommitted,
+  commit-1-ready Alert selection. Its canonical paths are
+  `src/alert-authority/alerts.ts`, `contracts.ts`, `delivery-contracts.ts`,
+  `inbox-delivery.ts`, and `direct-delivery.ts`.
+- `src/utils/alerts.ts`, `messaging.ts`, and `message-delivery.ts` are
+  compatibility re-exports only. Public tools, schemas, exports, inbox records
+  and filenames, ordering, retry, timing, exact errors, and console diagnostics
+  remain unchanged.
+- The current AST graph has 85 production files and 274 unique local edges. It
+  has zero cycles and zero dynamic imports. Canonical Alert still directly reads
+  Team configuration/current Membership and directly publishes Coordination
+  events. These are later seams; this selection does not claim consumer-owned
+  durable Alert ports.
+- Focused evidence includes the 34-test Alert characterization run and the
+  canonical compatibility selection. Final pre-commit verification passed the
+  exhaustive ALERT-004 test, 40 focused tests, typecheck, all 95 lanes, map,
+  links, static/public checks, and the exact generated declaration review.
+- The first final review found that ALERT-004 still spied on the old module
+  instance. Task `semantic-hardening-alert-i1q` retargeted only that spy to the
+  canonical inbox-delivery module, so the retained exhaustive assertions again
+  observe the real production call. This was a test-harness correction, not a
+  behavior change.
+- ALERT-004 remains compatibility-required: accepted delivery can survive
+  publication failure, the outer result is unavailable, and retry creates a new
+  Alert identity with duplicate delivery. The tests do not prove native watches
+  or locks, operating-system scheduling, or real Pi turn delivery. Package
+  cleanliness remains a required post-commit gate because its generated-output
+  check compares against committed HEAD. The reserved aggregate did not run.

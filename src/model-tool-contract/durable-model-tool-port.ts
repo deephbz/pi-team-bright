@@ -4,7 +4,7 @@ import * as paths from "../utils/paths";
 import * as teams from "../utils/teams";
 import { listTaskIds, resolveTeamTaskAuthority } from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
-import * as alerts from "../utils/alerts";
+import * as alerts from "../alert-authority/alerts";
 import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";

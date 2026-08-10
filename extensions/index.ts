@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-w
 import { Text } from "@earendil-works/pi-tui";
 import { Type, type TSchema } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
-import * as alerts from "../src/utils/alerts";
+import * as alerts from "../src/alert-authority/alerts";
 import { createToolResultRenderer } from "../src/model-tool-contract/tui-projection";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
 import { SYNC_NUDGE_CUSTOM_TYPE, syncNudgeTuiLine, validateSyncNudgeRecord } from "../src/utils/sync-nudge";
