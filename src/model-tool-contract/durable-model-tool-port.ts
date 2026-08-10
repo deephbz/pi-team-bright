@@ -5,10 +5,9 @@ import * as teams from "../utils/teams";
 import { listTaskIds, resolveTeamTaskAuthority } from "./beads-authority-adapter";
 import * as teamEvents from "../utils/team-events";
 import * as alerts from "../utils/alerts";
-import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
+import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
-import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
-import { createWorkerLaunchBridge, type WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
+import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
 import { MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import {
@@ -138,24 +137,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   private readonly pending = new Map<ExactLeaderSessionId, PendingDurableObservation>();
   /** Complete Task projections are rebuildable, keyed, and acknowledgement-gated baselines. */
   private readonly taskProjections = new Map<string, TaskProjectionCache>();
-  private readonly defaultLaunchBridge = createWorkerLaunchBridge({
-    buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
-      const argv = process.argv[1] ? [process.execPath, process.argv[1]] : ["pi"];
-      const result = [...argv];
-      if (model) result.push("--model", thinking ? `${model}:${thinking}` : model);
-      else if (thinking) result.push("--thinking", thinking);
-      const shippedExtension = process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION;
-      if (shippedExtension) result.push("-e", shippedExtension);
-      if (aggregatePath) result.push("--no-context-files", "--append-system-prompt", aggregatePath);
-      result.push(projectTrusted ? "--approve" : "--no-approve");
-      return result;
-    },
-    resolveModel: () => null,
-    resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
-    workerAggregate: (cwd) => resolveWorkerAggregate(cwd, process.cwd()),
-    lifecyclePublication: new DurableTeamLifecyclePublication(),
-  });
-  private readonly launchBridge: WorkerLaunchBridge;
+  private readonly launchBridge?: WorkerLaunchBridge;
   private readonly lifecycle?: ModelToolLifecycle;
   private readonly taskAdapterFactory: BeadsTaskAdapterFactory;
 
@@ -164,7 +146,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     lifecycle?: ModelToolLifecycle,
     taskAdapterFactory: BeadsTaskAdapterFactory = (teamName, actor) => new BeadsTaskAdapter(teamName, actor),
   ) {
-    this.launchBridge = launchBridge ?? this.defaultLaunchBridge;
+    this.launchBridge = launchBridge;
     this.lifecycle = lifecycle;
     this.taskAdapterFactory = taskAdapterFactory;
   }
@@ -254,6 +236,9 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   ): Promise<EnsureWorkerPortResult> {
     const bound = await this.boundTeam(leaderSessionId);
     if (!bound) return { kind: "no_active_team" };
+    if (!this.launchBridge) {
+      return { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool Worker launch bridge is not attached to this port." };
+    }
     const logical = await teams.ensureLogicalWorker(bound.teamName, { name: input.name, scope: input.scope });
     if (logical.kind === "contract_gap") return { kind: "no_active_team" };
     if (logical.kind === "scope_conflict") return { kind: "scope_conflict", worker: { name: logical.worker.name, scope: logical.worker.scope, carrier: "absent" } };

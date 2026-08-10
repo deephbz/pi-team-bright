@@ -1,25 +1,20 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "full_split_recomputed_task_reconciliation_team_carrier_lifecycle_and_session_service_verified_remaining_boundaries_incomplete",
-  "reviewedRevision": "a2e3f9c6821c3a9963397b23702d2b767c4a846c",
+  "status": "full_split_recomputed_worker_launch_injection_verified_remaining_boundaries_incomplete",
+  "reviewedRevision": "57c8e02d672eddad0aa955961cef5628b7bb4421",
   "reviewedTreeState": {
-    "kind": "independently_accepted_uncommitted_team_session_lifecycle_selection",
+    "kind": "independently_accepted_uncommitted_worker_launch_injection_selection",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "baseRevision": "a2e3f9c6821c3a9963397b23702d2b767c4a846c",
-    "selectedPaths": 8,
-    "selectionScope": "worker_and_lead_session_admission_exact_binding_runtime_claim_fence_and_publication_only",
+    "baseRevision": "57c8e02d672eddad0aa955961cef5628b7bb4421",
+    "selectedPaths": 2,
+    "selectionScope": "durable_model_tool_optional_worker_launch_bridge_injection_only",
     "selectedPathList": [
-      "extensions/index.ts",
-      "src/adapters/durable-team-lifecycle-publication.ts",
-      "src/team-authority/team-lifecycle-publication.ts",
-      "src/team-authority/team-lifecycle-service.boundary.test.ts",
-      "src/team-authority/team-session-lifecycle-service.boundary.test.ts",
-      "src/team-authority/team-session-lifecycle-service.ts",
-      "src/team-authority/worker-launch-bridge.boundary.test.ts",
-      "src/utils/worker-identity-process-admission.characterization.test.ts"
+      "src/model-tool-contract/durable-model-tool-port.ts",
+      "src/model-tool-contract/durable-model-tool-port.test.ts"
     ],
-    "review": "independently_accepted_52_focused_tests_typecheck_93_lane_package_static_fences",
-    "proofLimit": "This selection isolates Worker and lead placement admission, exact Session binding, exact Membership leases, runtime claim/fences, lead records, session-bound/failed publication, and bound-Session runtime writes. Pi hook adaptation and durable Trio facade composition remain outside the selection; private teamCreated evidence is not a real Pi-process proof."
+    "review": "independently_accepted_32_focused_tests_typecheck_93_lane_package_static_diff",
+    "selectedPathDigestSha256": "fe846971e975860b93362f0a0cb421870b56ef042d9cb6fec3abc58495c51bcf",
+    "proofLimit": "This selection removes direct DurableTeamLifecyclePublication and createWorkerLaunchBridge construction from the durable façade. An optional injected WorkerLaunchBridge preserves read-only snapshot and nudge-debt use; ensureWorker refuses carrier_unavailable before logical Worker mutation when it is absent. Pi hook adaptation, Alert, Coordination, Trio façade splitting, and Membership observation remain outside the selection."
   },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
@@ -56,8 +51,8 @@
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
       "files": 80,
-      "lines": 19736,
-      "staticLocalEdges": 268,
+      "lines": 19721,
+      "staticLocalEdges": 267,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -126,6 +121,10 @@
       {"path":"src/utils/worker-identity-process-admission.characterization.test.ts","state":"independently_accepted_registered_characterization","scope":"Registered extension keeps runtime claim -> Session bind -> session-bound event -> delivery order."}
     ],
     "independentTeamSessionLifecycleVerification": {"focusedTests":52,"typecheck":"passed","testLaneClosure":"passed_93_files","packageVerification":"passed","staticFences":"passed","architectureImpact":"changed_internal_team_session_lifecycle_boundary_only","aggregateLane":"not_run_by_contract","proofLimit":"teamCreated is a private model-lifecycle adapter proof, not a separate Pi process or hook-execution proof. Pi hook/refusal/delivery/title/footer/nudge adaptation and durable Trio facade composition remain open."},
+    "selectedWorkerLaunchInjectionEvidence": [
+      {"path":"src/model-tool-contract/durable-model-tool-port.test.ts","state":"independently_accepted","scope":"Optional injected WorkerLaunchBridge; read-only snapshot and nudge debt without it; missing bridge refusal before logical Worker mutation; durable façade import fence and single composition injection."}
+    ],
+    "independentWorkerLaunchInjectionVerification": {"focusedTests":32,"typecheck":"passed","testLaneClosure":"passed_93_files","packageVerification":"passed","staticFences":"passed","diffChecks":"passed","aggregateLane":"not_run_by_contract","proofLimit":"This proves launch-capability injection only. Pi Session adapter, Alert, Coordination, Trio façade/fake, and Membership observation seams remain open."},
     "selectedTeamLifecycleServiceEvidence": [
       {"path":"src/team-authority/team-lifecycle-service.boundary.test.ts","state":"independently_accepted","scope":"Injected AssignedWorkGuard and TeamLifecyclePublication ports plus Team-source static fence."},
       {"path":"src/utils/topology-lifecycle.contract.test.ts","state":"independently_accepted_characterization","scope":"Registered Worker stop/shutdown result, Task-state, partial/final, and stopped-publication behavior."}
@@ -296,7 +295,7 @@
           "src/adapters/durable-assigned-work-guard.ts",
           "src/adapters/durable-team-lifecycle-publication.ts"
         ],
-        "currentScopeNote": "Durable adapters implement the Team-owned assigned-work and lifecycle-publication ports with existing Task, Coordination, runtime, and terminal support. Pi composition injects them for the extension path; DurableModelToolTeamPort still constructs lifecycle publication directly."
+        "currentScopeNote": "Durable adapters implement the Team-owned assigned-work and lifecycle-publication ports with existing Task, Coordination, runtime, and terminal support. Pi composition injects one WorkerLaunchBridge for the extension path. DurableModelToolTeamPort no longer constructs lifecycle publication or a launch bridge; its optional capability preserves read-only/nudge calls and refuses missing launch capability before logical Worker mutation."
       },
       {
         "id": "membership_observation_projector",
@@ -785,7 +784,8 @@
       "compositionRoot": "extensions/index.ts:410-424",
       "compatibilityReExport": "src/utils/worker-launch-bridge.ts:1-2",
       "verification": {"focusedTests":38,"state":"independently_accepted","aggregate":"not_run_by_contract"},
-      "proofLimit": "DurableModelToolTeamPort directly constructs the durable adapter. Later accepted Team selections complete Session admission/claim/bind/runtime realization; Pi hook/refusal/delivery/title/footer/nudge adaptation and facade composition remain incomplete."
+      "launchCapabilityInjection": {"focusedTests":32,"typecheck":"passed","testLanes":"passed_93_files","package":"passed","staticFences":"passed","diffChecks":"passed"},
+      "proofLimit": "DurableModelToolTeamPort no longer constructs the durable adapter. Later accepted Team selections complete Session admission/claim/bind/runtime realization; Pi hook/refusal/delivery/title/footer/nudge adaptation and facade composition remain incomplete."
     },
     "teamStopShutdownServiceBoundary": {
       "state": "implemented_independently_accepted",
@@ -797,7 +797,7 @@
       "compositionRoot": "extensions/index.ts:412-416 and :1141-1142",
       "preserved": ["topology_then_current_membership_lock_order","exact_carrier_stop_before_membership_deactivation","stopped_event_after_transition","stopped_publication_failure_characterization","partial_shutdown_and_lead_last_order"],
       "verification": {"focusedTests":69,"typecheck":"passed","testLanes":"passed_92_files","package":"passed","staticFences":"passed"},
-      "proofLimit": "The later Session lifecycle selection owns Session admission/claim/bind/runtime realization. Pi hook/refusal/delivery/title/footer/nudge adaptation and DurableModelToolTeamPort direct adapter construction remain outside the combined Team boundary."
+      "proofLimit": "The later Session lifecycle selection owns Session admission/claim/bind/runtime realization. The launch-capability selection removed DurableModelToolTeamPort direct adapter construction. Pi hook/refusal/delivery/title/footer/nudge adaptation remains outside the combined Team boundary."
     },
     "teamSessionLifecycleBoundary": {
       "state": "implemented_independently_accepted",
@@ -806,7 +806,7 @@
       "compositionRoot": ["extensions/index.ts:386", "extensions/index.ts:859", "extensions/index.ts:907", "extensions/index.ts:1065"],
       "implemented": ["worker_and_lead_placement_admission", "exact_session_binding_and_membership_lease", "runtime_claim_and_post_failure_fence", "lead_session_record", "session_bound_and_failed_publication", "bound_session_runtime_write", "exact_membership_race_correction"],
       "verification": {"focusedTests":52,"typecheck":"passed","testLanes":"passed_93_files","package":"passed","staticFences":"passed"},
-      "proofLimit": "Private teamCreated adapter evidence is not a real Pi-process or hook-execution proof. Pi hook/refusal/delivery/title/footer/nudge adaptation and DurableModelToolTeamPort direct lifecycle-publication construction remain outside this boundary."
+      "proofLimit": "Private teamCreated adapter evidence is not a real Pi-process or hook-execution proof. The launch-capability selection removed DurableModelToolTeamPort direct lifecycle-publication construction. Pi hook/refusal/delivery/title/footer/nudge adaptation remains outside this boundary."
     },
     "rc10CoordinationBehavior": {
       "state": "implemented_behavior_boundary_incomplete",
@@ -1067,14 +1067,14 @@
     "schema": "pi-team-bright-full-split-completion-matrix/1",
     "computedAt": "2026-08-10",
     "input": {
-      "gitHead": "a2e3f9c6821c3a9963397b23702d2b767c4a846c",
-      "productionSourceDigestSha256": "c961e08d80a3a6373ef1c730666a5a6136052f0cacf2dc71feb65d15c764cd00",
-      "scope": "80 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts; digest is sorted sha256(content) plus two spaces plus path plus newline. Current tree includes the selected uncommitted Team Session lifecycle seam.",
+      "gitHead": "57c8e02d672eddad0aa955961cef5628b7bb4421",
+      "productionSourceDigestSha256": "93225593e8d49880c926e84470f277702c53f667404271d7bc4bcf3835985bbb",
+      "scope": "80 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts; digest is sorted sha256(content) plus two spaces plus path plus newline. Current tree includes the selected uncommitted Worker-launch injection seam.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
       "files": 80,
-      "uniqueLocalEdges": 268,
+      "uniqueLocalEdges": 267,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
@@ -1090,7 +1090,6 @@
         {"from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "edges": 8, "files": ["src/model-tool-contract/durable-model-tool-port.ts", "src/utils/team-footer.ts", "src/utils/team-status.ts"]},
         {"from": "trio_facing_interface_and_projections", "to": "coordination_observation", "edges": 7, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
         {"from": "trio_facing_interface_and_projections", "to": "alert_authority", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
-        {"from": "trio_facing_interface_and_projections", "to": "pi_composition_root", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
         {"from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/public/observation.ts"]},
         {"from": "team_authority_and_role_realization", "to": "alert_authority", "edges": 1, "files": ["src/team-authority/worker-launch-bridge.ts"]},
         {"from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/utils/alerts.ts"]},
@@ -1110,10 +1109,10 @@
       {
         "id": "team_authority_and_role_realization",
         "completion": "partial_carrier_stop_shutdown_and_session_lifecycle_isolated",
-        "remainingSeams": ["extensions/index.ts Pi hook/refusal/delivery/title/footer/nudge adaptation", "DurableModelToolTeamPort constructs DurableTeamLifecyclePublication directly", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
-        "violations": ["durable facade composition: src/model-tool-contract/durable-model-tool-port.ts:141-157 constructs the Team lifecycle adapter outside Pi composition"],
-        "staticGate": "For Team-owned lifecycle sources, deny concrete Task, Coordination, Trio, and Pi-hook imports. Permit Team contracts, terminal/runtime support, and Team-owned AssignedWorkGuard and TeamLifecyclePublication ports only. Keep the compatibility re-export at utils/worker-launch-bridge.ts.",
-        "focusedVerification": ["Independent 52-test Team Session lifecycle review: passed", "typecheck: passed", "test lanes: passed_93_files", "package verification: passed", "static fences: passed"]
+        "remainingSeams": ["extensions/index.ts Pi hook/refusal/delivery/title/footer/nudge adaptation", "DurableModelToolTeamPort remains a combined Team/Task/Alert/Coordination/Trio façade", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
+        "violations": ["Pi Session adaptation and durable Trio façade composition remain in extensions/index.ts and src/model-tool-contract/durable-model-tool-port.ts"],
+        "staticGate": "For Team-owned lifecycle sources, deny concrete Task, Coordination, Trio, and Pi-hook imports. Permit Team contracts, terminal/runtime support, and Team-owned AssignedWorkGuard and TeamLifecyclePublication ports only. Keep the compatibility re-export at utils/worker-launch-bridge.ts. DurableModelToolTeamPort must not import or construct DurableTeamLifecyclePublication or createWorkerLaunchBridge.",
+        "focusedVerification": ["Independent 52-test Team Session lifecycle review: passed", "Independent 32-test Worker-launch injection review: passed", "typecheck: passed", "test lanes: passed_93_files", "package verification: passed", "static fences and diff checks: passed"]
       },
       {
         "id": "task_authority",
@@ -1160,7 +1159,7 @@
     "safestCoherentOrder": [
       { "step": 0, "seam": "behavior_inventory_completion", "precondition": "All inventory entries are characterized. ALERT-004 is compatibility-required with one-Node-process hook-level later-presentation and replay evidence; external process, fork, Pi Session, and OS restart evidence remains a proof limit, not a behavior-identical seam gate.", "verification": ["npx vitest run src/utils/alert-publication-failure.characterization.test.ts src/utils/causal-path-characterization.test.ts"] },
       { "step": 1, "seam": "shared_domain_contracts", "precondition": "Keep compatibility re-exports and persisted shapes. Split src/utils/models.ts by authority before moving behavior.", "verification": ["npm run typecheck", "npm run test:lanes"] },
-      { "step": 2, "seam": "team_pi_hook_adapter_and_durable_facade_composition", "precondition": "Carrier, stop/shutdown, and Session realization selections are complete. Keep Pi hook/refusal/delivery/title/footer/nudge adaptation small without changing hook order, then remove DurableModelToolTeamPort direct lifecycle-adapter construction.", "verification": ["npx vitest run src/team-authority/team-session-lifecycle-service.boundary.test.ts src/utils/worker-identity-process-admission.characterization.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts"] },
+      { "step": 2, "seam": "team_pi_hook_adapter_and_durable_facade_composition", "precondition": "Carrier, stop/shutdown, Session realization, and Worker-launch injection selections are complete. Keep Pi hook/refusal/delivery/title/footer/nudge adaptation small without changing hook order; direct lifecycle-adapter construction is removed already.", "verification": ["npx vitest run src/model-tool-contract/durable-model-tool-port.test.ts src/team-authority/team-session-lifecycle-service.boundary.test.ts src/utils/worker-identity-process-admission.characterization.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts"] },
       { "step": 3, "seam": "alert_delivery_and_publication", "precondition": "Only after step 0. Wrap Message records in an Alert adapter and inject Membership resolution and Coordination publication.", "verification": ["npx vitest run src/utils/alerts.test.ts src/utils/alert-publication-failure.characterization.test.ts src/utils/message-delivery.test.ts"] },
       { "step": 4, "seam": "coordination_read_ports_and_application_boundary", "precondition": "Replace direct Team/runtime, Task-delivery, and Alert-inbox reads with Coordination-owned read queries. Keep hints, timers, and nudges derived.", "verification": ["npx vitest run src/model-tool-contract/sync-event-hydration.test.ts src/utils/sync-liveness.test.ts src/utils/task-event-failure-hints.test.ts src/utils/sync-nudge-extension.test.ts test/coord-liveness-e2e/sync-liveness.test.ts"] },
       { "step": 5, "seam": "trio_ports_and_separate_fakes", "precondition": "Split ModelToolTeamPort and StoredTeam only after the four authority ports exist. Preserve model and TUI output contracts.", "verification": ["npx vitest run src/model-tool-contract/first-journey.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/model-tool-contract/result-projection.test.ts", "npm run qa:tool-results"] },

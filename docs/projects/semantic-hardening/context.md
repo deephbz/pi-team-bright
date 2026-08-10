@@ -158,8 +158,18 @@ closed the order gate. Exact-Membership correction Task
 `semantic-hardening-boundaries-ggw`, and independent verification Task
 `semantic-hardening-boundaries-5hg` are closed. Audit/map update Task
 `semantic-hardening-boundaries-2vn` and final read-only record review Task
-`semantic-hardening-boundaries-blb` are closed. The current source bundle
-commits the independently accepted Team Session lifecycle selection.
+`semantic-hardening-boundaries-blb` are closed. Commit `57c8e02` contains the
+independently accepted Team Session lifecycle selection.
+
+The current source bundle removes Worker-launch construction from
+`DurableModelToolTeamPort`. The façade now consumes an optional injected
+`WorkerLaunchBridge`; read-only and nudge-debt use remains available without it,
+and `ensureWorker` refuses missing capability before logical Worker mutation.
+Implementation Task `semantic-hardening-authorities-92l`, independent test Task
+`semantic-hardening-authorities-3cw`, verification Task
+`semantic-hardening-authorities-r9i`, and audit Task
+`semantic-hardening-authorities-ojq` are closed. Pi Session hook adaptation
+remains the final Team seam.
 
 ## Decisions and constraints still in force
 
@@ -209,8 +219,10 @@ Open boundary risks:
 - `ModelToolTeamPort`, its durable implementation, and its in-memory fake still
   combine multiple authorities. The projection evidence is now bounded, but the
   façade and fake authority split remains incomplete.
-- Team lifecycle and carrier policy remain partly in Pi composition. Public
-  Membership observation still reads broad private record shapes.
+- Team lifecycle policy is now in Team services, and Worker-launch capability
+  is injected into the durable façade. Pi Session hook/refusal/delivery/title/
+  footer/nudge adaptation remains open. Public Membership observation still
+  reads broad private record shapes.
 - Beads hydration has a measured latency tail. Removing reverse-dependent
   hydration, filtering closed Tasks, or raising the timeout would change current
   meaning or policy. Actual optimization remains deferred.
