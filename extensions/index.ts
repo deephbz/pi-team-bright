@@ -41,7 +41,9 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelConfigurationError, type WorkerAggregate } from "../src/team-authority/worker-launch-bridge";
+import { DurableAssignedWorkGuard } from "../src/adapters/durable-assigned-work-guard";
 import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-lifecycle-publication";
+import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
@@ -407,6 +409,11 @@ export default function (pi: ExtensionAPI) {
 
   const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication());
 
+  const lifecyclePublication = new DurableTeamLifecyclePublication();
+  const teamLifecycleService = new TeamLifecycleService({
+    assignedWorkGuard: new DurableAssignedWorkGuard(),
+    lifecyclePublication,
+  });
   const workerLaunchBridge = createWorkerLaunchBridge({
     buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
       const argv = buildPiArgv(getPiLaunchArgv(), model, thinking);
@@ -420,7 +427,7 @@ export default function (pi: ExtensionAPI) {
     // No leader context exists on this fallback path; the resolver applies the
     // authorized always-trust default instead of manufacturing false.
     workerAggregate: (cwd) => workerAggregate(cwd, { cwd }),
-    lifecyclePublication: new DurableTeamLifecyclePublication(),
+    lifecyclePublication,
   });
 
   let modelToolLifecycleAdapter: ModelToolLifecycle | undefined;
@@ -1120,118 +1127,6 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  type TeammateStopEvidence = {
-    kind: "terminal_pane_stopped" | "terminal_window_stopped" | "bound_process_already_exited";
-    adapter?: string;
-    target?: string;
-    membershipId: string;
-  };
-
-  function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStatus | null): runtime.RuntimeGeneration | null {
-    const generation = runtime.runtimeGeneration(status);
-    return member.membershipId && generation?.membershipId === member.membershipId ? generation : null;
-  }
-
-  function exactBoundProcessAlreadyExited(generation: runtime.RuntimeGeneration | null): boolean {
-    if (!generation || generation.pid === process.pid) return false;
-    try {
-      process.kill(generation.pid, 0);
-      return false;
-    } catch (error) {
-      return (error as NodeJS.ErrnoException).code === "ESRCH";
-    }
-  }
-
-  async function killTeammate(teamName: string, member: Member): Promise<TeammateStopEvidence> {
-    if (member.name === "team-lead") throw new Error("The team leader has no teammate terminal stop operation.");
-    if (!member.membershipId) throw new Error(`Cannot stop ${member.name}: its current Membership has no stable identity.`);
-
-    // Runtime status is usable only when it names this exact Membership
-    // generation. We never kill a PID from this durable record: after PID reuse,
-    // the record cannot prove that the live OS process is still the teammate.
-    // It can safely prove the weaker fact that the recorded process no longer
-    // exists, which lets an operator finalize a manually closed Windows/Zellij
-    // teammate without reviving the old unscoped *.pid behavior.
-    const status = await runtime.readRuntimeStatus(teamName, member.name);
-    const observedGeneration = exactRuntimeGeneration(member, status);
-    if (exactBoundProcessAlreadyExited(observedGeneration)) {
-      const deleted = await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration!);
-      if (!deleted) {
-        throw new Error(
-          `Cannot confirm shutdown of ${member.name}: its runtime process generation changed after exit evidence. ` +
-          "The Membership remains current; inspect the resumed process and retry.",
-        );
-      }
-      return {
-        kind: "bound_process_already_exited",
-        membershipId: member.membershipId,
-      };
-    }
-
-    const teamConfig = await teams.readConfig(teamName);
-    const teamTerminal = terminalForTeam(teamConfig);
-    const target = teamConfig.terminalBackend
-      ? assertTeamTerminalTarget(teamConfig, member)
-      : memberTerminalTarget(member, teamTerminal.name);
-    if (!target) {
-      throw new Error(
-        `Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. ` +
-        "The Membership remains current.",
-      );
-    }
-    assertTargetSupportedByTerminal(teamTerminal, target);
-
-    if (target.kind === "window") {
-      teamTerminal.killWindow(target.targetId);
-      if (teamTerminal.isWindowAlive(target.targetId)) {
-        throw new Error(
-          `Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop window ${target.targetId}. ` +
-          "The Membership remains current; close the process manually and retry.",
-        );
-      }
-      if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
-      return {
-        kind: "terminal_window_stopped",
-        adapter: target.backend,
-        target: target.targetId,
-        membershipId: member.membershipId,
-      };
-    }
-
-    teamTerminal.kill(target.targetId);
-    if (teamTerminal.isAlive(target.targetId)) {
-      throw new Error(
-        `Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop pane ${target.targetId}. ` +
-        "The Membership remains current; close the process manually and retry.",
-      );
-    }
-    if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
-    return {
-      kind: "terminal_pane_stopped",
-      adapter: target.backend,
-      target: target.targetId,
-      membershipId: member.membershipId,
-    };
-  }
-
-  async function transitionCurrentMembership(
-    targetTeamName: string,
-    member: Member,
-    reason: NonNullable<Member["deactivationReason"]>,
-    stopTerminal: boolean,
-  ): Promise<{ member: Member | null; stopEvidence?: TeammateStopEvidence }> {
-    if (!member.membershipId) {
-      throw new Error(`Current Membership for ${member.name} on team ${targetTeamName} has no membershipId.`);
-    }
-    return teams.withCurrentMembershipLease(targetTeamName, member.membershipId, async (current) => {
-      const stopEvidence = stopTerminal ? await killTeammate(targetTeamName, current) : undefined;
-      return {
-        member: await teams.deactivateMembership(targetTeamName, member.membershipId!, reason),
-        stopEvidence,
-      };
-    });
-  }
-
   if (modelToolJourney) {
     modelToolLifecycleAdapter = {
       async teamCreated(targetTeamName, sessionFile) {
@@ -1243,51 +1138,8 @@ export default function (pi: ExtensionAPI) {
         await registerLeadSession(targetTeamName, sessionFile, undefined, true, currentMembershipId);
         startSyncNudgeConductor(leaderContext);
       },
-      async stopWorker(targetTeamName, worker) {
-        const safeTeamName = paths.sanitizeName(targetTeamName);
-        const safeWorker = paths.sanitizeName(worker);
-        return teams.withTeamTopologyLease(safeTeamName, async () => {
-          const config = await teams.readConfig(safeTeamName);
-          const member = [...config.members].reverse().find((candidate) => candidate.name === safeWorker && candidate.isActive !== false);
-          if (!member) return { kind: "refused" as const, worker: safeWorker, reason: "worker_not_found" as const, message: `Worker ${safeWorker} is not current.` };
-          if (member.name === "team-lead" || member.agentType === "lead") return { kind: "refused" as const, worker: safeWorker, reason: "leader_reserved" as const, message: "The Team leader is reserved; use team_shutdown for whole-Team closure." };
-          const unfinished = await tasks.listTasksWithVersions(safeTeamName, { assignee: safeWorker, nonterminalOnly: true });
-          if (unfinished.length > 0) return { kind: "refused" as const, worker: safeWorker, reason: "nonterminal_tasks_assigned" as const, message: `Worker ${safeWorker} has nonterminal Tasks.`, guardingTaskIds: unfinished.map((task) => task.id) };
-          try {
-            const changed = await transitionCurrentMembership(safeTeamName, member, "process_shutdown", true);
-            await teamEvents.appendTeamEvent(safeTeamName, { type: "worker", worker: safeWorker, membershipId: member.membershipId!, phase: "stopped" });
-            if (!changed.member) return { kind: "refused" as const, worker: safeWorker, reason: "stop_not_confirmed" as const, message: `Worker ${safeWorker} was not deactivated.` };
-            return { kind: "stopped" as const, worker: safeWorker };
-          } catch (error) {
-            return { kind: "refused" as const, worker: safeWorker, reason: "stop_not_confirmed" as const, message: error instanceof Error ? error.message : String(error) };
-          }
-        });
-      },
-      async shutdownTeam(targetTeamName) {
-        const safeTeamName = paths.sanitizeName(targetTeamName);
-        return teams.withTeamTopologyLease(safeTeamName, async () => {
-          const config = await teams.readConfig(safeTeamName);
-          const current = config.members.filter((member) => member.isActive !== false);
-          const teammates = current.filter((member) => member.name !== "team-lead" && member.agentType !== "lead");
-          const stoppedWorkers: string[] = [];
-          const failedWorkers: string[] = [];
-          await Promise.all(teammates.map(async (member) => {
-            try {
-              const changed = await transitionCurrentMembership(safeTeamName, member, "team_shutdown", true);
-              if (changed.member) stoppedWorkers.push(member.name);
-            } catch {
-              failedWorkers.push(member.name);
-            }
-          }));
-          if (failedWorkers.length === 0) {
-            const lead = current.find((member) => member.name === "team-lead" || member.agentType === "lead");
-            if (lead) await transitionCurrentMembership(safeTeamName, lead, "team_shutdown", false);
-          }
-          const unfinishedTaskIds = (await tasks.listTasksWithVersions(safeTeamName, { nonterminalOnly: true })).map((task) => task.id);
-          if (failedWorkers.length > 0) return { kind: "partial" as const, stoppedWorkers: stoppedWorkers.sort(), failedWorkers: failedWorkers.sort(), unfinishedTaskIds };
-          return { kind: "shutdown" as const, stoppedWorkers: stoppedWorkers.sort(), unfinishedTaskIds };
-        });
-      },
+      stopWorker: (targetTeamName, worker) => teamLifecycleService.stopWorker(targetTeamName, worker),
+      shutdownTeam: (targetTeamName) => teamLifecycleService.shutdownTeam(targetTeamName),
     };
   }
 

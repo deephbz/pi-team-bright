@@ -33,23 +33,25 @@ observation, and Trio-facing interface and projections. Public Membership
 observation remains an additive machine projection of Team authority.
 
 The initial review covered 60 production TypeScript files with 18,145 lines and
-77 test or test-support files with 20,585 lines. The current committed contract/dist base plus selected Team carrier tree has 76
-production TypeScript files with 19,705 lines, plus 91 test files with 23,866
-lines and two test-support files with 441 lines. The 93 test and support files
-contain 24,307 lines combined. Production means current tracked or selected
+77 test or test-support files with 20,585 lines. The current committed Team
+carrier base plus selected Team lifecycle-service tree has 79 production
+TypeScript files with 19,708 lines, plus 92 test files with 24,089 lines and two
+test-support files with 441 lines. The 94 test and support files contain 24,530
+lines combined. Production means current tracked or selected
 `.ts` files under `src/` and `extensions/`, excluding `*.test.ts`; test support
 means `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global
 setup is excluded. A TypeScript-AST scan resolves static relative import and
-re-export specifiers between those production files. It finds 249 unique local
+re-export specifiers between those production files. It finds 261 unique local
 edges, no nontrivial strongly connected component, no self-cycle, and no
 dynamic import expression. The prior hidden dynamic Task-adapter cycle remains
 removed, and the Task mutation path no longer imports concrete publication
 writers. Type-query `import("...")` syntax is not a dynamic import expression.
 
-This graph records committed base `32e12b559ff925aca20362162bdd281db9c92696`
-plus the independently accepted uncommitted Team carrier publication selection.
-That selection has nine paths and a 38-test focused review. It does not establish
-full Team authority isolation.
+This graph records committed base `8d63473` plus the independently accepted
+uncommitted Team lifecycle-service selection. That selection has eight paths,
+69 focused tests, a passed typecheck, 92 passing test lanes, package verification,
+and static fences. It has internal Team-boundary architecture impact, but it
+does not establish full Team authority isolation.
 
 The rc.10 tree also includes the rc.9/rc.10 Coordination work: event-directed
 Task hydration and page-safe watermarks, Worker run-state and actuation evidence,
@@ -92,13 +94,18 @@ Team-owned `TeamLifecyclePublication` port
 Team-event or startup-observation implementations. The durable adapter stays
 outside Team authority at
 `src/adapters/durable-team-lifecycle-publication.ts:14`; it writes existing
-Coordination evidence and performs bounded observation. The old
-`src/utils/worker-launch-bridge.ts` is a compatibility re-export only. The
-extension still performs startup admission, runtime claim, Session bind, stop,
-and shutdown (`extensions/index.ts:832`, `extensions/index.ts:1243`). Durable
-lead-Session discovery now lives in `findLeadTeamForSession`
-(`src/utils/teams.ts:476`); the extension calls that query without changing
-environment precedence or hook timing.
+Coordination evidence and performs bounded observation. `TeamLifecycleService`
+now owns stop and shutdown policy through Team-owned `AssignedWorkGuard` and
+`TeamLifecyclePublication` ports
+(`src/team-authority/team-lifecycle-service.ts:38-85`). The durable Task guard
+and stopped-event publisher remain adapters
+(`src/adapters/durable-assigned-work-guard.ts:5`,
+`src/adapters/durable-team-lifecycle-publication.ts:28`). The extension composes
+these adapters and delegates stop/shutdown (`extensions/index.ts:412-416`,
+`:1141-1142`). The old `src/utils/worker-launch-bridge.ts` is a compatibility
+re-export only. Session startup, runtime claim, Session binding, shutdown hooks,
+and their Pi ordering remain in the extension. Durable lead-Session discovery
+now lives in `findLeadTeamForSession` (`src/utils/teams.ts:476`).
 
 Team compatibility is not isolated. `TeamConfig` also carries resolved sync-
 liveness policy, historical implementation provenance, Beads authority,
@@ -334,12 +341,16 @@ to private record changes (`src/public/observation.ts:5`).
    behavior-identical seam, while a separate owner-visible decision remains
    required for any semantic change.
 
-9. Team lifecycle and Task authority need queries in both directions. Worker
-   stop checks nonterminal Tasks while holding the Team topology lease
-   (`extensions/index.ts:1246`, `extensions/index.ts:1251`), while Task creation
-   validates a logical Worker
-   (`src/model-tool-contract/durable-model-tool-port.ts:305`). Consumer-owned
-   query ports must prevent this semantic relation from becoming a source cycle.
+9. **Resolved for the Team stop/shutdown slice.** `TeamLifecycleService` holds
+   the Team topology lease, asks its consumer-owned `AssignedWorkGuard` for
+   nonterminal Task IDs, stops an exact carrier, deactivates under the exact
+   Membership lease, then publishes a stopped event
+   (`src/team-authority/team-lifecycle-service.ts:44-55`, `:113-118`). The
+   concrete Task query and Coordination write stay in durable adapters. A
+   stopped-publication failure remains a characterized post-deactivation refusal,
+   not evidence of rollback. Task creation still validates a logical Worker
+   (`src/model-tool-contract/durable-model-tool-port.ts:305`), so consumer-owned
+   ports remain necessary to prevent source cycles.
 
 10. Coordination liveness currently reads Team runtime, Task delivery, and the
     Alert/Message inbox directly (`src/utils/sync-liveness.ts:1`). This is useful
@@ -562,13 +573,14 @@ at the composition root.
    Alert state through consumer-owned query ports; derived hints and timers stay
    non-authoritative, and authorities no longer import `team-events.ts`
    concretely.
-7. **Partly implemented.** Durable lead-Session discovery and Worker carrier
-   publication/observation now use Team-owned contracts. The required
-   `TeamLifecyclePublication` port is implemented by the durable adapter outside
-   Team authority, and `src/utils/worker-launch-bridge.ts` remains a compatibility
-   re-export. Extract the remaining Team Session lifecycle and Worker carrier
-   services from `extensions/index.ts`. Add the Team-owned assigned-work guard,
-   keep exact hook order in one small Pi adapter, and stop
+7. **Partly implemented.** Durable lead-Session discovery, Worker carrier
+   publication/observation, and Team stop/shutdown policy now use Team-owned
+   contracts. `AssignedWorkGuard` isolates the Task query. The external durable
+   adapters implement the Task query and lifecycle publication, while exact
+   carrier stop, Membership transition, stopped publication, partial shutdown,
+   and lead-last order remain characterized. The stopped-publication-failure
+   result remains a post-deactivation refusal. Extract remaining Team Session
+   startup/binding/hooks into a small Pi adapter, and stop
    `DurableModelToolTeamPort` from constructing the durable lifecycle adapter
    directly. Team authority retains resource resolution, startup, recovery,
    stop, shutdown, and compatibility policy.

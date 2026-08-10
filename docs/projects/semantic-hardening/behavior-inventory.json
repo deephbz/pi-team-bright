@@ -72,7 +72,8 @@
       "summary": "Recover, stop, and shut down exact carriers without losing Membership history or claiming uncertain stop evidence.",
       "classification": "unclassified",
       "testState": "characterized",
-      "evidence": ["src/utils/worker-launch-bridge.ts", "extensions/index.ts"]
+      "evidence": ["src/team-authority/worker-launch-bridge.ts", "src/team-authority/team-lifecycle-service.ts", "src/team-authority/team-lifecycle-service.boundary.test.ts", "src/utils/topology-lifecycle.contract.test.ts", "extensions/index.ts"],
+      "proofLimit": "Registered-extension and focused-service evidence preserves exact carrier stop, Membership history, uncertain-stop refusal, and stopped-publication-failure characterization. It does not prove a separate Pi process, Session startup/binding, hook execution, or terminal carrier restart."
     },
     {
       "id": "TASK-001",
