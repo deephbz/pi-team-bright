@@ -2,9 +2,10 @@
 
 Updated: 2026-08-10
 Stage: consolidation and hardening
-Status: Coordination nudge boundary is accepted in commit
-`b4bf6dee91cf25532cbc33a397167567ba6d347e`; full five-subsystem
-implementation remains active
+Status: Trio split is accepted in commit
+`69c30acf5db23be8f656b2a6821b0ea032ae04cb` from clean baseline
+`c54dc25b34770b70afedffc7e87728da6376ee0f`; Membership observation is the
+next boundary
 Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -41,6 +42,23 @@ exists. Full Team runtime, terminal rendering, and model interpretation remain
 outside the source-verification claim.
 
 ## Active continuation
+
+The accepted Trio split closes the combined durable facade and one-store fake
+seam. `ModelToolJourneyPort` is the named facade over neutral Team, Task, Alert,
+and Coordination application contracts. The durable owners are
+`durable-model-tool-team-application.ts`, `durable-model-tool-task-application.ts`,
+`durable-model-tool-alert-application.ts`, and
+`durable-model-tool-coordination-application.ts`; bindings remain in
+`durable-model-tool-bindings.ts`. `in-memory-state.ts` and
+`in-memory-authority-ports.ts` keep authority state opaque, while
+`in-memory-model-tool-journey.ts`, `in-memory-team-port.ts`, and
+`durable-model-tool-port.ts` are thin compatibility wrappers. Task and Alert
+commit before Coordination publication; a later publication failure remains a
+partial outcome and never rolls back authority state. Rejected nominal attempts
+remain historical evidence. Focused gates passed, but this is deterministic
+local evidence only; it does not prove real Pi persistence, external
+Beads/Dolt contention, cross-process forks, watcher delivery, OS scheduling,
+external writers, or terminal pixels.
 
 The owner rejected the prior partial-completion interpretation. Delivery now
 requires the complete agreed request, not another bounded release increment:
@@ -326,11 +344,8 @@ Open boundary risks:
   waits, indeterminate outcomes, and nudges. Coordination owns nudge debt,
   identity, pagination, and eligibility; durable record adapters retain nudge
   storage, the conductor owns timers only, and Pi retains exact-Session
-  actuation and proof. The combined durable Trio façade and fake, Pi composition,
-  and hidden-observation Team configuration read remain later seams.
-- `ModelToolTeamPort`, its durable implementation, and its in-memory fake still
-  combine multiple authorities. The projection evidence is now bounded, but the
-  façade and fake authority split remains incomplete.
+  actuation and proof. Pi composition and the hidden-observation Team
+  configuration read remain later seams.
 - Team lifecycle policy is in Team services, Worker-launch capability is
   injected, and one Pi Session adapter owns hook/refusal/delivery/title/footer/
   nudge integration. Its direct Team record reads remain a narrow integration
@@ -369,9 +384,9 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Start the Trio façade and separate-fake split. Keep the accepted nudge
-   boundary stable, then continue additive Membership observation unless source
-   evidence requires a safer order.
+3. Start the additive Membership observation decoder boundary. Keep the
+   accepted four-port Trio split and nudge boundary stable unless source evidence
+   requires a safer order.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after

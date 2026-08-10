@@ -1,89 +1,73 @@
 # Semantic hardening continuation
 
-Updated: 2026-08-10 during automatic context compaction.
+Updated: 2026-08-10 during Trio continuation.
 
 ## Owner contract
 
-Continue the full subsystem hardening project without stopping at a release increment. Lead directly and use assigned Tasks for all Worker work. Keep the Herdr watchdog active. Do not push, tag, publish, or run the reserved aggregate until the full target is stable and the owner authorizes publication.
+Continue the full subsystem hardening project without stopping at a release
+increment. Lead directly and use assigned Tasks for all Worker work. Keep the
+Herdr watchdog active. Do not push, tag, publish, or run the reserved aggregate
+until the full target is stable and the owner authorizes publication.
 
-Preserve public tools, schemas, results, package exports, persisted records, filenames, ordering, errors, timing, terminal behavior, and undocumented observable behavior by default. A behavior change needs explicit evidence, classification, replacement tests, and its own commit.
+Preserve public tools, schemas, results, package exports, persisted records,
+filenames, ordering, errors, timing, terminal behavior, and undocumented
+observable behavior by default. A behavior change needs explicit evidence,
+classification, replacement tests, and its own commit.
 
-The full target remains Team authority, Task authority, Alert authority, Coordination observation, Trio-facing projections, and the additive read-only Membership observation component. Session, process, pane, delivery, locks, files, timers, and traces are support mechanisms, not authorities.
+The full target remains Team authority, Task authority, Alert authority,
+Coordination observation, Trio-facing projections, and the additive read-only
+Membership observation component. Session, process, pane, delivery, locks,
+files, timers, and traces are support mechanisms, not authorities.
 
 ## Current source state
 
-The Project worktree branch is `audit/semantic-hardening-behavior-inventory`. Current accepted source commit is `cafdf2deb4ccdbb47cb40b87e83081d1c9128665` (`fix: keep refused resumed Sessions alive`). Do not use the original checkout. Any result from the original checkout is invalid for the terminal-refusal correction.
+Use only `the isolated Project worktree` on branch
+`audit/semantic-hardening-behavior-inventory`. Do not use the original checkout.
 
-Recent accepted commits:
+Clean accepted baseline `c54dc25b34770b70afedffc7e87728da6376ee0f` now
+precedes accepted Trio commit
+`69c30acf5db23be8f656b2a6821b0ea032ae04cb` (`refactor: split Trio application
+ports`). The accepted continuation chain is `b4bf6de`, `e50eb68`, `3b265ea`,
+`cafdf2d`, `b3b2b22`, `c54dc25`, and `69c30ac`.
 
-- `34ac729` — Coordination outside-in characterization.
-- `f4f88a2` — Coordination query ports and durable adapters.
-- `3869ef6` — Coordination observation service extraction.
-- `b4bf6dee91cf25532cbc33a397167567ba6d347e` — Coordination nudge boundary.
-- `3b265ea6fbdc53c9b753950a4ed01ccddad527d8` — test hardening that binds
-  Session characterization to canonical Alert delivery.
-- `cafdf2deb4ccdbb47cb40b87e83081d1c9128665` — intentional terminal-refusal
-  behavior fix.
+The accepted architecture is a `ModelToolJourneyPort` facade over four neutral
+application contracts: Team, Task, Alert, and Coordination. Durable owners are
+`durable-model-tool-team-application.ts`,
+`durable-model-tool-task-application.ts`,
+`durable-model-tool-alert-application.ts`, and
+`durable-model-tool-coordination-application.ts`; bindings are in
+`durable-model-tool-bindings.ts`. Opaque in-memory authority state and ports
+replace the one-store fake. Compatibility wrappers remain thin.
 
-The hardened characterization exposed a pre-existing defect: resumed foreign or
-nested Worker and lead Sessions were shut down after placement refusal. The fix
-keeps them alive and unbound. Launch or runtime refusals with `exitProcess=true`
-still shut down. The exact resumed-Worker and resumed-lead cases are in
-`src/utils/pi-session-adapter.characterization.test.ts`; nested-Worker and
-foreign-lead cases are in `src/utils/terminal-backend.contract.test.ts`. This is
-deterministic one-process hook evidence, not real process, terminal, or terminal
-carrier proof. No public, schema, persistence, or graph change occurred; the
-accepted graph remains 99 files and 334 edges. Architecture impact: **none**.
-No aggregate ran.
+Task and Alert authority commits precede Coordination publication. Publication
+failure remains a partial outcome and does not roll back authority state. The
+rejected nominal implementation attempts remain historical evidence.
 
-The reserved aggregate has not run. Public behavior and package exports remain unchanged. Nothing after the earlier authorized RC branch increment has been pushed or published.
+No public behavior, schema, package export, persistence contract, or deployment
+shape changed. The final aggregate remains reserved for one exact stable final
+tree; do not run it during individual Task work.
 
-## Active Team and nudge slice
+## Active Team and Task state
 
-Active Team: `semantic-hardening-nudge`. The exact calling Session is leader.
+The Trio Team work is accepted. Keep the Herdr watchdog active until final
+Project completion. Design Tasks `semantic-hardening-trio-o6p` and
+`semantic-hardening-trio-c76` are closed; nominal attempts
+`semantic-hardening-trio-fbp` and `semantic-hardening-trio-tey` remain rejected
+history; durable slice `semantic-hardening-trio-8bs` is accepted. The prior
+in-memory rewrite and Trio acceptance gates are no longer active blockers.
 
-Closed work:
+## Next actions
 
-- `semantic-hardening-nudge-ezn` specified the accepted nudge split.
-- `semantic-hardening-nudge-v85` moved debt calculation into Coordination, added a durable nudge-record adapter, and retained Pi-only Session actuation.
-- `semantic-hardening-nudge-jsx` added independent debt, record, conductor, Pi race, compatibility, and import-fence tests.
-- `semantic-hardening-nudge-azk` replaced a concrete observation-service dependency with a narrow structural Task-projection reader.
-- `semantic-hardening-nudge-tah` created the shared neutral Task-projection revision function and removed concrete hidden/event/hint imports from Coordination nudge debt.
+1. Start the additive Membership observation decoder boundary.
+2. Preserve the accepted neutral four-port Trio contracts, opaque-state fakes,
+   thin wrappers, and Task/Alert partial-failure semantics.
+3. Stabilize one exact final tree before the one reserved aggregate.
+4. Refresh final acceptance artifacts, run the required privacy scan, and get
+   watchdog completion review before any release operation.
 
-The two legacy-oracle corrections are accepted. Nudge debt no longer rejects a
-missing optional policy version; it keeps the former interpolation in the debt
-key when logical Workers exist. A nudge-specific exact-leader binding resolver
-avoids an early `none` or no-active-Team result and requires only the bound lead
-Session, Team epoch, sync-liveness policy, Members/current lead identity, and
-Session file. Its durable hidden-observation read still applies
-`teamModelToolContractGap`: absent logical Workers therefore returns the exact
-legacy unavailable result. Snapshot and update observation still require logical
-Workers.
+## Proof limits
 
-Current audit evidence is 99 production TypeScript files and 334 unique resolved
-static local edges, with zero nontrivial cycles and zero runtime dynamic imports.
-Focused nudge and registered Coordination tests, typecheck, package verification,
-and agent QA passed. This is deterministic one-process evidence, not proof of
-real Pi persistence, external Beads/Dolt contention, cross-process forks, native
-watcher delivery, OS scheduling, external writers, or terminal pixels.
-
-## Immediate continuation
-
-1. Start the Trio façade and separate-fake split. It must use distinct Team,
-   Task, Alert, and Coordination application ports and must not collapse Task or
-   Alert commits with failed Coordination publication.
-2. Then isolate the additive Membership decoder, do measured local optimization,
-   stabilize one exact tree, run the one reserved aggregate, refresh final
-   artifacts, run the privacy scan, and obtain watchdog completion review.
-
-## Nudge boundary still in force
-
-Coordination owns debt meaning, event pagination, Task revision and failed-hint provenance, exact debt identity, and eligibility. The durable record adapter owns nudge JSONL reservation/promotion storage. `SyncNudgeConductor` owns timers only. Pi alone revalidates the exact Team epoch, lead Membership, Session, and full branch; reserves; sends the unchanged custom message; proves the exact persisted custom message; and then promotes. A stale reservation remains historical evidence. Fresh eligible debt can reserve and present once.
-
-Preserve current delay validation, read order, exact messages, debt keys, full-lineage identity, JSONL path/schema, malformed-line tolerance, append/fsync order, custom-message payload, `triggerTurn`, `deliverAs`, and public projections.
-
-## Proof limits and later work
-
-Current evidence is deterministic one-process harness evidence. It does not prove real Pi persistence, external Beads/Dolt contention, cross-process forks, native watcher delivery, OS scheduling, concurrent external writers, or terminal pixels.
-
-The next major boundary after nudge is the Trio split: one Trio facade over separate Team, Task, Alert, and Coordination application ports, plus separate in-memory authority fakes. Do not let Trio own authority state or collapse Task/Alert commits with failed Coordination publication.
+Current evidence is deterministic local source and test evidence. It does not
+prove real Pi persistence, external Beads/Dolt contention, cross-process forks,
+native watcher delivery, OS scheduling, concurrent external writers, or
+terminal pixels.

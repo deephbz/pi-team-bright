@@ -1,21 +1,21 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "accepted_terminal_refusal_fix_remaining_trio_and_observation_boundaries",
-  "reviewedRevision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665",
+  "status": "accepted_trio_split_membership_observation_next_boundary",
+  "reviewedRevision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb",
   "reviewedTreeState": {
-    "kind": "accepted_terminal_refusal_fix",
+    "kind": "accepted_trio_application_port_split",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "baseRevision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8",
-    "selectedPaths": 3,
-    "selectionScope": "resumed_session_terminal_refusal_behavior_fix_and_focused_evidence",
+    "baseRevision": "c54dc25b34770b70afedffc7e87728da6376ee0f",
+    "selectedPaths": 25,
+    "selectionScope": "trio_neutral_four_port_architecture_durable_owners_opaque_in_memory_fakes_and_thin_compatibility_wrappers",
     "selectedPathList": [
       "extensions/pi-team-session-adapter.ts",
       "src/utils/pi-session-adapter.characterization.test.ts",
       "src/utils/terminal-backend.contract.test.ts"
     ],
-    "review": "accepted_intentional_resumed_session_terminal_refusal_behavior_fix",
+    "review": "accepted_named_four_port_trio_split",
     "selectedPathDigestSha256": null,
-    "proofLimit": "Deterministic one-process hook evidence establishes resumed-session refusal control flow. It does not establish a real Pi process, terminal, or terminal carrier."
+    "proofLimit": "Focused deterministic local evidence does not establish real Pi persistence, external Beads/Dolt contention, cross-process forks, native watcher delivery, OS scheduling, external writers, or terminal pixels."
   },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
@@ -31,7 +31,8 @@
     { "revision": "8f2da7c", "scope": "rc.10 subsystem audit refresh" },
     { "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e", "scope": "Coordination nudge boundary" },
     { "revision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8", "scope": "test hardening binds Session characterization to canonical Alert delivery" },
-    { "revision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665", "scope": "intentional resumed Session terminal-refusal behavior fix" }
+    { "revision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665", "scope": "intentional resumed Session terminal-refusal behavior fix" },
+    { "revision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb", "scope": "accepted Trio application-port split" }
   ],
   "upstreamRc10CoordinationCommits": [
     { "revision": "a80f102", "scope": "event-directed Task hydration" },
@@ -55,9 +56,9 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 99,
+      "files": 111,
       "lines": null,
-      "staticLocalEdges": 334,
+      "staticLocalEdges": 426,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -74,7 +75,21 @@
       "lines": 25803
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
-    "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. Accepted Coordination nudge commit b4bf6dee91cf25532cbc33a397167567ba6d347e has 99 production TypeScript files and 334 unique resolved static local edges, with zero nontrivial cycles and zero runtime dynamic imports.",
+    "countCorrection": "The verifier's conservative accepted Trio graph is 111 production TypeScript files and 426 unique resolved static local edges, with zero nontrivial cycles and zero runtime dynamic imports. A narrower 109-file/379-edge probe is corroborating evidence only. Earlier 99/334 nudge evidence remains historical.",
+    "acceptedTrioSplit": {
+      "revision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb",
+      "baseline": "c54dc25b34770b70afedffc7e87728da6376ee0f",
+      "facade": "ModelToolJourneyPort",
+      "neutralApplicationContracts": ["Team", "Task", "Alert", "Coordination"],
+      "durableOwners": ["src/model-tool-contract/durable-model-tool-team-application.ts", "src/model-tool-contract/durable-model-tool-task-application.ts", "src/model-tool-contract/durable-model-tool-alert-application.ts", "src/model-tool-contract/durable-model-tool-coordination-application.ts"],
+      "bindings": "src/model-tool-contract/durable-model-tool-bindings.ts",
+      "opaqueInMemoryFakes": ["src/model-tool-contract/in-memory-state.ts", "src/model-tool-contract/in-memory-authority-ports.ts"],
+      "partialFailureSemantics": "Task and Alert commits survive later Coordination publication failure; the public result is partial and authority state does not roll back.",
+      "rejectedAttempts": "Nominal implementation attempts remain historical evidence.",
+      "testGates": "focused acceptance gates passed; final aggregate remains reserved for one stable final tree",
+      "nextBoundary": "additive_membership_observation",
+      "architectureImpact": "internal_only_structurizr_unchanged"
+    },
     "nextOwnCommitIssue": "The separately reproduced baseline terminal-admission defect is corrected by cafdf2deb4ccdbb47cb40b87e83081d1c9128665. It was not a regression from the Coordination nudge commit.",
     "terminalRefusalFix": {
       "testHardeningRevision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8",
@@ -622,7 +637,8 @@
     },
     {
       "id": "ASSESS-COMBINED-FACADE",
-      "statement": "ModelToolTeamPort, DurableModelToolTeamPort, and the in-memory implementation combine all five semantic boundaries plus rc.10 liveness and sync-nudge behavior in one seam."
+      "state": "resolved_by_accepted_trio_split",
+      "statement": "ModelToolJourneyPort is a thin facade over neutral Team, Task, Alert, and Coordination application contracts. Durable owners and opaque in-memory authority ports replace the combined durable facade and one-store fake while preserving compatibility wrappers."
     },
     {
       "id": "ASSESS-RC10-COORDINATION-INCOMPLETE",
@@ -1263,11 +1279,11 @@
       },
       {
         "id": "trio_facing_interface_and_projections",
-        "completion": "not_started_combined_facade_and_fake",
-        "remainingSeams": ["ModelToolTeamPort exposes all authority operations in one interface", "DurableModelToolTeamPort directly composes Team, Task, Alert, Coordination, Worker launch, acknowledgement, and nudge behavior", "InMemoryModelToolTeamPort stores all authority state and waiters in one StoredTeam", "extensions/index.ts contains both composition and an application/lifecycle layer; status and footer projections read concrete authorities"],
-        "violations": ["trio facade -> all five authorities: src/model-tool-contract/durable-model-tool-port.ts imports Team at :4, Task at :5/:13/:18, Alert at :7, and Coordination at :6/:20/:54-:57", "Trio fake cross-authority atomicity: src/model-tool-contract/in-memory-team-port.ts:209 and :273"],
-        "staticGate": "Trio registration, catalog, executors, result projection, TUI projection, status, and footer may depend only on separate Team, Task, Alert, and Coordination application ports and DTOs. Deny concrete authority, Beads, runtime, and delivery imports.",
-        "focusedVerification": ["npx vitest run src/model-tool-contract/catalog.test.ts src/model-tool-contract/first-journey.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/model-tool-contract/result-projection.test.ts src/utils/team-status.test.ts src/utils/team-footer.test.ts", "npm run qa:tool-results", "npm run typecheck"]
+        "completion": "accepted_neutral_four_port_facade_and_opaque_state_fakes",
+        "remainingSeams": ["Membership observation remains the next additive boundary"],
+        "violations": [],
+        "staticGate": "Trio registration, catalog, executors, result projection, TUI projection, status, and footer depend only on separate Team, Task, Alert, and Coordination application ports and DTOs; deny concrete authority, Beads, runtime, and delivery imports.",
+        "focusedVerification": ["focused Trio acceptance gates: passed", "final aggregate: reserved_for_one_stable_final_tree"]
       },
       {
         "id": "membership_observation",
