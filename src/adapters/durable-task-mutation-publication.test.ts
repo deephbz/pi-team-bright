@@ -205,9 +205,9 @@ describe("Task mutation publication import fence", () => {
     expect(bridge).toMatch(/from ["'][^"']*team-events["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-delivery["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-event-failure-hints["']/);
-    expect(durablePort).toContain("this.taskAdapterFactory(bound.teamName, \"team-lead\")");
-    expect(extension).toContain("createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication())");
-    expect(extension).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries, coordinationObservationService)");
+    expect(durablePort).toContain("new DurableModelToolTaskApplication(bindings, taskAdapterFactory)");
+    expect(extension).toContain("const taskAuthorityTeam = new DurableTaskAuthorityTeam()");
+    expect(extension).toContain("createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), taskAuthorityTeam)");
     expect(extension).toContain("taskAdapterFactory(binding.teamName, binding.member.name)");
   });
 });

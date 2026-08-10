@@ -20,6 +20,7 @@ import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contr
 import { resolveTeamTaskAuthority } from "../src/model-tool-contract/beads-authority-adapter";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
+import { DurableTaskAuthorityTeam } from "../src/adapters/durable-task-authority-team";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
 import { DurableCoordinationNudgeRecord } from "../src/adapters/durable-coordination-nudge-record";
@@ -331,7 +332,8 @@ export default function (pi: ExtensionAPI) {
     return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
   }
 
-  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication());
+  const taskAuthorityTeam = new DurableTaskAuthorityTeam();
+  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), taskAuthorityTeam);
   const alertMembership = new DurableAlertMembership();
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
