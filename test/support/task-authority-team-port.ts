@@ -1,5 +1,5 @@
 import type { TaskAuthorityBinding, TaskAuthorityTeamPort } from "../../src/task-authority/contracts";
-import { readConfig, withCurrentSessionBinding } from "../../src/utils/teams";
+import { assertCurrentSessionBinding, readConfig, withCurrentSessionBinding } from "../../src/utils/teams";
 
 export type TaskAuthorityTeamPortOverrides = Partial<TaskAuthorityTeamPort>;
 
@@ -10,20 +10,18 @@ export type TaskAuthorityTeamPortOverrides = Partial<TaskAuthorityTeamPort>;
 export function createTaskAuthorityTeamPort(overrides: TaskAuthorityTeamPortOverrides = {}): TaskAuthorityTeamPort {
   const binding = overrides.binding ?? (async (teamName: string): Promise<TaskAuthorityBinding> => {
     const config = await readConfig(teamName);
-    if (!config.taskWorkspace || !config.taskAuthorityFingerprint) {
-      throw new Error(`Team ${teamName} has no Task authority fixture binding.`);
+    if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
+      throw new Error(`Team ${config.name} has no complete Beads Task authority binding.`);
     }
-    return {
-      teamName: config.name,
-      workspace: config.taskWorkspace,
-      authorityFingerprint: config.taskAuthorityFingerprint,
-    };
+    return { teamName: config.name, workspace: config.taskWorkspace, authorityFingerprint: config.taskAuthorityFingerprint };
   });
   return {
     binding,
     withCurrentActor: overrides.withCurrentActor ?? (async (input, action) => {
-      if (!input.membershipId) throw new Error(`Task authority fixture requires a Membership for ${input.actor}.`);
-      return withCurrentSessionBinding(input.teamName, input.actor, input.sessionFile, input.membershipId, async () =>
+      const membershipId = input.membershipId
+        || (await assertCurrentSessionBinding(input.teamName, input.actor, input.sessionFile)).membershipId;
+      if (!membershipId) throw new Error(`Current Membership for ${input.actor} on team ${input.teamName} has no membershipId.`);
+      return withCurrentSessionBinding(input.teamName, input.actor, input.sessionFile, membershipId, async () =>
         action(await binding(input.teamName)));
     }),
   };
