@@ -179,15 +179,25 @@ describe("Team terminal backend binding", () => {
       sendUserMessage() {},
     } as never);
     const shutdown = vi.fn();
+    const notified: Array<[string, string | undefined]> = [];
     const ctx = {
       shutdown,
       sessionManager: { getSessionFile: () => sessionFile, buildContextEntries: () => [] },
-      ui: { setStatus() {}, setFooter() {}, notify() {} },
+      ui: {
+        setStatus() {},
+        setFooter() {},
+        notify(message: string, level?: string) { notified.push([message, level]); },
+      },
     };
 
     await handlers.get("session_start")?.({}, ctx);
     const worker = (await teams.readConfig(teamName)).members.find(member => member.name === "worker");
     expect(worker?.terminalTarget).toEqual({ backend: "herdr", kind: "pane", targetId: "w4:p-old" });
+    expect(await runtime.readRuntimeStatus(teamName, "worker")).toBeNull();
+    expect(notified).toContainEqual([
+      `Team ${teamName} is bound to terminal backend herdr, but this Pi process is inside a nested terminal carrier. Refusing to bind worker: a Team worker must be directly carried by its bound backend. Relaunch it directly from herdr.`,
+      "error",
+    ]);
     expect(shutdown).not.toHaveBeenCalled();
     await handlers.get("session_shutdown")?.({}, ctx);
   });
@@ -269,16 +279,26 @@ describe("Team terminal backend binding", () => {
       sendUserMessage() {},
     } as never);
     const shutdown = vi.fn();
+    const notified: Array<[string, string | undefined]> = [];
     const ctx = {
       shutdown,
       sessionManager: { getSessionFile: () => leadSession, buildContextEntries: () => [] },
-      ui: { setStatus() {}, setFooter() {}, notify() {} },
+      ui: {
+        setStatus() {},
+        setFooter() {},
+        notify(message: string, level?: string) { notified.push([message, level]); },
+      },
     };
 
     await handlers.get("session_start")?.({}, ctx);
 
     const lead = (await teams.readConfig(teamName)).members.find(member => member.name === "team-lead");
     expect(lead?.terminalTarget).toEqual({ backend: "herdr", kind: "pane", targetId: "w4:pN" });
+    expect(await runtime.readRuntimeStatus(teamName, "team-lead")).toBeNull();
+    expect(notified).toContainEqual([
+      `Team ${teamName} is bound to terminal backend herdr, but this Pi process is running in tmux. Refusing to bind team-lead: one Team epoch owns terminal surfaces in exactly one backend. Relaunch this process from herdr, or create a separate Team from this terminal.`,
+      "error",
+    ]);
     expect(shutdown).not.toHaveBeenCalled();
   });
 });

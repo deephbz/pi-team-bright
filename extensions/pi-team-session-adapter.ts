@@ -324,7 +324,7 @@ async function refuseTeamSession(
   ctx?.ui?.notify?.(admission.reason, "error");
   ctx?.ui?.setStatus?.("pi-teams", shutdownCandidate ? "startup admission refused" : "terminal backend mismatch");
   clearTeamFooter(ctx);
-  if (admission.exitProcess || shutdownCandidate) ctx?.shutdown?.();
+  if (admission.exitProcess) ctx?.shutdown?.();
 }
 
 function registerSessionHooks() {
@@ -400,7 +400,7 @@ function registerSessionHooks() {
         return;
       }
       if (startup.kind === "refused") {
-        await refuseTeamSession(ctx, teamName, agentName, { kind: "refused", reason: startup.reason, exitProcess: true }, true);
+        await refuseTeamSession(ctx, teamName, agentName, startup, true);
         return;
       }
       currentMembershipId = startup.member!.membershipId;
@@ -445,7 +445,7 @@ function registerSessionHooks() {
         return;
       }
       if (runtimeAdmission.kind === "refused") {
-        await refuseTeamSession(ctx, teamName, "team-lead", { kind: "refused", reason: runtimeAdmission.reason, exitProcess: true }, true);
+        await refuseTeamSession(ctx, teamName, "team-lead", runtimeAdmission, true);
         return;
       }
       currentMembershipId = runtimeAdmission.member.membershipId;
