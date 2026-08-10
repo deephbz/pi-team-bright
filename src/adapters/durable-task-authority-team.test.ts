@@ -49,7 +49,7 @@ describe("DurableTaskAuthorityTeam", () => {
     }
   });
 
-  it("uses the exact actor Session and Membership lease before it exposes a backend binding", async () => {
+  it("resolves the current leader Membership before it exposes a backend binding", async () => {
     const team = new DurableTaskAuthorityTeam();
     readConfig.mockImplementation(async () => { calls.push("binding"); return complete; });
     assertCurrentSessionBinding.mockImplementation(async () => {
@@ -63,25 +63,32 @@ describe("DurableTaskAuthorityTeam", () => {
 
     await expect(team.withCurrentActor({
       teamName: complete.name,
-      actor: "worker",
-      sessionFile: "/tmp/worker.jsonl",
+      actor: "team-lead",
+      sessionFile: "/tmp/team-lead.jsonl",
     }, async (binding) => {
       calls.push("backend");
       return binding.workspace;
     })).resolves.toBe(complete.taskWorkspace);
     expect(calls).toEqual(["assert", "lease:member-1", "binding", "backend"]);
-    expect(withCurrentSessionBinding).toHaveBeenCalledWith(complete.name, "worker", "/tmp/worker.jsonl", "member-1", expect.any(Function));
+    expect(withCurrentSessionBinding).toHaveBeenCalledWith(complete.name, "team-lead", "/tmp/team-lead.jsonl", "member-1", expect.any(Function));
+  });
 
-    calls.length = 0;
-    assertCurrentSessionBinding.mockClear();
-    await team.withCurrentActor({
+  it("refuses a captured stale Worker Membership without resolving a replacement", async () => {
+    const team = new DurableTaskAuthorityTeam();
+    const refusal = new Error("Membership replaced-worker / Session /tmp/worker.jsonl is not the current binding for worker on team task-authority-team; stale processes cannot mutate authority state.");
+    withCurrentSessionBinding.mockRejectedValue(refusal);
+
+    await expect(team.withCurrentActor({
       teamName: complete.name,
       actor: "worker",
       sessionFile: "/tmp/worker.jsonl",
-      membershipId: "captured-member",
-    }, async () => { calls.push("backend"); });
+      membershipId: "replaced-worker",
+    }, async () => { calls.push("backend"); })).rejects.toBe(refusal);
+
     expect(assertCurrentSessionBinding).not.toHaveBeenCalled();
-    expect(calls).toEqual(["lease:captured-member", "binding", "backend"]);
+    expect(withCurrentSessionBinding).toHaveBeenCalledWith(complete.name, "worker", "/tmp/worker.jsonl", "replaced-worker", expect.any(Function));
+    expect(calls).toEqual([]);
+    expect(readConfig).not.toHaveBeenCalled();
   });
 
   it("keeps Team coordinates outside Task contracts and injects one production authority port", () => {
@@ -105,6 +112,7 @@ describe("DurableTaskAuthorityTeam", () => {
     const authorityBody = authority.slice(authorityStart, authorityEnd);
     expect(authorityBody).not.toMatch(/if\s*\(teamPort\)/);
     expect(authorityBody).not.toContain("withCurrentSessionBinding");
+    expect(authorityBody).not.toContain("assertCurrentSessionBinding");
     expect(extension.match(/const taskAuthorityTeam = new DurableTaskAuthorityTeam\(\);/g)).toHaveLength(1);
     expect(extension.match(/createPublishingBeadsTaskAdapterFactory\(new DurableTaskMutationPublication\(\), taskAuthorityTeam\)/g)).toHaveLength(1);
   });

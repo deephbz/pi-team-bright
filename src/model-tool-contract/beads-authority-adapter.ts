@@ -6,7 +6,6 @@ import type { TaskAuthorityRecord } from "../utils/beads";
 import {
   teamExists,
   readConfig,
-  assertCurrentSessionBinding,
   withCurrentSessionBinding,
   assertNoOrphanedBeadsCutover,
 } from "../utils/teams";
@@ -229,10 +228,8 @@ async function withAgentMutationAuthority<T>(
     const binding = await teamPort.binding(teamName);
     return action(new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false }));
   }
-  const membershipId = (options.authorityMembershipId ?? options.actingMembershipId)
-    || (await assertCurrentSessionBinding(teamName, options.actor, authoritySessionFile)).membershipId;
-  if (!membershipId) throw new Error(`Current Membership for ${options.actor} on team ${teamName} has no membershipId.`);
-  return teamPort.withCurrentActor({ teamName, actor: options.actor, sessionFile: authoritySessionFile, membershipId }, async (binding) => action(new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false })));
+  const membershipId = options.authorityMembershipId ?? options.actingMembershipId;
+  return teamPort.withCurrentActor({ teamName, actor: options.actor, sessionFile: authoritySessionFile, ...(membershipId ? { membershipId } : {}) }, async (binding) => action(new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false })));
 }
 
 export interface SemanticTaskUpdate {
