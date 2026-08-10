@@ -1005,6 +1005,11 @@ changes; append a correction.
 - ALERT-004 remains compatibility-required: accepted delivery can survive
   publication failure, the outer result is unavailable, and retry creates a new
   Alert identity with duplicate delivery. The tests do not prove native watches
-  or locks, operating-system scheduling, or real Pi turn delivery. Package
-  cleanliness remains a required post-commit gate because its generated-output
-  check compares against committed HEAD. The reserved aggregate did not run.
+  or locks, operating-system scheduling, or real Pi turn delivery.
+- The first post-commit package gate found that the new canonical contracts
+  declarations were generated but ignored. The leader added only
+  `dist/alert-authority/contracts.d.ts` and `contracts.js` to the owning commit.
+  Independent Task `semantic-hardening-alert-egx` then accepted clean commit
+  `b264d13`: package verification, generated-dist comparison, compatibility
+  tests, ignored-output scan, public diff, and clean-tree checks passed.
+- The reserved aggregate did not run.

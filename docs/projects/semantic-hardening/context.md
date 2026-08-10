@@ -194,9 +194,9 @@ architecture Task `semantic-hardening-pi-adapter-0zt`; and verification Task
 accepted Pi Session adapter boundary. Direct adapter reads of Team records
 remain an explicit integration seam, not a new authority.
 
-Alert authority is commit-1-ready after clean commit `ab7f591`. Tasks
+Alert authority commit 1 is accepted at `b264d13`. Tasks
 `semantic-hardening-alert-2bm`, `semantic-hardening-alert-ou7`, and
-`semantic-hardening-alert-7ku` produced the stable uncommitted canonical tree.
+`semantic-hardening-alert-7ku` produced and audited the canonical tree.
 Canonical Alert paths are `src/alert-authority/alerts.ts`, `contracts.ts`,
 `inbox-delivery.ts`, `direct-delivery.ts`, and `delivery-contracts.ts`. The old
 `src/utils/alerts.ts`, `messaging.ts`, and `message-delivery.ts` paths are
@@ -209,9 +209,11 @@ helpers and Coordination event publication. These are later seams, not evidence
 that consumer-owned durable Alert ports are implemented. The current AST scan
 finds 85 production files, 274 unique local edges, zero cycles, and zero dynamic
 imports. Focused evidence covers validation without effects, ordered parallel
-fan-out, watch/poll and replacement behavior, and compatibility failure replay;
-it does not prove native filesystem watches or locks, operating-system scheduling,
-or real Pi turn delivery. Preserve ALERT-004 exactly: accepted delivery can
+fan-out, watch/poll and replacement behavior, and compatibility failure replay.
+Task `semantic-hardening-alert-egx` accepted the clean committed package and
+tracked generated declarations. This evidence does not prove native filesystem
+watches or locks, operating-system scheduling, or real Pi turn delivery.
+Preserve ALERT-004 exactly: accepted delivery can
 survive publication failure, the outer result remains unavailable, and retry
 creates a new Alert identity with duplicate delivery. Do not add an outbox,
 operation ID, recovery record, or warning change.
