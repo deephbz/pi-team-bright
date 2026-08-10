@@ -4,6 +4,8 @@ import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
+import { DirectMessageDelivery } from "./message-delivery";
+import { TaskChangeDelivery } from "./task-delivery";
 import * as teams from "./teams";
 
 const testTeams: string[] = [];
@@ -122,6 +124,51 @@ describe("registered Worker identity and process-admission characterization", ()
     expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([
       expect.objectContaining({ worker: "worker", membershipId: replacementMembershipId, phase: "session_bound", generation: expect.objectContaining({ membershipId: replacementMembershipId, pid: process.pid }) }),
     ]);
+    expect(ctx.shutdown).not.toHaveBeenCalled();
+  });
+
+  it("orders Worker runtime claim, exact binding, event evidence, and deliveries", async () => {
+    vi.stubEnv("TMUX", "");
+    const teamName = name("claim-bind-delivery-order");
+    await createTeam(teamName);
+    const membershipId = teams.newMembershipId();
+    const launchId = teams.newLaunchId();
+    const sessionFile = `/tmp/${teamName}-worker.jsonl`;
+    await teams.addMember(teamName, preparedMember(teamName, membershipId, launchId));
+    vi.stubEnv("PI_TEAM_NAME", teamName);
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
+    const order: string[] = [];
+    const writeRuntime = runtime.writeRuntimeStatus;
+    const bind = teams.bindMemberSession;
+    const append = teamEvents.appendTeamEvent;
+    vi.spyOn(runtime, "writeRuntimeStatus").mockImplementation(async (...args) => {
+      order.push("runtime_claim");
+      return writeRuntime(...args);
+    });
+    vi.spyOn(teams, "bindMemberSession").mockImplementation(async (...args) => {
+      expect(await runtime.readRuntimeStatus(teamName, "worker")).toMatchObject({ membershipId, pid: process.pid, ready: false });
+      expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([]);
+      order.push("session_bind");
+      return bind(...args);
+    });
+    vi.spyOn(teamEvents, "appendTeamEvent").mockImplementation(async (...args) => {
+      if (args[1].type === "worker" && args[1].phase === "session_bound") {
+        expect((await teams.currentMembership(teamName, "worker"))).toMatchObject({ membershipId, sessionFile });
+        order.push("session_bound_event");
+      }
+      return append(...args);
+    });
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockImplementation(async () => { order.push("direct_delivery_start"); });
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockImplementation(async () => { order.push("task_delivery_start"); });
+
+    const ctx = context(sessionFile);
+    await sessionStartHandler()({ reason: "startup" }, ctx);
+    expect(order).toEqual(["runtime_claim", "session_bind", "session_bound_event", "direct_delivery_start", "task_delivery_start"]);
+    const runtimeBeforeReentry = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
+    await sessionStartHandler()({ reason: "resume" }, ctx);
+    expect(fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8")).toBe(runtimeBeforeReentry);
+    expect(order.filter((step) => step === "runtime_claim" || step === "session_bind" || step === "session_bound_event")).toHaveLength(3);
     expect(ctx.shutdown).not.toHaveBeenCalled();
   });
 

@@ -34,6 +34,14 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
     });
   }
 
+  recordWorkerSessionBound(input: { teamName: string; workerName: string; membershipId: string; generation: { membershipId: string; pid: number; startedAt: number } }): Promise<{ cursor: string }> {
+    return teamEvents.appendTeamEvent(input.teamName, { type: "worker", worker: input.workerName, membershipId: input.membershipId, phase: "session_bound", generation: input.generation });
+  }
+
+  recordWorkerFailed(input: { teamName: string; workerName: string; membershipId: string }): Promise<{ cursor: string }> {
+    return teamEvents.appendTeamEvent(input.teamName, { type: "worker", worker: input.workerName, membershipId: input.membershipId, phase: "failed" });
+  }
+
   async observeWorkerStartup(input: {
     teamName: string;
     workerName: string;

@@ -44,6 +44,7 @@ import { createWorkerLaunchBridge, launchObservationState, WorkerDefaultModelCon
 import { DurableAssignedWorkGuard } from "../src/adapters/durable-assigned-work-guard";
 import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-lifecycle-publication";
 import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
+import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
@@ -243,38 +244,6 @@ function resolveModelWithProvider(modelName: string): string | null {
   return null;
 }
 
-/** Admit and publish the lead process under its exact Membership lease. */
-async function registerLeadSession(
-  teamName: string,
-  piSessionFile: string,
-  update?: Pick<Partial<Member>, "terminalTarget" | "tmuxPaneId">,
-  allowFirstRuntimeGeneration = false,
-  expectedMembershipId?: string,
-): Promise<runtime.RuntimeStartupAdmission> {
-  const initial = expectedMembershipId
-    ? undefined
-    : await teams.currentMembership(teamName, "team-lead");
-  return teams.withCurrentMembershipLease(teamName, expectedMembershipId ?? initial!.membershipId!, async (lead) => {
-    const status = await runtime.readRuntimeStatus(teamName, "team-lead");
-    const admission = allowFirstRuntimeGeneration && status === null
-      ? { kind: "admitted" as const, action: "claim" as const }
-      : runtime.admitRuntimeStartup(lead, piSessionFile, status);
-    if (admission.kind === "refused" || admission.action === "already_current") return admission;
-    const membershipId = lead.membershipId;
-    if (!membershipId) throw new Error(`Current lead Membership for ${teamName} has no stable identity.`);
-    const startedAt = Date.now();
-    // Claim the candidate generation before every durable terminal/binding write.
-    // If a later write fails, this fence remains until the candidate exits.
-    await runtime.writeRuntimeStatus(teamName, "team-lead", { pid: process.pid, startedAt }, membershipId);
-    if (update) await teams.updateMembership(teamName, membershipId, update);
-    const recordPath = paths.leadSessionPath(teamName);
-    const dir = path.dirname(recordPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(recordPath, JSON.stringify({ pid: process.pid, sessionFile: piSessionFile, startedAt }));
-    return admission;
-  });
-}
-
 export interface AgentSessionCleanupInspection {
   candidates: string[];
   cleaned: 0;
@@ -414,6 +383,7 @@ export default function (pi: ExtensionAPI) {
     assignedWorkGuard: new DurableAssignedWorkGuard(),
     lifecyclePublication,
   });
+  const teamSessionLifecycleService = new TeamSessionLifecycleService(lifecyclePublication);
   const workerLaunchBridge = createWorkerLaunchBridge({
     buildWorkerArgv: (model, thinking, aggregatePath, projectTrusted) => {
       const argv = buildPiArgv(getPiLaunchArgv(), model, thinking);
@@ -759,12 +729,13 @@ export default function (pi: ExtensionAPI) {
     if (!isTeammate || !teamName) return;
     const sessionFile = ctx?.sessionManager?.getSessionFile?.();
     if (!sessionFile) throw new Error("A durable Pi Session is required for teammate runtime updates.");
-    const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
-    if (!member.membershipId || (currentMembershipId && currentMembershipId !== member.membershipId)) {
-      throw new Error(`Runtime update rejected for stale Membership of ${agentName} on team ${teamName}.`);
-    }
-    currentMembershipId = member.membershipId;
-    await runtime.writeRuntimeStatus(teamName, agentName, updates, member.membershipId);
+    currentMembershipId = await teamSessionLifecycleService.writeBoundWorkerRuntime({
+      teamName,
+      workerName: agentName,
+      sessionFile,
+      membershipId: currentMembershipId,
+      updates,
+    });
   }
 
   async function startDirectMessageDelivery(ctx: any) {
@@ -823,11 +794,7 @@ export default function (pi: ExtensionAPI) {
     shutdownCandidate = false,
   ) {
     if (!shutdownCandidate) {
-      await teams.currentMembership(refusedTeam, role)
-        .then((candidate) => candidate.membershipId ? teamEvents.appendTeamEvent(refusedTeam, {
-          type: "worker", worker: role, membershipId: candidate.membershipId, phase: "failed",
-        }) : undefined)
-        .catch(() => undefined);
+      await teamSessionLifecycleService.recordAdmissionFailure(refusedTeam, role).catch(() => undefined);
     }
     stopDeliveries();
     isTeammate = false;
@@ -892,41 +859,15 @@ export default function (pi: ExtensionAPI) {
       if (teamName) {
         if (!piSessionFile) throw new Error("Teammate startup requires a durable Pi Session file.");
         const teamConfig = await teams.readConfig(teamName);
-        const admission = admitTeamSession(
-          teamConfig,
-          agentName,
-          placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
-          identitySource,
-        );
-        if (admission.kind === "refused") {
-          await refuseTeamSession(ctx, teamName, agentName, admission);
-          return;
-        }
-        const candidate = await teams.currentMembership(teamName, agentName);
-        let startup: runtime.RuntimeStartupAdmission & { member?: Member };
+        let startup: Awaited<ReturnType<typeof teamSessionLifecycleService.admitWorker>>;
         try {
-          startup = await teams.withCurrentMembershipLease(teamName, candidate.membershipId!, async (current) => {
-          const runtimeAdmission = runtime.admitRuntimeStartup(
-            current,
-            piSessionFile,
-            await runtime.readRuntimeStatus(teamName!, agentName), process.pid, runtime.probePidPresence, envLaunchId,
-          );
-          if (runtimeAdmission.kind === "refused") return runtimeAdmission;
-          if (runtimeAdmission.action === "already_current") return { kind: "admitted" as const, action: "already_current" as const, member: current };
-          const startedAt = Date.now();
-          // Claim the candidate before bindMemberSession can write a terminal
-          // target. A failed later write leaves this exact PID fenced.
-          await runtime.writeRuntimeStatus(teamName!, agentName, {
-            pid: process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined,
-          }, current.membershipId);
-          const bound = await teams.bindMemberSession(
-            teamName!, agentName, piSessionFile, envLaunchId, admission.update ?? {}, current.membershipId,
-          );
-          await teamEvents.appendTeamEvent(teamName!, {
-            type: "worker", worker: agentName, membershipId: bound.membershipId!, phase: "session_bound",
-            generation: { membershipId: bound.membershipId!, pid: process.pid, startedAt },
-          });
-          return { kind: "admitted" as const, action: "claim" as const, member: bound };
+          startup = await teamSessionLifecycleService.admitWorker({
+            teamName,
+            workerName: agentName,
+            sessionFile: piSessionFile,
+            placement: placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
+            identitySource,
+            launchId: envLaunchId,
           });
         } catch (error) {
           await refuseTeamSession(ctx, teamName, agentName, {
@@ -965,20 +906,14 @@ export default function (pi: ExtensionAPI) {
       // process. Refresh both volatile process identity and terminal location.
       if (teams.teamExists(teamName)) {
         const teamConfig = await teams.readConfig(teamName);
-        const admission = admitTeamSession(
-          teamConfig,
-          "team-lead",
-          placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
-          identitySource,
-        );
-        if (admission.kind === "refused") {
-          await refuseTeamSession(ctx, teamName, "team-lead", admission);
-          return;
-        }
-        const lead = await teams.assertCurrentSessionBinding(teamName, "team-lead", piSessionFile);
-        let runtimeAdmission: runtime.RuntimeStartupAdmission;
+        let runtimeAdmission: Awaited<ReturnType<typeof teamSessionLifecycleService.admitLead>>;
         try {
-          runtimeAdmission = await registerLeadSession(teamName, piSessionFile, admission.update, false, lead.membershipId);
+          runtimeAdmission = await teamSessionLifecycleService.admitLead({
+            teamName,
+            sessionFile: piSessionFile,
+            placement: placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
+            identitySource,
+          });
         } catch (error) {
           await refuseTeamSession(ctx, teamName, "team-lead", {
             kind: "refused",
@@ -991,7 +926,7 @@ export default function (pi: ExtensionAPI) {
           await refuseTeamSession(ctx, teamName, "team-lead", { kind: "refused", reason: runtimeAdmission.reason, exitProcess: true }, true);
           return;
         }
-        currentMembershipId = lead.membershipId;
+        currentMembershipId = runtimeAdmission.member.membershipId;
       }
       await startDirectMessageDelivery(ctx);
       await startTaskChangeDelivery(ctx);
@@ -1058,9 +993,7 @@ export default function (pi: ExtensionAPI) {
     const stopReason = event.message?.role === "assistant" ? event.message.stopReason : undefined;
     if (stopReason === "error" || stopReason === "aborted") {
       if (isTeammate && teamName && currentMembershipId) {
-        await teamEvents.appendTeamEvent(teamName, {
-          type: "worker", worker: agentName, membershipId: currentMembershipId, phase: "failed",
-        }).catch(() => undefined);
+        await lifecyclePublication.recordWorkerFailed({ teamName, workerName: agentName, membershipId: currentMembershipId }).catch(() => undefined);
       }
       return;
     }
@@ -1135,7 +1068,14 @@ export default function (pi: ExtensionAPI) {
         teamName = targetTeamName;
         const config = await teams.readConfig(targetTeamName);
         currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
-        await registerLeadSession(targetTeamName, sessionFile, undefined, true, currentMembershipId);
+        const admission = await teamSessionLifecycleService.admitLead({
+          teamName: targetTeamName,
+          sessionFile,
+          placement: { kind: "unlocated" },
+          identitySource: "resumed_session",
+          allowFirstRuntimeGeneration: true,
+        });
+        if (admission.kind === "admitted") currentMembershipId = admission.member.membershipId;
         startSyncNudgeConductor(leaderContext);
       },
       stopWorker: (targetTeamName, worker) => teamLifecycleService.stopWorker(targetTeamName, worker),
