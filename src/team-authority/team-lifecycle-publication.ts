@@ -25,6 +25,17 @@ export interface TeamLifecyclePublication {
     workerName: string;
     membershipId: string;
   }): Promise<{ cursor: string }>;
+  recordWorkerSessionBound(input: {
+    teamName: string;
+    workerName: string;
+    membershipId: string;
+    generation: { membershipId: string; pid: number; startedAt: number };
+  }): Promise<{ cursor: string }>;
+  recordWorkerFailed(input: {
+    teamName: string;
+    workerName: string;
+    membershipId: string;
+  }): Promise<{ cursor: string }>;
   observeWorkerStartup(input: {
     teamName: string;
     workerName: string;

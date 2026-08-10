@@ -137,11 +137,29 @@ Team-owned publication port replaces concrete Coordination imports, and a
 durable adapter outside Team owns event publication and bounded startup
 observation. The old utility path is a compatibility re-export.
 
-The current Team lifecycle selection adds a Team-owned assigned-work guard and
-stop/shutdown service. Concrete Task reads and stopped-event publication remain
-in external adapters. The service owns topology and Membership leases, exact
-carrier-stop proof, deactivation, partial shutdown, and result policy. Session
-startup/binding hooks, Pi adaptation, and the durable Trio façade remain open.
+Commit `a2e3f9c` adds a Team-owned assigned-work guard and stop/shutdown
+service. Concrete Task reads and stopped-event publication remain in external
+adapters. The service owns topology and Membership leases, exact carrier-stop
+proof, deactivation, partial shutdown, and result policy.
+
+This Team selection adds `TeamSessionLifecycleService` for
+lead and Worker startup admission, exact Membership leases, runtime-generation
+claims, binding, lead-session records, session-bound/failed publication, and
+exact bound-Session runtime updates. Pi hooks still own fork and identity
+recovery, terminal admission inputs, UI/refusal, deliveries, titles, footer, and
+callback order. Implementation Task `semantic-hardening-boundaries-3pt`, registered
+order-characterization Task `semantic-hardening-boundaries-03r`, read-only
+architecture review Task `semantic-hardening-boundaries-0xl`, and independent
+test Task `semantic-hardening-boundaries-3w7` are closed. Correction Task
+`semantic-hardening-boundaries-6g2` moved exact lead Session binding into the
+Team service, and independent test Task `semantic-hardening-boundaries-76m`
+closed the order gate. Exact-Membership correction Task
+`semantic-hardening-boundaries-7kz`, race test Task
+`semantic-hardening-boundaries-ggw`, and independent verification Task
+`semantic-hardening-boundaries-5hg` are closed. Audit/map update Task
+`semantic-hardening-boundaries-2vn` and final read-only record review Task
+`semantic-hardening-boundaries-blb` are closed. The current source bundle
+commits the independently accepted Team Session lifecycle selection.
 
 ## Decisions and constraints still in force
 
@@ -227,10 +245,9 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Commit the accepted Team stop/shutdown service, then complete Team Session
-   startup/binding and Pi hook adaptation. Continue with Alert, Coordination,
-   Trio façade and fakes, then additive Membership observation unless source
-   evidence requires a safer order.
+3. Extract the remaining small Pi hook adapter, then complete Alert,
+   Coordination, Trio façade and fakes, and additive Membership observation
+   unless source evidence requires a safer order.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after

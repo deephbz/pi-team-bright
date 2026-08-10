@@ -834,3 +834,46 @@ changes; append a correction.
   proof limits.
 - Session startup/binding services, Pi hook adaptation, and durable Trio façade
   composition remain open. The reserved final aggregate has not run.
+
+## 2026-08-10 — Team Session lifecycle selection accepted
+
+- Implementation Task `semantic-hardening-boundaries-3pt` added a Team-owned
+  Session lifecycle service for lead and Worker admission, exact Membership
+  leases, runtime-generation claim/fence, binding, lead-session records,
+  session-bound and failed-event publication, and exact bound-Session runtime
+  updates. Pi hooks retain fork/identity discovery, terminal admission inputs,
+  UI/refusal, delivery, title, footer, and callback order.
+- Registered characterization Task `semantic-hardening-boundaries-03r` proves
+  runtime fence before binding, binding before session-bound publication, and
+  publication before Direct Message and Task delivery starts. Same-PID re-entry
+  performs no duplicate claim, bind, or event. Existing anchors retain stale/
+  live refusal, replacement, bind-failure fence, fork, and lead-resume evidence.
+- The first behavior Worker carrier failed and was reconnected under the same
+  stable Worker identity; its assigned Task then closed with evidence. Carrier
+  replacement did not change Task identity or the direct leader.
+- Implementation-focused evidence passed 33 Session, admission, runtime,
+  binding, external characterization, and boundary tests; typecheck; lane
+  closure at 93 files (72 fast and 21 exhaustive); and diff checks. Registered
+  characterization separately passed 23 focused tests before a concurrent type
+  correction, which the implementation Task resolved.
+- Read-only architecture review Task `semantic-hardening-boundaries-0xl` and
+  independent test-hardening Task `semantic-hardening-boundaries-3w7` closed.
+  Architecture review found exact lead Session binding remained in Pi, so
+  correction Task `semantic-hardening-boundaries-6g2` moved that decision into
+  the Team service. Independent Task `semantic-hardening-boundaries-76m` added
+  placement-before-binding and binding-before-runtime order tests. Independent
+  exact-Membership correction Task `semantic-hardening-boundaries-7kz` and race
+  test Task `semantic-hardening-boundaries-ggw` closed the stale-snapshot risk.
+  Independent verification Task `semantic-hardening-boundaries-5hg` then passed
+  52 focused tests, typecheck, 93 lane files, package verification, static/public
+  checks, and diff checks. Its proof limit is that the private `teamCreated`
+  callback has static delegation and service evidence, but no direct registered
+  callback test. Audit/map update Task `semantic-hardening-boundaries-2vn`
+  closed with a recomputed 80-file, 268-edge acyclic production graph. Final
+  read-only record review Task `semantic-hardening-boundaries-blb` reproduced
+  the graph digest and accepted the provenance, evidence, proof limits, and
+  remaining seams. This source bundle commits the accepted Session boundary.
+- The Team Task history has again approached slow hydration. After every current
+  Task becomes terminal, rotate the direct-leader Team before the next authority
+  to keep event-driven coordination responsive.
+- The continuation's reserved final aggregate has not run.

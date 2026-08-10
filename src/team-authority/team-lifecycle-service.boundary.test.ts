@@ -77,6 +77,8 @@ function publication(stoppedFailure?: Error): TeamLifecyclePublication {
       fixture.stopped.push(workerName);
       return { cursor: "0" };
     },
+    recordWorkerSessionBound: async () => ({ cursor: "0" }),
+    recordWorkerFailed: async () => ({ cursor: "0" }),
     observeWorkerStartup: async () => ({ observed: false, carrier: "prepared", runtime: "not_observed", cursor: "0", reason: "timeout" }),
   };
 }
