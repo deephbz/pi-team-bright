@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import * as messaging from "./messaging";
+import * as canonicalMessaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
@@ -174,7 +175,7 @@ describe("current team binding correctness", () => {
   it("alert_send exposes a partial announcement without claiming every native delivery succeeded", async () => {
     const teamName = testTeamName("partial-alert");
     await teams.createTeam(teamName, "receipt-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
-    vi.spyOn(messaging, "broadcastMessage").mockResolvedValue({
+    vi.spyOn(canonicalMessaging, "broadcastMessage").mockResolvedValue({
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
     });

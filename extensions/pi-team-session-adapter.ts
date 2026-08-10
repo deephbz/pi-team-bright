@@ -6,6 +6,7 @@ import * as paths from "../src/utils/paths";
 import * as teams from "../src/utils/teams";
 import * as runtime from "../src/utils/runtime";
 import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
+import type { AlertMembershipPort } from "../src/alert-authority/contracts";
 import { TaskChangeDelivery, taskPollMs } from "../src/utils/task-delivery";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import { createSyncNudgeRecord, findSyncNudgeReservation, presentSyncNudge, readSyncNudges, reserveSyncNudge, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";
@@ -36,12 +37,13 @@ export function createPiTeamSessionAdapter(options: {
   modelToolBranchIds: (ctx: any) => string[];
   projectTrust: (ctx: any) => boolean | undefined;
   lifecyclePublication: { recordWorkerFailed(input: { teamName: string; workerName: string; membershipId: string }): Promise<unknown> };
+  alertMembership: AlertMembershipPort;
   leaderToolNames: ReadonlySet<string>;
   workerToolNames: ReadonlySet<string>;
   refreshAlertToolProjection: () => void;
   registerRecoveredWorkerTools: () => void;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
   const terminal = getTerminalAdapter();
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
@@ -269,6 +271,7 @@ async function startDirectMessageDelivery(ctx: any) {
     membershipId: member.membershipId,
     sessionFile,
     pollMs: messagePollMs(),
+    membership: alertMembership,
   });
   await directMessageDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
 }

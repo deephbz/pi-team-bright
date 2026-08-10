@@ -2,12 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import type { IdentifiedInboxMessage, InboxMessage } from "./delivery-contracts";
-import type { BroadcastMessageResult, ExpectedSenderBinding } from "./contracts";
+import type {
+  AlertMembershipPort,
+  BroadcastMessageResult,
+  ExpectedSenderBinding,
+} from "./contracts";
 
 export type { BroadcastMessageResult, ExpectedSenderBinding } from "./contracts";
 import { withLock } from "../utils/lock";
 import { inboxPath } from "../utils/paths";
-import { readConfig, teamExists, withCurrentConfig } from "../utils/teams";
 import { writeJsonAtomic } from "../utils/atomic-json";
 
 export class MessageTeamDoesNotExistError extends Error {
@@ -245,42 +248,30 @@ export async function sendPlainMessage(
   toName: string,
   text: string,
   summary: string,
-  color?: string,
-  expectedSender?: ExpectedSenderBinding,
+  color: string | undefined,
+  expectedSender: ExpectedSenderBinding | undefined,
+  membership: AlertMembershipPort,
 ): Promise<IdentifiedInboxMessage> {
-  if (!teamExists(teamName)) throw new MessageTeamDoesNotExistError(teamName);
-  return withCurrentConfig(teamName, async (config) => {
-    const recipient = [...config.members].reverse().find(
-      (member) => member.name === toName && member.isActive !== false,
-    );
-    if (!recipient) {
-      throw new RecipientNotCurrentMemberError(teamName, toName);
-    }
-    if (!recipient.membershipId) {
-      throw new RecipientMembershipUnresolvedError(teamName, toName);
-    }
-    const sender = [...config.members].reverse().find(
-      (member) => member.name === fromName && member.isActive !== false,
-    );
-    if (expectedSender && (
-      !sender
-      || sender.membershipId !== expectedSender.membershipId
-      || sender.sessionFile !== expectedSender.sessionFile
-    )) {
-      throw new Error(`Sender ${fromName} is no longer bound to Membership ${expectedSender.membershipId} / Session ${expectedSender.sessionFile}; refusing a stale Message append.`);
-    }
-    const msg: InboxMessage = {
-      recipientMembershipId: recipient.membershipId,
-      ...(sender?.membershipId ? { senderMembershipId: sender.membershipId } : {}),
-      from: fromName,
-      text,
-      timestamp: nowIso(),
-      read: false,
-      summary,
-      color,
-    };
-    return appendMessage(teamName, toName, msg);
-  });
+  const outcome = await membership.withCurrentDelivery({
+    teamName,
+    from: fromName,
+    to: toName,
+    expectedSender,
+  }, async (delivery) => appendMessage(teamName, toName, {
+    recipientMembershipId: delivery.recipientMembershipId,
+    ...(delivery.senderMembershipId ? { senderMembershipId: delivery.senderMembershipId } : {}),
+    from: fromName,
+    text,
+    timestamp: nowIso(),
+    read: false,
+    summary,
+    color,
+  }));
+  if (outcome.kind === "delivered") return outcome.value;
+  if (outcome.kind === "team_absent") throw new MessageTeamDoesNotExistError(teamName);
+  if (outcome.kind === "recipient_absent") throw new RecipientNotCurrentMemberError(teamName, toName);
+  if (outcome.kind === "recipient_unresolved") throw new RecipientMembershipUnresolvedError(teamName, toName);
+  throw new Error(`Sender ${fromName} is no longer bound to Membership ${expectedSender!.membershipId} / Session ${expectedSender!.sessionFile}; refusing a stale Message append.`);
 }
 
 /**
@@ -296,16 +287,16 @@ export async function broadcastMessage(
   fromName: string,
   text: string,
   summary: string,
-  color?: string,
-  expectedSender?: ExpectedSenderBinding,
+  color: string | undefined,
+  expectedSender: ExpectedSenderBinding | undefined,
+  membership: AlertMembershipPort,
 ): Promise<BroadcastMessageResult> {
-  const config = await readConfig(teamName);
-  const recipients = config.members
-    .filter((member) => member.isActive !== false && member.name !== fromName)
-    .map((member) => member.name);
+  const snapshot = await membership.currentRecipients(teamName, fromName);
+  if (snapshot.kind === "team_absent") throw new MessageTeamDoesNotExistError(teamName);
+  const recipients = snapshot.recipients.map((recipient) => recipient.name);
 
   const deliveryPromises = recipients
-    .map((recipient) => sendPlainMessage(teamName, fromName, recipient, text, summary, color, expectedSender));
+    .map((recipient) => sendPlainMessage(teamName, fromName, recipient, text, summary, color, expectedSender, membership));
 
   // Execute deliveries in parallel and wait for all to settle
   const results = await Promise.allSettled(deliveryPromises);

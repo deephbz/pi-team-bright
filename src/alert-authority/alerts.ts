@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import * as inboxDelivery from "./inbox-delivery";
-import { appendTeamEvent } from "../utils/team-events";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import {
   ALERT_KINDS,
   type AcceptedAlertDelivery,
   type AlertKind,
+  type AlertMembershipPort,
+  type AlertPublicationPort,
+  type AlertSender,
   type AlertTaskReference,
   type ExpectedSenderBinding,
   type SendAlertInput,
@@ -16,6 +18,9 @@ export {
   ALERT_KINDS,
   type AcceptedAlertDelivery,
   type AlertKind,
+  type AlertMembershipPort,
+  type AlertPublicationPort,
+  type AlertSender,
   type AlertTaskReference,
   type ExpectedSenderBinding,
   type SendAlertInput,
@@ -84,7 +89,19 @@ function deliverySummary(kind: AlertKind, taskRef: AlertTaskReference | undefine
  * transport, then publish the compact Alert to the Team event journal. The
  * legacy inbox is an internal delivery queue; callers receive no inbox API.
  */
-export async function sendAlert(input: SendAlertInput): Promise<SendAlertResult> {
+export function createAlertSender(
+  membership: AlertMembershipPort,
+  publication: AlertPublicationPort,
+): AlertSender {
+  return { sendAlert: (input) => sendAlert(input, membership, publication) };
+}
+
+/** Accept one Alert through explicitly injected Team and Coordination ports. */
+export async function sendAlert(
+  input: SendAlertInput,
+  membership: AlertMembershipPort,
+  publication: AlertPublicationPort,
+): Promise<SendAlertResult> {
   validateAlert(input);
   const alertId = `alert_${randomUUID()}`;
   const taskRef = taskReference(input);
@@ -101,6 +118,7 @@ export async function sendAlert(input: SendAlertInput): Promise<SendAlertResult>
       summary,
       undefined,
       input.expectedSender,
+      membership,
     );
     accepted = result.accepted;
     failures = result.failures;
@@ -113,6 +131,7 @@ export async function sendAlert(input: SendAlertInput): Promise<SendAlertResult>
       summary,
       undefined,
       input.expectedSender,
+      membership,
     );
     accepted = [{ recipient: input.to, messageId: message.id }];
     failures = [];
@@ -122,8 +141,8 @@ export async function sendAlert(input: SendAlertInput): Promise<SendAlertResult>
     throw new Error(`Alert ${alertId} was not accepted by any current Team member.`);
   }
 
-  const event = await appendTeamEvent(input.teamName, {
-    type: "alert",
+  const event = await publication.appendAcceptedAlert({
+    teamName: input.teamName,
     alertId,
     from: input.from,
     to: input.to,
