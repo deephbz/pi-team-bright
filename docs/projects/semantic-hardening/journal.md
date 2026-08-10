@@ -666,3 +666,33 @@ changes; append a correction.
 - The source remains untagged and unpublished. No commit, tag, push, npm
   publication, npm `next` change, registry or provenance claim, GitHub release,
   or full Team runtime/model-interpretation claim was produced by verification.
+
+## 2026-08-10 — full five-subsystem continuation launched
+
+- This entry corrects the earlier interpretation that rc.11 source verification
+  completed the Project. The owner requires the complete agreed five-subsystem
+  split and every behavior-evidence gate, not another bounded release increment.
+- Restored the isolated worktree at documentation commit `a3c51d7`. The partial
+  increment is on remote branch `rc/v0.17.0-rc.11`; `origin/main` and npm `next`
+  remain on rc.10.
+- Verified the direct leader's proxy environment and `HERDR_ENV=1`. Queried
+  Herdr before control, then created a separate unfocused watchdog workspace.
+  The watchdog Pi runs through `_codex_with_proxy` with
+  `openai-codex/gpt-5.6-terra:medium`; its inherited proxy environment was
+  proven before startup.
+- Named the read-only agent `ptb-full-split-watchdog`. It checks leader liveness
+  and the maintained completion checklist every 600 seconds. It requires two
+  quiet intervals plus evidence before recovery action, cannot mutate Team,
+  Tasks, Git, or Project files, and must reject early completion while any
+  boundary, evidence gate, independent review, final aggregate, or maintained
+  result remains open.
+- The exact calling Session created direct-leader Team
+  `semantic-hardening-full-split`. Stable architecture, behavior, test-harness,
+  implementation, and independent-verification Workers are connected.
+- Worker-authored claim and assignment events put three Tasks in progress:
+  `semantic-hardening-full-split-3ro` recomputes the dependency graph and
+  completion matrix; `semantic-hardening-full-split-bd0` audits all 26 behavior
+  entries against current tests; and `semantic-hardening-full-split-a5g`
+  designs deterministic Alert restart and failure characterization.
+- Production implementation remains gated on these current-tree audits. The
+  reserved full aggregate has not run for this continuation.

@@ -2,8 +2,8 @@
 
 Updated: 2026-08-09
 Stage: consolidation and hardening
-Status: exact `0.17.0-rc.11` source `638d5934` passed its reserved aggregate and
-local release gates; it remains untagged and unpublished
+Status: owner reopened delivery because the verified rc.11 increment did not
+complete the agreed five-subsystem refactor; full implementation is active
 Architecture impact: changed for internal Task and Team dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -33,10 +33,43 @@ release metadata. Its one reserved Node 22.22.1 aggregate passed 88 files and 69
 tests in 253.59 seconds. Lane, package, QA, public, persistence, JSON, link,
 privacy-range, exact-tarball, observation, Beads, and Pi-load gates passed.
 
-The source remains untagged and unpublished. No push, npm publication, npm
-`next` change, registry or provenance claim, GitHub release, or published-release
-receipt exists. Full Team runtime, terminal rendering, and model interpretation
-remain outside the source-verification claim.
+The partial source is pushed only to remote branch `rc/v0.17.0-rc.11`. It
+remains untagged and is not published to npm. `origin/main` and npm `next` stay
+on rc.10. No registry, provenance, GitHub release, or published-release receipt
+exists. Full Team runtime, terminal rendering, and model interpretation remain
+outside the source-verification claim.
+
+## Active continuation
+
+The owner rejected the prior partial-completion interpretation. Delivery now
+requires the complete agreed request, not another bounded release increment:
+
+- expand the behavior inventory and outside-in tests across functional and non-
+  functional behavior for all five subsystems;
+- complete the remaining Team authority and Role realization, Alert authority,
+  Coordination observation, and Trio-facing boundaries;
+- isolate the additive Membership observation projector behind a narrow Team/
+  runtime reader while keeping it core-independent and its public contract
+  unchanged;
+- split mixed contracts and the combined durable/in-memory façade only through
+  behavior-preserving, consumer-owned seams with static dependency gates;
+- preserve public surfaces and observable behavior by default, and handle each
+  justified behavior change through explicit evidence and its own commit;
+- continue separate focused optimization commits only when a measured or
+  reviewed problem justifies them;
+- keep this context current and the journal append-only until every completion
+  gate has external verification.
+
+The isolated worktree and local audit branch were restored at documentation HEAD
+`a3c51d7`. Remote branch `rc/v0.17.0-rc.11` contains that partial increment;
+`origin/main` and npm `next` remain on rc.10. The current direct leader Session
+has the required proxy environment and Herdr control. Dedicated watchdog
+`ptb-full-split-watchdog` and direct-leader Team
+`semantic-hardening-full-split` are active. Three Workers authored Task claim
+and assignment events for the source-graph audit, behavior-evidence audit, and
+Alert restart/failure proof design. The watchdog checks both leader liveness and
+goal completion, and must not accept a release increment as Project completion
+while any target boundary or behavior-inventory gate remains open.
 
 ## Sources of truth
 
@@ -147,9 +180,11 @@ Require `HERDR_ENV=1`. Query with `herdr agent list`, then use `agent get` and
 focus or stale pane IDs.
 
 The direct leader is named `ptb-semantic-direct-leader`; the independent
-watchdog is `ptb-leader-watchdog`. The watchdog checks every 600 seconds and
+watchdog is `ptb-full-split-watchdog`. The watchdog checks every 600 seconds and
 requires two full quiet intervals with no agent, terminal, Task, Git, context,
-or journal progress before it treats a turn as stuck. `unknown` is uncertainty.
+or journal progress before it treats a turn as stuck. It also checks every
+completion gate in this document and refuses early completion. `unknown` is
+uncertainty.
 
 For a proven stuck turn, read the pane, send one Escape, wait, and resume the
 exact coordinator Session only after process absence is proven. Start through
@@ -160,12 +195,21 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 ## Next actions
 
-1. Commit this verification receipt and maintained-context update without
-   changing the verified source identity.
-2. Keep tag, push, npm publication, npm `next`, provenance, and GitHub release as
-   separate authorized operations with external verification signals.
-3. If publication is authorized, verify the tag and registry artifact against
-   source `638d5934` and the recorded one-pack facts before writing a published-
-   release receipt.
-4. Continue remaining boundary or performance work only as separately scoped
-   Projects with explicit behavior and reversal evidence.
+1. Keep the active watchdog and direct-leader Team running; use their recorded
+   liveness and Worker-authored Task events as launch evidence.
+2. Recompute the current source graph and convert every missing behavior-
+   inventory entry into an explicit evidence gate before its owning seam moves.
+3. Implement and independently verify the remaining coherent boundaries in this
+   order unless source evidence requires a safer dependency order: shared domain
+   contracts, Team lifecycle/Role realization, Alert, Coordination, Trio façade
+   and fakes, then additive Membership observation.
+4. Commit each coherent boundary separately. Keep later optimizations as one
+   measured problem per commit.
+5. Run focused checks during implementation. Run one final aggregate only after
+   every target boundary and inventory completion gate is closed on the exact
+   stable source.
+6. Update the audit, dependency map, result report, current context, and append-
+   only journal. Independent verification and watchdog review must both confirm
+   that the original request is complete before shutdown or final reporting.
+7. Keep tag, main-branch integration, npm publication, provenance, and GitHub
+   release outside this continuation unless the owner authorizes them again.
