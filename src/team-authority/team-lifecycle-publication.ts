@@ -20,6 +20,11 @@ export interface TeamLifecyclePublication {
     workerName: string;
     membershipId: string;
   }): Promise<{ cursor: string }>;
+  recordWorkerStopped(input: {
+    teamName: string;
+    workerName: string;
+    membershipId: string;
+  }): Promise<{ cursor: string }>;
   observeWorkerStartup(input: {
     teamName: string;
     workerName: string;

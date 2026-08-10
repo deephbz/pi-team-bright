@@ -804,3 +804,33 @@ changes; append a correction.
 - Session hook services, assigned-work guard, stop/shutdown orchestration, and
   durable façade composition remain open. The reserved final aggregate has not
   run.
+
+## 2026-08-10 — Team stop and shutdown policy isolated
+
+- Added a Team-owned `AssignedWorkGuard` and `TeamLifecycleService`. A durable
+  adapter outside Team reads nonterminal Task IDs, so Team policy does not import
+  Task authority.
+- Moved Worker stop and whole-Team shutdown policy from Pi composition into the
+  service: topology lease, current Membership selection, leader reservation,
+  assigned-work refusal, exact Membership lease, carrier confirmation, runtime
+  cleanup, deactivation, stopped-event publication, partial shutdown, and final
+  lead deactivation.
+- Extended the Team-owned lifecycle publication port for stopped evidence. The
+  durable adapter remains the only selected concrete Coordination event writer.
+- Independent service tests use injected guards and publication fakes. They cover
+  guard/lease order, exact runtime generation, pane and window confirmation,
+  current-Membership retention after stop failure, deactivation-before-event
+  order, sorted partial shutdown, lead retention, and import direction.
+- Characterized the preserved event-failure edge: if stopped-event publication
+  fails after deactivation, the public result is `stop_not_confirmed`; the
+  Membership remains inactive, and retry returns `worker_not_found`. This is
+  current behavior evidence, not approval of its recovery semantics.
+- Independent verification passed 69 focused Team boundary, registered lifecycle,
+  release, ergonomic, compensation, and Session tests; typecheck; lane closure
+  at 92 files (71 fast and 21 exhaustive); package verification; static fences;
+  and diff checks.
+- TEAM-007 remains characterized and unclassified. Separate-process, real
+  terminal, Session startup/binding, Pi hook, and live Beads evidence remain
+  proof limits.
+- Session startup/binding services, Pi hook adaptation, and durable Trio façade
+  composition remain open. The reserved final aggregate has not run.

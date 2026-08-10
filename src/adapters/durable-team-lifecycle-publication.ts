@@ -25,6 +25,15 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
     });
   }
 
+  recordWorkerStopped(input: { teamName: string; workerName: string; membershipId: string }): Promise<{ cursor: string }> {
+    return teamEvents.appendTeamEvent(input.teamName, {
+      type: "worker",
+      worker: input.workerName,
+      membershipId: input.membershipId,
+      phase: "stopped",
+    });
+  }
+
   async observeWorkerStartup(input: {
     teamName: string;
     workerName: string;

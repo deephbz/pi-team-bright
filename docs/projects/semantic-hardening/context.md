@@ -132,12 +132,16 @@ edge. Persisted shapes and public package exports remain unchanged. Commit
 `32e12b5` keeps historical generated observation filenames while adding required
 canonical contract outputs; the packed CommonJS and TypeScript probes pass.
 
-The current Team boundary selection moves Worker carrier realization into Team
-authority. A required Team-owned publication port replaces concrete
-Coordination imports, and a durable adapter outside Team owns event publication
-and bounded startup observation. The old utility path is a compatibility re-
-export. Session hooks, assigned-work guards, stop/shutdown orchestration, and the
-durable Trio façade remain open.
+Commit `8d63473` moves Worker carrier realization into Team authority. A required
+Team-owned publication port replaces concrete Coordination imports, and a
+durable adapter outside Team owns event publication and bounded startup
+observation. The old utility path is a compatibility re-export.
+
+The current Team lifecycle selection adds a Team-owned assigned-work guard and
+stop/shutdown service. Concrete Task reads and stopped-event publication remain
+in external adapters. The service owns topology and Membership leases, exact
+carrier-stop proof, deactivation, partial shutdown, and result policy. Session
+startup/binding hooks, Pi adaptation, and the durable Trio façade remain open.
 
 ## Decisions and constraints still in force
 
@@ -223,10 +227,10 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Commit the accepted Team carrier publication slice, then complete Team
-   Session lifecycle, assigned-work guard, stop/shutdown, and Pi hook adaptation.
-   Continue with Alert, Coordination, Trio façade and fakes, then additive
-   Membership observation unless source evidence requires a safer order.
+3. Commit the accepted Team stop/shutdown service, then complete Team Session
+   startup/binding and Pi hook adaptation. Continue with Alert, Coordination,
+   Trio façade and fakes, then additive Membership observation unless source
+   evidence requires a safer order.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after
