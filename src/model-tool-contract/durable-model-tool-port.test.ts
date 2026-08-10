@@ -192,6 +192,51 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
   });
 
+  it("keeps read-only snapshot and nudge-debt use available without a launch bridge", async () => {
+    const { name, leaderSessionId } = await teamFixture(undefined);
+    const config = await teams.readConfig(name);
+    config.syncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS, policyVersion: "1" };
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    const port = new DurableModelToolTeamPort();
+    port.setLeaderSessionFile(leaderSessionId, `/tmp/${name}-lead.jsonl`);
+
+    await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({ kind: "snapshot", team: { name }, tasks: [] });
+    await expect(port.readSyncNudgeDebt(leaderSessionId, ["read-only-branch"])).resolves.toMatchObject({
+      kind: "eligible",
+      requestedView: "snapshot",
+      teamEpochId: config.epochId,
+    });
+  });
+
+  it("refuses Worker launch without a bridge before logical Worker mutation", async () => {
+    const { name, leaderSessionId } = await teamFixture(undefined);
+    const port = new DurableModelToolTeamPort();
+    port.setLeaderSessionFile(leaderSessionId, `/tmp/${name}-lead.jsonl`);
+    const ensureLogicalWorker = vi.spyOn(teams, "ensureLogicalWorker");
+
+    await expect(port.ensureWorker(leaderSessionId, { name: "worker", scope: "fixture scope" })).resolves.toEqual({
+      kind: "unavailable",
+      reason: "carrier_unavailable",
+      message: "The model-tool Worker launch bridge is not attached to this port.",
+    });
+    expect(ensureLogicalWorker).not.toHaveBeenCalled();
+  });
+
+  it("keeps the durable façade free of concrete Worker-launch construction", () => {
+    const source = fs.readFileSync(path.join(__dirname, "durable-model-tool-port.ts"), "utf8");
+
+    expect(source).not.toMatch(/DurableTeamLifecyclePublication|createWorkerLaunchBridge/);
+  });
+
+  it("keeps one composition-root launch bridge and injects it into the durable port", () => {
+    const source = fs.readFileSync(path.join(__dirname, "../../extensions/index.ts"), "utf8");
+
+    expect(source.match(/const workerLaunchBridge = createWorkerLaunchBridge\(/g)).toHaveLength(1);
+    expect(source).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory)");
+  });
+
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
     const { name, port, leaderSessionId, launchBridge } = await teamFixture(undefined);
     const cwd = path.join(paths.teamDir(name), "leader-cwd");
@@ -226,7 +271,14 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
     expect(launchBridge.ensureWorker).toHaveBeenCalledOnce();
     const request = launchBridge.ensureWorker.mock.calls[0][0];
-    expect(request.cwd).toBe(cwd);
+    expect(request).toEqual({
+      teamName: name,
+      workerName: "worker",
+      scope: "fixture scope",
+      cwd,
+      workerAggregate: expect.any(Function),
+      launchEnvironment: { PI_TEAM_BRIGHT_MODEL_TOOL: "1" },
+    });
     expect(request.workerAggregate(cwd)).toMatchObject({
       projectTrusted,
       defaultModel: projectTrusted ? { scope: "project", value: "project/model" } : undefined,

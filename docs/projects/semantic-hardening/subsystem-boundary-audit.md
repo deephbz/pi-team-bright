@@ -33,25 +33,27 @@ observation, and Trio-facing interface and projections. Public Membership
 observation remains an additive machine projection of Team authority.
 
 The initial review covered 60 production TypeScript files with 18,145 lines and
-77 test or test-support files with 20,585 lines. The current committed Team
-lifecycle base plus selected Team Session lifecycle tree has 80 production
-TypeScript files with 19,736 lines, plus 93 test files with 24,323 lines and two
-test-support files with 441 lines. The 95 test and support files contain 24,764
-lines combined. Production means current tracked or selected
+77 test or test-support files with 20,585 lines. The current selected tree has
+80 production TypeScript files with 19,721 lines, plus 93 test files with 24,323
+lines and two test-support files with 441 lines. The 95 test and support files
+contain 24,764 lines combined. Production means current tracked or selected
 `.ts` files under `src/` and `extensions/`, excluding `*.test.ts`; test support
 means `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global
 setup is excluded. A TypeScript-AST scan resolves static relative import and
-re-export specifiers between those production files. It finds 268 unique local
+re-export specifiers between those production files. It finds 267 unique local
 edges, no nontrivial strongly connected component, no self-cycle, and no
 dynamic import expression. The prior hidden dynamic Task-adapter cycle remains
 removed, and the Task mutation path no longer imports concrete publication
 writers. Type-query `import("...")` syntax is not a dynamic import expression.
 
-This graph records committed base `a2e3f9c6821c3a9963397b23702d2b767c4a846c`
-plus the independently accepted uncommitted Team Session lifecycle selection.
-That selection has eight paths, 52 focused tests, a passed typecheck, 93 passing
-test lanes, package verification, and static fences. Its sorted per-file SHA-256
-source digest is `c961e08d80a3a6373ef1c730666a5a6136052f0cacf2dc71feb65d15c764cd00`.
+This graph records clean baseline `57c8e02d672eddad0aa955961cef5628b7bb4421`
+plus the independently accepted uncommitted Worker-launch injection selection.
+That selection has two paths, 32 focused tests, a passed typecheck, 93 passing
+test lanes, package verification, static fences, and a diff check. Its sorted
+per-file SHA-256 digest is
+`fe846971e975860b93362f0a0cb421870b56ef042d9cb6fec3abc58495c51bcf`.
+The full selected production-source digest is
+`93225593e8d49880c926e84470f277702c53f667404271d7bc4bcf3835985bbb`.
 It has internal Team-boundary architecture impact, but it does not establish full
 Team authority isolation.
 
@@ -298,14 +300,17 @@ to private record changes (`src/public/observation.ts:5`).
    `src/model-tool-contract/in-memory-team-port.ts:273`). This test seam can make
    cross-authority atomicity appear easier than the durable system.
 
-5. `DurableModelToolTeamPort` has 21 unique direct local production dependencies.
-   It directly constructs Task, Team, Alert, Coordination, liveness, failed-
-   event-hint, nudge-debt, and Worker-launch behavior
-   (`src/model-tool-contract/durable-model-tool-port.ts:1`). Its five process
-   maps hold Session files, launch context, branch lineage, pending observations,
-   and exact acknowledged Task projections
-   (`src/model-tool-contract/durable-model-tool-port.ts:132`). It is a useful
-   façade, not one subsystem port.
+5. `DurableModelToolTeamPort` still directly composes Task, Team, Alert,
+   Coordination, liveness, failed-event-hint, nudge-debt, and Worker-launch
+   behavior (`src/model-tool-contract/durable-model-tool-port.ts:1`). It no
+   longer imports or constructs `DurableTeamLifecyclePublication` or
+   `createWorkerLaunchBridge`; composition injects an optional
+   `WorkerLaunchBridge`. Read-only snapshot and nudge-debt use remains available
+   without it, while `ensureWorker` refuses `carrier_unavailable` before a
+   logical-Worker mutation when it is absent. Its five process maps hold Session
+   files, launch context, branch lineage, pending observations, and exact
+   acknowledged Task projections (`src/model-tool-contract/durable-model-tool-port.ts:132`).
+   It is a useful façade, not one subsystem port.
 
 6. **Resolved for durable lead discovery and Worker carrier
    publication/observation only.** `extensions/index.ts` delegates durable
@@ -321,10 +326,12 @@ to private record changes (`src/public/observation.ts:5`).
    tests. Later accepted selections moved Team assigned-work guarding,
    stop/shutdown orchestration, and Session admission/claim/bind/runtime
    realization into Team authority. Pi retains hook/refusal/delivery/title/footer/
-   nudge adaptation, while durable façade composition remains open. The extension
-   starts delivery engines, composes sync-nudge reservation and exact-branch
-   presentation, and wires Trio projection (`extensions/index.ts:634`). Pi hook
-   order remains an implicit integration contract.
+   nudge adaptation, while durable façade composition remains open. The accepted
+   two-file launch-capability injection removes the façade's direct durable
+   lifecycle-adapter construction, but it does not split the combined façade or
+   move Pi Session adaptation. The extension starts delivery engines, composes
+   sync-nudge reservation and exact-branch presentation, and wires Trio projection
+   (`extensions/index.ts:634`). Pi hook order remains an implicit integration contract.
 
 7. `models.ts` and `paths.ts` act as shared registries. `models.ts` mixes Team,
    runtime carrier, Task relation, Coordination event, sync-liveness policy,
@@ -487,11 +494,12 @@ root, and public Membership observation reading broad private records. These ris
 
 The recomputed machine-operable completion matrix is
 [`subsystem-dependency-map.json`](subsystem-dependency-map.json) under
-`completionMatrix`. Its source input is `a3c51d78c3e95549768a91a36535bee0b5c94755`:
-68 production TypeScript files, 231 unique resolved static local edges, no
-literal relative dynamic import, no self-cycle, and no nontrivial SCC. The
-source digest is
-`89e6bd6788b822ae11fef1a267757f73e10c91979e3bce5ee21b427205886f43`.
+`completionMatrix`. Its source input is clean baseline
+`57c8e02d672eddad0aa955961cef5628b7bb4421` plus the accepted two-file
+Worker-launch injection selection: 80 production TypeScript files, 267 unique
+resolved static local edges, no literal relative dynamic import, no self-cycle,
+and no nontrivial SCC. The source digest is
+`93225593e8d49880c926e84470f277702c53f667404271d7bc4bcf3835985bbb`.
 
 Task reconciliation and mutation publication remain the only closed Task
 seams. Team, Alert, Coordination, Trio, and additive Membership observation
@@ -588,12 +596,14 @@ at the composition root.
    durable adapters implement Task query and lifecycle publication. Exact
    carrier stop, Membership transition, stopped publication, partial shutdown,
    lead-last order, Session-bound publication, and runtime-fence failures remain
-   characterized. The private `teamCreated` model-lifecycle path proves adapter
-   wiring only; it is not a Pi-process or hook-execution proof. Keep Pi
-   hook/refusal/delivery/title/footer/nudge adaptation small, and stop
-   `DurableModelToolTeamPort` from constructing the durable lifecycle adapter
-   directly. Team authority retains resource resolution, startup, recovery,
-   stop, shutdown, and compatibility policy.
+   characterized. The launch-capability selection injects the optional Worker
+   bridge and removes direct lifecycle-adapter construction from the durable
+   façade. It preserves read-only/nudge calls and refuses absent launch capability
+   before logical Worker mutation. The private `teamCreated` model-lifecycle path
+   proves adapter wiring only; it is not a Pi-process or hook-execution proof.
+   Keep Pi hook/refusal/delivery/title/footer/nudge adaptation small. Team
+   authority retains resource resolution, startup, recovery, stop, shutdown, and
+   compatibility policy.
 8. Keep result and TUI projection, catalog schemas, and Pi registration above
    the semantic application ports. Make status and footer consume query DTOs.
 9. Give public Membership observation a narrow read-only Team/runtime decoder.

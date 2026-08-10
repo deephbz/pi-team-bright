@@ -877,3 +877,25 @@ changes; append a correction.
   Task becomes terminal, rotate the direct-leader Team before the next authority
   to keep event-driven coordination responsive.
 - The continuation's reserved final aggregate has not run.
+
+## 2026-08-10 — Durable Worker-launch composition inverted
+
+- Shaping Tasks `semantic-hardening-authorities-43h` and
+  `semantic-hardening-authorities-yzu` separated the last Team work into two
+  commits: first remove durable-façade launch construction, then extract the Pi
+  Session adapter.
+- Implementation Task `semantic-hardening-authorities-92l` removed concrete
+  `DurableTeamLifecyclePublication` and `createWorkerLaunchBridge` construction
+  from `DurableModelToolTeamPort`. The port now consumes an optional injected
+  bridge. Missing capability returns `carrier_unavailable` before logical Worker
+  mutation, while read-only and nudge-debt operations remain available.
+- Independent test Task `semantic-hardening-authorities-3cw` added exact request,
+  no-bridge refusal, read-only/nudge, source-fence, and composition-root tests.
+  One intermediate blocker was false because a shell command omitted the
+  explicit Project worktree path and observed the original checkout. Git
+  authority confirmed the Project worktree never changed.
+- Independent verifier Task `semantic-hardening-authorities-r9i` passed 32
+  focused tests, typecheck, 93 lane files, package verification, static/public
+  checks, and diff checks. Audit Task `semantic-hardening-authorities-ojq`
+  recomputed an acyclic 80-file, 267-edge graph. Pi Session adaptation remains
+  open, and the reserved final aggregate has not run.
