@@ -1024,19 +1024,25 @@ changes; append a correction.
 - `DurableAlertMembership` retains Team configuration and lease operations, and
   `DurableAlertPublication` retains Coordination event publication. Both sit
   outside Alert authority. Pi composition creates one explicit `AlertSender`
-  for leader and Worker direct-delivery paths. There is no compatibility
-  singleton.
+  for leader and Worker Alert tools and injects Membership adaptation into
+  direct delivery. The legacy source paths use per-call or per-instance
+  compatibility facades, so there is no compatibility singleton.
 - This preserves the current lease/inbox/publication order, lock behavior,
   roster-order fan-out receipts, public tools, schemas, records, filenames,
   retry, timing, errors, console behavior, and ALERT-004. The rejected Team
   mirror and `membershipId`-leaking port attempts remain historical corrections,
   not current design.
-- Architecture Task `semantic-hardening-alert-n5o` recomputed the canonical AST
+- Architecture Task `semantic-hardening-alert-ports-n5o` recomputed the canonical AST
   map after an initial stale 302-edge record. The accepted evidence is 87
   production TypeScript files, 285 unique resolved static local edges, zero
   nontrivial cycles, and zero dynamic imports. Focused and runtime harness
   evidence does not prove native watches or locks, OS scheduling, real Pi turn
   delivery, process, fork, Pi Session, or OS restart. No aggregate ran.
 - Documentation validation is limited to JSON parsing, local links, audit/map
-  consistency, and diff review. This entry records the accepted production tree;
-  it does not stage or commit.
+  consistency, and diff review.
+- The leader committed this boundary as `e9f8dad`. Independent Task
+  `semantic-hardening-alert-ports-7cc` accepted the clean commit: package and
+  generated-dist verification, no ignored output, 13 equivalence/compatibility
+  tests, exhaustive ALERT-004, the 87/285 graph, unchanged explicit package
+  exports and ten tools, diff checks, and clean-tree checks passed. The reserved
+  aggregate did not run.
