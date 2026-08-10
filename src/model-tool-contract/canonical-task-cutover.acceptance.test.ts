@@ -166,7 +166,9 @@ describe("canonical Task cutover acceptance", () => {
     const delivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
 
     expect(contracts).not.toContain("in-memory-team-port");
-    expect(inMemoryPort).toMatch(/export type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\.\/task-authority\/contracts"/);
+    expect(inMemoryPort).toMatch(/import type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\/model-tool-contracts"/);
+    expect(inMemoryPort).toMatch(/export type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\/model-tool-contracts"/);
+    expect(inMemoryPort).not.toContain('from "../task-authority/contracts"');
     expect(taskAdapter).not.toMatch(/from "\.\/in-memory-team-port"/);
     expect(reconciliationAdapter).toContain("implements TaskReconciliationQuery");
     expect(delivery).not.toMatch(/import\([^)]*beads-(?:task|authority)-adapter/);
