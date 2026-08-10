@@ -181,6 +181,36 @@ describe("Task-native delivery", () => {
     fork.stop();
   });
 
+  it("records the delivery attempt before Session send, and keeps it pending after send failure", async () => {
+    const { teamName, sessionFile, task } = await fixture("attempt-before-send");
+    const record = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
+    let observedAttempt: unknown;
+    const delivery = new TaskChangeDelivery({
+      sendMessage: vi.fn(() => {
+        observedAttempt = JSON.parse(fs.readFileSync(paths.taskDeliveryPath(teamName, "worker"), "utf8"))[0];
+        throw new Error("injected send cut");
+      }),
+      appendEntry: vi.fn(),
+    }, {
+      teamName, recipient: "worker", sessionFile, reconcile: async () => 0,
+    });
+
+    await expect(delivery.start([])).rejects.toThrow("injected send cut");
+    expect(observedAttempt).toMatchObject({
+      deliveryId: record?.deliveryId,
+      attemptCount: 1,
+      attemptedAt: expect.any(String),
+    });
+    const [pending] = await readTaskDeliveries(teamName, "worker");
+    expect(pending).toMatchObject({
+      deliveryId: record?.deliveryId,
+      attemptCount: 1,
+      attemptedAt: expect.any(String),
+    });
+    expect(pending).not.toHaveProperty("successfulTurnAckAt");
+    delivery.stop();
+  });
+
   it("replays context-staged Task changes after error restart and acks once after toolUse", async () => {
     const { teamName, sessionFile, task } = await fixture("two-phase");
     const record = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
