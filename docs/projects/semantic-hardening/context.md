@@ -194,27 +194,33 @@ architecture Task `semantic-hardening-pi-adapter-0zt`; and verification Task
 accepted Pi Session adapter boundary. Direct adapter reads of Team records
 remain an explicit integration seam, not a new authority.
 
-Alert authority commit 1 is accepted at `b264d13`. The stable accepted
-Alert-port production tree adds Alert-owned consumer ports. `AlertMembershipPort`
+Alert authority commit 2 is accepted at `e9f8dad`. The accepted Alert-port
+production tree adds Alert-owned consumer ports. `AlertMembershipPort`
 provides only a name roster, a current-delivery lease that resolves Membership
 IDs inside durable Team adaptation, and exact Session-binding validation.
 `AlertPublicationPort` publishes only an accepted Alert after inbox acceptance.
 `DurableAlertMembership` and `DurableAlertPublication` implement these ports
 outside Alert authority. `extensions/index.ts` composes one explicit
-`AlertSender` for leader and Worker direct-delivery paths; no compatibility
-singleton exists. The rejected Team-mirroring and `membershipId`-leaking port
+`AlertSender` for leader and Worker Alert tools and injects the same Membership
+adapter into direct delivery; no compatibility singleton exists. The rejected
+Team-mirroring and `membershipId`-leaking port
 forms remain historical corrections, not current design.
 
 Canonical Alert paths remain `src/alert-authority/alerts.ts`, `contracts.ts`,
 `inbox-delivery.ts`, `direct-delivery.ts`, and `delivery-contracts.ts`. The old
 `src/utils/alerts.ts`, `messaging.ts`, and `message-delivery.ts` paths are
-compatibility re-exports only. Public tools, schemas, package exports, persisted
+compatibility facades that preserve old signatures. Public tools, schemas,
+package exports, persisted
 inbox records and filenames, retry, timing, ordering, errors, console behavior,
 lock and publication order, and ALERT-004 remain unchanged. The current AST scan
 finds 87 production files and 285 unique resolved static local edges, with zero
 cycles and zero dynamic imports. Architecture Task n5o recomputed this canonical
-map count after the stale 302-edge record. Focused evidence covers validation without effects, ordered parallel
-fan-out, watch/poll and replacement behavior, and compatibility failure replay.
+map count after the stale 302-edge record. Independent Task
+`semantic-hardening-alert-ports-7cc` accepted the clean committed package,
+generated declarations, 87/285 graph, public differential, Alert equivalence,
+and exhaustive ALERT-004 gates. Focused evidence covers validation without
+effects, ordered parallel fan-out, watch/poll and replacement behavior, and
+compatibility failure replay.
 It does not prove native filesystem watches or locks, OS scheduling, a real Pi
 turn, process, fork, Pi Session, or OS restart. No aggregate ran. Preserve
 ALERT-004 exactly: accepted delivery can survive publication failure, the outer
