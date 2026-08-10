@@ -25,6 +25,7 @@ import {
   type TaskMutationReceipt,
   type TaskMutationPublicationPort,
 } from "./beads-authority-adapter";
+import type { TaskAuthorityTeamPort } from "../task-authority/contracts";
 import type {
   ModelToolTaskJournalEntry,
   ModelToolTaskUpdateInput,
@@ -331,13 +332,14 @@ function publishingAuthority(
   teamName: string,
   actor: string,
   publicationPort: TaskMutationPublicationPort,
+  teamPort?: TaskAuthorityTeamPort,
 ): TaskAdapterAuthority {
   return {
     ...readOnlyAuthority(teamName),
     create: (input, publication) => createTask(teamName, input, publicationPort, { actor }, {
       ...publication,
       taskCardProjector: projectTaskCard,
-    }),
+    }, teamPort),
     update: (taskId, input, metadata) => applySemanticTaskUpdate(teamName, taskId, {
       ...(input.claim ? { claim: true } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
@@ -348,12 +350,12 @@ function publishingAuthority(
       taskMetadata: metadata,
       taskCardProjector: projectTaskCard,
       taskEventEvidence: taskUpdateEventEvidence(input as ModelToolTaskUpdateInput),
-    }, publicationPort),
+    }, publicationPort, teamPort),
     link: (taskId, input, options) => mutateTaskLink(teamName, taskId, {
       relation: input.relation,
       targetId: input.targetId,
       action: input.action,
-    }, { ...options, taskCardProjector: projectTaskCard }, publicationPort),
+    }, { ...options, taskCardProjector: projectTaskCard }, publicationPort, teamPort),
   };
 }
 
@@ -361,11 +363,12 @@ export type BeadsTaskAdapterFactory = (teamName: string, actor: string) => Beads
 
 export function createPublishingBeadsTaskAdapterFactory(
   publicationPort: TaskMutationPublicationPort,
+  teamPort?: TaskAuthorityTeamPort,
 ): BeadsTaskAdapterFactory {
   return (teamName, actor) => new BeadsTaskAdapter(
     teamName,
     actor,
-    publishingAuthority(teamName, actor, publicationPort),
+    publishingAuthority(teamName, actor, publicationPort, teamPort),
   );
 }
 

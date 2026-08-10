@@ -13,8 +13,9 @@ import * as tasks from "./tasks";
 import { createTask } from "../model-tool-contract/beads-authority-adapter";
 import * as authority from "../model-tool-contract/beads-authority-adapter";
 import * as teams from "./teams";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { BeadsTaskAdapter, createPublishingBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
+import type { TaskAuthorityTeamPort } from "../task-authority/contracts";
+import { taskVersionRef, type TaskVersionRef } from "../model-tool-contract/task-version-ref";
 import { readTaskDeliveries } from "./task-delivery";
 import { readTeamEvents } from "./team-events";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
@@ -387,6 +388,118 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(readTeamEvents(teamName).events).toHaveLength(beforeEvents.length + 1);
     expect(await readTaskDeliveries(teamName, "worker")).toEqual(deliveries);
   }, 60_000);
+
+  it("routes real-Beads mutations through the injected Team port and retains no-port compatibility", async () => {
+    const teamName = uniqueTeam();
+    const root = workspace();
+    const config = writeTeam(teamName, root);
+    const calls: string[] = [];
+    let actorInput: { teamName: string; actor: string; sessionFile: string; membershipId?: string } | undefined;
+    const binding = {
+      teamName,
+      workspace: root,
+      authorityFingerprint: config.taskAuthorityFingerprint!,
+    };
+    const port: TaskAuthorityTeamPort = {
+      async binding(requestedTeamName) {
+        calls.push(`binding:${requestedTeamName}`);
+        return binding;
+      },
+      async withCurrentActor(input, action) {
+        actorInput = input;
+        calls.push(`actor:${input.actor}:enter`);
+        const result = await action(binding);
+        calls.push(`actor:${input.actor}:release`);
+        return result;
+      },
+    };
+    const factory = createPublishingBeadsTaskAdapterFactory(publicationPort, port);
+    const leader = factory(teamName, "team-lead");
+    const worker = factory(teamName, "worker");
+
+    const created = await leader.create({
+      operationId: "port-create",
+      title: "Port-routed Task",
+      goal: "Keep authority binding outside Task implementation.",
+      assignee: "worker",
+    });
+    expect(created).toMatchObject({ kind: "created", task: { status: "open", assignee: "worker" } });
+    if (created.kind !== "created") throw new Error("Expected a created Task.");
+    expect(calls).toEqual([`binding:${teamName}`]);
+    calls.length = 0;
+
+    const updated = await worker.update({
+      taskId: created.task.id,
+      operationId: "port-update",
+      expectedVersion: created.task.version as TaskVersionRef,
+      status: "in_progress",
+    });
+    expect(updated).toMatchObject({ kind: "updated", task: { id: created.task.id, status: "in_progress" } });
+    if (updated.kind !== "updated") throw new Error("Expected an updated Task.");
+    expect(calls).toEqual([`binding:${teamName}`]);
+    expect(readTeamEvents(teamName).events).toHaveLength(2);
+    expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(2);
+
+    const target = await leader.create({
+      operationId: "port-link-target",
+      title: "Link target",
+      goal: "Provide a real Beads relation target.",
+    });
+    if (target.kind !== "created") throw new Error("Expected a link target.");
+    calls.length = 0;
+    const originalLink = BeadsTaskStore.prototype.mutateLinkWithResult;
+    vi.spyOn(BeadsTaskStore.prototype, "mutateLinkWithResult").mockImplementation(async function(this: BeadsTaskStore, ...args) {
+      calls.push("backend:link");
+      return originalLink.call(this, ...args);
+    });
+    const linkPublish = vi.spyOn(DurableTaskMutationPublication.prototype, "publishTaskMutation").mockImplementation(async function(this: DurableTaskMutationPublication, input) {
+      calls.push(`publish:${input.kind}`);
+      return { warnings: [], evidence: { teamEvent: { appended: true }, delivery: { attemptedRecipients: [], failedRecipients: [], recoveryRecordedFor: [], recoveryRecordFailedFor: [] } } };
+    });
+    const linked = await leader.link({
+      taskId: created.task.id,
+      targetId: target.task.id,
+      relation: "related",
+      action: "add",
+      expectedVersion: updated.task.version as TaskVersionRef,
+    }, {
+      actingSessionFile: `/tmp/${teamName}-team-lead.jsonl`,
+      actingMembershipId: config.members[0].membershipId,
+    });
+    expect(linked).toMatchObject({ kind: "linked", taskId: created.task.id, targetId: target.task.id, relation: "related", action: "add", changed: true });
+    expect(actorInput).toEqual({
+      teamName,
+      actor: "team-lead",
+      sessionFile: `/tmp/${teamName}-team-lead.jsonl`,
+      membershipId: config.members[0].membershipId,
+    });
+    expect(calls).toEqual(["actor:team-lead:enter", "backend:link", "actor:team-lead:release", "publish:relation_changed"]);
+    linkPublish.mockRestore();
+
+    const compatibilityTeam = uniqueTeam();
+    const compatibilityRoot = workspace();
+    writeTeam(compatibilityTeam, compatibilityRoot);
+    const compatibilityFactory = createPublishingBeadsTaskAdapterFactory(publicationPort);
+    const compatibilityLeader = compatibilityFactory(compatibilityTeam, "team-lead");
+    const compatibilityWorker = compatibilityFactory(compatibilityTeam, "worker");
+    const compatibilityCreated = await compatibilityLeader.create({
+      operationId: "port-create",
+      title: "Port-routed Task",
+      goal: "Keep authority binding outside Task implementation.",
+      assignee: "worker",
+    });
+    if (compatibilityCreated.kind !== "created") throw new Error("Expected a compatibility Task.");
+    const compatibilityUpdated = await compatibilityWorker.update({
+      taskId: compatibilityCreated.task.id,
+      operationId: "port-update",
+      expectedVersion: compatibilityCreated.task.version as TaskVersionRef,
+      status: "in_progress",
+    });
+    expect(compatibilityCreated).toMatchObject({ kind: created.kind, task: { title: created.task.title, status: created.task.status, assignee: created.task.assignee, current_context: created.task.current_context } });
+    expect(compatibilityUpdated).toMatchObject({ kind: updated.kind, task: { status: updated.task.status, assignee: updated.task.assignee, current_context: updated.task.current_context } });
+    expect(readTeamEvents(compatibilityTeam).events.map((event) => event.type)).toEqual(["task", "task"]);
+    expect(await readTaskDeliveries(compatibilityTeam, "worker")).toHaveLength(2);
+  }, 120_000);
 
   it("keeps the raw conditional preflight after model-ref resolution", async () => {
     const teamName = uniqueTeam();

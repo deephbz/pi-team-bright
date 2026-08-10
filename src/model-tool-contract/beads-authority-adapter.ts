@@ -28,6 +28,7 @@ import { teamDir } from "../utils/paths";
 import { withSemanticTrace } from "../utils/trace";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskCard } from "../task-authority/task-domain";
+import type { TaskAuthorityTeamPort } from "../task-authority/contracts";
 
 export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
 
@@ -93,7 +94,12 @@ export async function resolveTeamTaskAuthority(teamName: string): Promise<Resolv
   return { workspace, authorityId: `task_authority_${crypto.randomUUID()}`, fingerprint };
 }
 
-async function storeFor(teamName: string): Promise<BeadsTaskStore> {
+async function storeFor(teamName: string, teamPort?: TaskAuthorityTeamPort): Promise<BeadsTaskStore> {
+  if (teamPort) {
+    const binding = await teamPort.binding(teamName);
+    return new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false });
+  }
+  // Internal compatibility debt: direct callers retain the historical Team helper path.
   const config = await readConfig(teamName);
   if (config.taskBackend !== "beads") {
     const target = process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
@@ -213,11 +219,13 @@ async function withAgentMutationAuthority<T>(
   teamName: string,
   options: AgentMutationBinding,
   action: (store: BeadsTaskStore) => Promise<T>,
+  teamPort?: TaskAuthorityTeamPort,
 ): Promise<T> {
-  if (!options.actingSessionFile) return action(await storeFor(teamName));
+  if (!options.actingSessionFile) return action(await storeFor(teamName, teamPort));
   const membershipId = options.actingMembershipId
     || (await assertCurrentSessionBinding(teamName, options.actor, options.actingSessionFile)).membershipId;
   if (!membershipId) throw new Error(`Current Membership for ${options.actor} on team ${teamName} has no membershipId.`);
+  if (teamPort) return teamPort.withCurrentActor({ teamName, actor: options.actor, sessionFile: options.actingSessionFile, membershipId }, async (binding) => action(new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false })));
   return withCurrentSessionBinding(teamName, options.actor, options.actingSessionFile, membershipId, async (config) => action(storeForConfig(config)));
 }
 
@@ -330,6 +338,7 @@ export async function applySemanticTaskUpdate(
   update: SemanticTaskUpdate,
   options: TaskWriteOptions & AgentMutationBinding & InternalTaskPublicationOptions,
   publicationPort: TaskMutationPublicationPort,
+  teamPort?: TaskAuthorityTeamPort,
 ): Promise<SemanticTaskUpdateResult> {
   return withSemanticTrace("task_update", { teamName, taskId }, async () => {
     const mutationFields = [update.title, update.description, update.acceptanceCriteria, update.design, update.status, update.assignee, update.appendNote]
@@ -365,7 +374,7 @@ export async function applySemanticTaskUpdate(
         appendNote: update.appendNote,
         internalOwnerTransition: assigneeTransition?.writeOption,
       });
-    });
+    }, teamPort);
 
     const firstBefore = mutation.before;
     const current = mutation.after;
@@ -423,6 +432,7 @@ export async function createTask(
   publicationPort: TaskMutationPublicationPort,
   binding?: AgentMutationBinding,
   internalPublication: InternalTaskPublicationOptions = {},
+  teamPort?: TaskAuthorityTeamPort,
 ): Promise<TaskCreateReceipt> {
   return withSemanticTrace("task_create", { teamName }, async () => {
     const mutate = (store: BeadsTaskStore) => store.createWithResult(input, {
@@ -430,8 +440,8 @@ export async function createTask(
       actor: binding?.actor,
     });
     const result = binding
-      ? await withAgentMutationAuthority(teamName, binding, mutate)
-      : await mutate(await storeFor(teamName));
+      ? await withAgentMutationAuthority(teamName, binding, mutate, teamPort)
+      : await mutate(await storeFor(teamName, teamPort));
     if (result.replayed) {
       const replayCard = projectedCard(result.taskEnvelope, internalPublication);
       return {
@@ -513,10 +523,11 @@ export async function mutateTaskLink(
   link: BeadsTaskLink,
   options: TaskWriteOptions & AgentMutationBinding,
   publicationPort: TaskMutationPublicationPort,
+  teamPort?: TaskAuthorityTeamPort,
 ): Promise<TaskMutationReceipt> {
   return withSemanticTrace("task_link", { teamName, taskId }, async () => {
     const mutation = await withAgentMutationAuthority(teamName, options, (store) =>
-      store.mutateLinkWithResult(taskId, link, options));
+      store.mutateLinkWithResult(taskId, link, options), teamPort);
     const postStateCard = projectedCard(mutation.afterEnvelope, options);
     if (options.actingSessionFile && mutation.after.assignee === options.actor) {
       await publicationPort.suppressTaskVersionForSession({

@@ -1,6 +1,23 @@
 import type { TaskCard } from "./task-domain";
 import type { TaskVersionRef } from "./task-version-ref";
 
+export interface TaskAuthorityBinding {
+  teamName: string;
+  workspace: string;
+  authorityFingerprint: unknown;
+}
+
+/** Task-owned live Team boundary for mutation-capable Beads authority calls. */
+export interface TaskAuthorityTeamPort {
+  binding(teamName: string): Promise<TaskAuthorityBinding>;
+  withCurrentActor<T>(input: {
+    teamName: string;
+    actor: string;
+    sessionFile: string;
+    membershipId?: string;
+  }, action: (binding: TaskAuthorityBinding) => Promise<T>): Promise<T>;
+}
+
 export type TaskStatus = "open" | "in_progress" | "blocked" | "closed";
 
 export type TaskRelationType = "parent" | "blocked_by" | "related";
