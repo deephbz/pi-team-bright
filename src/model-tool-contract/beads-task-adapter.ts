@@ -337,7 +337,7 @@ function publishingAuthority(
   teamName: string,
   actor: string,
   publicationPort: TaskMutationPublicationPort,
-  teamPort?: TaskAuthorityTeamPort,
+  teamPort: TaskAuthorityTeamPort,
   actorFence?: TaskMutationActorFence,
 ): TaskAdapterAuthority {
   return {
@@ -370,7 +370,7 @@ export type BeadsTaskAdapterFactory = (teamName: string, actor: string, actorFen
 
 export function createPublishingBeadsTaskAdapterFactory(
   publicationPort: TaskMutationPublicationPort,
-  teamPort?: TaskAuthorityTeamPort,
+  teamPort: TaskAuthorityTeamPort,
 ): BeadsTaskAdapterFactory {
   return (teamName, actor, actorFence) => new BeadsTaskAdapter(
     teamName,
