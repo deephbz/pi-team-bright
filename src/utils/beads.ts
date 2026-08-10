@@ -3,7 +3,8 @@ import { Type } from "typebox";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { BeadsAuthorityFingerprint, TaskRelation, TaskRelationType, TaskStatus } from "./models";
+import type { BeadsAuthorityFingerprint } from "../team-authority/contracts";
+import type { TaskRelation, TaskRelationType, TaskStatus } from "../task-authority/contracts";
 export interface TaskAuthorityRecord {
   id: string;
   title: string;
@@ -22,7 +23,7 @@ export interface TaskAuthorityRecord {
 }
 
 export type TaskAuthorityListItem = Omit<TaskAuthorityRecord, "version">;
-import { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH, isTaskCardContext, isTaskCardGoal } from "../model-tool-contract/task-domain";
+import { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH, isTaskCardContext, isTaskCardGoal } from "../task-authority/task-domain";
 import { withLock } from "./lock";
 import { teamDir, sanitizeName } from "./paths";
 import { runHook } from "./hooks";
@@ -37,7 +38,7 @@ export const PI_TEAMS_SCHEMA = "1";
 export const TASK_METADATA_KEY = "pi_teams_task";
 export const TASK_METADATA_SCHEMA = "pi-teams-task/1" as const;
 /** Task-card limits are owned by the neutral domain module. */
-export { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH } from "../model-tool-contract/task-domain";
+export { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH } from "../task-authority/task-domain";
 
 /** Reject invalid canonical context before a Beads command can mutate it. */
 export function assertTaskMetadataContext(value: unknown): asserts value is TaskMetadata {

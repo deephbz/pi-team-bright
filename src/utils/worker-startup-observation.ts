@@ -1,6 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { TeamEventWaitResult } from "./team-events";
-import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "./models";
+import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "../coordination/contracts";
 
 export const WORKER_STARTUP_OBSERVATION_MS = 3_000;
 

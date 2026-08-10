@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { IdentifiedInboxMessage } from "./models";
+import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import * as messaging from "./messaging";
 import { inboxPath } from "./paths";
 import { readConfig } from "./teams";

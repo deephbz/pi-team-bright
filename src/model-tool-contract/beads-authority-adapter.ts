@@ -1,7 +1,7 @@
 // Project: pi-teams
 import path from "node:path";
 import crypto from "node:crypto";
-import { BeadsAuthorityFingerprint, TeamConfig } from "../utils/models";
+import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
 import type { TaskAuthorityRecord } from "../utils/beads";
 import {
   teamExists,
@@ -26,8 +26,8 @@ import {
 } from "../utils/beads";
 import { teamDir } from "../utils/paths";
 import { withSemanticTrace } from "../utils/trace";
-import { taskVersionRef, type TaskVersionRef } from "../model-tool-contract/task-version-ref";
-import type { TaskCard } from "./task-domain";
+import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskCard } from "../task-authority/task-domain";
 
 export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
 

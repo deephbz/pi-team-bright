@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget, LogicalWorker } from "./models";
+import type { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget, LogicalWorker } from "../team-authority/contracts";
 import { assertTerminalTargetShape } from "./terminal-target";
 import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
 import * as paths from "./paths";

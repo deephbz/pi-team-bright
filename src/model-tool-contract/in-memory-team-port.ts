@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
-import type { TaskCard, TaskCardWarning } from "./task-domain";
+import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
 import type {
   ModelToolTaskJournalEntry,

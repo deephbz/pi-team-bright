@@ -1,4 +1,4 @@
-import type { Member, TeamConfig, TerminalTarget } from "./models";
+import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
 import { memberTerminalTarget } from "./terminal-target";
 import type { TeamPanePlacement } from "./terminal-adapter";
 

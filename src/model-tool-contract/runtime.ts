@@ -46,7 +46,7 @@ export {
   type TaskLinkPortResult,
   type AlertSendPortResult,
 } from "./in-memory-team-port";
-export type { TaskCard } from "./task-domain";
+export type { TaskCard } from "../task-authority/task-domain";
 export {
   registerModelToolJourney,
   type RegisteredModelToolJourney,

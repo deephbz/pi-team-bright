@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as messaging from "./messaging";
 import { appendTeamEvent } from "./team-events";
-import { type TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import { type TaskVersionRef } from "../task-authority/task-version-ref";
 
 export const ALERT_KINDS = ["clarification", "attention", "announcement"] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];

@@ -23,7 +23,8 @@ import { createSyncNudgeRecord, findSyncNudgeReservation, presentSyncNudge, read
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
-import { IdentifiedInboxMessage, Member, TeamConfig } from "../src/utils/models";
+import type { IdentifiedInboxMessage } from "../src/alert-authority/delivery-contracts";
+import type { Member, TeamConfig } from "../src/team-authority/contracts";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { assertTeamTerminalTarget, hasPersistedTerminalTarget, memberTerminalTarget, terminalTarget } from "../src/utils/terminal-target";
 import { assertTargetSupportedByTerminal, terminalForTeam } from "../src/utils/team-terminal";
@@ -45,10 +46,10 @@ import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mut
 import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
 
 import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
-import { taskVersionRef } from "../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../src/task-authority/task-version-ref";
 import { DurableModelToolTeamPort, type ModelToolLifecycle } from "../src/model-tool-contract/durable-model-tool-port";
 import { exactLeaderSessionId, registerModelToolJourney } from "../src/model-tool-contract/runtime";
-import { TASK_CARD_CONTEXT_MAX_LENGTH, isTaskCardContext } from "../src/model-tool-contract/task-domain";
+import { TASK_CARD_CONTEXT_MAX_LENGTH, isTaskCardContext } from "../src/task-authority/task-domain";
 import { assembleToolResult } from "../src/model-tool-contract/result-projection";
 import {
   diagnoseTeam,

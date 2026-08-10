@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { inboxPath, taskDeliveryPath, teamDir } from "./paths";
 import { readRuntimeStatus, runtimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "./runtime";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 
 export type WorkerRunState = "active" | "settled" | "unknown" | "absent";
 

@@ -18,7 +18,7 @@ import type {
   TaskOwnerTransitionPreparationInput,
   TaskPublicationEvidence,
 } from "../model-tool-contract/beads-authority-adapter";
-import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 
 function defaultTaskEventEvidence(input: TaskMutationPublicationInput): TaskMutationEventEvidenceInput {
   if (input.created) return { kind: "created", text: "Task created." };

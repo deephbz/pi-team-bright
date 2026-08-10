@@ -5,7 +5,7 @@ import {
   TASK_METADATA_SCHEMA,
   assertTaskMetadataContext,
 } from "../utils/beads";
-import type { TeamEvent } from "../utils/models";
+import type { TeamEvent } from "../coordination/contracts";
 import {
   projectTaskEventEvidence,
   type TaskEventEvidenceKind,
@@ -30,14 +30,14 @@ import type {
   ModelToolTaskUpdateInput,
 } from "../task-authority/contracts";
 import type { TaskWriteOptions } from "../utils/beads";
-import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
+import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import {
   TASK_CARD_CONTEXT_MAX_LENGTH,
   TASK_CARD_GOAL_MAX_LENGTH,
   TASK_CARD_TITLE_MAX_LENGTH,
   type TaskCard,
   type TaskCardWarning,
-} from "./task-domain";
+} from "../task-authority/task-domain";
 
 const INITIAL_CURRENT_CONTEXT = "Work has not started.";
 const JOURNAL_KINDS = new Set<TaskEventEvidenceKind>([

@@ -18,8 +18,8 @@ import {
   TaskVersionRefSchema,
   MODEL_TOOL_LIMITS,
 } from "./catalog";
-import { type TaskVersionRef } from "./task-version-ref";
-import { TaskCardSchema, TaskCardWarningSchema } from "./task-domain";
+import { type TaskVersionRef } from "../task-authority/task-version-ref";
+import { TaskCardSchema, TaskCardWarningSchema } from "../task-authority/task-domain";
 
 export type ProjectedTool =
   | "team_create"

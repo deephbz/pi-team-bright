@@ -1,5 +1,14 @@
-import type { TaskCard } from "../model-tool-contract/task-domain";
-import type { TaskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TaskCard } from "./task-domain";
+import type { TaskVersionRef } from "./task-version-ref";
+
+export type TaskStatus = "open" | "in_progress" | "blocked" | "closed";
+
+export type TaskRelationType = "parent" | "blocked_by" | "related";
+
+export interface TaskRelation {
+  relation: TaskRelationType;
+  targetId: string;
+}
 
 /** Canonical Task update command consumed by Task authority. */
 export interface ModelToolTaskUpdateInput {

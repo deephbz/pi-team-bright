@@ -1,4 +1,4 @@
-import type { Member, TeamConfig, TerminalTarget } from "./models";
+import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
 
 function validTarget(value: unknown): value is TerminalTarget {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
