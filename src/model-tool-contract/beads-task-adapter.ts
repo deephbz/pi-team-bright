@@ -115,6 +115,11 @@ type TaskAuthorityUpdateInput = Omit<ModelToolTaskUpdateInput, "expectedVersion"
   claim?: boolean;
 };
 
+export interface TaskMutationActorFence {
+  sessionFile: string;
+  membershipId: string;
+}
+
 export interface TaskAdapterAuthority {
   create?(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
   read(taskId: string): Promise<TaskAuthorityRecordEnvelope>;
@@ -333,10 +338,11 @@ function publishingAuthority(
   actor: string,
   publicationPort: TaskMutationPublicationPort,
   teamPort?: TaskAuthorityTeamPort,
+  actorFence?: TaskMutationActorFence,
 ): TaskAdapterAuthority {
   return {
     ...readOnlyAuthority(teamName),
-    create: (input, publication) => createTask(teamName, input, publicationPort, { actor }, {
+    create: (input, publication) => createTask(teamName, input, publicationPort, { actor, ...(actorFence ? { authoritySessionFile: actorFence.sessionFile, authorityMembershipId: actorFence.membershipId } : {}) }, {
       ...publication,
       taskCardProjector: projectTaskCard,
     }, teamPort),
@@ -346,6 +352,7 @@ function publishingAuthority(
       ...(input.journalEntries?.length ? { appendNote: input.journalEntries.map((entry) => `[${entry.kind}] ${entry.text}`).join("\\n") } : {}),
     }, {
       actor,
+      ...(actorFence ? { authoritySessionFile: actorFence.sessionFile, authorityMembershipId: actorFence.membershipId } : {}),
       expectedVersion: input.expectedVersion,
       taskMetadata: metadata,
       taskCardProjector: projectTaskCard,
@@ -355,20 +362,20 @@ function publishingAuthority(
       relation: input.relation,
       targetId: input.targetId,
       action: input.action,
-    }, { ...options, taskCardProjector: projectTaskCard }, publicationPort, teamPort),
+    }, { ...options, ...(actorFence ? { authoritySessionFile: actorFence.sessionFile, authorityMembershipId: actorFence.membershipId } : {}), taskCardProjector: projectTaskCard }, publicationPort, teamPort),
   };
 }
 
-export type BeadsTaskAdapterFactory = (teamName: string, actor: string) => BeadsTaskAdapter;
+export type BeadsTaskAdapterFactory = (teamName: string, actor: string, actorFence?: TaskMutationActorFence) => BeadsTaskAdapter;
 
 export function createPublishingBeadsTaskAdapterFactory(
   publicationPort: TaskMutationPublicationPort,
   teamPort?: TaskAuthorityTeamPort,
 ): BeadsTaskAdapterFactory {
-  return (teamName, actor) => new BeadsTaskAdapter(
+  return (teamName, actor, actorFence) => new BeadsTaskAdapter(
     teamName,
     actor,
-    publishingAuthority(teamName, actor, publicationPort, teamPort),
+    publishingAuthority(teamName, actor, publicationPort, teamPort, actorFence),
   );
 }
 

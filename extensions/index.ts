@@ -522,7 +522,13 @@ export default function (pi: ExtensionAPI) {
       }, { additionalProperties: false, minProperties: 3 }),
       async execute(_toolCallId, params: any, _signal, _onUpdate, ctx) {
         const binding = await sessionAdapter.resolveCurrentWorkerContext(ctx);
-        const adapter = taskAdapterFactory(binding.teamName, binding.member.name);
+        const adapter = taskAdapterFactory(
+          binding.teamName,
+          binding.member.name,
+          binding.member.membershipId && binding.member.sessionFile
+            ? { membershipId: binding.member.membershipId, sessionFile: binding.member.sessionFile }
+            : undefined,
+        );
         if (params.claim === true && (params.current_context !== undefined || params.journal_entries !== undefined || params.status !== undefined)) {
           throw new Error("claim=true is atomic; do not include current_context, journal_entries, or status.");
         }

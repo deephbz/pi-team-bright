@@ -132,6 +132,15 @@
       "evidence": ["src/utils/task-migration.ts", "src/utils/task-delivery-migration.ts"]
     },
     {
+      "id": "TASK-008",
+      "subsystem": "task_authority",
+      "summary": "Refuse a stale or replaced Worker's Task mutation before authority or publication effects; accepting that mutation after exact public-context resolution is a defect.",
+      "classification": "defect",
+      "testState": "normative",
+      "evidence": ["src/utils/worker-task-update-version-ref.test.ts", "src/model-tool-contract/beads-task-adapter.ts", "src/model-tool-contract/beads-authority-adapter.ts"],
+      "proofLimit": "A registered one-process harness with real Beads proves replacement after public context resolution, exact refusal, no authority/publication effects, and replacement-first success. It does not prove a separate Pi process, operating-system fork, or crash recovery. Commit dff2a9f preserves the superseded acceptance behavior as historical evidence."
+    },
+    {
       "id": "ALERT-001",
       "subsystem": "alert_authority",
       "summary": "Accept only valid Alert kinds, targets, actor Roles, and canonical optional Task references.",

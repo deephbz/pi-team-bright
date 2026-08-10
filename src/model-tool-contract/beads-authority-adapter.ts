@@ -135,6 +135,9 @@ export interface AgentMutationBinding {
   actor: string;
   actingSessionFile?: string;
   actingMembershipId?: string;
+  /** Authority-only exact actor fence. Never drives delivery suppression. */
+  authoritySessionFile?: string;
+  authorityMembershipId?: string;
   /** Adapter-owned projection of the committed raw authority envelope. */
   taskCardProjector?: (record: TaskAuthorityRecordEnvelope) => TaskCard | { kind: "contract_gap"; message: string };
 }
@@ -221,12 +224,13 @@ async function withAgentMutationAuthority<T>(
   action: (store: BeadsTaskStore) => Promise<T>,
   teamPort?: TaskAuthorityTeamPort,
 ): Promise<T> {
-  if (!options.actingSessionFile) return action(await storeFor(teamName, teamPort));
-  const membershipId = options.actingMembershipId
-    || (await assertCurrentSessionBinding(teamName, options.actor, options.actingSessionFile)).membershipId;
+  const authoritySessionFile = options.authoritySessionFile ?? options.actingSessionFile;
+  if (!authoritySessionFile) return action(await storeFor(teamName, teamPort));
+  const membershipId = (options.authorityMembershipId ?? options.actingMembershipId)
+    || (await assertCurrentSessionBinding(teamName, options.actor, authoritySessionFile)).membershipId;
   if (!membershipId) throw new Error(`Current Membership for ${options.actor} on team ${teamName} has no membershipId.`);
-  if (teamPort) return teamPort.withCurrentActor({ teamName, actor: options.actor, sessionFile: options.actingSessionFile, membershipId }, async (binding) => action(new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false })));
-  return withCurrentSessionBinding(teamName, options.actor, options.actingSessionFile, membershipId, async (config) => action(storeForConfig(config)));
+  if (teamPort) return teamPort.withCurrentActor({ teamName, actor: options.actor, sessionFile: authoritySessionFile, membershipId }, async (binding) => action(new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false })));
+  return withCurrentSessionBinding(teamName, options.actor, authoritySessionFile, membershipId, async (config) => action(storeForConfig(config)));
 }
 
 export interface SemanticTaskUpdate {
