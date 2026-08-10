@@ -44,6 +44,38 @@ describe("pi-teams-observation/1", () => {
     expect(rejects(defs.issue, { code: "runtime_missing", scope: "membership", teamName: "alpha", memberName: "worker", membershipId: "worker-1", extra: true })).toBe(true);
   });
 
+  it("orders Teams and Membership records deterministically without expanding the public JSON", async () => {
+    const teamsRoot = root();
+    const ended = { ...teammate, membershipId: "worker-old", isActive: false, deactivatedAt: "2024-01-01T00:00:03.000Z", deactivationReason: "replaced" as const };
+    write(teamsRoot, "zeta", "config.json", { ...config([teammate, ended]), name: "zeta" });
+    write(teamsRoot, "alpha", "config.json", { ...config([lead]), name: "alpha" });
+    const first = await readObservationSnapshot({ teamsRoot, producerVersion: "consumer-probe" });
+    const second = await readObservationSnapshot({ teamsRoot, producerVersion: "consumer-probe" });
+    const stable = (snapshot: typeof first) => ({ ...snapshot, generatedAt: "generated-at-is-a-freshness-coordinate" });
+    expect(stable(first)).toEqual(stable(second));
+    expect(first).toMatchObject({ schema: OBSERVATION_SCHEMA, generatedAt: expect.any(String), producerVersion: "consumer-probe", availability: "partial" });
+    expect(first.teams.map(team => [team.teamName, team.memberships.map(member => member.membershipId)])).toEqual([["alpha", ["lead-1"]], ["zeta", ["worker-1", "worker-old"]]]);
+    expect(first.teams[1].memberships[1]).toMatchObject({ lifecycle: { state: "ended", reason: "replaced" }, issues: [expect.objectContaining({ code: "runtime_missing", scope: "membership" })] });
+    expect(JSON.stringify(first)).not.toMatch(/"(?:message|agentId|cwd|pendingLaunchId|launchConsumedAt|deactivatedAt)"/);
+  });
+
+  it("reports missing, malformed, and legacy runtime records while retaining other Membership evidence", async () => {
+    const teamsRoot = root();
+    const malformed = { ...teammate, membershipId: "worker-malformed", name: "malformed" };
+    const legacy = { ...teammate, membershipId: "worker-legacy", name: "legacy" };
+    const current = { ...teammate, membershipId: "worker-current", name: "current" };
+    write(teamsRoot, "alpha", "config.json", config([teammate, malformed, legacy, current, { name: "old-record" }]));
+    write(teamsRoot, "alpha", "runtime/malformed.json", "not json");
+    write(teamsRoot, "alpha", "runtime/legacy.json", { teamName: "alpha", agentName: "legacy", pid: 99, startedAt: 1_700_000_000_002, ready: true });
+    write(teamsRoot, "alpha", "runtime/current.json", { membershipId: "worker-current", pid: 102, startedAt: 1_700_000_000_003, ready: true });
+    const snapshot = await readObservationSnapshot({ teamsRoot }); const members = snapshot.teams[0].memberships;
+    expect(snapshot.availability).toBe("partial");
+    expect(snapshot.teams[0].issues).toEqual([{ code: "membership_malformed", scope: "team", teamName: "alpha" }]);
+    expect(members.map(member => [member.memberName, member.issues.map(issue => issue.code)])).toEqual([["worker", ["runtime_missing"]], ["malformed", ["runtime_malformed"]], ["legacy", ["runtime_legacy"]], ["current", []]]);
+    expect(members.slice(0, 3).every(member => member.processBinding === undefined && member.readiness === undefined)).toBe(true);
+    expect(members[3]).toMatchObject({ processBinding: { membershipId: "worker-current", pid: 102 }, readiness: true });
+  });
+
   it("fails closed on duplicate Membership IDs and ambiguous current process bindings", async () => {
     const teamsRoot = root(); const second = { ...teammate, name: "worker-two" };
     write(teamsRoot, "alpha", "config.json", config([teammate, second]));
