@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import {
+  AlertSendParametersSchema,
   EnsureWorkerParametersSchema,
   TaskCreateParametersSchema,
+  TaskLinkParametersSchema,
   TaskReadParametersSchema,
   TaskUpdateParametersSchema,
   TeamCreateParametersSchema,
+  TeamShutdownParametersSchema,
   TeamSyncParametersSchema,
+  WorkerStopParametersSchema,
 } from "./catalog";
 import {
   InMemoryModelToolTeamPort,
@@ -111,6 +115,86 @@ describe("first model-tool journey through the Pi registration adapter", () => {
       await expect(invoke(name, `reject-${name}`, params, exactSessionId), JSON.stringify(params))
         .rejects.toThrow(`Provider schema rejected ${name} parameters.`);
     }
+  });
+
+  it("maps each registered tool through ordered leader setup to its exact port method", async () => {
+    const calls: string[] = [];
+    const port = Object.fromEntries([
+      ["createTeam", "team_create"],
+      ["readTeamSync", "team_sync"],
+      ["ensureWorker", "ensure_worker"],
+      ["createTask", "task_create"],
+      ["readTasks", "task_read"],
+      ["updateTasks", "task_update"],
+      ["stopWorker", "worker_stop"],
+      ["shutdownTeam", "team_shutdown"],
+      ["linkTask", "task_link"],
+      ["sendAlert", "alert_send"],
+    ].map(([method, tool]) => [method, async () => {
+      calls.push(method);
+      throw new Error(`port:${tool}`);
+    }])) as Record<string, (...arguments_: unknown[]) => Promise<never>> & {
+      setLeaderSessionFile: (session: string, file: string) => void;
+      setLeaderLaunchContext: (session: string, context: unknown) => void;
+    };
+    port.setLeaderSessionFile = (session, file) => { calls.push(`session:${session}:${file}`); };
+    port.setLeaderLaunchContext = (session, context) => { calls.push(`launch:${session}:${JSON.stringify(context)}`); };
+
+    const tools = new Map<string, RegisteredTool>();
+    registerModelToolJourney({ registerTool(tool: RegisteredTool) { tools.set(tool.name, tool); } } as never, port as never);
+    const sessionId = "019fc274-f97e-7910-b6b6-579a20b3b1d0";
+    const sessionFile = "/tmp/leader.jsonl";
+    const ctx = {
+      cwd: "/workspace",
+      isProjectTrusted: () => true,
+      sessionManager: { getSessionId: () => sessionId, getSessionFile: () => sessionFile },
+    } as ReturnType<typeof exactSessionContext>;
+    const cases: Array<[string, unknown, unknown]> = [
+      ["team_create", { name: "team", purpose: "Purpose." }, TeamCreateParametersSchema],
+      ["team_sync", { view: "snapshot" }, TeamSyncParametersSchema],
+      ["ensure_worker", { name: "worker", scope: "Scope." }, EnsureWorkerParametersSchema],
+      ["task_create", { tasks: [{ operation_id: "create", title: "Task", goal: "Goal." }] }, TaskCreateParametersSchema],
+      ["task_read", { task_ids: ["task-1"] }, TaskReadParametersSchema],
+      ["task_update", { updates: [{ task_id: "task-1", operation_id: "update", expected_version: taskVersionRef("task_v1"), current_context: "Update." }] }, TaskUpdateParametersSchema],
+      ["worker_stop", { worker: "worker" }, WorkerStopParametersSchema],
+      ["team_shutdown", {}, TeamShutdownParametersSchema],
+      ["task_link", { task_id: "task-1", target_id: "task-2", relation: "related", action: "add" }, TaskLinkParametersSchema],
+      ["alert_send", { target: { kind: "worker", name: "worker" }, kind: "attention", text: "Review." }, AlertSendParametersSchema],
+    ];
+
+    for (const [name, parameters, schema] of cases) {
+      expect(Check(schema as never, parameters)).toBe(true);
+      await expect(tools.get(name)!.execute(`call-${name}`, parameters, new AbortController().signal, undefined, ctx))
+        .rejects.toThrow(`port:${name}`);
+    }
+    expect(calls).toEqual(cases.flatMap(([name]) => [
+      `session:${sessionId}:${sessionFile}`,
+      `launch:${sessionId}:{"cwd":"/workspace","projectTrusted":true}`,
+      ({ team_create: "createTeam", team_sync: "readTeamSync", ensure_worker: "ensureWorker", task_create: "createTask", task_read: "readTasks", task_update: "updateTasks", worker_stop: "stopWorker", team_shutdown: "shutdownTeam", task_link: "linkTask", alert_send: "sendAlert" } as Record<string, string>)[name],
+    ]));
+  });
+
+  it("keeps Alert result projection and in-memory debug revision separate from Team and Task authority", async () => {
+    const { invoke, port } = registerJourney();
+    const session = "019fc274-f97e-7910-b6b6-579a20b3b1d0";
+    await invoke("team_create", "create", { name: "release-team", purpose: "Prepare the release." }, session);
+    await invoke("ensure_worker", "worker", { name: "verifier", scope: "Own release verification." }, session);
+    const revision = port.readDebugRevision();
+
+    const alert = canonicalDetails(await invoke("alert_send", "alert", {
+      target: { kind: "worker", name: "verifier" },
+      kind: "attention",
+      text: "Review the release evidence.",
+    }, session));
+
+    expect(alert).toEqual({
+      kind: "alert_sent",
+      alert_id: "alert-3",
+      accepted_recipients: ["verifier"],
+      failed_recipients: [],
+      task_state_changed: false,
+    });
+    expect(port.readDebugRevision()).toBe(revision);
   });
 
   it("rejects a malformed semantic result before model content exists", () => {
