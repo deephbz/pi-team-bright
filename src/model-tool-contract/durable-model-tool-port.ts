@@ -2,22 +2,18 @@ import { getTerminalAdapter } from "../adapters/terminal-registry";
 import * as paths from "../utils/paths";
 import * as teams from "../utils/teams";
 import { resolveTeamTaskAuthority } from "./beads-authority-adapter";
-import * as teamEvents from "../utils/team-events";
 import type { AlertSender } from "../alert-authority/contracts";
 import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
 import { MODEL_TOOL_WORKER_MARKER } from "./model-tool-constants";
-import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import {
   BeadsTaskAdapter,
   projectNonterminalTaskIds,
   projectTaskChanges,
   type BeadsTaskAdapterFactory,
 } from "./beads-task-adapter";
-import {
-  readHiddenObservationProjection,
-} from "../utils/hidden-observation";
 import type {
   ExactLeaderSessionId,
   ModelToolLeaderLaunchContext,
@@ -41,15 +37,14 @@ import type {
 } from "./in-memory-team-port";
 import type { TaskCard } from "../task-authority/task-domain";
 import type { ModelToolTaskUpdateInput } from "../task-authority/contracts";
-import type { TeamEvent } from "../coordination/contracts";
 import type { Member, TeamConfig } from "../team-authority/contracts";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import type { CoordinationQueryBundle } from "../coordination/queries";
 import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
-import { CoordinationObservationService, taskProjectionRevision } from "../coordination/observation-service";
+import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
+import { CoordinationObservationService } from "../coordination/observation-service";
 import { loadSyncLivenessSettings } from "../utils/sync-liveness-settings";
 import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
-import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hints";
 
 type BoundTeam = { teamName: string; config: TeamConfig; sessionFile: string };
 
@@ -98,7 +93,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     taskAdapterFactory: BeadsTaskAdapterFactory = (teamName, actor) => new BeadsTaskAdapter(teamName, actor),
     alertSender?: AlertSender,
     coordinationQueries: CoordinationQueryBundle = createDurableCoordinationQueries(),
-    observationService: CoordinationObservationService = new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges }),
+    observationService: CoordinationObservationService = new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges }, undefined, undefined, createDurableCoordinationNudgeStore()),
   ) {
     this.launchBridge = launchBridge;
     this.lifecycle = lifecycle;
@@ -378,55 +373,8 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
   }
 
   async readSyncNudgeDebt(leaderSessionId: ExactLeaderSessionId, branchLineage: string[]): Promise<SyncNudgeDebt> {
-    const bound = await this.boundTeam(leaderSessionId);
-    if (!bound || !bound.config.syncLiveness?.nudgeEnabled || bound.config.syncLiveness.nudgeDelaySeconds === undefined) return { kind: "none" };
-    const branchId = branchLineage.at(-1);
-    if (!branchId || new Set(branchLineage).size !== branchLineage.length) return { kind: "none" };
-    const lead = [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === bound.sessionFile);
-    if (!lead?.membershipId) return { kind: "none" };
-    const branchKey = JSON.stringify(branchLineage);
-    const observation = await readHiddenObservationProjection(bound.teamName, {
-      teamEpochId: bound.config.epochId!,
-      exactSessionId: bound.sessionFile,
-      branchLineage,
-    });
-    if (observation.kind === "contract_gap") return { kind: "unavailable", message: `Model-tool ${observation.reason.replaceAll("_", " ")} is unavailable.` };
-    const tasksResult = await this.observationService.readTaskProjection(bound.teamName);
-    if (tasksResult.kind !== "tasks") return { kind: "unavailable", message: tasksResult.message };
-    const events = this.readAllNudgeEvents(bound.teamName, observation.kind === "found" ? observation.projection.teamEventCursor : undefined);
-    const currentRevision = taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
-    const currentCursor = events.headCursor;
-    const policyVersion = bound.config.syncLiveness.policyVersion;
-    if (observation.kind !== "found") {
-      const debtKey = `${bound.config.epochId}|${bound.sessionFile}|${lead.membershipId}|${branchKey}|snapshot|${currentCursor}|${currentRevision}|${policyVersion}`;
-      return { kind: "eligible", debtKey, requestedView: "snapshot", teamEpochId: bound.config.epochId!, leaderSessionId: bound.sessionFile, leaderMembershipId: lead.membershipId, branchLineage: [...branchLineage], branchId, policyVersion };
-    }
-    const acknowledgedRevision = observation.projection.authorityRevisions.task_projection;
-    const acknowledgedHintCursor = observation.projection.authorityRevisions.task_event_failure_hints ?? "0";
-    let hintBatch: ReturnType<typeof readTaskEventFailureHintsAfter>;
-    try {
-      hintBatch = readTaskEventFailureHintsAfter(bound.teamName, acknowledgedHintCursor, {
-        teamEpochId: bound.config.epochId!,
-        taskReferences: tasksResult.tasks.map((task) => ({ taskId: task.id, taskVersion: taskVersionRef(task.version) })),
-      });
-    } catch (error) {
-      return { kind: "indeterminate", message: `Failed-event hint evidence is unavailable; automatic sync nudge is suppressed. ${error instanceof Error ? error.message : String(error)}` };
-    }
-    const hintCursorChanged = hintBatch.headCursor !== acknowledgedHintCursor;
-    const externalHint = hintBatch.hints.some((match) => match.actorKind === "non-leader/external");
-    const leaderHint = hintBatch.hints.some((match) => match.actorKind === "team-lead");
-    const taskEvents = events.events.filter((event) => event.type === "task");
-    const nonLeaderTaskChange = taskEvents.some((event) => event.actor !== "team-lead");
-    const leaderTaskChange = taskEvents.some((event) => event.actor === "team-lead");
-    const pairChanged = observation.projection.teamEventCursor !== currentCursor || acknowledgedRevision !== currentRevision || hintCursorChanged;
-    if (!pairChanged) return { kind: "none" };
-    if (acknowledgedRevision === currentRevision && !hintCursorChanged && !nonLeaderTaskChange && !leaderTaskChange) return { kind: "none" };
-    if (nonLeaderTaskChange || externalHint) {
-      const debtKey = `${bound.config.epochId}|${bound.sessionFile}|${lead.membershipId}|${branchKey}|updates|${observation.projection.teamEventCursor}:${acknowledgedRevision}:${acknowledgedHintCursor}->${currentCursor}:${currentRevision}:${hintBatch.headCursor}|${policyVersion}`;
-      return { kind: "eligible", debtKey, requestedView: "updates", teamEpochId: bound.config.epochId!, leaderSessionId: bound.sessionFile, leaderMembershipId: lead.membershipId, branchLineage: [...branchLineage], branchId, policyVersion };
-    }
-    if (leaderTaskChange || leaderHint) return { kind: "none" };
-    return { kind: "indeterminate", message: "Task or failed-event evidence changed without actor evidence; automatic sync nudge is suppressed." };
+    const sessionFile = this.sessionFiles.get(leaderSessionId);
+    return sessionFile ? await this.observationService.readSyncNudgeDebt(sessionFile, branchLineage) : { kind: "none" };
   }
 
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void { this.observationService.setPendingResult(this.sessionFiles.get(leaderSessionId) ?? leaderSessionId, result); }
@@ -452,23 +400,6 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort {
     const config = await teams.readConfig(binding.teamName);
     return { teamName: binding.teamName, config, sessionFile };
   }
-
-  private readAllNudgeEvents(teamName: string, afterCursor?: string): { events: TeamEvent[]; headCursor: string } {
-    const events: TeamEvent[] = [];
-    let cursor = afterCursor;
-    let page: teamEvents.TeamEventBatch;
-    do {
-      page = teamEvents.readTeamEvents(teamName, { ...(cursor === undefined ? {} : { afterCursor: cursor }) });
-      events.push(...page.events);
-      if (!page.truncated) return { events, headCursor: page.headCursor };
-      if (page.cursor === cursor) throw new Error("Team nudge event pagination did not advance.");
-      cursor = page.cursor;
-    } while (page.truncated);
-    return { events, headCursor: page.headCursor };
-  }
-
-
-
 
 }
 

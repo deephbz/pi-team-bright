@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import { commitHiddenObservationProjection, readHiddenObservationProjection, type HiddenObservationProjection } from "../utils/hidden-observation";
 import * as teamEvents from "../utils/team-events";
 import { currentMember, deriveWorkerRunObservation, livenessIsComplete, livenessIsProductive, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";
@@ -8,6 +7,9 @@ import { taskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TeamEvent } from "./contracts";
 import type { CoordinationQueryBundle, CoordinationTaskReadOutcome, CoordinationLeaderBindingEvidence } from "./queries";
+import { CoordinationNudgeDebtService, type CoordinationNudgeStore, type SyncNudgeDebt } from "./nudge-debt";
+import { taskProjectionRevision } from "./task-projection-revision";
+export { taskProjectionRevision } from "./task-projection-revision";
 import type { CoordinationObservationBinding, CoordinationPendingObservation, CoordinationSnapshotResult, CoordinationSyncResult, CoordinationTaskProjection, CoordinationTeamCurrent, CoordinationWorkerCurrent } from "./observation-contracts";
 
 type TaskProjection = CoordinationTaskProjection;
@@ -24,7 +26,6 @@ function currentTeam(config: CoordinationLeaderBindingEvidence): CoordinationTea
 function latestMember(config: CoordinationLeaderBindingEvidence, workerName: string) { return [...config.members].reverse().find((member) => member.name === workerName && member.isActive !== false); }
 function workerCarrier(member: ReturnType<typeof latestMember>): CoordinationWorkerCurrent["carrier"] { return !member ? "absent" : member.sessionFile ? "connected" : member.pendingLaunchId ? "starting" : "absent"; }
 function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "created" | "connected" | "stopped" | "failed" { return event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase; }
-export function taskProjectionRevision(tasks: readonly TaskCard[], warnings: readonly TaskCardWarning[] = []): string { return crypto.createHash("sha256").update(JSON.stringify({ tasks, warnings })).digest("hex"); }
 
 export interface CoordinationObservationStore {
   readHidden: typeof readHiddenObservationProjection;
@@ -55,12 +56,14 @@ export class CoordinationObservationService {
   private readonly branchLineages = new Map<string, string[]>();
   private readonly pendingBySession = new Map<string, any>();
   private readonly taskProjections = new Map<string, any>();
+  private readonly nudgeDebt?: CoordinationNudgeDebtService;
   constructor(
     private readonly coordinationQueries: CoordinationQueryBundle,
     private readonly projection: CoordinationProjectionDependencies,
     private readonly store: CoordinationObservationStore = durableObservationStore,
     private readonly wait: CoordinationWaitDependencies = { waitForLivenessHint },
-  ) {}
+    nudgeStore?: CoordinationNudgeStore,
+  ) { this.nudgeDebt = nudgeStore ? new CoordinationNudgeDebtService(this, nudgeStore) : undefined; }
   setBranchContext(sessionId: string, branchLineage: string[]): void { this.branchLineages.set(sessionId, [...branchLineage]); }
   branchContext(sessionId: string): string[] { return [...(this.branchLineages.get(sessionId) ?? [])]; }
   pending(sessionId: string): CoordinationPendingObservation<CoordinationSyncResult> | undefined { const pending = this.pendingBySession.get(sessionId); return pending ? { sessionId: pending.sessionId, toolCallId: pending.toolCallId, resultText: pending.resultText, resultDigest: pending.resultDigest, head: pending.head, epochId: pending.epochId, result: pending.internalResult } : undefined; }
@@ -76,6 +79,23 @@ export class CoordinationObservationService {
   private async readSnapshotForBound(bound: BoundTeam): Promise<CoordinationSnapshotResult> { const tasks = await this.readTaskProjection(bound.teamName); if (tasks.kind !== "tasks") return tasks; const workers = this.readWorkers(bound, tasks.tasks); return { kind: "snapshot", team: currentTeam(bound.config), workers, tasks: tasks.tasks, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) }; }
   async acknowledge(exactSessionFile: string, entryId: string, branchIds: string[]): Promise<boolean> { const pending = this.takePending(exactSessionFile); if (!pending || !branchIds.includes(entryId)) return false; const committed = await this.store.commitHidden(pending.teamName, { teamEpochId: pending.epochId, exactSessionId: pending.sessionId, branchLineage: branchIds, acknowledgedEntryId: entryId, teamEventCursor: String(pending.head), authorityRevisions: pending.authorityRevisions }); if (committed.kind !== "committed") return false; if (pending.taskProjection) this.cacheTaskProjection({ teamName: pending.teamName, epochId: pending.epochId, exactSessionId: pending.sessionId, acknowledgedEntryId: committed.projection.acknowledgedEntryId, acknowledgedLineage: [...committed.projection.acknowledgedLineage], teamEventCursor: committed.projection.teamEventCursor, projection: pending.taskProjection }); this.clearPending(exactSessionFile); return true; }
   private async boundTeam(sessionFile: string): Promise<BoundTeam | undefined> { const config = await this.coordinationQueries.teamRuntime.readLeaderBinding?.(sessionFile); if (!config?.epochId || !config.logicalWorkers) return undefined; return { teamName: config.teamName, config: config as BoundTeam["config"], sessionFile }; }
+  /** Exact nudge binding deliberately excludes logical-Worker observation requirements. */
+  private async nudgeBoundTeam(sessionFile: string): Promise<BoundTeam | undefined> {
+    const config = await this.coordinationQueries.teamRuntime.readLeaderBinding?.(sessionFile);
+    const lead = config?.members && [...config.members].reverse().find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === sessionFile && member.membershipId);
+    if (!config?.epochId || !config.syncLiveness || !lead) return undefined;
+    return { teamName: config.teamName, config: config as BoundTeam["config"], sessionFile };
+  }
+  async readSyncNudgeDebt(exactSessionFile: string, branchLineage: string[]): Promise<SyncNudgeDebt> {
+    const bound = await this.nudgeBoundTeam(exactSessionFile);
+    const policy = bound?.config.syncLiveness;
+    if (!this.nudgeDebt || !bound || !policy?.nudgeEnabled || policy.nudgeDelaySeconds === undefined) return { kind: "none" };
+    return this.nudgeDebt.read({
+      teamName: bound.teamName,
+      sessionFile: bound.sessionFile,
+      config: { ...bound.config, syncLiveness: { waitSeconds: policy.waitSeconds, nudgeEnabled: policy.nudgeEnabled, nudgeDelaySeconds: policy.nudgeDelaySeconds, policyVersion: policy.policyVersion } },
+    }, branchLineage);
+  }
   async readTeamSync(
     exactSessionFile: string,
     view: "snapshot" | "updates",

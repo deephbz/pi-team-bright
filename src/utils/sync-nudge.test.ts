@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSyncNudgeRecord, presentSyncNudge, readSyncNudgeRecords, readSyncNudges, reserveSyncNudge, syncNudgeContent, syncNudgeTuiLine } from "./sync-nudge";
-import { teamDir } from "./paths";
+import { syncNudgeRecordPath, teamDir } from "./paths";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -30,5 +30,20 @@ describe("sync nudge derived presentation", () => {
     expect(syncNudgeContent(reserved)).not.toContain("task-");
     expect(syncNudgeTuiLine(reserved)).toContain("pending");
     expect(syncNudgeTuiLine(readSyncNudges(team)[0])).toContain("presented");
+  });
+
+  it("uses the latest valid record by ID and ignores malformed or foreign receipt history", () => {
+    const team = `nudge-history-${process.pid}`;
+    fs.rmSync(teamDir(team), { recursive: true, force: true });
+    fs.mkdirSync(teamDir(team), { recursive: true });
+    roots.push(teamDir(team));
+    const reserved = createSyncNudgeRecord({ ...record("reserved"), teamName: team });
+    reserveSyncNudge(reserved);
+    fs.appendFileSync(syncNudgeRecordPath(team), "not-json\n");
+    fs.appendFileSync(syncNudgeRecordPath(team), `${JSON.stringify({ ...reserved, teamName: "foreign-team" })}\n`);
+    const promoted = presentSyncNudge(reserved, "2026-08-10T00:00:00.000Z");
+
+    expect(readSyncNudgeRecords(team)).toEqual([promoted]);
+    expect(readSyncNudges(team)).toEqual([promoted]);
   });
 });

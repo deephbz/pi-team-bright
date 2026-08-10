@@ -21,6 +21,8 @@ import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
+import { DurableCoordinationNudgeRecord } from "../src/adapters/durable-coordination-nudge-record";
+import { createDurableCoordinationNudgeStore } from "../src/adapters/durable-coordination-nudge-store";
 import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
 import { CoordinationObservationService } from "../src/coordination/observation-service";
 import type { TaskCard, TaskCardWarning } from "../src/task-authority/task-domain";
@@ -325,7 +327,9 @@ export default function (pi: ExtensionAPI) {
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
   const coordinationQueries = createDurableCoordinationQueries();
-  const coordinationObservationService = new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges });
+  const coordinationNudgeStore = createDurableCoordinationNudgeStore();
+  const coordinationObservationService = new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges }, undefined, undefined, coordinationNudgeStore);
+  const nudgeRecords = new DurableCoordinationNudgeRecord();
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const teamLifecycleService = new TeamLifecycleService({
@@ -456,6 +460,7 @@ export default function (pi: ExtensionAPI) {
     projectTrust,
     lifecyclePublication,
     alertMembership,
+    nudgeRecords,
     leaderToolNames,
     workerToolNames,
     refreshAlertToolProjection,

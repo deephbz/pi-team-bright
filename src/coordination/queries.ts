@@ -48,8 +48,8 @@ export interface CoordinationLeaderBindingEvidence {
   epochId?: string;
   sessionFile: string;
   purpose?: string;
-  syncLiveness?: { waitSeconds: number };
-  members: CoordinationMemberEvidence[];
+  syncLiveness?: { waitSeconds: number; nudgeEnabled?: boolean; nudgeDelaySeconds?: number; policyVersion?: string };
+  members: Array<CoordinationMemberEvidence & { agentType?: string }>;
   logicalWorkers?: CoordinationLogicalWorkerEvidence[];
 }
 

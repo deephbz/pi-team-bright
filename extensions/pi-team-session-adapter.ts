@@ -9,7 +9,8 @@ import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/dir
 import type { AlertMembershipPort } from "../src/alert-authority/contracts";
 import { TaskChangeDelivery, taskPollMs } from "../src/utils/task-delivery";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
-import { createSyncNudgeRecord, findSyncNudgeReservation, presentSyncNudge, readSyncNudges, reserveSyncNudge, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";
+import type { CoordinationNudgeRecordPort } from "../src/coordination/nudge-record-port";
+import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import type { Member, TeamConfig } from "../src/team-authority/contracts";
@@ -38,12 +39,13 @@ export function createPiTeamSessionAdapter(options: {
   projectTrust: (ctx: any) => boolean | undefined;
   lifecyclePublication: { recordWorkerFailed(input: { teamName: string; workerName: string; membershipId: string }): Promise<unknown> };
   alertMembership: AlertMembershipPort;
+  nudgeRecords: CoordinationNudgeRecordPort;
   leaderToolNames: ReadonlySet<string>;
   workerToolNames: ReadonlySet<string>;
   refreshAlertToolProjection: () => void;
   registerRecoveredWorkerTools: () => void;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, nudgeRecords, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
   const terminal = getTerminalAdapter();
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
@@ -181,7 +183,7 @@ function startSyncNudgeConductor(ctx: any) {
     readDebt: debt,
     isSettled: () => leaderRunSettled,
     isBusy: busy,
-    alreadyPresented: (debtKey, branchLineage) => readSyncNudges(teamName!).some((record) => record.debtKey === debtKey && record.branchLineage.length === branchLineage.length && record.branchLineage.every((value, index) => value === branchLineage[index])),
+    alreadyPresented: (debtKey, branchLineage) => nudgeRecords.readPresented(teamName!).some((record) => record.debtKey === debtKey && record.branchLineage.length === branchLineage.length && record.branchLineage.every((value, index) => value === branchLineage[index])),
     present: async (candidate) => {
       const sessionFile = ctx?.sessionManager?.getSessionFile?.();
       const sessionId = ctx?.sessionManager?.getSessionId?.();
@@ -193,9 +195,9 @@ function startSyncNudgeConductor(ctx: any) {
       if (currentLead.membershipId !== candidate.leaderMembershipId) return;
       const latest = await modelToolJourney()!.port.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
       if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value: string, index: number) => value !== candidate.branchLineage[index]) || busy()) return;
-      const existing = findSyncNudgeReservation(teamName!, candidate.debtKey, candidate.branchLineage);
+      const existing = nudgeRecords.findReservation(teamName!, candidate.debtKey, candidate.branchLineage);
       if (existing && syncNudgeMessageDelivered(ctx, existing)) {
-        presentSyncNudge(existing);
+        nudgeRecords.present(existing);
         return;
       }
       const record = existing ?? createSyncNudgeRecord({
@@ -205,14 +207,14 @@ function startSyncNudgeConductor(ctx: any) {
         branchLineage: [...candidate.branchLineage], branchId: candidate.branchId, debtKey: candidate.debtKey,
         requestedView: candidate.requestedView, reservedAt: new Date().toISOString(), policyVersion: candidate.policyVersion,
       });
-      if (!existing) reserveSyncNudge(record);
+      if (!existing) nudgeRecords.reserve(record);
       const presented = createSyncNudgeRecord({ ...record, kind: "presented", presentedAt: new Date().toISOString() });
       // Reservation is internal. The model receives only the validated
       // presented semantic record; persistence follows exact Session proof.
       pi.sendMessage({ customType: SYNC_NUDGE_CUSTOM_TYPE, content: syncNudgeContent(presented), display: true, details: presented }, { triggerTurn: true, deliverAs: "followUp" });
       // Promote only after the durable Session contains this exact custom
       // message on the same full branch lineage.
-      if (syncNudgeMessageDelivered(ctx, presented)) presentSyncNudge(record, presented.presentedAt);
+      if (syncNudgeMessageDelivered(ctx, presented)) nudgeRecords.present(record, presented.presentedAt);
     },
   });
   const eventDirectory = path.join(paths.teamDir(teamName), "events");

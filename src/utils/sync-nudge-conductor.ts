@@ -1,8 +1,5 @@
-export type SyncNudgeDebt =
-  | { kind: "none" }
-  | { kind: "eligible"; debtKey: string; requestedView: "snapshot" | "updates"; teamEpochId: string; leaderSessionId: string; leaderMembershipId: string; branchLineage: string[]; branchId: string; policyVersion: string }
-  | { kind: "indeterminate"; message: string }
-  | { kind: "unavailable"; message: string };
+export type { SyncNudgeDebt } from "../coordination/nudge-debt";
+import type { SyncNudgeDebt } from "../coordination/nudge-debt";
 
 export interface SyncNudgeConductorClock {
   setTimeout(callback: () => void, delayMs: number): unknown;

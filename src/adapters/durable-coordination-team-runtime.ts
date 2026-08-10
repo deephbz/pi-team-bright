@@ -28,9 +28,15 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
       purpose: config.description,
       epochId: config.epochId,
       sessionFile,
-      ...(config.syncLiveness ? { syncLiveness: { waitSeconds: config.syncLiveness.waitSeconds } } : {}),
+      ...(config.syncLiveness ? { syncLiveness: {
+        waitSeconds: config.syncLiveness.waitSeconds,
+        nudgeEnabled: config.syncLiveness.nudgeEnabled,
+        nudgeDelaySeconds: config.syncLiveness.nudgeDelaySeconds,
+        policyVersion: config.syncLiveness.policyVersion,
+      } } : {}),
       members: config.members.map((member) => ({
         name: member.name,
+        agentType: member.agentType,
         membershipId: member.membershipId,
         pendingLaunchId: member.pendingLaunchId,
         sessionFile: member.sessionFile,
