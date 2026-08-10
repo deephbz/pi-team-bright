@@ -1199,3 +1199,32 @@ changes; append a correction.
 - No source or test edit, stage, aggregate run, or commit was made by this
   documentation receipt. The next structural boundary remains the combined Trio
   façade and separate fake.
+
+## 2026-08-10 — Trio application-port split accepted
+
+- Clean accepted baseline `c54dc25b34770b70afedffc7e87728da6376ee0f` entered
+  accepted commit `69c30acf5db23be8f656b2a6821b0ea032ae04cb`
+  (`refactor: split Trio application ports`).
+- The accepted named architecture makes `ModelToolJourneyPort` the facade over
+  neutral Team, Task, Alert, and Coordination application contracts. Durable
+  owners are `durable-model-tool-team-application.ts`,
+  `durable-model-tool-task-application.ts`,
+  `durable-model-tool-alert-application.ts`, and
+  `durable-model-tool-coordination-application.ts`; bindings remain in
+  `durable-model-tool-bindings.ts`.
+- Opaque in-memory state and authority ports replace the one-store fake. The
+  journey and compatibility paths are thin wrappers. Task and Alert commits
+  remain authoritative when later Coordination publication fails; that result is
+  partial and does not roll back authority state.
+- Nominal implementation attempts rejected during Trio design remain historical
+  evidence. Focused acceptance gates passed. The final aggregate remains
+  reserved for one exact stable final tree.
+- The conservative verifier graph is canonical: 111 production files, 426
+  resolved static local edges, zero nontrivial SCC, and zero runtime dynamic
+  imports. A narrower 109-file/379-edge probe corroborates only its narrower
+  scope.
+- Evidence is deterministic and local. It does not prove real Pi persistence,
+  external Beads/Dolt contention, cross-process forks, native watcher delivery,
+  OS scheduling, external writers, or terminal pixels. Membership observation is
+  the next boundary. Structurizr remains unchanged because these internals stay
+  opaque.

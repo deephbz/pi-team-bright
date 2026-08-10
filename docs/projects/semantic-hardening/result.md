@@ -2,7 +2,8 @@
 
 Date: 2026-08-10
 Stage: consolidation and hardening
-Result revision: `15e707b5668af383d6949934bd8e67a35b8bc097`
+Result revision: `69c30acf5db23be8f656b2a6821b0ea032ae04cb`
+Trio baseline: `c54dc25b34770b70afedffc7e87728da6376ee0f`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
 Verified source candidate: `638d5934bd52c7f4a3fe18525e5d72569a227211`
@@ -16,7 +17,9 @@ because it keeps Pi Team Bright internals opaque
 
 The Project produced an evidence-backed internal hardening series without a
 public tool, schema, package-export, persisted-record, filename, retry, timing,
-or default-behavior change. It characterized the main Task-delivery causal path,
+or default-behavior change. Accepted commit
+`69c30acf5db23be8f656b2a6821b0ea032ae04cb` splits the Trio seam from clean
+baseline `c54dc25b34770b70afedffc7e87728da6376ee0f`. It characterized the main Task-delivery causal path,
 made two Task dependency seams explicit, moved durable lead discovery to Team
 authority, removed duplicate result validation, replaced nondeterministic lock
 test oracles, and added a reproducible Task-hydration benchmark.
@@ -125,6 +128,29 @@ coordinate changed. The accepted graph remains 99 production TypeScript files
 and 334 static local edges. Architecture impact is **none** for this correction.
 No aggregate ran. The next structural boundary remains the combined Trio façade
 and separate fake.
+
+## Accepted Trio split
+
+`ModelToolJourneyPort` is a thin Trio facade over neutral Team, Task, Alert, and
+Coordination application contracts. Durable ownership is explicit in
+`durable-model-tool-team-application.ts`,
+`durable-model-tool-task-application.ts`,
+`durable-model-tool-alert-application.ts`, and
+`durable-model-tool-coordination-application.ts`; bindings remain separate in
+`durable-model-tool-bindings.ts`. `in-memory-state.ts` and
+`in-memory-authority-ports.ts` hold opaque fake authority state, while existing
+journey and legacy port paths are thin wrappers.
+
+Task and Alert commits remain authoritative when later Coordination publication
+fails. The failure is a partial outcome; it does not imply rollback. Nominal
+implementation attempts rejected during design remain historical evidence.
+Focused acceptance gates passed, but they prove deterministic local behavior
+only. They do not prove real Pi persistence, external Beads/Dolt contention,
+cross-process forks, native watcher delivery, OS scheduling, external writers,
+or terminal pixels. The next boundary is additive Membership observation. The
+canonical graph is 111 production files and 426 local edges, with zero
+nontrivial SCC and zero runtime dynamic imports; a narrower 109-file/379-edge
+probe corroborates only its narrower scope.
 
 ## Optimization report
 

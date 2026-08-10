@@ -1,12 +1,12 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-10
-Status: maintained semantic-hardening audit; Coordination nudge boundary is
-accepted in `b4bf6dee91cf25532cbc33a397167567ba6d347e`. Task reconciliation,
-Task mutation publication, Team lifecycle slices, the Pi Session adapter,
-Alert's durable ports, Coordination observation, and the nudge boundary are
-independently verified; the Trio and Membership-observation seams remain
-incomplete
+Status: maintained semantic-hardening audit; accepted Trio split commit
+`69c30acf5db23be8f656b2a6821b0ea032ae04cb` follows clean baseline
+`c54dc25b34770b70afedffc7e87728da6376ee0f`. Task reconciliation, Task mutation
+publication, Team lifecycle slices, the Pi Session adapter, Alert durable ports,
+Coordination observation, nudge, and Trio are independently verified;
+Membership observation remains the next boundary
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -44,6 +44,33 @@ carrier. No public/schema/persistence change occurred. The 99-file/334-edge
 accepted graph is unchanged, and architecture impact is **none** for this
 correction. The next boundary remains Trio.
 
+## Accepted Trio boundary
+
+The accepted named architecture uses `ModelToolJourneyPort` as a thin facade
+above neutral Team, Task, Alert, and Coordination application contracts.
+`durable-model-tool-team-application.ts`,
+`durable-model-tool-task-application.ts`,
+`durable-model-tool-alert-application.ts`, and
+`durable-model-tool-coordination-application.ts` are the durable owners;
+`durable-model-tool-bindings.ts` owns composition bindings. The in-memory split
+uses opaque state and authority ports, not one shared fake store. Existing
+journey and legacy port paths remain thin compatibility wrappers.
+
+Task and Alert commits survive a later Coordination publication failure. The
+public result records the partial outcome; it does not roll back authority state.
+This preserves the existing partial-failure semantics. Rejected nominal
+implementations remain historical evidence. Focused acceptance gates establish
+deterministic local behavior only, not real Pi persistence, Beads/Dolt
+contention, cross-process forks, native watchers, OS scheduling, external
+writers, or terminal pixels.
+
+The verifier's conservative current graph is canonical: 111 production files,
+426 resolved static local edges, zero nontrivial SCC, and zero runtime dynamic
+imports. A narrower 109-file/379-edge probe is corroborating evidence only; it
+must not replace the canonical graph. Architecture impact is internal only, so
+Structurizr stays unchanged because Pi Team Bright internals remain opaque.
+Membership observation is the next boundary.
+
 ## Scope and evidence
 
 This audit uses the five accepted subsystems in the Project handoff: Team
@@ -59,10 +86,12 @@ selection from baseline `1686ac1` has 81 production TypeScript files with
 `src/` and `extensions/`, excluding `*.test.ts`; test support means
 `test/setup.ts` and non-test `test/support/*.ts`, while runner-only global setup
 is excluded. A TypeScript-AST scan resolves static relative import and re-export
-specifiers between those production files. The accepted Coordination nudge
-commit `b4bf6dee91cf25532cbc33a397167567ba6d347e` has 99 production TypeScript
-files and 334 unique resolved static local edges. It has no nontrivial strongly
-connected component, no self-cycle, and no runtime dynamic import expression. The prior 87/285 Alert-port and
+specifiers between those production files. The earlier accepted Coordination nudge commit
+`b4bf6dee91cf25532cbc33a397167567ba6d347e` had 99 production TypeScript files
+and 334 unique resolved static local edges. The accepted Trio graph is now the
+canonical 111-file/426-edge graph described above. Both have no nontrivial
+strongly connected component, no self-cycle, and no runtime dynamic import
+expression. The prior 87/285 Alert-port and
 92/304 slice-B query counts remain historical evidence for earlier slices. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
