@@ -12,7 +12,7 @@ The full target remains Team authority, Task authority, Alert authority, Coordin
 
 ## Current source state
 
-The Project worktree branch is `audit/semantic-hardening-behavior-inventory`. Current accepted source commit is `b4bf6dee91cf25532cbc33a397167567ba6d347e` (`refactor: isolate Coordination nudge boundary`). Do not use the original checkout.
+The Project worktree branch is `audit/semantic-hardening-behavior-inventory`. Current accepted source commit is `cafdf2deb4ccdbb47cb40b87e83081d1c9128665` (`fix: keep refused resumed Sessions alive`). Do not use the original checkout. Any result from the original checkout is invalid for the terminal-refusal correction.
 
 Recent accepted commits:
 
@@ -20,6 +20,21 @@ Recent accepted commits:
 - `f4f88a2` — Coordination query ports and durable adapters.
 - `3869ef6` — Coordination observation service extraction.
 - `b4bf6dee91cf25532cbc33a397167567ba6d347e` — Coordination nudge boundary.
+- `3b265ea6fbdc53c9b753950a4ed01ccddad527d8` — test hardening that binds
+  Session characterization to canonical Alert delivery.
+- `cafdf2deb4ccdbb47cb40b87e83081d1c9128665` — intentional terminal-refusal
+  behavior fix.
+
+The hardened characterization exposed a pre-existing defect: resumed foreign or
+nested Worker and lead Sessions were shut down after placement refusal. The fix
+keeps them alive and unbound. Launch or runtime refusals with `exitProcess=true`
+still shut down. The exact resumed-Worker and resumed-lead cases are in
+`src/utils/pi-session-adapter.characterization.test.ts`; nested-Worker and
+foreign-lead cases are in `src/utils/terminal-backend.contract.test.ts`. This is
+deterministic one-process hook evidence, not real process, terminal, or terminal
+carrier proof. No public, schema, persistence, or graph change occurred; the
+accepted graph remains 99 files and 334 edges. Architecture impact: **none**.
+No aggregate ran.
 
 The reserved aggregate has not run. Public behavior and package exports remain unchanged. Nothing after the earlier authorized RC branch increment has been pushed or published.
 
@@ -54,12 +69,10 @@ watcher delivery, OS scheduling, external writers, or terminal pixels.
 
 ## Immediate continuation
 
-1. Address the separately reproduced baseline terminal-admission defect in its
-   own commit. Do not classify it as a nudge regression.
-2. Start the Trio façade and separate-fake split. It must use distinct Team,
+1. Start the Trio façade and separate-fake split. It must use distinct Team,
    Task, Alert, and Coordination application ports and must not collapse Task or
    Alert commits with failed Coordination publication.
-3. Then isolate the additive Membership decoder, do measured local optimization,
+2. Then isolate the additive Membership decoder, do measured local optimization,
    stabilize one exact tree, run the one reserved aggregate, refresh final
    artifacts, run the privacy scan, and obtain watchdog completion review.
 

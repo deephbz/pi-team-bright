@@ -100,6 +100,32 @@ structural seam is the combined Trio façade and fake. A separately reproduced
 baseline terminal-admission defect is the next own-commit issue, not a nudge
 regression.
 
+## Terminal-refusal correction
+
+Test-hardening commit `3b265ea6fbdc53c9b753950a4ed01ccddad527d8`
+changed the registered Pi Session characterization to use canonical Alert
+delivery. It exposed a pre-existing resumed-session shutdown defect. Intentional
+behavior-fix commit `cafdf2deb4ccdbb47cb40b87e83081d1c9128665` corrects that
+case: a resumed foreign or nested Worker or lead Session remains alive and
+unbound after terminal-placement refusal. Launch and runtime admission refusals
+that set `exitProcess=true` still shut down.
+
+The exact checks are the “keeps a resumed Worker alive when foreign placement
+refuses its Team binding” and “keeps a resumed lead alive when foreign placement
+refuses its Team binding” cases in
+[`pi-session-adapter.characterization.test.ts`](../../../src/utils/pi-session-adapter.characterization.test.ts),
+and the nested-Worker and foreign-lead refusal cases in
+[`terminal-backend.contract.test.ts`](../../../src/utils/terminal-backend.contract.test.ts).
+Any result from the original checkout is invalid for this correction. The tests
+are deterministic one-process hook evidence. They do not prove a real Pi
+process, terminal, or terminal carrier.
+
+No public tool, schema, package export, persistence shape, or source-graph
+coordinate changed. The accepted graph remains 99 production TypeScript files
+and 334 static local edges. Architecture impact is **none** for this correction.
+No aggregate ran. The next structural boundary remains the combined Trio façade
+and separate fake.
+
 ## Optimization report
 
 The Million Eyes review froze 193 source entries and 158 call-evidence files

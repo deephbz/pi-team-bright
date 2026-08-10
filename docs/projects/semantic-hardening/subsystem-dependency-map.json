@@ -1,37 +1,21 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "accepted_coordination_nudge_commit_remaining_trio_and_observation_boundaries",
-  "reviewedRevision": "b4bf6dee91cf25532cbc33a397167567ba6d347e",
+  "status": "accepted_terminal_refusal_fix_remaining_trio_and_observation_boundaries",
+  "reviewedRevision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665",
   "reviewedTreeState": {
-    "kind": "accepted_coordination_nudge_commit",
+    "kind": "accepted_terminal_refusal_fix",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "baseRevision": "3869ef6",
-    "selectedPaths": 19,
-    "selectionScope": "coordination_nudge_debt_record_storage_pi_actuation_and_focused_evidence",
+    "baseRevision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8",
+    "selectedPaths": 3,
+    "selectionScope": "resumed_session_terminal_refusal_behavior_fix_and_focused_evidence",
     "selectedPathList": [
-      "extensions/index.ts",
       "extensions/pi-team-session-adapter.ts",
-      "src/adapters/durable-coordination-nudge-record.ts",
-      "src/adapters/durable-coordination-nudge-store.ts",
-      "src/adapters/durable-coordination-team-runtime.ts",
-      "src/coordination/nudge-boundary.test.ts",
-      "src/coordination/nudge-debt.test.ts",
-      "src/coordination/nudge-debt.ts",
-      "src/coordination/nudge-eligibility.test.ts",
-      "src/coordination/nudge-record-port.ts",
-      "src/coordination/observation-service.ts",
-      "src/coordination/queries.ts",
-      "src/coordination/task-projection-revision.ts",
-      "src/model-tool-contract/durable-model-tool-port.test.ts",
-      "src/model-tool-contract/durable-model-tool-port.ts",
-      "src/utils/sync-nudge-conductor.test.ts",
-      "src/utils/sync-nudge-conductor.ts",
-      "src/utils/sync-nudge-extension.test.ts",
-      "src/utils/sync-nudge.test.ts"
+      "src/utils/pi-session-adapter.characterization.test.ts",
+      "src/utils/terminal-backend.contract.test.ts"
     ],
-    "review": "accepted_behavior_preserving_coordination_nudge_commit",
+    "review": "accepted_intentional_resumed_session_terminal_refusal_behavior_fix",
     "selectedPathDigestSha256": null,
-    "proofLimit": "Focused deterministic evidence establishes source control flow and behavior compatibility. It does not establish real Pi persistence, external Beads/Dolt contention, cross-process forks, native watcher delivery, OS scheduling, concurrent external writers, or terminal pixels."
+    "proofLimit": "Deterministic one-process hook evidence establishes resumed-session refusal control flow. It does not establish a real Pi process, terminal, or terminal carrier."
   },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
@@ -45,7 +29,9 @@
     { "revision": "9a41d24", "scope": "Task hydration benchmark" },
     { "revision": "734bbd3", "scope": "rc.10 characterization alignment" },
     { "revision": "8f2da7c", "scope": "rc.10 subsystem audit refresh" },
-    { "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e", "scope": "Coordination nudge boundary" }
+    { "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e", "scope": "Coordination nudge boundary" },
+    { "revision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8", "scope": "test hardening binds Session characterization to canonical Alert delivery" },
+    { "revision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665", "scope": "intentional resumed Session terminal-refusal behavior fix" }
   ],
   "upstreamRc10CoordinationCommits": [
     { "revision": "a80f102", "scope": "event-directed Task hydration" },
@@ -63,7 +49,8 @@
   "architectureImpact": {
     "classification": "changed",
     "scope": "internal Task publication, Task reconciliation, Team lifecycle and Session boundaries, and Coordination boundaries",
-    "canonicalHyperCarrierDiagram": "unchanged_because_pi_team_bright_internals_are_opaque"
+    "canonicalHyperCarrierDiagram": "unchanged_because_pi_team_bright_internals_are_opaque",
+    "latestChangeClassification": "none_for_cafdf2deb4ccdbb47cb40b87e83081d1c9128665_terminal_refusal_fix"
   },
   "evidenceBasis": {
     "productionTypeScript": {
@@ -88,7 +75,26 @@
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
     "countCorrection": "Architecture Task n5o recomputed the Alert-port tree after a stale 302-edge record. Accepted Coordination nudge commit b4bf6dee91cf25532cbc33a397167567ba6d347e has 99 production TypeScript files and 334 unique resolved static local edges, with zero nontrivial cycles and zero runtime dynamic imports.",
-    "nextOwnCommitIssue": "A separately reproduced baseline terminal-admission defect is the next own-commit issue. It is not a regression from the Coordination nudge commit.",
+    "nextOwnCommitIssue": "The separately reproduced baseline terminal-admission defect is corrected by cafdf2deb4ccdbb47cb40b87e83081d1c9128665. It was not a regression from the Coordination nudge commit.",
+    "terminalRefusalFix": {
+      "testHardeningRevision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8",
+      "fixRevision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665",
+      "establishedFact": "Canonical-delivery test hardening exposed a pre-existing shutdown of resumed foreign or nested Sessions after terminal-placement refusal.",
+      "currentBehavior": "Refused resumed foreign or nested Worker and lead Sessions remain alive and unbound. Launch or runtime refusal with exitProcess=true still shuts down.",
+      "exactTests": [
+        "src/utils/pi-session-adapter.characterization.test.ts: keeps a resumed Worker alive when foreign placement refuses its Team binding",
+        "src/utils/pi-session-adapter.characterization.test.ts: keeps a resumed lead alive when foreign placement refuses its Team binding",
+        "src/utils/terminal-backend.contract.test.ts: nested Worker terminal-backend refusal",
+        "src/utils/terminal-backend.contract.test.ts: foreign lead terminal-backend refusal"
+      ],
+      "invalidatedEvidence": "Any result from the original checkout is invalid for these commits and is not evidence for this fix.",
+      "proofLimit": "Deterministic one-process hook tests do not prove a real Pi process, terminal, or terminal carrier.",
+      "publicSchemaPersistenceChange": "none",
+      "graph": "unchanged_99_production_files_334_static_local_edges",
+      "architectureImpact": "none",
+      "aggregate": "not_run",
+      "nextBoundary": "combined_trio_facade_and_separate_fake"
+    },
     "acceptedNudgeBoundary": {
       "state": "accepted_commit_behavior_preserving",
       "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e",
