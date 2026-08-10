@@ -7,6 +7,7 @@ import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
 import type { TeamConfig } from "./models";
+import { readSyncNudgeRecords, readSyncNudges } from "./sync-nudge";
 
 const createdTeams: string[] = [];
 
@@ -64,13 +65,14 @@ function context(sessionFile: string, sessionId: string, branch: any[]) {
   };
 }
 
-function registerExtension(branch: any[], sent: any[]) {
+function registerExtension(branch: any[], sent: any[], beforeSend?: (message: any) => void) {
   const handlers = new Map<string, (...args: any[]) => any>();
   piTeams({
     registerTool() {},
     registerMessageRenderer() {},
     on(event: string, handler: (...args: any[]) => any) { handlers.set(event, handler); },
     sendMessage(message: any) {
+      beforeSend?.(message);
       sent.push(message);
       branch.push({
         id: `nudge-entry-${sent.length}`,
@@ -85,11 +87,8 @@ function registerExtension(branch: any[], sent: any[]) {
   return handlers;
 }
 
-async function settle(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 25));
-}
-
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   for (const name of createdTeams.splice(0)) {
@@ -100,6 +99,7 @@ afterEach(() => {
 
 describe("resumed leader sync nudge binding", () => {
   it("binds the exact resumed Session before Worker-authored debt arms and presents once", async () => {
+    vi.useFakeTimers();
     const name = teamName("eligible");
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     const sessionId = `pi-session-${name}`;
@@ -126,7 +126,7 @@ describe("resumed leader sync nudge binding", () => {
 
     const resumedContext = context(sessionFile, sessionId, branch);
     await handlers.get("session_start")!({ reason: "resume" }, resumedContext);
-    await settle();
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(bind).toHaveBeenCalledWith(sessionId, sessionFile);
     expect(readDebt).toHaveBeenCalledWith(sessionId, ["root"]);
@@ -136,6 +136,57 @@ describe("resumed leader sync nudge binding", () => {
     expect(branch.at(-1)?.details).toMatchObject({ kind: "presented", debtKey: "worker-authored-task-change" });
 
     await handlers.get("session_shutdown")!({ reason: "quit" }, context(sessionFile, sessionId, branch));
+  });
+
+  it("reserves before a lineage race and promotes only one fresh eligible nudge", async () => {
+    vi.useFakeTimers();
+    const name = teamName("lineage-race");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const sessionId = `pi-session-${name}`;
+    const config = await createTeam(name, sessionFile);
+    const lead = config.members.find((member) => member.name === "team-lead")!;
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
+    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
+    const sent: any[] = [];
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", name);
+    const stale = {
+      kind: "eligible" as const, debtKey: "stale-debt", requestedView: "updates" as const,
+      teamEpochId: config.epochId!, leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!,
+      branchLineage: ["root"], branchId: "root", policyVersion: "test",
+    };
+    const fresh = {
+      ...stale, debtKey: "fresh-debt", branchLineage: ["fork-root"], branchId: "fork-root",
+    };
+    vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockImplementation(async (_session, lineage) =>
+      lineage[0] === "root" ? stale : lineage[0] === "fork-root" ? fresh : { kind: "none" },
+    );
+    let raced = false;
+    const handlers = registerExtension(branch, sent, () => {
+      if (!raced) {
+        raced = true;
+        branch.splice(0, branch.length, { id: "fork-root", type: "message", timestamp: new Date().toISOString() });
+      }
+    });
+    const resumed = context(sessionFile, sessionId, branch);
+
+    await handlers.get("session_start")!({ reason: "resume" }, resumed);
+    await vi.advanceTimersByTimeAsync(0);
+    // The monitor is the deterministic producer hint for the fresh fork debt.
+    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sent).toHaveLength(2);
+    expect(readSyncNudgeRecords(name)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "reserved", debtKey: "stale-debt", branchLineage: ["root"] }),
+      expect.objectContaining({ kind: "presented", debtKey: "fresh-debt", branchLineage: ["fork-root"] }),
+    ]));
+    expect(readSyncNudges(name)).toEqual([
+      expect.objectContaining({ kind: "presented", debtKey: "fresh-debt", branchLineage: ["fork-root"] }),
+    ]);
+    expect(branch.filter((entry) => entry.type === "custom_message" && entry.details?.debtKey === "stale-debt")).toHaveLength(1);
+
+    await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
   });
 
   it("suppresses forked Sessions and real stale/unbound port bindings", async () => {

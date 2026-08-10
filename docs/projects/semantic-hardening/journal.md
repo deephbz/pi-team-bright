@@ -1046,3 +1046,31 @@ changes; append a correction.
   tests, exhaustive ALERT-004, the 87/285 graph, unchanged explicit package
   exports and ten tools, diff checks, and clean-tree checks passed. The reserved
   aggregate did not run.
+
+## 2026-08-10 — Coordination characterization gate accepted
+
+- Read-only Tasks `semantic-hardening-coordination-oza` and
+  `semantic-hardening-coordination-s68` mapped the current Coordination
+  observation boundary and its test gaps. The target is one observation service
+  with consumer-owned Team runtime, Task state/delivery, and Alert actuation
+  query ports; durable adapters retain concrete authority reads.
+- Test Tasks `semantic-hardening-coordination-qjp`,
+  `semantic-hardening-coordination-3bq`, and
+  `semantic-hardening-coordination-trt` added registered extension gates for
+  Task-authority failure and retry, exact output and hidden-position
+  acknowledgement, quiet Task rescans, mixed legacy/current/malformed records,
+  and a nudge reservation-to-lineage race.
+- The first mixed-record test called the durable port directly and used
+  permissive assertions. Independent review rejected it. Task `trt` replaced
+  those calls with registered `team_sync` plus the exact persisted-result
+  provider hook and strict empty-coordinate assertions.
+- The requested two-read quiet-cadence oracle was also wrong. Current behavior
+  performs one complete Task read by 4,999 ms and three by 5,000 ms: initial,
+  authority-cadence, and post-wake recheck. The characterization records this
+  source-of-truth behavior. The third read is a later optimization candidate,
+  not a structural-refactor target.
+- Independent Task `semantic-hardening-coordination-hzz` accepted the three
+  test paths. Focused registered tests, typecheck, all 97 lanes, agent/tool
+  projections, and diff/static checks passed. The one-process harness does not
+  prove real Pi persistence, cross-process forks, native watchers, OS timing,
+  external writer concurrency, or terminal pixels. No aggregate ran.

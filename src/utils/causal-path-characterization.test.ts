@@ -9,7 +9,9 @@ import {
   captureTrioProjection,
   type RegisteredToolLike,
 } from "../../test/support/external-harness";
+import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { readBeadsAuthorityFingerprint } from "./beads";
+import { readHiddenObservationProjection } from "./hidden-observation";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
@@ -591,6 +593,197 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
       expect.objectContaining({ deliveryId: staleRecord.deliveryId, recipientMembershipId: state.worker.membershipId }),
       expect.objectContaining({ recipientMembershipId: replacementMembershipId, recipientSessionFile: replacementSessionFile }),
     ]));
+  }, 60_000);
+
+  it("keeps an unavailable event hydration unacknowledged, then retries through the registered raw, model, and TUI boundary", async () => {
+    const state = await fixture("unavailable-retry");
+    const lead = leaderHarness();
+    const leadCtx = sessionContext(state.leaderSessionFile);
+    const snapshot = await invoke(lead, "team_sync", "unavailable-baseline", { view: "snapshot" }, leadCtx);
+    await acknowledgeSync(lead, leadCtx, "unavailable-baseline", snapshot, "unavailable-baseline-entry");
+
+    const created = await invoke(lead, "task_create", "unavailable-create", {
+      tasks: [{
+        operation_id: "unavailable-create",
+        title: "Retry unavailable hydration",
+        goal: "Keep the acknowledgement boundary behind complete Task authority evidence.",
+        assignee: "worker",
+      }],
+    }, leadCtx);
+    const task = created.details.outcomes[0].task;
+    const hydrate = vi.spyOn(BeadsTaskAdapter.prototype, "readMany")
+      .mockRejectedValueOnce(new Error("injected Task authority outage"));
+
+    await lead.emit("tool_call", { toolName: "team_sync" }, leadCtx);
+    const unavailable = await captureTrioProjection({
+      tool: lead.tools.get("team_sync") as RegisteredToolLike,
+      args: { view: "updates" },
+      context: leadCtx,
+      toolCallId: "unavailable-update",
+    });
+    const raw = {
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+      message: "injected Task authority outage",
+      state_changed: false,
+      observation_advanced: false,
+    };
+    expect(unavailable.execution).toEqual({ kind: "returned", isError: false });
+    expect(unavailable.machine).toEqual({ details: raw, json: JSON.stringify(raw) });
+    expect(unavailable.model?.text).toBe(JSON.stringify({
+      kind: "unavailable",
+      reason: "task_authority_unavailable",
+      message: "injected Task authority outage",
+    }));
+    const compactTui = (value: string | undefined) => value?.split("\n").map((line) => line.trimEnd()).join("\n");
+    expect(compactTui(unavailable.human?.collapsed)).toBe(
+      "! unavailable\n  unavailable · task_authority_unavailable: injected Task authority outage",
+    );
+    expect(compactTui(unavailable.human?.expanded)).toBe(
+      "! unavailable\n  unavailable · task_authority_unavailable: injected Task authority outage",
+    );
+
+    const config = await teams.readConfig(state.teamName);
+    const beforeRetry = await readHiddenObservationProjection(state.teamName, {
+      teamEpochId: config.epochId!,
+      exactSessionId: state.leaderSessionFile,
+      branchLineage: ["unavailable-baseline-entry"],
+    });
+    expect(beforeRetry).toMatchObject({
+      kind: "found",
+      projection: {
+        teamEventCursor: "0",
+        authorityRevisions: expect.objectContaining({ team_events: "0", task_event_failure_hints: "0" }),
+      },
+    });
+
+    const retried = await invoke(lead, "team_sync", "unavailable-retry", { view: "updates" }, leadCtx);
+    expect(retried.details).toMatchObject({
+      kind: "updates",
+      task_changes: [{ task_id: task.id, current: { id: task.id, version: task.version } }],
+    });
+    const staged = await readHiddenObservationProjection(state.teamName, {
+      teamEpochId: config.epochId!,
+      exactSessionId: state.leaderSessionFile,
+      branchLineage: ["unavailable-baseline-entry"],
+    });
+    expect(staged).toMatchObject({
+      kind: "found",
+      projection: { teamEventCursor: "0", authorityRevisions: expect.objectContaining({ task_event_failure_hints: "0" }) },
+    });
+
+    await acknowledgeSync(lead, leadCtx, "unavailable-retry", retried, "unavailable-retry-entry");
+    const acknowledged = await readHiddenObservationProjection(state.teamName, {
+      teamEpochId: config.epochId!,
+      exactSessionId: state.leaderSessionFile,
+      branchLineage: ["unavailable-baseline-entry", "unavailable-retry-entry"],
+    });
+    expect(acknowledged).toMatchObject({
+      kind: "found",
+      projection: {
+        teamEventCursor: "1",
+        authorityRevisions: expect.objectContaining({ team_events: "1", task_event_failure_hints: "0" }),
+      },
+    });
+    const delivered = deliveryRecords(state.teamName).map((record) => ({
+      ...record,
+      successfulTurnAckAt: new Date().toISOString(),
+    }));
+    fs.writeFileSync(paths.taskDeliveryPath(state.teamName, "worker"), JSON.stringify(delivered));
+    await runtime.writeRuntimeStatus(state.teamName, "worker", {
+      pid: process.pid,
+      startedAt: Date.now(),
+      runState: "settled",
+    }, state.worker.membershipId);
+    await expect(invoke(lead, "team_sync", "unavailable-caught-up", { view: "updates" }, leadCtx))
+      .resolves.toMatchObject({ details: { kind: "caught_up", observation_advanced: true } });
+  }, 60_000);
+
+  it("performs one quiet-authority read before 5 seconds, then cadence and post-wake reads before acknowledgement", async () => {
+    const state = await fixture("quiet-cadence");
+    const lead = leaderHarness();
+    const leadCtx = sessionContext(state.leaderSessionFile);
+    const created = await invoke(lead, "task_create", "quiet-create", {
+      tasks: [{
+        operation_id: "quiet-create",
+        title: "Quiet authority revision",
+        goal: "Make a Task revision visible after the bounded quiet-authority cadence.",
+        assignee: "worker",
+      }],
+    }, leadCtx);
+    const task = created.details.outcomes[0].task;
+    const baseline = await invoke(lead, "team_sync", "quiet-baseline", { view: "snapshot" }, leadCtx);
+    await acknowledgeSync(lead, leadCtx, "quiet-baseline", baseline, "quiet-baseline-entry");
+    fs.writeFileSync(paths.taskDeliveryPath(state.teamName, "worker"), JSON.stringify(deliveryRecords(state.teamName).map((record) => ({
+      ...record,
+      successfulTurnAckAt: new Date().toISOString(),
+    }))));
+    await runtime.writeRuntimeStatus(state.teamName, "worker", {
+      pid: process.pid,
+      startedAt: Date.now(),
+      runState: "active",
+    }, state.worker.membershipId);
+
+    const originalReadMany = BeadsTaskAdapter.prototype.readMany;
+    let completeReads = 0;
+    let releaseInitialRead!: () => void;
+    const initialRead = new Promise<void>((resolve) => { releaseInitialRead = resolve; });
+    const changedVersion = "v_1111111111111111";
+    const readMany = vi.spyOn(BeadsTaskAdapter.prototype, "readMany").mockImplementation(async function(this: BeadsTaskAdapter, taskIds) {
+      completeReads++;
+      if (completeReads === 1) releaseInitialRead();
+      const records = await originalReadMany.call(this, taskIds);
+      return completeReads < 2 ? records : records.map((record) => record && record.kind === "found"
+        ? { ...record, task: { ...record.task, version: changedVersion } }
+        : record);
+    });
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const update = invoke(lead, "team_sync", "quiet-update", { view: "updates" }, leadCtx, controller.signal);
+    try {
+      await initialRead;
+      expect(readMany).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(readMany).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(update).resolves.toMatchObject({
+        details: {
+          kind: "updates",
+          task_changes: [{ task_id: task.id, change_kinds: ["progress"], current: { version: changedVersion } }],
+        },
+      });
+      // The cadence detects the revision, then the public sync path performs its
+      // complete post-wake read before it can stage the returned projection.
+      // This measured duplicate is a later performance candidate, not a second
+      // authority or acknowledgement advance.
+      expect(readMany).toHaveBeenCalledTimes(3);
+
+      const config = await teams.readConfig(state.teamName);
+      const staged = await readHiddenObservationProjection(state.teamName, {
+        teamEpochId: config.epochId!,
+        exactSessionId: state.leaderSessionFile,
+        branchLineage: ["quiet-baseline-entry"],
+      });
+      expect(staged).toMatchObject({
+        kind: "found",
+        projection: {
+          teamEventCursor: "1",
+          authorityRevisions: expect.objectContaining({ task_projection: expect.any(String), task_event_failure_hints: "0" }),
+        },
+      });
+      await acknowledgeSync(lead, leadCtx, "quiet-update", await update, "quiet-update-entry");
+      await runtime.writeRuntimeStatus(state.teamName, "worker", {
+        pid: process.pid,
+        startedAt: Date.now(),
+        runState: "settled",
+      }, state.worker.membershipId);
+      await expect(invoke(lead, "team_sync", "quiet-caught-up", { view: "updates" }, leadCtx))
+        .resolves.toMatchObject({ details: { kind: "caught_up", observation_advanced: true } });
+    } finally {
+      controller.abort();
+      await update.catch(() => undefined);
+      vi.useRealTimers();
+    }
   }, 60_000);
 
   it("reports degraded public assignment and recovers after atomic delivery-spool failure", async () => {
