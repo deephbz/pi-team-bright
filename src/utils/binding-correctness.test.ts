@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { initializeBeadsWorkspace } from "./beads";
 import * as messaging from "./messaging";
 import * as canonicalMessaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
-import * as tasks from "./tasks";
 import * as teams from "./teams";
 import * as runtime from "./runtime";
 
@@ -223,7 +223,19 @@ describe("current team binding correctness", () => {
     vi.stubEnv("TMUX", "");
     const teamName = testTeamName("stale-pid");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
-    await teams.createTeam(teamName, leadSession, "lead-agent");
+    const taskWorkspace = paths.teamDir(teamName);
+    const taskAuthorityFingerprint = await initializeBeadsWorkspace(taskWorkspace);
+    await teams.createTeam(
+      teamName,
+      leadSession,
+      "lead-agent",
+      undefined,
+      undefined,
+      undefined,
+      taskWorkspace,
+      `task_authority_${teamName}`,
+      taskAuthorityFingerprint,
+    );
     await teams.updateMember(teamName, "team-lead", { sessionFile: leadSession });
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
@@ -237,7 +249,6 @@ describe("current team binding correctness", () => {
     });
     fs.writeFileSync(path.join(paths.teamDir(teamName), "worker.pid"), "424242");
     const kill = vi.spyOn(process, "kill").mockImplementation(() => true);
-    vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
     const shutdown = registerExtension().toolsByName.get("worker_stop")!;
 
     const result: any = await shutdown.execute("shutdown", {
