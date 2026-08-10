@@ -153,7 +153,7 @@ function syncNudgeMessageDelivered(ctx: any, record: { id: string; branchLineage
 
 function startSyncNudgeConductor(ctx: any) {
   stopSyncNudgeConductor();
-  if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.readSyncNudgeDebt) return;
+  if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.coordination.readSyncNudgeDebt) return;
   let config: TeamConfig;
   try { config = JSON.parse(fs.readFileSync(paths.configPath(teamName), "utf8")) as TeamConfig; } catch { return; }
   const policy = config.syncLiveness;
@@ -165,17 +165,17 @@ function startSyncNudgeConductor(ctx: any) {
   const sessionId = ctx?.sessionManager?.getSessionId?.();
   const sessionFile = ctx?.sessionManager?.getSessionFile?.();
   if (!sessionId || !sessionFile) return;
-  modelToolJourney().port.setLeaderSessionFile?.(exactLeaderSessionId(sessionId), sessionFile);
+  modelToolJourney().port.team.setLeaderSessionFile?.(exactLeaderSessionId(sessionId), sessionFile);
   const debt = async (): Promise<SyncNudgeDebt> => {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     const branch = modelToolBranchIds(ctx);
     if (!sessionId || branch.length === 0) return { kind: "none" };
-    return modelToolJourney()!.port.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
+    return modelToolJourney()!.port.coordination.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
   };
   const busy = (): boolean => {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     return !leaderRunSettled || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
-      || (!!sessionId && !!modelToolJourney()?.port.getPendingObservation?.(exactLeaderSessionId(sessionId)));
+      || (!!sessionId && !!modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)));
   };
   syncNudgeConductor = new SyncNudgeConductor({
     clock: { setTimeout: (callback, ms) => setTimeout(callback, ms), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
@@ -193,7 +193,7 @@ function startSyncNudgeConductor(ctx: any) {
       if (current.epochId !== candidate.teamEpochId || current.leadSessionId !== sessionFile) return;
       const currentLead = await teams.assertCurrentSessionBinding(teamName!, "team-lead", sessionFile);
       if (currentLead.membershipId !== candidate.leaderMembershipId) return;
-      const latest = await modelToolJourney()!.port.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
+      const latest = await modelToolJourney()!.port.coordination.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
       if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value: string, index: number) => value !== candidate.branchLineage[index]) || busy()) return;
       const existing = nudgeRecords.findReservation(teamName!, candidate.debtKey, candidate.branchLineage);
       if (existing && syncNudgeMessageDelivered(ctx, existing)) {

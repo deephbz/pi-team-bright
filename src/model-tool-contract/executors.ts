@@ -21,7 +21,8 @@ import {
   AlertSendParametersSchema,
   AlertSendResultSchema,
 } from "./catalog";
-import type { AlertTarget, ExactLeaderSessionId, ModelToolTeamPort, ReadTaskContractGap } from "./in-memory-team-port";
+import type { AlertTarget, ExactLeaderSessionId, ReadTaskContractGap } from "./model-tool-contracts";
+import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import type { TaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { projectToolResult } from "./result-projection";
@@ -64,10 +65,10 @@ export interface ModelToolJourneyExecutors {
   teamSync(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult>;
 }
 
-export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelToolJourneyExecutors {
+export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): ModelToolJourneyExecutors {
   return {
     async teamCreate(leaderSessionId, parameters) {
-      const outcome = await port.createTeam(leaderSessionId, parameters);
+      const outcome = await port.team.createTeam(leaderSessionId, parameters);
       if (outcome.kind === "created") return { kind: "team_created", team: outcome.team };
       if (outcome.kind === "unavailable") {
         return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
@@ -83,7 +84,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async ensureWorker(leaderSessionId, parameters) {
-      const outcome = await port.ensureWorker(leaderSessionId, parameters);
+      const outcome = await port.team.ensureWorker(leaderSessionId, parameters);
       if (outcome.kind === "no_active_team") {
         return {
           kind: "unavailable",
@@ -104,7 +105,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     async taskCreate(leaderSessionId, parameters) {
       const outcomes: TaskCreateResult["outcomes"] = [];
       for (const [inputIndex, input] of parameters.tasks.entries()) {
-        const outcome = await port.createTask(leaderSessionId, {
+        const outcome = await port.task.createTask(leaderSessionId, {
           operationId: input.operation_id,
           title: input.title,
           goal: input.goal,
@@ -145,7 +146,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async taskRead(leaderSessionId, parameters) {
-      const outcome = await port.readTasks(leaderSessionId, parameters.task_ids);
+      const outcome = await port.task.readTasks(leaderSessionId, parameters.task_ids);
       if (outcome.kind === "no_active_team") {
         return {
           kind: "unavailable",
@@ -202,7 +203,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
         };
       }
 
-      const outcome = await port.updateTasks(leaderSessionId, parameters.updates.map((update) => ({
+      const outcome = await port.task.updateTasks(leaderSessionId, parameters.updates.map((update) => ({
         taskId: update.task_id,
         operationId: update.operation_id,
         expectedVersion: update.expected_version as TaskVersionRef,
@@ -273,7 +274,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async workerStop(leaderSessionId, parameters) {
-      const outcome = await port.stopWorker(leaderSessionId, parameters.worker);
+      const outcome = await port.team.stopWorker(leaderSessionId, parameters.worker);
       if (outcome.kind === "stopped") return { kind: "worker_stopped", worker: outcome.worker, state_changed: true };
       if (outcome.kind === "unavailable") return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
       return {
@@ -287,7 +288,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async teamShutdown(leaderSessionId, _parameters) {
-      const outcome = await port.shutdownTeam(leaderSessionId);
+      const outcome = await port.team.shutdownTeam(leaderSessionId);
       if (outcome.kind === "unavailable") return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
       if (outcome.kind === "partial") return {
         kind: "partial",
@@ -306,7 +307,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async taskLink(leaderSessionId, parameters) {
-      const outcome = await port.linkTask(leaderSessionId, {
+      const outcome = await port.task.linkTask(leaderSessionId, {
         taskId: parameters.task_id,
         relation: parameters.relation,
         targetId: parameters.target_id,
@@ -330,7 +331,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
       const target: AlertTarget = parameters.target.kind === "team"
         ? { kind: "team" }
         : { kind: "worker", name: parameters.target.name };
-      const outcome = await port.sendAlert(leaderSessionId, {
+      const outcome = await port.alert.sendAlert(leaderSessionId, {
         target,
         kind: parameters.kind,
         text: parameters.text,
@@ -349,7 +350,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
     },
 
     async teamSync(leaderSessionId, parameters, signal = new AbortController().signal, toolCallId = "team-sync") {
-      const outcome = await port.readTeamSync(leaderSessionId, parameters.view, signal, toolCallId);
+      const outcome = await port.coordination.readTeamSync(leaderSessionId, parameters.view, signal, toolCallId);
       if (outcome.kind === "unavailable") {
         return {
           kind: "unavailable",
@@ -392,7 +393,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           state_changed: false as const,
           observation_advanced: true as const,
         };
-        port.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
+        port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
         return result;
       }
       if (outcome.kind === "indeterminate") return {
@@ -417,7 +418,7 @@ export function createModelToolJourneyExecutors(port: ModelToolTeamPort): ModelT
           alerts: outcome.alerts,
           ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
         };
-      port.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
+      port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
       return result;
     },
   };

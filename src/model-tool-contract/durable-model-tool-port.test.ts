@@ -363,7 +363,11 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source.match(/const alertPublication = new DurableAlertPublication\(\)/g)).toHaveLength(1);
     expect(source).toContain("const alertSender = createAlertSender(alertMembership, alertPublication)");
     expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(\)/g)).toHaveLength(1);
-    expect(source).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries, coordinationObservationService)");
+    expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
+    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, { resolve: resolveTeamTaskAuthority })");
+    expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory)");
+    expect(source).toContain("new DurableModelToolAlertApplication(modelToolBindings, alertSender)");
+    expect(source).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });
 
   it.each([true, false])("propagates leader cwd and explicit trust through model-tool registration (%s)", async (projectTrusted) => {
@@ -1004,4 +1008,23 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(lifecycle.shutdownTeam).toHaveBeenCalledWith(name);
   });
 
+});
+
+describe("durable Trio import fences", () => {
+  it("keeps authority implementations in separate modules and keeps named composition off the legacy facade", () => {
+    const root = __dirname;
+    const sources = {
+      team: fs.readFileSync(path.join(root, "durable-model-tool-team-application.ts"), "utf8"),
+      task: fs.readFileSync(path.join(root, "durable-model-tool-task-application.ts"), "utf8"),
+      alert: fs.readFileSync(path.join(root, "durable-model-tool-alert-application.ts"), "utf8"),
+      coordination: fs.readFileSync(path.join(root, "durable-model-tool-coordination-application.ts"), "utf8"),
+      extension: fs.readFileSync(path.join(root, "../../extensions/index.ts"), "utf8"),
+    };
+    expect(fs.existsSync(path.join(root, "durable-model-tool-applications.ts"))).toBe(false);
+    expect(sources.team).not.toContain('"./beads-authority-adapter"');
+    expect(sources.task).not.toContain('"../alert-authority/');
+    expect(sources.alert).not.toContain('"./beads-task-adapter"');
+    expect(sources.coordination).not.toContain('"../alert-authority/');
+    expect(sources.extension).not.toContain("new DurableModelToolTeamPort(");
+  });
 });

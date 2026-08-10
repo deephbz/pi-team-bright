@@ -28,24 +28,41 @@ export {
   type AlertSendResult,
   type ModelToolJourneyExecutors,
 } from "./executors";
+export { InMemoryModelToolTeamPort, type InMemoryModelToolTeamDebugState } from "./in-memory-team-port";
+export { exactLeaderSessionId } from "./model-tool-contracts";
+export type {
+  ExactLeaderSessionId,
+  ModelToolLeaderLaunchContext,
+  ReadTasksPortResult,
+  ModelToolTaskJournalEntry,
+  ModelToolTaskUpdateInput,
+  TaskUpdatePortOutcome,
+  UpdateTasksPortResult,
+  WorkerStopPortResult,
+  TeamShutdownPortResult,
+  TaskLinkPortInput,
+  TaskLinkPortResult,
+  AlertSendPortResult,
+} from "./model-tool-contracts";
+export type { ModelToolTeamPort } from "./model-tool-contracts";
 export {
-  exactLeaderSessionId,
-  InMemoryModelToolTeamPort,
-  type ExactLeaderSessionId,
-  type InMemoryModelToolTeamDebugState,
-  type ModelToolTeamPort,
-  type ModelToolLeaderLaunchContext,
-  type ReadTasksPortResult,
-  type ModelToolTaskJournalEntry,
-  type ModelToolTaskUpdateInput,
-  type TaskUpdatePortOutcome,
-  type UpdateTasksPortResult,
-  type WorkerStopPortResult,
-  type TeamShutdownPortResult,
-  type TaskLinkPortInput,
-  type TaskLinkPortResult,
-  type AlertSendPortResult,
-} from "./in-memory-team-port";
+  ModelToolJourneyFacade,
+  type ModelToolJourneyPorts,
+} from "./model-tool-journey-facade";
+export { createInMemoryModelToolJourney } from "./in-memory-model-tool-journey";
+export {
+  InMemoryTeamApplicationPort,
+  InMemoryTaskApplicationPort,
+  InMemoryAlertApplicationPort,
+  InMemoryCoordinationApplicationPort,
+} from "./in-memory-authority-ports";
+export type {
+  ModelToolJourneyPort,
+  ModelToolTeamApplicationPort,
+  ModelToolTaskApplicationPort,
+  ModelToolAlertApplicationPort,
+  ModelToolCoordinationApplicationPort,
+} from "./model-tool-journey-port";
 export type { TaskCard } from "../task-authority/task-domain";
 export {
   registerModelToolJourney,
