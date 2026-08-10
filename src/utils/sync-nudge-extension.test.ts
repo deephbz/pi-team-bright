@@ -189,6 +189,38 @@ describe("resumed leader sync nudge binding", () => {
     await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
   });
 
+  it("suppresses a candidate after exact lead Membership replacement", async () => {
+    vi.useFakeTimers();
+    const name = teamName("lead-replaced");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const sessionId = `pi-session-${name}`;
+    const config = await createTeam(name, sessionFile);
+    const lead = config.members.find((member) => member.name === "team-lead")!;
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
+    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
+    const sent: any[] = [];
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", name);
+    vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockResolvedValue({
+      kind: "eligible", debtKey: "old-lead-debt", requestedView: "updates", teamEpochId: config.epochId!,
+      leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!, branchLineage: ["root"], branchId: "root", policyVersion: "test",
+    });
+    const handlers = registerExtension(branch, sent);
+    const resumed = context(sessionFile, sessionId, branch);
+
+    await handlers.get("session_start")!({ reason: "resume" }, resumed);
+    const replaced = await teams.readConfig(name);
+    replaced.members = replaced.members.map((member) => member.name === "team-lead"
+      ? { ...member, membershipId: "replacement-membership" }
+      : member);
+    teams.writeConfigAtomic(paths.configPath(name), replaced);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(sent).toEqual([]);
+    expect(readSyncNudgeRecords(name)).toEqual([]);
+    await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
+  });
+
   it("suppresses forked Sessions and real stale/unbound port bindings", async () => {
     const readDebt = vi.spyOn(DurableModelToolTeamPort.prototype, "readSyncNudgeDebt").mockResolvedValue({ kind: "eligible", debtKey: "must-not-read", requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "test" });
     const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];

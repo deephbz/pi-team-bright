@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "./sync-nudge-conductor";
 
@@ -79,5 +81,13 @@ describe("delayed sync nudge conductor", () => {
     const clock = new FakeClock(); let busy = true; const sent: string[] = [];
     const conductor = new SyncNudgeConductor({ clock, delayMs: 5, readDebt: async () => debt({ requestedView: "snapshot" }), isSettled: () => true, isBusy: () => busy, alreadyPresented: () => false, present: async (value) => { sent.push(value.requestedView); } });
     conductor.start(); await conductor.reconcile(); await clock.advance(10); expect(sent).toEqual([]); busy = false; conductor.notify(); await conductor.reconcile(); await clock.advance(5); expect(sent).toEqual(["snapshot"]);
+  });
+
+  it("keeps the timer conductor free of Coordination and durable-record imports", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "src/utils/sync-nudge-conductor.ts"), "utf8");
+    expect(source).toMatch(/import type \{ SyncNudgeDebt \} from "\.\.\/coordination\/nudge-debt"/);
+    expect(source).not.toMatch(/from ["'][^"']*(?:sync-nudge|durable-model-tool-port|team-events)[^"']*["']/);
+    expect(source).not.toContain("readSyncNudgeDebt");
+    expect(source).toContain("readDebt: () => Promise<SyncNudgeDebt>");
   });
 });

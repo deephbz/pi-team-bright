@@ -13,6 +13,7 @@ import { registerModelToolJourney } from "./pi-registration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { taskVersionRef } from "./task-version-ref";
 import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS } from "../utils/sync-liveness-settings";
+import { taskProjectionRevision } from "../coordination/task-projection-revision";
 
 const testTeams: string[] = [];
 const paneSettingsRoots: string[] = [];
@@ -294,6 +295,43 @@ describe("DurableModelToolTeamPort durable authority", () => {
       kind: "eligible",
       requestedView: "snapshot",
       teamEpochId: config.epochId,
+    });
+  });
+
+  it("keeps legacy nudge policyVersion eligible, but preserves strict logical-Worker absence", async () => {
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
+    const config: any = await teams.readConfig(name);
+    const lead = config.members.find((member: any) => member.name === "team-lead");
+    config.syncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 5, policyVersion: "current" };
+    const { policyVersion: _policyVersion, ...legacyPolicy } = config.syncLiveness;
+    config.syncLiveness = legacyPolicy;
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
+    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+
+    const debt = await port.readSyncNudgeDebt(leaderSessionId, ["legacy-branch"]);
+    expect(debt).toEqual(expect.objectContaining({
+      kind: "eligible",
+      requestedView: "snapshot",
+      policyVersion: undefined,
+      debtKey: `${config.epochId}|${config.leadSessionId}|${lead.membershipId}|["legacy-branch"]|snapshot|0|${taskProjectionRevision([])}|undefined`,
+    }));
+
+    delete config.logicalWorkers;
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    await expect(port.readSyncNudgeDebt(leaderSessionId, ["legacy-branch"])).resolves.toEqual({
+      kind: "unavailable",
+      message: "Model-tool logical workers missing is unavailable.",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "legacy-no-workers-snapshot")).resolves.toEqual({
+      kind: "unavailable",
+      reason: "no_active_team",
+      message: "The exact leader Session is not bound to an active Team.",
+    });
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "legacy-no-workers-updates")).resolves.toEqual({
+      kind: "unavailable",
+      reason: "no_active_team",
+      message: "The exact leader Session is not bound to an active Team.",
     });
   });
 
