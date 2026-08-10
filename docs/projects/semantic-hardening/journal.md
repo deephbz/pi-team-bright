@@ -943,3 +943,36 @@ changes; append a correction.
   reproduced both recorded digests and accepted the final eight-path bundle. No
   real Pi/terminal run or reserved final aggregate ran. This source bundle
   commits the accepted adapter boundary.
+
+## 2026-08-10 — Alert authority work started
+
+- The direct leader committed the accepted Pi Session adapter as `ab7f591` and
+  rotated to Team `semantic-hardening-alert`.
+- Read-only Tasks `semantic-hardening-pi-adapter-3ri` and
+  `semantic-hardening-pi-adapter-212` shaped Alert ownership and found four
+  missing gates: validation without effects, parallel fan-out with roster-order
+  receipts, watch/poll triggers, and replacement between inbox read and steer.
+- Test Tasks `semantic-hardening-alert-5bg` and
+  `semantic-hardening-alert-u0y` are in progress before production refactoring.
+  Task `5bg` falsely observed the original checkout because a shell command
+  omitted the explicit Project worktree `cd`; the leader confirmed the assigned
+  worktree is clean at `ab7f591` and corrected the Task.
+- Planned production work keeps Alert delivery and replay semantics in Alert;
+  Team Membership and Coordination publication become consumer-owned ports with
+  durable adapters outside Alert. ALERT-004 remains compatibility-required.
+  The reserved final aggregate has not run.
+
+## 2026-08-10 — Alert characterization gate accepted
+
+- Tasks `semantic-hardening-alert-5bg` and
+  `semantic-hardening-alert-u0y` added deterministic gates for validation with
+  no effects, parallel fan-out with roster-order receipts, the 20 ms watch-hint
+  debounce, the 30-second fallback scan, and replacement between inbox read and
+  steer.
+- Independent Task `semantic-hardening-alert-w89` accepted the selection. Its
+  focused run passed 34 tests, typecheck, all 94 lanes, diff checks, and the
+  unchanged production/public boundary.
+- The fakes drive production control flow and are mutation-sensitive. They do
+  not prove native filesystem watch delivery, operating-system scheduling,
+  filesystem locks, or real Pi turn delivery. Production refactoring can now
+  start from commit `ab7f591`; the reserved final aggregate has not run.

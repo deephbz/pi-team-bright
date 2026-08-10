@@ -194,6 +194,25 @@ architecture Task `semantic-hardening-pi-adapter-0zt`; and verification Task
 accepted Pi Session adapter boundary. Direct adapter reads of Team records
 remain an explicit integration seam, not a new authority.
 
+Alert authority is the active boundary after clean commit `ab7f591`.
+Read-only Tasks `semantic-hardening-pi-adapter-3ri` and
+`semantic-hardening-pi-adapter-212` shaped a behavior-identical two-commit
+split and identified four missing deterministic gates. Test Tasks
+`semantic-hardening-alert-5bg` and `semantic-hardening-alert-u0y` added those
+gates before production work. Independent Task `semantic-hardening-alert-w89`
+accepted 34 focused tests, typecheck, all 94 lanes, the selected-path boundary,
+and the unchanged public production surface. The tests prove deterministic
+production control flow, not native filesystem watches, scheduler timing,
+filesystem locks, or real Pi turn delivery.
+
+The Alert target keeps validation, Alert identity, ordered parallel fan-out,
+inbox records, exact delivery/replay/acknowledgement, and compatibility inside
+Alert authority. Consumer-owned Team Membership and Coordination publication
+ports keep concrete cross-authority dependencies in durable adapters. Preserve
+ALERT-004 exactly: accepted delivery can survive publication failure, the outer
+result remains unavailable, and retry creates a new Alert identity with duplicate
+delivery. Do not add an outbox, operation ID, recovery record, or warning change.
+
 ## Decisions and constraints still in force
 
 - Preserve observable behavior by default. A behavior change needs a separate
