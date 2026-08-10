@@ -171,14 +171,28 @@ Implementation Task `semantic-hardening-authorities-92l`, independent test Task
 `semantic-hardening-authorities-ojq` are closed. Pi Session hook adaptation
 remains the final Team seam.
 
-The current source bundle adds registered characterization for the Pi adapter
-before extraction. It anchors already-current Worker and resumed-lead delivery
-order, lead refusal and candidate shutdown, delivery/footer cleanup, Worker
-title timers, durable `teamCreated` callback order, and callback-failure state.
+Commit `1686ac1` adds registered characterization for the Pi adapter before
+extraction. It anchors already-current Worker and resumed-lead delivery order,
+lead refusal and candidate shutdown, delivery/footer cleanup, Worker title
+timers, durable `teamCreated` callback order, and callback-failure state.
 Characterization Tasks `semantic-hardening-authorities-tl7` and
 `semantic-hardening-authorities-ewv`, wording correction Task
 `semantic-hardening-authorities-f09`, and independent review Task
 `semantic-hardening-authorities-qqa` are closed.
+
+The current source bundle extracts `extensions/pi-team-session-adapter.ts` as
+the one mutable Pi Session identity and lifecycle-hook boundary. Index retains
+composition, public tool schemas/executors, and leader branch observation. Team
+services retain admission, runtime, stop, and shutdown policy. Implementation
+Tasks `semantic-hardening-pi-adapter-jqr`,
+`semantic-hardening-pi-adapter-40f`, `semantic-hardening-pi-adapter-7l1`, and
+`semantic-hardening-pi-adapter-dq0`; independent test Tasks
+`semantic-hardening-pi-adapter-1il` and `semantic-hardening-pi-adapter-lxb`;
+architecture Task `semantic-hardening-pi-adapter-0zt`; and verification Task
+`semantic-hardening-pi-adapter-jwu` and audit/map Task
+`semantic-hardening-pi-adapter-r6f` are closed. This source bundle commits the
+accepted Pi Session adapter boundary. Direct adapter reads of Team records
+remain an explicit integration seam, not a new authority.
 
 ## Decisions and constraints still in force
 
@@ -228,10 +242,10 @@ Open boundary risks:
 - `ModelToolTeamPort`, its durable implementation, and its in-memory fake still
   combine multiple authorities. The projection evidence is now bounded, but the
   façade and fake authority split remains incomplete.
-- Team lifecycle policy is now in Team services, and Worker-launch capability
-  is injected into the durable façade. Pi Session hook/refusal/delivery/title/
-  footer/nudge adaptation remains open. Public Membership observation still
-  reads broad private record shapes.
+- Team lifecycle policy is in Team services, Worker-launch capability is
+  injected, and one Pi Session adapter owns hook/refusal/delivery/title/footer/
+  nudge integration. Its direct Team record reads remain a narrow integration
+  seam. Public Membership observation still reads broad private record shapes.
 - Beads hydration has a measured latency tail. Removing reverse-dependent
   hydration, filtering closed Tasks, or raising the timeout would change current
   meaning or policy. Actual optimization remains deferred.
@@ -266,9 +280,8 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    liveness and Worker-authored Task events as launch evidence.
 2. Use the completed source graph, behavior inventory, and contract split as
    gates for each next implementation Task.
-3. Extract the remaining small Pi hook adapter, then complete Alert,
-   Coordination, Trio façade and fakes, and additive Membership observation
-   unless source evidence requires a safer order.
+3. Complete Alert, Coordination, Trio façade and fakes, and additive Membership
+   observation unless source evidence requires a safer order.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after

@@ -916,3 +916,30 @@ changes; append a correction.
   corrected selection. Focused tests, typecheck, 94 lane files, and diff checks
   passed. The tests simulate registered hooks in one process; they do not prove
   a real Pi process, terminal, or OS timer. The final aggregate has not run.
+
+## 2026-08-10 — Pi Session adapter extracted
+
+- Task `semantic-hardening-pi-adapter-jqr` moved mutable Session identity,
+  lifecycle hooks, refusal/UI, delivery, runtime heartbeat, title/footer, Worker
+  prompt, reload cleanup, nudge actuation, and model lifecycle callbacks into
+  `extensions/pi-team-session-adapter.ts`. Index retains composition, tool
+  schemas/executors, and leader branch observation.
+- Independent Task `semantic-hardening-pi-adapter-1il` found a recovered-Worker
+  regression where leader branch hooks used immutable initial identity. Task
+  `semantic-hardening-pi-adapter-40f` restored dynamic adapter identity, and the
+  test now proves branch hooks stay suppressed after envless Worker recovery.
+- Architecture Task `semantic-hardening-pi-adapter-0zt` required a narrower
+  adapter interface, stale-import cleanup, and exact recovered Worker tool
+  projection. Tasks `semantic-hardening-pi-adapter-7l1` and
+  `semantic-hardening-pi-adapter-lxb` closed those gates. Independent verifier
+  Task `semantic-hardening-pi-adapter-jwu` found seven final stale imports; Task
+  `semantic-hardening-pi-adapter-dq0` removed exactly those symbols.
+- Final independent evidence passed 114 focused tests, typecheck, 94 lane files,
+  package verification, agent-surface QA, static/public checks, and diff checks.
+  Audit/map Task `semantic-hardening-pi-adapter-r6f` closed with an acyclic
+  81-file, 266-edge production graph. Direct Team record reads remain in the Pi
+  integration adapter. Task `semantic-hardening-pi-adapter-6i0` corrected the
+  exact selection digest, and Task `semantic-hardening-pi-adapter-vun`
+  reproduced both recorded digests and accepted the final eight-path bundle. No
+  real Pi/terminal run or reserved final aggregate ran. This source bundle
+  commits the accepted adapter boundary.

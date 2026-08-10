@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
 import { DirectMessageDelivery } from "./message-delivery";
@@ -58,16 +59,22 @@ function context(sessionFile: string) {
   } as any;
 }
 
-function extension() {
+function extension(activeTools = ["foreign_extension_tool", "team_create", "team_sync"]) {
   const handlers = new Map<string, (event: any, ctx: any) => Promise<void>>();
+  const registrations: string[] = [];
+  let active = [...activeTools];
+  const setActiveTools = vi.fn((names: string[]) => { active = [...names]; });
   piTeams({
     on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
-    registerTool() {},
+    registerTool(tool: { name: string }) { registrations.push(tool.name); },
     registerMessageRenderer() {},
     sendMessage() {},
     sendUserMessage() {},
+    getActiveTools: () => active,
+    getAllTools: () => registrations.map((name) => ({ name })),
+    setActiveTools,
   } as never);
-  return handlers;
+  return Object.assign(handlers, { registrations, setActiveTools });
 }
 
 async function createTeam(name: string, sessionFile: string) {
@@ -87,6 +94,38 @@ afterEach(() => {
 });
 
 describe("registered Pi Session adapter characterization", () => {
+  it("recovers only the Worker tool surface and suppresses leader branch hooks", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("worker-recovery-surface");
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
+    });
+    const member = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1 }, member.membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const branchContext = vi.spyOn(DurableModelToolTeamPort.prototype, "setBranchContext");
+    const ctx = context(sessionFile);
+    const harness = extension();
+    const registrationsBeforeRecovery = harness.registrations.length;
+
+    await harness.get("session_start")!({ reason: "resume" }, ctx);
+    await harness.get("tool_call")!({ toolName: "team_sync" }, ctx);
+    await harness.get("before_provider_request")!({ payload: [] }, ctx);
+
+    const workerTools = ["task_read", "task_update", "alert_send"];
+    const leaderOnlyTools = ["team_create", "ensure_worker", "task_create", "team_sync", "worker_stop", "team_shutdown", "task_link"];
+    const recoveredRegistrations = harness.registrations.slice(registrationsBeforeRecovery);
+    expect(new Set(recoveredRegistrations)).toEqual(new Set(workerTools));
+    expect(recoveredRegistrations).not.toEqual(expect.arrayContaining(leaderOnlyTools));
+    expect(harness.setActiveTools).toHaveBeenLastCalledWith(["foreign_extension_tool", ...workerTools]);
+    expect(branchContext).not.toHaveBeenCalled();
+  });
+
   it("starts resumed already-current Worker deliveries in order without another admission mutation", async () => {
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const name = teamName("worker-resume");
