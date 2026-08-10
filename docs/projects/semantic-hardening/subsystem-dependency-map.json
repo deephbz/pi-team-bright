@@ -1,19 +1,31 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "accepted_trio_split_membership_observation_next_boundary",
-  "reviewedRevision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb",
+  "status": "accepted_membership_projection_and_partial_core_target_progress",
+  "reviewedRevision": "5950f3b3f17124b9baf38afa48d839dc503d847b",
   "reviewedTreeState": {
-    "kind": "accepted_trio_application_port_split",
+    "kind": "accepted_membership_observation_reader_split",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "baseRevision": "c54dc25b34770b70afedffc7e87728da6376ee0f",
-    "selectedPaths": 25,
-    "selectionScope": "trio_neutral_four_port_architecture_durable_owners_opaque_in_memory_fakes_and_thin_compatibility_wrappers",
+    "baseRevision": "6997dce",
+    "selectedPaths": 15,
+    "selectionScope": "additive_membership_observation_reader_private_decode_public_projection_and_generated_closure",
     "selectedPathList": [
-      "extensions/pi-team-session-adapter.ts",
-      "src/utils/pi-session-adapter.characterization.test.ts",
-      "src/utils/terminal-backend.contract.test.ts"
+      "dist/public/observation.d.ts",
+      "dist/public/observation.js",
+      "dist/team-authority/membership-observation-reader.d.ts",
+      "dist/team-authority/membership-observation-reader.js",
+      "dist/utils/lock.d.ts",
+      "dist/utils/lock.js",
+      "dist/utils/paths.d.ts",
+      "dist/utils/paths.js",
+      "dist/utils/runtime.d.ts",
+      "dist/utils/runtime.js",
+      "dist/utils/trace.d.ts",
+      "dist/utils/trace.js",
+      "src/public/observation.ts",
+      "src/team-authority/membership-observation-reader.test.ts",
+      "src/team-authority/membership-observation-reader.ts"
     ],
-    "review": "accepted_named_four_port_trio_split",
+    "review": "accepted_additive_membership_reader_projection_split",
     "selectedPathDigestSha256": null,
     "proofLimit": "Focused deterministic local evidence does not establish real Pi persistence, external Beads/Dolt contention, cross-process forks, native watcher delivery, OS scheduling, external writers, or terminal pixels."
   },
@@ -32,7 +44,8 @@
     { "revision": "b4bf6dee91cf25532cbc33a397167567ba6d347e", "scope": "Coordination nudge boundary" },
     { "revision": "3b265ea6fbdc53c9b753950a4ed01ccddad527d8", "scope": "test hardening binds Session characterization to canonical Alert delivery" },
     { "revision": "cafdf2deb4ccdbb47cb40b87e83081d1c9128665", "scope": "intentional resumed Session terminal-refusal behavior fix" },
-    { "revision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb", "scope": "accepted Trio application-port split" }
+    { "revision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb", "scope": "accepted Trio application-port split" },
+    { "revision": "5950f3b3f17124b9baf38afa48d839dc503d847b", "scope": "accepted additive Membership reader split" }
   ],
   "upstreamRc10CoordinationCommits": [
     { "revision": "a80f102", "scope": "event-directed Task hydration" },
@@ -49,16 +62,16 @@
   ],
   "architectureImpact": {
     "classification": "changed",
-    "scope": "internal Task publication, Task reconciliation, Team lifecycle and Session boundaries, and Coordination boundaries",
+    "scope": "internal Team, Task, Alert, Coordination, Trio, and additive Membership projection dependency boundaries",
     "canonicalHyperCarrierDiagram": "unchanged_because_pi_team_bright_internals_are_opaque",
     "latestChangeClassification": "none_for_cafdf2deb4ccdbb47cb40b87e83081d1c9128665_terminal_refusal_fix"
   },
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 111,
+      "files": 112,
       "lines": null,
-      "staticLocalEdges": 426,
+      "staticLocalEdges": 425,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -75,7 +88,7 @@
       "lines": 25803
     },
     "staticGraphMethod": "TypeScript AST import and re-export declarations with relative specifiers resolved to current tracked or selected production files; unique ordered file edges; Tarjan SCC. Type-query import syntax is excluded from dynamic-import counts.",
-    "countCorrection": "The verifier's conservative accepted Trio graph is 111 production TypeScript files and 426 unique resolved static local edges, with zero nontrivial cycles and zero runtime dynamic imports. A narrower 109-file/379-edge probe is corroborating evidence only. Earlier 99/334 nudge evidence remains historical.",
+    "countCorrection": "The historical accepted Trio graph is 111 production TypeScript files and 426 resolved static import/re-export declaration edges. The same canonical AST method now reports 112 files and 425 edges after the Membership reader split, with zero nontrivial cycles and zero runtime dynamic imports. A narrower 109-file/379-edge probe remains historical corroboration only.",
     "acceptedTrioSplit": {
       "revision": "69c30acf5db23be8f656b2a6821b0ea032ae04cb",
       "baseline": "c54dc25b34770b70afedffc7e87728da6376ee0f",
@@ -87,7 +100,20 @@
       "partialFailureSemantics": "Task and Alert commits survive later Coordination publication failure; the public result is partial and authority state does not roll back.",
       "rejectedAttempts": "Nominal implementation attempts remain historical evidence.",
       "testGates": "focused acceptance gates passed; final aggregate remains reserved for one stable final tree",
-      "nextBoundary": "additive_membership_observation",
+      "nextBoundary": "completed_by_5950f3b",
+      "architectureImpact": "internal_only_structurizr_unchanged"
+    },
+    "acceptedMembershipObservation": {
+      "revision": "5950f3b3f17124b9baf38afa48d839dc503d847b",
+      "baseline": "6997dce",
+      "privateReader": "src/team-authority/membership-observation-reader.ts",
+      "publicProjector": "src/public/observation.ts",
+      "publicContract": "unchanged_pi-teams-observation/1_and_@hypercarrier/pi-team-bright/observation_export",
+      "preserved": ["deadline", "AbortSignal", "config_runtime_config_retry", "Team_and_Membership_order", "issue_codes", "mixed_old_records", "privacy", "filenames"],
+      "focusedTests": 22,
+      "verification": ["typecheck", "package_export_probe", "generated_output", "static_fences", "diff"],
+      "resourceContentionCorrection": "The lock-free reader neither joins nor creates producer locks and does not repair separate Beads/Dolt contention.",
+      "proofLimit": "Deterministic local reads are recorded evidence, never OS liveness or proof of external writers, forks, scheduling, or terminal state.",
       "architectureImpact": "internal_only_structurizr_unchanged"
     },
     "nextOwnCommitIssue": "The separately reproduced baseline terminal-admission defect is corrected by cafdf2deb4ccdbb47cb40b87e83081d1c9128665. It was not a regression from the Coordination nudge commit.",
@@ -391,7 +417,8 @@
         "id": "membership_observation_projector",
         "currentOwner": "membership_observation",
         "sources": [
-          "src/public/observation.ts"
+          "src/public/observation.ts",
+          "src/team-authority/membership-observation-reader.ts"
         ]
       },
       {
@@ -599,12 +626,12 @@
       },
       {
         "from": "membership_observation_projector",
-        "to": "team_core",
-        "mechanism": "private_record_type_and_file_read",
+        "to": "team_authority_and_role_realization",
+        "mechanism": "narrow_read_only_reader",
         "evidence": [
-          "src/public/observation.ts:5",
-          "src/public/observation.ts:8",
-          "src/public/observation.ts:139"
+          "src/public/observation.ts:2",
+          "src/team-authority/membership-observation-reader.ts:1",
+          "src/team-authority/membership-observation-reader.ts:96"
         ]
       }
     ]
@@ -643,7 +670,7 @@
     {
       "id": "ASSESS-RC10-COORDINATION-INCOMPLETE",
       "state": "behavior_implemented_boundary_incomplete",
-      "statement": "Slice B preserves rc.10 page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, and branch-bound nudges while moving Team runtime, Task state/delivery, and Alert actuation reads behind minimal Coordination query DTOs. The combined durable facade, Pi composition, hidden-observation Team query, and nudge actuation remain later seams."
+      "statement": "Slice B preserves rc.10 page-safe hydration, liveness, failed-event hints, bounded waits, indeterminate outcomes, and branch-bound nudges. The later Trio split removes the combined facade/fake claim. The hidden-observation Team query, concrete Coordination runtime/path reads, and nudge actuation remain target seams."
     },
     {
       "id": "ASSESS-TEAM-CARRIER-PUBLICATION",
@@ -661,7 +688,7 @@
     },
     {
       "id": "ASSESS-ADDITIVE-OBSERVATION",
-      "statement": "Membership observation remains additive and core-independent, but broad private record imports increase compatibility coupling."
+      "statement": "Membership observation remains additive and core-independent. Its narrow reader owns private decoding; the public projector keeps the stable allowlisted contract."
     }
   ],
   "risks": [
@@ -740,7 +767,7 @@
         "semantic-hardening-direct-hkp"
       ],
       "currentFact": "Task delivery consumes an injected TaskReconciliationQuery. Four deterministic equivalence tests preserve suppression, external-change delivery, owner-marker recovery, exact replacement binding, delivery deduplication, recovery replay, and metadata-gap refusal.",
-      "proofLimit": "This gate proves the reconciliation seam only. The separate Task publication gate proves mutation publication; other subsystem migrations remain incomplete.",
+      "proofLimit": "This historical gate proves the reconciliation seam only. Later accepted boundaries complete the structural targets; external-process and performance proof limits remain.",
       "anchors": [
         "src/task-authority/contracts.ts:41",
         "src/task-authority/beads-reconciliation-query.ts:12",
@@ -767,7 +794,7 @@
         "diff": "passed",
         "aggregate": "not_run_by_contract"
       },
-      "proofLimit": "This gate proves Task mutation publication dependency direction and behavior equivalence. It does not isolate Team actor fencing or complete Team, Alert, Coordination, Trio, or additive Membership-observation boundaries.",
+      "proofLimit": "This gate proves Task mutation publication dependency direction and behavior equivalence. Later accepted boundaries close the other structural targets; external process, contention, and terminal evidence remain separate proof limits.",
       "anchors": [
         "src/model-tool-contract/beads-authority-adapter.ts:196",
         "src/adapters/durable-task-mutation-publication.ts:44",
@@ -895,7 +922,7 @@
       "compatibilityReExport": "src/utils/worker-launch-bridge.ts:1-2",
       "verification": {"focusedTests":38,"state":"independently_accepted","aggregate":"not_run_by_contract"},
       "launchCapabilityInjection": {"focusedTests":32,"typecheck":"passed","testLanes":"passed_93_files","package":"passed","staticFences":"passed","diffChecks":"passed"},
-      "proofLimit": "DurableModelToolTeamPort no longer constructs the durable adapter. Later accepted Team selections complete Session admission/claim/bind/runtime realization; Pi hook/refusal/delivery/title/footer/nudge adaptation and facade composition remain incomplete."
+      "proofLimit": "DurableModelToolTeamPort no longer constructs the durable adapter. Later accepted Team and Trio selections complete the structural targets; real Pi hook and terminal operation remain external proof limits."
     },
     "teamStopShutdownServiceBoundary": {
       "state": "implemented_independently_accepted",
@@ -1001,7 +1028,7 @@
       {
         "current": "model_tool_facade_and_projections",
         "target": "trio_facing_interface_and_projections",
-        "splitRequired": "Move authority application behavior behind separate semantic ports."
+        "splitRequired": "Completed by the accepted neutral application-port split; preserve the separate ports."
       },
       {
         "current": "pi_composition_and_lifecycle",
@@ -1186,33 +1213,33 @@
       "state": "implemented",
       "afterGate": "TASK-RECONCILIATION-INJECTION",
       "change": "Move Task update and journal contracts to Task ownership and inject Task reconciliation queries while preserving temporary re-exports and persisted records.",
-      "proofLimit": "TaskCard and TaskVersionRef remain at their current canonical paths. The later verified publication seam is recorded separately; other subsystem migrations remain incomplete."
+      "proofLimit": "TaskCard and TaskVersionRef remain at their current canonical paths. Later accepted publication and structural seams complete the target split; this remains a reconciliation-specific receipt."
     },
     "taskPublicationSeam": {
       "state": "implemented_independently_verified",
       "gate": "TASK-PUBLICATION-INVERSION",
       "change": "Task mutation orchestration consumes a consumer-owned publication port; the stateless durable Coordination and Task-delivery adapter lives outside Task authority, and Pi composition injects one mutation-capable Beads adapter factory into leader and Worker paths.",
-      "proofLimit": "This closes Task mutation publication only. Team actor fencing and the Team, Alert, Coordination, Trio, and additive Membership-observation migrations remain incomplete."
+      "proofLimit": "This historical gate closes Task mutation publication. Later accepted seams complete the structural targets; external process, contention, and terminal evidence remain proof limits."
     },
     "nextEligibleSeam": {
-      "state": "requires_separate_task_and_behavior_gate",
-      "gate": "ALERT-PUBLICATION-FAILURE_or_RC10-COORDINATION-BOUNDARY",
-      "change": "ALERT-004 is compatibility-required. Isolate one Coordination read boundary or make behavior-identical Alert seam changes while preserving current behavior; require a separate owner-visible decision for semantic change.",
-      "proofLimit": "No Alert outbox or broad Coordination consolidation is authorized by the Task publication seam."
+      "state": "structural_targets_complete",
+      "gate": "measured_optimization_or_final_release_validation",
+      "change": "Keep ALERT-004 compatibility behavior stable. Start only a separately authorized measured optimization or behavior-fix task.",
+      "proofLimit": "No outbox, broad consolidation, or semantic behavior change is authorized by the completed structural split."
     }
   },
   "completionMatrix": {
     "schema": "pi-team-bright-full-split-completion-matrix/1",
     "computedAt": "2026-08-10",
     "input": {
-      "gitHead": "ab7f591",
+      "gitHead": "5950f3b",
       "productionSourceDigestSha256": null,
-      "scope": "94 selected TypeScript production files under src/ and extensions/, excluding *.test.ts. Current tree is the stable accepted slice-C Coordination service graph; the 87-file Alert-port tree remains historical baseline evidence.",
+      "scope": "112 tracked production TypeScript files under src/ and extensions/, excluding *.test.ts. Current tree includes the accepted Membership reader; earlier slice graphs remain historical evidence.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 99,
-      "uniqueLocalEdges": 334,
+      "files": 112,
+      "uniqueLocalEdges": 425,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
@@ -1228,7 +1255,7 @@
         {"from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "edges": 8, "files": ["src/model-tool-contract/durable-model-tool-port.ts", "src/utils/team-footer.ts", "src/utils/team-status.ts"]},
         {"from": "trio_facing_interface_and_projections", "to": "coordination_observation", "edges": 7, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
         {"from": "trio_facing_interface_and_projections", "to": "alert_authority", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
-        {"from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/public/observation.ts"]},
+        {"from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 1, "files": ["src/public/observation.ts"]},
         {"from": "team_authority_and_role_realization", "to": "alert_authority", "edges": 1, "files": ["src/team-authority/worker-launch-bridge.ts"]},
         {"from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/alert-authority/alerts.ts"]},
         {"from": "alert_authority", "to": "task_authority", "edges": 1, "files": ["src/alert-authority/alerts.ts"]},
@@ -1239,22 +1266,22 @@
       "supportMediatedDependencies": [
         { "from": "coordination_observation", "to": "task_authority", "path": "src/adapters/durable-coordination-task-state-delivery.ts", "mechanism": "durable Task state/delivery adapter implements the Coordination-owned query outside Coordination" },
         { "from": "coordination_observation", "to": "alert_authority", "path": "src/adapters/durable-coordination-alert-actuation.ts", "mechanism": "durable Alert actuation adapter implements the Coordination-owned query outside Coordination" },
-        { "from": "membership_observation", "to": "team_authority_and_role_realization", "path": "src/public/observation.ts", "mechanism": "direct TeamConfig and Member decoding plus direct runtime file reads; only the runtime type import is a selected local edge" },
+        { "from": "membership_observation", "to": "team_authority_and_role_realization", "path": "src/public/observation.ts -> src/team-authority/membership-observation-reader.ts", "mechanism": "public projector depends only on the narrow reader; the reader owns private Team/runtime file decoding" },
         { "from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "path": "src/utils/team-status.ts and src/utils/team-footer.ts", "mechanism": "human projection code directly reads Team implementation; these paths are classified as support by the AST grouping and remain a Trio seam" }
       ]
     },
     "authorities": [
       {
         "id": "team_authority_and_role_realization",
-        "completion": "partial_carrier_stop_shutdown_and_session_lifecycle_isolated",
-        "remainingSeams": ["extensions/pi-team-session-adapter.ts directly queries Team configuration and exact Membership for resume, delivery, status, and nudge revalidation", "DurableModelToolTeamPort remains a combined Team/Task/Alert/Coordination/Trio façade", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
-        "violations": ["Pi Session adaptation is isolated in extensions/pi-team-session-adapter.ts, but its direct Team queries remain; durable Trio façade composition remains in src/model-tool-contract/durable-model-tool-port.ts"],
+        "completion": "partial_accepted_team_slices_target_query_seams_open",
+        "remainingSeams": ["extensions/pi-team-session-adapter.ts directly queries Team configuration and exact Membership for resume, delivery, status, and nudge revalidation", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
+        "violations": ["Pi Session adaptation is isolated, but its direct Team queries remain a target seam."],
         "staticGate": "For Team-owned lifecycle sources, deny concrete Task, Coordination, Trio, and Pi-hook imports. Permit Team contracts, terminal/runtime support, and Team-owned AssignedWorkGuard and TeamLifecyclePublication ports only. Keep the compatibility re-export at utils/worker-launch-bridge.ts. DurableModelToolTeamPort must not import or construct DurableTeamLifecyclePublication or createWorkerLaunchBridge.",
         "focusedVerification": ["Independent Pi Session adapter selection: 114 focused tests passed", "typecheck: passed", "test lanes: passed_94_files", "package and agent-surface verification: passed", "static and diff checks: passed", "real Pi and terminal-carrier operation: proof limit"]
       },
       {
         "id": "task_authority",
-        "completion": "partial_task_reconciliation_and_mutation_publication_closed",
+        "completion": "partial_closed_reconciliation_and_publication_target_reverse_dependencies_open",
         "remainingSeams": ["Task actor fencing and migration paths import Team authority directly", "src/model-tool-contract/beads-task-adapter.ts still imports Coordination event definitions", "src/utils/models.ts still owns mixed Task relation and delivery record types"],
         "violations": ["task_authority -> team_authority_and_role_realization: src/model-tool-contract/beads-authority-adapter.ts:6; src/utils/task-delivery.ts:13; src/utils/task-delivery-migration.ts:7; src/utils/task-migration.ts:7", "task_authority -> coordination_observation: src/model-tool-contract/beads-task-adapter.ts:9"],
         "staticGate": "Keep the closed publication fence. Add a Task-source deny list for utils/teams, utils/team-events, and Trio modules. Allow only Task-owned contracts and injected current-Membership and publication interfaces.",
@@ -1262,7 +1289,7 @@
       },
       {
         "id": "alert_authority",
-        "completion": "membership_and_publication_ports_isolated_later_alert_work_open",
+        "completion": "complete_accepted_consumer_owned_ports",
         "remainingSeams": ["Alert inbox and direct-delivery behavior remains one authority slice", "DurableAlertMembership and DurableAlertPublication retain Team and Coordination implementation calls outside Alert authority"],
         "violations": [],
         "staticGate": "Alert authority may depend on Alert-owned contracts and delivery support only. Deny Team and Coordination implementation imports from Alert authority. Durable adapters implement the ports outside Alert authority; do not add a Team mirror, membershipId roster coordinate, or compatibility singleton.",
@@ -1271,39 +1298,37 @@
       },
       {
         "id": "coordination_observation",
-        "completion": "coordination_observation_and_nudge_boundary_implemented_trio_later",
-        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts retain broader Trio-facing behavior", "Pi exact-Session nudge actuation and proof remain deliberate integration responsibilities", "No separate nudge actuator exists by design"],
+        "completion": "partial_consumer_owned_query_target_open",
+        "remainingSeams": ["src/utils/hidden-observation.ts imports Team configuration operations", "src/utils/sync-liveness.ts and src/utils/team-events.ts retain concrete Team/runtime/path reads for Coordination observation", "Pi exact-Session nudge actuation and proof remain deliberate integration responsibilities", "No separate nudge actuator exists by design"],
         "violations": ["coordination_observation -> team_authority_and_role_realization: src/utils/hidden-observation.ts:6 remains a concrete Team configuration read"],
         "staticGate": "Coordination liveness may import only its consumer-owned Team runtime, Task state/delivery, and Alert actuation query interfaces. Concrete reads stay in the three durable adapters; deny utils/runtime, taskDeliveryPath, inboxPath, and concrete Team configuration imports from Coordination liveness sources.",
         "focusedVerification": ["npx vitest run src/coordination/queries.equivalence.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/utils/sync-liveness.test.ts test/coord-liveness-e2e/sync-liveness.test.ts", "npm run typecheck", "npm run test:lanes"]
       },
       {
         "id": "trio_facing_interface_and_projections",
-        "completion": "accepted_neutral_four_port_facade_and_opaque_state_fakes",
-        "remainingSeams": ["Membership observation remains the next additive boundary"],
+        "completion": "complete_accepted_structural_target",
+        "remainingSeams": [],
         "violations": [],
         "staticGate": "Trio registration, catalog, executors, result projection, TUI projection, status, and footer depend only on separate Team, Task, Alert, and Coordination application ports and DTOs; deny concrete authority, Beads, runtime, and delivery imports.",
         "focusedVerification": ["focused Trio acceptance gates: passed", "final aggregate: reserved_for_one_stable_final_tree"]
       },
       {
         "id": "membership_observation",
-        "completion": "partial_additive_but_broad_private_decoder",
-        "remainingSeams": ["src/public/observation.ts imports private runtime and model types and decodes TeamConfig/Member records directly", "No narrow Team/runtime projection reader or public-compatibility import fence exists"],
-        "violations": ["membership_observation -> team_authority_and_role_realization has one static type edge at src/public/observation.ts:5 and broad direct private-record file decoding at :8 through :139"],
-        "staticGate": "Core source imports of src/public/observation.ts remain zero. Public observation may import only a narrow read-only Team/runtime decoder and public DTOs, never Team mutation, lifecycle, Task, Alert, or Trio modules.",
-        "focusedVerification": ["npx vitest run src/public/observation.test.ts", "npm run verify:observation-package", "npm run typecheck"]
+        "completion": "complete_additive_non_authoritative_projection",
+        "remainingSeams": [],
+        "violations": [],
+        "staticGate": "Core source imports of src/public/observation.ts remain zero. Public observation imports only the narrow read-only Team/runtime reader and package metadata; it imports no filesystem, runtime, Team-contract, mutation, lifecycle, Task, Alert, or Trio module.",
+        "focusedVerification": ["npx vitest run src/public/observation.test.ts src/team-authority/membership-observation-reader.test.ts", "npm run verify:observation-package", "npm run typecheck"]
       }
     ],
     "safestCoherentOrder": [
-      { "step": 0, "seam": "behavior_inventory_completion", "precondition": "All inventory entries are characterized. ALERT-004 is compatibility-required with one-Node-process hook-level later-presentation and replay evidence; external process, fork, Pi Session, and OS restart evidence remains a proof limit, not a behavior-identical seam gate.", "verification": ["npx vitest run src/utils/alert-publication-failure.characterization.test.ts src/utils/causal-path-characterization.test.ts"] },
-      { "step": 1, "seam": "shared_domain_contracts", "precondition": "Keep compatibility re-exports and persisted shapes. Split src/utils/models.ts by authority before moving behavior.", "verification": ["npm run typecheck", "npm run test:lanes"] },
-      { "step": 2, "seam": "team_pi_hook_adapter_and_durable_facade_composition", "precondition": "Carrier, stop/shutdown, Session realization, and Worker-launch injection selections are complete. Keep Pi hook/refusal/delivery/title/footer/nudge adaptation small without changing hook order; direct lifecycle-adapter construction is removed already.", "verification": ["npx vitest run src/model-tool-contract/durable-model-tool-port.test.ts src/team-authority/team-session-lifecycle-service.boundary.test.ts src/utils/worker-identity-process-admission.characterization.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts"] },
-      { "step": 3, "seam": "alert_delivery_and_publication", "precondition": "Only after step 0. Wrap Message records in an Alert adapter and inject Membership resolution and Coordination publication.", "verification": ["npx vitest run src/utils/alerts.test.ts src/utils/alert-publication-failure.characterization.test.ts src/utils/message-delivery.test.ts"] },
-      { "step": 4, "seam": "coordination_read_ports_and_application_boundary", "precondition": "Replace direct Team/runtime, Task-delivery, and Alert-inbox reads with Coordination-owned read queries. Keep hints, timers, and nudges derived.", "verification": ["npx vitest run src/model-tool-contract/sync-event-hydration.test.ts src/utils/sync-liveness.test.ts src/utils/task-event-failure-hints.test.ts src/utils/sync-nudge-extension.test.ts test/coord-liveness-e2e/sync-liveness.test.ts"] },
-      { "step": 5, "seam": "trio_ports_and_separate_fakes", "precondition": "Split ModelToolTeamPort and StoredTeam only after the four authority ports exist. Preserve model and TUI output contracts.", "verification": ["npx vitest run src/model-tool-contract/first-journey.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/model-tool-contract/result-projection.test.ts", "npm run qa:tool-results"] },
-      { "step": 6, "seam": "additive_membership_decoder", "precondition": "Move only the read-only Team/runtime decoder behind the final narrow projection interface. Keep the observation export and schema unchanged.", "verification": ["npx vitest run src/public/observation.test.ts", "npm run verify:observation-package"] },
-      { "step": 7, "seam": "final_static_and_release_validation", "precondition": "All source fences and behavior gates pass on one stable tree.", "verification": ["npm run typecheck", "npm run test:lanes", "npm run test:full", "npm run verify:package"] }
+      { "step": 0, "seam": "membership_observation_and_proven_alert_trio_boundaries", "state": "complete", "verification": ["accepted focused boundary gates", "canonical AST graph"] },
+      { "step": 1, "seam": "task_current_membership_and_authority_reverse_dependencies", "precondition": "Replace direct Team helpers in Task mutation, delivery, migration, and Beads authority paths with the Task-owned current-membership resolver or explicitly accepted narrow port.", "verification": ["focused Task equivalence and import fences"] },
+      { "step": 2, "seam": "coordination_worker_run_observation_query", "precondition": "Implement and inject the proposed Coordination-owned Team/runtime query; remove concrete Team/runtime/path reads from hidden-observation, sync-liveness, and team-events where they implement Coordination observation.", "verification": ["focused Coordination query equivalence, liveness, and import fences"] },
+      { "step": 3, "seam": "team_worker_launch_alert_delivery_type_edge", "precondition": "Classify the Team worker-launch Alert delivery type edge as neutral DTO support or move it behind an accepted Team-owned port.", "verification": ["source classification and focused Team lifecycle fence"] },
+      { "step": 4, "seam": "measured_optimization_or_authorized_behavior_fix", "precondition": "Close all target violations first; use one named measurement or owner decision.", "verification": ["focused evidence"] },
+      { "step": 5, "seam": "final_static_and_release_validation", "precondition": "One exact stable final tree after all structural and authorized follow-up work.", "verification": ["npm run typecheck", "npm run test:lanes", "npm run test:full", "npm run verify:package", "privacy scan", "watchdog review"] }
     ],
-    "completionRule": "Do not report the five-authority split complete until every authority entry is complete, every listed static gate is implemented and passing, ALERT-004 compatibility behavior is preserved through its seam with hook-level characterization, the Trio fake no longer combines authority state, Membership observation consumes only its narrow decoder, and the final stable tree passes the listed release validation. External process, fork, Pi Session, and OS restart evidence remains a proof limit, not a behavior-identical Alert-seam gate."
+    "completionRule": "Membership observation and proven Alert and Trio boundaries are complete through 5950f3b. Do not report the five-target split complete while Team/Task reverse dependencies or the proposed Coordination worker-run observation query remain. Close those target gates with accepted consumer-owned ports and focused evidence before optimization, one exact final aggregate, privacy scan, and watchdog review. External process, fork, Pi Session, OS restart, contention, and terminal-pixel evidence remain proof limits."
   }
 }

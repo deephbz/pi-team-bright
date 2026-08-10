@@ -1,12 +1,10 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-10
-Status: maintained semantic-hardening audit; accepted Trio split commit
-`69c30acf5db23be8f656b2a6821b0ea032ae04cb` follows clean baseline
-`c54dc25b34770b70afedffc7e87728da6376ee0f`. Task reconciliation, Task mutation
-publication, Team lifecycle slices, the Pi Session adapter, Alert durable ports,
-Coordination observation, nudge, and Trio are independently verified;
-Membership observation remains the next boundary
+Status: maintained semantic-hardening audit; accepted Membership reader commit
+`5950f3b3f17124b9baf38afa48d839dc503d847b` follows Trio split commit
+`69c30acf5db23be8f656b2a6821b0ea032ae04cb`. Team, Task, Alert, Coordination,
+Trio, and additive Membership observation boundaries are independently verified
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -64,12 +62,11 @@ deterministic local behavior only, not real Pi persistence, Beads/Dolt
 contention, cross-process forks, native watchers, OS scheduling, external
 writers, or terminal pixels.
 
-The verifier's conservative current graph is canonical: 111 production files,
-426 resolved static local edges, zero nontrivial SCC, and zero runtime dynamic
-imports. A narrower 109-file/379-edge probe is corroborating evidence only; it
-must not replace the canonical graph. Architecture impact is internal only, so
-Structurizr stays unchanged because Pi Team Bright internals remain opaque.
-Membership observation is the next boundary.
+The historical Trio graph is 111 production files and 426 resolved static
+import/re-export edges. The current canonical AST graph is 112 production files
+and 425 such edges, with zero nontrivial SCC, self-cycle, or runtime dynamic
+relative import. Architecture impact remains internal only, so Structurizr stays
+unchanged because Pi Team Bright internals remain opaque.
 
 ## Scope and evidence
 
@@ -88,10 +85,12 @@ selection from baseline `1686ac1` has 81 production TypeScript files with
 is excluded. A TypeScript-AST scan resolves static relative import and re-export
 specifiers between those production files. The earlier accepted Coordination nudge commit
 `b4bf6dee91cf25532cbc33a397167567ba6d347e` had 99 production TypeScript files
-and 334 unique resolved static local edges. The accepted Trio graph is now the
-canonical 111-file/426-edge graph described above. Both have no nontrivial
-strongly connected component, no self-cycle, and no runtime dynamic import
-expression. The prior 87/285 Alert-port and
+and 334 unique resolved static local edges. The accepted Trio graph remains historical evidence. The current canonical
+AST scan uses the same method: static relative TypeScript `import` and
+re-export declarations resolved to selected production files, counted as
+ordered declaration edges, with Tarjan SCC and literal runtime dynamic imports
+separately scanned. It reports 112 files and 425 edges, with no nontrivial SCC,
+self-cycle, or runtime dynamic import expression. The prior 87/285 Alert-port and
 92/304 slice-B query counts remain historical evidence for earlier slices. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
@@ -360,12 +359,14 @@ and Task implementations directly (`src/utils/team-status.ts:4`,
 
 ### Additive Membership observation
 
-`src/public/observation.ts` is one-way: no core production module imports it. It
-locklessly reads atomic Team/runtime records, applies deadline and abort
-controls, and emits only `pi-teams-observation/1`
-(`src/public/observation.ts:8`, `src/public/observation.ts:139`). It is not a core subsystem. Its direct use of
-broad internal `Member` and runtime types makes public compatibility sensitive
-to private record changes (`src/public/observation.ts:5`).
+`src/team-authority/membership-observation-reader.ts` is the sole private
+Team/runtime filesystem decoder. It owns lock-free reads, config/runtime/config
+retry, deadline and AbortSignal control, ordering, and diagnosis of mixed or
+old records. `src/public/observation.ts` is one-way: no core production module
+imports it. It owns only the existing `pi-teams-observation/1` machine DTO, JSON
+Schema, and projection over reader evidence. The public module imports only the
+reader and package metadata. The reader and projector preserve the allowlist and
+never assert OS liveness. This is additive, not a core subsystem.
 
 ## Boundary assessments
 
@@ -494,9 +495,12 @@ to private record changes (`src/public/observation.ts:5`).
     combine broader Coordination behavior, while hidden observation retains its
     concrete Team configuration check; these are later seams.
 
-11. Public Membership observation is core-independent, but it reads private
-    record shapes directly. A narrow Team-observation record reader would keep
-    it additive and reduce public compatibility blast radius.
+11. **Resolved for additive Membership observation.** The private reader
+    decodes Team/runtime records and returns only narrow evidence and diagnoses.
+    The public projector retains the existing machine contract. Static fences
+    deny core imports of the public module and deny public filesystem, runtime,
+    and Team-contract imports. Focused tests preserve deadline, abort, retry,
+    order, privacy, old-record diagnoses, and package export behavior.
 
 ## Risks and unresolved test gates
 
@@ -537,6 +541,11 @@ to private record changes (`src/public/observation.ts:5`).
   package, public-surface, persistence, and diff checks. It did not run the
   aggregate lane.
 
+- The completed Membership boundary passed 22 focused public-reader tests,
+  TypeScript, package/export, generated-output, static-fence, and diff checks.
+  The packed CommonJS and TypeScript probe retains the public observation
+  subpath. Its lock-free reader creates no producer artifact and leaves the
+  separate Beads/Dolt resource-contention risk open.
 - Slice B has focused query-equivalence, liveness, hydration, nudge, extension,
   and E2E evidence. It preserves explicit `indeterminate` outcomes, branch-safe
   position, constructor/default compatibility, and the unchanged five-second
@@ -549,7 +558,8 @@ concrete Task publication dependencies are closed, and durable lead discovery
 now belongs to Team authority. The main remaining structural risks are one
 façade and one in-memory fake that combine all authorities, Coordination
 liveness reading three authorities, hook-order coupling in the Pi composition
-root, and public Membership observation reading broad private records. These risks do not authorize behavior changes.
+root. The completed Membership reader is no longer a broad private-record
+public dependency. These risks do not authorize behavior changes.
 
 ## Preserved state, timing, and ordering facts
 
@@ -627,11 +637,11 @@ static local edges, no literal relative dynamic import, no self-cycle, and no
 nontrivial SCC. The source digest is
 `51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40`.
 
-Task reconciliation and mutation publication remain the closed Task seams.
-Alert membership and publication ports are implemented, but Alert authority
-still owns inbox and direct-delivery behavior while its durable adapters retain
-Team and Coordination implementation imports. Team, Coordination, Trio, and
-additive Membership observation remain incomplete. The matrix records every remaining concrete or
+Task reconciliation and mutation publication remain closed Task seams. The
+Membership projection, Alert ports, and Trio split are complete. The matrix
+keeps Team/Task concrete reverse dependencies and the proposed Coordination
+worker-run observation query open because they remain target violations. Close
+those gates before performance, aggregate, privacy, and watchdog gates. The matrix records every remaining concrete or
 support-mediated seam, its source paths, required source fence, focused test
 command, blocker, and safe order. It does not treat the acyclic current file
 graph as a completed authority split: the main remaining violations are Team
@@ -737,12 +747,12 @@ at the composition root.
    compatibility policy.
 8. Keep result and TUI projection, catalog schemas, and Pi registration above
    the semantic application ports. Make status and footer consume query DTOs.
-9. Give public Membership observation a narrow read-only Team/runtime decoder.
-   Keep its export and schema unchanged. Add an import fence that prevents core
-   modules from importing it.
-10. Add static dependency tests after each seam moves. Preserve the outside-in
-    characterization suite after each step. Do not start with a directory rename
-    or whole-system rewrite.
+9. **Implemented.** The Membership reader is the narrow read-only Team/runtime
+   decoder. The public export and schema are unchanged, and import fences keep
+   core independent from the public projector.
+10. Static dependency tests and outside-in characterization remain required for
+    future changes. Do not replace the completed boundaries with a directory
+    rename or whole-system rewrite.
 
 `TASK-RECONCILIATION-INJECTION` and `TASK-PUBLICATION-INVERSION` now prove the
 implemented Task dependency boundaries. They remove the clearest upward type

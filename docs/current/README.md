@@ -36,7 +36,7 @@ variables do not.
 | Team epoch, logical Worker, Membership, Task, Alert, and event types | [`src/utils/models.ts`](../../src/utils/models.ts) |
 | Team authority, exact Session binding, and logical Worker persistence | [`src/utils/teams.ts`](../../src/utils/teams.ts) |
 | Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
-| Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation` |
+| Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation`; [`src/team-authority/membership-observation-reader.ts`](../../src/team-authority/membership-observation-reader.ts) is its private read-only decoder |
 | Canonical Task card and opaque TaskVersionRef | [`src/model-tool-contract/task-domain.ts`](../../src/model-tool-contract/task-domain.ts) and [`src/model-tool-contract/task-version-ref.ts`](../../src/model-tool-contract/task-version-ref.ts) |
 | Task authority, mutation semantics, and Beads translation | Task update, journal, and reconciliation-query contracts live in [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts); [`src/task-authority/beads-reconciliation-query.ts`](../../src/task-authority/beads-reconciliation-query.ts), [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts) implement the Beads boundary; [`beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts) owns the consumer-side mutation-publication port, while [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) implements its concrete Coordination and delivery bridge outside Task authority; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
 | Semantic-hardening status and dependency evidence | Maintained [`context`](../projects/semantic-hardening/context.md), [`subsystem audit`](../projects/semantic-hardening/subsystem-boundary-audit.md), and machine [`dependency map`](../projects/semantic-hardening/subsystem-dependency-map.json) |
@@ -259,13 +259,11 @@ artifacts; dated evidence remains in the journal. They do not replace this repos
 context or the executable contract sources.
 
 - [Semantic hardening](../projects/semantic-hardening/context.md) is in
-  consolidation and hardening. Exact rc.11 source `638d5934` passed the reserved
-  aggregate and local release gates but remains untagged and unpublished. Task
-  reconciliation and Task mutation publication use explicit dependency seams.
-  `TASK-PUBLICATION-INVERSION` is implemented and independently verified.
-  ALERT-004 remains unclassified, and Team, Alert, Coordination, Trio, and
-  additive Membership-observation boundary work remains
-  incomplete. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
+  consolidation and hardening. Membership observation is complete through
+  `5950f3b`; its private Team/runtime reader keeps `pi-teams-observation/1`
+  public-only and core-independent. Team/Task reverse dependencies and the
+  proposed Coordination worker-run observation query remain structural gates,
+  before optimization, final aggregate, privacy, and watchdog completion. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
   and machine [dependency map](../projects/semantic-hardening/subsystem-dependency-map.json)
   own current structural evidence.
 - [Model-invoked tool contract](../projects/model-invoked-tool-contract.md) is in

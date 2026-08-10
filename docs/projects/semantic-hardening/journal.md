@@ -1228,3 +1228,35 @@ changes; append a correction.
   OS scheduling, external writers, or terminal pixels. Membership observation is
   the next boundary. Structurizr remains unchanged because these internals stay
   opaque.
+
+## 2026-08-10 — Membership observation reader boundary accepted
+
+- Accepted source commit `5950f3b3f17124b9baf38afa48d839dc503d847b`
+  (`refactor: isolate Membership observation reader`) follows public-contract
+  characterization `6997dce`.
+- `src/team-authority/membership-observation-reader.ts` now owns every private
+  Team/runtime filesystem decode. `src/public/observation.ts` retains only the
+  existing `pi-teams-observation/1` DTO, JSON Schema, package export, and
+  machine projection. Core imports of the public module remain zero.
+- The reader preserves lock-free reads, no producer artifacts, Team sort order,
+  stored Membership order, config/runtime/config retry, one total deadline,
+  AbortSignal, issue codes, privacy allowlist, historical/mixed records, and
+  legacy diagnoses. It reports recorded evidence and never asserts OS liveness.
+- Focused public-reader evidence passed 22 tests. TypeScript, package/export,
+  generated-output, static-fence, and diff checks passed. The packed CommonJS
+  and TypeScript probe kept `@hypercarrier/pi-team-bright/observation`. Generated
+  closure adds the reader and removes unreachable observation-only runtime,
+  paths, lock, and trace files.
+- A correction restored truthy non-string runtime Membership IDs as generation
+  mismatches and preserved a truthy raw ended deactivation reason. The reader
+  neither joins nor creates producer locks; this corrects observation resource
+  behavior but does not repair the separate Beads/Dolt contention risk.
+- The canonical AST method used for accepted Trio evidence now reports 112
+  production TypeScript files and 425 resolved static import/re-export edges,
+  with zero nontrivial SCC, self-cycle, or runtime dynamic relative import. The
+  Trio 111-file/426-edge count remains historical evidence.
+- Membership observation is complete. The accepted Alert ports and Trio split
+  remain complete, but Team/Task concrete reverse dependencies and the proposed
+  Coordination worker-run observation query remain target gates. Architecture
+  impact is internal dependency direction only, so HyperCarrier Structurizr
+  remains unchanged. No aggregate, push, tag, or publication occurred.
