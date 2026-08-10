@@ -31,8 +31,8 @@ export type {
   TeamEvent,
   TeamEventInput,
 } from "../coordination/contracts";
+export type { AlertKind } from "../alert-authority/contracts";
 export type {
-  AlertKind,
   InboxMessage,
   IdentifiedInboxMessage,
 } from "../alert-authority/delivery-contracts";

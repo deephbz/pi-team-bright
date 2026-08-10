@@ -1,9 +1,11 @@
 # Accepted subsystem boundary audit
 
-Date: 2026-08-09
-Status: maintained semantic-hardening audit; Task reconciliation, Task mutation
-publication, Team lifecycle slices, and the Pi Session adapter selection are
-independently verified; the other subsystem migrations remain incomplete
+Date: 2026-08-10
+Status: maintained semantic-hardening audit; the stable uncommitted Alert
+canonical selection is commit-1-ready. Task reconciliation, Task mutation
+publication, Team lifecycle slices, and the Pi Session adapter selection remain
+independently verified; later Alert, Coordination, Trio, and observation seams
+remain incomplete
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -180,18 +182,28 @@ Task-owned contract module, so existing internal imports remain compatible.
 
 ### Alert authority
 
-`alerts.ts` owns Alert kinds, target rules, Task references, acceptance, fan-out,
-and the invariant that Alerts do not mutate Tasks (`src/utils/alerts.ts:6`,
-`src/utils/alerts.ts:37`). It uses the legacy Message inbox as its durable
-delivery queue through `messaging.ts`, then uses `DirectMessageDelivery` for
-exact-Membership Session presentation and successful-turn acknowledgement
-(`src/utils/alerts.ts:99`, `src/utils/message-delivery.ts:259`).
+The stable uncommitted commit-1 selection places canonical Alert meaning in
+`src/alert-authority/alerts.ts` and `contracts.ts`; durable inbox acceptance,
+fan-out, reads, acknowledgement, and legacy IDs live in `inbox-delivery.ts` and
+`delivery-contracts.ts`; exact-Membership Pi presentation and replay live in
+`direct-delivery.ts`. The old `src/utils/alerts.ts`, `messaging.ts`, and
+`message-delivery.ts` paths are compatibility re-exports only. This preserves
+public tools, schemas, package exports, inbox record shapes and filenames,
+ordering, retry, timing, exact errors, and console diagnostics.
 
-The Message names are now implementation vocabulary. Public work uses typed
-Alerts, but records remain `InboxMessage` and the actuator identifies itself as
-`pi-teams-message/2` (`src/utils/models.ts:149`,
-`src/utils/message-delivery.ts:15`). This is a naming and ownership leak, not
-evidence for a sixth Message subsystem.
+Canonical `alerts.ts` still directly calls canonical inbox delivery, imports
+`appendTeamEvent` from Coordination, and imports the Task version reference.
+Canonical inbox and direct delivery still directly read Team configuration and
+current Membership. These direct Alert-to-Team and Alert-to-Coordination edges
+are later seams. They do not establish consumer-owned durable Alert ports.
+
+The Message names remain implementation vocabulary. Public work uses typed
+Alerts, while durable records remain `InboxMessage` and the actuator keeps
+`pi-teams-message/2`. This is compatibility, not a sixth Message subsystem.
+Focused tests prove deterministic validation without delivery/event effects,
+parallel fan-out with roster-order receipts, debounce/poll and replacement
+control flow, plus ALERT-004 replay behavior. They do not prove native watches,
+filesystem locks, operating-system scheduling, or real Pi turn delivery.
 
 ### Coordination observation
 
@@ -354,17 +366,16 @@ to private record changes (`src/public/observation.ts:5`).
    `src/utils/paths.ts:69`, `src/utils/paths.ts:86`). Paths own no truth, but the mixed type file
    does.
 
-8. Alert authority depends on broad Message storage and directly publishes a
-   Coordination event (`src/utils/alerts.ts:1`). Delivery acceptance happens
-   before event append (`src/utils/alerts.ts:109`, `src/utils/alerts.ts:137`).
-   Tests prove this order, partial fan-out, and an event-append failure after
-   partial accepted delivery (`src/utils/alerts.test.ts:32`,
-   `src/utils/alerts.test.ts:87`,
-   `src/utils/alert-publication-failure.characterization.test.ts`). Independent
-   verification accepted the failure case as characterization. ALERT-004 is
-   compatibility-required; preserve its observed behavior through a
-   behavior-identical seam, while a separate owner-visible decision remains
-   required for any semantic change.
+8. **Commit-1-ready Alert canonical selection.** `src/alert-authority/alerts.ts`
+   accepts typed Alerts and directly publishes a Coordination event after inbox
+   acceptance. `inbox-delivery.ts` and `direct-delivery.ts` directly resolve
+   Team Membership. The old utils paths are compatibility-only re-exports. The
+   current source graph has 85 production files, 274 unique local edges, zero
+   cycles, and zero dynamic imports. This is a source-location and compatibility
+   change only: public behavior is unchanged. The direct Team and Coordination
+   imports remain later seams; no consumer-owned durable Alert port is claimed.
+   ALERT-004 remains compatibility-required and needs a separate owner-visible
+   decision for any semantic change.
 
 9. **Resolved for the Team stop/shutdown slice.** `TeamLifecycleService` holds
    the Team topology lease, asks its consumer-owned `AssignedWorkGuard` for
@@ -392,7 +403,7 @@ to private record changes (`src/public/observation.ts:5`).
 - `ALERT-PUBLICATION-FAILURE` is classified compatibility-required for this
   behavior-identical Project. Alert delivery records can be accepted before
   `appendTeamEvent` fails
-  (`src/utils/alerts.ts:109`, `src/utils/alerts.ts:137`). Independently verified
+  (`src/alert-authority/alerts.ts`). Independently verified
   characterization records an ambiguous unavailable
   result, retained native delivery, duplicate delivery after retry, unchanged
   Task state, and no event for the first Alert
@@ -470,7 +481,7 @@ root, and public Membership observation reading broad private records. These ris
 - Task and Alert presentation use filesystem hints plus 30-second fallback
   scans. Context observation stages IDs. Only a non-error, non-aborted turn
   commits acknowledgement (`src/utils/task-delivery.ts:950`,
-  `src/utils/message-delivery.ts:365`). Restart replays presented but
+  `src/alert-authority/direct-delivery.ts`). Restart replays presented but
   unacknowledged records. Concurrent test changes now characterize aborted
   turns and failed Session sends (`src/utils/delivery-round3.test.ts`).
 - A Team epoch captures its sync wait and nudge policy once. The wait defaults to
@@ -491,7 +502,7 @@ root, and public Membership observation reading broad private records. These ris
   run state uses exact generation and actuation evidence instead of heartbeat or
   terminal activity (`src/utils/sync-liveness.ts:27`).
 - Alert fan-out is per-recipient and partial. Accepted inbox writes precede one
-  combined Alert event (`src/utils/alerts.ts:109`, `src/utils/alerts.ts:137`).
+  combined Alert event (`src/alert-authority/alerts.ts`).
 - Sync nudges reserve before send and become presented evidence only after the
   exact custom message exists on the same full branch lineage
   (`src/utils/sync-nudge.ts:47`,
@@ -513,8 +524,9 @@ nontrivial SCC. The source digest is
 `51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40`.
 
 Task reconciliation and mutation publication remain the only closed Task
-seams. Team, Alert, Coordination, Trio, and additive Membership observation
-remain incomplete. The matrix records every remaining concrete or
+seams. The Alert canonical selection is commit-1-ready but its direct Team and
+Coordination dependencies remain later seams. Team, Alert, Coordination, Trio,
+and additive Membership observation remain incomplete. The matrix records every remaining concrete or
 support-mediated seam, its source paths, required source fence, focused test
 command, blocker, and safe order. It does not treat the acyclic current file
 graph as a completed authority split: the main remaining violations are Team

@@ -1,5 +1,3 @@
-export type AlertKind = "clarification" | "attention" | "announcement";
-
 export interface InboxMessage {
   /** Communication-authority identity. Optional only for legacy on-disk records. */
   id?: string;

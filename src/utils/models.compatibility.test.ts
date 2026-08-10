@@ -50,7 +50,8 @@ import type {
   TerminalTarget,
   ThinkingLevel,
 } from "../team-authority/contracts";
-import type { AlertKind, IdentifiedInboxMessage, InboxMessage } from "../alert-authority/delivery-contracts";
+import type { AlertKind } from "../alert-authority/contracts";
+import type { IdentifiedInboxMessage, InboxMessage } from "../alert-authority/delivery-contracts";
 import type { TaskRelation, TaskRelationType, TaskStatus } from "../task-authority/contracts";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type {

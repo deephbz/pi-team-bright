@@ -10,7 +10,7 @@ import {
   assertCursorUnchanged,
 } from "../../test/support/external-harness";
 import { readBeadsAuthorityFingerprint, resolveBdExecutable } from "./beads";
-import * as messaging from "./messaging";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, DIRECT_MESSAGE_RESUME_TYPE } from "./message-delivery";

@@ -1,20 +1,26 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "full_split_recomputed_worker_launch_injection_verified_remaining_boundaries_incomplete",
+  "status": "commit_1_ready_alert_canonical_selection_remaining_boundaries_incomplete",
   "reviewedRevision": "57c8e02d672eddad0aa955961cef5628b7bb4421",
   "reviewedTreeState": {
-    "kind": "independently_accepted_uncommitted_worker_launch_injection_selection",
+    "kind": "stable_uncommitted_alert_canonical_selection",
     "branch": "audit/semantic-hardening-behavior-inventory",
-    "baseRevision": "57c8e02d672eddad0aa955961cef5628b7bb4421",
-    "selectedPaths": 2,
-    "selectionScope": "durable_model_tool_optional_worker_launch_bridge_injection_only",
+    "baseRevision": "ab7f591",
+    "selectedPaths": 8,
+    "selectionScope": "alert_canonical_contract_inbox_delivery_direct_delivery_and_utils_compatibility",
     "selectedPathList": [
-      "src/model-tool-contract/durable-model-tool-port.ts",
-      "src/model-tool-contract/durable-model-tool-port.test.ts"
+      "src/alert-authority/alerts.ts",
+      "src/alert-authority/contracts.ts",
+      "src/alert-authority/delivery-contracts.ts",
+      "src/alert-authority/inbox-delivery.ts",
+      "src/alert-authority/direct-delivery.ts",
+      "src/utils/alerts.ts",
+      "src/utils/messaging.ts",
+      "src/utils/message-delivery.ts"
     ],
-    "review": "independently_accepted_32_focused_tests_typecheck_93_lane_package_static_diff",
-    "selectedPathDigestSha256": "fe846971e975860b93362f0a0cb421870b56ef042d9cb6fec3abc58495c51bcf",
-    "proofLimit": "This selection removes direct DurableTeamLifecyclePublication and createWorkerLaunchBridge construction from the durable façade. An optional injected WorkerLaunchBridge preserves read-only snapshot and nudge-debt use; ensureWorker refuses carrier_unavailable before logical Worker mutation when it is absent. Pi hook adaptation, Alert, Coordination, Trio façade splitting, and Membership observation remain outside the selection."
+    "review": "stable_after_tasks_2bm_ou7_7ku_commit_1_ready",
+    "selectedPathDigestSha256": null,
+    "proofLimit": "Focused tests establish deterministic production control flow and behavior compatibility. They do not establish native filesystem watches or locks, operating-system scheduling, real Pi turn delivery, or a consumer-owned durable Alert port."
   },
   "productionTypeScriptBaseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
   "sourceDocument": "subsystem-boundary-audit.md",
@@ -50,9 +56,9 @@
   "evidenceBasis": {
     "productionTypeScript": {
       "scope": "tracked or selected .ts files under src/ and extensions/, excluding *.test.ts",
-      "files": 81,
-      "lines": 19693,
-      "staticLocalEdges": 266,
+      "files": 85,
+      "lines": null,
+      "staticLocalEdges": 274,
       "nontrivialStaticStronglyConnectedComponents": 0,
       "dynamicImports": 0,
       "changedSinceProductionTypeScriptBaseline": true
@@ -269,10 +275,13 @@
         "id": "alert_acceptance_and_delivery",
         "currentOwner": "alert_authority",
         "sources": [
-          "src/utils/alerts.ts",
-          "src/utils/messaging.ts",
-          "src/utils/message-delivery.ts"
-        ]
+          "src/alert-authority/alerts.ts",
+          "src/alert-authority/contracts.ts",
+          "src/alert-authority/delivery-contracts.ts",
+          "src/alert-authority/inbox-delivery.ts",
+          "src/alert-authority/direct-delivery.ts"
+        ],
+        "currentScopeNote": "src/utils/alerts.ts, src/utils/messaging.ts, and src/utils/message-delivery.ts are compatibility re-exports only. Public behavior remains unchanged; direct Team and Coordination implementation imports remain later seams."
       },
       {
         "id": "coordination_journal_and_position",
@@ -411,20 +420,19 @@
       {
         "from": "alert_acceptance_and_delivery",
         "to": "team_core",
-        "mechanism": "legacy_message_delivery_resolves_exact_membership",
+        "mechanism": "canonical_inbox_and_direct_delivery_resolve_exact_membership",
         "evidence": [
-          "src/utils/alerts.ts:109",
-          "src/utils/alerts.ts:120",
-          "src/utils/messaging.ts"
+          "src/alert-authority/inbox-delivery.ts",
+          "src/alert-authority/direct-delivery.ts"
         ]
       },
       {
         "from": "alert_acceptance_and_delivery",
         "to": "coordination_journal_and_position",
-        "mechanism": "static_event_publication_import",
+        "mechanism": "canonical_static_event_publication_import",
         "evidence": [
-          "src/utils/alerts.ts:3",
-          "src/utils/alerts.ts:137"
+          "src/alert-authority/alerts.ts:3",
+          "src/alert-authority/alerts.ts"
         ]
       },
       {
@@ -617,8 +625,7 @@
         "One Node process directly drives two registered extension harnesses and same-Session lifecycle hooks. It proves later exact-Session presentation and hook-level replay after an error, not a process, fork, Pi Session, or OS restart. External process evidence remains a proof limit."
       ],
       "anchors": [
-        "src/utils/alerts.ts:109",
-        "src/utils/alerts.ts:137",
+        "src/alert-authority/alerts.ts",
         "src/utils/alerts.test.ts:32",
         "src/utils/alerts.test.ts:87",
         "src/utils/alert-publication-failure.characterization.test.ts"
@@ -1090,14 +1097,14 @@
     "schema": "pi-team-bright-full-split-completion-matrix/1",
     "computedAt": "2026-08-10",
     "input": {
-      "gitHead": "1686ac19dc83143e55c7a68062e1a30c1e53fa6d",
-      "productionSourceDigestSha256": "51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40",
-      "scope": "81 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts; digest is sorted sha256(content) plus two spaces plus path plus newline. Current tree includes the independently accepted uncommitted Pi Session adapter selection.",
+      "gitHead": "ab7f591",
+      "productionSourceDigestSha256": null,
+      "scope": "85 current tracked or selected TypeScript production files under src/ and extensions/, excluding *.test.ts. Current tree includes the stable uncommitted Alert canonical selection after Tasks 2bm, ou7, and 7ku.",
       "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
     },
     "observedStaticGraph": {
-      "files": 81,
-      "uniqueLocalEdges": 266,
+      "files": 85,
+      "uniqueLocalEdges": 274,
       "dynamicRelativeImports": 0,
       "nontrivialStronglyConnectedComponents": 0,
       "selfCycles": 0,
@@ -1115,10 +1122,10 @@
         {"from": "trio_facing_interface_and_projections", "to": "alert_authority", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"]},
         {"from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/public/observation.ts"]},
         {"from": "team_authority_and_role_realization", "to": "alert_authority", "edges": 1, "files": ["src/team-authority/worker-launch-bridge.ts"]},
-        {"from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/utils/alerts.ts"]},
-        {"from": "alert_authority", "to": "task_authority", "edges": 1, "files": ["src/utils/alerts.ts"]},
+        {"from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/alert-authority/alerts.ts"]},
+        {"from": "alert_authority", "to": "task_authority", "edges": 1, "files": ["src/alert-authority/alerts.ts"]},
         {"from": "coordination_observation", "to": "team_authority_and_role_realization", "edges": 4, "files": ["src/utils/hidden-observation.ts", "src/utils/sync-liveness.ts", "src/utils/team-events.ts"]},
-        {"from": "alert_authority", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/utils/message-delivery.ts", "src/utils/messaging.ts"]},
+        {"from": "alert_authority", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/alert-authority/direct-delivery.ts", "src/alert-authority/inbox-delivery.ts"]},
         {"from": "coordination_observation", "to": "task_authority", "edges": 3, "files": ["src/utils/task-event-failure-hints.ts", "src/utils/team-events.ts"]}
       ],
       "supportMediatedDependencies": [
@@ -1147,11 +1154,11 @@
       },
       {
         "id": "alert_authority",
-        "completion": "compatibility_required_behavior_identical_seam_eligible",
-        "remainingSeams": ["src/utils/alerts.ts uses the legacy Message queue and directly appends Coordination events", "src/utils/messaging.ts and src/utils/message-delivery.ts resolve Team Membership directly", "Alert delivery, recovery, and exact-Session presentation have no Alert-owned adapter boundary"],
-        "violations": ["alert_authority -> coordination_observation: src/utils/alerts.ts:3", "alert_authority -> team_authority_and_role_realization: src/utils/messaging.ts:7 and src/utils/message-delivery.ts:7"],
-        "staticGate": "For behavior-identical ALERT-004 seam work, deny Team and Coordination implementation imports from Alert sources. Permit Alert-owned delivery interfaces plus injected current-Membership and event-publication ports only.",
-        "focusedVerification": ["npx vitest run src/utils/alerts.test.ts src/utils/alert-publication-failure.characterization.test.ts src/utils/message-delivery.test.ts", "npm run typecheck"],
+        "completion": "commit_1_ready_canonical_selection_later_seams_open",
+        "remainingSeams": ["src/alert-authority/alerts.ts directly appends Coordination events", "src/alert-authority/inbox-delivery.ts and src/alert-authority/direct-delivery.ts resolve Team Membership directly", "consumer-owned durable Alert ports are not implemented"],
+        "violations": ["alert_authority -> coordination_observation: src/alert-authority/alerts.ts:3", "alert_authority -> team_authority_and_role_realization: src/alert-authority/inbox-delivery.ts and src/alert-authority/direct-delivery.ts"],
+        "staticGate": "The current canonical selection deliberately retains Team and Coordination implementation imports. A later seam must replace them with Alert-owned consumer ports and injected adapters without changing ALERT-004 behavior.",
+        "focusedVerification": ["npx vitest run src/utils/alerts.test.ts src/utils/messaging.test.ts src/utils/message-delivery.test.ts src/alert-authority/compatibility.test.ts", "npm run typecheck", "npm run test:lanes"],
         "blocker": "Semantic Alert behavior or recovery decisions need a separate owner-visible decision. External process, fork, Pi Session, and OS restart evidence remains a proof limit; it does not block behavior-identical compatibility seam work."
       },
       {
