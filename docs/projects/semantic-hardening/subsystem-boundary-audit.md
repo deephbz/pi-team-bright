@@ -306,9 +306,10 @@ to private record changes (`src/public/observation.ts:5`).
    partial accepted delivery (`src/utils/alerts.test.ts:32`,
    `src/utils/alerts.test.ts:87`,
    `src/utils/alert-publication-failure.characterization.test.ts`). Independent
-   verification accepted the failure case as characterization. ALERT-004 remains
-   unclassified; recovery ownership and behavior classification authorize no
-   change.
+   verification accepted the failure case as characterization. ALERT-004 is
+   compatibility-required; preserve its observed behavior through a
+   behavior-identical seam, while a separate owner-visible decision remains
+   required for any semantic change.
 
 9. Team lifecycle and Task authority need queries in both directions. Worker
    stop checks nonterminal Tasks while holding the Team topology lease
@@ -329,16 +330,20 @@ to private record changes (`src/public/observation.ts:5`).
 
 ## Risks and unresolved test gates
 
-- `ALERT-PUBLICATION-FAILURE` is open for owner classification. Alert delivery
-  records can be accepted before `appendTeamEvent` fails
+- `ALERT-PUBLICATION-FAILURE` is classified compatibility-required for this
+  behavior-identical Project. Alert delivery records can be accepted before
+  `appendTeamEvent` fails
   (`src/utils/alerts.ts:109`, `src/utils/alerts.ts:137`). Independently verified
   characterization records an ambiguous unavailable
   result, retained native delivery, duplicate delivery after retry, unchanged
   Task state, and no event for the first Alert
-  (`src/utils/alert-publication-failure.characterization.test.ts`). Restart and
-  later-presentation evidence also remain open. The Alert boundary must not
-  choose preservation, warnings, recovery records, or an outbox until the owner
-  classifies this behavior.
+  (`src/utils/alert-publication-failure.characterization.test.ts`). One Node
+  process directly drives two registered extension harnesses and same-Session
+  lifecycle hooks. It proves later exact-Session presentation and hook-level
+  replay after an error, not a process, fork, Pi Session, or OS restart.
+  External process evidence remains a proof limit, but does not block the
+  behavior-identical compatibility seam. A semantic change still needs a
+  separate owner-visible decision.
 - `TASK-RECONCILIATION-INJECTION` is closed. Four independent deterministic
   tests run the injected query through self-authored suppression, a later
   external change, owner-marker recovery, exact replacement binding, delivery
@@ -432,6 +437,27 @@ root, and public Membership observation reading broad private records. These ris
   reconciliation and never mutate Task or Team authority.
 - Compatibility readers preserve legacy Memberships, inbox IDs, terminal
   fields, Task cutover evidence, and mixed event/delivery records.
+
+## Full-split completion matrix
+
+The recomputed machine-operable completion matrix is
+[`subsystem-dependency-map.json`](subsystem-dependency-map.json) under
+`completionMatrix`. Its source input is `a3c51d78c3e95549768a91a36535bee0b5c94755`:
+68 production TypeScript files, 231 unique resolved static local edges, no
+literal relative dynamic import, no self-cycle, and no nontrivial SCC. The
+source digest is
+`89e6bd6788b822ae11fef1a267757f73e10c91979e3bce5ee21b427205886f43`.
+
+Task reconciliation and mutation publication remain the only closed Task
+seams. Team, Alert, Coordination, Trio, and additive Membership observation
+remain incomplete. The matrix records every remaining concrete or
+support-mediated seam, its source paths, required source fence, focused test
+command, blocker, and safe order. It does not treat the acyclic current file
+graph as a completed authority split: the main remaining violations are Team
+and Task direct reverse dependencies, Alert direct Team and event writes,
+Coordination's concrete Team/runtime/Task-delivery/Alert-inbox reads, the
+combined durable and in-memory Trio façade, and the broad public observation
+decoder.
 
 ## Proposed dependency direction
 
@@ -530,6 +556,7 @@ dependency, hidden dynamic reconciliation cycle, and concrete mutation-
 publication writers without changing a public operation, persisted record, or
 runtime order. The rebased rc.10 tree adds substantial Coordination behavior and
 evidence, but it does not complete Team, Alert, Coordination, Trio, or additive
-Membership-observation boundaries. ALERT-004 remains unclassified; owner
-classification plus restart and later-presentation evidence remain required
-before Alert refactoring.
+Membership-observation boundaries. ALERT-004 is compatibility-required and
+has hook-level later-presentation and replay characterization. Its external
+process boundary remains a proof limit, not a gate on behavior-identical Alert
+refactoring; semantic change still needs a separate owner-visible decision.

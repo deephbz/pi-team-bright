@@ -1,6 +1,6 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "rc10_task_reconciliation_and_publication_boundaries_verified_remaining_boundaries_incomplete",
+  "status": "full_split_recomputed_task_reconciliation_and_publication_verified_remaining_boundaries_incomplete",
   "reviewedRevision": "8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571",
   "reviewedTreeState": {
     "kind": "independently_verified_uncommitted_selection",
@@ -85,7 +85,7 @@
     "selectedPhaseTwoEvidence": [
       {
         "path": "src/utils/alert-publication-failure.characterization.test.ts",
-        "state": "independently_verified_characterization_pending_owner_classification",
+        "state": "compatibility_required_behavior_identical_seam_eligible",
         "scope": "Alert delivery acceptance followed by Coordination publication failure"
       },
       {
@@ -564,13 +564,13 @@
   "unresolvedTestGates": [
     {
       "id": "ALERT-PUBLICATION-FAILURE",
-      "state": "characterized_owner_classification_required",
-      "blocks": "Alert boundary refactor and any outbox or warning decision",
+      "state": "compatibility_required_behavior_identical_seam_eligible",
+      "blocks": "Any semantic Alert behavior, outbox, or warning decision; not behavior-identical seam work",
       "currentFact": "After partial Alert delivery acceptance followed by Coordination publication failure, the unavailable public result omits per-recipient outcomes, the cursor does not advance, Task state remains unchanged, and an exact retry duplicates accepted delivery under a new Alert identity.",
       "requiredEvidence": [
-        "Obtain owner classification before selecting preservation, warning, recovery-record, outbox, or replacement behavior.",
+        "Preserve the accepted compatibility-required behavior through behavior-identical seam work.",
         "If behavior changes, preserve this characterization as historical evidence and add normative replacement tests.",
-        "Keep process restart and later exact-Session presentation outside this characterization's proof claim."
+        "One Node process directly drives two registered extension harnesses and same-Session lifecycle hooks. It proves later exact-Session presentation and hook-level replay after an error, not a process, fork, Pi Session, or OS restart. External process evidence remains a proof limit."
       ],
       "anchors": [
         "src/utils/alerts.ts:109",
@@ -1007,8 +1007,111 @@
     "nextEligibleSeam": {
       "state": "requires_separate_task_and_behavior_gate",
       "gate": "ALERT-PUBLICATION-FAILURE_or_RC10-COORDINATION-BOUNDARY",
-      "change": "Classify ALERT-004 before any Alert publication change, or isolate one Coordination read boundary while preserving rc.10 behavior.",
+      "change": "ALERT-004 is compatibility-required. Isolate one Coordination read boundary or make behavior-identical Alert seam changes while preserving current behavior; require a separate owner-visible decision for semantic change.",
       "proofLimit": "No Alert outbox or broad Coordination consolidation is authorized by the Task publication seam."
     }
+  },
+  "completionMatrix": {
+    "schema": "pi-team-bright-full-split-completion-matrix/1",
+    "computedAt": "2026-08-10",
+    "input": {
+      "gitHead": "a3c51d78c3e95549768a91a36535bee0b5c94755",
+      "productionSourceDigestSha256": "89e6bd6788b822ae11fef1a267757f73e10c91979e3bce5ee21b427205886f43",
+      "scope": "68 TypeScript production files under src/ and extensions/, excluding *.test.ts; the source digest excludes concurrent test and documentation changes.",
+      "method": "TypeScript AST scan of static relative import and re-export declarations, resolved only to selected production files; unique ordered file edges; Tarjan SCC. Dynamic import calls with literal relative specifiers are separately scanned."
+    },
+    "observedStaticGraph": {
+      "files": 68,
+      "uniqueLocalEdges": 231,
+      "dynamicRelativeImports": 0,
+      "nontrivialStronglyConnectedComponents": 0,
+      "selfCycles": 0,
+      "componentEdges": [
+        { "from": "team_authority_and_role_realization", "to": "coordination_observation", "edges": 2, "files": ["src/utils/worker-launch-bridge.ts"] },
+        { "from": "task_authority", "to": "team_authority_and_role_realization", "edges": 4, "files": ["src/model-tool-contract/beads-authority-adapter.ts", "src/utils/task-delivery.ts", "src/utils/task-delivery-migration.ts", "src/utils/task-migration.ts"] },
+        { "from": "task_authority", "to": "coordination_observation", "edges": 1, "files": ["src/model-tool-contract/beads-task-adapter.ts"] },
+        { "from": "alert_authority", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/utils/messaging.ts", "src/utils/message-delivery.ts"] },
+        { "from": "alert_authority", "to": "coordination_observation", "edges": 1, "files": ["src/utils/alerts.ts"] },
+        { "from": "coordination_observation", "to": "team_authority_and_role_realization", "edges": 2, "files": ["src/utils/hidden-observation.ts", "src/utils/sync-liveness.ts"] },
+        { "from": "coordination_observation", "to": "task_authority", "edges": 3, "files": ["src/utils/team-events.ts", "src/utils/task-event-failure-hints.ts"] },
+        { "from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "edges": 3, "files": ["src/model-tool-contract/durable-model-tool-port.ts"] },
+        { "from": "trio_facing_interface_and_projections", "to": "task_authority", "edges": 14, "files": ["src/model-tool-contract/catalog.ts", "src/model-tool-contract/durable-model-tool-port.ts", "src/model-tool-contract/executors.ts", "src/model-tool-contract/in-memory-team-port.ts", "src/model-tool-contract/result-projection.ts"] },
+        { "from": "trio_facing_interface_and_projections", "to": "alert_authority", "edges": 1, "files": ["src/model-tool-contract/durable-model-tool-port.ts"] },
+        { "from": "trio_facing_interface_and_projections", "to": "coordination_observation", "edges": 6, "files": ["src/model-tool-contract/durable-model-tool-port.ts"] },
+        { "from": "pi_composition_root", "to": "team_authority_and_role_realization", "edges": 6, "files": ["extensions/index.ts"] },
+        { "from": "pi_composition_root", "to": "task_authority", "edges": 7, "files": ["extensions/index.ts"] },
+        { "from": "pi_composition_root", "to": "alert_authority", "edges": 2, "files": ["extensions/index.ts"] },
+        { "from": "pi_composition_root", "to": "coordination_observation", "edges": 5, "files": ["extensions/index.ts"] },
+        { "from": "membership_observation", "to": "team_authority_and_role_realization", "edges": 1, "files": ["src/public/observation.ts"] }
+      ],
+      "supportMediatedDependencies": [
+        { "from": "coordination_observation", "to": "task_authority", "path": "src/utils/sync-liveness.ts", "mechanism": "taskDeliveryPath reads Task-delivery records through src/utils/paths.ts" },
+        { "from": "coordination_observation", "to": "alert_authority", "path": "src/utils/sync-liveness.ts", "mechanism": "inboxPath reads legacy Alert delivery records through src/utils/paths.ts" },
+        { "from": "membership_observation", "to": "team_authority_and_role_realization", "path": "src/public/observation.ts", "mechanism": "direct TeamConfig and Member decoding plus direct runtime file reads; only the runtime type import is a selected local edge" },
+        { "from": "trio_facing_interface_and_projections", "to": "team_authority_and_role_realization", "path": "src/utils/team-status.ts and src/utils/team-footer.ts", "mechanism": "human projection code directly reads Team implementation; these paths are classified as support by the AST grouping and remain a Trio seam" }
+      ]
+    },
+    "authorities": [
+      {
+        "id": "team_authority_and_role_realization",
+        "completion": "partial",
+        "remainingSeams": ["extensions/index.ts lifecycle, startup admission, Session binding, stop, shutdown, and Worker carrier orchestration", "src/utils/worker-launch-bridge.ts directly appends and waits on Coordination events", "TeamConfig and src/utils/models.ts mix Team, Task, Alert, Coordination, runtime, and compatibility records"],
+        "violations": ["team_authority_and_role_realization -> coordination_observation: src/utils/worker-launch-bridge.ts:3 and :18", "team_authority_and_role_realization -> task_authority behavior at extensions/index.ts:1246 and :1251 lacks a Team-owned assigned-work guard port"],
+        "staticGate": "For Team-owned sources, deny imports of task-authority, model-tool-contract, coordination utilities, public observation, and Trio renderers. Permit only Team contracts, carrier adapters, and consumer-owned guard interfaces.",
+        "focusedVerification": ["npx vitest run src/utils/worker-ensure-lifecycle.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts src/utils/launch-compensation.contract.test.ts", "npm run typecheck"]
+      },
+      {
+        "id": "task_authority",
+        "completion": "partial_task_reconciliation_and_mutation_publication_closed",
+        "remainingSeams": ["Task actor fencing and migration paths import Team authority directly", "src/model-tool-contract/beads-task-adapter.ts still imports Coordination event definitions", "src/utils/models.ts still owns mixed Task relation and delivery record types"],
+        "violations": ["task_authority -> team_authority_and_role_realization: src/model-tool-contract/beads-authority-adapter.ts:6; src/utils/task-delivery.ts:13; src/utils/task-delivery-migration.ts:7; src/utils/task-migration.ts:7", "task_authority -> coordination_observation: src/model-tool-contract/beads-task-adapter.ts:9"],
+        "staticGate": "Keep the closed publication fence. Add a Task-source deny list for utils/teams, utils/team-events, and Trio modules. Allow only Task-owned contracts and injected current-Membership and publication interfaces.",
+        "focusedVerification": ["npx vitest run src/task-authority/reconciliation-equivalence.test.ts src/model-tool-contract/task-mutation-publication-order.test.ts src/adapters/durable-task-mutation-publication.test.ts src/model-tool-contract/beads-task-adapter.test.ts", "npm run typecheck"]
+      },
+      {
+        "id": "alert_authority",
+        "completion": "compatibility_required_behavior_identical_seam_eligible",
+        "remainingSeams": ["src/utils/alerts.ts uses the legacy Message queue and directly appends Coordination events", "src/utils/messaging.ts and src/utils/message-delivery.ts resolve Team Membership directly", "Alert delivery, recovery, and exact-Session presentation have no Alert-owned adapter boundary"],
+        "violations": ["alert_authority -> coordination_observation: src/utils/alerts.ts:3", "alert_authority -> team_authority_and_role_realization: src/utils/messaging.ts:7 and src/utils/message-delivery.ts:7"],
+        "staticGate": "For behavior-identical ALERT-004 seam work, deny Team and Coordination implementation imports from Alert sources. Permit Alert-owned delivery interfaces plus injected current-Membership and event-publication ports only.",
+        "focusedVerification": ["npx vitest run src/utils/alerts.test.ts src/utils/alert-publication-failure.characterization.test.ts src/utils/message-delivery.test.ts", "npm run typecheck"],
+        "blocker": "Semantic Alert behavior or recovery decisions need a separate owner-visible decision. External process, fork, Pi Session, and OS restart evidence remains a proof limit; it does not block behavior-identical compatibility seam work."
+      },
+      {
+        "id": "coordination_observation",
+        "completion": "partial_behavior_implemented_boundary_not_isolated",
+        "remainingSeams": ["src/utils/sync-liveness.ts reads runtime, Task-delivery, and legacy Alert inbox records directly", "src/utils/hidden-observation.ts imports Team configuration operations", "DurableModelToolTeamPort and extensions/index.ts own Coordination application behavior and nudge actuation"],
+        "violations": ["coordination_observation -> team_authority_and_role_realization: src/utils/hidden-observation.ts:6 and src/utils/sync-liveness.ts:4 are concrete reads rather than a Coordination-owned Team query", "coordination_observation -> task_authority and alert_authority: src/utils/sync-liveness.ts reads taskDeliveryPath and inboxPath through src/utils/paths.ts"],
+        "staticGate": "Coordination may import only its consumer-owned Team, Task, and Alert read-query interfaces. Deny utils/runtime, utils/task-delivery, utils/messaging, utils/message-delivery, and concrete Team configuration imports from Coordination sources.",
+        "focusedVerification": ["npx vitest run src/model-tool-contract/sync-event-hydration.test.ts src/utils/sync-liveness.test.ts src/utils/task-event-failure-hints.test.ts src/utils/sync-nudge.test.ts src/utils/sync-nudge-conductor.test.ts src/utils/sync-nudge-extension.test.ts test/coord-liveness-e2e/sync-liveness.test.ts", "npm run typecheck"]
+      },
+      {
+        "id": "trio_facing_interface_and_projections",
+        "completion": "not_started_combined_facade_and_fake",
+        "remainingSeams": ["ModelToolTeamPort exposes all authority operations in one interface", "DurableModelToolTeamPort directly composes Team, Task, Alert, Coordination, Worker launch, acknowledgement, and nudge behavior", "InMemoryModelToolTeamPort stores all authority state and waiters in one StoredTeam", "extensions/index.ts contains both composition and an application/lifecycle layer; status and footer projections read concrete authorities"],
+        "violations": ["trio facade -> all five authorities: src/model-tool-contract/durable-model-tool-port.ts imports Team at :4, Task at :5/:13/:18, Alert at :7, and Coordination at :6/:20/:54-:57", "Trio fake cross-authority atomicity: src/model-tool-contract/in-memory-team-port.ts:209 and :273"],
+        "staticGate": "Trio registration, catalog, executors, result projection, TUI projection, status, and footer may depend only on separate Team, Task, Alert, and Coordination application ports and DTOs. Deny concrete authority, Beads, runtime, and delivery imports.",
+        "focusedVerification": ["npx vitest run src/model-tool-contract/catalog.test.ts src/model-tool-contract/first-journey.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/model-tool-contract/result-projection.test.ts src/utils/team-status.test.ts src/utils/team-footer.test.ts", "npm run qa:tool-results", "npm run typecheck"]
+      },
+      {
+        "id": "membership_observation",
+        "completion": "partial_additive_but_broad_private_decoder",
+        "remainingSeams": ["src/public/observation.ts imports private runtime and model types and decodes TeamConfig/Member records directly", "No narrow Team/runtime projection reader or public-compatibility import fence exists"],
+        "violations": ["membership_observation -> team_authority_and_role_realization has one static type edge at src/public/observation.ts:5 and broad direct private-record file decoding at :8 through :139"],
+        "staticGate": "Core source imports of src/public/observation.ts remain zero. Public observation may import only a narrow read-only Team/runtime decoder and public DTOs, never Team mutation, lifecycle, Task, Alert, or Trio modules.",
+        "focusedVerification": ["npx vitest run src/public/observation.test.ts", "npm run verify:observation-package", "npm run typecheck"]
+      }
+    ],
+    "safestCoherentOrder": [
+      { "step": 0, "seam": "behavior_inventory_completion", "precondition": "All inventory entries are characterized. ALERT-004 is compatibility-required with one-Node-process hook-level later-presentation and replay evidence; external process, fork, Pi Session, and OS restart evidence remains a proof limit, not a behavior-identical seam gate.", "verification": ["npx vitest run src/utils/alert-publication-failure.characterization.test.ts src/utils/causal-path-characterization.test.ts"] },
+      { "step": 1, "seam": "shared_domain_contracts", "precondition": "Keep compatibility re-exports and persisted shapes. Split src/utils/models.ts by authority before moving behavior.", "verification": ["npm run typecheck", "npm run test:lanes"] },
+      { "step": 2, "seam": "team_role_lifecycle_and_consumer_guard", "precondition": "Introduce the Team-owned assigned-work guard and extract lifecycle/carrier application services from extensions/index.ts without changing hook order.", "verification": ["npx vitest run src/utils/worker-ensure-lifecycle.test.ts src/utils/session-lifecycle.test.ts src/utils/topology-lifecycle.contract.test.ts"] },
+      { "step": 3, "seam": "alert_delivery_and_publication", "precondition": "Only after step 0. Wrap Message records in an Alert adapter and inject Membership resolution and Coordination publication.", "verification": ["npx vitest run src/utils/alerts.test.ts src/utils/alert-publication-failure.characterization.test.ts src/utils/message-delivery.test.ts"] },
+      { "step": 4, "seam": "coordination_read_ports_and_application_boundary", "precondition": "Replace direct Team/runtime, Task-delivery, and Alert-inbox reads with Coordination-owned read queries. Keep hints, timers, and nudges derived.", "verification": ["npx vitest run src/model-tool-contract/sync-event-hydration.test.ts src/utils/sync-liveness.test.ts src/utils/task-event-failure-hints.test.ts src/utils/sync-nudge-extension.test.ts test/coord-liveness-e2e/sync-liveness.test.ts"] },
+      { "step": 5, "seam": "trio_ports_and_separate_fakes", "precondition": "Split ModelToolTeamPort and StoredTeam only after the four authority ports exist. Preserve model and TUI output contracts.", "verification": ["npx vitest run src/model-tool-contract/first-journey.test.ts src/model-tool-contract/durable-model-tool-port.test.ts src/model-tool-contract/result-projection.test.ts", "npm run qa:tool-results"] },
+      { "step": 6, "seam": "additive_membership_decoder", "precondition": "Move only the read-only Team/runtime decoder behind the final narrow projection interface. Keep the observation export and schema unchanged.", "verification": ["npx vitest run src/public/observation.test.ts", "npm run verify:observation-package"] },
+      { "step": 7, "seam": "final_static_and_release_validation", "precondition": "All source fences and behavior gates pass on one stable tree.", "verification": ["npm run typecheck", "npm run test:lanes", "npm run test:full", "npm run verify:package"] }
+    ],
+    "completionRule": "Do not report the five-authority split complete until every authority entry is complete, every listed static gate is implemented and passing, ALERT-004 compatibility behavior is preserved through its seam with hook-level characterization, the Trio fake no longer combines authority state, Membership observation consumes only its narrow decoder, and the final stable tree passes the listed release validation. External process, fork, Pi Session, and OS restart evidence remains a proof limit, not a behavior-identical Alert-seam gate."
   }
 }

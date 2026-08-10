@@ -65,11 +65,14 @@ The isolated worktree and local audit branch were restored at documentation HEAD
 `origin/main` and npm `next` remain on rc.10. The current direct leader Session
 has the required proxy environment and Herdr control. Dedicated watchdog
 `ptb-full-split-watchdog` and direct-leader Team
-`semantic-hardening-full-split` are active. Three Workers authored Task claim
-and assignment events for the source-graph audit, behavior-evidence audit, and
-Alert restart/failure proof design. The watchdog checks both leader liveness and
+`semantic-hardening-full-split` are active. Worker-authored Task evidence now
+covers the current source graph, all 27 behavior entries, Alert hook-level replay,
+Team carrier replacement, and Trio projection parity. All 27 entries are
+characterized with explicit proof limits; characterization does not make them
+normative. The shared domain-contract split also passed independent review and
+awaits its separate refactor commit. The watchdog checks both leader liveness and
 goal completion, and must not accept a release increment as Project completion
-while any target boundary or behavior-inventory gate remains open.
+while any target boundary or behavior gate remains open.
 
 ## Sources of truth
 
@@ -151,18 +154,22 @@ Closed gates:
 - `TASK-PUBLICATION-INVERSION` — consumer-owned port, external durable adapter,
   leader and Worker composition, exact order, warning, failure, no-op, replay,
   and import-fence evidence.
+- `BEHAVIOR-CHARACTERIZATION` — all 27 inventory entries have bounded executable
+  anchors and explicit proof limits. Broad Trio checks cover 48 registered-tool
+  cases; representative TUI outcomes have independent semantic assertions.
 
 Open boundary risks:
 
-- `ALERT-PUBLICATION-FAILURE` / ALERT-004 remains characterized and
-  unclassified. Restart and later exact-Session presentation evidence remain
-  open. Do not choose an outbox, warning, or replacement behavior first.
+- `ALERT-PUBLICATION-FAILURE` / ALERT-004 is compatibility-required for this
+  behavior-identical refactor. One-process hook simulation proves later exact-
+  Session presentation and replay after an error, not process, fork, Pi Session,
+  or OS restart. Any semantic change needs a separate owner-visible decision.
 - Coordination implements rc.10 hydration, liveness, failed hints, bounded
   waits, indeterminate outcomes, and nudges, but still reads Team runtime, Task
   delivery, and Alert inbox records concretely.
 - `ModelToolTeamPort`, its durable implementation, and its in-memory fake still
-  combine multiple authorities. Broad Trio parity and privacy coverage remains
-  incomplete.
+  combine multiple authorities. The projection evidence is now bounded, but the
+  façade and fake authority split remains incomplete.
 - Team lifecycle and carrier policy remain partly in Pi composition. Public
   Membership observation still reads broad private record shapes.
 - Beads hydration has a measured latency tail. Removing reverse-dependent
@@ -197,12 +204,12 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 1. Keep the active watchdog and direct-leader Team running; use their recorded
    liveness and Worker-authored Task events as launch evidence.
-2. Recompute the current source graph and convert every missing behavior-
-   inventory entry into an explicit evidence gate before its owning seam moves.
+2. Commit the independently verified behavior-characterization slice, then the
+   separately verified shared domain-contract split.
 3. Implement and independently verify the remaining coherent boundaries in this
-   order unless source evidence requires a safer dependency order: shared domain
-   contracts, Team lifecycle/Role realization, Alert, Coordination, Trio façade
-   and fakes, then additive Membership observation.
+   order unless source evidence requires a safer dependency order: Team
+   lifecycle/Role realization, Alert, Coordination, Trio façade and fakes, then
+   additive Membership observation.
 4. Commit each coherent boundary separately. Keep later optimizations as one
    measured problem per commit.
 5. Run focused checks during implementation. Run one final aggregate only after
