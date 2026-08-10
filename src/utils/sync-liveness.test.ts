@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { readWorkerRunObservation, livenessIsComplete, livenessIsProductive } from "./sync-liveness";
+import { deriveWorkerRunObservation, readWorkerRunObservation, livenessIsComplete, livenessIsProductive } from "./sync-liveness";
 import { writeRuntimeStatus } from "./runtime";
 import { inboxPath, taskDeliveryPath, teamDir } from "./paths";
 
@@ -19,6 +19,14 @@ function member(overrides: Record<string, unknown> = {}) {
 }
 
 describe("exact Worker run-state evidence", () => {
+  it("derives liveness without reading durable records", () => {
+    expect(deriveWorkerRunObservation(member(), {
+      runtime: { membershipId: "membership-1", pid: 42, startedAt: 10, runState: "settled" },
+      taskDelivery: { known: true, pending: false },
+      alertInbox: { known: true, pending: false },
+    })).toMatchObject({ state: "settled", generation: { membershipId: "membership-1", pid: 42, startedAt: 10 } });
+  });
+
   it("distinguishes active and settled exact generations", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "ptb-liveness-runtime-"));
     roots.push(root);

@@ -125,7 +125,7 @@ describe("durable Alert port equivalence", () => {
     expect(extension.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);
     expect(extension.match(/const alertPublication = new DurableAlertPublication\(\)/g)).toHaveLength(1);
     expect(extension.match(/const alertSender = createAlertSender\(alertMembership, alertPublication\)/g)).toHaveLength(1);
-    expect(extension).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender)");
+    expect(extension).toContain("new DurableModelToolTeamPort(workerLaunchBridge, lifecycle, taskAdapterFactory, alertSender, coordinationQueries)");
     expect(extension).toContain("alertSender.sendAlert({ teamName: binding.teamName");
 
     const sessionAdapter = fs.readFileSync(path.join(root, "extensions/pi-team-session-adapter.ts"), "utf8");

@@ -1,8 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import { inboxPath, taskDeliveryPath, teamDir } from "./paths";
-import { readRuntimeStatus, runtimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "./runtime";
+import { teamDir } from "./paths";
+import type { RuntimeGeneration } from "./runtime";
 import type { Member } from "../team-authority/contracts";
+import type {
+  CoordinationMemberEvidence,
+  CoordinationQueryBundle,
+  CoordinationRuntimeEvidence,
+} from "../coordination/queries";
+import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 
 export type WorkerRunState = "active" | "settled" | "unknown" | "absent";
 
@@ -15,60 +21,51 @@ export interface WorkerRunObservation {
   actuationPending: boolean;
 }
 
-type ActuationEvidence = { known: boolean; pending: boolean };
-
-function exactStatus(member: Member, status: AgentRuntimeStatus | null): RuntimeGeneration | undefined {
-  const generation = runtimeGeneration(status);
-  if (!member.membershipId || !generation || generation.membershipId !== member.membershipId) return undefined;
-  return generation;
+function exactStatus(member: CoordinationMemberEvidence, status: CoordinationRuntimeEvidence | null): RuntimeGeneration | undefined {
+  if (
+    !member.membershipId
+    || !status?.membershipId
+    || !Number.isSafeInteger(status.pid)
+    || status.pid! <= 1
+    || !Number.isFinite(status.startedAt)
+    || status.startedAt! <= 0
+    || status.membershipId !== member.membershipId
+  ) return undefined;
+  return { membershipId: status.membershipId, pid: status.pid!, startedAt: status.startedAt! };
 }
 
-/** Read runtime evidence without treating heartbeat or terminal state as liveness. */
-export async function readWorkerRunObservation(teamName: string, member: Member): Promise<WorkerRunObservation> {
-  const delivery = hasPendingTaskDelivery(teamName, member.name);
-  const inbox = hasPendingInboxMessage(teamName, member.name);
-  const actuationPending = (!member.sessionFile && !!member.pendingLaunchId) || delivery.pending || inbox.pending;
-  const actuationKnown = delivery.known && inbox.known;
+/** Pure liveness projection over already-read Team, runtime, and actuation evidence. */
+export function deriveWorkerRunObservation(
+  member: CoordinationMemberEvidence,
+  evidence: {
+    runtime: CoordinationRuntimeEvidence | null;
+    taskDelivery: { known: boolean; pending: boolean };
+    alertInbox: { known: boolean; pending: boolean };
+  },
+): WorkerRunObservation {
+  const actuationPending = (!member.sessionFile && !!member.pendingLaunchId) || evidence.taskDelivery.pending || evidence.alertInbox.pending;
+  const actuationKnown = evidence.taskDelivery.known && evidence.alertInbox.known;
   if (member.isActive === false) return { worker: member.name, state: "absent", actuationPending: false };
-  const status = await readRuntimeStatusForMember(teamName, member);
-  const generation = exactStatus(member, status);
+  const generation = exactStatus(member, evidence.runtime);
   if (!member.sessionFile) return { worker: member.name, membershipId: member.membershipId, generation, state: !actuationKnown || actuationPending ? "unknown" : "absent", actuationPending };
   if (!generation || !actuationKnown) return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending };
-  if (status?.runState === "active") return { worker: member.name, membershipId: member.membershipId, generation, state: "active", actuationPending };
-  if (status?.runState === "settled") return { worker: member.name, membershipId: member.membershipId, generation, state: "settled", actuationPending };
+  if (evidence.runtime?.runState === "active") return { worker: member.name, membershipId: member.membershipId, generation, state: "active", actuationPending };
+  if (evidence.runtime?.runState === "settled") return { worker: member.name, membershipId: member.membershipId, generation, state: "settled", actuationPending };
   return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending };
 }
 
-function hasPendingTaskDelivery(teamName: string, worker: string): ActuationEvidence {
-  const file = taskDeliveryPath(teamName, worker);
-  if (!fs.existsSync(file)) return { known: true, pending: false };
-  try {
-    const value = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-    if (!Array.isArray(value) || value.some((record) => !record || typeof record !== "object" || typeof (record as { successfulTurnAckAt?: unknown }).successfulTurnAckAt !== "string" && (record as { successfulTurnAckAt?: unknown }).successfulTurnAckAt !== undefined)) return { known: false, pending: false };
-    return { known: true, pending: value.some((record) => !(record as { successfulTurnAckAt?: string }).successfulTurnAckAt) };
-  } catch {
-    return { known: false, pending: false };
-  }
-}
-
-function hasPendingInboxMessage(teamName: string, worker: string): ActuationEvidence {
-  const file = inboxPath(teamName, worker);
-  if (!fs.existsSync(file)) return { known: true, pending: false };
-  try {
-    const value = JSON.parse(fs.readFileSync(file, "utf8")) as unknown;
-    if (!Array.isArray(value) || value.some((message) => !message || typeof message !== "object" || typeof (message as { read?: unknown }).read !== "boolean")) return { known: false, pending: false };
-    return { known: true, pending: value.some((message) => !(message as { read: boolean }).read) };
-  } catch {
-    return { known: false, pending: false };
-  }
-}
-
-async function readRuntimeStatusForMember(teamName: string, member: Member): Promise<AgentRuntimeStatus | null> {
-  try {
-    return await readRuntimeStatus(teamName, member.name);
-  } catch {
-    return null;
-  }
+/** Compatibility composition for existing callers that do not inject queries. */
+export async function readWorkerRunObservation(
+  teamName: string,
+  member: Member,
+  queries: CoordinationQueryBundle = createDurableCoordinationQueries(),
+): Promise<WorkerRunObservation> {
+  const [taskDelivery, alertInbox, runtime] = await Promise.all([
+    queries.taskStateDelivery.readDeliveryEvidence(teamName, member.name),
+    queries.alertActuation.readInboxEvidence(teamName, member.name),
+    queries.teamRuntime.readRuntime(teamName, member).catch(() => null),
+  ]);
+  return deriveWorkerRunObservation(member, { runtime, taskDelivery, alertInbox });
 }
 
 export interface LivenessWaitOptions {
