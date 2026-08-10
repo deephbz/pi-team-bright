@@ -8,5 +8,9 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
-  "include": ["src/public/observation.ts"]
+  "include": [
+    "src/public/observation.ts",
+    "src/model-tool-contract/task-version-ref.ts",
+    "src/utils/models.ts"
+  ]
 }

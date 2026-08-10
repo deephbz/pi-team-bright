@@ -1,4 +1,4 @@
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 /**
  * Runtime constants for health checking.
  * Exported for configurability and testing.
