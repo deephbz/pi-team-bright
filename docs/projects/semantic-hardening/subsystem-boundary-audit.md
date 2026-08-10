@@ -28,6 +28,22 @@ Architecture impact: **changed** for internal Task publication, Task
 reconciliation, Team, and Coordination boundaries. HyperCarrier's canonical
 diagram stays unchanged because it keeps Pi Team Bright internals opaque.
 
+Terminal-refusal correction: test-hardening commit
+`3b265ea6fbdc53c9b753950a4ed01ccddad527d8` corrected the Session
+characterization to use canonical Alert delivery and exposed a pre-existing
+resumed-session shutdown defect. Intentional behavior-fix commit
+`cafdf2deb4ccdbb47cb40b87e83081d1c9128665` keeps resumed foreign or nested
+Worker and lead Sessions alive and unbound after terminal-placement refusal;
+launch or runtime refusals with `exitProcess=true` still shut down. The exact
+anchors are the resumed-Worker and resumed-lead foreign-placement cases in
+`src/utils/pi-session-adapter.characterization.test.ts`, and nested-Worker and
+foreign-lead refusal cases in `src/utils/terminal-backend.contract.test.ts`.
+Original-checkout results are invalid for this correction. The deterministic
+one-process hook tests do not prove a real process, terminal, or terminal
+carrier. No public/schema/persistence change occurred. The 99-file/334-edge
+accepted graph is unchanged, and architecture impact is **none** for this
+correction. The next boundary remains Trio.
+
 ## Scope and evidence
 
 This audit uses the five accepted subsystems in the Project handoff: Team
@@ -282,9 +298,9 @@ result, but its durable hidden-observation read still applies
 `teamModelToolContractGap`; absent logical Workers therefore returns the exact
 legacy unavailable result. Snapshot and update observation retain their
 logical-Worker requirement. Derived records and timers never become Team, Task,
-Alert, or acknowledged-observation authority. A separately reproduced baseline
-terminal-admission defect remains the next own-commit issue; it is not a nudge
-regression.
+Alert, or acknowledged-observation authority. The separately reproduced baseline
+terminal-admission defect is corrected by
+`cafdf2deb4ccdbb47cb40b87e83081d1c9128665`; it was not a nudge regression.
 
 Worker startup observation consumes coordination events, but it verifies current
 Team and runtime authority before claiming success. Its three-second wait is

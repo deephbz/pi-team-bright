@@ -1171,3 +1171,31 @@ changes; append a correction.
 - A separately reproduced baseline terminal-admission defect is the next
   own-commit issue. It is not a regression from this nudge commit. No aggregate
   claim follows from this receipt.
+
+## 2026-08-10 — resumed terminal-refusal correction
+
+- Test-hardening commit `3b265ea6fbdc53c9b753950a4ed01ccddad527d8`
+  (`test: bind session characterization to canonical delivery`) corrected the
+  registered Pi Session characterization to use canonical Alert delivery.
+- That established test exposed a pre-existing defect: a resumed Worker or lead
+  Session refused for foreign or nested terminal placement was shut down, even
+  though it was not bound to the Team.
+- Intentional behavior-fix commit `cafdf2deb4ccdbb47cb40b87e83081d1c9128665`
+  (`fix: keep refused resumed Sessions alive`) now leaves those resumed foreign
+  or nested Sessions alive and unbound. Launch and runtime admission refusals
+  with `exitProcess=true` still shut down.
+- Exact anchors are “keeps a resumed Worker alive when foreign placement refuses
+  its Team binding” and “keeps a resumed lead alive when foreign placement
+  refuses its Team binding” in
+  `src/utils/pi-session-adapter.characterization.test.ts`; the nested-Worker
+  and foreign-lead refusal cases are in
+  `src/utils/terminal-backend.contract.test.ts`.
+- Test or inspection evidence from the original checkout is invalid for these
+  two commits. It must not support this receipt.
+- The evidence is deterministic one-process hook evidence. It does not prove a
+  real Pi process, terminal, or terminal carrier. No public tool, schema,
+  persistence shape, or graph coordinate changed. The accepted graph remains
+  99 production files and 334 static local edges. Architecture impact: **none**.
+- No source or test edit, stage, aggregate run, or commit was made by this
+  documentation receipt. The next structural boundary remains the combined Trio
+  façade and separate fake.

@@ -254,9 +254,22 @@ hidden-observation read still applies `teamModelToolContractGap`; absent logical
 Workers therefore returns the exact legacy unavailable result. Snapshot and
 update observation also require logical Workers. The source graph has 99 production
 TypeScript files and 334 unique resolved static local edges, with zero
-nontrivial cycles or runtime dynamic imports. The remaining next boundary is the combined Trio façade and fake, not nudge
-actuation. A separately reproduced baseline terminal-admission defect is the
-next own-commit issue; it is not a nudge regression.
+nontrivial cycles or runtime dynamic imports. Test-hardening commit
+`3b265ea6fbdc53c9b753950a4ed01ccddad527d8` corrected the registered
+characterization to use canonical Alert delivery. That established test exposed
+a pre-existing terminal-refusal defect. Intentional behavior-fix commit
+`cafdf2deb4ccdbb47cb40b87e83081d1c9128665` keeps resumed foreign or nested
+Worker and lead Sessions alive and unbound after placement refusal. Launch or
+runtime refusals with `exitProcess=true` still shut down. The exact anchors are
+`pi-session-adapter.characterization.test.ts` cases “keeps a resumed Worker
+alive when foreign placement refuses its Team binding” and “keeps a resumed
+lead alive when foreign placement refuses its Team binding”, plus the nested
+Worker and foreign-lead cases in `terminal-backend.contract.test.ts`. Evidence
+from the original checkout is invalid for these commits and must not support
+this claim. These deterministic hook tests do not prove a real process,
+terminal, or terminal carrier. No public tool, schema, persistence, or graph
+change occurred; architecture impact is **none** for this fix. The remaining
+next boundary is the combined Trio façade and fake, not nudge actuation.
 
 Characterization Tasks `semantic-hardening-coordination-qjp`,
 `semantic-hardening-coordination-3bq`, and
