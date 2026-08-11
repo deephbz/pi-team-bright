@@ -2,8 +2,8 @@
 
 Updated: 2026-08-11
 Stage: consolidation and hardening
-Status: Exact committed source `8c74a5c9e2b5c1c645fcfc89c107a438a4272fbc`
-passed its one final aggregate: TypeScript plus 119 test files and 875 tests in
+Status: Executable source/test candidate `8c74a5c9e2b5c1c645fcfc89c107a438a4272fbc`
+and documentation closure `3e199a5` record the final aggregate: TypeScript plus 119 test files and 875 tests in
 241.77 seconds. Package/generated, lane, agent-surface, tool-result, privacy,
 JSON, and type gates passed. The follow-up Team shut down cleanly, and the
 separate global checkout advanced to this source while preserving five untracked
@@ -374,22 +374,25 @@ Open boundary risks:
   nudge integration. Its direct Team record reads remain a narrow integration
   seam. The completed public Membership projection reads only its narrow
   Team/runtime reader and remains non-authoritative.
-- Stress follow-up in `ed72376` adds exact metadata reconciliation for create
-  replay, adaptive exact-ID hydration with canonical bounded-`show` fallback, a
-  narrow assigned-nonterminal Worker-stop query, `deliveryId`-keyed tombstones,
-  and a wall-clock `BdRunner` deadline. The 120-Task receipt is a before baseline
-  only. The later comparative run has no per-call durations and establishes no
-  repair benefit or capacity limit. Removing reverse-dependent hydration,
-  filtering closed Tasks, or raising the timeout would change current meaning or
-  policy. Its four outside-repository receipts and comparison are recorded in
-  the [closure receipt](../../journal/2026-08-11-stress-followup-closure-receipt.md).
-- The owner-authorized `BdRunner` repair uses one wall-clock deadline, terminates
-  its process group, and records payload-free start/deadline/cleanup/settled
-  lifecycle evidence ([`beads.ts`](../../../src/utils/beads.ts),
-  [`trace.ts`](../../../src/utils/trace.ts)). Session JSONL proves historical
-  outer-call tails but not `bd` time; the new descendant fixture is deterministic
-  local proof. `dist/task-authority/contracts.d.ts` is generated output for the
-  Worker query, not deadline evidence.
+- Stress follow-up executable source/test candidate `8c74a5c` and documentation
+  closure `3e199a5` retain exact metadata reconciliation for create replay,
+  adaptive exact-ID hydration with canonical bounded-`show` fallback, a narrow
+  assigned-nonterminal Worker-stop query, and `deliveryId`-keyed tombstones. The
+  120-Task receipt is a before baseline only. The later comparison has no
+  per-call durations and establishes no repair benefit or capacity limit. Its
+  `caught_up` late-assignment/backlog observation is a pre-existing or
+  unclassified risk, not an established regression. Removing reverse-dependent
+  hydration, filtering closed Tasks, or raising the timeout would change current
+  meaning or policy. Its four outside-repository receipts and comparison are
+  recorded in the [closure receipt](../../journal/2026-08-11-stress-followup-closure-receipt.md).
+- The owner-authorized `BdRunner` repair intentionally changes wall-clock timing:
+  one deadline terminates its process group and records payload-free
+  start/deadline/cleanup/settled lifecycle evidence
+  ([`beads.ts`](../../../src/utils/beads.ts), [`trace.ts`](../../../src/utils/trace.ts)).
+  Session JSONL proves historical outer-call tails but not `bd` time; the new
+  descendant fixture is deterministic local proof. No established breaking
+  public contract or regression follows. `dist/task-authority/contracts.d.ts` is
+  generated output for the Worker query, not deadline evidence.
 
 These risks bound future work. They do not show a regression in `15e707b`, and
 they do not authorize speculative completion before the next release candidate.
