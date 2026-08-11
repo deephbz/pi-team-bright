@@ -39,32 +39,39 @@ creation and reconnection snapshot boundary. Its durable adapter stays outside
 Team application code. The corrected continuation Team required Worker-authored
 Terra-medium preflight evidence before inspection. Independent verification
 accepted Task stopped-epoch migration, Coordination event journal, TeamConfig
-compatibility, and deterministic aggregate-timeout hardening. Exact committed
-source `bea6f45572ba34f5e29574cc489f45383b7ebc19` then passed its one reserved
-final aggregate: TypeScript plus 118 test files and 863 tests in 289.91 seconds.
-Package/generated, lane, agent-surface and tool-result QA, JSON, Markdown-link,
-privacy-range, source-graph, and diff checks provide local closure evidence.
-The dated [final-verification receipt](../../journal/2026-08-11-semantic-hardening-final-verification.md)
-records commands, prior aggregate failures, and proof limits. This does not prove a real Pi process, Beads/Dolt contention,
-external writers, watcher delivery, OS scheduling, terminal pixels, publication,
-registry state, or provenance.
+compatibility, and deterministic aggregate-timeout hardening. Exact committed source `8c74a5c9e2b5c1c645fcfc89c107a438a4272fbc`
+then passed the final aggregate: TypeScript plus 119 test files and 875 tests in
+241.77 seconds. The first `ed72376` aggregate failed in three lanes: durable
+cursor acknowledgement, stale-PID Worker stop, and tool-result QA. Focused
+corrections preceded this one pass. Package/generated, lane, agent-surface and
+tool-result QA, privacy, JSON, and type gates then passed. The follow-up Team
+shut down cleanly. A separate global checkout advanced to `8c74a5c`, preserved
+five untracked files, and passed fresh `npm ci --workspaces=false`, typecheck,
+and package verification. The [closure receipt](../../journal/2026-08-11-stress-followup-closure-receipt.md)
+anchors the Session evidence and limits. This does not prove a real Pi process,
+Beads/Dolt contention, external writers, watcher delivery, OS scheduling,
+terminal pixels, publication, registry state, provenance, or TUI freeze
+prevention.
 
 ## Stress follow-up
 
-The follow-up reconciles create replay with an exact native metadata filter.
-Its adaptive exact-ID hydration accepts `bd list` only when it carries every
-full authority-version input, then conservatively falls back to bounded `show`
-([`beads.ts`](../../../src/utils/beads.ts)). The Worker-stop guard uses a narrow
-assigned-nonterminal query
-([`durable-nonterminal-assigned-task-query.ts`](../../../src/adapters/durable-nonterminal-assigned-task-query.ts)).
-Tombstone persistence keys suppression by `deliveryId`, so each durable Task
-version remains suppressed on replay ([`task-delivery.ts`](../../../src/utils/task-delivery.ts)).
-The durable [120-Task receipt](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.json)
+Commit `ed72376` covers exact native metadata reconciliation for create replay,
+adaptive exact-ID hydration with bounded canonical-`show` fallback, the narrow
+assigned-nonterminal Worker-stop query, `deliveryId` tombstones, and the
+wall-clock `BdRunner` deadline. Commit `8c74a5c` adds only aggregate-test
+stabilization. The [120-Task receipt](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.json)
 and its [runner](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.py)
-are before-baseline evidence only. They show three timeouts in four contended
-detailed reads and do not measure repair benefit. Focused source evidence passed
-4 files and 44 tests. This is local disposable-authority evidence. It does not
-prove real Pi, production Beads/Dolt, external-writer, or capacity behavior.
+remain before-baseline evidence.
+
+The later eight-Worker comparison closed all 104 Tasks and stopped all eight
+Workers. It recorded 14 unknown creates versus 23, two unavailable syncs versus
+eight, and zero Worker-stop timeouts versus eight. It also recorded no task-read
+unavailable outcome. The model-visible cursor is only a final head, not a full
+cursor stream. Seven late assignments remained after `caught_up`; two had been
+closed by Workers and five required leader reconciliation. There are no per-call
+durations, so the run is consistent with, but does not prove, TUI-freeze
+prevention. The receipt records four pending owner-visible schema decisions;
+none is delivered internal work.
 
 ## BdRunner deadline repair
 

@@ -2,16 +2,18 @@
 
 Updated: 2026-08-11
 Stage: consolidation and hardening
-Status: Exact committed source `bea6f45572ba34f5e29574cc489f45383b7ebc19`
-passed its single final-verification aggregate: TypeScript plus 118 test files
-and 863 tests in 289.91 seconds. Package/generated, lane, QA, JSON, local-link,
-privacy-range, graph, and diff closure remain recorded with the final
-verification receipt. This is local deterministic evidence. It does not prove a
-real Pi process, Beads/Dolt contention, external writers, watcher delivery, OS
-scheduling, terminal pixels, publication, registry state, or provenance.
-Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
-HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
-Bright internals opaque
+Status: Exact committed source `8c74a5c9e2b5c1c645fcfc89c107a438a4272fbc`
+passed its one final aggregate: TypeScript plus 119 test files and 875 tests in
+241.77 seconds. Package/generated, lane, agent-surface, tool-result, privacy,
+JSON, and type gates passed. The follow-up Team shut down cleanly, and the
+separate global checkout advanced to this source while preserving five untracked
+files; its fresh `npm ci --workspaces=false`, typecheck, and package verification
+passed. This is local deterministic evidence. It does not prove a real Pi
+process, Beads/Dolt contention, external writers, watcher delivery, OS
+scheduling, terminal pixels, publication, registry state, provenance, or TUI
+freeze prevention. Architecture impact: changed for internal Task, Team, and
+Alert dependency ownership; HyperCarrier's canonical diagram remains unchanged
+because it keeps Pi Team Bright internals opaque.
 
 ## Outcome and current result
 
@@ -91,19 +93,12 @@ requires the complete agreed request, not another bounded release increment:
 
 The isolated worktree and local audit branch were restored at documentation HEAD
 `a3c51d7`. Remote branch `rc/v0.17.0-rc.11` contains that partial increment;
-`origin/main` and npm `next` remain on rc.10. The current direct leader Session
-has the required proxy environment and Herdr control. Dedicated watchdog
-`ptb-full-split-watchdog` and direct-leader Team
-`semantic-hardening-boundaries` are active. The first continuation Team shut down
-only after all Tasks became terminal, which reset expensive Task-history
-hydration without changing the direct leader. Worker-authored Task evidence now
-covers the current source graph, all 27 behavior entries, Alert hook-level replay,
-Team carrier replacement, and Trio projection parity. All 27 entries are
-characterized with explicit proof limits; characterization does not make them
-normative. The shared domain-contract split passed independent review and entered
-commit `6b7fb14`. The watchdog checks both leader liveness and goal completion,
-and must not accept a release increment as Project completion while any target
-boundary or behavior gate remains open.
+`origin/main` and npm `next` remain on rc.10. Historical direct-leader and
+watchdog Teams are closed. Worker-authored Task evidence covers the source graph,
+all 27 behavior entries, Alert hook-level replay, Team carrier replacement, and
+Trio projection parity. All 27 entries are characterized with explicit proof
+limits; characterization does not make them normative. The shared domain-contract
+split passed independent review and entered commit `6b7fb14`.
 
 ## Sources of truth
 
@@ -379,18 +374,15 @@ Open boundary risks:
   nudge integration. Its direct Team record reads remain a narrow integration
   seam. The completed public Membership projection reads only its narrow
   Team/runtime reader and remains non-authoritative.
-- Stress follow-up reconciles create replay through an exact native metadata
-  filter. It uses adaptive exact-ID hydration only when `bd list` supplies every
-  authority-version input; otherwise it uses canonical bounded `show`
-  ([`beads.ts`](../../../src/utils/beads.ts)). Worker stop uses the narrow
-  assigned-nonterminal query
-  ([`durable-nonterminal-assigned-task-query.ts`](../../../src/adapters/durable-nonterminal-assigned-task-query.ts)).
-  Tombstones now retain each `deliveryId`, so replay suppression covers every
-  durable Task version ([`task-delivery.ts`](../../../src/utils/task-delivery.ts)).
-  The 120-Task receipt is a before baseline only. It records three contended
-  `show` timeouts and does not measure repair benefit. Removing reverse-dependent
-  hydration, filtering closed Tasks, or raising the timeout would change current
-  meaning or policy.
+- Stress follow-up in `ed72376` adds exact metadata reconciliation for create
+  replay, adaptive exact-ID hydration with canonical bounded-`show` fallback, a
+  narrow assigned-nonterminal Worker-stop query, `deliveryId`-keyed tombstones,
+  and a wall-clock `BdRunner` deadline. The 120-Task receipt is a before baseline
+  only. The later comparative run has no per-call durations and establishes no
+  repair benefit or capacity limit. Removing reverse-dependent hydration,
+  filtering closed Tasks, or raising the timeout would change current meaning or
+  policy. Its four outside-repository receipts and comparison are recorded in
+  the [closure receipt](../../journal/2026-08-11-stress-followup-closure-receipt.md).
 - The owner-authorized `BdRunner` repair uses one wall-clock deadline, terminates
   its process group, and records payload-free start/deadline/cleanup/settled
   lifecycle evidence ([`beads.ts`](../../../src/utils/beads.ts),
@@ -425,11 +417,9 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 ## Next actions
 
-1. Keep verified source `bea6f45572ba34f5e29574cc489f45383b7ebc19`
-   stable. Route later structural or behavior changes through new focused gates.
-2. Keep the accepted Trio, Membership, Alert, Task read/delivery/provisioning,
-   Coordination event-journal, TeamConfig, and nudge boundaries stable.
-3. Treat measured Beads hydration and aggregate resource contention as deferred
-   non-functional work. Do not change product timeouts without a separate decision.
-4. Keep tag, main-branch integration, npm publication, provenance, and GitHub
+1. Obtain owner decisions for the four public-schema proposals in the closure
+   receipt: assigned-work backlog state, explicit create replay, bounded timing
+   and correlation, and unavailable-hydration diagnostics.
+2. Keep `8c74a5c` stable until an accepted decision defines a focused next gate.
+3. Keep tag, main-branch integration, npm publication, provenance, and GitHub
    release outside this continuation unless the owner authorizes them.
