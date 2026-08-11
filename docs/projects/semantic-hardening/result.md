@@ -2,12 +2,12 @@
 
 Date: 2026-08-11
 Stage: consolidation and hardening
-Result revision: `5950f3b3f17124b9baf38afa48d839dc503d847b`
+Result revision: `bea6f45572ba34f5e29574cc489f45383b7ebc19`
 Trio baseline: `c54dc25b34770b70afedffc7e87728da6376ee0f`
 Membership baseline: `6997dce`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
-Verified source candidate: `638d5934bd52c7f4a3fe18525e5d72569a227211`
+Verified source candidate: `bea6f45572ba34f5e29574cc489f45383b7ebc19`
 Package metadata: `@hypercarrier/pi-team-bright@0.17.0-rc.11`
 Publication state: untagged and unpublished
 Public behavior: unchanged
@@ -34,19 +34,20 @@ report records the outcome, evidence, optimization choices, and limits.
 
 ## Continuation status
 
-Commit `241622f` preserves `TaskAuthorityProvisioningPort` as the Task-owned
+Commit `d781f82` preserves `TaskAuthorityProvisioningPort` as the Task-owned
 creation and reconnection snapshot boundary. Its durable adapter stays outside
-Team application code. The focused adapter and durable-port run passed 38 tests,
-and TypeScript passed before commit. The corrected continuation Team required
-Worker-authored Terra-medium preflight evidence before inspection. Independent
-verification then accepted the Task stopped-epoch migration, Coordination event
-journal, and TeamConfig compatibility partitions. It passed two focused runs of
-30 and 44 tests, TypeScript, compatibility and static-fence checks, and diff
-checks. Pi exact-Session nudge actuation remains intentional; its failed-send
-case now has focused regression evidence. The one reserved aggregate later ran
-at `a5db88a` and failed 16 stale-fixture classes. Focused corrections passed
-independently, but the exact corrected tree has no aggregate proof because the
-owner prohibited a rerun.
+Team application code. The corrected continuation Team required Worker-authored
+Terra-medium preflight evidence before inspection. Independent verification
+accepted Task stopped-epoch migration, Coordination event journal, TeamConfig
+compatibility, and deterministic aggregate-timeout hardening. Exact committed
+source `bea6f45572ba34f5e29574cc489f45383b7ebc19` then passed its one reserved
+final aggregate: TypeScript plus 118 test files and 863 tests in 289.91 seconds.
+Package/generated, lane, agent-surface and tool-result QA, JSON, Markdown-link,
+privacy-range, source-graph, and diff checks provide local closure evidence.
+The dated [final-verification receipt](../../journal/2026-08-11-semantic-hardening-final-verification.md)
+records commands, prior aggregate failures, and proof limits. This does not prove a real Pi process, Beads/Dolt contention,
+external writers, watcher delivery, OS scheduling, terminal pixels, publication,
+registry state, or provenance.
 
 ## Commit series
 

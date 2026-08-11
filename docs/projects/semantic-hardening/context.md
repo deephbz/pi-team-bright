@@ -2,13 +2,13 @@
 
 Updated: 2026-08-11
 Stage: consolidation and hardening
-Status: The continuation commits Task stopped migration, Coordination event
-journal, and TeamConfig compatibility. Its one reserved aggregate at `a5db88a`
-failed 16 stale test-fixture classes. Focused corrections and independent
-verification pass, but the exact post-correction tree cannot claim aggregate
-success because the owner prohibited a rerun. Owner authorization is required
-for another aggregate before final-release proof. The restart Team rejected every Worker before source
-inspection because each inherited `gpt-5.6-sol:high`, not `gpt-5.6-terra:medium`.
+Status: Exact committed source `bea6f45572ba34f5e29574cc489f45383b7ebc19`
+passed its single final-verification aggregate: TypeScript plus 118 test files
+and 863 tests in 289.91 seconds. Package/generated, lane, QA, JSON, local-link,
+privacy-range, graph, and diff closure remain recorded with the final
+verification receipt. This is local deterministic evidence. It does not prove a
+real Pi process, Beads/Dolt contention, external writers, watcher delivery, OS
+scheduling, terminal pixels, publication, registry state, or provenance.
 Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -34,7 +34,7 @@ unchanged.
 The superseded rc.8 publication patch stash was removed after the reviewed rc.10
 implementation entered `15e707b`; no Project stash remains.
 
-Commit `241622f` preserves the Task-owned `TaskAuthorityProvisioningPort` and
+Commit `d781f82` preserves the Task-owned `TaskAuthorityProvisioningPort` and
 its durable adapter. It moves existing-binding validation, legacy refusal,
 orphan-cutover validation, workspace initialization, and native-store validation
 outside Team application code. The snapshot is copied and frozen. The leader ran
@@ -409,20 +409,11 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 ## Next actions
 
-1. Keep the active watchdog and direct-leader Team running; use their recorded
-   liveness and Worker-authored Task events as launch evidence.
-2. Use the completed source graph, behavior inventory, and contract split as
-   gates for each next implementation Task.
-3. Keep the accepted four-port Trio split, nudge boundary, and additive
-   Membership reader stable unless source evidence requires a correction.
-4. Keep the accepted Task read, TaskChangeDelivery, and stopped-epoch migration
-   ports stable.
-5. Close the remaining Team/Task reverse dependencies and Coordination runtime
-   reads. Keep exact-Session nudge actuation in Pi unless separately authorized.
-6. Run one final aggregate only after the exact stable source includes every
-   remaining authorized optimization or correction.
-7. Update the audit, dependency map, result report, current context, and
-   append-only journal at each accepted milestone. Independent verification and
-   watchdog review must confirm final completion before shutdown or reporting.
-8. Keep tag, main-branch integration, npm publication, provenance, and GitHub
-   release outside this continuation unless the owner authorizes them again.
+1. Keep verified source `bea6f45572ba34f5e29574cc489f45383b7ebc19`
+   stable. Route later structural or behavior changes through new focused gates.
+2. Keep the accepted Trio, Membership, Alert, Task read/delivery/provisioning,
+   Coordination event-journal, TeamConfig, and nudge boundaries stable.
+3. Treat measured Beads hydration and aggregate resource contention as deferred
+   non-functional work. Do not change product timeouts without a separate decision.
+4. Keep tag, main-branch integration, npm publication, provenance, and GitHub
+   release outside this continuation unless the owner authorizes them.

@@ -114,7 +114,7 @@ Current historical evidence:
 - [real-session tool-call audit](../journal/artifacts/2026-08-02-pi-team-toolcall-audit/README.md);
 - [design dogfood observation](../journal/2026-08-02-tool-contract-design-dogfood.md);
 - [Task-adapter conformance gap](../journal/2026-08-02-task-adapter-conformance-gap.md); and
-- [generic Team orchestration model](../../../../docs/current/hc-team-orchestration.md).
+- [current Team coordination context](../current/README.md).
 
 Current shipped behavior remains authoritative in
 [`extensions/index.ts`](../../extensions/index.ts) and the modules routed by

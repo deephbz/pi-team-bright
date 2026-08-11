@@ -1,12 +1,12 @@
 {
   "schema": "pi-team-bright-subsystem-dependency-map/1",
-  "status": "task_stopped_migration_coordination_event_journal_and_team_config_compatibility_accepted",
+  "status": "semantic_hardening_final_source_verified",
   "continuationEvidence": {
-    "revision": "uncommitted_after_241622f",
+    "revision": "bea6f45572ba34f5e29574cc489f45383b7ebc19",
     "workerPreflight": "Six Worker-authored events proved openai-codex/gpt-5.6-terra:medium before source inspection; one replacement carrier repeated the proof.",
     "acceptedSeams": ["Task stopped-epoch migration port", "Coordination event journal owner", "TeamConfig compatibility partition"],
     "nudgeActuation": "Pi exact-Session actuation remains deliberate integration policy; failed-send regression evidence is added.",
-    "independentVerification": "Initial focused runs passed 6 files/30 tests and 8 files/44 tests. After the one aggregate failed 16 stale-fixture classes, focused recovery passed 46, 3, and 83-test selections; independent recovery passed two 3-file/49-test runs plus typecheck, JSON, lane, link, and diff checks. Owner prohibited an aggregate rerun.",
+    "independentVerification": "Initial aggregate failures were isolated through focused and independent repair gates. Exact source bea6f45572ba34f5e29574cc489f45383b7ebc19 then passed TypeScript and 118 files/863 tests in 289.91 seconds. Package/generated, lane, QA, JSON, links, privacy range, graph, and diff gates passed.",
     "proofLimit": "Deterministic local source and harness evidence does not prove real Pi processes, external persistence or writers, contention, watcher delivery, OS scheduling, or terminal pixels."
   },
   "reviewedRevision": "cb38d9254dd0cccb9e745a8df3edb27f367d852d",

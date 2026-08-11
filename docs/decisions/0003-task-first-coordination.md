@@ -47,5 +47,5 @@ verification contract.
 ## Evidence
 
 - [Problem and design](../journal/2026-07-17-task-first-agent-coordination-design.md)
-- [`PI_TEAMS_PUBLIC_TOOLS`](../../src/utils/tool-result-renderer.ts)
+- [Public tool registration](../../extensions/index.ts)
 - [Headless QA harness](../../scripts/tool-result-qa/README.md)
