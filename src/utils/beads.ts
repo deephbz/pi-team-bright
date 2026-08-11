@@ -1,8 +1,8 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { Type } from "typebox";
 import fs from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
+
 import type { BeadsAuthorityFingerprint } from "../team-authority/contracts";
 import type { TaskRelation, TaskRelationType, TaskStatus } from "../task-authority/contracts";
 export interface TaskAuthorityRecord {
@@ -28,9 +28,7 @@ import { withLock } from "./lock";
 import { teamDir, sanitizeName } from "./paths";
 import { runHook } from "./hooks";
 import crypto from "node:crypto";
-import { recordBdCall } from "./trace";
-
-const execFileAsync = promisify(execFile);
+import { recordBdCall, recordBdRunnerLifecycle } from "./trace";
 
 export const DEFAULT_BD_TIMEOUT_MS = 10_000;
 export const DEFAULT_BD_INIT_TIMEOUT_MS = 30_000;
@@ -162,10 +160,10 @@ export class OwnedBdBinaryError extends Error {
 /**
  * Resolve the owned Beads CLI directly from this package's dependency graph.
  * Pi launches extensions from a parent process whose PATH need not include the
- * package's `node_modules/.bin`; invoking the package bin avoids silently
- * binding Task authority to an unrelated global `bd` version. The wrapper is
- * present in every npm install, but its platform-native sibling is acquired by
- * @beads/bd postinstall (or deliberately materialized by CI).
+ * package's `node_modules/.bin`; invoking its platform-native binary avoids
+ * silently binding Task authority to an unrelated global `bd` version or a
+ * launcher process. The native binary is acquired by @beads/bd postinstall
+ * (or deliberately materialized by CI).
  */
 export function resolveBdExecutable(): string {
   try {
@@ -180,10 +178,10 @@ export function resolveBdExecutable(): string {
     );
 
     const packageRoot = path.dirname(manifestPath);
-    const executable = path.resolve(packageRoot, bin);
-    if (!fs.statSync(executable).isFile()) throw new OwnedBdBinaryError(
+    const launcher = path.resolve(packageRoot, bin);
+    if (!fs.statSync(launcher).isFile()) throw new OwnedBdBinaryError(
       "BEADS_OWNED_BINARY_MISSING",
-      `owned @beads/bd launcher is missing at ${executable}`,
+      `owned @beads/bd launcher is missing at ${launcher}`,
     );
 
     if (!["darwin", "linux", "win32", "android"].includes(process.platform) || !["x64", "arm64"].includes(process.arch)) {
@@ -197,7 +195,7 @@ export function resolveBdExecutable(): string {
       "BEADS_OWNED_BINARY_MISSING",
       `owned @beads/bd binary is missing at ${nativeBinary}; reinstall @beads/bd@1.1.0 for ${process.platform}-${process.arch}`,
     );
-    return executable;
+    return nativeBinary;
   } catch (error) {
     if (error instanceof OwnedBdBinaryError) throw error;
     const reason = error instanceof Error ? error.message : String(error);
@@ -224,16 +222,82 @@ export function bdExecFailure(error: any): BdCommandResult {
   return { stdout, stderr, exitCode };
 }
 
-class ExecBdRunner implements BdRunner {
+export class ExecBdRunner implements BdRunner {
+  constructor(private readonly executable: () => string = resolveBdExecutable) {}
+
   async run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult> {
+    const startedAt = Date.now();
     try {
-      const result = await execFileAsync(resolveBdExecutable(), args, {
-        cwd: options.cwd,
-        timeout: options.timeoutMs,
-        maxBuffer: 8 * 1024 * 1024,
-        encoding: "utf8",
+      const executable = this.executable();
+      return await new Promise<BdCommandResult>((resolve) => {
+        const child = spawn(executable, args, {
+          cwd: options.cwd,
+          detached: process.platform !== "win32",
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stdout = "";
+        let stderr = "";
+        let timedOut = false;
+        let outputLimitExceeded = false;
+        let settled = false;
+        let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+        const finish = (result: BdCommandResult) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(deadline);
+          if (cleanupTimer) clearTimeout(cleanupTimer);
+          if (timedOut || outputLimitExceeded) {
+            child.stdout.destroy();
+            child.stderr.destroy();
+            child.unref();
+          }
+          recordBdRunnerLifecycle("settled", Date.now() - startedAt, timedOut);
+          resolve(result);
+        };
+        const terminate = async (signal: NodeJS.Signals): Promise<void> => {
+          if (process.platform === "win32") {
+            await new Promise<void>((resolve) => {
+              if (!child.pid) return resolve();
+              execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], (error) => {
+                if (error) child.kill(signal);
+                resolve();
+              });
+            });
+          } else if (child.pid) {
+            try { process.kill(-child.pid, signal); } catch { child.kill(signal); }
+          } else child.kill(signal);
+        };
+        const appendOutput = (target: "stdout" | "stderr", chunk: string) => {
+          if (outputLimitExceeded) return;
+          const used = Buffer.byteLength(stdout) + Buffer.byteLength(stderr);
+          const remaining = 8 * 1024 * 1024 - used;
+          const bytes = Buffer.byteLength(chunk);
+          const value = bytes <= remaining ? chunk : Buffer.from(chunk).subarray(0, Math.max(0, remaining)).toString("utf8");
+          if (target === "stdout") stdout += value;
+          else stderr += value;
+          if (bytes > remaining) {
+            outputLimitExceeded = true;
+            void terminate("SIGKILL").finally(() => finish({ stdout, stderr, exitCode: 1 }));
+          }
+        };
+        child.stdout.setEncoding("utf8");
+        child.stderr.setEncoding("utf8");
+        child.stdout.on("data", (chunk: string) => appendOutput("stdout", chunk));
+        child.stderr.on("data", (chunk: string) => appendOutput("stderr", chunk));
+        child.once("error", (error) => finish(bdExecFailure(error)));
+        child.once("close", (code) => finish({ stdout, stderr, exitCode: timedOut ? 124 : code ?? 1 }));
+        recordBdRunnerLifecycle("start", 0, false);
+        const deadline = setTimeout(() => {
+          timedOut = true;
+          recordBdRunnerLifecycle("deadline", Date.now() - startedAt, true);
+          void terminate("SIGTERM").finally(() => {
+            recordBdRunnerLifecycle("termination_cleanup", Date.now() - startedAt, true);
+            cleanupTimer = setTimeout(() => {
+              void terminate("SIGKILL").finally(() => finish({ stdout, stderr, exitCode: 124 }));
+            }, 100);
+          });
+        }, Math.max(0, options.timeoutMs));
       });
-      return { stdout: result.stdout, stderr: result.stderr, exitCode: 0 };
     } catch (error: any) {
       return bdExecFailure(error);
     }
@@ -680,11 +744,82 @@ export class BeadsTaskStore {
     return (await this.showManyRaw([taskId]))[0];
   }
 
-  private async listRaw(): Promise<RawBead[]> {
-    const result = await this.command<RawBead[]>(["list", "--label", beadsLabel(this.teamName), "--all", "--no-pager", "--limit", "0"]);
+  /** Native `bd list` filters keep candidate discovery in the authority. */
+  private async listRaw(options: { ids?: readonly string[]; metadataField?: { key: string; value: string }; assignee?: string; statuses?: readonly TaskStatus[] } = {}): Promise<RawBead[]> {
+    const args = ["list", "--label", beadsLabel(this.teamName), "--all", "--no-pager", "--limit", "0"];
+    if (options.ids?.length) args.push("--id", options.ids.join(","));
+    if (options.metadataField) args.push("--metadata-field", `${options.metadataField.key}=${options.metadataField.value}`);
+    if (options.assignee) args.push("--assignee", sanitizeName(options.assignee));
+    if (options.statuses?.length) args.push("--status", options.statuses.join(","));
+    const result = await this.command<RawBead[]>(args);
     if (!Array.isArray(result)) throw new BeadsError("Beads list returned a non-array JSON value.", "malformed", "bd list");
     for (const raw of result) this.verifyScope(raw);
     return result;
+  }
+
+  /** Exact Worker stop guard; it does not hydrate the full Team Task set. */
+  async listNonterminalTaskIdsAssignedTo(workerName: string): Promise<string[]> {
+    return (await this.listRaw({ assignee: workerName, statuses: ["open", "in_progress", "blocked"] }))
+      .filter((raw) => metadataValue(raw, "pi_teams_deleted") !== "true")
+      .map((raw) => raw.id)
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  /**
+   * `bd list --id` is the fast exact-ID path. Its compact record is usable
+   * only when it proves the relation inputs used by the authority version.
+   */
+  private hasExactListFidelity(raw: RawBead): boolean {
+    const exactCount = (count: number | undefined, values: unknown[] | undefined): boolean =>
+      typeof count === "number" && Number.isSafeInteger(count) && count >= 0
+        ? count === (values?.length ?? 0)
+        : Array.isArray(values);
+    // authorityVersion hashes each of these fields. A compact list result
+    // cannot stand in for canonical show unless it supplies every input.
+    const completeVersionFields = typeof raw.id === "string"
+      && typeof raw.title === "string"
+      && ["open", "in_progress", "blocked", "deferred", "closed"].includes(raw.status)
+      && typeof raw.description === "string"
+      && typeof raw.acceptance_criteria === "string"
+      && typeof raw.design === "string"
+      && typeof raw.notes === "string"
+      && typeof raw.parent === "string"
+      && typeof raw.assignee === "string"
+      && typeof raw.updated_at === "string"
+      && Number.isFinite(Date.parse(raw.updated_at))
+      && Array.isArray(raw.labels) && raw.labels.every((label) => typeof label === "string")
+      && !!raw.metadata && !Array.isArray(raw.metadata)
+      && Array.isArray(raw.dependencies)
+      && Array.isArray(raw.dependents);
+    return completeVersionFields
+      && exactCount(raw.dependency_count, raw.dependencies)
+      && exactCount(raw.dependent_count, raw.dependents)
+      && typeof raw.comment_count === "number" && Number.isSafeInteger(raw.comment_count) && raw.comment_count >= 0;
+  }
+
+  private async listExactRawAllowMissing(taskIds: readonly string[]): Promise<Array<RawBead | undefined> | undefined> {
+    const safeIds = [...new Set(taskIds.map((taskId) => sanitizeName(taskId)))];
+    if (safeIds.length === 0) return [];
+    try {
+      const result = await this.listRaw({ ids: safeIds });
+      const requested = new Set(safeIds);
+      const byId = new Map<string, RawBead>();
+      for (const raw of result) {
+        if (!raw?.id || !requested.has(raw.id)) {
+          throw new BeadsError(`Beads list returned unrequested task ${raw?.id || "without an ID"}.`, "scope", "bd list --id");
+        }
+        if (byId.has(raw.id)) {
+          throw new BeadsError(`Beads list returned duplicate task ${raw.id}.`, "conflict", "bd list --id");
+        }
+        if (!this.hasExactListFidelity(raw)) return undefined;
+        byId.set(raw.id, raw);
+      }
+      return safeIds.map((taskId) => byId.get(taskId));
+    } catch {
+      // The documented exact list filter is an optimization. A list failure
+      // never changes the canonical show-based authority semantics.
+      return undefined;
+    }
   }
 
   async findByLegacyId(legacyId: string): Promise<TaskAuthorityRecord | undefined> {
@@ -714,7 +849,7 @@ export class BeadsTaskStore {
     const idempotencyKey = input.idempotencyKey || options.idempotencyKey;
     const create = async (): Promise<TaskCreateResult> => {
       if (idempotencyKey) {
-        const existing = (await this.listRaw()).filter(raw => metadataValue(raw, "pi_teams_idempotency_key") === idempotencyKey);
+        const existing = await this.listRaw({ metadataField: { key: "pi_teams_idempotency_key", value: idempotencyKey } });
         if (existing.length > 1) throw new BeadsError(`Duplicate Beads tasks share idempotency key ${idempotencyKey}; refusing to choose a mapping.`, "conflict", `bd list ${idempotencyKey}`);
         if (existing[0]) return { task: mapTask(existing[0]), taskEnvelope: this.taskAuthorityRecordEnvelope(existing[0]), replayed: true };
       }
@@ -807,8 +942,9 @@ export class BeadsTaskStore {
    * authority record is undefined rather than a second native show.
    */
   async readTaskAuthorityRecordEnvelopes(taskIds: readonly string[]): Promise<Array<TaskAuthorityRecordEnvelope | undefined>> {
-    return (await this.showManyRawAllowMissing(taskIds)).map((raw) =>
-      raw ? this.taskAuthorityRecordEnvelope(raw) : undefined);
+    const exact = await this.listExactRawAllowMissing(taskIds);
+    const raws = exact ?? await this.showManyRawAllowMissing(taskIds);
+    return raws.map((raw) => raw ? this.taskAuthorityRecordEnvelope(raw) : undefined);
   }
 
   /** Hydrate several exact Task revisions with one Beads authority query. */

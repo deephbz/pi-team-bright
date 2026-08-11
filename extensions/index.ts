@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, type WorkerAggregate } from "../src/team-authority/worker-launch-bridge";
 import { DurableAssignedWorkGuard } from "../src/adapters/durable-assigned-work-guard";
+import { DurableNonterminalAssignedTaskQuery } from "../src/adapters/durable-nonterminal-assigned-task-query";
 import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-lifecycle-publication";
 import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
@@ -361,7 +362,10 @@ export default function (pi: ExtensionAPI) {
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const teamLifecycleService = new TeamLifecycleService({
-    assignedWorkGuard: new DurableAssignedWorkGuard(taskReadAdapterFactory),
+    assignedWorkGuard: new DurableAssignedWorkGuard(
+      taskReadAdapterFactory,
+      new DurableNonterminalAssignedTaskQuery(taskAuthorityRead),
+    ),
     lifecyclePublication,
   });
   const teamSessionLifecycleService = new TeamSessionLifecycleService(lifecyclePublication);

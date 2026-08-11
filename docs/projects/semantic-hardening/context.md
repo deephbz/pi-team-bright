@@ -379,9 +379,25 @@ Open boundary risks:
   nudge integration. Its direct Team record reads remain a narrow integration
   seam. The completed public Membership projection reads only its narrow
   Team/runtime reader and remains non-authoritative.
-- Beads hydration has a measured latency tail. Removing reverse-dependent
+- Stress follow-up reconciles create replay through an exact native metadata
+  filter. It uses adaptive exact-ID hydration only when `bd list` supplies every
+  authority-version input; otherwise it uses canonical bounded `show`
+  ([`beads.ts`](../../../src/utils/beads.ts)). Worker stop uses the narrow
+  assigned-nonterminal query
+  ([`durable-nonterminal-assigned-task-query.ts`](../../../src/adapters/durable-nonterminal-assigned-task-query.ts)).
+  Tombstones now retain each `deliveryId`, so replay suppression covers every
+  durable Task version ([`task-delivery.ts`](../../../src/utils/task-delivery.ts)).
+  The 120-Task receipt is a before baseline only. It records three contended
+  `show` timeouts and does not measure repair benefit. Removing reverse-dependent
   hydration, filtering closed Tasks, or raising the timeout would change current
-  meaning or policy. Actual optimization remains deferred.
+  meaning or policy.
+- The owner-authorized `BdRunner` repair uses one wall-clock deadline, terminates
+  its process group, and records payload-free start/deadline/cleanup/settled
+  lifecycle evidence ([`beads.ts`](../../../src/utils/beads.ts),
+  [`trace.ts`](../../../src/utils/trace.ts)). Session JSONL proves historical
+  outer-call tails but not `bd` time; the new descendant fixture is deterministic
+  local proof. `dist/task-authority/contracts.d.ts` is generated output for the
+  Worker query, not deadline evidence.
 
 These risks bound future work. They do not show a regression in `15e707b`, and
 they do not authorize speculative completion before the next release candidate.

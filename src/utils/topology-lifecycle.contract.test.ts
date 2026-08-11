@@ -11,6 +11,7 @@ import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 
 type RegisteredTool = {
   name: string;
@@ -67,6 +68,7 @@ async function createBeadsTeam(name: string, leadSession: string) {
     project_id: `topology-${name}`,
   }));
   vi.spyOn(BeadsTaskAdapter.prototype, "list").mockResolvedValue([]);
+  vi.spyOn(DurableTaskAuthorityRead.prototype, "listNonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
   return teams.createTeam(
     name,
     leadSession,
@@ -237,9 +239,9 @@ describe("Team topology/lifecycle lease", () => {
       version: "v_0123456789abcdef",
     };
     const taskBefore = structuredClone(guardedTask);
-    const listed = vi.mocked(BeadsTaskAdapter.prototype.list)
-      .mockResolvedValueOnce([structuredClone(guardedTask)])
-      .mockResolvedValue([]);
+    const listed = vi.mocked(BeadsTaskAdapter.prototype.list).mockResolvedValue([]);
+    vi.mocked(DurableTaskAuthorityRead.prototype.listNonterminalTaskIdsAssignedToWorker)
+      .mockImplementation(async (_teamName, workerName) => workerName === "guarded" ? [guardedTask.id] : []);
     const tools = registerExtension();
     const stop = tools.get("worker_stop")!;
     const shutdown = tools.get("team_shutdown")!;

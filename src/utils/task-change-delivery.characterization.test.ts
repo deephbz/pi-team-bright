@@ -7,6 +7,7 @@ import {
   enqueueTaskChange,
   enqueueTaskChangeForExactRecipient,
   readTaskDeliveries,
+  suppressTaskVersionForSession,
   TASK_CHANGE_ACK_ENTRY_TYPE,
   TASK_CHANGE_CUSTOM_TYPE,
   TASK_CHANGE_RESUME_TYPE,
@@ -159,6 +160,52 @@ describe("TaskChangeDelivery current behavior characterization", () => {
     expect(await current.delivery.commitPresentedAfterSuccessfulTurn("stop")).toBe(0);
     expect(current.sink.appendEntry).not.toHaveBeenCalled();
     expect((await readTaskDeliveries(teamName, "worker"))[0].successfulTurnAckAt).toBeUndefined();
+  });
+
+  it("replays concurrent assigned backlog coordinates when a Worker is reused", async () => {
+    const { teamName, sessionFile, task } = await fixture("concurrent-backlog");
+    const next = { ...task, current_context: "A later assigned Task coordinate is ready.", version: taskVersionRef("delivery-v2") };
+    const queued = await Promise.all([
+      enqueueTaskChange(teamName, task, "assigned"),
+      enqueueTaskChange(teamName, next, "status_changed"),
+    ]);
+
+    const reused = delivery(teamName, sessionFile);
+    await reused.delivery.start([]);
+    const batch = reused.sink.sendMessage.mock.calls[0][0];
+    expect(batch).toMatchObject({
+      customType: TASK_CHANGE_CUSTOM_TYPE,
+      details: {
+        deliveryIds: expect.arrayContaining(queued.map((record) => record!.deliveryId)),
+        changes: expect.arrayContaining([
+          expect.objectContaining({ ref: expect.objectContaining({ taskId: task.id, version: task.version }), changeKind: "assigned" }),
+          expect.objectContaining({ ref: expect.objectContaining({ taskId: next.id, version: next.version }), changeKind: "status_changed" }),
+        ]),
+      },
+    });
+    reused.delivery.stop();
+  });
+
+  it("keeps concurrent self-observed backlog versions suppressed when a Worker is reused", async () => {
+    const { teamName, sessionFile, task } = await fixture("concurrent-reuse");
+    const first = await enqueueTaskChange(teamName, task, "assigned");
+    const next = { ...task, current_context: "A newer assigned Task coordinate is ready.", version: taskVersionRef("delivery-v2") };
+    const second = await enqueueTaskChange(teamName, next, "status_changed");
+    expect([first?.deliveryId, second?.deliveryId]).toHaveLength(2);
+
+    // Two Task mutations can suppress their own post-state delivery while the
+    // Worker is down. A reused Session must not replay either version.
+    await Promise.all([
+      suppressTaskVersionForSession(teamName, "worker", sessionFile, task),
+      suppressTaskVersionForSession(teamName, "worker", sessionFile, next),
+    ]);
+
+    const reused = delivery(teamName, sessionFile);
+    await reused.delivery.start([]);
+    expect(reused.sink.sendMessage).not.toHaveBeenCalled();
+    expect((await readTaskDeliveries(teamName, "worker")).map((record) => record.deliveryId))
+      .toEqual([first!.deliveryId, second!.deliveryId]);
+    reused.delivery.stop();
   });
 
   it("keeps failed and error-stopped presentation pending, then replays its stable ID until one acknowledgement", async () => {

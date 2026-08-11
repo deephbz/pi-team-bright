@@ -10,12 +10,19 @@ interface BdCallTrace {
   outcome: "ok" | "error";
 }
 
+interface BdRunnerLifecycleTrace {
+  event: "start" | "deadline" | "termination_cleanup" | "settled";
+  durationMs: number;
+  timedOut: boolean;
+}
+
 interface TraceContext {
   operation: string;
   teamName?: string;
   taskId?: string;
   startedAt: number;
   bdCalls: BdCallTrace[];
+  bdRunnerLifecycle: BdRunnerLifecycleTrace[];
   lockWaitMs: number;
 }
 
@@ -39,6 +46,11 @@ export function recordBdCall(command: string, durationMs: number, outcome: "ok" 
   storage.getStore()?.bdCalls.push({ command, durationMs, outcome });
 }
 
+/** Record payload-free owned-process lifecycle evidence in a semantic trace. */
+export function recordBdRunnerLifecycle(event: BdRunnerLifecycleTrace["event"], durationMs: number, timedOut: boolean): void {
+  storage.getStore()?.bdRunnerLifecycle.push({ event, durationMs, timedOut });
+}
+
 export function recordLockWait(durationMs: number): void {
   const context = storage.getStore();
   if (context) context.lockWaitMs += durationMs;
@@ -51,7 +63,7 @@ export async function withSemanticTrace<T>(
   action: () => Promise<T>,
 ): Promise<T> {
   if (!process.env[PI_TEAMS_TRACE_JSONL_ENV]) return action();
-  const context: TraceContext = { operation, ...identity, startedAt: Date.now(), bdCalls: [], lockWaitMs: 0 };
+  const context: TraceContext = { operation, ...identity, startedAt: Date.now(), bdCalls: [], bdRunnerLifecycle: [], lockWaitMs: 0 };
   return storage.run(context, async () => {
     let outcome: "ok" | "error" = "ok";
     let caught: unknown;
@@ -72,6 +84,7 @@ export async function withSemanticTrace<T>(
           bdCallCount: context.bdCalls.length,
           bdTotalMs: context.bdCalls.reduce((sum, call) => sum + call.durationMs, 0),
           bdCalls: context.bdCalls,
+          bdRunnerLifecycle: context.bdRunnerLifecycle,
           lockWaitMs: context.lockWaitMs,
           outcome,
           ...(caught ? { error: {

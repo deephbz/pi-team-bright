@@ -49,6 +49,39 @@ records commands, prior aggregate failures, and proof limits. This does not prov
 external writers, watcher delivery, OS scheduling, terminal pixels, publication,
 registry state, or provenance.
 
+## Stress follow-up
+
+The follow-up reconciles create replay with an exact native metadata filter.
+Its adaptive exact-ID hydration accepts `bd list` only when it carries every
+full authority-version input, then conservatively falls back to bounded `show`
+([`beads.ts`](../../../src/utils/beads.ts)). The Worker-stop guard uses a narrow
+assigned-nonterminal query
+([`durable-nonterminal-assigned-task-query.ts`](../../../src/adapters/durable-nonterminal-assigned-task-query.ts)).
+Tombstone persistence keys suppression by `deliveryId`, so each durable Task
+version remains suppressed on replay ([`task-delivery.ts`](../../../src/utils/task-delivery.ts)).
+The durable [120-Task receipt](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.json)
+and its [runner](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.py)
+are before-baseline evidence only. They show three timeouts in four contended
+detailed reads and do not measure repair benefit. Focused source evidence passed
+4 files and 44 tests. This is local disposable-authority evidence. It does not
+prove real Pi, production Beads/Dolt, external-writer, or capacity behavior.
+
+## BdRunner deadline repair
+
+The owner authorized a wall-clock deadline repair after the retained Session
+JSONL audit recorded outer `task_read` tails of 10.770 to 64.834 seconds, but no
+exact historical `bd` timing. `ExecBdRunner` now executes the owned native
+binary directly, terminates its process group at deadline, and emits the
+payload-free start, deadline, termination-cleanup, and settled trace lifecycle
+([`beads.ts`](../../../src/utils/beads.ts), [`trace.ts`](../../../src/utils/trace.ts)).
+The deterministic stdio-descendant fixture proves a 100 ms deadline settles and
+removes the descendant ([`beads.test.ts`](../../../src/utils/beads.test.ts)).
+The modified generated declaration,
+[`dist/task-authority/contracts.d.ts`](../../../dist/task-authority/contracts.d.ts),
+is the Worker-query output, not a runner artifact. Focused independent proof
+passed 1 file and 5 tests. This does not prove Windows process-tree behavior,
+real Pi lifecycle timing, production Beads/Dolt contention, or a package build.
+
 ## Commit series
 
 The ten Project commits after the rc.10 integration base are:

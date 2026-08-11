@@ -1435,3 +1435,68 @@ changes; append a correction.
 - The consolidation changed no source, public surface, persistence shape, or
   verification result. Current documentation pointers and privacy evidence were
   refreshed after the rewrite.
+
+## 2026-08-11 — 120-Task stress follow-up and guarded native-list candidate
+
+- The disposable native-Beads benchmark created 120 labeled Tasks with no
+  relations. Two idle snapshots completed: list p50 was 437.0 ms and detailed
+  show p50 was 39,455.7 ms. Four concurrent readers with one toggling writer
+  completed one snapshot; three detailed shows reached the 120-second runner
+  timeout. The complete machine receipt and rerunnable source are
+  [`2026-08-11-beads-120-contention-benchmark.json`](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.json)
+  and
+  [`2026-08-11-beads-120-contention-benchmark.py`](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.py).
+- The repair candidate in [`src/utils/beads.ts`](../../../src/utils/beads.ts)
+  uses documented exact-ID `bd list` only when relation counts and arrays prove
+  sufficient fidelity; failure or incomplete fidelity falls back to canonical
+  multi-ID `show`. The Worker stop path now queries only nonterminal Tasks
+  assigned to that Worker through
+  [`src/adapters/durable-nonterminal-assigned-task-query.ts`](../../../src/adapters/durable-nonterminal-assigned-task-query.ts).
+- Focused evidence passed `npx vitest run src/model-tool-contract/beads-task-adapter.test.ts src/adapters/durable-assigned-work-guard.test.ts src/team-authority/team-lifecycle-service.boundary.test.ts src/utils/task-change-delivery.characterization.test.ts`: 4 files and 44 tests in 1.86 seconds. JSON parsing, Python runner compilation, and the prior benchmark-focused 2-file/9-test run passed.
+- This records local disposable authority and focused harness evidence. It does
+  not prove real Pi processes, production Beads/Dolt contention, external
+  writers, filesystem watches, OS scheduling, semantic equivalence beyond the
+  tested fallback, or a supported Task-capacity limit. No commit occurred.
+
+## 2026-08-11 — correction: stress follow-up scope
+
+- The prior entry called the source work a repair candidate. The durable scope is
+  exact metadata reconciliation for create replay, conservative adaptive
+  hydration, a narrow Worker-stop query, and delivery replay correction.
+- [`src/utils/beads.ts`](../../../src/utils/beads.ts) uses the documented
+  metadata filter for exact idempotency reconciliation. Its exact-ID list path
+  accepts only records with every authority-version field and relation input;
+  otherwise it falls back to bounded canonical `show`.
+- [`src/adapters/durable-nonterminal-assigned-task-query.ts`](../../../src/adapters/durable-nonterminal-assigned-task-query.ts)
+  limits Worker stop to that Worker's nonterminal assigned IDs. Tombstone
+  persistence in [`src/utils/task-delivery.ts`](../../../src/utils/task-delivery.ts)
+  keys by `deliveryId`, so concurrent durable versions for one Task and Session
+  do not overwrite each other's replay suppression.
+- The 120-Task receipt remains a before baseline only. Its idle and contended
+  measurements do not claim a source-repair performance result. All prior local
+  evidence limits remain in force; no commit occurred.
+
+## 2026-08-11 — BdRunner wall-clock deadline repair
+
+- The retained Session JSONL audit supplies exact outer-call timing, not exact
+  subprocess timing: four `task_read` calls took 10.770, 15.720, 63.004, and
+  64.834 seconds. Its `PI_TEAMS_TRACE_JSONL` was absent, so it cannot identify
+  the `bd` share ([`bd-latency.json`](../../journal/artifacts/2026-08-02-pi-team-toolcall-audit/bd-latency.json)).
+- The owner authorized the narrow runner repair. `ExecBdRunner` executes the
+  owned platform-native `bd` binary directly, starts one wall-clock deadline,
+  terminates the owned process group, preserves the 8 MiB combined-output limit,
+  and returns exit 124 on timeout ([`src/utils/beads.ts`](../../../src/utils/beads.ts)).
+  It records payload-free `start`, `deadline`, `termination_cleanup`, and
+  `settled` lifecycle entries in the semantic trace
+  ([`src/utils/trace.ts`](../../../src/utils/trace.ts)).
+- The deterministic fixture
+  [`bd-runner-stdio-descendant.cjs`](../../../src/utils/fixtures/bd-runner-stdio-descendant.cjs)
+  holds inherited stdio in a descendant. The focused test uses a 100 ms deadline,
+  proves settlement below one second, confirms the descendant is gone, and checks
+  the full lifecycle sequence ([`src/utils/beads.test.ts`](../../../src/utils/beads.test.ts)).
+  Independent focused evidence passed 1 file and 5 tests in 384 ms.
+- `dist/task-authority/contracts.d.ts` changed only because the Worker assignment
+  query has generated declaration output. It is not generated evidence for the
+  runner repair. The source test does not prove Windows process-tree behavior,
+  real Pi lifecycle timing, production Beads/Dolt contention, a package build,
+  or performance improvement. No commit occurred.
