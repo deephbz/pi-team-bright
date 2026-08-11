@@ -32,6 +32,18 @@ The maintained [subsystem audit](subsystem-boundary-audit.md) and machine
 source directions. Exact behavior remains authoritative in code and tests. This
 report records the outcome, evidence, optimization choices, and limits.
 
+## Continuation status
+
+Commit `241622f` preserves `TaskAuthorityProvisioningPort` as the Task-owned
+creation and reconnection snapshot boundary. Its durable adapter stays outside
+Team application code. The focused adapter and durable-port run passed 38 tests,
+and TypeScript passed before commit. A fresh restart Team produced required
+Worker-authored preflight events, but every Worker reported `gpt-5.6-sol:high`.
+The leader rejected and stopped them before inspection or edits. Therefore no
+wrong-model result supports this commit, and compliant independent verification
+and the remaining structural gates are still required. The reserved aggregate did
+not run.
+
 ## Commit series
 
 The ten Project commits after the rc.10 integration base are:

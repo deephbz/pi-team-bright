@@ -2,10 +2,11 @@
 
 Updated: 2026-08-11
 Stage: consolidation and hardening
-Status: Membership observation is accepted through
-`5950f3b3f17124b9baf38afa48d839dc503d847b`; Team/Task reverse dependencies
-and the proposed Coordination worker-run query remain structural gates before
-optimization, aggregate, privacy, and watchdog review
+Status: Task-to-Team provisioning is committed at `241622f`. Team/Task reverse
+dependencies, Coordination runtime/event/nudge-actuation, stopped migration, and
+TeamConfig compatibility remain structural gates before optimization, aggregate,
+privacy, and watchdog review. The restart Team rejected every Worker before source
+inspection because each inherited `gpt-5.6-sol:high`, not `gpt-5.6-terra:medium`.
 Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
 Bright internals opaque
@@ -29,7 +30,15 @@ exports, persisted records, filenames, retry, timing, and default behavior are
 unchanged.
 
 The superseded rc.8 publication patch stash was removed after the reviewed rc.10
-implementation entered `15e707b`; no Project stash remains. Exact source commit
+implementation entered `15e707b`; no Project stash remains.
+
+Commit `241622f` preserves the Task-owned `TaskAuthorityProvisioningPort` and
+its durable adapter. It moves existing-binding validation, legacy refusal,
+orphan-cutover validation, workspace initialization, and native-store validation
+outside Team application code. The snapshot is copied and frozen. The leader ran
+the focused provisioning and durable-port checks (38 tests) plus TypeScript before
+this commit. This is local deterministic evidence; a compliant independent Worker
+must still recheck it. Exact source commit
 `638d5934bd52c7f4a3fe18525e5d72569a227211` adds the result bundle and rc.11
 release metadata. Its one reserved Node 22.22.1 aggregate passed 88 files and 695
 tests in 253.59 seconds. Lane, package, QA, public, persistence, JSON, link,

@@ -4,6 +4,7 @@ import { createDurableCoordinationQueries } from "../../src/adapters/durable-coo
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../../src/coordination/observation-service";
 import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges, type BeadsTaskAdapterFactory } from "../../src/model-tool-contract/beads-task-adapter";
 import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-model-tool-port";
+import { DurableTaskAuthorityProvisioning } from "../../src/adapters/durable-task-authority-provisioning";
 
 const emptyFactory = createReadOnlyBeadsTaskAdapterFactory({
   readTaskAuthorityRecordEnvelope: async () => undefined as any,
@@ -16,5 +17,6 @@ export function composedDurableModelToolPort(factory: BeadsTaskAdapterFactory = 
   const queries = createDurableCoordinationQueries(factory);
   const hidden = new DurableCoordinationHiddenObservation();
   return new DurableModelToolTeamPort(undefined, undefined, factory, undefined,
-    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)));
+    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)),
+    new DurableTaskAuthorityProvisioning());
 }

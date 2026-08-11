@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as paths from "../utils/paths";
-import * as authority from "./beads-authority-adapter";
+import { DurableTaskAuthorityProvisioning } from "../adapters/durable-task-authority-provisioning";
 import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
 import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 import * as teamEvents from "../utils/team-events";
@@ -43,6 +43,7 @@ function composedPort(
     factory,
     alertSender,
     new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)),
+    new DurableTaskAuthorityProvisioning(),
   );
 }
 
@@ -127,7 +128,7 @@ async function createTeamWithPaneSettings(projectTrusted?: boolean, globalTeamSe
     isWindowAlive: () => false,
   });
   vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "abstain", reason: "not_bound" });
-  vi.spyOn(authority, "resolveTeamTaskAuthority").mockResolvedValue({
+  vi.spyOn(DurableTaskAuthorityProvisioning.prototype, "resolve").mockResolvedValue({
     workspace: path.join(root, "tasks"), authorityId: "authority-pane-settings", fingerprint: {} as any,
   });
   let createArgs: any[] | undefined;
@@ -169,7 +170,7 @@ async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle) {
   });
   const name = teamName("lifecycle-callback");
   vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "abstain", reason: "not_bound" });
-  vi.spyOn(authority, "resolveTeamTaskAuthority").mockResolvedValue({
+  vi.spyOn(DurableTaskAuthorityProvisioning.prototype, "resolve").mockResolvedValue({
     workspace: path.join(root, "tasks"),
     authorityId: "authority-lifecycle-callback",
     fingerprint: { schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: name, projectId: name },
@@ -384,6 +385,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const source = fs.readFileSync(path.join(__dirname, "durable-model-tool-port.ts"), "utf8");
 
     expect(source).not.toMatch(/DurableTeamLifecyclePublication|createWorkerLaunchBridge/);
+    expect(source).not.toMatch(/beads-authority-adapter|durable-task-authority-provisioning/);
+    expect(source).toContain('import type { TaskAuthorityProvisioningPort } from "../task-authority/contracts"');
   });
 
   it("keeps one composition-root launch bridge and injects it into the durable port", () => {
@@ -395,7 +398,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source).toContain("const alertSender = createAlertSender(alertMembership, alertPublication)");
     expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory\)/g)).toHaveLength(1);
     expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
-    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, { resolve: resolveTeamTaskAuthority })");
+    expect(source).toContain("const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning()");
+    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning)");
     expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory)");
     expect(source).toContain("new DurableModelToolAlertApplication(modelToolBindings, alertSender)");
     expect(source).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");

@@ -1,7 +1,7 @@
 import { getTerminalAdapter } from "../adapters/terminal-registry";
 import * as paths from "../utils/paths";
 import * as teams from "../utils/teams";
-import type { TeamTaskAuthorityResolver } from "./durable-model-tool-team-contracts";
+import type { TaskAuthorityProvisioningPort } from "../task-authority/contracts";
 import { resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
@@ -18,7 +18,7 @@ function resolveWorkerAggregate(cwd: string, leaderCwd: string, trusted?: boolea
 export class DurableModelToolTeamApplication implements ModelToolTeamApplicationPort {
   setLeaderSessionFile: NonNullable<ModelToolTeamApplicationPort["setLeaderSessionFile"]>;
   setLeaderLaunchContext: NonNullable<ModelToolTeamApplicationPort["setLeaderLaunchContext"]>;
-  constructor(private readonly bindings: DurableModelToolBindings, private readonly launchBridge?: WorkerLaunchBridge, private readonly lifecycle?: ModelToolLifecycle, private readonly taskAuthority?: TeamTaskAuthorityResolver) {
+  constructor(private readonly bindings: DurableModelToolBindings, private readonly launchBridge?: WorkerLaunchBridge, private readonly lifecycle?: ModelToolLifecycle, private readonly taskAuthority?: TaskAuthorityProvisioningPort) {
     this.setLeaderSessionFile = bindings.setLeaderSessionFile.bind(bindings);
     this.setLeaderLaunchContext = bindings.setLeaderLaunchContext.bind(bindings);
   }
