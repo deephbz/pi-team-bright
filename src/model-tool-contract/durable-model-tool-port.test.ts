@@ -5,7 +5,8 @@ import * as paths from "../utils/paths";
 import { DurableTaskAuthorityProvisioning } from "../adapters/durable-task-authority-provisioning";
 import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
 import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
-import * as teamEvents from "../utils/team-events";
+import * as teamEvents from "../coordination/event-journal";
+import type { TeamEventInput } from "../coordination/contracts";
 import * as teams from "../utils/teams";
 import { DurableModelToolTeamPort, type ModelToolLifecycle } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
@@ -51,6 +52,13 @@ function teamName(suffix: string): string {
   const name = `durable-model-tool-fence-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
   testTeams.push(name);
   return name;
+}
+
+/** Prepare a valid event page without making this hydration test contend on 51 fsync-backed appends. */
+function stageEventPage(name: string, inputs: readonly TeamEventInput[]): void {
+  const journal = paths.teamEventJournalPath(name);
+  fs.mkdirSync(path.dirname(journal), { recursive: true });
+  fs.writeFileSync(journal, `${inputs.map((input, index) => JSON.stringify({ ...input, cursor: String(index + 1), at: "2026-08-11T00:00:00.000Z" })).join("\n")}\n`, { mode: 0o600 });
 }
 
 async function teamFixture(implementationVersion: string | undefined) {
@@ -693,20 +701,23 @@ describe("DurableModelToolTeamPort durable authority", () => {
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
     hydrate.mockResolvedValue([undefined]);
-    await teamEvents.appendTeamEvent(name, {
-      type: "task",
-      ref: { taskId: "missing-page-task", version: taskVersionRef("missing-page-v1") },
-      change: "created",
-      actor: "team-lead",
-    });
-    for (let index = 0; index < 59; index++) {
-      await teamEvents.appendTeamEvent(name, {
-        type: "worker",
+    stageEventPage(name, [
+      {
+        type: "task",
+        ref: { taskId: "missing-page-task", version: taskVersionRef("missing-page-v1") },
+        change: "created",
+        actor: "team-lead",
+      },
+      ...Array.from({ length: 50 }, (_, index) => ({
+        type: "worker" as const,
         worker: "worker",
         membershipId: `membership-${index}`,
-        phase: "failed",
-      });
-    }
+        phase: "failed" as const,
+      })),
+    ]);
+    const stagedPage = teamEvents.readTeamEvents(name, { limit: 50 });
+    expect(stagedPage).toMatchObject({ cursor: "50", headCursor: "51", truncated: true });
+    expect(stagedPage.events[0]).toMatchObject({ type: "task", ref: { taskId: "missing-page-task" } });
 
     await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-page")).resolves.toMatchObject({
       kind: "unavailable",

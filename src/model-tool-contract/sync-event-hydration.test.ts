@@ -7,7 +7,7 @@ import { exactLeaderSessionId } from "./in-memory-team-port";
 import { taskVersionRef } from "./task-version-ref";
 import { TASK_METADATA_SCHEMA } from "../utils/beads";
 import * as paths from "../utils/paths";
-import * as teamEvents from "../utils/team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "../utils/teams";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";

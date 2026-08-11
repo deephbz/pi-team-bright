@@ -14,7 +14,7 @@ vi.mock("../utils/teams", () => ({
   teamExists: calls.teamExists,
   withCurrentConfig: calls.withCurrentConfig,
 }));
-vi.mock("../utils/team-events", () => ({ appendTeamEvent: calls.appendTeamEvent }));
+vi.mock("../coordination/event-journal", () => ({ appendTeamEvent: calls.appendTeamEvent }));
 
 import { DurableAlertMembership } from "./durable-alert-membership";
 import { DurableAlertPublication } from "./durable-alert-publication";
@@ -119,7 +119,7 @@ describe("durable Alert port equivalence", () => {
     expect(fs.readFileSync(path.join(root, "src/adapters/durable-alert-membership.ts"), "utf8"))
       .toMatch(/from\s+["']\.\.\/utils\/teams["']/);
     expect(fs.readFileSync(path.join(root, "src/adapters/durable-alert-publication.ts"), "utf8"))
-      .toMatch(/from\s+["']\.\.\/utils\/team-events["']/);
+      .toMatch(/from\s+["']\.\.\/coordination\/event-journal["']/);
 
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
     expect(extension.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);

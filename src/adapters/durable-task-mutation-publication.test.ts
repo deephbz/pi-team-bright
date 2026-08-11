@@ -14,7 +14,7 @@ const calls = vi.hoisted(() => ({
   readConfig: vi.fn(),
 }));
 
-vi.mock("../utils/team-events", () => ({ appendTaskEvidenceEvent: calls.append }));
+vi.mock("../coordination/event-journal", () => ({ appendTaskEvidenceEvent: calls.append }));
 vi.mock("../utils/task-event-failure-hints", () => ({ appendTaskEventFailureHint: calls.hint }));
 vi.mock("../utils/teams", () => ({ readConfig: calls.readConfig }));
 vi.mock("../utils/task-delivery", () => ({
@@ -202,7 +202,7 @@ describe("Task mutation publication import fence", () => {
 
     expect(authority).not.toMatch(/from ["'][^"']*(?:team-events|task-delivery|task-event-failure-hints)["']/);
     expect(taskAdapter).not.toMatch(/from ["'][^"']*(?:task-delivery|task-event-failure-hints)["']/);
-    expect(bridge).toMatch(/from ["'][^"']*team-events["']/);
+    expect(bridge).toMatch(/from ["'][^"']*coordination\/event-journal["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-delivery["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-event-failure-hints["']/);
     expect(durablePort).toContain("new DurableModelToolTaskApplication(bindings, taskAdapterFactory)");

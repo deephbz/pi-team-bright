@@ -10,7 +10,7 @@ import {
   projectTaskEventEvidence,
   type TaskEventEvidenceKind,
   type TaskEventEvidenceInput,
-} from "../utils/team-events";
+} from "../coordination/event-journal";
 import {
   applySemanticTaskUpdate,
   createTask,

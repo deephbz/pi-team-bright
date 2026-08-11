@@ -5,7 +5,7 @@ import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import * as tasks from "./tasks";
+import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
 import { createWorkerLaunchBridge } from "./worker-launch-bridge";
@@ -76,7 +76,7 @@ async function team(suffix: string, defaultModel?: string) {
     dolt_database: "launch_compensation_contract",
     project_id: `launch-compensation-${name}`,
   }));
-  vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
+  vi.spyOn(BeadsTaskAdapter.prototype, "list").mockResolvedValue([]);
   await teams.createTeam(
     name,
     leadSession,
@@ -424,7 +424,7 @@ describe("compensated Worker launch", () => {
       subscriptions: [],
       isActive: true,
     });
-    vi.mocked(tasks.listTasksWithVersions).mockResolvedValue([{
+    vi.mocked(BeadsTaskAdapter.prototype.list).mockResolvedValue([{
       id: "task-open",
       title: "Retained unfinished work",
       goal: "Keep this Task across partial shutdown.",

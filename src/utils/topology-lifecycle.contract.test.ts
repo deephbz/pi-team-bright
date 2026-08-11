@@ -8,9 +8,9 @@ import { projectTui } from "../model-tool-contract/tui-projection";
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
-import * as taskAuthority from "./tasks";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
+import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 
 type RegisteredTool = {
   name: string;
@@ -66,7 +66,7 @@ async function createBeadsTeam(name: string, leadSession: string) {
     dolt_database: "topology_contract",
     project_id: `topology-${name}`,
   }));
-  vi.spyOn(taskAuthority, "listTasksWithVersions").mockResolvedValue([]);
+  vi.spyOn(BeadsTaskAdapter.prototype, "list").mockResolvedValue([]);
   return teams.createTeam(
     name,
     leadSession,
@@ -237,9 +237,9 @@ describe("Team topology/lifecycle lease", () => {
       version: "v_0123456789abcdef",
     };
     const taskBefore = structuredClone(guardedTask);
-    const listed = vi.spyOn(taskAuthority, "listTasksWithVersions").mockImplementation(async (_team, filter = {}) =>
-      filter.assignee === "guarded" ? [structuredClone(guardedTask)] : [],
-    );
+    const listed = vi.mocked(BeadsTaskAdapter.prototype.list)
+      .mockResolvedValueOnce([structuredClone(guardedTask)])
+      .mockResolvedValue([]);
     const tools = registerExtension();
     const stop = tools.get("worker_stop")!;
     const shutdown = tools.get("team_shutdown")!;
@@ -300,8 +300,8 @@ describe("Team topology/lifecycle lease", () => {
     expect(killed.slice(0, 2)).toEqual(["pane-uncertain", "pane-ready"]);
     expect(killed.slice(2).sort()).toEqual(["pane-fails", "pane-fails", "pane-guarded", "pane-succeeds", "pane-uncertain", "pane-uncertain"]);
     expect(guardedTask).toEqual(taskBefore);
-    expect(listed).toHaveBeenCalledWith(name, { assignee: "guarded", nonterminalOnly: true });
-    expect(listed).toHaveBeenLastCalledWith(name, { nonterminalOnly: true });
+    expect(listed).toHaveBeenCalledWith();
+    expect(listed).toHaveBeenLastCalledWith();
   });
 
   it("serializes one Team while allowing another Team to progress without deadlock", async () => {

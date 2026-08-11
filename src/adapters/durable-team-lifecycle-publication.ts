@@ -1,5 +1,5 @@
 import * as runtime from "../utils/runtime";
-import * as teamEvents from "../utils/team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "../utils/teams";
 import {
   observeWorkerStartup,

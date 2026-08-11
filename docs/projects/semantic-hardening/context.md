@@ -2,10 +2,12 @@
 
 Updated: 2026-08-11
 Stage: consolidation and hardening
-Status: Task-to-Team provisioning is committed at `241622f`. Team/Task reverse
-dependencies, Coordination runtime/event/nudge-actuation, stopped migration, and
-TeamConfig compatibility remain structural gates before optimization, aggregate,
-privacy, and watchdog review. The restart Team rejected every Worker before source
+Status: The continuation commits Task stopped migration, Coordination event
+journal, and TeamConfig compatibility. Its one reserved aggregate at `a5db88a`
+failed 16 stale test-fixture classes. Focused corrections and independent
+verification pass, but the exact post-correction tree cannot claim aggregate
+success because the owner prohibited a rerun. Owner authorization is required
+for another aggregate before final-release proof. The restart Team rejected every Worker before source
 inspection because each inherited `gpt-5.6-sol:high`, not `gpt-5.6-terra:medium`.
 Architecture impact: changed for internal Task, Team, and Alert dependency ownership;
 HyperCarrier's canonical diagram remains unchanged because it keeps Pi Team
@@ -413,9 +415,10 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    gates for each next implementation Task.
 3. Keep the accepted four-port Trio split, nudge boundary, and additive
    Membership reader stable unless source evidence requires a correction.
-4. Keep the accepted Task read and TaskChangeDelivery ports stable; stopped migration remains separate.
-5. Close the remaining Team/Task reverse dependencies and Coordination runtime,
-   event, and nudge-actuation seams before optimization.
+4. Keep the accepted Task read, TaskChangeDelivery, and stopped-epoch migration
+   ports stable.
+5. Close the remaining Team/Task reverse dependencies and Coordination runtime
+   reads. Keep exact-Session nudge actuation in Pi unless separately authorized.
 6. Run one final aggregate only after the exact stable source includes every
    remaining authorized optimization or correction.
 7. Update the audit, dependency map, result report, current context, and

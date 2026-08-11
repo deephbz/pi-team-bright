@@ -5,6 +5,22 @@ export interface TaskAuthorityBinding {
     workspace: string;
     authorityFingerprint: unknown;
 }
+/** Immutable Task-owned authority snapshot for creation or reconnection. */
+export interface TaskAuthorityProvisioningSnapshot {
+    readonly workspace: string;
+    readonly authorityId: string;
+    readonly fingerprint: {
+        readonly schema: "pi-teams-beads-authority/1";
+        readonly backend: "dolt";
+        readonly database: "dolt";
+        readonly doltDatabase: string;
+        readonly projectId: string;
+    };
+}
+/** Task-owned resolver for a Team-scoped authority snapshot. */
+export interface TaskAuthorityProvisioningPort {
+    resolve(teamName: string): Promise<TaskAuthorityProvisioningSnapshot>;
+}
 /** Task-owned live Team boundary for mutation-capable Beads authority calls. */
 export interface TaskAuthorityTeamPort {
     binding(teamName: string): Promise<TaskAuthorityBinding>;

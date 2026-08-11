@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
 import { TaskChangeDelivery } from "./task-delivery";
 import * as teams from "./teams";

@@ -8,7 +8,7 @@ import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/t
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as taskAuthority from "./tasks";
 import * as runtime from "./runtime";
 import * as workerResources from "./worker-resource-projection";

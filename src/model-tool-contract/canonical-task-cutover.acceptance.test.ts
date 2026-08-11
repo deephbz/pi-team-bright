@@ -14,6 +14,7 @@ import { TASK_METADATA_SCHEMA, type TaskAuthorityRecordEnvelope } from "../utils
 import type { TaskAuthorityRecord } from "../utils/beads";
 import { projectTaskForAgent } from "../utils/task-delivery";
 import { migrateLegacyTaskDeliveryEpoch } from "../utils/task-delivery-migration";
+import { DurableTaskDeliveryStoppedEpoch } from "../adapters/durable-task-delivery-stopped-epoch";
 import { projectToolResult } from "./result-projection";
 import { appendTeamEvent } from "../utils/team-events";
 import { taskReadAdapterFactory } from "../../test/support/task-authority-read-port";
@@ -284,7 +285,11 @@ describe("canonical Task cutover acceptance", () => {
   });
 
   it("does not create stopped-epoch records when none exist", async () => {
-    await expect(migrateLegacyTaskDeliveryEpoch(`missing-migration-team-${process.pid}`, missingTeamReadFactory))
+    await expect(migrateLegacyTaskDeliveryEpoch(
+      `missing-migration-team-${process.pid}`,
+      missingTeamReadFactory,
+      new DurableTaskDeliveryStoppedEpoch(),
+    ))
       .resolves.toMatchObject({ scanned: 0, converted: 0, failed: 0 });
   });
 });
