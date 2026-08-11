@@ -1500,3 +1500,36 @@ changes; append a correction.
   runner repair. The source test does not prove Windows process-tree behavior,
   real Pi lifecycle timing, production Beads/Dolt contention, a package build,
   or performance improvement. No commit occurred.
+
+## 2026-08-11 — stress follow-up closure recorded
+
+- Commit `ed72376` contains exact create-replay metadata reconciliation,
+  adaptive exact-ID hydration with bounded canonical-`show` fallback, narrow
+  assigned-nonterminal Worker-stop queries, `deliveryId` tombstones, and the
+  wall-clock `BdRunner` deadline. Its first aggregate failed in three correction
+  lanes: durable cursor acknowledgement, stale-PID Worker stop, and tool-result
+  QA. Commit `8c74a5c` contains the aggregate-test stabilization.
+- The retained coordinator Session records one final `npm run test:full` pass on
+  exact `8c74a5c`: TypeScript plus 119 files and 875 tests in 241.77 seconds.
+  Package/generated, lane, agent-surface, tool-result, privacy-range, JSON, and
+  type gates passed. No aggregate ran for this documentation task.
+- The follow-up Team stopped all Workers and shut down with no unfinished Tasks.
+  A separate global checkout advanced to `8c74a5c`, retained its five existing
+  untracked files, and passed fresh `npm ci --workspaces=false`, typecheck, and
+  package verification. No source, test, global-checkout, push, tag,
+  publication, or merge action occurred here.
+- The four outside-repository receipts for `stress-8c74a5c-20260811-b` record
+  104 of 104 Tasks closed and eight Workers stopped. Against
+  `stress-dfe15527-20260811-a`, it records 14 versus 23 unknown creates, two
+  versus eight unavailable syncs, zero versus eight Worker-stop timeouts, and
+  zero task-read unavailable outcomes. The run saw a final visible cursor head
+  of 325, but no full cursor stream. Seven late assignments remained after
+  `caught_up`; two later showed Worker completion and the leader reconciliation
+  batch closed five.
+- The model surface supplies no per-call durations, maximum sync duration, or UI
+  measure. The run is consistent with bounded waits, but does not prove TUI-freeze
+  prevention or repair benefit. Four retrospective proposals remain pending
+  owner-visible public-schema decisions: assigned-work backlog state, explicit
+  create replay, timing and correlation fields, and unavailable-hydration detail
+  with retry guidance. The dated [closure receipt](../../journal/2026-08-11-stress-followup-closure-receipt.md)
+  preserves the comparison and limits.
