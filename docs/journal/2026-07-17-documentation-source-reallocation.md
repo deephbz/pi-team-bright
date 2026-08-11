@@ -16,8 +16,9 @@ still described the earlier 18-tool Message/inbox surface.
 
 - Executable TypeBox schemas and tool behavior live in
   [`extensions/index.ts`](../../extensions/index.ts).
-- The exact public selection and human renderer boundary live in
-  [`src/utils/tool-result-renderer.ts`](../../src/utils/tool-result-renderer.ts).
+- The exact public selection and human renderer boundary live in the current
+  [`extensions/index.ts`](../../extensions/index.ts) registration and model-tool
+  projection modules.
 - Result, Task, and event contracts have stable TypeScript homes and contract
   tests.
 - `docs/current/product.md`, `domain.md`, `system.md`, and `operations.md`

@@ -1,13 +1,14 @@
 # Accepted subsystem boundary audit
 
 Date: 2026-08-11
-Status: maintained semantic-hardening audit; accepted uncommitted Task read and
-TaskChangeDelivery boundaries extend baseline
-`cb38d9254dd0cccb9e745a8df3edb27f367d852d`. They add generic read and
-exact-recipient delivery ports with external durable adapters and explicit
-composition. `PiSessionTeamQueryPort` and `CoordinationHiddenObservationPort`
-are independently verified. Remaining Team, Task, and Coordination target
-violations stay open.
+Status: maintained semantic-hardening audit; exact accepted source
+`bea6f45572ba34f5e29574cc489f45383b7ebc19` includes the Task read, delivery,
+provisioning, and stopped-migration ports; Coordination hidden observation and
+event-journal ownership; Pi Session Team queries; TeamConfig partition; and the
+accepted nudge integration boundary. Its final aggregate passed 118 files and
+863 tests. Package, public/persistence, privacy, graph, QA, JSON, link, and diff
+gates passed. Remaining measured runtime risks are proof limits or separately
+authorized future work, not blockers for this verified source.
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`

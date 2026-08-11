@@ -1401,3 +1401,37 @@ changes; append a correction.
 - The owner prohibited another aggregate. Therefore the corrected exact tree
   lacks an aggregate-pass claim. This is an owner-only release-proof blocker;
   focused evidence does not replace the reserved aggregate receipt.
+
+## 2026-08-11 — final exact-tree verification
+
+- This entry corrects the earlier owner-authorization blocker. Project policy
+  permitted focused repair followed by one final-verifier aggregate on the exact
+  repaired tree; no separate authorization was required.
+- Exact clean source `1ca791f94cf165dd5075112bd08743b1d0d3eda7` passed its one
+  reserved `npm run test:full`: TypeScript plus 118 files and 863 tests in
+  289.91 seconds. It was not rerun.
+- Package/generated verification, lane closure, agent-surface QA, tool-result
+  QA, privacy-range, JSON parsing, local Markdown links, runtime import graph,
+  and diff checks passed. The graph has 123 production TypeScript files, 224
+  resolved runtime static local edges, no nontrivial SCC, and no runtime dynamic
+  local import.
+- The dated [final verification receipt](../../journal/2026-08-11-semantic-hardening-final-verification.md)
+  records commands, prior aggregate failure history, and proof limits. These
+  deterministic local checks do not prove a real Pi process, Beads/Dolt
+  contention, external writers, watcher delivery, OS scheduling, terminal
+  pixels, publication, registry state, or provenance.
+
+## 2026-08-11 — branch-only history consolidated
+
+- Shared release history through `ec7642a` remains unchanged. The 14 later,
+  unpublished branch commits were consolidated into five review units: authority
+  fixture alignment, Task/Team/Coordination query seams, Task provisioning,
+  remaining authority seams, and final verification evidence.
+- Verified source `bea6f45572ba34f5e29574cc489f45383b7ebc19` has tree
+  `979b1fdb89115493c5526f1644a0102a3bd7b65f`, exactly equal to the tree of
+  historical source `1ca791f94cf165dd5075112bd08743b1d0d3eda7`. The historical
+  hashes above remain observation records; maintained context now points to the
+  consolidated source.
+- The consolidation changed no source, public surface, persistence shape, or
+  verification result. Current documentation pointers and privacy evidence were
+  refreshed after the rewrite.
