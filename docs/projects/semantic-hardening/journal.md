@@ -1337,3 +1337,25 @@ changes; append a correction.
 - No aggregate ran. Focused deterministic source and harness evidence does not
   prove a real Pi process, persistence, external writers, watcher delivery,
   process forks, Beads/Dolt contention, OS scheduling, or terminal pixels.
+
+## 2026-08-11 — restart preflight rejected wrong-model Workers
+
+- The direct coordinator verified `PI_PROVIDER=openai-codex`,
+  `PI_MODEL=gpt-5.6-terra`, `PI_REASONING_LEVEL=medium`, and nonempty
+  `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY` before it created
+  `semantic-hardening-restart`.
+- Six independent assigned lanes recorded their own first Task events. Every
+  Worker reported `PI_MODEL=gpt-5.6-sol` and `PI_REASONING_LEVEL=high`, with the
+  required proxy variables present. They performed no source inspection, edit,
+  test, or commit.
+- The leader closed each rejected Task, stopped every Worker, reconciled the
+  terminal Team, and shut it down. Wrong-model work is not acceptance evidence.
+- The shared tree was restored to accepted `7d7b3fc` before preserving only the
+  independently verified Task authority provisioning slice. Commit `241622f`
+  adds its Task-owned contract, external durable adapter, composition injection,
+  and focused adapter proof. The leader reran the adapter plus durable-port
+  focused checks: 2 files and 38 tests passed; `npm run typecheck` passed; and
+  `git diff --check` passed before the commit.
+- This entry records local evidence only. A compliant independent verification
+  and every remaining structural gate are still required. The reserved aggregate
+  did not run.

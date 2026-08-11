@@ -17,7 +17,7 @@ import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-li
 import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory, createReadOnlyBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
-import { resolveTeamTaskAuthority } from "../src/model-tool-contract/beads-authority-adapter";
+import { DurableTaskAuthorityProvisioning } from "../src/adapters/durable-task-authority-provisioning";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableTaskAuthorityTeam } from "../src/adapters/durable-task-authority-team";
@@ -394,7 +394,8 @@ export default function (pi: ExtensionAPI) {
         : { kind: "unavailable", reason: "team_authority_unavailable", message: "Model-tool lifecycle adapter is not ready." },
     };
     const modelToolBindings = new DurableModelToolBindings();
-    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, { resolve: resolveTeamTaskAuthority });
+    const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning();
+    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning);
     const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory);
     const modelToolAlert = new DurableModelToolAlertApplication(modelToolBindings, alertSender);
     const modelToolCoordination = new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService);

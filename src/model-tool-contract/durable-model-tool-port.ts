@@ -1,7 +1,7 @@
 import type { AlertSender } from "../alert-authority/contracts";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
 import type { BeadsTaskAdapterFactory } from "./beads-task-adapter";
-import { resolveTeamTaskAuthority } from "./beads-authority-adapter";
+import type { TaskAuthorityProvisioningPort } from "../task-authority/contracts";
 import { CoordinationObservationService } from "../coordination/observation-service";
 import { DurableModelToolBindings } from "./durable-model-tool-bindings";
 import { DurableModelToolTeamApplication, type ModelToolLifecycle } from "./durable-model-tool-team-application";
@@ -34,9 +34,10 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
     taskAdapterFactory: BeadsTaskAdapterFactory,
     alertSender: AlertSender | undefined,
     observationService: CoordinationObservationService,
+    taskAuthority?: TaskAuthorityProvisioningPort,
   ) {
     const bindings = new DurableModelToolBindings();
-    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, { resolve: resolveTeamTaskAuthority });
+    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, taskAuthority);
     this.task = new DurableModelToolTaskApplication(bindings, taskAdapterFactory);
     this.alert = new DurableModelToolAlertApplication(bindings, alertSender);
     this.coordination = new DurableModelToolCoordinationApplication(bindings, observationService);
