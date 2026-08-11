@@ -68,8 +68,14 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     const taskAdapter = await import("../../src/model-tool-contract/beads-task-adapter");
     const { DurableTaskMutationPublication } = await import("../../src/adapters/durable-task-mutation-publication");
     const { createTaskAuthorityTeamPort } = await import("../../test/support/task-authority-team-port");
+    const { DurableTaskAuthorityRead } = await import("../../src/adapters/durable-task-authority-read");
+    const { createReadOnlyBeadsTaskAdapterFactory } = await import("../../src/model-tool-contract/beads-task-adapter");
+    const { DurableTaskAuthorityReadTeam } = await import("../../src/adapters/durable-task-authority-read-team");
     const publicationPort = new DurableTaskMutationPublication();
     const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
+    const taskAuthorityReadTeamPort = new DurableTaskAuthorityReadTeam();
+    const taskAuthorityRead = new DurableTaskAuthorityRead(taskAuthorityReadTeamPort);
+    const taskReadFactory = createReadOnlyBeadsTaskAdapterFactory(taskAuthorityRead);
     const teamEvents = await import("../../src/utils/team-events");
     const terminalRegistry = await import("../../src/adapters/terminal-registry");
 
@@ -153,7 +159,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
 
     async function snapshot(): Promise<unknown> {
       if (!teams.teamExists(teamName)) return { team: { name: teamName, lifecycle: "absent" }, workers: [], tasks: [] };
-      const [config, taskList] = await Promise.all([teams.readConfig(teamName), tasks.listTasks(teamName)]);
+      const [config, taskList] = await Promise.all([teams.readConfig(teamName), tasks.listTasks(teamName, taskReadFactory)]);
       return {
         team: {
           name: config.name,
@@ -497,7 +503,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     });
     const leadMembership = (await teams.readConfig(teamName)).members.find((member) => member.name === "team-lead" && member.isActive !== false)!;
     const deliveryWarningTaskState = postStateOf(deliveryWarningTask);
-    const deliveryWarningAuthority = await authorityAdapter.readTaskAuthorityRecordEnvelope(teamName, deliveryWarningTaskState.id);
+    const deliveryWarningAuthority = await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, deliveryWarningTaskState.id);
 
     const clearedDeliveryWarningTask = await authorityAdapter.applySemanticTaskUpdate(teamName, deliveryWarningTaskState.id, {
       status: "blocked",

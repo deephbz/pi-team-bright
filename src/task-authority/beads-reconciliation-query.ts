@@ -2,22 +2,21 @@ import type {
   TaskReconciliationQuery,
   TaskReconciliationReadOutcome,
 } from "./contracts";
-import { listTaskIds } from "../model-tool-contract/beads-authority-adapter";
-import {
-  BeadsTaskAdapter,
-  readTaskOwnerTransitionEvidence,
-} from "../model-tool-contract/beads-task-adapter";
+import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 
 /** Beads implementation wired at composition for Task-delivery recovery. */
 export class BeadsTaskReconciliationQuery implements TaskReconciliationQuery {
-  constructor(private readonly teamName: string) {}
+  constructor(
+    private readonly teamName: string,
+    private readonly factory: BeadsTaskAdapterFactory,
+  ) {}
 
   readOwnerTransitionEvidence(taskId: string) {
-    return readTaskOwnerTransitionEvidence(this.teamName, taskId);
+    return this.factory(this.teamName, "task-delivery-reconciliation").readOwnerTransitionEvidence(taskId);
   }
 
   async readCurrentTasks(): Promise<TaskReconciliationReadOutcome[]> {
-    return new BeadsTaskAdapter(this.teamName, "task-delivery-reconciliation")
-      .readMany(await listTaskIds(this.teamName));
+    const adapter = this.factory(this.teamName, "task-delivery-reconciliation");
+    return adapter.readMany(await adapter.listIds());
   }
 }

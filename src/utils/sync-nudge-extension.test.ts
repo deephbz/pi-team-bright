@@ -8,6 +8,7 @@ import * as runtime from "./runtime";
 import * as teams from "./teams";
 import type { TeamConfig } from "./models";
 import { readSyncNudgeRecords, readSyncNudges } from "./sync-nudge";
+import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
 
 const createdTeams: string[] = [];
 
@@ -237,10 +238,10 @@ describe("resumed leader sync nudge binding", () => {
     const name = teamName("stale");
     const currentSession = `/tmp/${name}-current.jsonl`;
     await createTeam(name, currentSession);
-    const stalePort = new DurableModelToolTeamPort();
+    const stalePort = composedDurableModelToolPort();
     stalePort.setLeaderSessionFile(exactLeaderSessionId("stale-session"), `/tmp/${name}-stale.jsonl`);
     await expect(stalePort.readSyncNudgeDebt(exactLeaderSessionId("stale-session"), ["root"])).resolves.toEqual({ kind: "none" });
-    const unboundPort = new DurableModelToolTeamPort();
+    const unboundPort = composedDurableModelToolPort();
     await expect(unboundPort.readSyncNudgeDebt(exactLeaderSessionId("unbound-session"), ["root"])).resolves.toEqual({ kind: "none" });
   });
 });

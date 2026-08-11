@@ -19,7 +19,10 @@ import { taskVersionRef, type TaskVersionRef } from "../model-tool-contract/task
 import { readTaskDeliveries } from "./task-delivery";
 import { readTeamEvents } from "./team-events";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
+import { DurableTaskAuthorityReadTeam } from "../adapters/durable-task-authority-read-team";
 import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
+import { taskReadAdapterFactory } from "../../test/support/task-authority-read-port";
 
 type Tool = { name: string; parameters: unknown; execute: (...args: any[]) => Promise<any> };
 
@@ -27,6 +30,9 @@ const testTeams: string[] = [];
 const testRoots: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
 const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
+const taskAuthorityReadTeamPort = new DurableTaskAuthorityReadTeam();
+const taskAuthorityRead = new DurableTaskAuthorityRead(taskAuthorityReadTeamPort);
+const taskReadFactory = taskReadAdapterFactory(taskAuthorityRead);
 
 function uniqueTeam(): string {
   const name = `worker-version-ref-${process.pid}-${Date.now()}-${testTeams.length}`;
@@ -238,6 +244,11 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     writeTeam(teamName, root);
     let failPostCreateRead = true;
     const adapter = new BeadsTaskAdapter(teamName, "team-lead", {
+      mode: "publishing",
+      readMany: (taskIds) => taskAuthorityRead.readTaskAuthorityRecordEnvelopes(teamName, taskIds),
+      list: () => taskAuthorityRead.listTaskIds(teamName),
+      update: async () => { throw new Error("unused update"); },
+      link: async () => { throw new Error("unused link"); },
       create: async (input, publication) => {
         const receipt = await createTask(teamName, input, publicationPort, { actor: "team-lead" }, publication, taskAuthorityTeamPort);
         return { ...receipt, taskCard: undefined };
@@ -247,7 +258,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
           failPostCreateRead = false;
           throw new Error("injected post-create read fault");
         }
-        return authority.readTaskAuthorityRecordEnvelope(teamName, taskId);
+        return taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, taskId);
       },
     });
     const input = {
@@ -273,7 +284,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       operationId: input.operationId,
     });
 
-    expect(await tasks.listTasks(teamName)).toHaveLength(1);
+    expect(await tasks.listTasks(teamName, taskReadFactory)).toHaveLength(1);
     expect(readTeamEvents(teamName).events).toHaveLength(1);
     expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
   }, 60_000);
@@ -290,15 +301,15 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       tasks: [{ operation_id: "create-worker-read", title: "Worker read", goal: "Read one exact Task authority record.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
     const task = created.details.outcomes[0].task;
-    const taskAuthorityRead = vi.spyOn(authority, "readTaskAuthorityRecordEnvelope");
+    const taskAuthorityReadSpy = vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelope");
     const genericRead = vi.spyOn(tasks, "readTask");
 
     const result = await worker.get("task_read")!.execute("read", {
       task_id: task.id,
     }, undefined, undefined, workerCtx);
 
-    expect(taskAuthorityRead).toHaveBeenCalledOnce();
-    expect(taskAuthorityRead).toHaveBeenCalledWith(teamName, task.id);
+    expect(taskAuthorityReadSpy).toHaveBeenCalledOnce();
+    expect(taskAuthorityReadSpy).toHaveBeenCalledWith(teamName, task.id);
     expect(genericRead).not.toHaveBeenCalled();
     expect(JSON.parse(result.content[0].text)).toMatchObject({ kind: "found", task: { id: task.id, version: expect.any(String) } });
   }, 60_000);
@@ -316,8 +327,8 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       tasks: [{ operation_id: "create-stale-actor", title: "Stale actor", goal: "Record current stale Worker mutation behavior.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
     const task = created.details.outcomes[0].task;
-    const beforeAuthority = structuredClone(await authority.readTaskAuthorityRecordEnvelope(teamName, task.id));
-    const beforeCanonicalTask = structuredClone(await new BeadsTaskAdapter(teamName, "worker").read(task.id));
+    const beforeAuthority = structuredClone(await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id));
+    const beforeCanonicalTask = structuredClone(await taskReadFactory(teamName, "worker").read(task.id));
     const beforeOperationMetadata = structuredClone(beforeAuthority.taskMetadata);
     const beforeEvents = readTeamEvents(teamName).events;
     const beforeDeliveries = await readTaskDeliveries(teamName, "worker");
@@ -354,9 +365,9 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(suppress).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
-    expect(await authority.readTaskAuthorityRecordEnvelope(teamName, task.id)).toEqual(beforeAuthority);
-    expect(await new BeadsTaskAdapter(teamName, "worker").read(task.id)).toEqual(beforeCanonicalTask);
-    expect((await authority.readTaskAuthorityRecordEnvelope(teamName, task.id)).taskMetadata).toEqual(beforeOperationMetadata);
+    expect(await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id)).toEqual(beforeAuthority);
+    expect(await taskReadFactory(teamName, "worker").read(task.id)).toEqual(beforeCanonicalTask);
+    expect((await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id)).taskMetadata).toEqual(beforeOperationMetadata);
     expect(readTeamEvents(teamName).events).toEqual(beforeEvents);
     expect(fileBytesOrAbsent(hintPath)).toEqual(beforeHints);
     expect(await readTaskDeliveries(teamName, "worker")).toEqual(beforeDeliveries);
@@ -378,7 +389,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(suppress).not.toHaveBeenCalled();
     expect(publish).toHaveBeenCalledOnce();
     expect(complete).not.toHaveBeenCalled();
-    const afterAuthority = await authority.readTaskAuthorityRecordEnvelope(teamName, task.id);
+    const afterAuthority = await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id);
     expect(afterAuthority).not.toEqual(beforeAuthority);
     expect(afterAuthority.task).toMatchObject({ id: task.id, status: "in_progress" });
     expect(JSON.parse(String(afterAuthority.taskMetadata))).toMatchObject({ last_operation: { operation_id: "stale-actor-update" } });
@@ -419,7 +430,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
         return result;
       },
     };
-    const factory = createPublishingBeadsTaskAdapterFactory(publicationPort, port);
+    const factory = createPublishingBeadsTaskAdapterFactory(publicationPort, port, taskAuthorityRead);
     const leader = factory(teamName, "team-lead");
     const worker = factory(teamName, "worker");
 
@@ -485,7 +496,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const compatibilityTeam = uniqueTeam();
     const compatibilityRoot = workspace();
     writeTeam(compatibilityTeam, compatibilityRoot);
-    const compatibilityFactory = createPublishingBeadsTaskAdapterFactory(publicationPort, taskAuthorityTeamPort);
+    const compatibilityFactory = createPublishingBeadsTaskAdapterFactory(publicationPort, taskAuthorityTeamPort, taskAuthorityRead);
     const compatibilityLeader = compatibilityFactory(compatibilityTeam, "team-lead");
     const compatibilityWorker = compatibilityFactory(compatibilityTeam, "worker");
     const compatibilityCreated = await compatibilityLeader.create({
@@ -521,9 +532,9 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const task = created.details.outcomes[0].task;
     const visibleVersion = JSON.parse((await worker.get("task_read")!.execute("read", { task_id: task.id }, undefined, undefined, workerCtx)).content[0].text).task.version;
     const store = new BeadsTaskStore({ teamName, workspace: root, authorityFingerprint: config.taskAuthorityFingerprint!, requireExpectedVersion: true });
-    const originalRead = authority.readTaskAuthorityRecordEnvelope;
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelope").mockImplementationOnce(async (...args: any[]) => {
-      const record = await originalRead(...args as Parameters<typeof authority.readTaskAuthorityRecordEnvelope>);
+    const originalRead = DurableTaskAuthorityRead.prototype.readTaskAuthorityRecordEnvelope;
+    vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelope").mockImplementationOnce(async function (this: DurableTaskAuthorityRead, team, taskId) {
+      const record = await originalRead.call(this, team, taskId);
       await store.update(record.task.id, { description: "External writer won the race." }, { actor: "team-lead", expectedVersion: record.task.version });
       return record;
     });
@@ -534,7 +545,7 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
       append_note: "This write must lose the raw preflight race.",
       expected_version: visibleVersion,
     }, undefined, undefined, workerCtx);
-    const current = await tasks.readTask(teamName, task.id);
+    const current = await tasks.readTask(teamName, task.id, taskReadFactory);
     expect(raced.details.outcomes[0]).toMatchObject({ kind: "refused", reason: "version_conflict", current_task: { id: task.id, version: current.version }, state_changed: false });
     expect(JSON.parse(raced.content[0].text)).toMatchObject({ recovery: { action: "reconcile_and_retry", expected_version: current.version } });
   }, 60_000);

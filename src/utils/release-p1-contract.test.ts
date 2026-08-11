@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import { BeadsTaskStore } from "./beads";
 import * as messaging from "./messaging";
 import type { Member } from "./models";
@@ -19,9 +20,9 @@ import {
 import { migrateTeamTasks, type LegacyTaskAuthorityRecord } from "./task-migration";
 import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 import * as taskAuthority from "../model-tool-contract/beads-authority-adapter";
-import * as tasks from "./tasks";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
@@ -107,7 +108,7 @@ function registerSessionExtension(): Map<string, (...args: any[]) => any> {
 async function createBeadsTeam(name: string, leadSession: string) {
   const suffix = `lifecycle-${testWorkspaces.length}`;
   const taskWorkspace = workspace(suffix);
-  vi.spyOn(tasks, "listTasksWithVersions").mockResolvedValue([]);
+  vi.spyOn(DurableTaskAuthorityRead.prototype, "listTaskIds").mockResolvedValue([]);
   return teams.createTeam(
     name,
     leadSession,
@@ -573,6 +574,7 @@ describe("release P1 public contracts", () => {
       membershipId: oldMember.membershipId,
       sessionFile: oldSession,
       pollMs: 60_000,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
 

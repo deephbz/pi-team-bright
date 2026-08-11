@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { IdentifiedInboxMessage, Member, TeamConfig } from "./models";
 import type { TaskCard } from "../model-tool-contract/task-domain";
@@ -147,6 +148,7 @@ function taskDelivery(team: string, sessionFile: string) {
     recipient: "worker",
     sessionFile,
     pollMs: 60_000,
+    membership: taskDeliveryMembership,
     reconcile: async () => 0,
   });
   return { delivery, sink };
@@ -295,7 +297,7 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
     const failed = new TaskChangeDelivery({
       sendMessage: vi.fn(() => { throw new Error("injected Session delivery failure"); }),
       appendEntry: vi.fn(),
-    }, { teamName: team, recipient: "worker", sessionFile, pollMs: 60_000, reconcile: async () => 0 });
+    }, { teamName: team, recipient: "worker", sessionFile, pollMs: 60_000, membership: taskDeliveryMembership, reconcile: async () => 0 });
 
     await expect(failed.start([])).rejects.toThrow("injected Session delivery failure");
     failed.stop();

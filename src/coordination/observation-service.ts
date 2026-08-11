@@ -1,4 +1,3 @@
-import { commitHiddenObservationProjection, readHiddenObservationProjection, type HiddenObservationProjection } from "../utils/hidden-observation";
 import * as teamEvents from "../utils/team-events";
 import { currentMember, deriveWorkerRunObservation, livenessIsComplete, livenessIsProductive, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";
 import { DEFAULT_SYNC_WAIT_SECONDS } from "../utils/sync-liveness-settings";
@@ -6,7 +5,7 @@ import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hint
 import { taskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TeamEvent } from "./contracts";
-import type { CoordinationQueryBundle, CoordinationTaskReadOutcome, CoordinationLeaderBindingEvidence } from "./queries";
+import type { CoordinationHiddenObservationPort, CoordinationHiddenObservationProjection, CoordinationQueryBundle, CoordinationTaskReadOutcome, CoordinationLeaderBindingEvidence } from "./queries";
 import { CoordinationNudgeDebtService, type CoordinationNudgeStore, type SyncNudgeDebt } from "./nudge-debt";
 import { taskProjectionRevision } from "./task-projection-revision";
 export { taskProjectionRevision } from "./task-projection-revision";
@@ -28,8 +27,9 @@ function workerCarrier(member: ReturnType<typeof latestMember>): CoordinationWor
 function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "created" | "connected" | "stopped" | "failed" { return event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase; }
 
 export interface CoordinationObservationStore {
-  readHidden: typeof readHiddenObservationProjection;
-  commitHidden: typeof commitHiddenObservationProjection;
+  /** Coordination-owned hidden record port, exposed as observation operations. */
+  readHidden: CoordinationHiddenObservationPort["read"];
+  commitHidden: CoordinationHiddenObservationPort["commit"];
   readEvents: typeof teamEvents.readTeamEvents;
   readEventCursor: typeof teamEvents.readTeamEventCursor;
   waitEvents: typeof teamEvents.waitForTeamEvents;
@@ -40,16 +40,16 @@ export interface CoordinationWaitDependencies {
   waitForLivenessHint: typeof waitForLivenessHint;
 }
 
-const durableObservationStore: CoordinationObservationStore = {
-  // Delegate at call time. Test and runtime instrumentation can then observe
-  // the durable boundary without replacing this composition object.
-  readHidden: (...args) => readHiddenObservationProjection(...args),
-  commitHidden: (...args) => commitHiddenObservationProjection(...args),
-  readEvents: (...args) => teamEvents.readTeamEvents(...args),
+export function createDurableCoordinationObservationStore(hidden: CoordinationHiddenObservationPort): CoordinationObservationStore {
+  return {
+    readHidden: (...args) => hidden.read(...args),
+    commitHidden: (...args) => hidden.commit(...args),
+    readEvents: (...args) => teamEvents.readTeamEvents(...args),
   readEventCursor: (...args) => teamEvents.readTeamEventCursor(...args),
   waitEvents: (...args) => teamEvents.waitForTeamEvents(...args),
-  readFailureHints: (...args) => readTaskEventFailureHintsAfter(...args),
-};
+    readFailureHints: (...args) => readTaskEventFailureHintsAfter(...args),
+  };
+}
 
 /** Coordination observation algorithm. Dependencies supply authority reads and durable projection storage. */
 export class CoordinationObservationService {
@@ -60,7 +60,7 @@ export class CoordinationObservationService {
   constructor(
     private readonly coordinationQueries: CoordinationQueryBundle,
     private readonly projection: CoordinationProjectionDependencies,
-    private readonly store: CoordinationObservationStore = durableObservationStore,
+    private readonly store: CoordinationObservationStore,
     private readonly wait: CoordinationWaitDependencies = { waitForLivenessHint },
     nudgeStore?: CoordinationNudgeStore,
   ) { this.nudgeDebt = nudgeStore ? new CoordinationNudgeDebtService(this, nudgeStore) : undefined; }
@@ -292,7 +292,7 @@ export class CoordinationObservationService {
 
   private cachedProjectionForBound(
     bound: BoundTeam,
-    observation: HiddenObservationProjection,
+    observation: CoordinationHiddenObservationProjection,
   ): TaskProjection | undefined {
     return this.cachedTaskProjection(
       bound.teamName,
@@ -396,7 +396,7 @@ export class CoordinationObservationService {
     }));
   }
 
-  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: HiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<CoordinationSyncResult, { kind: "updates" | "contract_gap" | "unavailable" }>> {
+  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: CoordinationHiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<CoordinationSyncResult, { kind: "updates" | "contract_gap" | "unavailable" }>> {
     const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection, warnings: taskWarnings } : await this.readTaskProjection(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
     const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];

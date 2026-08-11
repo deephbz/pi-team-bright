@@ -18,6 +18,18 @@ export interface TaskAuthorityTeamPort {
   }, action: (binding: TaskAuthorityBinding) => Promise<T>): Promise<T>;
 }
 
+/** Task-owned Team binding boundary for read-only native authority calls. */
+export interface TaskAuthorityReadTeamPort {
+  readBinding(teamName: string): Promise<TaskAuthorityBinding>;
+}
+
+/** Task-owned read boundary over one Team-scoped native authority. */
+export interface TaskAuthorityReadPort<TaskAuthorityRecord> {
+  readTaskAuthorityRecordEnvelope(teamName: string, taskId: string): Promise<TaskAuthorityRecord>;
+  readTaskAuthorityRecordEnvelopes(teamName: string, taskIds: readonly string[]): Promise<Array<TaskAuthorityRecord | undefined>>;
+  listTaskIds(teamName: string): Promise<string[]>;
+}
+
 export type TaskStatus = "open" | "in_progress" | "blocked" | "closed";
 
 export type TaskRelationType = "parent" | "blocked_by" | "related";

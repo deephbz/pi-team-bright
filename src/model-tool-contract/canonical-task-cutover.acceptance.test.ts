@@ -16,8 +16,14 @@ import { projectTaskForAgent } from "../utils/task-delivery";
 import { migrateLegacyTaskDeliveryEpoch } from "../utils/task-delivery-migration";
 import { projectToolResult } from "./result-projection";
 import { appendTeamEvent } from "../utils/team-events";
+import { taskReadAdapterFactory } from "../../test/support/task-authority-read-port";
 
 const createdTeams: string[] = [];
+const missingTeamReadFactory = taskReadAdapterFactory({
+  readTaskAuthorityRecordEnvelope: async () => { throw new Error("missing Team has no Task authority"); },
+  readTaskAuthorityRecordEnvelopes: async () => { throw new Error("missing Team has no Task authority"); },
+  listTaskIds: async () => { throw new Error("missing Team has no Task authority"); },
+});
 
 function authorityRecord(overrides: Partial<TaskAuthorityRecord> = {}, goal = "Run the focused acceptance check and report its result."): TaskAuthorityRecordEnvelope {
   const task: TaskAuthorityRecord = {
@@ -50,7 +56,9 @@ afterEach(() => {
 describe("canonical Task cutover acceptance", () => {
   it("projects one neutral card with only an opaque revision", async () => {
     const adapter = new BeadsTaskAdapter("cutover", "team-lead", {
-      create: async () => { throw new Error("unused"); },
+      mode: "read_only",
+      readMany: async () => [],
+      list: async () => [],
       read: async () => authorityRecord(),
     });
     const result = await adapter.read("task-1");
@@ -66,7 +74,9 @@ describe("canonical Task cutover acceptance", () => {
 
   it("does not turn an oversized goal into executable prose", async () => {
     const adapter = new BeadsTaskAdapter("cutover", "team-lead", {
-      create: async () => { throw new Error("unused"); },
+      mode: "read_only",
+      readMany: async () => [],
+      list: async () => [],
       read: async () => authorityRecord({ title: "A".repeat(100) }, "G".repeat(1_001)),
     });
     const result = await adapter.read("task-1");
@@ -131,7 +141,9 @@ describe("canonical Task cutover acceptance", () => {
   it("keeps delivery projection equal to the card supplied at publication", async () => {
     const record = authorityRecord();
     const projected = await new BeadsTaskAdapter("cutover", "team-lead", {
-      create: async () => { throw new Error("unused"); },
+      mode: "read_only",
+      readMany: async () => [],
+      list: async () => [],
       read: async () => record,
     }).read("task-1");
     expect(projected.kind).toBe("found");
@@ -248,7 +260,12 @@ describe("canonical Task cutover acceptance", () => {
     const record = authorityRecord({ assignee: "worker" });
     const metadata = record.taskMetadata as { goal: string; current_context: string };
     const adapter = new BeadsTaskAdapter(teamName, "team-lead", {
+      mode: "publishing",
+      readMany: async () => [],
+      list: async () => [],
       create: async () => ({ task: record.task, before: record.task, changed: true, appliedOperations: ["create"], deliveryDegraded: false, deliveryWarnings: [], publication: { teamEvent: { appended: false }, delivery: { attemptedRecipients: [], failedRecipients: [], recoveryRecordedFor: [], recoveryRecordFailedFor: [] } } }),
+      update: async () => { throw new Error("unused update"); },
+      link: async () => { throw new Error("unused link"); },
       read: async () => record,
     });
     const mutation = await adapter.createWithReceipt({ operationId: "create-parity", title: record.task.title, goal: metadata.goal, assignee: "worker" });
@@ -267,7 +284,7 @@ describe("canonical Task cutover acceptance", () => {
   });
 
   it("does not create stopped-epoch records when none exist", async () => {
-    await expect(migrateLegacyTaskDeliveryEpoch(`missing-migration-team-${process.pid}`))
+    await expect(migrateLegacyTaskDeliveryEpoch(`missing-migration-team-${process.pid}`, missingTeamReadFactory))
       .resolves.toMatchObject({ scanned: 0, converted: 0, failed: 0 });
   });
 });

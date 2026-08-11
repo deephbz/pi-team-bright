@@ -118,7 +118,10 @@ describe("models compatibility and authority contract fences", () => {
 
   it("keeps authority contract imports free of Trio and authority implementations", () => {
     expect(imports("team-authority/contracts.ts")).toEqual(["../utils/team-pane-layout"]);
-    expect(imports("task-authority/contracts.ts")).toEqual(["./task-domain", "./task-version-ref"]);
+    const taskContractImports = imports("task-authority/contracts.ts");
+    expect(taskContractImports).toEqual(["./task-domain", "./task-version-ref"]);
+    expect(taskContractImports).not.toContain("../utils/beads");
+    expect(taskContractImports.every((specifier) => !specifier.includes("/utils/"))).toBe(true);
     expect(imports("task-authority/task-domain.ts")).toEqual(["typebox", "./task-version-ref"]);
     expect(imports("task-authority/task-version-ref.ts")).toEqual(["node:crypto", "typebox"]);
     expect(imports("alert-authority/delivery-contracts.ts")).toEqual([]);

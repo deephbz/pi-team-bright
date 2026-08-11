@@ -1,13 +1,10 @@
 import { CoordinationObservationService } from "../coordination/observation-service";
-import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
-import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
-import { projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
 import type { ModelToolCoordinationApplicationPort } from "./model-tool-journey-port";
 import type { ExactLeaderSessionId, PendingObservation, TeamSnapshotPortResult, TeamSyncPortResult } from "./model-tool-contracts";
 import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
 import { DurableModelToolBindings } from "./durable-model-tool-bindings";
 export class DurableModelToolCoordinationApplication implements ModelToolCoordinationApplicationPort {
-  constructor(private readonly bindings: DurableModelToolBindings, private readonly service: CoordinationObservationService = new CoordinationObservationService(createDurableCoordinationQueries(), { projectNonterminalTaskIds, projectTaskChanges }, undefined, undefined, createDurableCoordinationNudgeStore())) {}
+  constructor(private readonly bindings: DurableModelToolBindings, private readonly service: CoordinationObservationService) {}
   async readSnapshot(id: ExactLeaderSessionId): Promise<TeamSnapshotPortResult> { const file = this.bindings.sessionFile(id); return file ? this.service.readSnapshot(file) : { kind: "no_active_team" }; }
   async readTeamSync(id: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, call: string): Promise<TeamSyncPortResult> { const file = this.bindings.sessionFile(id); return file ? this.service.readTeamSync(file, view, signal, call) : { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." }; }
   async readSyncNudgeDebt(id: ExactLeaderSessionId, lineage: string[]): Promise<SyncNudgeDebt> { const file = this.bindings.sessionFile(id); return file ? this.service.readSyncNudgeDebt(file, lineage) : { kind: "none" }; }

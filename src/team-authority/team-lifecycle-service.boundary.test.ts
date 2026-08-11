@@ -219,7 +219,9 @@ describe("Team lifecycle service boundary", () => {
     expect(source).toContain("assignedWorkGuard: AssignedWorkGuard");
     expect(source).toContain("lifecyclePublication: TeamLifecyclePublication");
     expect(adapter).not.toMatch(/utils\/tasks/);
-    expect(adapter).toContain('import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter"');
+    expect(adapter).not.toMatch(/import\s*\{\s*BeadsTaskAdapter\s*\}/);
+    expect(adapter).toContain('import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter"');
+    expect(adapter).toContain('constructor(private readonly factory: BeadsTaskAdapterFactory)');
     expect(adapter).toContain('import type { AssignedWorkGuard } from "../team-authority/assigned-work-guard"');
   });
 });

@@ -16,7 +16,14 @@ function serviceWithInjectedDerivedStore(config: any, calls: string[]) {
   }, {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: () => ({ kind: "projected", changes: [] }),
-  }, undefined, undefined, {
+  }, {
+    readHidden: async () => ({ kind: "not_found" as const, reason: "absent" as const }),
+    commitHidden: async () => ({ kind: "refused" as const, reason: "stale_acknowledgement" as const }),
+    readEvents: () => ({ events: [], headCursor: "0", cursor: "0", truncated: false, remaining: 0 }),
+    readEventCursor: () => "0",
+    waitEvents: async () => ({ events: [], headCursor: "0", cursor: "0", truncated: false, remaining: 0, timedOut: true }),
+    readFailureHints: () => ({ headCursor: "0", cursor: "0", hints: [] }),
+  }, undefined, {
     readHidden: async () => { calls.push("hidden"); return { kind: "missing" }; },
     readEvents: () => { calls.push("events"); return { events: [], headCursor: "0", cursor: "0", truncated: false }; },
     readFailureHints: () => ({ headCursor: "0", hints: [] }),

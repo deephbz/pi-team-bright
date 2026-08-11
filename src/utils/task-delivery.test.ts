@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
 import * as teams from "./teams";
@@ -15,6 +16,7 @@ import {
   TASK_CHANGE_ACK_ENTRY_TYPE,
   TASK_CHANGE_RESUME_TYPE,
   TaskChangeDelivery,
+  type TaskDeliveryMembershipPort,
 } from "./task-delivery";
 
 const created: string[] = [];
@@ -101,6 +103,7 @@ describe("Task-native delivery", () => {
       recipient: "worker",
       sessionFile,
       pollMs: 60_000,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
 
@@ -161,6 +164,7 @@ describe("Task-native delivery", () => {
       teamName,
       recipient: "worker",
       sessionFile,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
     await source.start(entries);
@@ -174,6 +178,7 @@ describe("Task-native delivery", () => {
       teamName,
       recipient: "worker",
       sessionFile: `${sessionFile}.fork`,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
     await fork.start(entries);
@@ -192,7 +197,7 @@ describe("Task-native delivery", () => {
       }),
       appendEntry: vi.fn(),
     }, {
-      teamName, recipient: "worker", sessionFile, reconcile: async () => 0,
+      teamName, recipient: "worker", sessionFile, membership: taskDeliveryMembership, reconcile: async () => 0,
     });
 
     await expect(delivery.start([])).rejects.toThrow("injected send cut");
@@ -216,7 +221,7 @@ describe("Task-native delivery", () => {
     const record = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
     const firstSend = vi.fn();
     const first = new TaskChangeDelivery({ sendMessage: firstSend, appendEntry: vi.fn() }, {
-      teamName, recipient: "worker", sessionFile, reconcile: async () => 0,
+      teamName, recipient: "worker", sessionFile, membership: taskDeliveryMembership, reconcile: async () => 0,
     });
     await first.start([]);
     const batch = firstSend.mock.calls[0][0];
@@ -233,7 +238,7 @@ describe("Task-native delivery", () => {
     const appendEntry = vi.fn();
     const retrySend = vi.fn();
     const retry = new TaskChangeDelivery({ sendMessage: retrySend, appendEntry }, {
-      teamName, recipient: "worker", sessionFile, reconcile: async () => 0,
+      teamName, recipient: "worker", sessionFile, membership: taskDeliveryMembership, reconcile: async () => 0,
     });
     await retry.start([presented]);
     expect(retrySend.mock.calls[0][0].customType).toBe(TASK_CHANGE_RESUME_TYPE);
@@ -247,7 +252,7 @@ describe("Task-native delivery", () => {
     const settledSend = vi.fn();
     const ack = { type: "custom", customType: TASK_CHANGE_ACK_ENTRY_TYPE, data: batch.details } as any;
     const settled = new TaskChangeDelivery({ sendMessage: settledSend, appendEntry: vi.fn() }, {
-      teamName, recipient: "worker", sessionFile, reconcile: async () => 0,
+      teamName, recipient: "worker", sessionFile, membership: taskDeliveryMembership, reconcile: async () => 0,
     });
     await settled.start([presented, ack]);
     expect(settledSend).not.toHaveBeenCalled();
@@ -284,6 +289,7 @@ describe("Task-native delivery", () => {
       recipient: "worker",
       sessionFile,
       pollMs: 60_000,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
     await delivery.start([]);
@@ -342,6 +348,7 @@ describe("Task-native delivery", () => {
       recipient: "worker",
       sessionFile,
       pollMs: 60_000,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
       reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, {
         query: reconciliationQuery(readEvidence),
@@ -399,6 +406,7 @@ describe("Task-native delivery", () => {
       recipient: "worker",
       sessionFile,
       pollMs: 60_000,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
       reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, {
         query: reconciliationQuery(readEvidence),
@@ -411,6 +419,59 @@ describe("Task-native delivery", () => {
     delivery.stop();
   });
 
+  it("uses the injected exact-recipient port for resolution and successful-turn acknowledgement", async () => {
+    const { teamName, sessionFile, task } = await fixture("membership-port");
+    const record = await enqueueTaskChange(teamName, task, "assigned");
+    const order: string[] = [];
+    const currentRecipient = vi.fn(async () => ({ membershipId: record!.recipientMembershipId }));
+    const withCurrentRecipient = vi.fn(async <T>(
+      _input: Parameters<TaskDeliveryMembershipPort["withCurrentRecipient"]>[0],
+      action: () => Promise<T>,
+    ): Promise<T> => {
+      order.push("lease");
+      return await action();
+    }) as TaskDeliveryMembershipPort["withCurrentRecipient"];
+    const membership: TaskDeliveryMembershipPort = { currentRecipient, withCurrentRecipient };
+    const sendMessage = vi.fn((_message: any) => { order.push("send"); });
+    const appendEntry = vi.fn(() => { order.push("acknowledge"); });
+    const delivery = new TaskChangeDelivery({ sendMessage, appendEntry }, {
+      teamName,
+      recipient: "worker",
+      sessionFile,
+      membership,
+      reconcile: async () => 0,
+    });
+
+    await delivery.start([]);
+    const batch = sendMessage.mock.calls[0][0];
+    await delivery.observeContext([{ role: "custom", customType: batch.customType, details: batch.details }]);
+    await delivery.commitPresentedAfterSuccessfulTurn("stop");
+
+    expect(currentRecipient).toHaveBeenCalledWith({ teamName, recipient: "worker", sessionFile });
+    expect(withCurrentRecipient).toHaveBeenCalledTimes(2);
+    expect(withCurrentRecipient).toHaveBeenNthCalledWith(
+      1,
+      { teamName, recipient: "worker", sessionFile, membershipId: record!.recipientMembershipId },
+      expect.any(Function),
+    );
+    expect(withCurrentRecipient).toHaveBeenNthCalledWith(
+      2,
+      { teamName, recipient: "worker", sessionFile, membershipId: record!.recipientMembershipId },
+      expect.any(Function),
+    );
+    expect(order).toEqual(["lease", "send", "lease", "acknowledge"]);
+    expect(appendEntry).toHaveBeenCalledWith(TASK_CHANGE_ACK_ENTRY_TYPE, expect.objectContaining({ deliveryIds: [record!.deliveryId] }));
+    delivery.stop();
+  });
+
+  it("keeps TaskChangeDelivery free of direct Team reads and leases", () => {
+    const source = fs.readFileSync("src/utils/task-delivery.ts", "utf8");
+    const consumer = source.slice(source.indexOf("export class TaskChangeDelivery"));
+    expect(source).not.toContain("withCurrentSessionBinding");
+    expect(consumer).not.toContain("readConfig(");
+    expect(consumer).not.toContain("withCurrentSessionBinding");
+  });
+
   it("does not let assignee-outbox recovery failure block an existing recipient spool", async () => {
     const { teamName, sessionFile, task } = await fixture("outbox-recovery-degraded");
     await enqueueTaskChange(teamName, task, "assigned");
@@ -421,6 +482,7 @@ describe("Task-native delivery", () => {
       recipient: "worker",
       sessionFile,
       pollMs: 60_000,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
       reconcileOwnerOutbox: async () => { throw new Error("Beads temporarily unavailable"); },
     });

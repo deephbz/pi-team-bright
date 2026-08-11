@@ -1260,3 +1260,80 @@ changes; append a correction.
   Coordination worker-run observation query remain target gates. Architecture
   impact is internal dependency direction only, so HyperCarrier Structurizr
   remains unchanged. No aggregate, push, tag, or publication occurred.
+
+## 2026-08-10 — Task read boundary independently accepted
+
+- Independent acceptance used baseline
+  `cb38d9254dd0cccb9e745a8df3edb27f367d852d`. It accepted the uncommitted
+  Task read boundary without edits, commits, original-checkout access,
+  benchmark CLI execution, aggregate suite, or unfiltered Vitest.
+- `TaskAuthorityReadPort<T>` and the distinct
+  `TaskAuthorityReadTeamPort` now live in
+  `src/task-authority/contracts.ts`. `DurableTaskAuthorityRead` and
+  `DurableTaskAuthorityReadTeam` implement the native read and Team-binding
+  sides outside Task authority. Composition injects explicit read-only and
+  publishing Beads adapter factories into Task, Coordination, guard,
+  reconciliation, delivery, and benchmark consumers.
+- The selection removes raw Task read/list exports, `storeFor`, optional
+  `readMany`/`list`, legacy read factories, and consumer defaults. It preserves
+  `task_read`, `task_read_many`, and `task_list` traces; legacy binding errors;
+  raw/model/TUI/error/public parity; and the generated
+  `dist/task-authority/contracts.d.ts` declaration.
+- Exact binding checks passed two files and 14 tests. The selected full-config
+  changed/new sweep plus benchmark passed 28 files and 207 tests. Typecheck,
+  lane closure (113 files: 92 fast, 21 exhaustive), agent-surface QA,
+  tool-result QA, package verification with generated-dist comparison, public
+  differential, and raw/default source fences passed.
+- The earlier accidental unfiltered full-Vitest attempt ran on an unstable tree
+  and found blockers. It is historical non-aggregate evidence only. No
+  aggregate claim follows from this acceptance.
+- The canonical TypeScript AST scan now reports 115 production files, 20,017
+  lines, 434 ordered static relative import/re-export declaration edges, 402
+  unique ordered file edges, no nontrivial SCC, no self-cycle, and no literal
+  relative runtime dynamic import. JSON, citations, local links, and diff
+  checks passed.
+- Architecture impact: **changed** for internal Task read ownership and
+  composition. HyperCarrier Structurizr stays unchanged because Pi Team Bright
+  internals are opaque. The next separate gate is `TaskChangeDelivery`; preserve
+  recipient resolution, exact current-binding lease, send/stage, and
+  acknowledgement order, and keep stopped migration separate.
+
+## 2026-08-11 — Task read citations corrected and TaskChangeDelivery accepted
+
+- Corrected Task-read composition citations to the accepted source locations.
+  `BeadsTaskAdapter` has no default authority constructor. Explicit read-only
+  and publishing factories supply its required authority.
+- Independent re-verification accepted `TaskChangeDelivery` with the mandatory
+  consumer-owned `TaskDeliveryMembershipPort`. The external durable adapter
+  resolves the active exact recipient and provides both send and acknowledgement
+  leases. No local Team read or lease fallback remains in Task delivery.
+- The focused characterization preserves stale-target refusal, send/context
+  staging/acknowledgement order, replacement refusal, failed-send replay, and
+  one acknowledgement. The verifier also passed the release-P1 fixture,
+  typecheck, focused tests, public/persistence diffs, and source fences.
+- No aggregate ran. This is deterministic source and harness evidence only. It
+  does not prove a real Pi process, Beads/Dolt contention, external writers,
+  watcher delivery, OS scheduling, or terminal pixels.
+- Stopped migration remains separate. Team and Coordination target gates remain
+  open. Architecture impact is **changed** for internal Task read and delivery
+  ownership; HyperCarrier Structurizr remains unchanged.
+
+## 2026-08-11 — Pi Session Team-query and Coordination hidden-observation ports accepted
+
+- Independent verification accepted `PiSessionTeamQueryPort`. The Pi Session
+  adapter now receives lead and Worker resolution, exact current binding,
+  terminal placement, nudge-candidate checks, Worker profile, and active
+  Membership lookup through its Team-owned read-only contract. The durable
+  adapter retains concrete Team reads outside Pi Session adaptation.
+- Independent verification also accepted `CoordinationHiddenObservationPort`.
+  It moves hidden projection reads and commits behind Coordination's contract
+  and an external durable adapter. The characterization preserves exact epoch,
+  lead Session, branch lineage, pending state, commit-before-cache reuse and
+  pending clear, Worker-run DTO parity, and separate nudge eligibility.
+- These ports close only the Pi Session direct Team-query and Coordination
+  hidden-observation target seams. TeamConfig mixed compatibility, Task/Team
+  reverse dependencies, and Coordination runtime, event, and nudge-actuation
+  seams remain open. Stopped migration remains separate.
+- No aggregate ran. Focused deterministic source and harness evidence does not
+  prove a real Pi process, persistence, external writers, watcher delivery,
+  process forks, Beads/Dolt contention, OS scheduling, or terminal pixels.

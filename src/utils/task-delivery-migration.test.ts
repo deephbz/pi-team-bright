@@ -1,23 +1,26 @@
 import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
-import type { TaskCard } from "../model-tool-contract/task-domain";
+import { TASK_METADATA_SCHEMA, type TaskAuthorityRecordEnvelope } from "../utils/beads";
+import { taskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskCard } from "../task-authority/task-domain";
+import type { TaskAuthorityReadPort } from "../task-authority/contracts";
+import {
+  createReadOnlyBeadsTaskAdapterFactory,
+  type BeadsTaskAdapterFactory,
+} from "../model-tool-contract/beads-task-adapter";
 import { configPath, taskDeliveryPath, teamDir, teamEventJournalPath } from "./paths";
 import { migrateLegacyTaskDeliveryEpoch } from "./task-delivery-migration";
-import { listTaskIds } from "../model-tool-contract/beads-authority-adapter";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 
-vi.mock("../model-tool-contract/beads-authority-adapter", () => ({
-  listTaskIds: vi.fn(),
-}));
-const readManyMock = vi.fn(async (ids: readonly string[]) => ids.map((id) => ({ kind: "found" as const, task: card(id) })));
-vi.mock("../model-tool-contract/beads-task-adapter", () => ({
-  BeadsTaskAdapter: class {
-    readMany = readManyMock;
+const listTaskIdsMock = vi.fn<(teamName: string) => Promise<string[]>>();
+const readManyMock = vi.fn<(teamName: string, ids: readonly string[]) => Promise<Array<TaskAuthorityRecordEnvelope | undefined>>>();
+const readPort: TaskAuthorityReadPort<TaskAuthorityRecordEnvelope> = {
+  readTaskAuthorityRecordEnvelope: async () => {
+    throw new Error("single Task reads are not used by delivery migration");
   },
-}));
-
-const listTaskIdsMock = vi.mocked(listTaskIds);
+  readTaskAuthorityRecordEnvelopes: (teamName, ids) => readManyMock(teamName, ids),
+  listTaskIds: (teamName) => listTaskIdsMock(teamName),
+};
+const taskAdapterFactory: BeadsTaskAdapterFactory = createReadOnlyBeadsTaskAdapterFactory(readPort);
 const team = `delivery-migration-${process.pid}`;
 
 function card(id: string): TaskCard {
@@ -28,6 +31,27 @@ function card(id: string): TaskCard {
     current_context: "Migration is ready.",
     status: "open",
     version: taskVersionRef("current-authority-version"),
+  };
+}
+
+function authorityRecord(id: string): TaskAuthorityRecordEnvelope {
+  const task = card(id);
+  return {
+    task: {
+      id: task.id,
+      title: task.title,
+      description: "Compatibility description.",
+      acceptanceCriteria: "Compatibility acceptance criteria.",
+      status: task.status,
+      relations: [],
+      version: "current-authority-version",
+      provenance: { authority: "beads", teamName: team },
+    },
+    taskMetadata: {
+      schema: TASK_METADATA_SCHEMA,
+      goal: "Keep the migrated Task executable.",
+      current_context: "Migration is ready.",
+    },
   };
 }
 
@@ -60,8 +84,8 @@ beforeEach(() => {
   fs.rmSync(teamDir(team), { recursive: true, force: true });
   listTaskIdsMock.mockReset();
   listTaskIdsMock.mockResolvedValue(["task-1"]);
-  readManyMock.mockClear();
-  vi.clearAllMocks();
+  readManyMock.mockReset();
+  readManyMock.mockImplementation(async (_teamName, ids) => ids.map((id) => authorityRecord(id)));
 });
 
 describe("stopped-epoch Task delivery migration", () => {
@@ -107,7 +131,7 @@ describe("stopped-epoch Task delivery migration", () => {
       taskSnapshot: { id: "task-1", version: "raw-v2", legacy: "preserved-by-card" },
     }]));
 
-    const receipt = await migrateLegacyTaskDeliveryEpoch(team);
+    const receipt = await migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory);
       expect(receipt).toMatchObject({ scanned: 4, converted: 3, failed: 0, unresolved: 0 });
     const migratedJournal = fs.readFileSync(teamEventJournalPath(team), "utf8");
     expect(migratedJournal.split("\n")[0]).toBe(originalWorkerLine);
@@ -153,7 +177,7 @@ describe("stopped-epoch Task delivery migration", () => {
       at: "now",
     }]);
 
-    const receipt = await migrateLegacyTaskDeliveryEpoch(team);
+    const receipt = await migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory);
     expect(receipt.converted).toBe(2);
     expect(listTaskIdsMock).toHaveBeenCalledTimes(1);
     expect(readManyMock).not.toHaveBeenCalled();
@@ -168,12 +192,12 @@ describe("stopped-epoch Task delivery migration", () => {
     writeJournal(journal);
     const journalBytes = fs.readFileSync(teamEventJournalPath(team));
     listTaskIdsMock.mockResolvedValue([]);
-    await expect(migrateLegacyTaskDeliveryEpoch(team)).rejects.toMatchObject({ name: "upgrade_required" });
+    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory)).rejects.toMatchObject({ name: "upgrade_required" });
     expect(fs.readFileSync(teamEventJournalPath(team))).toEqual(journalBytes);
     expect(readManyMock).not.toHaveBeenCalled();
 
     fs.writeFileSync(configPath(team), JSON.stringify({ name: team, members: [{ name: "lead", isActive: true }] }));
-    await expect(migrateLegacyTaskDeliveryEpoch(team)).rejects.toMatchObject({ name: "upgrade_required" });
+    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory)).rejects.toMatchObject({ name: "upgrade_required" });
     expect(fs.readFileSync(teamEventJournalPath(team))).toEqual(journalBytes);
   });
 });

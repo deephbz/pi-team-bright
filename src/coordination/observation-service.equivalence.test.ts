@@ -5,6 +5,8 @@ import { createDurableCoordinationQueries } from "../adapters/durable-coordinati
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import type { TeamSyncPortResult } from "../model-tool-contract/model-tool-contracts";
 import { CoordinationObservationService } from "./observation-service";
+import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
+import { createReadOnlyBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import type { CoordinationSyncResult } from "./observation-contracts";
 
 function modelToolAlias(result: CoordinationSyncResult): TeamSyncPortResult {
@@ -56,14 +58,26 @@ describe("Coordination observation service equivalence fences", () => {
     expect(source).not.toContain("observationService.acknowledge");
   });
 
-  it("fences Coordination imports and preserves default construction compatibility", () => {
+  it("fences Coordination imports and requires an injected durable store", () => {
     const root = process.cwd();
     const source = fs.readFileSync(path.join(root, "src/coordination/observation-service.ts"), "utf8");
     expect(source).not.toMatch(/from ["'][^"']*(?:model-tool-contract|trio)[^"']*["']/);
-    expect(() => new DurableModelToolTeamPort()).not.toThrow();
-    expect(() => new CoordinationObservationService(createDurableCoordinationQueries(), {
+    expect(() => composedDurableModelToolPort()).not.toThrow();
+    const factory = createReadOnlyBeadsTaskAdapterFactory({
+      readTaskAuthorityRecordEnvelope: async () => undefined as any,
+      readTaskAuthorityRecordEnvelopes: async () => [],
+      listTaskIds: async () => [],
+    });
+    expect(() => new CoordinationObservationService(createDurableCoordinationQueries(factory), {
       projectNonterminalTaskIds: () => [],
       projectTaskChanges: () => ({ kind: "projected", changes: [] }),
+    }, {
+      readHidden: async () => ({ kind: "not_found", reason: "absent" }),
+      commitHidden: async () => ({ kind: "refused", reason: "stale_acknowledgement" }),
+      readEvents: () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0 }),
+      readEventCursor: () => "0",
+      waitEvents: async () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0, timedOut: true }),
+      readFailureHints: () => ({ hints: [], cursor: "0", headCursor: "0" }),
     })).not.toThrow();
   });
 });

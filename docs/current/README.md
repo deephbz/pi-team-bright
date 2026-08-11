@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-09
+Updated: 2026-08-11
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -38,7 +38,7 @@ variables do not.
 | Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
 | Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation`; [`src/team-authority/membership-observation-reader.ts`](../../src/team-authority/membership-observation-reader.ts) is its private read-only decoder |
 | Canonical Task card and opaque TaskVersionRef | [`src/model-tool-contract/task-domain.ts`](../../src/model-tool-contract/task-domain.ts) and [`src/model-tool-contract/task-version-ref.ts`](../../src/model-tool-contract/task-version-ref.ts) |
-| Task authority, mutation semantics, and Beads translation | Task update, journal, and reconciliation-query contracts live in [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts); [`src/task-authority/beads-reconciliation-query.ts`](../../src/task-authority/beads-reconciliation-query.ts), [`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts), [`src/model-tool-contract/beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts), and [`src/utils/beads.ts`](../../src/utils/beads.ts) implement the Beads boundary; [`beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts) owns the consumer-side mutation-publication port, while [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) implements its concrete Coordination and delivery bridge outside Task authority; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
+| Task authority, reads, mutation semantics, and Beads translation | [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts) owns Task commands, reconciliation, and generic `TaskAuthorityReadPort`/distinct read-Team contracts. [`durable-task-authority-read.ts`](../../src/adapters/durable-task-authority-read.ts) and [`durable-task-authority-read-team.ts`](../../src/adapters/durable-task-authority-read-team.ts) implement the read boundary outside Task authority; [`beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts) receives explicit read-only or publishing factories. [`beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts) owns the consumer-side mutation-publication port, while [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) implements its concrete Coordination and delivery bridge outside Task authority; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
 | Semantic-hardening status and dependency evidence | Maintained [`context`](../projects/semantic-hardening/context.md), [`subsystem audit`](../projects/semantic-hardening/subsystem-boundary-audit.md), and machine [`dependency map`](../projects/semantic-hardening/subsystem-dependency-map.json) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Human operating introduction | [Repository README](../../README.md) |
@@ -259,11 +259,16 @@ artifacts; dated evidence remains in the journal. They do not replace this repos
 context or the executable contract sources.
 
 - [Semantic hardening](../projects/semantic-hardening/context.md) is in
-  consolidation and hardening. Membership observation is complete through
-  `5950f3b`; its private Team/runtime reader keeps `pi-teams-observation/1`
-  public-only and core-independent. Team/Task reverse dependencies and the
-  proposed Coordination worker-run observation query remain structural gates,
-  before optimization, final aggregate, privacy, and watchdog completion. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
+  consolidation and hardening. Accepted uncommitted Task read and
+  `TaskChangeDelivery` ports keep native reads and exact-recipient delivery
+  leases behind explicit external adapters. `BeadsTaskAdapter` has no default
+  authority constructor. The delivery port is mandatory and covers send and
+  acknowledgement leases, ordering, replacement refusal, and replay parity.
+  Independent acceptance and re-verification passed focused checks, typecheck,
+  public/persistence diffs, and source fences; no aggregate ran. Stopped
+  migration remains separate. Pi Session Team-query and Coordination hidden-
+  observation ports are accepted. Task/Team reverse dependencies and
+  Coordination runtime, event, and nudge-actuation seams remain open. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
   and machine [dependency map](../projects/semantic-hardening/subsystem-dependency-map.json)
   own current structural evidence.
 - [Model-invoked tool contract](../projects/model-invoked-tool-contract.md) is in

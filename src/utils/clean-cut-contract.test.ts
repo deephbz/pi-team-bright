@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import type { TeamConfig } from "./models";
 import type { TaskCard } from "../../src/model-tool-contract/task-domain";
 import * as messaging from "./messaging";
@@ -24,6 +25,9 @@ import { BeadsTaskStore, TASK_METADATA_KEY, TASK_METADATA_SCHEMA, readBeadsAutho
 import * as teams from "./teams";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 import { BeadsTaskReconciliationQuery } from "../../src/task-authority/beads-reconciliation-query";
+import { DurableTaskAuthorityRead } from "../../src/adapters/durable-task-authority-read";
+import { createReadOnlyBeadsTaskAdapterFactory } from "../../src/model-tool-contract/beads-task-adapter";
+import { DurableTaskAuthorityReadTeam } from "../adapters/durable-task-authority-read-team";
 
 type RegisteredTool = {
   name: string;
@@ -582,13 +586,17 @@ describe("durability and recovery", () => {
       version: taskVersionRef("v1"),
     } satisfies TaskCard, "assigned", "team-lead");
     expect(record).not.toBeNull();
-    const reconciliationQuery = new BeadsTaskReconciliationQuery(name);
+    const reconciliationQuery = new BeadsTaskReconciliationQuery(
+      name,
+      createReadOnlyBeadsTaskAdapterFactory(new DurableTaskAuthorityRead(new DurableTaskAuthorityReadTeam())),
+    );
 
     const firstSend = vi.fn();
     const first = new TaskChangeDelivery({ sendMessage: firstSend, appendEntry: vi.fn() }, {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      membership: taskDeliveryMembership,
       reconciliationQuery,
     });
     await first.start([]);
@@ -602,6 +610,7 @@ describe("durability and recovery", () => {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      membership: taskDeliveryMembership,
       reconciliationQuery,
     });
     await retry.start([]);
@@ -632,6 +641,7 @@ describe("durability and recovery", () => {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      membership: taskDeliveryMembership,
       reconciliationQuery,
     });
     await settled.start([presented, observed]);

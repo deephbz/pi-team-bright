@@ -114,6 +114,8 @@ describe("DurableTaskAuthorityTeam", () => {
     expect(authorityBody).not.toContain("withCurrentSessionBinding");
     expect(authorityBody).not.toContain("assertCurrentSessionBinding");
     expect(extension.match(/const taskAuthorityTeam = new DurableTaskAuthorityTeam\(\);/g)).toHaveLength(1);
-    expect(extension.match(/createPublishingBeadsTaskAdapterFactory\(new DurableTaskMutationPublication\(\), taskAuthorityTeam\)/g)).toHaveLength(1);
+    expect(extension.match(/const taskAuthorityReadTeam = new DurableTaskAuthorityReadTeam\(\);/g)).toHaveLength(1);
+    expect(extension.match(/const taskAuthorityRead = new DurableTaskAuthorityRead\(taskAuthorityReadTeam\);/g)).toHaveLength(1);
+    expect(extension.match(/createPublishingBeadsTaskAdapterFactory\(new DurableTaskMutationPublication\(\), taskAuthorityTeam, taskAuthorityRead\)/g)).toHaveLength(1);
   });
 });

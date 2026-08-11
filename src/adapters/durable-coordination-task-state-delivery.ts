@@ -1,6 +1,5 @@
 import fs from "node:fs";
-import { listTaskIds } from "../model-tool-contract/beads-authority-adapter";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import { taskDeliveryPath } from "../utils/paths";
 import type {
   CoordinationActuationEvidence,
@@ -10,12 +9,14 @@ import type {
 
 /** Durable Beads Task and Task-delivery adapter for Coordination queries. */
 export class DurableCoordinationTaskStateDeliveryQuery implements CoordinationTaskStateDeliveryQuery {
+  constructor(private readonly factory: BeadsTaskAdapterFactory) {}
+
   async listTaskIds(teamName: string): Promise<string[]> {
-    return await listTaskIds(teamName);
+    return this.factory(teamName, "team-lead").listIds();
   }
 
   async readTasks(teamName: string, taskIds: readonly string[]): Promise<readonly CoordinationTaskReadOutcome[]> {
-    return await new BeadsTaskAdapter(teamName, "team-lead").readMany([...taskIds]);
+    return await this.factory(teamName, "team-lead").readMany([...taskIds]);
   }
 
   async readDeliveryEvidence(teamName: string, worker: string): Promise<CoordinationActuationEvidence> {

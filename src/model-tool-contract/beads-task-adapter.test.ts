@@ -18,6 +18,7 @@ import {
 import type { InternalTaskPublicationOptions, TaskCreateReceipt } from "./beads-authority-adapter";
 import {
   BeadsTaskAdapter,
+  createReadOnlyBeadsTaskAdapterFactory,
   createPublishingBeadsTaskAdapterFactory,
   taskUpdateEventEvidence,
   projectNonterminalTaskIds,
@@ -80,6 +81,19 @@ function authorityRecord(taskMetadata?: unknown): TaskAuthorityRecordEnvelope {
   };
 }
 
+function completeAuthority(overrides: Record<string, unknown>): TaskAdapterAuthority {
+  return {
+    mode: "publishing",
+    read: async () => authorityRecord(metadata()),
+    readMany: async () => [],
+    list: async () => [],
+    create: async () => receipt(task()),
+    update: async () => { throw new Error("unused update"); },
+    link: async () => { throw new Error("unused link"); },
+    ...overrides,
+  } as TaskAdapterAuthority;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   for (const teamName of createdTeams.splice(0)) {
@@ -88,9 +102,26 @@ afterEach(() => {
 });
 
 describe("durable Task adapter", () => {
-  it("keeps default construction read-only and exposes mutation only through the publishing factory", async () => {
-    const readOnly = new BeadsTaskAdapter("candidate-team", "team-lead");
-    await expect(readOnly.create({
+  it("keeps explicit read-only construction read-only and exposes mutation only through the publishing factory", async () => {
+    const factory = createPublishingBeadsTaskAdapterFactory({
+      prepareOwnerTransitionIntent: vi.fn(),
+      suppressTaskVersionForSession: vi.fn(),
+      publishTaskMutation: vi.fn(),
+      completeOwnerTransitionIntent: vi.fn(),
+    }, createTaskAuthorityTeamPort(), {
+      readTaskAuthorityRecordEnvelope: async () => authorityRecord(metadata()),
+      readTaskAuthorityRecordEnvelopes: async () => [],
+      listTaskIds: async () => [],
+    });
+    expect(factory("candidate-team", "team-lead")).toBeInstanceOf(BeadsTaskAdapter);
+
+    const readPort = {
+      readTaskAuthorityRecordEnvelope: vi.fn(async () => authorityRecord(metadata())),
+      readTaskAuthorityRecordEnvelopes: vi.fn(async () => []),
+      listTaskIds: vi.fn(async () => []),
+    };
+    const explicitReadOnly = createReadOnlyBeadsTaskAdapterFactory(readPort)("candidate-team", "team-lead");
+    await expect(explicitReadOnly.create({
       operationId: "read-only-create",
       title: "Must not mutate",
       goal: "Require an injected publication port.",
@@ -99,20 +130,14 @@ describe("durable Task adapter", () => {
       operationId: "read-only-create",
       message: "Task create outcome is unknown: the Task adapter is read-only.",
     });
-
-    const factory = createPublishingBeadsTaskAdapterFactory({
-      prepareOwnerTransitionIntent: vi.fn(),
-      suppressTaskVersionForSession: vi.fn(),
-      publishTaskMutation: vi.fn(),
-      completeOwnerTransitionIntent: vi.fn(),
-    }, createTaskAuthorityTeamPort());
-    expect(factory("candidate-team", "team-lead")).toBeInstanceOf(BeadsTaskAdapter);
+    await expect(explicitReadOnly.list()).resolves.toEqual([]);
+    expect(readPort.listTaskIds).toHaveBeenCalledWith("candidate-team");
   });
 
   it("creates through the existing Task authority and keeps metadata canonical", async () => {
     const create = vi.fn(async (_input: CreateTaskInput, _publication: InternalTaskPublicationOptions) => receipt(task()));
     const read = vi.fn(async () => authorityRecord(metadata()));
-    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", { create, read });
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({ create, read }));
 
     const created = await adapter.create({
       operationId: "create-candidate",
@@ -172,7 +197,7 @@ describe("durable Task adapter", () => {
       }
       return stored!;
     });
-    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", { create, read });
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({ create, read }));
     const input = { operationId: "create-safe-1", title: "Verify candidate", goal: "Verify the exact release digest.", assignee: "verifier" };
 
     await expect(adapter.create(input)).resolves.toMatchObject({
@@ -198,10 +223,10 @@ describe("durable Task adapter", () => {
       authorityRecord(JSON.stringify(metadata("String context."))),
       authorityRecord(),
     ];
-    const authority: TaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = completeAuthority({
       create,
       read: vi.fn(async () => records.shift()!),
-    };
+    });
     const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
 
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
@@ -406,11 +431,11 @@ describe("durable Task adapter", () => {
       ...authorityRecord(taskId === "candidate-task-2" ? undefined : metadata(`${taskId} context`)),
       task: task({ id: taskId }),
     })));
-    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", {
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({
       create: vi.fn(async () => receipt(task())),
       read,
       readMany,
-    });
+    }));
 
     await expect(adapter.readMany(["candidate-task-1", "candidate-task-2"])).resolves.toMatchObject([
       { kind: "found", task: { id: "candidate-task-1", current_context: "candidate-task-1 context" } },
@@ -427,10 +452,10 @@ describe("durable Task adapter", () => {
       authorityRecord({ ...metadata(), goal: "😀".repeat(501) }),
       { ...authorityRecord(metadata()), task: task({ title: "😀".repeat(41) }) },
     ];
-    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", {
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => records.shift()!),
-    });
+    }));
 
     await expect(adapter.read("candidate-task-1")).resolves.toMatchObject({
       kind: "found",
@@ -462,8 +487,10 @@ describe("durable Task adapter", () => {
 
   it("returns a typed no-write gap instead of claiming CAS or operation replay", async () => {
     const authority: TaskAdapterAuthority = {
-      create: vi.fn(async () => receipt(task())),
+      mode: "read_only",
       read: vi.fn(async () => authorityRecord(metadata("Ready to update."))),
+      readMany: vi.fn(async () => []),
+      list: vi.fn(async () => []),
     };
     const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
 
@@ -493,11 +520,11 @@ describe("durable Task adapter", () => {
         deliveryWarnings: [],
       };
     });
-    const authority: TaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = completeAuthority({
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => authorityRecord(stored)),
       update,
-    };
+    });
     const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
     const input = {
       taskId: "candidate-task-1",
@@ -531,11 +558,11 @@ describe("durable Task adapter", () => {
         deliveryWarnings: [],
       };
     });
-    const authority: TaskAdapterAuthority = {
+    const authority: TaskAdapterAuthority = completeAuthority({
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => ({ task: storedTask, taskMetadata: storedMetadata })),
       update,
-    };
+    });
     const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", authority);
     const operationA = {
       taskId: "candidate-task-1",
@@ -579,11 +606,11 @@ describe("durable Task adapter", () => {
 
   it("returns a typed gap for oversized leader context before invoking its authority", async () => {
     const update = vi.fn();
-    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", {
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({
       create: vi.fn(async () => receipt(task())),
       read: vi.fn(async () => authorityRecord(metadata("Ready to update."))),
       update,
-    });
+    }));
 
     await expect(adapter.update({
       taskId: "candidate-task-1",
