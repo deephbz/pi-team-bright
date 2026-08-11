@@ -1,6 +1,6 @@
 # Pi Team Bright semantic hardening
 
-Updated: 2026-08-10
+Updated: 2026-08-11
 Stage: consolidation and hardening
 Status: Membership observation is accepted through
 `5950f3b3f17124b9baf38afa48d839dc503d847b`; Team/Task reverse dependencies
@@ -182,6 +182,12 @@ closed the order gate. Exact-Membership correction Task
 `semantic-hardening-boundaries-blb` are closed. Commit `57c8e02` contains the
 independently accepted Team Session lifecycle selection.
 
+The completed Task read boundary gives `TaskAuthorityReadPort<T>` and its distinct `TaskAuthorityReadTeamPort` canonical homes in [`src/task-authority/contracts.ts`](../../../src/task-authority/contracts.ts#L21). [`DurableTaskAuthorityRead`](../../../src/adapters/durable-task-authority-read.ts#L8) preserves the `task_read`, `task_read_many`, and `task_list` traces. [`DurableTaskAuthorityReadTeam`](../../../src/adapters/durable-task-authority-read-team.ts#L6) resolves the Team binding. Explicit read-only and publishing factories inject the port ([`beads-task-adapter.ts`](../../../src/model-tool-contract/beads-task-adapter.ts#L362); [`index.ts`](../../../extensions/index.ts#L339)). There is no default `BeadsTaskAdapter` authority constructor. This removes raw read/list exports and consumer/default fallbacks while preserving binding errors, raw/model/TUI/error behavior, public contracts, and the generated Task-authority declaration. Independent acceptance from baseline `cb38d9254dd0cccb9e745a8df3edb27f367d852d` passed the selected 28-file/207-test sweep, typecheck, 113-file lane closure (92 fast, 21 exhaustive), agent and tool-result QA, package verification, public and fence checks.
+
+Independent re-verification also accepts the `TaskChangeDelivery` consumer-owned `TaskDeliveryMembershipPort`. [`DurableTaskChangeDeliveryMembership`](../../../src/adapters/durable-task-change-delivery-membership.ts#L5) keeps Team reads and exact-recipient leases outside Task delivery. The delivery requires that port; it resolves the current recipient at start, sends under its exact lease, and writes the acknowledgement entry before durable acknowledgement ([`task-delivery.ts`](../../../src/utils/task-delivery.ts#L878), [`task-delivery.ts`](../../../src/utils/task-delivery.ts#L978), [`task-delivery.ts`](../../../src/utils/task-delivery.ts#L1037)). Pi composition injects it ([`index.ts`](../../../extensions/index.ts#L345); [`pi-team-session-adapter.ts`](../../../extensions/pi-team-session-adapter.ts#L286)). The characterization covers recipient replacement, send/stage/acknowledgement order, failed-send replay, and one acknowledgement ([`task-change-delivery.characterization.test.ts`](../../../src/utils/task-change-delivery.characterization.test.ts)). Stopped migration remains separate.
+
+These are deterministic local and source/harness checks. They do not prove a real Pi process, Beads/Dolt contention, external writers, filesystem watches, OS scheduling, or terminal pixels. Architecture impact is **changed** for internal Task read and delivery ownership; Structurizr remains unchanged.
+
 The current source bundle removes Worker-launch construction from
 `DurableModelToolTeamPort`. The façade now consumes an optional injected
 `WorkerLaunchBridge`; read-only and nudge-debt use remains available without it,
@@ -212,8 +218,13 @@ Tasks `semantic-hardening-pi-adapter-jqr`,
 architecture Task `semantic-hardening-pi-adapter-0zt`; and verification Task
 `semantic-hardening-pi-adapter-jwu` and audit/map Task
 `semantic-hardening-pi-adapter-r6f` are closed. This source bundle commits the
-accepted Pi Session adapter boundary. Direct adapter reads of Team records
-remain an explicit integration seam, not a new authority.
+accepted Pi Session adapter boundary. `PiSessionTeamQueryPort` now owns its
+read-only Team coordinates ([`pi-session-team-query.ts`](../../../src/team-authority/pi-session-team-query.ts#L46)), while
+`DurablePiSessionTeamQuery` performs Team record reads outside the adapter
+([`durable-pi-session-team-query.ts`](../../../src/adapters/durable-pi-session-team-query.ts#L18)). Composition injects the port
+([`index.ts`](../../../extensions/index.ts#L347)). This closes the adapter's
+direct Team-query target seam; TeamConfig's mixed compatibility registry remains
+separate.
 
 Alert authority commit 2 is accepted at `e9f8dad`. The accepted Alert-port
 production tree adds Alert-owned consumer ports. `AlertMembershipPort`
@@ -255,7 +266,11 @@ observation, pages, hydration, waits, revisions, pending presentation, cached
 Task projections, branch lineage, and acknowledgement. It receives explicit
 query, durable-store, wait, and projection dependencies. The durable model-tool
 facade delegates this algorithm and keeps stable model-tool aliases and default
-constructor compatibility. Pi composition constructs the service once.
+constructor compatibility. `CoordinationHiddenObservationPort` now owns hidden
+projection reads and commits ([`queries.ts`](../../../src/coordination/queries.ts#L68)); its durable adapter remains outside Coordination
+([`durable-coordination-hidden-observation.ts`](../../../src/adapters/durable-coordination-hidden-observation.ts#L10)) and composition injects the store
+([`index.ts`](../../../extensions/index.ts#L351)). This closes the hidden-
+observation Team-query seam. Pi composition constructs the service once.
 
 Slice B query DTOs and three durable authority adapters remain its read boundary,
 and liveness remains pure over them. Outputs, cursors, acknowledgement, bounded
@@ -389,11 +404,13 @@ this Project. Normal coordination remains Task-first through `team_sync`.
    gates for each next implementation Task.
 3. Keep the accepted four-port Trio split, nudge boundary, and additive
    Membership reader stable unless source evidence requires a correction.
-4. Keep later optimizations to one measured problem per commit.
-5. Run one final aggregate only after the exact stable source includes every
+4. Keep the accepted Task read and TaskChangeDelivery ports stable; stopped migration remains separate.
+5. Close the remaining Team/Task reverse dependencies and Coordination runtime,
+   event, and nudge-actuation seams before optimization.
+6. Run one final aggregate only after the exact stable source includes every
    remaining authorized optimization or correction.
-6. Update the audit, dependency map, result report, current context, and
+7. Update the audit, dependency map, result report, current context, and
    append-only journal at each accepted milestone. Independent verification and
    watchdog review must confirm final completion before shutdown or reporting.
-7. Keep tag, main-branch integration, npm publication, provenance, and GitHub
+8. Keep tag, main-branch integration, npm publication, provenance, and GitHub
    release outside this continuation unless the owner authorizes them again.

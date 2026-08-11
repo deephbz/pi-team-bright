@@ -11,6 +11,12 @@ export interface CoordinationMemberEvidence {
 }
 
 /** Exact runtime record fields that affect liveness. */
+export interface CoordinationRuntimeGeneration {
+  membershipId: string;
+  pid: number;
+  startedAt: number;
+}
+
 export interface CoordinationRuntimeEvidence {
   membershipId?: string;
   pid?: number;
@@ -21,6 +27,47 @@ export interface CoordinationRuntimeEvidence {
 export interface CoordinationActuationEvidence {
   known: boolean;
   pending: boolean;
+}
+
+/** Coordination-owned durable acknowledgement projection. */
+export interface CoordinationHiddenObservationProjection {
+  schema: "pi-teams-hidden-observation/1";
+  teamEpochId: string;
+  exactSessionId: string;
+  acknowledgedEntryId: string;
+  acknowledgedLineage: string[];
+  teamEventCursor: string;
+  authorityRevisions: Record<string, string>;
+  updatedAt: string;
+}
+
+export interface CoordinationHiddenObservationCoordinate {
+  teamEpochId: string;
+  exactSessionId: string;
+  branchLineage: string[];
+}
+
+export interface CoordinationHiddenObservationCommit extends CoordinationHiddenObservationCoordinate {
+  acknowledgedEntryId: string;
+  teamEventCursor: string;
+  authorityRevisions?: Record<string, string>;
+}
+
+export type CoordinationHiddenObservationReadResult =
+  | { kind: "found"; projection: CoordinationHiddenObservationProjection }
+  | { kind: "not_found"; reason: "absent" | "lineage_mismatch" }
+  | { kind: "coordinate_mismatch"; reason: "team_epoch_mismatch" | "lead_session_mismatch" }
+  | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent" };
+
+export type CoordinationHiddenObservationCommitResult =
+  | { kind: "committed"; projection: CoordinationHiddenObservationProjection }
+  | { kind: "refused"; reason: "team_epoch_mismatch" | "lead_session_mismatch" | "acknowledged_entry_not_in_lineage" | "stale_acknowledgement" | "acknowledgement_conflict" }
+  | { kind: "contract_gap"; reason: string };
+
+/** Read and commit acknowledgement records through Coordination's durable boundary. */
+export interface CoordinationHiddenObservationPort {
+  read(teamName: string, coordinate: CoordinationHiddenObservationCoordinate): Promise<CoordinationHiddenObservationReadResult>;
+  commit(teamName: string, input: CoordinationHiddenObservationCommit): Promise<CoordinationHiddenObservationCommitResult>;
 }
 
 export interface CoordinationTaskReadContractGap {

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs";
-import * as authority from "./beads-authority-adapter";
+import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
+import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 import { DurableModelToolTeamPort } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { taskVersionRef } from "./task-version-ref";
@@ -9,8 +10,17 @@ import * as paths from "../utils/paths";
 import * as teamEvents from "../utils/team-events";
 import * as teams from "../utils/teams";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
+import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
+import { DurableCoordinationHiddenObservation } from "../adapters/durable-coordination-hidden-observation";
+import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../coordination/observation-service";
 
 const fixtures: string[] = [];
+const readPort = {
+  readTaskAuthorityRecordEnvelope: vi.fn(),
+  readTaskAuthorityRecordEnvelopes: vi.fn(),
+  listTaskIds: vi.fn(),
+};
+const readFactory = createReadOnlyBeadsTaskAdapterFactory(readPort);
 
 function fixtureName(): string {
   const name = `sync-event-hydration-${process.pid}-${Date.now()}-${fixtures.length}`;
@@ -39,7 +49,15 @@ async function makeFixture() {
   config.logicalWorkers = [{ name: "worker", scope: "fixture scope" }];
   teams.writeConfigAtomic(paths.configPath(name), config);
 
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+  const queries = createDurableCoordinationQueries(readFactory);
+  const hidden = new DurableCoordinationHiddenObservation();
+  const port = new DurableModelToolTeamPort(
+    { ensureWorker: vi.fn() } as any,
+    undefined,
+    readFactory,
+    undefined,
+    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)),
+  );
   const leaderSessionId = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(leaderSessionId, sessionFile);
   return { name, sessionFile, port, leaderSessionId };
@@ -89,6 +107,9 @@ async function appendTaskEvent(name: string, id: string, change: "created" | "st
 
 afterEach(() => {
   vi.restoreAllMocks();
+  readPort.readTaskAuthorityRecordEnvelope.mockReset();
+  readPort.readTaskAuthorityRecordEnvelopes.mockReset();
+  readPort.listTaskIds.mockReset();
   for (const name of fixtures.splice(0)) {
     fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
     fs.rmSync(paths.taskDir(name), { recursive: true, force: true });
@@ -100,8 +121,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     const fixture = await makeFixture();
     const taskId = "close-task";
     let current = taskEnvelope(fixture.name, taskId, "open");
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([taskId]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_name, ids) =>
+    const list = readPort.listTaskIds.mockResolvedValue([taskId]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async (_name: string, ids: readonly string[]) =>
       ids.map(() => current));
 
     await acknowledgeSnapshot(fixture);
@@ -121,8 +142,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
   it("hydrates an event Task that the Team list does not return", async () => {
     const fixture = await makeFixture();
     const taskId = "event-only-task";
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    const list = readPort.listTaskIds.mockResolvedValue([]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     await acknowledgeSnapshot(fixture);
     list.mockClear();
     hydrate.mockClear();
@@ -139,12 +160,12 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
   it("hydrates many Task events with one canonical batch authority read", async () => {
     const fixture = await makeFixture();
     const taskIds = ["event-task-a", "event-task-b", "event-task-c"];
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    const list = readPort.listTaskIds.mockResolvedValue([]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     await acknowledgeSnapshot(fixture);
     list.mockClear();
     hydrate.mockClear();
-    hydrate.mockImplementation(async (_name, ids) => ids.map((id) => taskEnvelope(fixture.name, id)));
+    hydrate.mockImplementation(async (_name: string, ids: readonly string[]) => ids.map((id) => taskEnvelope(fixture.name, id)));
     for (const taskId of taskIds) await appendTaskEvent(fixture.name, taskId);
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "many-events"))
@@ -156,8 +177,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
 
   it("projects Worker-only events without hydrating or listing Tasks", async () => {
     const fixture = await makeFixture();
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    const list = readPort.listTaskIds.mockResolvedValue([]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     await acknowledgeSnapshot(fixture);
     list.mockClear();
     hydrate.mockClear();
@@ -178,8 +199,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
   it("does not stage or advance the watermark when event Task hydration fails", async () => {
     const fixture = await makeFixture();
     const taskId = "failed-hydration-task";
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    const list = readPort.listTaskIds.mockResolvedValue([]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     await acknowledgeSnapshot(fixture);
     list.mockClear();
     hydrate.mockClear();
@@ -201,8 +222,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
   it("returns the event on retry after Task hydration recovers", async () => {
     const fixture = await makeFixture();
     const taskId = "retry-hydration-task";
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    readPort.listTaskIds.mockResolvedValue([]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     await acknowledgeSnapshot(fixture);
     hydrate.mockClear();
     hydrate.mockRejectedValueOnce(new Error("temporary Task authority failure"));
@@ -210,7 +231,7 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "first-retry"))
       .resolves.toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable", message: "temporary Task authority failure" });
-    hydrate.mockImplementation(async (_name, ids) => ids.map((id) => taskEnvelope(fixture.name, id)));
+    hydrate.mockImplementation(async (_name: string, ids: readonly string[]) => ids.map((id) => taskEnvelope(fixture.name, id)));
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "second-retry"))
       .resolves.toMatchObject({ kind: "updates", head: 1, taskChanges: [{ taskId }] });
@@ -226,8 +247,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
       [baselineId, taskEnvelope(fixture.name, baselineId)],
       [eventId, taskEnvelope(fixture.name, eventId)],
     ]);
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([baselineId]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_name, ids) => ids.map((id) => records.get(id)));
+    const list = readPort.listTaskIds.mockResolvedValue([baselineId]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async (_name: string, ids: readonly string[]) => ids.map((id) => records.get(id)));
     await acknowledgeSnapshot(fixture);
     await teamEvents.appendTeamEvent(fixture.name, {
       type: "task",
@@ -237,7 +258,15 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     });
 
     list.mockResolvedValue([baselineId, eventId]);
-    const resumed = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+    const resumedQueries = createDurableCoordinationQueries(readFactory);
+    const resumedHidden = new DurableCoordinationHiddenObservation();
+    const resumed = new DurableModelToolTeamPort(
+      { ensureWorker: vi.fn() } as any,
+      undefined,
+      readFactory,
+      undefined,
+      new CoordinationObservationService(resumedQueries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(resumedHidden), undefined, createDurableCoordinationNudgeStore(resumedHidden)),
+    );
     resumed.setLeaderSessionFile(fixture.leaderSessionId, fixture.sessionFile);
     resumed.setBranchContext(fixture.leaderSessionId, ["snapshot-entry"]);
     await expect(resumed.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "restart-update"))
@@ -250,8 +279,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
   it("requires a fresh snapshot after a branch switch", async () => {
     const fixture = await makeFixture();
     const taskId = "branch-isolated-task";
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([taskId]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([taskEnvelope(fixture.name, taskId)]);
+    const list = readPort.listTaskIds.mockResolvedValue([taskId]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([taskEnvelope(fixture.name, taskId)]);
     await acknowledgeSnapshot(fixture, "branch-a");
     hydrate.mockClear();
     list.mockClear();
@@ -268,8 +297,8 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     const fixture = await makeFixture();
     const taskId = "quiet-rescan-task";
     let version = "quiet-v1";
-    const list = vi.spyOn(authority, "listTaskIds").mockResolvedValue([taskId]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => {
+    const list = readPort.listTaskIds.mockResolvedValue([taskId]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async () => {
       const current = taskEnvelope(fixture.name, taskId);
       return [{ ...current, task: { ...current.task, version } }];
     });

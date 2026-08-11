@@ -8,7 +8,8 @@ import {
 import { projectTui } from "./tui-projection";
 import { InMemoryModelToolTeamPort, exactLeaderSessionId, type ModelToolTeamPort } from "./in-memory-team-port";
 import { registerModelToolJourney, type ModelToolRegistration } from "./pi-registration";
-import { BeadsTaskAdapter } from "./beads-task-adapter";
+import { BeadsTaskAdapter, type TaskAdapterAuthority } from "./beads-task-adapter";
+import type { TaskAuthorityRecord } from "../utils/beads";
 import { taskVersionRef } from "./task-version-ref";
 
 const task = {
@@ -62,12 +63,43 @@ describe("task semantic-result totality", () => {
   });
 
   it("labels a post-create authority exception as an unknown outcome with its same-operation coordinate", async () => {
-    const read = vi.fn().mockRejectedValue(new Error("post-create authority read failed"));
-    const authority = {
-      create: vi.fn().mockResolvedValue({ task: { id: "task-1" }, deliveryWarnings: [] }),
-      read,
+    type PublishingAuthority = Extract<TaskAdapterAuthority, { mode: "publishing" }>;
+    const authorityTask: TaskAuthorityRecord = {
+      id: "task-1",
+      title: "Verify",
+      description: "Verify the release.",
+      acceptanceCriteria: "",
+      status: "open",
+      relations: [],
+      version: "beads_task_1",
+      provenance: { authority: "beads", teamName: "totality-team" },
     };
-    const adapter = new BeadsTaskAdapter("totality-team", "team-lead", authority as any);
+    const read = vi.fn<PublishingAuthority["read"]>().mockRejectedValue(new Error("post-create authority read failed"));
+    const authority: PublishingAuthority = {
+      mode: "publishing",
+      read,
+      readMany: vi.fn<PublishingAuthority["readMany"]>(),
+      list: vi.fn<PublishingAuthority["list"]>(),
+      create: vi.fn<PublishingAuthority["create"]>().mockResolvedValue({
+        task: authorityTask,
+        changed: true,
+        appliedOperations: [],
+        deliveryDegraded: false,
+        deliveryWarnings: [],
+        publication: {
+          teamEvent: { appended: true },
+          delivery: {
+            attemptedRecipients: [],
+            failedRecipients: [],
+            recoveryRecordedFor: [],
+            recoveryRecordFailedFor: [],
+          },
+        },
+      }),
+      update: vi.fn<PublishingAuthority["update"]>(),
+      link: vi.fn<PublishingAuthority["link"]>(),
+    };
+    const adapter = new BeadsTaskAdapter("totality-team", "team-lead", authority);
     await expect(adapter.create({ operationId: "create-unknown", title: "Verify", goal: "Verify the release." })).resolves.toMatchObject({
       kind: "unknown_outcome",
       operationId: "create-unknown",

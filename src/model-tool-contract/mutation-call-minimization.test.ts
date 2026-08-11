@@ -5,12 +5,25 @@ import { DurableModelToolTeamPort } from "./durable-model-tool-port";
 import { exactLeaderSessionId } from "./in-memory-team-port";
 import { taskVersionRef } from "./task-version-ref";
 import type { TaskAuthorityRecord } from "../utils/beads";
-import { createPublishingBeadsTaskAdapterFactory } from "./beads-task-adapter";
+import { createPublishingBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
+import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
+import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
+import { DurableCoordinationHiddenObservation } from "../adapters/durable-coordination-hidden-observation";
+import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../coordination/observation-service";
 
 const createdTeams: string[] = [];
-const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), createTaskAuthorityTeamPort());
+const readPort = {
+  readTaskAuthorityRecordEnvelope: vi.fn(),
+  readTaskAuthorityRecordEnvelopes: vi.fn(),
+  listTaskIds: vi.fn(),
+};
+const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(
+  new DurableTaskMutationPublication(),
+  createTaskAuthorityTeamPort(),
+  readPort,
+);
 
 function task(teamName: string, id: string, version = `beads_${id}_v1`, status: TaskAuthorityRecord["status"] = "open"): TaskAuthorityRecord {
   return {
@@ -30,7 +43,9 @@ async function durablePort(suffix: string): Promise<{ name: string; port: Durabl
   const sessionFile = `/tmp/${name}-lead.jsonl`;
   createdTeams.push(name);
   await teams.createTeam(name, sessionFile, "lead-agent", "Mutation call minimization.", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, undefined, taskAdapterFactory);
+  const queries = createDurableCoordinationQueries(taskAdapterFactory);
+  const hidden = new DurableCoordinationHiddenObservation();
+  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, undefined, taskAdapterFactory, undefined, new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)));
   const session = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(session, sessionFile);
   return { name, port, session };
@@ -38,13 +53,16 @@ async function durablePort(suffix: string): Promise<{ name: string; port: Durabl
 
 afterEach(() => {
   vi.restoreAllMocks();
+  readPort.readTaskAuthorityRecordEnvelope.mockReset();
+  readPort.readTaskAuthorityRecordEnvelopes.mockReset();
+  readPort.listTaskIds.mockReset();
   createdTeams.splice(0);
 });
 
 describe("model mutation Beads call minimization", () => {
   it("does not add an outer source read when task_link has no expected version", async () => {
     const { name, port, session } = await durablePort("link");
-    const read = vi.spyOn(authority, "readTaskAuthorityRecordEnvelope").mockRejectedValue(new Error("unused outer source read"));
+    const read = readPort.readTaskAuthorityRecordEnvelope.mockRejectedValue(new Error("unused outer source read"));
     const mutate = vi.spyOn(authority, "mutateTaskLink").mockResolvedValue({
       task: task(name, "task-a", "beads_task-a_v2"),
       changed: true,
@@ -72,7 +90,7 @@ describe("model mutation Beads call minimization", () => {
       task: task(teamName, "task-a", "beads_task-a_v3"),
       taskMetadata: { schema: "pi-teams-task/1", goal: "Link the Task.", current_context: "Ready." },
     } as any;
-    const read = vi.spyOn(authority, "readTaskAuthorityRecordEnvelope").mockResolvedValue(record);
+    const read = readPort.readTaskAuthorityRecordEnvelope.mockResolvedValue(record);
     const mutate = vi.spyOn(authority, "mutateTaskLink").mockResolvedValue({
       task: record.task,
       changed: true,

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { captureTrioProjection, type RegisteredToolLike } from "../../test/support/external-harness";
-import * as authority from "../model-tool-contract/beads-authority-adapter";
+import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import { TASK_METADATA_SCHEMA } from "./beads";
 import { readHiddenObservationProjection } from "./hidden-observation";
@@ -119,8 +119,8 @@ describe("mixed Coordination observation records through registered team_sync", 
     vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
 
     let version = "task-v1";
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["current-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => [taskEnvelope(name, version)]);
+    vi.spyOn(DurableTaskAuthorityRead.prototype, "listTaskIds").mockResolvedValue(["current-task"]);
+    const hydrate = vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => [taskEnvelope(name, version)]);
     const harness = registeredLeaderHarness();
     const context = sessionContext(sessionFile);
 

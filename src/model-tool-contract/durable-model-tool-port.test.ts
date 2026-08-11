@@ -3,6 +3,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as paths from "../utils/paths";
 import * as authority from "./beads-authority-adapter";
+import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
+import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 import * as teamEvents from "../utils/team-events";
 import * as teams from "../utils/teams";
 import { DurableModelToolTeamPort, type ModelToolLifecycle } from "./durable-model-tool-port";
@@ -14,9 +16,35 @@ import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { taskVersionRef } from "./task-version-ref";
 import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS } from "../utils/sync-liveness-settings";
 import { taskProjectionRevision } from "../coordination/task-projection-revision";
+import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../coordination/observation-service";
+import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
+import { DurableCoordinationHiddenObservation } from "../adapters/durable-coordination-hidden-observation";
 
 const testTeams: string[] = [];
 const paneSettingsRoots: string[] = [];
+const readPort = {
+  readTaskAuthorityRecordEnvelope: vi.fn(),
+  readTaskAuthorityRecordEnvelopes: vi.fn(),
+  listTaskIds: vi.fn(),
+};
+const readFactory = createReadOnlyBeadsTaskAdapterFactory(readPort);
+
+function composedPort(
+  launchBridge: any = undefined,
+  lifecycle: ModelToolLifecycle | undefined = undefined,
+  factory = readFactory,
+  alertSender: any = undefined,
+  queries = createDurableCoordinationQueries(factory),
+) {
+  const hidden = new DurableCoordinationHiddenObservation();
+  return new DurableModelToolTeamPort(
+    launchBridge,
+    lifecycle,
+    factory,
+    alertSender,
+    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)),
+  );
+}
 
 function teamName(suffix: string): string {
   const name = `durable-model-tool-fence-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
@@ -50,7 +78,7 @@ async function teamFixture(implementationVersion: string | undefined) {
     stopWorker: vi.fn(),
     shutdownTeam: vi.fn(),
   };
-  const port = new DurableModelToolTeamPort(launchBridge as any, lifecycle);
+  const port = composedPort(launchBridge, lifecycle);
   const leaderSessionId = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(leaderSessionId, sessionFile);
   return { name, port, leaderSessionId, launchBridge, lifecycle };
@@ -58,6 +86,9 @@ async function teamFixture(implementationVersion: string | undefined) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  readPort.readTaskAuthorityRecordEnvelope.mockReset();
+  readPort.readTaskAuthorityRecordEnvelopes.mockReset();
+  readPort.listTaskIds.mockReset();
   clearAdapterCache();
   for (const name of testTeams.splice(0)) {
     fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
@@ -104,7 +135,7 @@ async function createTeamWithPaneSettings(projectTrusted?: boolean, globalTeamSe
     createArgs = args;
     return { name: args[0], description: args[3], members: [] } as any;
   });
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+  const port = composedPort({ ensureWorker: vi.fn() });
   const leaderSessionId = exactLeaderSessionId(`pane-settings-${Date.now()}-${Math.random()}`);
   port.setLeaderSessionFile(leaderSessionId, path.join(root, "leader.jsonl"));
   port.setLeaderLaunchContext(leaderSessionId, { cwd, projectTrusted });
@@ -145,7 +176,7 @@ async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle) {
   });
   const sessionFile = path.join(root, "leader.jsonl");
   const leaderSessionId = exactLeaderSessionId(`lifecycle-callback-${Date.now()}-${Math.random()}`);
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, lifecycle);
+  const port = composedPort({ ensureWorker: vi.fn() }, lifecycle);
   port.setLeaderSessionFile(leaderSessionId, sessionFile);
   port.setLeaderLaunchContext(leaderSessionId, { cwd, projectTrusted: true });
   return { name, port, leaderSessionId, sessionFile };
@@ -232,8 +263,8 @@ describe("DurableModelToolTeamPort lifecycle callback", () => {
 describe("DurableModelToolTeamPort durable authority", () => {
   it("tolerates one externally oversized Task without rejecting the snapshot", async () => {
     const { port, leaderSessionId } = await teamFixture(undefined);
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["invalid-task"]);
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([{
+    readPort.listTaskIds.mockResolvedValue(["invalid-task"]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([{
       task: {
         id: "invalid-task",
         title: "Invalid external context",
@@ -266,7 +297,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
   it("returns typed unavailable for snapshot Task authority failure without staging", async () => {
     const { port, leaderSessionId } = await teamFixture(undefined);
-    vi.spyOn(authority, "listTaskIds").mockRejectedValue(new Error("bd list timed out"));
+    readPort.listTaskIds.mockRejectedValue(new Error("bd list timed out"));
 
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
       kind: "unavailable",
@@ -285,9 +316,9 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const config = await teams.readConfig(name);
     config.syncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS, policyVersion: "1" };
     teams.writeConfigAtomic(paths.configPath(name), config);
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
-    const port = new DurableModelToolTeamPort();
+    readPort.listTaskIds.mockResolvedValue([]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
+    const port = composedPort();
     port.setLeaderSessionFile(leaderSessionId, `/tmp/${name}-lead.jsonl`);
 
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({ kind: "snapshot", team: { name }, tasks: [] });
@@ -306,8 +337,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const { policyVersion: _policyVersion, ...legacyPolicy } = config.syncLiveness;
     config.syncLiveness = legacyPolicy;
     teams.writeConfigAtomic(paths.configPath(name), config);
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    readPort.listTaskIds.mockResolvedValue([]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
 
     const debt = await port.readSyncNudgeDebt(leaderSessionId, ["legacy-branch"]);
     expect(debt).toEqual(expect.objectContaining({
@@ -337,7 +368,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
   it("refuses Worker launch without a bridge before logical Worker mutation", async () => {
     const { name, leaderSessionId } = await teamFixture(undefined);
-    const port = new DurableModelToolTeamPort();
+    const port = composedPort();
     port.setLeaderSessionFile(leaderSessionId, `/tmp/${name}-lead.jsonl`);
     const ensureLogicalWorker = vi.spyOn(teams, "ensureLogicalWorker");
 
@@ -362,7 +393,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);
     expect(source.match(/const alertPublication = new DurableAlertPublication\(\)/g)).toHaveLength(1);
     expect(source).toContain("const alertSender = createAlertSender(alertMembership, alertPublication)");
-    expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(\)/g)).toHaveLength(1);
+    expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory\)/g)).toHaveLength(1);
     expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
     expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, { resolve: resolveTeamTaskAuthority })");
     expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory)");
@@ -431,8 +462,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       version: "beads_watermark_v1",
       provenance: { authority: "beads" as const, teamName: name },
     };
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue([task.id]);
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([{
+    readPort.listTaskIds.mockResolvedValue([task.id]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([{
       task,
       taskMetadata: {
         schema: TASK_METADATA_SCHEMA,
@@ -490,7 +521,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
       version: `beads_${id}`,
       provenance: { authority: "beads" as const, teamName: name },
     });
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_teamName, taskIds) => taskIds.map((taskId) => ({
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async (_teamName: string, taskIds: readonly string[]) => taskIds.map((taskId) => ({
       task: task(taskId),
       taskMetadata: {
         schema: TASK_METADATA_SCHEMA,
@@ -515,7 +546,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
   it("returns one ordered missing outcome from the same exact-ID hydration", async () => {
     const { name, port, leaderSessionId } = await teamFixture(undefined);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([
       undefined,
       {
         task: {
@@ -546,7 +577,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
   it("returns whole-call unavailable when exact-ID hydration fails", async () => {
     const { name, port, leaderSessionId } = await teamFixture(undefined);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockRejectedValue(new Error("simulated authority failure"));
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockRejectedValue(new Error("simulated authority failure"));
 
     await expect(port.readTasks(leaderSessionId, ["first-task", "second-task"])).resolves.toEqual({
       kind: "unavailable",
@@ -570,8 +601,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       version: "beads_context_changed",
       provenance: { authority: "beads" as const, teamName: name },
     };
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue([task.id]);
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => ([{
+    readPort.listTaskIds.mockResolvedValue([task.id]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async () => ([{
       task,
       taskMetadata: {
         schema: TASK_METADATA_SCHEMA,
@@ -595,8 +626,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
   it("acknowledges only the returned event page cursor", async () => {
     const { name, port, leaderSessionId } = await teamFixture(undefined);
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-    vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+    readPort.listTaskIds.mockResolvedValue([]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     const config = await teams.readConfig(name);
     config.logicalWorkers = [{ name: "worker", scope: "page test" }];
     teams.writeConfigAtomic(paths.configPath(name), config);
@@ -652,8 +683,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep page failure safe.", current_context: "Current context." },
     };
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    readPort.listTaskIds.mockResolvedValue(["baseline-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([record]);
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
@@ -705,8 +736,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       ["baseline-task", record("baseline-task", "baseline-v1")],
       ["event-task", record("event-task", "event-v1")],
     ]);
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_teamName, taskIds) => taskIds.map((id) => records.get(id)));
+    readPort.listTaskIds.mockResolvedValue(["baseline-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async (_teamName: string, taskIds: readonly string[]) => taskIds.map((id) => records.get(id)));
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
@@ -717,8 +748,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       change: "status",
       actor: "team-lead",
     });
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task", "event-task"]);
-    const resumed = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+    readPort.listTaskIds.mockResolvedValue(["baseline-task", "event-task"]);
+    const resumed = composedPort({ ensureWorker: vi.fn() });
     resumed.setLeaderSessionFile(leaderSessionId, sessionFile);
     resumed.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await expect(resumed.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "restart-update")).resolves.toMatchObject({
@@ -744,8 +775,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep branches separate.", current_context: "Current context." },
     };
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["branch-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    readPort.listTaskIds.mockResolvedValue(["branch-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([record]);
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["branch-a"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "branch-a", ["branch-a"]);
@@ -775,8 +806,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep eventless changes.", current_context: "Current context." },
     });
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["quiet-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async () => [record()]);
+    readPort.listTaskIds.mockResolvedValue(["quiet-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async () => [record()]);
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
@@ -826,8 +857,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
         current_context: "Current Task context.",
       },
     });
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockImplementation(async (_teamName, taskIds) => taskIds.map(record));
+    readPort.listTaskIds.mockResolvedValue(["baseline-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockImplementation(async (_teamName: string, taskIds: readonly string[]) => taskIds.map(record));
 
     await expect(port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call")).resolves.toMatchObject({
       kind: "snapshot",
@@ -866,8 +897,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep the baseline.", current_context: "Current context." },
     };
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    readPort.listTaskIds.mockResolvedValue(["baseline-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([record]);
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
@@ -903,8 +934,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Require complete batches.", current_context: "Current context." },
     });
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record("baseline-task")]);
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([record("baseline-task")]);
+    readPort.listTaskIds.mockResolvedValue(["baseline-task"]);
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
@@ -951,8 +982,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Keep the baseline.", current_context: "Current context." },
     };
-    vi.spyOn(authority, "listTaskIds").mockResolvedValue(["baseline-task"]);
-    const hydrate = vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([record]);
+    readPort.listTaskIds.mockResolvedValue(["baseline-task"]);
+    const hydrate = readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([record]);
     await port.readTeamSync(leaderSessionId, "snapshot", new AbortController().signal, "snapshot-call");
     port.setBranchContext(leaderSessionId, ["snapshot-entry"]);
     await port.acknowledgePendingObservationAsync(leaderSessionId, "snapshot-entry", ["snapshot-entry"]);
@@ -979,7 +1010,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
   it("requires an injected lifecycle for Worker stop and Team shutdown", async () => {
     const { name, leaderSessionId } = await teamFixture(undefined);
-    const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any);
+    const port = composedPort({ ensureWorker: vi.fn() });
     port.setLeaderSessionFile(leaderSessionId, `/tmp/${name}-lead.jsonl`);
 
     await expect(port.stopWorker(leaderSessionId, "worker")).resolves.toEqual({

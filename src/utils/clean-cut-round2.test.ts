@@ -5,9 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import { writeJsonAtomic } from "./atomic-json";
 import { BeadsTaskStore, TASK_METADATA_KEY, TASK_METADATA_SCHEMA, readBeadsAuthorityFingerprint } from "./beads";
-import { projectTaskCard } from "../model-tool-contract/beads-task-adapter";
+import { createReadOnlyBeadsTaskAdapterFactory, projectTaskCard } from "../model-tool-contract/beads-task-adapter";
 import { BeadsTaskReconciliationQuery } from "../task-authority/beads-reconciliation-query";
 import type { BdRunner } from "./beads";
 import type { Member, TeamConfig } from "./models";
@@ -26,6 +27,8 @@ import {
 } from "./task-delivery";
 import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
+import { DurableTaskAuthorityReadTeam } from "../adapters/durable-task-authority-read-team";
 import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 import * as tasks from "./tasks";
 import * as teams from "./teams";
@@ -40,6 +43,8 @@ const createdTeams: string[] = [];
 const roots: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
 const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
+const taskAuthorityReadTeamPort = new DurableTaskAuthorityReadTeam();
+const taskReadAdapterFactory = createReadOnlyBeadsTaskAdapterFactory(new DurableTaskAuthorityRead(taskAuthorityReadTeamPort));
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
 const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
   applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
@@ -170,7 +175,7 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "worker", sourceSession),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "worker", requireExpectedVersion: false });
-    const reconciliationQuery = new BeadsTaskReconciliationQuery(teamName);
+    const reconciliationQuery = new BeadsTaskReconciliationQuery(teamName, taskReadAdapterFactory);
     const created = await createTask(store, "self assignment", "same name is not identity");
 
     const selfAssigned = (await applySemanticTaskUpdate(teamName, created.id, {
@@ -209,7 +214,7 @@ describe.skipIf(!hasBd)("reconciliation identity and ownership delivery", () => 
       member(teamName, "worker", sessionFile),
     ]);
     const store = new BeadsTaskStore({ teamName, workspace, actor: "worker", requireExpectedVersion: false });
-    const reconciliationQuery = new BeadsTaskReconciliationQuery(teamName);
+    const reconciliationQuery = new BeadsTaskReconciliationQuery(teamName, taskReadAdapterFactory);
     const created = await createTask(store, "post-state", "v0");
     const selfAssigned = (await applySemanticTaskUpdate(teamName, created.id, { assignee: "worker" }, {
       actor: "worker",
@@ -302,6 +307,7 @@ describe("delivery scheduling and exact Session scope", () => {
       recipient: "worker",
       sessionFile,
       pollMs: 50,
+      membership: taskDeliveryMembership,
       reconcile,
     });
 
@@ -326,6 +332,7 @@ describe("delivery scheduling and exact Session scope", () => {
       teamName,
       recipient: "worker",
       sessionFile: sourceSession,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
     await source.start([]);
@@ -347,6 +354,7 @@ describe("delivery scheduling and exact Session scope", () => {
       teamName,
       recipient: "worker",
       sessionFile: forkSession,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
     await fork.start([sourceCustom]);
@@ -388,7 +396,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       kind: "task_create_batch",
       outcomes: [{ kind: "created", input_index: 0, task: { id: task.id, title: "Preserve delivery degradation", status: "open", assignee: "worker", version: task.version } }],
     });
-    await expect(tasks.readTask(teamName, task.id)).resolves.toMatchObject({
+    await expect(tasks.readTask(teamName, task.id, taskReadAdapterFactory)).resolves.toMatchObject({
       id: task.id,
       title: "Preserve delivery degradation",
       assignee: "worker",

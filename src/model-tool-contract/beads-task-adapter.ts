@@ -14,9 +14,6 @@ import {
 import {
   applySemanticTaskUpdate,
   createTask,
-  listTaskIds,
-  readTaskAuthorityRecordEnvelope,
-  readTaskAuthorityRecordEnvelopes,
   mutateTaskLink,
   type AgentMutationBinding,
   type InternalTaskPublicationOptions,
@@ -25,7 +22,7 @@ import {
   type TaskMutationReceipt,
   type TaskMutationPublicationPort,
 } from "./beads-authority-adapter";
-import type { TaskAuthorityTeamPort } from "../task-authority/contracts";
+import type { TaskAuthorityReadPort, TaskAuthorityTeamPort } from "../task-authority/contracts";
 import type {
   ModelToolTaskJournalEntry,
   ModelToolTaskUpdateInput,
@@ -120,14 +117,26 @@ export interface TaskMutationActorFence {
   membershipId: string;
 }
 
-export interface TaskAdapterAuthority {
-  create?(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
+interface TaskAdapterReadMethods {
   read(taskId: string): Promise<TaskAuthorityRecordEnvelope>;
   /** Batch Task hydration over the existing native multi-ID show seam. */
-  readMany?(taskIds: readonly string[]): Promise<Array<TaskAuthorityRecordEnvelope | undefined>>;
-  update?(taskId: string, input: TaskAuthorityUpdateInput, metadata: TaskMetadata): Promise<SemanticTaskUpdateResult>;
-  link?(taskId: string, input: TaskLinkInput, options: TaskWriteOptions & AgentMutationBinding): Promise<TaskMutationReceipt>;
+  readMany(taskIds: readonly string[]): Promise<Array<TaskAuthorityRecordEnvelope | undefined>>;
+  list(): Promise<string[]>;
 }
+
+interface TaskAdapterReadAuthority extends TaskAdapterReadMethods {
+  mode: "read_only";
+}
+
+interface PublishingTaskAdapterAuthority extends TaskAdapterReadMethods {
+  mode: "publishing";
+  create(input: CreateTaskInput, publication: InternalTaskPublicationOptions): Promise<TaskCreateReceipt>;
+  update(taskId: string, input: TaskAuthorityUpdateInput, metadata: TaskMetadata): Promise<SemanticTaskUpdateResult>;
+  link(taskId: string, input: TaskLinkInput, options: TaskWriteOptions & AgentMutationBinding): Promise<TaskMutationReceipt>;
+}
+
+/** Exact authority contract; composition selects an explicit read-only or publishing capability. */
+export type TaskAdapterAuthority = TaskAdapterReadAuthority | PublishingTaskAdapterAuthority;
 
 export interface TaskChangeProjection {
   taskId: string;
@@ -308,29 +317,8 @@ function projectTaskRecord(record: TaskAuthorityRecordEnvelope): TaskReadOutcome
   return "kind" in projected ? projected : { kind: "found", task: projected };
 }
 
-/** Read the canonical post-state evidence needed by delivery recovery. */
-export async function readTaskOwnerTransitionEvidence(
-  teamName: string,
-  taskId: string,
-): Promise<{ task: TaskCard; operationId?: string }> {
-  const record = await readTaskAuthorityRecordEnvelope(teamName, taskId);
-  const card = projectTaskCard(record);
-  if ("kind" in card) {
-    const error = new Error(card.message);
-    error.name = "upgrade_required";
-    throw error;
-  }
-  return {
-    task: card,
-    ...(record.ownerTransitionOperationId ? { operationId: record.ownerTransitionOperationId } : {}),
-  };
-}
-
-function readOnlyAuthority(teamName: string): TaskAdapterAuthority {
-  return {
-    read: (taskId) => readTaskAuthorityRecordEnvelope(teamName, taskId),
-    readMany: (taskIds) => readTaskAuthorityRecordEnvelopes(teamName, taskIds),
-  };
+function readOnlyAuthority(read: TaskAdapterReadMethods): TaskAdapterAuthority {
+  return { mode: "read_only", ...read };
 }
 
 function publishingAuthority(
@@ -338,10 +326,13 @@ function publishingAuthority(
   actor: string,
   publicationPort: TaskMutationPublicationPort,
   teamPort: TaskAuthorityTeamPort,
+  read: TaskAdapterReadMethods,
   actorFence?: TaskMutationActorFence,
 ): TaskAdapterAuthority {
   return {
-    ...readOnlyAuthority(teamName),
+    ...read,
+
+    mode: "publishing",
     create: (input, publication) => createTask(teamName, input, publicationPort, { actor, ...(actorFence ? { authoritySessionFile: actorFence.sessionFile, authorityMembershipId: actorFence.membershipId } : {}) }, {
       ...publication,
       taskCardProjector: projectTaskCard,
@@ -368,14 +359,29 @@ function publishingAuthority(
 
 export type BeadsTaskAdapterFactory = (teamName: string, actor: string, actorFence?: TaskMutationActorFence) => BeadsTaskAdapter;
 
+export function createReadOnlyBeadsTaskAdapterFactory(
+  readPort: TaskAuthorityReadPort<TaskAuthorityRecordEnvelope>,
+): BeadsTaskAdapterFactory {
+  return (teamName, actor) => new BeadsTaskAdapter(teamName, actor, readOnlyAuthority({
+    read: (taskId) => readPort.readTaskAuthorityRecordEnvelope(teamName, taskId),
+    readMany: (taskIds) => readPort.readTaskAuthorityRecordEnvelopes(teamName, taskIds),
+    list: () => readPort.listTaskIds(teamName),
+  }));
+}
+
 export function createPublishingBeadsTaskAdapterFactory(
   publicationPort: TaskMutationPublicationPort,
   teamPort: TaskAuthorityTeamPort,
+  readPort: TaskAuthorityReadPort<TaskAuthorityRecordEnvelope>,
 ): BeadsTaskAdapterFactory {
   return (teamName, actor, actorFence) => new BeadsTaskAdapter(
     teamName,
     actor,
-    publishingAuthority(teamName, actor, publicationPort, teamPort, actorFence),
+    publishingAuthority(teamName, actor, publicationPort, teamPort, {
+      read: (taskId) => readPort.readTaskAuthorityRecordEnvelope(teamName, taskId),
+      readMany: (taskIds) => readPort.readTaskAuthorityRecordEnvelopes(teamName, taskIds),
+      list: () => readPort.listTaskIds(teamName),
+    }, actorFence),
   );
 }
 
@@ -391,7 +397,7 @@ export class BeadsTaskAdapter {
   constructor(
     readonly teamName: string,
     readonly actor: string,
-    authority: TaskAdapterAuthority = readOnlyAuthority(teamName),
+    authority: TaskAdapterAuthority,
   ) {
     this.authority = authority;
   }
@@ -403,15 +409,15 @@ export class BeadsTaskAdapter {
   async createWithReceipt(input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<TaskCreateOutcome> {
     const metadata = taskMetadata(input.goal, INITIAL_CURRENT_CONTEXT);
     try {
-      const create = this.authority.create;
-      if (!create) {
+      const authority = this.authority;
+      if (authority.mode !== "publishing") {
         return {
           kind: "unknown_outcome",
           operationId: input.operationId,
           message: "Task create outcome is unknown: the Task adapter is read-only.",
         };
       }
-      const receipt = await create({
+      const receipt = await authority.create({
         title: input.title,
         // These are compatibility projections only. Task reads use metadata.
         description: input.goal,
@@ -464,6 +470,17 @@ export class BeadsTaskAdapter {
     return projectTaskRecord(record);
   }
 
+  async readOwnerTransitionEvidence(taskId: string): Promise<{ task: TaskCard; operationId?: string }> {
+    const record = await this.authority.read(taskId);
+    const card = projectTaskCard(record);
+    if ("kind" in card) {
+      const error = new Error(card.message);
+      error.name = "upgrade_required";
+      throw error;
+    }
+    return { task: card, ...(record.ownerTransitionOperationId ? { operationId: record.ownerTransitionOperationId } : {}) };
+  }
+
   /** Resolve one public version coordinate to raw CAS, then retain that CAS for the mutation. */
   async link(input: TaskLinkInput, binding: Omit<AgentMutationBinding, "actor"> = {}): Promise<TaskLinkOutcome> {
     try {
@@ -480,14 +497,15 @@ export class BeadsTaskAdapter {
           };
         }
       }
-      if (!this.authority.link) {
+      const authority = this.authority;
+      if (authority.mode !== "publishing") {
         return {
           kind: "unavailable",
           reason: "task_authority_unavailable",
           message: "The Task authority does not expose the conditional link capability.",
         };
       }
-      const result = await this.authority.link(input.taskId, input, {
+      const result = await authority.link(input.taskId, input, {
         actor: this.actor,
         expectedVersion,
         ...binding,
@@ -517,14 +535,16 @@ export class BeadsTaskAdapter {
 
   /** Project all Task records without changing gap or version semantics. */
   async readMany(taskIds: readonly string[]): Promise<Array<TaskReadOutcome | undefined>> {
-    const records = this.authority.readMany
-      ? await this.authority.readMany(taskIds)
-      : await Promise.all(taskIds.map((taskId) => this.authority.read(taskId)));
+    const records = await this.authority.readMany(taskIds);
     return records.map((record) => record ? projectTaskRecord(record) : undefined);
   }
 
+  async listIds(): Promise<string[]> {
+    return this.authority.list();
+  }
+
   async list(): Promise<TaskCard[]> {
-    const results = await this.readMany(await listTaskIds(this.teamName));
+    const results = await this.readMany(await this.listIds());
     return results.flatMap((result) => result && result.kind === "found" ? [result.task] : []);
   }
 
@@ -568,7 +588,8 @@ export class BeadsTaskAdapter {
         message: `Expected Task version ${input.expectedVersion}, but Beads reports ${currentTask.version}.`,
       };
     }
-    if (!this.authority.update) {
+    const authority = this.authority;
+    if (authority.mode !== "publishing") {
       return {
         kind: "contract_gap",
         reason: "external_writer_atomicity_unavailable",
@@ -599,7 +620,7 @@ export class BeadsTaskAdapter {
       );
     }
     try {
-      const result = await this.authority.update(input.taskId, {
+      const result = await authority.update(input.taskId, {
         ...input,
         expectedVersion: record.task.version,
       }, nextMetadata);

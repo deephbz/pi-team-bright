@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { taskVersionRef } from "../task-authority/task-version-ref";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
-import { listTaskIds } from "../model-tool-contract/beads-authority-adapter";
 import { readConfig } from "./teams";
 import { teamEventJournalPath, teamDir } from "./paths";
 import { writeJsonAtomic } from "./atomic-json";
@@ -202,7 +201,7 @@ function migrateEvent(
  * and canonical Task reads before it writes any delivery or journal file.
  * Worker events remain evidence-only records and are never Task-normalized.
  */
-export async function migrateLegacyTaskDeliveryEpoch(teamName: string): Promise<MigrationReceipt> {
+export async function migrateLegacyTaskDeliveryEpoch(teamName: string, factory: BeadsTaskAdapterFactory): Promise<MigrationReceipt> {
   const config = await readConfig(teamName).catch(() => undefined);
   if (config?.members.some((member) => member.isActive !== false)) {
     throw upgradeRequired(`Team ${teamName} is active; stop every Team Membership before running the stopped-epoch migration.`);
@@ -251,7 +250,8 @@ export async function migrateLegacyTaskDeliveryEpoch(teamName: string): Promise<
   };
   if (allIds.size === 0 && cardIds.size === 0 && !eventNeedsMigration.some(Boolean)) return receipt;
 
-  const scopedIds = new Set(await listTaskIds(teamName));
+  const adapter = factory(teamName, "task-delivery-migration");
+  const scopedIds = new Set(await adapter.listIds());
   const outOfScope = [...allIds].filter((id) => !scopedIds.has(id));
   if (outOfScope.length > 0) {
     receipt.failed = outOfScope.length;
@@ -259,7 +259,7 @@ export async function migrateLegacyTaskDeliveryEpoch(teamName: string): Promise<
   }
   const ids = [...cardIds];
   const outcomes = ids.length > 0
-    ? await new BeadsTaskAdapter(teamName, "task-delivery-migration").readMany(ids)
+    ? await adapter.readMany(ids)
     : [];
   const cards = new Map<string, TaskCard>();
   outcomes.forEach((outcome, index) => {

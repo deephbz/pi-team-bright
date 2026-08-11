@@ -250,6 +250,63 @@ describe("registered Pi Session adapter characterization", () => {
     expect(ctx.ui.notify).toHaveBeenLastCalledWith(expect.stringMatching(/No current Team is bound/), "warning");
   });
 
+  it("refuses an explicit missing Team before resumed identity, command, or delivery binding", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    vi.stubEnv("PI_TEAM_NAME", `missing-${process.pid}`);
+    const direct = vi.spyOn(DirectMessageDelivery.prototype, "start");
+    const task = vi.spyOn(TaskChangeDelivery.prototype, "start");
+    const ctx = context(`/tmp/missing-${process.pid}-worker.jsonl`);
+
+    await expect(extension().get("session_start")!({ reason: "resume" }, ctx)).rejects.toThrow(/does not name a current team/i);
+
+    expect(direct).not.toHaveBeenCalled();
+    expect(task).not.toHaveBeenCalled();
+  });
+
+  it("uses the exact resumed Worker binding for delivery and preserves its profile prompt", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("worker-profile-binding");
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
+      prompt: "Keep Task evidence exact.", model: "test/model", thinking: "high",
+    });
+    const member = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1 }, member.membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const bound = vi.spyOn(teams, "assertCurrentSessionBinding");
+    const ctx = context(sessionFile);
+    const handlers = extension();
+
+    await handlers.get("session_start")!({ reason: "resume" }, ctx);
+    const prompt = await handlers.get("before_agent_start")!({ systemPrompt: "base" }, ctx) as any;
+
+    expect(bound).toHaveBeenCalledWith(name, "worker", sessionFile);
+    expect(prompt.systemPrompt).toContain("Your standing Worker profile: Keep Task evidence exact.");
+    expect(prompt.systemPrompt).toContain("currently using model: test/model with thinking level: high");
+  });
+
+  it("keeps nudge actuation suppressed when the current Team policy disables it", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("nudge-policy-suppression");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const config = await createTeam(name, sessionFile);
+    config.syncLiveness = { waitSeconds: 120, nudgeEnabled: false, nudgeDelaySeconds: 0, policyVersion: "characterization" };
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    const start = vi.spyOn(SyncNudgeConductor.prototype, "start");
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+
+    await extension().get("session_start")!({ reason: "resume" }, context(sessionFile));
+
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it("keeps a resumed Worker alive when foreign placement refuses its Team binding", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");

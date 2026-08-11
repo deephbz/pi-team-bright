@@ -1,27 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
 import { teamDir } from "./paths";
-import type { RuntimeGeneration } from "./runtime";
-import type { Member } from "../team-authority/contracts";
 import type {
   CoordinationMemberEvidence,
   CoordinationQueryBundle,
   CoordinationRuntimeEvidence,
+  CoordinationRuntimeGeneration,
 } from "../coordination/queries";
-import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
 
 export type WorkerRunState = "active" | "settled" | "unknown" | "absent";
 
 export interface WorkerRunObservation {
   worker: string;
   membershipId?: string;
-  generation?: RuntimeGeneration;
+  generation?: CoordinationRuntimeGeneration;
   state: WorkerRunState;
   /** True when a carrier or delivery can produce a future run. */
   actuationPending: boolean;
 }
 
-function exactStatus(member: CoordinationMemberEvidence, status: CoordinationRuntimeEvidence | null): RuntimeGeneration | undefined {
+function exactStatus(member: CoordinationMemberEvidence, status: CoordinationRuntimeEvidence | null): CoordinationRuntimeGeneration | undefined {
   if (
     !member.membershipId
     || !status?.membershipId
@@ -54,11 +52,11 @@ export function deriveWorkerRunObservation(
   return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending };
 }
 
-/** Compatibility composition for existing callers that do not inject queries. */
+/** Reads liveness from the caller's explicit Coordination query bundle. */
 export async function readWorkerRunObservation(
   teamName: string,
-  member: Member,
-  queries: CoordinationQueryBundle = createDurableCoordinationQueries(),
+  member: CoordinationMemberEvidence,
+  queries: CoordinationQueryBundle,
 ): Promise<WorkerRunObservation> {
   const [taskDelivery, alertInbox, runtime] = await Promise.all([
     queries.taskStateDelivery.readDeliveryEvidence(teamName, member.name),
@@ -141,7 +139,7 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
   });
 }
 
-export function currentMember(members: readonly Member[], worker: string): Member | undefined {
+export function currentMember(members: readonly (CoordinationMemberEvidence & { agentType?: string })[], worker: string): CoordinationMemberEvidence | undefined {
   return [...members].reverse().find((member) => member.name === worker && member.agentType === "teammate" && member.isActive !== false);
 }
 

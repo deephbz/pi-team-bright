@@ -39,7 +39,7 @@ export type SessionTerminalPlacement =
  * longer manufacture a record that files a non-tmux pane ID under `tmuxPaneId`.
  */
 export function placeSessionTerminal(
-  config: TeamConfig,
+  config: Pick<TeamConfig, "name" | "terminalBackend">,
   current: TerminalAdapter | null,
   legacyPaneEnv?: string,
 ): SessionTerminalPlacement {

@@ -10,7 +10,7 @@ import {
   taskDeliveryTombstonePath,
   taskOwnerTransitionOutboxPath,
 } from "./paths";
-import { readConfig, withCurrentSessionBinding } from "./teams";
+import { readConfig } from "./teams";
 import { writeJsonAtomic } from "./atomic-json";
 import { Check } from "typebox/value";
 import { TaskCardSchema, type TaskCard } from "../task-authority/task-domain";
@@ -134,6 +134,21 @@ export interface TaskChangeBatch {
   content: string;
   display: true;
   details: TaskChangeBatchDetails;
+}
+
+/** Task-delivery consumer boundary for current recipient identity and its lease. */
+export interface TaskDeliveryMembershipPort {
+  currentRecipient(input: {
+    teamName: string;
+    recipient: string;
+    sessionFile: string;
+  }): Promise<{ membershipId: string } | null>;
+  withCurrentRecipient<T>(input: {
+    teamName: string;
+    recipient: string;
+    sessionFile: string;
+    membershipId: string;
+  }, action: () => Promise<T>): Promise<T>;
 }
 
 export interface TaskDeliverySink {
@@ -841,6 +856,8 @@ export class TaskChangeDelivery {
       membershipId?: string;
       sessionFile: string;
       pollMs?: number;
+      /** Consumer-owned exact-recipient binding implementation supplied by composition. */
+      membership: TaskDeliveryMembershipPort;
       /** Task-owned query implementation supplied by the composition root. */
       reconciliationQuery?: TaskReconciliationQuery;
       /** Test/embedding seam; production uses the injected latest-state query. */
@@ -858,11 +875,12 @@ export class TaskChangeDelivery {
     this.stop();
     const generation = this.generation;
     this.stopped = false;
-    const initialConfig = await readConfig(this.options.teamName);
-    const initialBinding = recipientBinding(initialConfig, this.options.recipient);
-    this.resolvedMembershipId = this.options.membershipId || (
-      initialBinding?.sessionFile === this.options.sessionFile ? initialBinding.membershipId : ""
-    );
+    const initialBinding = await this.options.membership.currentRecipient({
+      teamName: this.options.teamName,
+      recipient: this.options.recipient,
+      sessionFile: this.options.sessionFile,
+    });
+    this.resolvedMembershipId = this.options.membershipId || initialBinding?.membershipId || "";
     this.attempted.clear();
     this.acknowledged = acknowledgedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
     this.staged.clear();
@@ -957,12 +975,12 @@ export class TaskChangeDelivery {
     if (ids.size === 0) return 0;
     const records = (await this.eligible()).filter((record) => ids.has(record.deliveryId));
     if (this.stopped || records.length === 0) return 0;
-    const count = await withCurrentSessionBinding(
-      this.options.teamName,
-      this.options.recipient,
-      this.options.sessionFile,
-      this.resolvedMembershipId,
-      async () => {
+    const count = await this.options.membership.withCurrentRecipient({
+      teamName: this.options.teamName,
+      recipient: this.options.recipient,
+      sessionFile: this.options.sessionFile,
+      membershipId: this.resolvedMembershipId,
+    }, async () => {
         const details = this.details(records);
         this.sink.appendEntry(TASK_CHANGE_ACK_ENTRY_TYPE, details);
         await persistTombstones(this.options.teamName, this.options.recipient, records.map((record) => ({
@@ -977,8 +995,7 @@ export class TaskChangeDelivery {
         return mutateRecords(this.options.teamName, this.options.recipient, ids, (record) => {
           record.successfulTurnAckAt ||= new Date().toISOString();
         });
-      },
-    );
+    });
     for (const id of ids) {
       this.acknowledged.add(id);
       this.staged.delete(id);
@@ -1017,13 +1034,12 @@ export class TaskChangeDelivery {
       return;
     }
     try {
-      await withCurrentSessionBinding(
-        this.options.teamName,
-        this.options.recipient,
-        this.options.sessionFile,
-        this.resolvedMembershipId,
-        async () => this.sink.sendMessage({ customType: TASK_CHANGE_CUSTOM_TYPE, content: formatBatch(records), display: true, details: this.details(records) }, { triggerTurn: true, deliverAs: "steer" }),
-      );
+      await this.options.membership.withCurrentRecipient({
+        teamName: this.options.teamName,
+        recipient: this.options.recipient,
+        sessionFile: this.options.sessionFile,
+        membershipId: this.resolvedMembershipId,
+      }, async () => this.sink.sendMessage({ customType: TASK_CHANGE_CUSTOM_TYPE, content: formatBatch(records), display: true, details: this.details(records) }, { triggerTurn: true, deliverAs: "steer" }));
     } catch (error) {
       for (const record of records) this.attempted.delete(record.deliveryId);
       throw error;
@@ -1031,20 +1047,24 @@ export class TaskChangeDelivery {
   }
 
   private async eligible(): Promise<TaskDeliveryRecord[]> {
-    const config = await readConfig(this.options.teamName);
-    const binding = recipientBinding(config, this.options.recipient);
-    if (!this.resolvedMembershipId || !binding || binding.membershipId !== this.resolvedMembershipId || binding.sessionFile !== this.options.sessionFile) return [];
+    const binding = await this.options.membership.currentRecipient({
+      teamName: this.options.teamName,
+      recipient: this.options.recipient,
+      sessionFile: this.options.sessionFile,
+    });
+    if (!this.resolvedMembershipId || binding?.membershipId !== this.resolvedMembershipId) return [];
     const tombstones = new Set((await readTaskDeliveryTombstones(this.options.teamName, this.options.recipient)).map((item) => item.deliveryId));
     return (await readTaskDeliveries(this.options.teamName, this.options.recipient))
       .filter((record) => record.recipientMembershipId === this.resolvedMembershipId && record.recipientSessionFile === this.options.sessionFile && !tombstones.has(record.deliveryId));
   }
 
   private async isCurrentBinding(): Promise<boolean> {
-    const config = await readConfig(this.options.teamName);
-    const binding = recipientBinding(config, this.options.recipient);
-    return !!this.resolvedMembershipId
-      && binding?.membershipId === this.resolvedMembershipId
-      && binding.sessionFile === this.options.sessionFile;
+    const binding = await this.options.membership.currentRecipient({
+      teamName: this.options.teamName,
+      recipient: this.options.recipient,
+      sessionFile: this.options.sessionFile,
+    });
+    return !!this.resolvedMembershipId && binding?.membershipId === this.resolvedMembershipId;
   }
 
   private details(records: TaskDeliveryRecord[]): TaskChangeBatchDetails {

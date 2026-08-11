@@ -1,8 +1,6 @@
 import { performance } from "node:perf_hooks";
-import {
-  listTaskIds,
-  readTaskAuthorityRecordEnvelopes,
-} from "../src/model-tool-contract/beads-authority-adapter";
+import { DurableTaskAuthorityRead } from "../src/adapters/durable-task-authority-read";
+import { DurableTaskAuthorityReadTeam } from "../src/adapters/durable-task-authority-read-team";
 import { BeadsError, DEFAULT_BD_TIMEOUT_MS } from "../src/utils/beads";
 
 export const TASK_HYDRATION_BENCHMARK_SCHEMA = "pi-team-bright/task-hydration-benchmark/1" as const;
@@ -54,9 +52,10 @@ export interface BenchmarkDependencies {
   now(): number;
 }
 
+const productionRead = new DurableTaskAuthorityRead(new DurableTaskAuthorityReadTeam());
 const productionDependencies: BenchmarkDependencies = {
-  list: listTaskIds,
-  hydrate: readTaskAuthorityRecordEnvelopes,
+  list: (teamName) => productionRead.listTaskIds(teamName),
+  hydrate: (teamName, taskIds) => productionRead.readTaskAuthorityRecordEnvelopes(teamName, taskIds),
   now: () => performance.now(),
 };
 

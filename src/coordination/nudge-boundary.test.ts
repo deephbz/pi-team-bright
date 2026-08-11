@@ -4,16 +4,17 @@ import { describe, expect, it } from "vitest";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import { DurableCoordinationNudgeRecord } from "../adapters/durable-coordination-nudge-record";
 import { CoordinationObservationService } from "./observation-service";
+import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
 
 const root = process.cwd();
 
 describe("Coordination nudge boundary", () => {
-  it("keeps the facade as a nudge-debt delegate with legacy construction", () => {
+  it("keeps the facade as a nudge-debt delegate with explicit composition", () => {
     const source = fs.readFileSync(path.join(root, "src/model-tool-contract/durable-model-tool-port.ts"), "utf8");
-    expect(source).toContain("this.observationService.readSyncNudgeDebt(sessionFile, branchLineage)");
+    expect(source).toContain("return this.coordination.readSyncNudgeDebt(...args);");
     expect(source).not.toContain("readAllNudgeEvents");
     expect(source).not.toContain("readTaskEventFailureHintsAfter");
-    expect(() => new DurableModelToolTeamPort()).not.toThrow();
+    expect(() => composedDurableModelToolPort()).not.toThrow();
   });
 
   it("keeps debt provenance in Coordination and timer plus Pi record persistence outside it", () => {
@@ -35,8 +36,10 @@ describe("Coordination nudge boundary", () => {
     const revision = fs.readFileSync(path.join(root, "src/coordination/task-projection-revision.ts"), "utf8");
     const durableStore = fs.readFileSync(path.join(root, "src/adapters/durable-coordination-nudge-store.ts"), "utf8");
     expect(revision).toContain('createHash("sha256")');
-    expect(durableStore).toContain("readHiddenObservationProjection");
+    expect(durableStore).toContain("CoordinationHiddenObservationPort");
+    expect(durableStore).toContain("hidden.read");
     expect(durableStore).toContain("readTaskEventFailureHintsAfter");
+    expect(durableStore).not.toContain("readHiddenObservationProjection");
     expect(CoordinationObservationService).toBeTypeOf("function");
   });
 });

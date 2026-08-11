@@ -3,21 +3,21 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import * as paths from "../src/utils/paths";
-import * as teams from "../src/utils/teams";
 import * as runtime from "../src/utils/runtime";
 import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
 import type { AlertMembershipPort } from "../src/alert-authority/contracts";
-import { TaskChangeDelivery, taskPollMs } from "../src/utils/task-delivery";
+import { TaskChangeDelivery, taskPollMs, type TaskDeliveryMembershipPort } from "../src/utils/task-delivery";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import type { CoordinationNudgeRecordPort } from "../src/coordination/nudge-record-port";
 import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
-import type { Member, TeamConfig } from "../src/team-authority/contracts";
+import type { PiSessionCurrentWorkerMember, PiSessionTeamQueryPort } from "../src/team-authority/pi-session-team-query";
 import { placeSessionTerminal, type TeamIdentitySource, type TeamSessionAdmission } from "../src/utils/session-terminal";
 import { exactLeaderSessionId } from "../src/model-tool-contract/runtime";
 import type { ModelToolLifecycle } from "../src/model-tool-contract/durable-model-tool-port";
 import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
+import type { BeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
@@ -26,7 +26,7 @@ import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 export interface PiTeamSessionAdapter {
   readonly modelToolLifecycle: ModelToolLifecycle;
   readonly isTeammate: () => boolean;
-  readonly resolveCurrentWorkerContext: (ctx: any) => Promise<{ teamName: string; member: Member }>;
+  readonly resolveCurrentWorkerContext: (ctx: any) => Promise<{ teamName: string; member: PiSessionCurrentWorkerMember }>;
   register(): void;
 }
 
@@ -39,19 +39,22 @@ export function createPiTeamSessionAdapter(options: {
   projectTrust: (ctx: any) => boolean | undefined;
   lifecyclePublication: { recordWorkerFailed(input: { teamName: string; workerName: string; membershipId: string }): Promise<unknown> };
   alertMembership: AlertMembershipPort;
+  taskDeliveryMembership: TaskDeliveryMembershipPort;
   nudgeRecords: CoordinationNudgeRecordPort;
+  taskReadAdapterFactory: BeadsTaskAdapterFactory;
+  teamQuery: PiSessionTeamQueryPort;
   leaderToolNames: ReadonlySet<string>;
   workerToolNames: ReadonlySet<string>;
   refreshAlertToolProjection: () => void;
   registerRecoveredWorkerTools: () => void;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, nudgeRecords, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, nudgeRecords, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
   const terminal = getTerminalAdapter();
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
   const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
-  let teamName: string | null = envTeamName || teams.findLeadTeamForSession();
+  let teamName: string | null = envTeamName || teamQuery.findLeadTeamForSession();
   let currentMembershipId: string | undefined;
   let directMessageDelivery: DirectMessageDelivery | null = null;
   let taskChangeDelivery: TaskChangeDelivery | null = null;
@@ -110,7 +113,7 @@ registerCommand?.("pi-team-bright", {
     let sessionBinding: TeamSessionBindingStatus = sessionFile ? "stale" : "unavailable";
     let sessionDetail = sessionFile ? undefined : "durable Pi Session file unavailable";
     if (sessionFile) try {
-      const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+      const member = await teamQuery.currentSessionBinding(teamName, agentName, sessionFile);
       if (currentMembershipId && member.membershipId !== currentMembershipId) sessionDetail = "current Team membership differs from this runtime generation";
       else sessionBinding = "current";
     } catch (error) { sessionDetail = error instanceof Error ? error.message : String(error); }
@@ -151,12 +154,11 @@ function syncNudgeMessageDelivered(ctx: any, record: { id: string; branchLineage
   });
 }
 
-function startSyncNudgeConductor(ctx: any) {
+async function startSyncNudgeConductor(ctx: any) {
   stopSyncNudgeConductor();
   if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.coordination.readSyncNudgeDebt) return;
-  let config: TeamConfig;
-  try { config = JSON.parse(fs.readFileSync(paths.configPath(teamName), "utf8")) as TeamConfig; } catch { return; }
-  const policy = config.syncLiveness;
+  let policy;
+  try { policy = await teamQuery.syncNudgePolicy(teamName); } catch { return; }
   if (!policy?.nudgeEnabled || policy.nudgeDelaySeconds === undefined) return;
   const delayMs = Math.max(0, policy.nudgeDelaySeconds * 1000);
   // Model-tool registration normally binds lazily on the first tool call.
@@ -189,10 +191,12 @@ function startSyncNudgeConductor(ctx: any) {
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const branch = modelToolBranchIds(ctx);
       if (!sessionFile || !sessionId || branch.length === 0 || busy()) return;
-      const current = await teams.readConfig(teamName!);
-      if (current.epochId !== candidate.teamEpochId || current.leadSessionId !== sessionFile) return;
-      const currentLead = await teams.assertCurrentSessionBinding(teamName!, "team-lead", sessionFile);
-      if (currentLead.membershipId !== candidate.leaderMembershipId) return;
+      if (!await teamQuery.matchesSyncNudgeCandidate({
+        teamName: teamName!,
+        teamEpochId: candidate.teamEpochId,
+        leaderSessionFile: sessionFile,
+        leaderMembershipId: candidate.leaderMembershipId,
+      })) return;
       const latest = await modelToolJourney()!.port.coordination.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
       if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value: string, index: number) => value !== candidate.branchLineage[index]) || busy()) return;
       const existing = nudgeRecords.findReservation(teamName!, candidate.debtKey, candidate.branchLineage);
@@ -236,10 +240,10 @@ function stopDeliveries() {
 }
 
 /** Resolve the one exact current Team and Worker identity for Worker tools. */
-async function resolveCurrentWorkerContext(ctx: any): Promise<{ teamName: string; member: Member }> {
+async function resolveCurrentWorkerContext(ctx: any): Promise<{ teamName: string; member: PiSessionCurrentWorkerMember }> {
   const sessionFile = ctx?.sessionManager?.getSessionFile?.();
   if (!sessionFile) throw new Error("A durable Pi Session is required for every Worker tool operation.");
-  const binding = await teams.resolveCurrentTeammateSessionBinding(sessionFile);
+  const binding = await teamQuery.resolveCurrentTeammateSessionBinding(sessionFile);
   if (binding.status !== "bound") {
     throw new Error(`Current Worker Session binding is unavailable: ${binding.reason}.`);
   }
@@ -263,7 +267,7 @@ async function startDirectMessageDelivery(ctx: any) {
   if (!teamName || !directMessageSessionEligible) return;
   const sessionFile = ctx.sessionManager?.getSessionFile?.();
   if (!sessionFile) return;
-  const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+  const member = await teamQuery.currentSessionBinding(teamName, agentName, sessionFile);
   if (!member.membershipId) throw new Error(`Current Membership for ${agentName} has no membershipId.`);
   currentMembershipId = member.membershipId;
   directMessageDelivery?.stop();
@@ -282,7 +286,7 @@ async function startTaskChangeDelivery(ctx: any) {
   if (!teamName || !taskChangeSessionEligible) return;
   const sessionFile = ctx.sessionManager?.getSessionFile?.();
   if (!sessionFile) return;
-  const member = await teams.assertCurrentSessionBinding(teamName, agentName, sessionFile);
+  const member = await teamQuery.currentSessionBinding(teamName, agentName, sessionFile);
   if (!member.membershipId) throw new Error(`Current Membership for ${agentName} has no membershipId.`);
   taskChangeDelivery?.stop();
   taskChangeDelivery = new TaskChangeDelivery(pi, {
@@ -291,7 +295,8 @@ async function startTaskChangeDelivery(ctx: any) {
     membershipId: member.membershipId,
     sessionFile,
     pollMs: taskPollMs(),
-    reconciliationQuery: new BeadsTaskReconciliationQuery(teamName),
+    membership: taskDeliveryMembership,
+    reconciliationQuery: new BeadsTaskReconciliationQuery(teamName, taskReadAdapterFactory),
   });
   await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
 }
@@ -353,7 +358,7 @@ function registerSessionHooks() {
   // to restore its identity before the normal teammate lifecycle runs.
   const piSessionFile = ctx.sessionManager?.getSessionFile?.();
   if (!isTeammate && !teamName && piSessionFile) {
-    const resumedMember = teams.findTeammateBySessionFile(piSessionFile);
+    const resumedMember = teamQuery.findTeammateBySessionFile(piSessionFile);
     if (resumedMember) {
       isTeammate = true;
       agentName = resumedMember.member.name;
@@ -366,10 +371,10 @@ function registerSessionHooks() {
   // A fresh lead process has no lead environment variables either. Match
   // its resumed Pi session to the durable lead record.
   if (!isTeammate && !teamName) {
-    teamName = teams.findLeadTeamForSession(piSessionFile);
+    teamName = teamQuery.findLeadTeamForSession(piSessionFile);
   }
 
-  if (envTeamName && !teams.teamExists(envTeamName)) {
+  if (envTeamName && !teamQuery.teamExists(envTeamName)) {
     throw new Error(
       `Explicit PI_TEAM_NAME '${envTeamName}' does not name a current team. ` +
       "Refusing implicit fallback or team-state creation; choose an existing team or create it explicitly.",
@@ -380,7 +385,7 @@ function registerSessionHooks() {
     configureWorkerResources(ctx);
     if (teamName) {
       if (!piSessionFile) throw new Error("Teammate startup requires a durable Pi Session file.");
-      const teamConfig = await teams.readConfig(teamName);
+      const teamConfig = await teamQuery.terminalPlacement(teamName);
       let startup: Awaited<ReturnType<typeof teamSessionLifecycleService.admitWorker>>;
       try {
         startup = await teamSessionLifecycleService.admitWorker({
@@ -426,8 +431,8 @@ function registerSessionHooks() {
     if (!piSessionFile) throw new Error("Lead resume requires a durable Pi Session file.");
     // Lead reconnecting to an existing team, including a new `pi -r`
     // process. Refresh both volatile process identity and terminal location.
-    if (teams.teamExists(teamName)) {
-      const teamConfig = await teams.readConfig(teamName);
+    if (teamQuery.teamExists(teamName)) {
+      const teamConfig = await teamQuery.terminalPlacement(teamName);
       let runtimeAdmission: Awaited<ReturnType<typeof teamSessionLifecycleService.admitLead>>;
       try {
         runtimeAdmission = await teamSessionLifecycleService.admitLead({
@@ -457,7 +462,7 @@ function registerSessionHooks() {
     // A resumed/reloaded idle Session has no active agent run. This is
     // positive settled evidence, unlike a fresh startup before agent_start.
     leaderRunSettled = event.reason === "resume" || event.reason === "reload";
-    startSyncNudgeConductor(ctx);
+    await startSyncNudgeConductor(ctx);
   }
   await refreshTeamFooter(ctx);
 });
@@ -558,10 +563,9 @@ pi.on("before_agent_start", async (event, ctx) => {
     let profileInfo = "";
     if (teamName) {
       try {
-        const teamConfig = await teams.readConfig(teamName);
-        const member = teamConfig.members.find(m => m.name === agentName);
+        const member = await teamQuery.workerProfile(teamName, agentName);
         if (member?.prompt) profileInfo = `\nYour standing Worker profile: ${member.prompt}`;
-        if (member && member.model) {
+        if (member?.model) {
           modelInfo = `\nYou are currently using model: ${member.model}`;
           if (member.thinking) {
             modelInfo += ` with thinking level: ${member.thinking}`;
@@ -589,11 +593,10 @@ pi.on("before_agent_start", async (event, ctx) => {
         isTeammate = false;
         agentName = "team-lead";
         teamName = targetTeamName;
-        const config = await teams.readConfig(targetTeamName);
-        currentMembershipId = config.members.find((member) => member.name === "team-lead" && member.isActive !== false)?.membershipId;
+        currentMembershipId = await teamQuery.activeMembershipId(targetTeamName, "team-lead");
         const admission = await teamSessionLifecycleService.admitLead({ teamName: targetTeamName, sessionFile, placement: { kind: "unlocated" }, identitySource: "resumed_session", allowFirstRuntimeGeneration: true });
         if (admission.kind === "admitted") currentMembershipId = admission.member.membershipId;
-        startSyncNudgeConductor(leaderContext);
+        await startSyncNudgeConductor(leaderContext);
       },
       stopWorker: (targetTeamName, worker) => teamLifecycleService.stopWorker(targetTeamName, worker),
       shutdownTeam: (targetTeamName) => teamLifecycleService.shutdownTeam(targetTeamName),

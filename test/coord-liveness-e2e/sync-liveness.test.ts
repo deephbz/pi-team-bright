@@ -3,7 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import piTeams from "../../extensions/index";
-import * as authority from "../../src/model-tool-contract/beads-authority-adapter";
+import { createDurableCoordinationQueries } from "../../src/adapters/durable-coordination-queries";
+import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "../../src/model-tool-contract/beads-task-adapter";
+import { createDurableCoordinationNudgeStore } from "../../src/adapters/durable-coordination-nudge-store";
+import { DurableCoordinationHiddenObservation } from "../../src/adapters/durable-coordination-hidden-observation";
+import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../../src/coordination/observation-service";
 import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-model-tool-port";
 import { InMemoryModelToolTeamPort, exactLeaderSessionId } from "../../src/model-tool-contract/in-memory-team-port";
 import { projectToolResult } from "../../src/model-tool-contract/result-projection";
@@ -36,6 +40,13 @@ import { TASK_METADATA_SCHEMA } from "../../src/utils/beads";
 
 const createdTeams: string[] = [];
 const temporaryRoots: string[] = [];
+const readPort = {
+  readTaskAuthorityRecordEnvelope: vi.fn(),
+  readTaskAuthorityRecordEnvelopes: vi.fn(),
+  listTaskIds: vi.fn(),
+};
+const readFactory = createReadOnlyBeadsTaskAdapterFactory(readPort);
+const livenessQueries = createDurableCoordinationQueries(readFactory);
 
 class FakeClock {
   now = 0;
@@ -127,9 +138,17 @@ function taskEnvelope(id = "task-1", context = "Work has not started."): any {
 async function durableFixture(policy: TeamConfigSyncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 5, policyVersion: "1" }) {
   const name = teamName("durable");
   const sessionFile = path.join(paths.teamDir(name), "leader-session.jsonl");
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, { stopWorker: vi.fn(), shutdownTeam: vi.fn() });
-  vi.spyOn(authority, "listTaskIds").mockResolvedValue([]);
-  vi.spyOn(authority, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([]);
+  const queries = createDurableCoordinationQueries(readFactory);
+  const hidden = new DurableCoordinationHiddenObservation();
+  const port = new DurableModelToolTeamPort(
+    { ensureWorker: vi.fn() } as any,
+    { stopWorker: vi.fn(), shutdownTeam: vi.fn() },
+    readFactory,
+    undefined,
+    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)),
+  );
+  readPort.listTaskIds.mockResolvedValue([]);
+  readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
   await teams.createTeam(name, sessionFile, "leader-agent", "Liveness fixture", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, policy);
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "liveness" }];
@@ -169,14 +188,14 @@ describe("hardened coordination liveness boundaries", () => {
     fs.mkdirSync(paths.teamDir(name), { recursive: true });
     const current = member();
     await writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1, runState: "active" }, current.membershipId);
-    await expect(readWorkerRunObservation(name, current)).resolves.toMatchObject({ state: "active", actuationPending: false });
+    await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "active", actuationPending: false });
     await writeRuntimeStatus(name, "worker", { runState: "settled" }, current.membershipId);
-    await expect(readWorkerRunObservation(name, current)).resolves.toMatchObject({ state: "settled", actuationPending: false });
+    await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "settled", actuationPending: false });
 
     fs.mkdirSync(path.dirname(paths.taskDeliveryPath(name, "worker")), { recursive: true });
     fs.writeFileSync(paths.taskDeliveryPath(name, "worker"), JSON.stringify([{ id: "delivery-1" }]));
-    await expect(readWorkerRunObservation(name, current)).resolves.toMatchObject({ state: "settled", actuationPending: true });
-    const pending = await readWorkerRunObservation(name, current);
+    await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "settled", actuationPending: true });
+    const pending = await readWorkerRunObservation(name, current, livenessQueries);
     expect(livenessIsComplete([pending])).toBe(false);
   });
 
@@ -184,7 +203,7 @@ describe("hardened coordination liveness boundaries", () => {
     const name = teamName("stale-membership");
     fs.mkdirSync(paths.teamDir(name), { recursive: true });
     await writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1, runState: "settled" }, "other-membership");
-    const observation = await readWorkerRunObservation(name, member());
+    const observation = await readWorkerRunObservation(name, member(), livenessQueries);
     expect(observation).toMatchObject({ state: "unknown", actuationPending: false });
     expect(livenessIsComplete([observation])).toBe(false);
     expect(livenessIsProductive([observation])).toBe(false);
@@ -269,7 +288,7 @@ describe("hardened coordination liveness boundaries", () => {
     const current = await teams.readConfig(fixture.name);
     current.members.push(member({ name: "worker", membershipId: "stale", sessionFile: "stale-session" }));
     teams.writeConfigAtomic(paths.configPath(fixture.name), current);
-    const observation = await readWorkerRunObservation(fixture.name, current.members.at(-1)!);
+    const observation = await readWorkerRunObservation(fixture.name, current.members.at(-1)!, livenessQueries);
     expect(observation).toMatchObject({ state: "unknown", actuationPending: false });
     expect(livenessIsComplete([observation])).toBe(false);
   });

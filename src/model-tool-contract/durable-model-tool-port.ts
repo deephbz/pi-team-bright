@@ -1,9 +1,6 @@
 import type { AlertSender } from "../alert-authority/contracts";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
-import { projectNonterminalTaskIds, projectTaskChanges, type BeadsTaskAdapterFactory } from "./beads-task-adapter";
-import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
-import type { CoordinationQueryBundle } from "../coordination/queries";
-import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
+import type { BeadsTaskAdapterFactory } from "./beads-task-adapter";
 import { resolveTeamTaskAuthority } from "./beads-authority-adapter";
 import { CoordinationObservationService } from "../coordination/observation-service";
 import { DurableModelToolBindings } from "./durable-model-tool-bindings";
@@ -32,18 +29,17 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
   readonly coordination: DurableModelToolCoordinationApplication;
 
   constructor(
-    launchBridge?: WorkerLaunchBridge,
-    lifecycle?: ModelToolLifecycle,
-    taskAdapterFactory?: BeadsTaskAdapterFactory,
-    alertSender?: AlertSender,
-    coordinationQueries: CoordinationQueryBundle = createDurableCoordinationQueries(),
-    observationService?: CoordinationObservationService,
+    launchBridge: WorkerLaunchBridge | undefined,
+    lifecycle: ModelToolLifecycle | undefined,
+    taskAdapterFactory: BeadsTaskAdapterFactory,
+    alertSender: AlertSender | undefined,
+    observationService: CoordinationObservationService,
   ) {
     const bindings = new DurableModelToolBindings();
     this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, { resolve: resolveTeamTaskAuthority });
     this.task = new DurableModelToolTaskApplication(bindings, taskAdapterFactory);
     this.alert = new DurableModelToolAlertApplication(bindings, alertSender);
-    this.coordination = new DurableModelToolCoordinationApplication(bindings, observationService ?? new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges }, undefined, undefined, createDurableCoordinationNudgeStore()));
+    this.coordination = new DurableModelToolCoordinationApplication(bindings, observationService);
   }
 
   createTeam(...args: Parameters<DurableModelToolTeamApplication["createTeam"]>) { return this.team.createTeam(...args); }

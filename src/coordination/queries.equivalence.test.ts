@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DurableCoordinationTaskStateDeliveryQuery } from "../adapters/durable-coordination-task-state-delivery";
+import type { TaskAuthorityRecordEnvelope } from "../utils/beads";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import { createReadOnlyBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import type { CoordinationQueryBundle, CoordinationTaskReadOutcome } from "./queries";
 import { readWorkerRunObservation } from "../utils/sync-liveness";
 import { taskDeliveryPath } from "../utils/paths";
@@ -11,8 +12,14 @@ import { CoordinationObservationService } from "./observation-service";
 import { taskProjectionRevision } from "./task-projection-revision";
 import { projectToolResult } from "../model-tool-contract/result-projection";
 import { projectTui } from "../model-tool-contract/tui-projection";
+import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
 
 const teamName = "coordination-query-equivalence";
+const emptyReadFactory = createReadOnlyBeadsTaskAdapterFactory({
+  readTaskAuthorityRecordEnvelope: vi.fn(),
+  readTaskAuthorityRecordEnvelopes: vi.fn(async () => []),
+  listTaskIds: vi.fn(async () => []),
+});
 const task = {
   id: "task-a",
   title: "Canonical Task",
@@ -27,28 +34,37 @@ afterEach(() => vi.restoreAllMocks());
 describe("durable Coordination query equivalence", () => {
   it("preserves ordered multi-ID Task outcomes and typed hydration failure", async () => {
     const outcomes: CoordinationTaskReadOutcome[] = [
-      { kind: "found", task },
+      { kind: "found", task: { ...task, version: "v_5ee07e909280ff0e" } },
       {
         kind: "contract_gap",
-        reason: "task_metadata_invalid",
+        reason: "task_metadata_absent",
         taskId: "task-b",
-        version: "v_1111111111111111" as any,
-        message: "Task metadata is invalid.",
+        version: "v_5e86669cea4e8c4c" as any,
+        message: "Task task-b has no canonical pi_teams_task metadata; compatibility fields are not a Task definition.",
       },
       undefined,
     ];
-    const readMany = vi.spyOn(BeadsTaskAdapter.prototype, "readMany").mockResolvedValue(outcomes as any);
-    const query = new DurableCoordinationTaskStateDeliveryQuery();
+    const records: Array<TaskAuthorityRecordEnvelope | undefined> = [
+      { task: { id: "task-a", title: task.title, description: "Compatibility", acceptanceCriteria: "Compatibility", status: "open", relations: [], version: "raw-a", provenance: { authority: "beads" as const, teamName } }, taskMetadata: { schema: "pi-teams-task/1", goal: task.goal, current_context: task.current_context } },
+      { task: { id: "task-b", title: "Task b", description: "Compatibility", acceptanceCriteria: "Compatibility", status: "open", relations: [], version: "raw-b", provenance: { authority: "beads" as const, teamName } } },
+      undefined,
+    ];
+    const readPort = {
+      readTaskAuthorityRecordEnvelope: vi.fn(),
+      readTaskAuthorityRecordEnvelopes: vi.fn(async () => records),
+      listTaskIds: vi.fn(),
+    };
+    const query = new DurableCoordinationTaskStateDeliveryQuery(createReadOnlyBeadsTaskAdapterFactory(readPort));
 
     await expect(query.readTasks(teamName, ["task-a", "task-b", "task-c"])).resolves.toEqual(outcomes);
-    expect(readMany).toHaveBeenCalledOnce();
-    expect(readMany).toHaveBeenCalledWith(["task-a", "task-b", "task-c"]);
+    expect(readPort.readTaskAuthorityRecordEnvelopes).toHaveBeenCalledOnce();
+    expect(readPort.readTaskAuthorityRecordEnvelopes).toHaveBeenCalledWith(teamName, ["task-a", "task-b", "task-c"]);
   });
 
   it("reads only Task-delivery evidence for Coordination and distinguishes absent, pending, settled, and malformed records", async () => {
     const deliveryTeam = `coordination-delivery-evidence-${process.pid}-${Date.now()}`;
     const deliveryFile = taskDeliveryPath(deliveryTeam, "worker");
-    const query = new DurableCoordinationTaskStateDeliveryQuery();
+    const query = new DurableCoordinationTaskStateDeliveryQuery(emptyReadFactory);
     try {
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: false });
 
@@ -92,11 +108,11 @@ describe("durable Coordination query equivalence", () => {
     expect(queries.alertActuation.readInboxEvidence).toHaveBeenCalledWith(teamName, "worker");
   });
 
-  it("keeps the legacy DurableModelToolTeamPort constructor usable while production injects one query bundle", () => {
-    expect(() => new DurableModelToolTeamPort()).not.toThrow();
+  it("requires explicit composition for the legacy DurableModelToolTeamPort facade", () => {
+    expect(() => composedDurableModelToolPort()).not.toThrow();
     const root = process.cwd();
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
-    expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(\);/g)).toHaveLength(1);
+    expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory\);/g)).toHaveLength(1);
     expect(extension).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });
 

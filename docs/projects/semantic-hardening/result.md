@@ -1,6 +1,6 @@
 # Semantic hardening result
 
-Date: 2026-08-10
+Date: 2026-08-11
 Stage: consolidation and hardening
 Result revision: `5950f3b3f17124b9baf38afa48d839dc503d847b`
 Trio baseline: `c54dc25b34770b70afedffc7e87728da6376ee0f`
@@ -83,6 +83,32 @@ and
 The canonical non-self-referential source/test receipt covers 16 paths with
 SHA-256 digest
 `d6da537790c95ac42ef741c5aa2f1fdf6999966ac76c525190838b01d8f96219`.
+
+The accepted Task read boundary gives `TaskAuthorityReadPort<T>` and distinct
+`TaskAuthorityReadTeamPort` canonical homes in
+[`contracts.ts`](../../../src/task-authority/contracts.ts#L21). External durable
+read adapters and explicit read-only or publishing factories replace raw/default
+read paths. `BeadsTaskAdapter` has no default authority constructor. Independent
+acceptance passed its selected 28-file/207-test sweep, typecheck, lane closure,
+QA, package, public, and fence checks. No aggregate ran.
+
+Independent re-verification accepts `TaskChangeDelivery` behind its required
+consumer-owned `TaskDeliveryMembershipPort` ([`task-delivery.ts`](../../../src/utils/task-delivery.ts#L139)). The external durable adapter resolves the active exact recipient and holds both send and acknowledgement leases
+([`durable-task-change-delivery-membership.ts`](../../../src/adapters/durable-task-change-delivery-membership.ts#L5)). Composition injects it into the Pi Session adapter
+([`extensions/index.ts`](../../../extensions/index.ts#L345); [`pi-team-session-adapter.ts`](../../../extensions/pi-team-session-adapter.ts#L286)). The focused characterization preserves stale-target refusal, send/context-stage/acknowledgement order, replacement refusal, failed-send replay, and one acknowledgement. Stopped migration is not part of this boundary.
+
+Independent verification also accepts `PiSessionTeamQueryPort` and
+`CoordinationHiddenObservationPort`. The former moves Pi Session adapter Team
+queries behind its Team-owned read-only contract and external durable adapter.
+The latter moves hidden-observation projection reads and commits behind a
+Coordination-owned port and external durable adapter. Composition injects both.
+This closes those two target seams, but TeamConfig's mixed registry, Task/Team
+reverse dependencies, and Coordination runtime, event, and nudge-actuation
+seams remain open.
+
+These checks prove deterministic local source and harness behavior. They do not
+prove a real Pi process, Beads/Dolt contention, external writers, watcher
+delivery, OS scheduling, or terminal pixels. No aggregate ran.
 
 Durable lead-Session discovery moved verbatim from Pi composition to Team
 authority. Focused Team and Session tests plus an AST body comparison preserve

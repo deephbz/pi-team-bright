@@ -1,10 +1,13 @@
 # Accepted subsystem boundary audit
 
-Date: 2026-08-10
-Status: maintained semantic-hardening audit; accepted Membership reader commit
-`5950f3b3f17124b9baf38afa48d839dc503d847b` follows Trio split commit
-`69c30acf5db23be8f656b2a6821b0ea032ae04cb`. Team, Task, Alert, Coordination,
-Trio, and additive Membership observation boundaries are independently verified
+Date: 2026-08-11
+Status: maintained semantic-hardening audit; accepted uncommitted Task read and
+TaskChangeDelivery boundaries extend baseline
+`cb38d9254dd0cccb9e745a8df3edb27f367d852d`. They add generic read and
+exact-recipient delivery ports with external durable adapters and explicit
+composition. `PiSessionTeamQueryPort` and `CoordinationHiddenObservationPort`
+are independently verified. Remaining Team, Task, and Coordination target
+violations stay open.
 Reviewed baseline revision: `8f2da7c5c13ab11aebbdfa6f297219ddf5e4b571`
 (`audit/semantic-hardening-behavior-inventory`), based on public rc.10 integration
 revision `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
@@ -90,7 +93,11 @@ AST scan uses the same method: static relative TypeScript `import` and
 re-export declarations resolved to selected production files, counted as
 ordered declaration edges, with Tarjan SCC and literal runtime dynamic imports
 separately scanned. It reports 112 files and 425 edges, with no nontrivial SCC,
-self-cycle, or runtime dynamic import expression. The prior 87/285 Alert-port and
+self-cycle, or runtime dynamic import expression. The recomputed current graph
+for the Task read selection has 115 production TypeScript files, 20,017 lines,
+434 ordered import/re-export declaration edges (402 unique ordered file edges),
+no nontrivial SCC, no self-cycle, and no literal relative runtime dynamic
+import. The prior 87/285 Alert-port and
 92/304 slice-B query counts remain historical evidence for earlier slices. The prior hidden dynamic Task-adapter cycle remains removed, and the
 Task mutation path no longer imports concrete publication writers. Type-query
 `import("...")` syntax is not a dynamic import expression.
@@ -171,10 +178,10 @@ lead-Session discovery now lives in `findLeadTeamForSession`
 
 Team compatibility is not isolated. `TeamConfig` also carries resolved sync-
 liveness policy, historical implementation provenance, Beads authority,
-workspace, fingerprint, and Task-cutover fields (`src/utils/models.ts:61`).
+workspace, fingerprint, and Task-cutover fields (`src/utils/models.ts`).
 `createTeam` captures sync-liveness settings once for the Team epoch
-(`src/model-tool-contract/durable-model-tool-port.ts:204`,
-`src/model-tool-contract/durable-model-tool-port.ts:239`), while current
+(`src/model-tool-contract/durable-model-tool-port.ts`,
+`src/model-tool-contract/durable-model-tool-port.ts`), while current
 compatibility no longer treats package version as a storage coordinate. This is
 required current behavior, but it makes TeamConfig a shared persistence
 envelope instead of a narrow Team contract.
@@ -187,7 +194,7 @@ The canonical Task card and version contracts remain `task-domain.ts` plus
 `TaskReconciliationQuery`. `BeadsTaskReconciliationQuery` implements that query
 for one Team-scoped authority in
 `src/task-authority/beads-reconciliation-query.ts`; the Pi composition root
-injects it into `TaskChangeDelivery` (`extensions/index.ts:791`).
+injects it into `TaskChangeDelivery` (`extensions/index.ts`).
 `BeadsTaskAdapter` owns metadata parsing, bounded TaskCard projection, opaque
 versions, replay, CAS, and semantic outcomes
 (`src/model-tool-contract/beads-task-adapter.ts:295`,
@@ -206,19 +213,27 @@ authority (`src/adapters/durable-task-mutation-publication.ts:44`). It implement
 the port with the existing Team-event, failed-hint, Task-delivery, recovery,
 suppression, and owner-transition operations. The Pi composition root constructs
 one publishing Beads adapter factory and supplies it to leader and Worker paths
-(`extensions/index.ts:406`, `extensions/index.ts:435`,
-`extensions/index.ts:1328`). Default `BeadsTaskAdapter` construction remains
-read-only (`src/model-tool-contract/beads-task-adapter.ts:384`).
+([`extensions/index.ts:343`](../../../extensions/index.ts#L343)).
+`BeadsTaskAdapter` has no default authority constructor: explicit read-only and
+publishing factories supply its required authority
+([`src/model-tool-contract/beads-task-adapter.ts:362`](../../../src/model-tool-contract/beads-task-adapter.ts#L362)).
 
-`task-delivery.ts` currently owns Task-delivery meaning: exact recipient intent,
-precommit owner-transition markers, committed projections, recovery records,
-tombstones, presentation attempts, and successful-turn acknowledgement
-(`src/utils/task-delivery.ts:45`, `src/utils/task-delivery.ts:340`,
-`src/utils/task-delivery.ts:824`). Session steer is actuation only. A successful
-turn acknowledges presentation but never mutates Task state
-(`src/utils/task-delivery.ts:950`). The current causal inventory maps assignment,
-exact-Session presentation, acknowledgement, and leader observation
-(`src/utils/causal-path.inventory.json`).
+`task-delivery.ts` owns Task-delivery meaning: exact recipient intent, precommit
+owner-transition markers, committed projections, recovery records, tombstones,
+presentation attempts, and successful-turn acknowledgement. Its required
+consumer-owned `TaskDeliveryMembershipPort` resolves the current recipient and
+runs both send and acknowledgement under the exact-recipient lease
+([`src/utils/task-delivery.ts:139`](../../../src/utils/task-delivery.ts#L139),
+[`src/utils/task-delivery.ts:978`](../../../src/utils/task-delivery.ts#L978),
+[`src/utils/task-delivery.ts:1037`](../../../src/utils/task-delivery.ts#L1037)).
+`DurableTaskChangeDeliveryMembership` implements the Team read and lease outside
+Task delivery ([`src/adapters/durable-task-change-delivery-membership.ts:5`](../../../src/adapters/durable-task-change-delivery-membership.ts#L5)). Pi composition supplies it to the Session adapter
+([`extensions/index.ts:345`](../../../extensions/index.ts#L345);
+[`extensions/pi-team-session-adapter.ts:286`](../../../extensions/pi-team-session-adapter.ts#L286)).
+Session steer is actuation only. A successful turn acknowledges presentation but
+never mutates Task state. The characterization proves stale-recipient refusal,
+send/stage/acknowledgement order, replacement refusal, failed-send replay, and
+one acknowledgement ([`src/utils/task-change-delivery.characterization.test.ts`](../../../src/utils/task-change-delivery.characterization.test.ts)).
 
 Task and delivery migration remain stopped-epoch compatibility paths in
 `task-migration.ts` and `task-delivery-migration.ts`. Normal delivery refuses
@@ -226,6 +241,13 @@ noncanonical records with an explicit migration requirement
 (`src/utils/task-delivery.ts:671`). `in-memory-team-port.ts` temporarily
 re-exports `ModelToolTaskUpdateInput` and `ModelToolTaskJournalEntry` from the
 Task-owned contract module, so existing internal imports remain compatible.
+
+The accepted Task read seam owns generic `TaskAuthorityReadPort<T>` and the
+separate `TaskAuthorityReadTeamPort` ([`src/task-authority/contracts.ts:21`](../../../src/task-authority/contracts.ts#L21)). `DurableTaskAuthorityRead` binds the Team adapter, creates the native store, and preserves the `task_read`, `task_read_many`, and `task_list` semantic traces ([`src/adapters/durable-task-authority-read.ts:8`](../../../src/adapters/durable-task-authority-read.ts#L8)). `DurableTaskAuthorityReadTeam` alone reads the Team configuration and preserves legacy-JSON, missing-workspace, and incomplete-binding errors ([`src/adapters/durable-task-authority-read-team.ts:6`](../../../src/adapters/durable-task-authority-read-team.ts#L6)). The Beads adapter receives a required explicit read authority; read-only and publishing factories both delegate reads through the port ([`src/model-tool-contract/beads-task-adapter.ts:362`](../../../src/model-tool-contract/beads-task-adapter.ts#L362)). Pi composition constructs the durable readers once and injects them into the factories, Coordination query bundle, guard, and delivery reconciliation ([`extensions/index.ts:339`](../../../extensions/index.ts#L339); [`extensions/pi-team-session-adapter.ts:300`](../../../extensions/pi-team-session-adapter.ts#L300)). Raw Task read/list exports, `storeFor`, optional `readMany`/`list`, legacy read factories, and consumer defaults are removed.
+
+Independent acceptance from `cb38d9254dd0cccb9e745a8df3edb27f367d852d` passed the two binding files (14 tests), then the selected full-config changed/new sweep plus benchmark (28 files, 207 tests), typecheck, 113-file lane closure (92 fast, 21 exhaustive), agent-surface QA, tool-result QA, and clean-package/generated-dist verification. The public differential found only internal extension composition; package exports, `src/public`, observation configuration/declarations, raw/default fences, and trace/error/projection parity passed. This is not an aggregate result. An accidental unfiltered full-Vitest attempt ran earlier on an unstable tree, found blockers, and is historical non-aggregate evidence only.
+
+The accepted read and delivery seams change internal Task ownership and composition. Independent re-verification requires the mandatory delivery port, no local Team read or lease fallback, both exact-recipient leases, behavior/order parity, release-P1 fixture, typecheck, focused tests, public/persistence diffs, and source fences. No aggregate ran. This deterministic evidence does not prove a real Pi process, Beads/Dolt contention, external writers, native watcher delivery, OS scheduling, or terminal pixels. Stopped migration remains separate. Later accepted ports close the Pi Session Team-query and Coordination hidden-observation seams; remaining Team, Task, and Coordination target violations stay open.
 
 ### Alert authority
 
@@ -273,17 +295,17 @@ page cursor is the last represented event rather than the unseen journal head
 post-registration read closes the lost-wakeup gap
 (`src/utils/team-events.ts:424`).
 
-`hidden-observation.ts` owns acknowledged branch position. It keys state by Team
-epoch and exact lead Session, validates branch lineage, and commits only after
-Pi persists the exact result entry (`src/utils/hidden-observation.ts:169`,
-`src/utils/hidden-observation.ts:208`). `DurableModelToolTeamPort.readTeamSync`
+`CoordinationHiddenObservationPort` owns acknowledged branch projection reads
+and commits. `DurableCoordinationHiddenObservation` implements the existing
+hidden-record operations outside Coordination, and composition injects the
+resulting observation store ([`src/coordination/queries.ts:68`](../../../src/coordination/queries.ts#L68); [`src/adapters/durable-coordination-hidden-observation.ts:10`](../../../src/adapters/durable-coordination-hidden-observation.ts#L10); [`extensions/index.ts:351`](../../../extensions/index.ts#L351)). Exact Team epoch, lead Session, branch lineage, pending state, and commit-before-cache-reuse behavior remain characterized ([`src/coordination/hidden-observation-port.characterization.test.ts`](../../../src/coordination/hidden-observation-port.characterization.test.ts)). `DurableModelToolTeamPort.readTeamSync`
 now composes page-safe event reads, event-directed Task hydration, complete
 quiet-journal rescans, exact cached baselines, Worker run-state and actuation
 evidence, configured bounded waits, projection hashes, failed-event hint
 cursors, and pending acknowledgement
-(`src/model-tool-contract/durable-model-tool-port.ts:435`). It returns
+(`src/model-tool-contract/durable-model-tool-port.ts`). It returns
 `indeterminate` without position advance when run-state evidence cannot prove a
-productive or complete wait (`src/model-tool-contract/durable-model-tool-port.ts:513`).
+productive or complete wait (`src/model-tool-contract/durable-model-tool-port.ts`).
 
 Slice B introduces minimal Coordination-owned query DTOs in
 `src/coordination/queries.ts`: Team runtime evidence, Task state plus delivery
@@ -352,7 +374,7 @@ Task or Worker state (`src/model-tool-contract/result-projection.ts:300`).
 layer. Its process closure holds role, Team, Membership, delivery, tool, footer,
 model, and sync-nudge state (`extensions/index.ts:363`,
 `extensions/index.ts:376`). It also contains Worker
-schemas and execution beside the leader journey (`extensions/index.ts:1293`).
+schemas and execution beside the leader journey (`extensions/index.ts`).
 `team-status.ts` and `team-footer.ts` are human projections, but they import Team
 and Task implementations directly (`src/utils/team-status.ts:4`,
 `src/utils/team-status.ts:6`, `src/utils/team-footer.ts:9`).
@@ -390,7 +412,7 @@ never assert OS liveness. This is additive, not a core subsystem.
 3. **Resolved for reconciliation.** Task delivery imports the Task-owned query
    contract and receives its Beads implementation at composition. It contains
    no static or dynamic Beads Task-adapter import
-   (`src/utils/task-delivery.ts:18`, `extensions/index.ts:791`). The production
+   (`src/utils/task-delivery.ts:18`, `extensions/index.ts`). The production
    static file graph remains acyclic. Task mutation now uses the injected
    publication port, so reconciliation and publication dependencies both point
    through explicit seams.
@@ -401,11 +423,11 @@ never assert OS liveness. This is additive, not a core subsystem.
    injected query/store/wait/projection dependencies. `ModelToolTeamPort` still
    combines Team, Task, Alert, Coordination, launch context, sync-nudge debt,
    and the public observation entry points in one interface
-   (`src/model-tool-contract/in-memory-team-port.ts:162`). Its in-memory
+   (`src/model-tool-contract/in-memory-team-port.ts`). Its in-memory
    implementation stores Team state, Task state, replay records, event history,
    branch baselines, pending observations, and waiters in one `StoredTeam` and
-   class (`src/model-tool-contract/in-memory-team-port.ts:209`,
-   `src/model-tool-contract/in-memory-team-port.ts:273`). This test seam can make
+   class (`src/model-tool-contract/in-memory-team-port.ts`,
+   `src/model-tool-contract/in-memory-team-port.ts`). This test seam can make
    cross-authority atomicity appear easier than the durable system.
 
 5. `DurableModelToolTeamPort` still directly composes Task, Team, Alert,
@@ -417,7 +439,7 @@ never assert OS liveness. This is additive, not a core subsystem.
    without it, while `ensureWorker` refuses `carrier_unavailable` before a
    logical-Worker mutation when it is absent. Its five process maps hold Session
    files, launch context, branch lineage, pending observations, and exact
-   acknowledged Task projections (`src/model-tool-contract/durable-model-tool-port.ts:132`).
+   acknowledged Task projections (`src/model-tool-contract/durable-model-tool-port.ts`).
    It is a useful façade, not one subsystem port. The accepted nudge extraction
    removes nudge debt, identity, pagination, and record storage from this façade,
    but it deliberately leaves Pi exact-Session actuation and proof at the
@@ -446,16 +468,17 @@ never assert OS liveness. This is additive, not a core subsystem.
    exact-branch presentation, and owns hook order. `extensions/index.ts` wires
    composition, tool schemas, and leader branch observation. Envless Worker
    recovery re-projects only the Worker tool surface and suppresses leader branch
-   hooks (`src/utils/pi-session-adapter.characterization.test.ts`). The adapter
-   still directly queries Team configuration and exact Membership for resume,
-   delivery, status, and nudge revalidation; this is a remaining Team seam, not
-   a completed Team query boundary.
+   hooks (`src/utils/pi-session-adapter.characterization.test.ts`).
+   `PiSessionTeamQueryPort` now supplies Team resolution, exact binding,
+   placement, profile, and nudge-candidate reads. Its durable adapter keeps the
+   concrete Team operations outside Pi Session adaptation. TeamConfig mixed
+   compatibility remains a separate Team seam.
 
 7. `models.ts` and `paths.ts` act as shared registries. `models.ts` mixes Team,
    runtime carrier, Task relation, Coordination event, sync-liveness policy,
    Alert, and delivery Message types (`src/utils/models.ts:15`,
-   `src/utils/models.ts:61`, `src/utils/models.ts:105`,
-   `src/utils/models.ts:114`, `src/utils/models.ts:149`). `paths.ts` exposes
+   `src/utils/models.ts`, `src/utils/models.ts`,
+   `src/utils/models.ts`, `src/utils/models.ts`). `paths.ts` exposes
    every authority's private and derived records through one support module
    (`src/utils/paths.ts:26`, `src/utils/paths.ts:34`,
    `src/utils/paths.ts:39`, `src/utils/paths.ts:59`,
@@ -484,7 +507,7 @@ never assert OS liveness. This is additive, not a core subsystem.
    concrete Task query and Coordination write stay in durable adapters. A
    stopped-publication failure remains a characterized post-deactivation refusal,
    not evidence of rollback. Task creation still validates a logical Worker
-   (`src/model-tool-contract/durable-model-tool-port.ts:305`), so consumer-owned
+   (`src/model-tool-contract/durable-model-tool-port.ts`), so consumer-owned
    ports remain necessary to prevent source cycles.
 
 10. **Partly resolved in slice B.** Coordination now reads Team runtime, Task
@@ -492,8 +515,9 @@ never assert OS liveness. This is additive, not a core subsystem.
     DTOs. Three durable adapters keep concrete authority reads outside
     Coordination, and `WorkerRunObservation` is a pure derivation rather than
     another authority. `DurableModelToolTeamPort` and Pi composition still
-    combine broader Coordination behavior, while hidden observation retains its
-    concrete Team configuration check; these are later seams.
+    combine broader Coordination behavior. Hidden observation now uses its
+    Coordination-owned port; concrete runtime/event reads and nudge actuation
+    remain later seams.
 
 11. **Resolved for additive Membership observation.** The private reader
     decodes Team/runtime records and returns only narrow evidence and diagnoses.
@@ -503,6 +527,15 @@ never assert OS liveness. This is additive, not a core subsystem.
     order, privacy, old-record diagnoses, and package export behavior.
 
 ## Risks and unresolved test gates
+
+- `TASK-READ-PORT` and `TASK-CHANGE-DELIVERY-PORT` are closed by independent
+  acceptance. They prove the generic read port, distinct read-Team binding,
+  required exact-recipient delivery port, raw/default removal, trace/error/public
+  projection parity, and delivery ordering. They do not prove live process,
+  storage contention, external writers, watchers, scheduling, or terminal
+  behavior. Stopped migration remains separate. The Pi Session Team-query and
+  Coordination hidden-observation seams are closed; remaining Team, Task, and
+  Coordination target violations stay open.
 
 - `ALERT-PUBLICATION-FAILURE` is classified compatibility-required for this
   behavior-identical Project. Alert delivery records can be accepted before
@@ -574,8 +607,8 @@ public dependency. These risks do not authorize behavior changes.
   deactivates only after exact carrier-stop proof
   (`src/team-authority/worker-launch-bridge.ts:468`, `:474`).
 - Process startup order is runtime-generation claim, Membership Session bind,
-  then `session_bound` event (`extensions/index.ts:909`,
-  `extensions/index.ts:912`, `extensions/index.ts:915`). A post-claim failure
+  then `session_bound` event (`extensions/index.ts`,
+  `extensions/index.ts`, `extensions/index.ts`). A post-claim failure
   deliberately leaves a runtime fence until PID exit.
 - Normal Task mutation commits Beads first and releases the Membership lease,
   suppresses the acting Session when needed, appends event evidence, then
@@ -599,17 +632,17 @@ public dependency. These risks do not authorize behavior changes.
   120 seconds and settings bound it from zero through 3,600 seconds
   (`src/utils/sync-liveness-settings.ts:6`,
   `src/utils/sync-liveness-settings.ts:8`,
-  `src/model-tool-contract/durable-model-tool-port.ts:204`,
-  `src/model-tool-contract/durable-model-tool-port.ts:239`). `team_sync` must
+  `src/model-tool-contract/durable-model-tool-port.ts`,
+  `src/model-tool-contract/durable-model-tool-port.ts`). `team_sync` must
   publish one complete observation or none; `indeterminate` does not advance
   position, and hidden state advances only after the exact result persists on
-  the active branch (`src/model-tool-contract/durable-model-tool-port.ts:513`,
+  the active branch (`src/model-tool-contract/durable-model-tool-port.ts`,
   `extensions/index.ts:475`).
 - Runtime constants of 90 seconds for heartbeat staleness, 60 seconds for
   startup stall, and five minutes for stale files are diagnostic policy, not
   work state (`src/utils/runtime.ts:11`, `src/utils/runtime.ts:12`,
   `src/utils/runtime.ts:13`). Membership observation has a separate
-  one-second default deadline (`src/public/observation.ts:105`). Coordination
+  one-second default deadline (`src/public/observation.ts`). Coordination
   run state uses exact generation and actuation evidence instead of heartbeat or
   terminal activity (`src/utils/sync-liveness.ts:27`).
 - Alert fan-out is per-recipient and partial. Accepted inbox writes precede one
@@ -638,10 +671,11 @@ nontrivial SCC. The source digest is
 `51d579ca88e5ba184bc1088121a5bb3e3bdae7de7d35e652586528c55a0dbe40`.
 
 Task reconciliation and mutation publication remain closed Task seams. The
-Membership projection, Alert ports, and Trio split are complete. The matrix
-keeps Team/Task concrete reverse dependencies and the proposed Coordination
-worker-run observation query open because they remain target violations. Close
-those gates before performance, aggregate, privacy, and watchdog gates. The matrix records every remaining concrete or
+Membership projection, Alert ports, Trio split, Pi Session Team-query, and
+Coordination hidden-observation ports are complete. The matrix keeps Team/Task
+concrete reverse dependencies plus Coordination runtime, event, and nudge-
+actuation seams open because they remain target violations. Close those gates
+before performance, aggregate, privacy, and watchdog gates. The matrix records every remaining concrete or
 support-mediated seam, its source paths, required source fence, focused test
 command, blocker, and safe order. It does not treat the acyclic current file
 graph as a completed authority split: the main remaining violations are Team
@@ -727,8 +761,8 @@ at the composition root.
    hidden acknowledgement. It receives Coordination queries, durable storage,
    wait, and projection dependencies; the facade delegates. Preserve failed-event
    hints, nudge debt, outputs, cursors, waits, acknowledgement, and the
-   five-second cadence. Nudge actuation, the Trio facade, and the
-   hidden-observation Team query remain later seams. The unused
+   five-second cadence. Nudge actuation, the Trio facade, and concrete
+   Coordination runtime/event reads remain later seams. The unused
    `readAllNudgeEvents` helper is later local cleanup.
 7. **Partly implemented.** Durable lead-Session discovery, Worker carrier
    publication/observation, Team stop/shutdown policy, and Team Session

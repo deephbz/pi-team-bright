@@ -93,31 +93,6 @@ export async function resolveTeamTaskAuthority(teamName: string): Promise<Resolv
   return { workspace, authorityId: `task_authority_${crypto.randomUUID()}`, fingerprint };
 }
 
-async function storeFor(teamName: string, teamPort?: TaskAuthorityTeamPort): Promise<BeadsTaskStore> {
-  if (teamPort) {
-    const binding = await teamPort.binding(teamName);
-    return new BeadsTaskStore({ teamName: binding.teamName, workspace: binding.workspace, authorityFingerprint: binding.authorityFingerprint as BeadsAuthorityFingerprint, requireExpectedVersion: false });
-  }
-  // Internal compatibility debt: direct callers retain the historical Team helper path.
-  const config = await readConfig(teamName);
-  if (config.taskBackend !== "beads") {
-    const target = process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
-    throw new Error(`Team ${teamName} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${teamName} ${target}`);
-  }
-  if (!config.taskWorkspace) {
-    throw new Error(`Team ${teamName} is configured for Beads but has no taskWorkspace. Re-run migration configuration; legacy task files are not a fallback.`);
-  }
-  if (!config.taskAuthorityId || !config.taskAuthorityFingerprint) {
-    throw new Error(`Team ${teamName} has an incomplete Beads Task authority binding.`);
-  }
-  return new BeadsTaskStore({
-    teamName,
-    workspace: config.taskWorkspace!,
-    authorityFingerprint: config.taskAuthorityFingerprint,
-    requireExpectedVersion: false,
-  });
-}
-
 function storeForConfig(config: TeamConfig): BeadsTaskStore {
   if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
     throw new Error(`Team ${config.name} has no complete Beads Task authority binding.`);
@@ -495,29 +470,6 @@ export async function createTask(
       publication: publication.evidence,
     };
   });
-}
-
-export async function readTaskAuthorityRecordEnvelope(
-  teamName: string,
-  taskId: string,
-): Promise<TaskAuthorityRecordEnvelope> {
-  return withSemanticTrace("task_read",  { teamName, taskId }, async () =>
-    (await storeFor(teamName)).readTaskAuthorityRecordEnvelope(taskId));
-}
-
-/** Read canonical Task metadata for exact Task IDs with one authority query. */
-export async function readTaskAuthorityRecordEnvelopes(
-  teamName: string,
-  taskIds: readonly string[],
-): Promise<Array<TaskAuthorityRecordEnvelope | undefined>> {
-  return withSemanticTrace("task_read_many",  { teamName }, async () =>
-    (await storeFor(teamName)).readTaskAuthorityRecordEnvelopes(taskIds));
-}
-
-/** Select Task IDs from the compact Team-scoped list surface. */
-export async function listTaskIds(teamName: string): Promise<string[]> {
-  return withSemanticTrace("task_list",  { teamName }, async () =>
-    (await storeFor(teamName)).list()).then((listed) => listed.map((task) => task.id));
 }
 
 export async function mutateTaskLink(

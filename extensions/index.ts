@@ -16,17 +16,22 @@ import { DurableAssignedWorkGuard } from "../src/adapters/durable-assigned-work-
 import { DurableTeamLifecyclePublication } from "../src/adapters/durable-team-lifecycle-publication";
 import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
-import { createPublishingBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
+import { createPublishingBeadsTaskAdapterFactory, createReadOnlyBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import { resolveTeamTaskAuthority } from "../src/model-tool-contract/beads-authority-adapter";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableTaskAuthorityTeam } from "../src/adapters/durable-task-authority-team";
+import { DurableTaskAuthorityRead } from "../src/adapters/durable-task-authority-read";
+import { DurableTaskAuthorityReadTeam } from "../src/adapters/durable-task-authority-read-team";
+import { DurableTaskChangeDeliveryMembership } from "../src/adapters/durable-task-change-delivery-membership";
+import { DurablePiSessionTeamQuery } from "../src/adapters/durable-pi-session-team-query";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
 import { DurableCoordinationNudgeRecord } from "../src/adapters/durable-coordination-nudge-record";
 import { createDurableCoordinationNudgeStore } from "../src/adapters/durable-coordination-nudge-store";
 import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
-import { CoordinationObservationService } from "../src/coordination/observation-service";
+import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../src/coordination/observation-service";
+import { DurableCoordinationHiddenObservation } from "../src/adapters/durable-coordination-hidden-observation";
 import type { TaskCard, TaskCardWarning } from "../src/task-authority/task-domain";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
@@ -333,18 +338,30 @@ export default function (pi: ExtensionAPI) {
   }
 
   const taskAuthorityTeam = new DurableTaskAuthorityTeam();
-  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), taskAuthorityTeam);
+  const taskAuthorityReadTeam = new DurableTaskAuthorityReadTeam();
+  const taskAuthorityRead = new DurableTaskAuthorityRead(taskAuthorityReadTeam);
+  const taskReadAdapterFactory = createReadOnlyBeadsTaskAdapterFactory(taskAuthorityRead);
+  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), taskAuthorityTeam, taskAuthorityRead);
   const alertMembership = new DurableAlertMembership();
+  const taskDeliveryMembership = new DurableTaskChangeDeliveryMembership();
+  const piSessionTeamQuery = new DurablePiSessionTeamQuery();
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
-  const coordinationQueries = createDurableCoordinationQueries();
-  const coordinationNudgeStore = createDurableCoordinationNudgeStore();
-  const coordinationObservationService = new CoordinationObservationService(coordinationQueries, { projectNonterminalTaskIds, projectTaskChanges }, undefined, undefined, coordinationNudgeStore);
+  const coordinationQueries = createDurableCoordinationQueries(taskReadAdapterFactory);
+  const coordinationHiddenObservation = new DurableCoordinationHiddenObservation();
+  const coordinationNudgeStore = createDurableCoordinationNudgeStore(coordinationHiddenObservation);
+  const coordinationObservationService = new CoordinationObservationService(
+    coordinationQueries,
+    { projectNonterminalTaskIds, projectTaskChanges },
+    createDurableCoordinationObservationStore(coordinationHiddenObservation),
+    undefined,
+    coordinationNudgeStore,
+  );
   const nudgeRecords = new DurableCoordinationNudgeRecord();
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const teamLifecycleService = new TeamLifecycleService({
-    assignedWorkGuard: new DurableAssignedWorkGuard(),
+    assignedWorkGuard: new DurableAssignedWorkGuard(taskReadAdapterFactory),
     lifecyclePublication,
   });
   const teamSessionLifecycleService = new TeamSessionLifecycleService(lifecyclePublication);
@@ -476,7 +493,10 @@ export default function (pi: ExtensionAPI) {
     projectTrust,
     lifecyclePublication,
     alertMembership,
+    taskDeliveryMembership,
     nudgeRecords,
+    taskReadAdapterFactory,
+    teamQuery: piSessionTeamQuery,
     leaderToolNames,
     workerToolNames,
     refreshAlertToolProjection,

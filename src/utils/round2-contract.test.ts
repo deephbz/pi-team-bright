@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import { BeadsTaskStore, readBeadsAuthorityFingerprint, TASK_METADATA_KEY, TASK_METADATA_SCHEMA } from "./beads";
 import { projectTaskCard } from "../model-tool-contract/beads-task-adapter";
 import * as paths from "./paths";
@@ -96,6 +97,7 @@ describe("Round 2 Task delivery contracts", () => {
       recipient: "worker",
       sessionFile: "/tmp/restart-only.jsonl",
       pollMs: 10,
+      membership: taskDeliveryMembership,
       reconcile,
     });
     await delivery.start([]);
@@ -126,6 +128,7 @@ describe("Round 2 Task delivery contracts", () => {
       teamName: name,
       recipient: "worker",
       sessionFile,
+      membership: taskDeliveryMembership,
       reconcile: async () => 0,
     });
     await delivery.start([]);
