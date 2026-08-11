@@ -3,7 +3,6 @@ import path from "node:path";
 import { taskVersionRef } from "../task-authority/task-version-ref";
 import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
-import { readConfig } from "./teams";
 import { teamEventJournalPath, teamDir } from "./paths";
 import { writeJsonAtomic } from "./atomic-json";
 
@@ -12,6 +11,11 @@ export interface MigrationReceipt {
   converted: number;
   unresolved: number;
   failed: number;
+}
+
+/** Team-owned stopped-epoch guard required by Task-delivery migration. */
+export interface TaskDeliveryStoppedEpochPort {
+  isStoppedEpoch(teamName: string): Promise<boolean>;
 }
 
 export class UpgradeRequiredError extends Error {
@@ -201,9 +205,12 @@ function migrateEvent(
  * and canonical Task reads before it writes any delivery or journal file.
  * Worker events remain evidence-only records and are never Task-normalized.
  */
-export async function migrateLegacyTaskDeliveryEpoch(teamName: string, factory: BeadsTaskAdapterFactory): Promise<MigrationReceipt> {
-  const config = await readConfig(teamName).catch(() => undefined);
-  if (config?.members.some((member) => member.isActive !== false)) {
+export async function migrateLegacyTaskDeliveryEpoch(
+  teamName: string,
+  factory: BeadsTaskAdapterFactory,
+  stoppedEpoch: TaskDeliveryStoppedEpochPort,
+): Promise<MigrationReceipt> {
+  if (!await stoppedEpoch.isStoppedEpoch(teamName)) {
     throw upgradeRequired(`Team ${teamName} is active; stop every Team Membership before running the stopped-epoch migration.`);
   }
 

@@ -37,12 +37,16 @@ report records the outcome, evidence, optimization choices, and limits.
 Commit `241622f` preserves `TaskAuthorityProvisioningPort` as the Task-owned
 creation and reconnection snapshot boundary. Its durable adapter stays outside
 Team application code. The focused adapter and durable-port run passed 38 tests,
-and TypeScript passed before commit. A fresh restart Team produced required
-Worker-authored preflight events, but every Worker reported `gpt-5.6-sol:high`.
-The leader rejected and stopped them before inspection or edits. Therefore no
-wrong-model result supports this commit, and compliant independent verification
-and the remaining structural gates are still required. The reserved aggregate did
-not run.
+and TypeScript passed before commit. The corrected continuation Team required
+Worker-authored Terra-medium preflight evidence before inspection. Independent
+verification then accepted the Task stopped-epoch migration, Coordination event
+journal, and TeamConfig compatibility partitions. It passed two focused runs of
+30 and 44 tests, TypeScript, compatibility and static-fence checks, and diff
+checks. Pi exact-Session nudge actuation remains intentional; its failed-send
+case now has focused regression evidence. The one reserved aggregate later ran
+at `a5db88a` and failed 16 stale-fixture classes. Focused corrections passed
+independently, but the exact corrected tree has no aggregate proof because the
+owner prohibited a rerun.
 
 ## Commit series
 

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { BeadsTaskStore } from "./beads";
 import type { TaskAuthorityRecord } from "./beads";
 import { teamDir } from "./paths";
+import * as eventJournal from "../coordination/event-journal";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
 import * as failureHints from "./task-event-failure-hints";
@@ -112,7 +113,7 @@ describe("Task-event publication", () => {
     vi.spyOn(BeadsTaskStore.prototype, "updateWithResult")
       .mockResolvedValueOnce({ before: workerBefore, after: workerAfter, appliedOperations: ["set:status"] })
       .mockResolvedValueOnce({ before: leaderBefore, after: leaderAfter, appliedOperations: ["set:status"] });
-    vi.spyOn(teamEvents, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
+    vi.spyOn(eventJournal, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
 
     const worker = await applySemanticTaskUpdate(teamName, workerBefore.id, { status: "in_progress" }, { actor: "worker" });
     const leader = await applySemanticTaskUpdate(teamName, leaderBefore.id, { status: "in_progress" }, { actor: "team-lead" });
@@ -136,7 +137,7 @@ describe("Task-event publication", () => {
     const before = task(teamName);
     const after = task(teamName, { status: "in_progress", version: "hint-failure-v2" });
     vi.spyOn(BeadsTaskStore.prototype, "updateWithResult").mockResolvedValue({ before, after, appliedOperations: ["set:status"] });
-    vi.spyOn(teamEvents, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
+    vi.spyOn(eventJournal, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
     vi.spyOn(failureHints, "appendTaskEventFailureHint").mockRejectedValue(new Error("hint store unavailable"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 

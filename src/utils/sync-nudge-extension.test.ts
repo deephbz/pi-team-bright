@@ -222,6 +222,36 @@ describe("resumed leader sync nudge binding", () => {
     await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
   });
 
+  it("keeps a reservation unpresented when Pi Session nudge actuation fails", async () => {
+    vi.useFakeTimers();
+    const name = teamName("actuation-failure");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const sessionId = `pi-session-${name}`;
+    const config = await createTeam(name, sessionFile);
+    const lead = config.members.find((member) => member.name === "team-lead")!;
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
+    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", name);
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
+      kind: "eligible", debtKey: "failed-actuation", requestedView: "updates", teamEpochId: config.epochId!,
+      leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!, branchLineage: ["root"], branchId: "root", policyVersion: "test",
+    });
+    const handlers = registerExtension(branch, [], () => { throw new Error("Pi Session send failed"); });
+    const resumed = context(sessionFile, sessionId, branch);
+
+    await handlers.get("session_start")!({ reason: "resume" }, resumed);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(readSyncNudgeRecords(name)).toEqual([
+      expect.objectContaining({ kind: "reserved", debtKey: "failed-actuation", branchLineage: ["root"] }),
+    ]);
+    expect(readSyncNudges(name)).toEqual([]);
+    expect(branch).toHaveLength(1);
+
+    await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
+  });
+
   it("suppresses forked Sessions and real stale/unbound port bindings", async () => {
     const readDebt = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({ kind: "eligible", debtKey: "must-not-read", requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "test" });
     const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];

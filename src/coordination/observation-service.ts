@@ -1,4 +1,4 @@
-import * as teamEvents from "../utils/team-events";
+import * as teamEvents from "../coordination/event-journal";
 import { currentMember, deriveWorkerRunObservation, livenessIsComplete, livenessIsProductive, waitForLivenessHint, type WorkerRunObservation } from "../utils/sync-liveness";
 import { DEFAULT_SYNC_WAIT_SECONDS } from "../utils/sync-liveness-settings";
 import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hints";

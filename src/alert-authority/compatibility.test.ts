@@ -131,7 +131,7 @@ describe("Alert canonical authority compatibility", () => {
     const membershipAdapter = fs.readFileSync(path.join(root, "src/adapters/durable-alert-membership.ts"), "utf8");
     const publicationAdapter = fs.readFileSync(path.join(root, "src/adapters/durable-alert-publication.ts"), "utf8");
     expect(membershipAdapter).toContain("../utils/teams");
-    expect(publicationAdapter).toContain("../utils/team-events");
+    expect(publicationAdapter).toContain("../coordination/event-journal");
     const contracts = fs.readFileSync(path.join(root, "src/alert-authority/contracts.ts"), "utf8");
     expect(contracts).toContain("currentRecipients");
     expect(contracts).toContain("withCurrentDelivery");

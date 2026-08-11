@@ -5,7 +5,7 @@ import {
   recordTaskDeliveryRecovery,
   suppressTaskVersionForSession,
 } from "../utils/task-delivery";
-import { appendTaskEvidenceEvent } from "../utils/team-events";
+import { appendTaskEvidenceEvent } from "../coordination/event-journal";
 import { appendTaskEventFailureHint } from "../utils/task-event-failure-hints";
 import { readConfig } from "../utils/teams";
 import type {

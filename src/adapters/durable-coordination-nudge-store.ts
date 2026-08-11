@@ -1,4 +1,4 @@
-import * as teamEvents from "../utils/team-events";
+import * as teamEvents from "../coordination/event-journal";
 import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hints";
 import type { CoordinationNudgeStore } from "../coordination/nudge-debt";
 import type { CoordinationHiddenObservationPort } from "../coordination/queries";

@@ -1359,3 +1359,45 @@ changes; append a correction.
 - This entry records local evidence only. A compliant independent verification
   and every remaining structural gate are still required. The reserved aggregate
   did not run.
+
+## 2026-08-11 — corrected Terra continuation lanes accepted
+
+- Before Team creation, the direct coordinator verified `PI_PROVIDER=openai-codex`,
+  `PI_MODEL=gpt-5.6-terra`, `PI_MODEL_TOOL_WORKER_MODEL=openai-codex/gpt-5.6-terra:medium`,
+  medium reasoning, and nonempty `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`.
+- Six assigned Workers each recorded Terra-medium preflight evidence before source
+  inspection. One failed carrier was replaced, and its replacement recorded the
+  same preflight before it resumed. No model mismatch was accepted.
+- The Task stopped-epoch migration now receives `TaskDeliveryStoppedEpochPort`
+  from `DurableTaskDeliveryStoppedEpoch`; Task delivery no longer reads Team
+  configuration directly. Its focused suite passed 4 files and 33 tests, then
+  TypeScript and diff checks passed.
+- Coordination now owns the append-only event journal at
+  `src/coordination/event-journal.ts`; the historical utility path is a
+  compatibility re-export. Focused event-journal evidence passed 5 files and 26
+  tests. TeamConfig compatibility now composes Team, Coordination, and Task
+  field contracts while legacy exports and persisted shape remain stable; its
+  focused suite passed 3 files and 22 tests.
+- Pi exact-Session nudge actuation remains deliberate integration policy. A new
+  failure regression proves failed send leaves a reserved record without message
+  or promotion. The focused nudge suite passed 3 files and 27 tests.
+- Independent verification accepted the integrated selection: two focused runs
+  passed 6 files and 30 tests, then 8 files and 44 tests; TypeScript,
+  compatibility, static fences, and `git diff --check` passed. No aggregate ran.
+  This remains deterministic local evidence and does not prove a real Pi process,
+  external persistence or writers, contention, watcher delivery, OS scheduling,
+  or terminal pixels.
+
+## 2026-08-11 — reserved aggregate failed; focused recovery accepted
+
+- The one permitted `npm run test:full` on committed `a5db88a` ran TypeScript,
+  then reported 16 failures across sync hydration, lifecycle fixtures, cursor
+  failure fixtures, Worker admission, and Task event-publication fixtures.
+- Three canonical event-journal spy corrections passed focused 46-test and
+  3-test runs. Lifecycle fixture corrections passed 8 files and 83 tests.
+  Independent recovery verification passed two 3-file/49-test runs, TypeScript,
+  all 51 JSON parses, lane metadata (118 files: 97 fast and 21 exhaustive),
+  documentation links, and diff checks.
+- The owner prohibited another aggregate. Therefore the corrected exact tree
+  lacks an aggregate-pass claim. This is an owner-only release-proof blocker;
+  focused evidence does not replace the reserved aggregate receipt.

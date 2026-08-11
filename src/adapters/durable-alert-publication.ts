@@ -1,4 +1,4 @@
-import { appendTeamEvent } from "../utils/team-events";
+import { appendTeamEvent } from "../coordination/event-journal";
 import type {
   AlertPublicationInput,
   AlertPublicationPort,

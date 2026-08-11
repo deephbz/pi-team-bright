@@ -9,7 +9,10 @@ import {
   type BeadsTaskAdapterFactory,
 } from "../model-tool-contract/beads-task-adapter";
 import { configPath, taskDeliveryPath, teamDir, teamEventJournalPath } from "./paths";
+import { DurableTaskDeliveryStoppedEpoch } from "../adapters/durable-task-delivery-stopped-epoch";
 import { migrateLegacyTaskDeliveryEpoch } from "./task-delivery-migration";
+
+const stoppedEpoch = new DurableTaskDeliveryStoppedEpoch();
 
 const listTaskIdsMock = vi.fn<(teamName: string) => Promise<string[]>>();
 const readManyMock = vi.fn<(teamName: string, ids: readonly string[]) => Promise<Array<TaskAuthorityRecordEnvelope | undefined>>>();
@@ -89,6 +92,16 @@ beforeEach(() => {
 });
 
 describe("stopped-epoch Task delivery migration", () => {
+  it("uses the injected Team stopped-epoch guard", async () => {
+    const guard = { isStoppedEpoch: vi.fn(async () => false) };
+    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory, guard)).rejects.toMatchObject({ name: "upgrade_required" });
+    expect(guard.isStoppedEpoch).toHaveBeenCalledWith(team);
+    expect(listTaskIdsMock).not.toHaveBeenCalled();
+
+    const migration = fs.readFileSync("src/utils/task-delivery-migration.ts", "utf8");
+    expect(migration).not.toContain('from "./teams"');
+  });
+
   it("migrates mixed history without changing Worker evidence or surrounding evidence", async () => {
     stoppedConfig();
     const worker = {
@@ -131,8 +144,8 @@ describe("stopped-epoch Task delivery migration", () => {
       taskSnapshot: { id: "task-1", version: "raw-v2", legacy: "preserved-by-card" },
     }]));
 
-    const receipt = await migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory);
-      expect(receipt).toMatchObject({ scanned: 4, converted: 3, failed: 0, unresolved: 0 });
+    const receipt = await migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory, stoppedEpoch);
+    expect(receipt).toMatchObject({ scanned: 4, converted: 3, failed: 0, unresolved: 0 });
     const migratedJournal = fs.readFileSync(teamEventJournalPath(team), "utf8");
     expect(migratedJournal.split("\n")[0]).toBe(originalWorkerLine);
     expect(JSON.parse(migratedJournal.split("\n")[0])).toEqual(worker);
@@ -177,7 +190,7 @@ describe("stopped-epoch Task delivery migration", () => {
       at: "now",
     }]);
 
-    const receipt = await migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory);
+    const receipt = await migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory, stoppedEpoch);
     expect(receipt.converted).toBe(2);
     expect(listTaskIdsMock).toHaveBeenCalledTimes(1);
     expect(readManyMock).not.toHaveBeenCalled();
@@ -192,12 +205,12 @@ describe("stopped-epoch Task delivery migration", () => {
     writeJournal(journal);
     const journalBytes = fs.readFileSync(teamEventJournalPath(team));
     listTaskIdsMock.mockResolvedValue([]);
-    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory)).rejects.toMatchObject({ name: "upgrade_required" });
+    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory, stoppedEpoch)).rejects.toMatchObject({ name: "upgrade_required" });
     expect(fs.readFileSync(teamEventJournalPath(team))).toEqual(journalBytes);
     expect(readManyMock).not.toHaveBeenCalled();
 
     fs.writeFileSync(configPath(team), JSON.stringify({ name: team, members: [{ name: "lead", isActive: true }] }));
-    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory)).rejects.toMatchObject({ name: "upgrade_required" });
+    await expect(migrateLegacyTaskDeliveryEpoch(team, taskAdapterFactory, stoppedEpoch)).rejects.toMatchObject({ name: "upgrade_required" });
     expect(fs.readFileSync(teamEventJournalPath(team))).toEqual(journalBytes);
   });
 });

@@ -3,6 +3,9 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { THINKING_LEVELS as legacyThinkingLevels } from "./models";
 import { THINKING_LEVELS as canonicalThinkingLevels } from "../team-authority/contracts";
+import type { TeamConfig as CompatibilityTeamConfig } from "../team-authority/team-config-compatibility";
+import type { TeamConfigSyncLiveness } from "../coordination/team-config-sync-liveness";
+import type { TeamConfigTaskAuthority } from "../task-authority/team-config-task-authority";
 import {
   TaskCardSchema as legacyTaskCardSchema,
   TASK_CARD_CONTEXT_MAX_LENGTH as legacyTaskCardContextMaxLength,
@@ -83,6 +86,8 @@ type LegacyExportsRemainCanonical = [
   Expect<Equal<LegacyBeadsAuthorityFingerprint, BeadsAuthorityFingerprint>>,
   Expect<Equal<LegacyLogicalWorker, LogicalWorker>>,
   Expect<Equal<LegacyTeamConfig, TeamConfig>>,
+  Expect<Equal<TeamConfig, CompatibilityTeamConfig>>,
+  Expect<TeamConfig extends TeamConfigSyncLiveness & TeamConfigTaskAuthority ? true : false>,
   Expect<Equal<LegacyTaskStatus, TaskStatus>>,
   Expect<Equal<LegacyTaskRelationType, TaskRelationType>>,
   Expect<Equal<LegacyTaskRelation, TaskRelation>>,
@@ -116,8 +121,22 @@ describe("models compatibility and authority contract fences", () => {
     expect(legacyTaskVersionRef).toBe(canonicalTaskVersionRef);
   });
 
+  it("keeps TeamConfig compatibility at a typed consumer-owned seam", () => {
+    expect(imports("team-authority/contracts.ts")).toEqual([
+      "../task-authority/team-config-task-authority",
+      "./team-config-compatibility",
+    ]);
+    expect(imports("team-authority/team-config-compatibility.ts")).toEqual([
+      "../coordination/team-config-sync-liveness",
+      "../task-authority/team-config-task-authority",
+      "../utils/team-pane-layout",
+      "./contracts",
+    ]);
+    expect(imports("coordination/team-config-sync-liveness.ts")).toEqual([]);
+    expect(imports("task-authority/team-config-task-authority.ts")).toEqual([]);
+  });
+
   it("keeps authority contract imports free of Trio and authority implementations", () => {
-    expect(imports("team-authority/contracts.ts")).toEqual(["../utils/team-pane-layout"]);
     const taskContractImports = imports("task-authority/contracts.ts");
     expect(taskContractImports).toEqual(["./task-domain", "./task-version-ref"]);
     expect(taskContractImports).not.toContain("../utils/beads");

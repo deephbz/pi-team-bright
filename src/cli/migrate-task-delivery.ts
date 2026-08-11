@@ -1,6 +1,7 @@
 import { migrateLegacyTaskDeliveryEpoch } from "../utils/task-delivery-migration";
 import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 import { DurableTaskAuthorityReadTeam } from "../adapters/durable-task-authority-read-team";
+import { DurableTaskDeliveryStoppedEpoch } from "../adapters/durable-task-delivery-stopped-epoch";
 import { createReadOnlyBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 
 function usage(): never {
@@ -14,7 +15,11 @@ async function main(): Promise<void> {
   try {
     const team = new DurableTaskAuthorityReadTeam();
     const read = new DurableTaskAuthorityRead(team);
-    const receipt = await migrateLegacyTaskDeliveryEpoch(teamName, createReadOnlyBeadsTaskAdapterFactory(read));
+    const receipt = await migrateLegacyTaskDeliveryEpoch(
+      teamName,
+      createReadOnlyBeadsTaskAdapterFactory(read),
+      new DurableTaskDeliveryStoppedEpoch(),
+    );
     process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

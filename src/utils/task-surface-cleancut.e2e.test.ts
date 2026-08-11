@@ -33,6 +33,10 @@ const testRoots: string[] = [];
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 180_000 });
 
+// This applies only to the intentional two-Worker claim race below. It leaves
+// production's 5-second lock authority budget unchanged.
+const AGGREGATE_E2E_CLAIM_LOCK_RETRIES = 1_200;
+
 function uniqueTeam(suffix: string): string {
   const name = `task-surface-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
   testTeams.push(name);
@@ -288,11 +292,11 @@ describe("clean-cut Task public surface", () => {
     expect(directResult.content[0].text).not.toContain("deterministic test command");
 
     // This evaluator intentionally races two public-tool claims against the
-    // same Task. Under full-suite Beads load, the winner can hold the local
-    // Task lock across several `bd` subprocesses for longer than the default
-    // five-second wait budget. Extend only this test's claim budget so the
-    // evaluator still observes one committed claim and one stale-version
-    // refusal; a leaked lock still fails after the bounded 30-second budget.
+    // same Task. Under aggregate Beads load, the winner can hold the local
+    // Task lock across several `bd` subprocesses for longer than production's
+    // five-second authority budget. Extend only this evaluator's budget so it
+    // still observes one committed claim and one stale-version refusal. A
+    // leaked lock remains bounded to two minutes, below this test's timeout.
     const claimWithResult = BeadsTaskStore.prototype.claimWithResult;
     vi.spyOn(BeadsTaskStore.prototype, "claimWithResult").mockImplementation(function (
       this: BeadsTaskStore,
@@ -300,7 +304,7 @@ describe("clean-cut Task public surface", () => {
       actor?: string,
       options: TaskWriteOptions = {},
     ) {
-      return claimWithResult.call(this, taskId, actor, { ...options, retries: 300 });
+      return claimWithResult.call(this, taskId, actor, { ...options, retries: AGGREGATE_E2E_CLAIM_LOCK_RETRIES });
     });
 
     const claimResults = await Promise.all([
