@@ -56,6 +56,9 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
 
   const cases: QaCase[] = [];
   const fixtureTransitions: QaBundle["fixtureTransitions"] = [];
+  // Each call completes before the next starts, so the prior verified post-state
+  // is the next call's pre-state. This removes redundant Beads snapshot reads.
+  let previousSnapshot: unknown;
 
   try {
     // HOME must be isolated before these imports because PiTeams resolves its
@@ -233,6 +236,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
         tool,
         context: options.ctx,
         snapshot,
+        before: previousSnapshot,
         beforeExecute: async () => {
           await handlers?.get("tool_call")?.({ toolName: options.tool }, options.ctx);
         },
@@ -250,6 +254,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
           await handlers.get("before_provider_request")?.({ payload: result.content }, options.ctx);
         },
       });
+      previousSnapshot = captured.oracle.after;
       cases.push(captured);
       return captured;
     }

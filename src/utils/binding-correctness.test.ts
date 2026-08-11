@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { DurableAssignedWorkGuard } from "../adapters/durable-assigned-work-guard";
+import { DurableNonterminalAssignedTaskQuery } from "../adapters/durable-nonterminal-assigned-task-query";
 import * as messaging from "./messaging";
 import * as canonicalMessaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
@@ -221,7 +221,7 @@ describe("current team binding correctness", () => {
 
   it("never signals a numeric PID from a stale per-name pid file", async () => {
     vi.stubEnv("TMUX", "");
-    vi.spyOn(DurableAssignedWorkGuard.prototype, "nonterminalTaskIds").mockResolvedValue([]);
+    vi.spyOn(DurableNonterminalAssignedTaskQuery.prototype, "nonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
     const teamName = testTeamName("stale-pid");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
     await teams.createTeam(teamName, leadSession, "lead-agent");

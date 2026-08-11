@@ -153,11 +153,16 @@ export async function captureToolCase(options: {
   context: unknown;
   qaBrief: QaBrief;
   snapshot: () => Promise<unknown>;
+  /**
+   * Known authority state immediately before this sequential fixture call.
+   * The caller owns its provenance; capture still reads the post-call state.
+   */
+  before?: unknown;
   beforeExecute?: () => Promise<void>;
   afterExecute?: (result: { content: any[]; details: unknown }) => Promise<void>;
   signal?: AbortSignal;
 }): Promise<QaCase> {
-  const before = await options.snapshot();
+  const before = options.before ?? await options.snapshot();
   await options.beforeExecute?.();
   let threw = false;
   let result: any;
