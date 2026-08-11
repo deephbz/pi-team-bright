@@ -46,7 +46,7 @@ export class TeamLifecycleService {
       const member = [...config.members].reverse().find((candidate) => candidate.name === safeWorker && candidate.isActive !== false);
       if (!member) return { kind: "refused", worker: safeWorker, reason: "worker_not_found", message: `Worker ${safeWorker} is not current.` };
       if (member.name === "team-lead" || member.agentType === "lead") return { kind: "refused", worker: safeWorker, reason: "leader_reserved", message: "The Team leader is reserved; use team_shutdown for whole-Team closure." };
-      const guardingTaskIds = await this.dependencies.assignedWorkGuard.nonterminalTaskIds(safeTeamName, safeWorker);
+      const guardingTaskIds = await this.dependencies.assignedWorkGuard.nonterminalTaskIdsAssignedToWorker(safeTeamName, safeWorker);
       if (guardingTaskIds.length > 0) return { kind: "refused", worker: safeWorker, reason: "nonterminal_tasks_assigned", message: `Worker ${safeWorker} has nonterminal Tasks.`, guardingTaskIds };
       try {
         const changed = await this.transitionCurrentMembership(safeTeamName, member, "process_shutdown", true);

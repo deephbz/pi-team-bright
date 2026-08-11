@@ -74,6 +74,28 @@ function metadata(currentContext = "Work has not started."): TaskMetadata {
   };
 }
 
+function versionCompleteRaw(id: string) {
+  return {
+    id,
+    title: id,
+    description: "",
+    acceptance_criteria: "",
+    design: "",
+    notes: "",
+    parent: "",
+    status: "open" as const,
+    assignee: "",
+    updated_at: "2026-08-11T14:00:00.000Z",
+    labels: ["pi-teams:candidate-team"],
+    dependency_count: 0,
+    dependent_count: 0,
+    comment_count: 0,
+    dependencies: [],
+    dependents: [],
+    metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata(id) },
+  };
+}
+
 function authorityRecord(taskMetadata?: unknown): TaskAuthorityRecordEnvelope {
   return {
     task: task(),
@@ -292,10 +314,15 @@ describe("durable Task adapter", () => {
 
     const listCommands = commands.filter((args) => args[3] === "list");
     const showCommands = commands.filter((args) => args[3] === "show");
-    expect(listCommands).toHaveLength(1);
+    expect(listCommands).toHaveLength(2);
     expect(listCommands[0]).toEqual([
       "--directory", "/tmp/candidate-team-authority", "--json",
       "list", "--label", "pi-teams:candidate-team", "--all", "--no-pager", "--limit", "0",
+    ]);
+    expect(listCommands[1]).toEqual([
+      "--directory", "/tmp/candidate-team-authority", "--json",
+      "list", "--label", "pi-teams:candidate-team", "--all", "--no-pager", "--limit", "0",
+      "--id", ids.join(","),
     ]);
     expect(showCommands).toHaveLength(1);
     expect(showCommands[0]).toEqual([
@@ -333,11 +360,125 @@ describe("durable Task adapter", () => {
       { task: { id: "candidate-task-1" }, taskMetadata: metadata() },
       undefined,
     ]);
-    expect(run).toHaveBeenCalledOnce();
-    expect(run).toHaveBeenCalledWith([
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenLastCalledWith([
       "--directory", "/tmp/candidate-team-authority", "--json",
       "show", "candidate-task-1", "candidate-task-missing", "--include-dependents",
     ], { cwd: "/tmp/candidate-team-authority", timeoutMs: 10_000 });
+  });
+
+  it("uses exact metadata filtering for create replay instead of scanning the Team list", async () => {
+    const run = vi.fn(async (args: string[]) => {
+      expect(args).toEqual([
+        "--directory", "/tmp/candidate-team-authority", "--json",
+        "list", "--label", "pi-teams:candidate-team", "--all", "--no-pager", "--limit", "0",
+        "--metadata-field", "pi_teams_idempotency_key=model-task-create:candidate-team:replay-1",
+      ]);
+      return {
+        stdout: JSON.stringify([{
+          id: "candidate-task-1", title: "Candidate", status: "open", labels: ["pi-teams:candidate-team"],
+          metadata: { pi_teams_team: "candidate-team", pi_teams_idempotency_key: "model-task-create:candidate-team:replay-1", [TASK_METADATA_KEY]: metadata() },
+        }]), stderr: "", exitCode: 0,
+      };
+    });
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner: { run } });
+
+    await expect(store.createWithResult({ title: "Candidate", description: "Compatibility", idempotencyKey: "model-task-create:candidate-team:replay-1" })).resolves.toMatchObject({
+      replayed: true, task: { id: "candidate-task-1" },
+    });
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it("uses one fast exact-ID list for more than 100 relation-complete Tasks", async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `candidate-task-${index + 1}`);
+    const run = vi.fn(async (args: string[]) => {
+      expect(args[3]).toBe("list");
+      const requested = args[args.indexOf("--id") + 1]!.split(",");
+      return {
+        stdout: JSON.stringify([...requested].reverse().map(versionCompleteRaw)), stderr: "", exitCode: 0,
+      };
+    });
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner: { run } });
+
+    const records = await store.readTaskAuthorityRecordEnvelopes(ids);
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(records.map((record) => record?.task.id)).toEqual(ids);
+  });
+
+  it("falls back to show when list cannot prove relation and authority-version fidelity", async () => {
+    const run = vi.fn(async (args: string[]) => {
+      if (args[3] === "list") {
+        return {
+          stdout: JSON.stringify([{
+            id: "candidate-task-1", title: "Candidate", status: "open", labels: ["pi-teams:candidate-team"],
+            dependency_count: 1, dependent_count: 1, comment_count: 0,
+            metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata() },
+          }]), stderr: "", exitCode: 0,
+        };
+      }
+      return {
+        stdout: JSON.stringify([{
+          id: "candidate-task-1", title: "Candidate", status: "open", labels: ["pi-teams:candidate-team"],
+          dependency_count: 1, dependent_count: 1, comment_count: 0,
+          dependencies: [{ id: "blocker", dependency_type: "blocks" }],
+          dependents: [{ id: "related", dependency_type: "related" }],
+          metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata() },
+        }]), stderr: "", exitCode: 0,
+      };
+    });
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner: { run } });
+
+    const [record] = await store.readTaskAuthorityRecordEnvelopes(["candidate-task-1"]);
+
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(run.mock.calls[1]![0][3]).toBe("show");
+    expect(record?.task).toMatchObject({
+      relations: [
+        { relation: "blocked_by", targetId: "blocker" },
+        { relation: "related", targetId: "related" },
+      ],
+      version: expect.stringMatching(/^beads_/),
+    });
+  });
+
+  it("avoids a forced 16-ID show timeout when exact list records prove relation and version fidelity", async () => {
+    const ids = Array.from({ length: 16 }, (_, index) => `candidate-task-${index + 1}`);
+    const run = vi.fn(async (args: string[]) => {
+      if (args[3] === "show") return { stdout: "", stderr: "forced 16-ID timeout", exitCode: 124 };
+      const requested = args[args.indexOf("--id") + 1]!.split(",");
+      return {
+        stdout: JSON.stringify(requested.map(versionCompleteRaw)), stderr: "", exitCode: 0,
+      };
+    });
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner: { run } });
+
+    await expect(store.readTaskAuthorityRecordEnvelopes(ids)).resolves.toHaveLength(16);
+    expect(run).toHaveBeenCalledOnce();
+    expect(run.mock.calls[0]![0][3]).toBe("list");
+  });
+
+  it("matches canonical show authority envelope and version when exact list supplies every version input", async () => {
+    const raw = {
+      ...versionCompleteRaw("candidate-task-1"),
+      dependency_count: 1,
+      dependent_count: 1,
+      dependencies: [{ id: "blocker", dependency_type: "blocks" }],
+      dependents: [{ id: "related", dependency_type: "related" }],
+    };
+    const run = vi.fn(async (_args: string[]) => ({ stdout: JSON.stringify([raw]), stderr: "", exitCode: 0 }));
+    const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner: { run } });
+
+    const [listed] = await store.readTaskAuthorityRecordEnvelopes([raw.id]);
+    const shown = await store.readTaskAuthorityRecordEnvelope(raw.id);
+
+    expect(listed).toEqual(shown);
+    expect(listed?.task.version).toEqual(shown.task.version);
+    expect(listed?.task.relations).toEqual([
+      { relation: "blocked_by", targetId: "blocker" },
+      { relation: "related", targetId: "related" },
+    ]);
+    expect(run.mock.calls.map(([args]) => args[3])).toEqual(["list", "show"]);
   });
 
   it("splits large hydrations into sequential bounded shows and restores requested order", async () => {
@@ -394,7 +535,7 @@ describe("durable Task adapter", () => {
     expect(records).toHaveLength(ids.length);
     expect(records.slice(0, 17).map((record) => record?.task.id)).toEqual(ids.slice(0, 17));
     expect(records[17]).toBeUndefined();
-    expect(runner.run).toHaveBeenCalledTimes(2);
+    expect(runner.run).toHaveBeenCalledTimes(3);
   });
 
   it.each([
@@ -422,7 +563,7 @@ describe("durable Task adapter", () => {
     const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
 
     await expect(store.readTaskAuthorityRecordEnvelopes(ids)).rejects.toThrow();
-    expect(runner.run).toHaveBeenCalledTimes(2);
+    expect(runner.run).toHaveBeenCalledTimes(3);
   });
 
   it("projects batched Task records with the same found and gap semantics", async () => {

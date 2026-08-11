@@ -4,6 +4,7 @@ import { taskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskCard } from "../task-authority/task-domain";
 import type { TaskAuthorityRecordEnvelope } from "../utils/beads";
 import { DurableAssignedWorkGuard } from "./durable-assigned-work-guard";
+import type { NonterminalAssignedTaskQuery } from "../team-authority/assigned-work-guard";
 
 function task(id: string, status: TaskCard["status"], assignee?: string): TaskCard & { goal: string } {
   return {
@@ -41,6 +42,23 @@ function authorityRecord(card: TaskCard & { goal: string }, teamName: string): T
 afterEach(() => vi.restoreAllMocks());
 
 describe("DurableAssignedWorkGuard", () => {
+  it("uses the exact-Worker query when the full-Team list times out", async () => {
+    const fullListTimeout = new Error("forced full-list timeout");
+    const workerQuery: NonterminalAssignedTaskQuery = {
+      nonterminalTaskIdsAssignedToWorker: vi.fn(async (_team, worker) => worker === "idle" ? [] : ["worker-blocked", "worker-open"]),
+    };
+    const guard = new DurableAssignedWorkGuard(createReadOnlyBeadsTaskAdapterFactory({
+      listTaskIds: vi.fn(async () => { throw fullListTimeout; }),
+      readTaskAuthorityRecordEnvelope: vi.fn(),
+      readTaskAuthorityRecordEnvelopes: vi.fn(),
+    }), workerQuery);
+
+    await expect(guard.nonterminalTaskIdsAssignedToWorker("team", "idle")).resolves.toEqual([]);
+    await expect(guard.nonterminalTaskIdsAssignedToWorker("team", "worker")).resolves.toEqual(["worker-blocked", "worker-open"]);
+    expect(workerQuery.nonterminalTaskIdsAssignedToWorker).toHaveBeenNthCalledWith(1, "team", "idle");
+    expect(workerQuery.nonterminalTaskIdsAssignedToWorker).toHaveBeenNthCalledWith(2, "team", "worker");
+  });
+
   it("projects only exact nonterminal assignments in the Task application's canonical order", async () => {
     const cards = [
       task("unassigned-open", "open"),
@@ -58,9 +76,11 @@ describe("DurableAssignedWorkGuard", () => {
       readTaskAuthorityRecordEnvelope: vi.fn(async (teamName: string, id: string) => authorityRecord(byId.get(id)!, teamName)),
       readTaskAuthorityRecordEnvelopes: vi.fn(async (teamName: string, ids: readonly string[]) =>
         ids.map((id) => authorityRecord(byId.get(id)!, teamName))),
-    }));
+    }), {
+      nonterminalTaskIdsAssignedToWorker: vi.fn(async () => ["worker-blocked", "worker-open", "worker-in-progress"]),
+    });
 
-    await expect(guard.nonterminalTaskIds("team", "worker")).resolves.toEqual([
+    await expect(guard.nonterminalTaskIdsAssignedToWorker("team", "worker")).resolves.toEqual([
       "worker-blocked",
       "worker-open",
       "worker-in-progress",
@@ -81,6 +101,6 @@ describe("DurableAssignedWorkGuard", () => {
       listTaskIds: vi.fn(async () => { throw failure; }),
       readTaskAuthorityRecordEnvelope: vi.fn(),
       readTaskAuthorityRecordEnvelopes: vi.fn(),
-    })).nonterminalTaskIds("team", "worker")).rejects.toBe(failure);
+    }), { nonterminalTaskIdsAssignedToWorker: vi.fn() }).nonterminalTaskIds("team")).rejects.toBe(failure);
   });
 });

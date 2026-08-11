@@ -10,6 +10,7 @@ const store = {
   readTaskAuthorityRecordEnvelope: vi.fn(async (id: string) => ({ task: { id } })),
   readTaskAuthorityRecordEnvelopes: vi.fn(async (ids: readonly string[]) => ids.map((id) => ({ task: { id } }))),
   list: vi.fn(async () => [{ id: "first" }, { id: "second" }]),
+  listNonterminalTaskIdsAssignedTo: vi.fn(async (worker: string) => worker === "worker" ? ["assigned-task"] : []),
 };
 
 vi.mock("../utils/beads", () => ({
@@ -39,13 +40,16 @@ describe("DurableTaskAuthorityRead", () => {
     await expect(read.readTaskAuthorityRecordEnvelope("team", "one")).resolves.toEqual({ task: { id: "one" } });
     await expect(read.readTaskAuthorityRecordEnvelopes("team", ["two", "three"])).resolves.toEqual([{ task: { id: "two" } }, { task: { id: "three" } }]);
     await expect(read.listTaskIds("team")).resolves.toEqual(["first", "second"]);
+    await expect(read.listNonterminalTaskIdsAssignedToWorker("team", "worker")).resolves.toEqual(["assigned-task"]);
 
-    expect(calls).toEqual(["binding:team", "binding:team", "binding:team"]);
+    expect(calls).toEqual(["binding:team", "binding:team", "binding:team", "binding:team"]);
     expect(storeOptions).toEqual([
       { teamName: "team", workspace: "/tmp/tasks", authorityFingerprint: fingerprint, requireExpectedVersion: false },
       { teamName: "team", workspace: "/tmp/tasks", authorityFingerprint: fingerprint, requireExpectedVersion: false },
       { teamName: "team", workspace: "/tmp/tasks", authorityFingerprint: fingerprint, requireExpectedVersion: false },
+      { teamName: "team", workspace: "/tmp/tasks", authorityFingerprint: fingerprint, requireExpectedVersion: false },
     ]);
+    expect(store.listNonterminalTaskIdsAssignedTo).toHaveBeenCalledWith("worker");
     expect(storeOptions[0]!.authorityFingerprint).toBe(fingerprint);
   });
 
@@ -89,6 +93,7 @@ describe("DurableTaskAuthorityRead", () => {
     await read.readTaskAuthorityRecordEnvelope("team", "one");
     await read.readTaskAuthorityRecordEnvelopes("team", ["two"]);
     await read.listTaskIds("team");
+    await read.listNonterminalTaskIdsAssignedToWorker("team", "worker");
 
     expect(fs.readFileSync(trace, "utf8").trim().split("\n").map((line) => {
       const record = JSON.parse(line);
@@ -97,6 +102,7 @@ describe("DurableTaskAuthorityRead", () => {
       { operation: "task_read", teamName: "team", taskId: "one", outcome: "ok" },
       { operation: "task_read_many", teamName: "team", taskId: undefined, outcome: "ok" },
       { operation: "task_list", teamName: "team", taskId: undefined, outcome: "ok" },
+      { operation: "task_list_assigned_nonterminal", teamName: "team", taskId: undefined, outcome: "ok" },
     ]);
   });
 });

@@ -109,6 +109,7 @@ async function createBeadsTeam(name: string, leadSession: string) {
   const suffix = `lifecycle-${testWorkspaces.length}`;
   const taskWorkspace = workspace(suffix);
   vi.spyOn(DurableTaskAuthorityRead.prototype, "listTaskIds").mockResolvedValue([]);
+  vi.spyOn(DurableTaskAuthorityRead.prototype, "listNonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
   return teams.createTeam(
     name,
     leadSession,

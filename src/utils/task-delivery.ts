@@ -722,11 +722,13 @@ async function persistTombstones(
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await withLock(file, async () => {
     const existing = readTombstonesUnsafe(file);
-    const byTaskSession = new Map<string, TaskDeliveryTombstone>();
+    const byDeliveryId = new Map<string, TaskDeliveryTombstone>();
     for (const item of [...existing, ...tombstones]) {
-      byTaskSession.set(`${item.ref.taskId}:${item.recipientMembershipId}:${item.recipientSessionFile}`, item);
+      // A Task may have several durable opaque versions for one exact Session.
+      // Each observed delivery suppresses only its own presentation.
+      byDeliveryId.set(item.deliveryId, item);
     }
-    writeJsonAtomic(file, [...byTaskSession.values()]);
+    writeJsonAtomic(file, [...byDeliveryId.values()]);
   });
 }
 

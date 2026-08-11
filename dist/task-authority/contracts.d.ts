@@ -41,6 +41,10 @@ export interface TaskAuthorityReadPort<TaskAuthorityRecord> {
     readTaskAuthorityRecordEnvelopes(teamName: string, taskIds: readonly string[]): Promise<Array<TaskAuthorityRecord | undefined>>;
     listTaskIds(teamName: string): Promise<string[]>;
 }
+/** Read-only native selector for one Worker's lifecycle eligibility. */
+export interface TaskAuthorityWorkerAssignmentReadPort {
+    listNonterminalTaskIdsAssignedToWorker(teamName: string, workerName: string): Promise<string[]>;
+}
 export type TaskStatus = "open" | "in_progress" | "blocked" | "closed";
 export type TaskRelationType = "parent" | "blocked_by" | "related";
 export interface TaskRelation {

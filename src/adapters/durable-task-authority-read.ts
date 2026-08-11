@@ -1,11 +1,11 @@
 import type { BeadsAuthorityFingerprint } from "../team-authority/contracts";
 import type { TaskAuthorityRecordEnvelope } from "../utils/beads";
 import { BeadsTaskStore } from "../utils/beads";
-import type { TaskAuthorityBinding, TaskAuthorityReadPort, TaskAuthorityReadTeamPort } from "../task-authority/contracts";
+import type { TaskAuthorityBinding, TaskAuthorityReadPort, TaskAuthorityReadTeamPort, TaskAuthorityWorkerAssignmentReadPort } from "../task-authority/contracts";
 import { withSemanticTrace } from "../utils/trace";
 
 /** Durable Team-backed Task read implementation. */
-export class DurableTaskAuthorityRead implements TaskAuthorityReadPort<TaskAuthorityRecordEnvelope> {
+export class DurableTaskAuthorityRead implements TaskAuthorityReadPort<TaskAuthorityRecordEnvelope>, TaskAuthorityWorkerAssignmentReadPort {
   constructor(private readonly team: TaskAuthorityReadTeamPort) {}
 
   private async store(teamName: string): Promise<BeadsTaskStore> {
@@ -31,5 +31,10 @@ export class DurableTaskAuthorityRead implements TaskAuthorityReadPort<TaskAutho
   async listTaskIds(teamName: string): Promise<string[]> {
     return withSemanticTrace("task_list", { teamName }, async () =>
       (await this.store(teamName)).list()).then((tasks) => tasks.map((task) => task.id));
+  }
+
+  async listNonterminalTaskIdsAssignedToWorker(teamName: string, workerName: string): Promise<string[]> {
+    return withSemanticTrace("task_list_assigned_nonterminal", { teamName }, async () =>
+      (await this.store(teamName)).listNonterminalTaskIdsAssignedTo(workerName));
   }
 }

@@ -84,10 +84,16 @@ function publication(stoppedFailure?: Error): TeamLifecyclePublication {
 }
 
 function guard(): AssignedWorkGuard {
-  return { nonterminalTaskIds: vi.fn(async (_team: string, worker?: string) => {
-    fixture.events.push(`guard:${worker ?? "all"}`);
-    return fixture.guard;
-  }) };
+  return {
+    nonterminalTaskIds: vi.fn(async () => {
+      fixture.events.push("guard:all");
+      return fixture.guard;
+    }),
+    nonterminalTaskIdsAssignedToWorker: vi.fn(async (_team: string, worker: string) => {
+      fixture.events.push(`guard:${worker}`);
+      return fixture.guard;
+    }),
+  };
 }
 
 function reset() {
@@ -114,7 +120,21 @@ describe("Team lifecycle service boundary", () => {
 
     await expect(service.stopWorker("team", "worker")).resolves.toMatchObject({ kind: "refused", reason: "nonterminal_tasks_assigned", guardingTaskIds: ["task-1"] });
     expect(fixture.events).toEqual(["topology", "guard:worker"]);
-    expect(assignedWorkGuard.nonterminalTaskIds).toHaveBeenCalledWith("team", "worker");
+    expect(assignedWorkGuard.nonterminalTaskIdsAssignedToWorker).toHaveBeenCalledWith("team", "worker");
+  });
+
+  it("does not stop or deactivate when the exact-Worker Task authority query is incomplete", async () => {
+    reset();
+    fixture.config.members = [member("worker")];
+    const assignedWorkGuard = guard();
+    const authorityFailure = new Error("Task authority read timed out");
+    vi.mocked(assignedWorkGuard.nonterminalTaskIdsAssignedToWorker).mockRejectedValueOnce(authorityFailure);
+    const service = new TeamLifecycleService({ assignedWorkGuard, lifecyclePublication: publication() });
+
+    await expect(service.stopWorker("team", "worker")).rejects.toBe(authorityFailure);
+    expect(fixture.kill).not.toHaveBeenCalled();
+    expect(fixture.deactivate).toEqual([]);
+    expect(fixture.stopped).toEqual([]);
   });
 
   it("does not accept exited runtime evidence when its exact Membership generation changed", async () => {
@@ -164,7 +184,7 @@ describe("Team lifecycle service boundary", () => {
     });
     expect(worker).toMatchObject({ isActive: false, deactivationReason: "process_shutdown" });
     expect(fixture.events).toEqual(["topology", "guard:worker", "membership:worker-membership", "deactivate:worker-membership", "stopped:worker"]);
-    expect(assignedWorkGuard.nonterminalTaskIds).toHaveBeenCalledTimes(1);
+    expect(assignedWorkGuard.nonterminalTaskIdsAssignedToWorker).toHaveBeenCalledTimes(1);
     expect(fixture.guard).toEqual([]);
     expect(fixture.kill).toHaveBeenCalledTimes(1);
 
@@ -175,7 +195,7 @@ describe("Team lifecycle service boundary", () => {
       message: "Worker worker is not current.",
     });
     expect(fixture.kill).toHaveBeenCalledTimes(1);
-    expect(assignedWorkGuard.nonterminalTaskIds).toHaveBeenCalledTimes(1);
+    expect(assignedWorkGuard.nonterminalTaskIdsAssignedToWorker).toHaveBeenCalledTimes(1);
   });
 
   it("retains the current Membership when pane stop confirmation fails", async () => {
@@ -221,7 +241,8 @@ describe("Team lifecycle service boundary", () => {
     expect(adapter).not.toMatch(/utils\/tasks/);
     expect(adapter).not.toMatch(/import\s*\{\s*BeadsTaskAdapter\s*\}/);
     expect(adapter).toContain('import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter"');
-    expect(adapter).toContain('constructor(private readonly factory: BeadsTaskAdapterFactory)');
-    expect(adapter).toContain('import type { AssignedWorkGuard } from "../team-authority/assigned-work-guard"');
+    expect(adapter).toContain("private readonly factory: BeadsTaskAdapterFactory");
+    expect(adapter).toContain("private readonly assignedTaskQuery: NonterminalAssignedTaskQuery");
+    expect(adapter).toContain('import type { AssignedWorkGuard, NonterminalAssignedTaskQuery } from "../team-authority/assigned-work-guard"');
   });
 });
