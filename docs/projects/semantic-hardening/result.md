@@ -2,23 +2,27 @@
 
 Date: 2026-08-11
 Stage: consolidation and hardening
-Result revision: `bea6f45572ba34f5e29574cc489f45383b7ebc19`
+Result revision: `8c74a5c`
+Documentation closure: `3e199a5`
+Executable source/test candidate: `8c74a5c`
 Trio baseline: `c54dc25b34770b70afedffc7e87728da6376ee0f`
 Membership baseline: `6997dce`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
-Verified source candidate: `bea6f45572ba34f5e29574cc489f45383b7ebc19`
+Verified source candidate: `8c74a5c`
 Package metadata: `@hypercarrier/pi-team-bright@0.17.0-rc.11`
 Publication state: untagged and unpublished
-Public behavior: unchanged
+Public surface unchanged; no established breaking contract or regression
+BdRunner behavior: intentional wall-clock timing change
 Architecture impact: changed internally; HyperCarrier's diagram is unchanged
 because it keeps Pi Team Bright internals opaque
 
 ## Result
 
 The Project produced an evidence-backed internal hardening series without a
-public tool, schema, package-export, persisted-record, filename, retry, timing,
-or default-behavior change. Accepted commits `69c30acf5db23be8f656b2a6821b0ea032ae04cb` and
+public tool, schema, package-export, persisted-record, or filename change. The
+intentional `BdRunner` wall-clock timing change has no established breaking
+contract or regression. Accepted commits `69c30acf5db23be8f656b2a6821b0ea032ae04cb` and
 `5950f3b3f17124b9baf38afa48d839dc503d847b` complete the accepted Trio and
 additive Membership projection boundaries. The latter splits its private reader
 from the unchanged public projection. Team/Task reverse dependencies and the
@@ -57,9 +61,9 @@ prevention.
 
 Commit `ed72376` covers exact native metadata reconciliation for create replay,
 adaptive exact-ID hydration with bounded canonical-`show` fallback, the narrow
-assigned-nonterminal Worker-stop query, `deliveryId` tombstones, and the
-wall-clock `BdRunner` deadline. Commit `8c74a5c` adds only aggregate-test
-stabilization. The [120-Task receipt](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.json)
+assigned-nonterminal Worker-stop query, and `deliveryId` tombstones. The
+executable source/test candidate is `8c74a5c`; documentation closure is
+`3e199a5`. The [120-Task receipt](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.json)
 and its [runner](../../journal/artifacts/2026-08-11-beads-120-contention-benchmark.py)
 remain before-baseline evidence.
 
@@ -68,16 +72,17 @@ Workers. It recorded 14 unknown creates versus 23, two unavailable syncs versus
 eight, and zero Worker-stop timeouts versus eight. It also recorded no task-read
 unavailable outcome. The model-visible cursor is only a final head, not a full
 cursor stream. Seven late assignments remained after `caught_up`; two had been
-closed by Workers and five required leader reconciliation. There are no per-call
-durations, so the run is consistent with, but does not prove, TUI-freeze
-prevention. The receipt records four pending owner-visible schema decisions;
-none is delivered internal work.
+closed by Workers and five required leader reconciliation. Treat that
+`caught_up`/backlog observation as a pre-existing or unclassified risk, not an
+established regression. There are no per-call durations, so the run is
+consistent with, but does not prove, TUI-freeze prevention. The receipt records
+four pending owner-visible schema decisions; none is delivered internal work.
 
 ## BdRunner deadline repair
 
-The owner authorized a wall-clock deadline repair after the retained Session
-JSONL audit recorded outer `task_read` tails of 10.770 to 64.834 seconds, but no
-exact historical `bd` timing. `ExecBdRunner` now executes the owned native
+The owner authorized an intentional wall-clock timing change after the retained
+Session JSONL audit recorded outer `task_read` tails of 10.770 to 64.834 seconds,
+but no exact historical `bd` timing. `ExecBdRunner` now executes the owned native
 binary directly, terminates its process group at deadline, and emits the
 payload-free start, deadline, termination-cleanup, and settled trace lifecycle
 ([`beads.ts`](../../../src/utils/beads.ts), [`trace.ts`](../../../src/utils/trace.ts)).
@@ -88,6 +93,7 @@ The modified generated declaration,
 is the Worker-query output, not a runner artifact. Focused independent proof
 passed 1 file and 5 tests. This does not prove Windows process-tree behavior,
 real Pi lifecycle timing, production Beads/Dolt contention, or a package build.
+No established breaking public contract or regression follows.
 
 ## Commit series
 

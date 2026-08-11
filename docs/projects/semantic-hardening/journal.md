@@ -1533,3 +1533,14 @@ changes; append a correction.
   create replay, timing and correlation fields, and unavailable-hydration detail
   with retry guidance. The dated [closure receipt](../../journal/2026-08-11-stress-followup-closure-receipt.md)
   preserves the comparison and limits.
+
+## 2026-08-11 — correction: stress follow-up closure wording
+
+- `8c74a5c` is the executable source/test candidate. `3e199a5` is the
+  documentation closure. The prior phrase that `8c74a5c` “contains the
+  aggregate-test stabilization” is stale and does not define either boundary.
+- The `BdRunner` wall-clock deadline is an intentional timing change. No
+  established breaking public contract or regression follows from the recorded
+  evidence.
+- The seven late assignments after `caught_up` describe a pre-existing or
+  unclassified `caught_up`/backlog risk. They do not establish a regression.
