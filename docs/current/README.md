@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-11
+Updated: 2026-08-12
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
@@ -152,20 +152,15 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- Exact `0.17.0-rc.11` source commit
-  `638d5934bd52c7f4a3fe18525e5d72569a227211` passed its one reserved Node
-  22.22.1 aggregate: 88 files and 695 tests in 253.59 seconds. Lane closure,
-  package and generated-output checks, agent and tool-result QA, public and
-  persistence comparisons, 48 JSON files, 95 local links, the exact privacy
-  range, and installed-tarball canaries passed. The one packed artifact contains
-  93 files; its exact sizes, digests, integrity, procedure, and proof limits are
-  in the [source verification
-  receipt](../journal/2026-08-09-v0.17.0-rc.11-source-verification-receipt.md).
-  The source carries internal Task and Team dependency hardening with no public
-  behavior change. It remains untagged and unpublished: no push, npm publication,
-  npm `next` change, provenance claim, or GitHub release occurred. The dated
-  [release plan](../journal/2026-08-09-v0.17.0-rc.11-release-plan.md) keeps
-  publication operations separate.
+- `0.17.0-rc.13` source preparation is uncommitted and based exactly on
+  `d2dfc7004d73f7a69c2a8cf23bd4c691162fe51a`. Package metadata, the README,
+  parity checklist, this context, and semantic-hardening result status identify
+  the candidate only. No aggregate, package, registry, provenance, publication,
+  push, tag, npm `next` change, or GitHub release claim exists for rc.13. The
+  dated [release plan](../journal/2026-08-12-v0.17.0-rc.13-release-plan.md)
+  keeps verification and publication operations separate. The rc.11
+  [source verification receipt](../journal/2026-08-09-v0.17.0-rc.11-source-verification-receipt.md)
+  remains historical evidence.
 - `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release
