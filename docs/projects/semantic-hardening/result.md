@@ -10,8 +10,8 @@ Membership baseline: `6997dce`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
 Verified source candidate: `8c74a5c`
-Package metadata target: `@hypercarrier/pi-team-bright@0.17.0-rc.13`
-Publication state: source preparation only; untagged and unpublished
+Published package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.13` on npm `next`
+Publication state: rc.13 is published; rc.14 product acceptance passed but it has no candidate commit, tag, publication, or release claim
 Public surface unchanged; no established breaking contract or regression
 BdRunner behavior: intentional wall-clock timing change
 Architecture impact: changed internally; HyperCarrier's diagram is unchanged
@@ -56,6 +56,20 @@ anchors the Session evidence and limits. This does not prove a real Pi process,
 Beads/Dolt contention, external writers, watcher delivery, OS scheduling,
 terminal pixels, publication, registry state, provenance, or TUI freeze
 prevention.
+
+## rc.14 incident continuation
+
+The current shared tree has an uncommitted liveness and recovery repair. The
+owner-supplied macOS incident artifact records the earlier feedback storm. A
+new isolated exact-source Pi/Herdr run passed with eight Terra-medium Workers,
+nine closed Tasks, safe logical Worker recovery, all current Workers stopped,
+and no unfinished Tasks at shutdown. Its external monitor matched 27
+non-overlapping `team_sync` calls from 16 to 5,308 ms, with at most one live
+Beads list child and no observed FSEvents storm. The durable
+[receipt](../../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md)
+records evidence and proof limits. `fs_usage` was unavailable because it
+required root. The reserved aggregate has not run, so the candidate commit and
+all publication claims remain open.
 
 ## Stress follow-up
 

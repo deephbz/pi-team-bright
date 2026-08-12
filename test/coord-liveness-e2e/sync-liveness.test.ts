@@ -211,13 +211,17 @@ describe("hardened coordination liveness boundaries", () => {
 
   it("wakes on a positive runtime/event producer hint and closes the event check-register race", async () => {
     const name = teamName("event-race");
-    await teams.createTeam(name, "leader-session.jsonl", "leader-agent", "Event race");
+    const listeners: Array<(event: string, filename: string) => void> = [];
+    vi.spyOn(fs, "watch").mockImplementation((_directory: any, listener: any) => {
+      listeners.push(listener);
+      return { on: vi.fn(), close: vi.fn() } as any;
+    });
     let producer = false;
     const checking = vi.fn(() => producer);
     const waiting = waitForLivenessHint({ teamName: name, waitMs: 2_000, check: checking });
-    await new Promise((resolve) => setImmediate(resolve));
+    await Promise.resolve();
     producer = true;
-    await teamEvents.appendTeamEvent(name, { type: "worker", worker: "worker", membershipId: "membership-1", phase: "session_bound", generation: { membershipId: "membership-1", pid: process.pid, startedAt: 1 } });
+    listeners[1]!("change", "team-events.jsonl");
     await expect(waiting).resolves.toBe("hint");
     expect(checking).toHaveBeenCalled();
   });
@@ -253,6 +257,121 @@ describe("hardened coordination liveness boundaries", () => {
     fs.mkdirSync(paths.teamDir(name), { recursive: true });
     const controller = new AbortController();
     const waiting = waitForLivenessHint({ teamName: name, waitMs: 2_000, signal: controller.signal, check: () => false });
+    controller.abort();
+    await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("uses exact string filenames and leaves unavailable watcher filenames to the bounded fallback", async () => {
+    vi.useFakeTimers();
+    const name = teamName("watch-filenames");
+    const listeners: Array<(event: string, filename: unknown) => void> = [];
+    vi.spyOn(fs, "watch").mockImplementation((_directory: any, listener: any) => {
+      listeners.push(listener);
+      return { on: vi.fn(), close: vi.fn() } as any;
+    });
+    const check = vi.fn(() => false);
+    const waiting = waitForLivenessHint({ teamName: name, waitMs: 10_000, check, checkAuthority: () => false });
+    await Promise.resolve();
+    for (const [watcher, filename] of [[0, ".worker.json.1.tmp"], [1, "unrelated.jsonl"], [0, ""], [1, ""], [0, Buffer.from("worker.json")], [1, Buffer.from("team-events.jsonl")]] as const) {
+      listeners[watcher]!("change", filename);
+    }
+    await Promise.resolve();
+    expect(check).not.toHaveBeenCalled();
+
+    for (const [watcher, filename] of [[0, "worker.json"], [1, "team-events.jsonl"]] as const) {
+      listeners[watcher]!("change", filename);
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    expect(check).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(waiting).resolves.toBe("timeout");
+  });
+
+  it("ignores a null-filename watcher storm and still terminates within its bound", async () => {
+    vi.useFakeTimers();
+    const listeners: Array<(event: string, filename: unknown) => void> = [];
+    vi.spyOn(fs, "watch").mockImplementation((_directory: any, listener: any) => {
+      listeners.push(listener);
+      return { on: vi.fn(), close: vi.fn() } as any;
+    });
+    const check = vi.fn(() => false);
+    const waiting = waitForLivenessHint({ teamName: teamName("null-filename-storm"), waitMs: 100, check, checkAuthority: () => false });
+    await Promise.resolve();
+    for (let index = 0; index < 1_000; index++) listeners[index % 2]!("change", null);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(check).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(waiting).resolves.toBe("timeout");
+  });
+
+  it("times out and cancels while continuous watcher noise is coalesced", async () => {
+    vi.useFakeTimers();
+    const listeners: Array<(event: string, filename: string) => void> = [];
+    const watchers: Array<{ close: ReturnType<typeof vi.fn> }> = [];
+    vi.spyOn(fs, "watch").mockImplementation((_directory: any, listener: any) => {
+      listeners.push(listener);
+      const watcher = { close: vi.fn(), on: vi.fn() };
+      watchers.push(watcher);
+      return watcher as any;
+    });
+    let releaseTimeoutAuthority!: () => void;
+    const timeoutAuthority = vi.fn(() => new Promise<boolean>((resolve) => { releaseTimeoutAuthority = () => resolve(false); }));
+    const timeout = waitForLivenessHint({ teamName: teamName("noise-timeout"), waitMs: 100, check: () => false, checkAuthority: timeoutAuthority });
+    await Promise.resolve();
+    for (let index = 0; index < 20; index++) listeners[index % 2]!("change", index % 2 ? "team-events.jsonl" : "worker.json");
+    await vi.advanceTimersByTimeAsync(100);
+    await expect(timeout).resolves.toBe("timeout");
+    expect(timeoutAuthority).toHaveBeenCalledOnce();
+    expect(watchers[0]!.close).toHaveBeenCalledOnce();
+    expect(watchers[1]!.close).toHaveBeenCalledOnce();
+    releaseTimeoutAuthority();
+    await Promise.resolve();
+    expect(timeoutAuthority).toHaveBeenCalledOnce();
+
+    let releaseCancelledAuthority!: () => void;
+    const cancelledAuthority = vi.fn(() => new Promise<boolean>((resolve) => { releaseCancelledAuthority = () => resolve(false); }));
+    const controller = new AbortController();
+    const cancelled = waitForLivenessHint({ teamName: teamName("noise-cancel"), waitMs: 10_000, signal: controller.signal, check: () => false, checkAuthority: cancelledAuthority });
+    await Promise.resolve();
+    for (let index = 0; index < 20; index++) listeners[2 + (index % 2)]!("change", index % 2 ? "team-events.jsonl" : "worker.json");
+    controller.abort();
+    await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+    expect(cancelledAuthority).toHaveBeenCalledOnce();
+    expect(watchers[2]!.close).toHaveBeenCalledOnce();
+    expect(watchers[3]!.close).toHaveBeenCalledOnce();
+    releaseCancelledAuthority();
+    await Promise.resolve();
+    expect(cancelledAuthority).toHaveBeenCalledOnce();
+  });
+
+  it("filters watcher noise and coalesces one authority-priority rescan", async () => {
+    vi.useFakeTimers();
+    const name = teamName("coalesced-rescan");
+    const listeners: Array<(event: string, filename: string) => void> = [];
+    vi.spyOn(fs, "watch").mockImplementation((_directory: any, listener: any) => {
+      listeners.push(listener);
+      return { on: vi.fn(), close: vi.fn() } as any;
+    });
+    let release!: () => void;
+    const firstAuthorityCheck = new Promise<boolean>((resolve) => { release = () => resolve(false); });
+    const check = vi.fn(() => false);
+    const checkAuthority = vi.fn(() => checkAuthority.mock.calls.length === 1 ? firstAuthorityCheck : false);
+    const controller = new AbortController();
+    const waiting = waitForLivenessHint({ teamName: name, waitMs: 10_000, signal: controller.signal, check, checkAuthority });
+    await Promise.resolve();
+    expect(checkAuthority).toHaveBeenCalledTimes(1);
+    listeners[0]!("rename", ".worker.json.1.tmp");
+    listeners[1]!("rename", "unrelated.jsonl");
+    listeners[0]!("rename", "worker.json");
+    listeners[1]!("change", "team-events.jsonl");
+    await vi.advanceTimersByTimeAsync(5_000);
+    release();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(checkAuthority).toHaveBeenCalledTimes(2);
+    expect(check).not.toHaveBeenCalled();
     controller.abort();
     await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
   });

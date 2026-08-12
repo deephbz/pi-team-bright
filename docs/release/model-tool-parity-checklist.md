@@ -1,10 +1,10 @@
 # Model-tool release parity checklist
 
-Release: `0.17.0-rc.13`
-Source surface: exact preparation base `d2dfc7004d73f7a69c2a8cf23bd4c691162fe51a`;
+Release: `0.17.0-rc.14`
+Source surface: exact preparation base `53367e412ad0217bfcf4845d92a07bb9ebec6de2`;
 at preparation it is untagged, unpublished, and not aggregate-verified
 
-This checklist maps each `0.17.0-rc.13` coordination capability to the
+This checklist maps each `0.17.0-rc.14` coordination capability to the
 single durable model-tool leader surface. The leader uses exact Session binding,
 so the surface omits `team_name` and carrier controls. Worker processes keep the
 narrow `task_read`, `task_update`, and `alert_send` registrations; Worker Team

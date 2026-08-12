@@ -1,0 +1,55 @@
+{
+  "schema": "pi-team-bright/runtime-liveness-evidence/1",
+  "date": "2026-08-12",
+  "stage": "hardening",
+  "source": {
+    "kind": "owner-supplied-external-runtime-evidence",
+    "sample_sha256": "fc8564e81c571b9d5c1e09b81a86502abf60e590ccb80afbab7c4f70bce97ae2",
+    "sample_bytes": 403103,
+    "sample_lines": 2292,
+    "watchdog_sha256": "c2bc285240045a3d87ddc5c030e98d2afd0c2fd49fa48af7fa214269fbb58cd1",
+    "watchdog_bytes": 6283,
+    "watchdog_lines": 52,
+    "watchdog_sample_sha256": "f207c8e3dce701ec0297e8c292aaf17185cd1618addfd0adf02ac486d94e6eb5",
+    "watchdog_sample_bytes": 288944,
+    "watchdog_sample_lines": 1775,
+    "second_sample_sha256": "a33a780ca8fbc0b821502c49022b3a1e9f01e5605104f1dc1aa8685eb8dbb75d",
+    "second_sample_bytes": 372830,
+    "second_sample_lines": 2226,
+    "raw_records": "preserved outside the repository at the three owner-supplied /tmp paths"
+  },
+  "observations": {
+    "affected_team_sync_duration_ms": 88384,
+    "sample_main_thread_total": 4122,
+    "sample_fsevents_callback": 4119,
+    "sample_activity": [
+      "synchronous_open",
+      "synchronous_read",
+      "synchronous_write"
+    ],
+    "owner_observed_zombie_bd_descendants": 2,
+    "watchdog_sample_main_thread_total": 2538,
+    "watchdog_sample_fsevents_callback": 2532,
+    "second_sample_main_thread_total": 2306,
+    "second_sample_fsevents_callback": 2305,
+    "owner_observed_concurrent_live_beads_children": 2,
+    "owner_observed_live_child_start_gap_seconds": 29,
+    "live_watchdog": {
+      "slow_threshold_ms": 5000,
+      "sample_threshold_ms": 15000,
+      "severe_threshold_ms": 60000,
+      "later_observed_duration_ms": 137247,
+      "later_outcome": "result"
+    }
+  },
+  "assessment": {
+    "cause": "Two defects combined: macOS null-filename FSEvents notifications entered both watcher callbacks as relevant hints, and a timed-out or cancelled waiter left an authority scan running while final or later sync reads started another scan",
+    "repair": "ignore null, empty, and invalid watcher filenames; retain exact relevant filenames and five-second authority cadence; single-flight complete Task-projection reads per CoordinationObservationService and Team so orphaned, final, and later reads join until settlement",
+    "release_blocker": "A new-source real macOS eight-Worker stress and recovery E2E must remain bounded, show no overlapping Beads children from sync reads, and show no FSEvents feedback storm before release."
+  },
+  "limits": [
+    "The process sample is diagnostic evidence, not a correctness proof.",
+    "The zombie descendant count is an owner observation, not derived from the stored summary.",
+    "No terminal pixels were observed or claimed."
+  ]
+}

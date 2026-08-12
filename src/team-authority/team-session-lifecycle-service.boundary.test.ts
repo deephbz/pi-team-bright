@@ -115,6 +115,16 @@ describe("Team Session lifecycle boundary", () => {
     expect(fixture.writeRuntime).toHaveBeenCalledTimes(1);
   });
 
+  it("refuses a child launched for a stale exact Membership before runtime admission", async () => {
+    reset(); fixture.current = member("worker"); fixture.config.members = [fixture.current];
+    const service = new TeamSessionLifecycleService(publication());
+    await expect(service.admitWorker({ ...workerInput, expectedMembershipId: "stale-membership" }))
+      .resolves.toEqual({ kind: "refused", reason: "Worker worker started for stale Membership stale-membership.", exitProcess: true });
+    expect(fixture.events).toEqual(["current-lookup"]);
+    expect(fixture.writeRuntime).not.toHaveBeenCalled();
+    expect(fixture.bind).not.toHaveBeenCalled();
+  });
+
   it("orders Worker runtime claim, fence write, exact bind, then session-bound publication", async () => {
     reset(); fixture.current = member("worker"); fixture.config.members = [fixture.current];
     const service = new TeamSessionLifecycleService(publication());

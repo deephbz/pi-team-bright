@@ -54,6 +54,7 @@ export function createPiTeamSessionAdapter(options: {
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
   const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
+  const envMembershipId = process.env.PI_TEAM_MEMBERSHIP_ID;
   let teamName: string | null = envTeamName || teamQuery.findLeadTeamForSession();
   let currentMembershipId: string | undefined;
   let directMessageDelivery: DirectMessageDelivery | null = null;
@@ -395,6 +396,7 @@ function registerSessionHooks() {
           placement: placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
           identitySource,
           launchId: envLaunchId,
+          expectedMembershipId: envMembershipId,
         });
       } catch (error) {
         await refuseTeamSession(ctx, teamName, agentName, {

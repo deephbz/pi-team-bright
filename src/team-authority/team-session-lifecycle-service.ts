@@ -14,12 +14,21 @@ export type SessionStartup =
 export class TeamSessionLifecycleService {
   constructor(private readonly lifecyclePublication: TeamLifecyclePublication) {}
 
-  async admitWorker(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string }): Promise<SessionStartup> {
+  async admitWorker(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string; expectedMembershipId?: string }): Promise<SessionStartup> {
     const config = await teams.readConfig(input.teamName);
     const admission = admitTeamSession(config, input.workerName, input.placement, input.identitySource);
     if (admission.kind === "refused") return admission;
     const candidate = await teams.currentMembership(input.teamName, input.workerName);
+    if (input.expectedMembershipId && candidate.membershipId !== input.expectedMembershipId) {
+      return { kind: "refused", reason: `Worker ${input.workerName} started for stale Membership ${input.expectedMembershipId}.`, exitProcess: true };
+    }
     return teams.withCurrentMembershipLease(input.teamName, candidate.membershipId!, async (current) => {
+      if (input.expectedMembershipId) {
+        const exact = await teams.currentMembership(input.teamName, input.workerName);
+        if (exact.membershipId !== current.membershipId || exact.membershipId !== input.expectedMembershipId) {
+          return { kind: "refused", reason: `Worker ${input.workerName} started for a Membership that is no longer current.`, exitProcess: true };
+        }
+      }
       const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), process.pid, runtime.probePidPresence, input.launchId);
       if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
       if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: current };

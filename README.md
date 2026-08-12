@@ -116,7 +116,7 @@ based substitute for Tasks.
 After npm lists this release candidate, pin the exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.13
+pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.14
 ```
 
 The package owns its local Task backend through the exact runtime dependency

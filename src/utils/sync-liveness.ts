@@ -92,6 +92,8 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
   fs.mkdirSync(eventDirectory, { recursive: true });
   return new Promise((resolve, reject) => {
     let settled = false;
+    let scanning = false;
+    let pending: "hint" | "authority" | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let interval: ReturnType<typeof setInterval> | undefined;
     const watchers: fs.FSWatcher[] = [];
@@ -104,25 +106,49 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
       options.signal?.removeEventListener("abort", onAbort);
       if (error) reject(error); else resolve(result!);
     };
-    const scan = async (authority = false) => {
+    const requestScan = (kind: "hint" | "authority") => {
       if (settled) return;
-      try {
-        const check = authority ? (options.checkAuthority ?? options.check) : options.check;
-        if (await check()) finish("hint");
-      } catch (error) {
-        finish(undefined, error);
+      if (scanning) {
+        // Keep only one deferred scan. Authority covers hint state too, so it
+        // replaces a pending hint instead of letting filesystem noise grow work.
+        if (kind === "authority" || pending === undefined) pending = kind;
+        return;
       }
+      scanning = true;
+      void (async () => {
+        try {
+          const check = kind === "authority" ? (options.checkAuthority ?? options.check) : options.check;
+          if (await check()) finish("hint");
+        } catch (error) {
+          finish(undefined, error);
+        } finally {
+          scanning = false;
+          const next = pending;
+          pending = undefined;
+          if (!settled && next) requestScan(next);
+        }
+      })();
     };
     const onAbort = () => {
       const error = new Error("Team liveness wait aborted");
       error.name = "AbortError";
       finish(undefined, error);
     };
-    for (const directory of [runtimeDirectory, eventDirectory]) {
-      const watcher = fs.watch(directory, () => { void scan(); });
-      watcher.on("error", (error) => finish(undefined, error));
-      watchers.push(watcher);
-    }
+    const eventJournal = "team-events.jsonl";
+    const runtimeWatcher = fs.watch(runtimeDirectory, (_event, filename) => {
+      // Atomic runtime replacement reports the final status filename. Null,
+      // empty, and non-string names are not actionable: macOS can emit them
+      // for unrelated directory activity and create a rescan feedback loop.
+      // The periodic authority scan remains the bounded fallback.
+      if (typeof filename === "string" && filename.endsWith(".json")) requestScan("hint");
+    });
+    runtimeWatcher.on("error", (error) => finish(undefined, error));
+    watchers.push(runtimeWatcher);
+    const eventWatcher = fs.watch(eventDirectory, (_event, filename) => {
+      if (typeof filename === "string" && filename === eventJournal) requestScan("hint");
+    });
+    eventWatcher.on("error", (error) => finish(undefined, error));
+    watchers.push(eventWatcher);
     options.signal?.addEventListener("abort", onAbort, { once: true });
     timer = setTimeout(() => finish("timeout"), options.waitMs);
     timer.unref?.();
@@ -133,9 +159,11 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
       finish(undefined, new Error("authorityCheckMs must be a positive finite number."));
       return;
     }
-    interval = setInterval(() => { void scan(true); }, Math.min(authorityCheckMs, Math.max(25, options.waitMs)));
+    interval = setInterval(() => requestScan("authority"), Math.min(authorityCheckMs, Math.max(25, options.waitMs)));
     interval.unref?.();
-    void scan(true);
+    // This closes the registration race. The observation service performs the
+    // final complete authority read after this waiter settles.
+    requestScan("authority");
   });
 }
 
