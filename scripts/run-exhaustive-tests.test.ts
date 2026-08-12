@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawn as spawnChild } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { causalPath, createExhaustiveRunner, runExhaustiveTests } = require("./run-exhaustive-tests.cjs");
+const { causalInventoryTitle, causalPath, createExhaustiveRunner, runExhaustiveTests } = require("./run-exhaustive-tests.cjs");
 
 class Child extends EventEmitter {
   constructor(readonly pid = 4123) { super(); }
@@ -43,7 +43,7 @@ describe("exhaustive test runner", () => {
     const causal = new Child(3);
     const spawn = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second).mockReturnValueOnce(causal);
     const runner = createExhaustiveRunner({ spawn });
-    const running = runExhaustiveTests("vitest.test.config.ts", runner, ["first.test.ts", "second.test.ts"]);
+    const running = runExhaustiveTests("vitest.test.config.ts", runner, ["first.test.ts", "second.test.ts"], [causalInventoryTitle]);
 
     expect(spawn.mock.calls[0][1]).toContain("first.test.ts");
     first.emit("close", 0, null);
@@ -56,6 +56,36 @@ describe("exhaustive test runner", () => {
     expect(spawn.mock.calls[2][1]).toContain(causalPath);
     causal.emit("close", 0, null);
     await expect(running).resolves.toBeUndefined();
+  });
+
+  it("runs each causal scenario independently with an observable case title", async () => {
+    const inventory = new Child(1);
+    const scenario = new Child(2);
+    const spawn = vi.fn().mockReturnValueOnce(inventory).mockReturnValueOnce(scenario);
+    const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const runner = createExhaustiveRunner({ spawn });
+    const running = runner.runCausal("vitest.test.config.ts", ["inventory", "real Beads scenario"]);
+
+    expect(spawn.mock.calls[0][1]).toEqual(expect.arrayContaining([causalPath, "-t", "inventory"]));
+    expect(output).toHaveBeenCalledWith("causal case: inventory");
+    inventory.emit("close", 0, null);
+    await nextTurn();
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn.mock.calls[1][1]).toEqual(expect.arrayContaining([causalPath, "-t", "real Beads scenario"]));
+    expect(output).toHaveBeenCalledWith("causal case: real Beads scenario");
+    scenario.emit("close", 0, null);
+    await expect(running).resolves.toBeUndefined();
+  });
+
+  it("short-circuits causal scenarios after a failure", async () => {
+    const child = new Child();
+    const spawn = vi.fn(() => child);
+    const runner = createExhaustiveRunner({ spawn });
+    const running = runner.runCausal("vitest.test.config.ts", ["first scenario", "second scenario"]);
+
+    child.emit("close", 1, null);
+    await expect(running).rejects.toThrow("vitest closed with code 1");
+    expect(spawn).toHaveBeenCalledTimes(1);
   });
 
   it("short-circuits remaining files and the causal lane after a non-causal failure", async () => {
@@ -100,7 +130,7 @@ describe("exhaustive test runner", () => {
       clearTimer: () => {},
       terminateGroup,
     });
-    const running = runner.runCausal("vitest.test.config.ts");
+    const running = runner.runCausal("vitest.test.config.ts", [causalInventoryTitle]);
 
     deadline();
     expect(terminateGroup).toHaveBeenCalledOnce();
@@ -134,7 +164,7 @@ describe("exhaustive test runner", () => {
     });
 
     try {
-      const running = runner.runCausal("vitest.test.config.ts");
+      const running = runner.runCausal("vitest.test.config.ts", [causalInventoryTitle]);
       await waitForFile(pidFile);
       const descendantPid = Number(fs.readFileSync(pidFile, "utf8"));
       await expect(running).rejects.toThrow("causal-path test exceeded");
