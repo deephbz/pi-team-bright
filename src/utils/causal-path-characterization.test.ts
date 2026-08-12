@@ -724,18 +724,25 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
       runState: "active",
     }, state.worker.membershipId);
 
-    const originalReadMany = BeadsTaskAdapter.prototype.readMany;
+    // The cadence clock uses fake timers. Keep its authority fixture in-memory,
+    // because a real `bd` child process cannot make progress while timer
+    // advancement waits for this async cadence callback on Linux.
     let completeReads = 0;
     let releaseInitialRead!: () => void;
+    let releaseInitialResult!: () => void;
     const initialRead = new Promise<void>((resolve) => { releaseInitialRead = resolve; });
+    const initialResult = new Promise<void>((resolve) => { releaseInitialResult = resolve; });
     const changedVersion = "v_1111111111111111";
-    const readMany = vi.spyOn(BeadsTaskAdapter.prototype, "readMany").mockImplementation(async function(this: BeadsTaskAdapter, taskIds) {
+    vi.spyOn(BeadsTaskAdapter.prototype, "listIds").mockResolvedValue([task.id]);
+    const readMany = vi.spyOn(BeadsTaskAdapter.prototype, "readMany").mockImplementation(async (taskIds) => {
       completeReads++;
-      if (completeReads === 1) releaseInitialRead();
-      const records = await originalReadMany.call(this, taskIds);
-      return completeReads < 2 ? records : records.map((record) => record && record.kind === "found"
-        ? { ...record, task: { ...record.task, version: changedVersion } }
-        : record);
+      if (completeReads === 1) {
+        releaseInitialRead();
+        await initialResult;
+      }
+      return taskIds.map((taskId) => taskId === task.id
+        ? { kind: "found" as const, task: { ...task, version: completeReads < 2 ? task.version : changedVersion } }
+        : undefined);
     });
     vi.useFakeTimers();
     const controller = new AbortController();
@@ -746,6 +753,7 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
       await vi.advanceTimersByTimeAsync(4_999);
       expect(readMany).toHaveBeenCalledTimes(1);
       await vi.advanceTimersByTimeAsync(1);
+      releaseInitialResult();
       await expect(update).resolves.toMatchObject({
         details: {
           kind: "updates",
