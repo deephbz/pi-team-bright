@@ -6,6 +6,16 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const causalPath = "src/utils/causal-path-characterization.test.ts";
 const causalTimeoutMs = 180_000;
+const causalInventoryTitle = "keeps the Task-to-observation path and its outside-in anchors machine-operable";
+const causalScenarioTitles = [
+  "spans public assignment, exact Session presentation, acknowledgement, leader observation, duplicate replay, and restart",
+  "requires an acknowledged snapshot and keeps observation position on the exact active branch",
+  "characterizes public team_sync timeout and cancellation without losing later authority changes",
+  "refuses stale Membership presentation and reconstructs delivery for the replacement exact Session",
+  "keeps an unavailable event hydration unacknowledged, then retries through the registered raw, model, and TUI boundary",
+  "performs one quiet-authority read before 5 seconds, then cadence and post-wake reads before acknowledgement",
+  "reports degraded public assignment and recovers after atomic delivery-spool failure",
+];
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
@@ -92,15 +102,23 @@ function createExhaustiveRunner({
     async runNonCausal(config, files) {
       for (const file of files) await run(config, [file]);
     },
-    runCausal(config) {
-      return run(config, [causalPath], causalTimeoutMs);
+    async runCausal(config, cases = [causalInventoryTitle, ...causalScenarioTitles]) {
+      for (const title of cases) {
+        console.log(`causal case: ${title}`);
+        await run(config, [causalPath, "-t", title], causalTimeoutMs);
+      }
     },
   };
 }
 
-async function runExhaustiveTests(config, runner = createExhaustiveRunner(), files = nonCausalFiles(config)) {
+async function runExhaustiveTests(
+  config,
+  runner = createExhaustiveRunner(),
+  files = nonCausalFiles(config),
+  causalCases,
+) {
   await runner.runNonCausal(config, files);
-  await runner.runCausal(config);
+  await runner.runCausal(config, causalCases);
 }
 
 if (require.main === module) {
@@ -112,4 +130,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { causalPath, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, runExhaustiveTests, terminateProcessGroup };
+module.exports = { causalInventoryTitle, causalPath, causalScenarioTitles, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, runExhaustiveTests, terminateProcessGroup };
