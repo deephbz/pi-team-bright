@@ -10,8 +10,8 @@ Membership baseline: `6997dce`
 Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
 Verified source candidate: `8c74a5c`
-Package metadata: `@hypercarrier/pi-team-bright@0.17.0-rc.11`
-Publication state: untagged and unpublished
+Package metadata target: `@hypercarrier/pi-team-bright@0.17.0-rc.13`
+Publication state: source preparation only; untagged and unpublished
 Public surface unchanged; no established breaking contract or regression
 BdRunner behavior: intentional wall-clock timing change
 Architecture impact: changed internally; HyperCarrier's diagram is unchanged
@@ -346,12 +346,14 @@ ALERT-004 remains characterized and unclassified. Broad TRIO-004 parity, Alert r
 behavior, a real Pi subprocess/rendered-terminal receipt, and model
 interpretation remain outside the proved scope.
 
-The result bundle and rc.11 metadata are committed in verified source
-`638d5934`. That source remains untagged and unpublished. No push, npm
-publication, npm `next` change, registry comparison, provenance claim, GitHub
-release, or published-release receipt occurred. Publication is a separate
-authorized operation and must compare its external identities with this source
-and receipt.
+The rc.11 result bundle and metadata remain committed in verified source
+`638d5934` as historical evidence. The rc.13 preparation target is uncommitted
+and based exactly on `d2dfc7004d73f7a69c2a8cf23bd4c691162fe51a`; it has no
+aggregate or package-verification claim. No rc.13 push, tag, npm publication,
+npm `next` change, registry comparison, provenance claim, GitHub release, or
+published-release receipt occurred. The dated
+[rc.13 release plan](../../journal/2026-08-12-v0.17.0-rc.13-release-plan.md)
+keeps verification and publication as separate authorized operations.
 
 Current nudge evidence is deterministic and one-process. It does not prove real
 Pi persistence, external Beads/Dolt contention, cross-process forks, native
