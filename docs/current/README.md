@@ -2,6 +2,10 @@
 
 Updated: 2026-08-12
 
+Current release: `0.17.0-rc.13` is published to npm `next` from annotated tag
+`v0.17.0-rc.13`. The durable publication evidence is in
+[`2026-08-12-v0.17.0-rc.13-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.13-release-receipt.md).
+
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces; the unresolved Beads list-contention path remains in
 **hardening**.
