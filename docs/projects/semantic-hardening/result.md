@@ -11,7 +11,7 @@ Integration base: `7453ce1b2a2ca49f8729a6bf399f7c1f25bfca6a`
 Package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.10`
 Verified source candidate: `8c74a5c`
 Published package baseline: `@hypercarrier/pi-team-bright@0.17.0-rc.13` on npm `next`
-Publication state: rc.13 is published; rc.14 product acceptance passed but it has no candidate commit, tag, publication, or release claim
+Publication state: rc.14 is published to npm `next` with SLSA provenance and a GitHub prerelease
 Public surface unchanged; no established breaking contract or regression
 BdRunner behavior: intentional wall-clock timing change
 Architecture impact: changed internally; HyperCarrier's diagram is unchanged
@@ -68,8 +68,13 @@ non-overlapping `team_sync` calls from 16 to 5,308 ms, with at most one live
 Beads list child and no observed FSEvents storm. The durable
 [receipt](../../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md)
 records evidence and proof limits. `fs_usage` was unavailable because it
-required root. The reserved aggregate has not run, so the candidate commit and
-all publication claims remain open.
+required root. Exact source `8bb517bd32d8687e97b96a531db15833fd64420a`
+then passed the reserved aggregate, package and source gates, Node 22/24 CI,
+hosted dry-run, and hosted OIDC publication. The registry tarball matches the
+local one-pack artifact, npm `next` selects rc.14, SLSA provenance is present,
+and the GitHub prerelease exists. The durable [release
+receipt](../../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md) owns these
+claims.
 
 ## Stress follow-up
 

@@ -2,9 +2,9 @@
 
 Updated: 2026-08-12
 
-Current release: `0.17.0-rc.13` is published to npm `next` from annotated tag
-`v0.17.0-rc.13`. The durable publication evidence is in
-[`2026-08-12-v0.17.0-rc.13-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.13-release-receipt.md).
+Current release: `0.17.0-rc.14` is published to npm `next` from annotated tag
+`v0.17.0-rc.14`. The durable publication evidence is in
+[`2026-08-12-v0.17.0-rc.14-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md).
 
 Lifecycle stage: **sharing** for the Task-first coordination and Membership-
 observation surfaces. The rc.14 liveness and recovery candidate is in final
@@ -156,17 +156,14 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `0.17.0-rc.13` is published to npm `next` from annotated tag
-  `v0.17.0-rc.13`. Its durable [release receipt](../journal/2026-08-12-v0.17.0-rc.13-release-receipt.md)
-  records the exact source, gates, package, registry, provenance, and GitHub
-  prerelease evidence. Earlier rc.13 preparation records remain historical
-  evidence only. `0.17.0-rc.14` selects the bounded liveness and Worker-recovery
-  repair on base `53367e412ad0217bfcf4845d92a07bb9ebec6de2`. Isolated product
-  acceptance passed, but no candidate commit, aggregate, tag, publication, or
-  release claim exists. Its dated [plan](../journal/2026-08-12-v0.17.0-rc.14-release-plan.md),
-  [draft notes](../journal/2026-08-12-v0.17.0-rc.14-release-notes-draft.md), and
-  [checklist](../release/v0.17.0-rc.14-release-checklist.md) keep source
-  preparation, reversible gates, and publication operations separate.
+- `0.17.0-rc.14` is published to npm `next` from annotated tag
+  `v0.17.0-rc.14`. Its durable [release receipt](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md)
+  records exact source `8bb517bd32d8687e97b96a531db15833fd64420a`, product acceptance,
+  local and hosted gates, package identity, registry equality, SLSA provenance,
+  and the GitHub prerelease. The dated [plan](../journal/2026-08-12-v0.17.0-rc.14-release-plan.md),
+  [notes](../journal/2026-08-12-v0.17.0-rc.14-release-notes-draft.md), and
+  [checklist](../release/v0.17.0-rc.14-release-checklist.md) remain supporting
+  artifacts. Rc.13 records are historical evidence only.
 - `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release
@@ -215,8 +212,9 @@ restating executable definitions.
   runtime startup. The isolated [exact-source E2E receipt](../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md)
   records eight Terra-medium Workers, nine closed Tasks, safe recovery, exact
   cleanup, and 27 non-overlapping sync calls from 16 to 5,308 ms. This is the
-  acceptance anchor for the incident repair; the reserved aggregate and release
-  gates remain open.
+  acceptance anchor for the incident repair. The reserved aggregate, hosted
+  gates, npm publication, provenance, and GitHub prerelease then passed as
+  recorded in the rc.14 release receipt.
 - Task mutation publication now crosses a consumer-owned port. The durable
   adapter preserves Beads commit, Membership-lease release, acting-Session
   suppression, serial event, failed-hint, recipient delivery, inline recovery,

@@ -1,19 +1,16 @@
 # Pi Team Bright semantic hardening
 
 Updated: 2026-08-12
-Stage: consolidation and release hardening
-Status: Historical executable source/test candidate `8c74a5c9e2b5c1c645fcfc89c107a438a4272fbc`
-and documentation closure `3e199a5` record the final aggregate: TypeScript plus 119 test files and 875 tests in
-241.77 seconds. Package/generated, lane, agent-surface, tool-result, privacy,
-JSON, and type gates passed. The follow-up Team shut down cleanly, and the
-separate global checkout advanced to this source while preserving five untracked
-files; its fresh `npm ci --workspaces=false`, typecheck, and package verification
-passed. This is local deterministic evidence. It does not prove a real Pi
-process, Beads/Dolt contention, external writers, watcher delivery, OS
-scheduling, terminal pixels, publication, registry state, provenance, or TUI
-freeze prevention. Architecture impact: changed for internal Task, Team, and
-Alert dependency ownership; HyperCarrier's canonical diagram remains unchanged
-because it keeps Pi Team Bright internals opaque.
+Stage: sharing
+Status: Exact source `8bb517bd32d8687e97b96a531db15833fd64420a`
+is published as `@hypercarrier/pi-team-bright@0.17.0-rc.14` on npm `next`.
+The reserved aggregate passed 127 isolated result blocks and 895 assertions.
+Isolated eight-Worker product acceptance, package and source gates, independent
+verification, Node 22/24 CI, hosted dry-run, hosted OIDC publication, registry
+equality, SLSA provenance, and the GitHub prerelease passed. The durable
+[release receipt](../../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md)
+records exact evidence and limits. Architecture impact remains internal; the
+public coordination contract and HyperCarrier's opaque diagram are unchanged.
 
 ## Outcome and current result
 
@@ -110,8 +107,12 @@ then passed with eight Terra-medium Workers, nine closed Tasks, safe logical
 Worker recovery, exact cleanup, and 27 non-overlapping `team_sync` calls from
 16 to 5,308 ms. Its [receipt](../../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md)
 and [leader interview](../../journal/2026-08-12-rc14-e2e-leader-interview.md)
-are the current product-acceptance evidence. The reserved aggregate has not run,
-so rc.14 still has no candidate commit, tag, publication, or release claim.
+are the current product-acceptance evidence. Exact source
+`8bb517bd32d8687e97b96a531db15833fd64420a` passed the reserved aggregate and
+all local and hosted release gates. Rc.14 is published to npm `next` with SLSA
+provenance and a GitHub prerelease. The durable [release
+receipt](../../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md) owns the
+publication claim.
 
 ## Sources of truth
 
@@ -433,11 +434,9 @@ this Project. Normal coordination remains Task-first through `team_sync`.
 
 ## Next actions
 
-1. Commit the reviewed rc.14 source, tests, release metadata, and acceptance
-   artifacts as one exact candidate.
-2. Run the reserved aggregate once on that clean commit, then complete package,
-   lane, QA, public, persistence, graph, privacy, JSON, link, detached one-pack,
-   owned Beads, and bounded Pi-load gates.
-3. Push main, wait for Node 22/24 CI, run the hosted dry-run, publish through the
-   annotated rc.14 tag and OIDC workflow, verify registry and provenance, create
-   the GitHub prerelease, and append the immutable release receipt.
+1. Keep the deferred empty structural progress and split state/event projection
+   opportunities outside rc.14 until an ontology and behavior gate selects them.
+2. Continue measuring residual Beads contention through existing typed timeout
+   and exact-operation retry behavior.
+3. Keep the separate DAG-native line outside this release history until its own
+   integration decision and verification gates pass.

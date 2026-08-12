@@ -1,8 +1,8 @@
 # Model-tool release parity checklist
 
 Release: `0.17.0-rc.14`
-Source surface: exact preparation base `53367e412ad0217bfcf4845d92a07bb9ebec6de2`;
-at preparation it is untagged, unpublished, and not aggregate-verified
+Source surface: exact release source `8bb517bd32d8687e97b96a531db15833fd64420a`;
+published from annotated tag `v0.17.0-rc.14` after aggregate and release gates
 
 This checklist maps each `0.17.0-rc.14` coordination capability to the
 single durable model-tool leader surface. The leader uses exact Session binding,
