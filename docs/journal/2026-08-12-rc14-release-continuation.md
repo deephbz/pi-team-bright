@@ -4,7 +4,7 @@ Date: 2026-08-12
 Stage: hardening to sharing
 Base and origin/main: `53367e412ad0217bfcf4845d92a07bb9ebec6de2`
 Candidate version in package and lock: `0.17.0-rc.14`
-Publication state: no candidate commit, aggregate, push, tag, npm release, provenance, or GitHub prerelease yet
+Publication state: completed by exact source `8bb517bd32d8687e97b96a531db15833fd64420a`; see the rc.14 release receipt
 
 ## Owner intent
 
@@ -95,7 +95,17 @@ and version consistency passed after these edits. Global Pi settings retain
 Worker `default_model=openai-codex/gpt-5.6-terra`; leader default reasoning was
 restored to high.
 
-## Required next order
+## Completion correction
+
+The open steps below are historical handoff state. Exact source
+`8bb517bd32d8687e97b96a531db15833fd64420a` passed the reserved aggregate and
+all release gates. Annotated tag `v0.17.0-rc.14` published through hosted OIDC
+run `31592109336`. npm `next`, registry equality, SLSA provenance, and the
+GitHub prerelease passed. The durable
+[release receipt](2026-08-12-v0.17.0-rc.14-release-receipt.md) supersedes this
+continuation for current status.
+
+## Historical required next order
 
 1. Let the isolated Sol leader finish its successful receipt and interview, then
    stop that Pi process normally. Keep its completed Team shut down.

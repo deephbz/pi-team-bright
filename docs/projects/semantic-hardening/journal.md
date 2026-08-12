@@ -1581,4 +1581,24 @@ changes; append a correction.
 - The [exact-source receipt](../../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md),
   [leader interview](../../journal/2026-08-12-rc14-e2e-leader-interview.md), and
   machine timing artifacts preserve exact evidence and limits. No aggregate,
-  candidate commit, push, tag, publication, or release claim exists yet.
+  candidate commit, push, tag, publication, or release claim existed at that
+  point.
+
+## 2026-08-12 — rc.14 published
+
+- Exact clean source `8bb517bd32d8687e97b96a531db15833fd64420a`
+  passed its reserved local aggregate: 127 isolated result blocks and 895 passed
+  assertions. Package, lane, QA, public, persistence, JSON, link, graph, privacy,
+  detached one-pack, owned Beads, bounded Pi-load, and independent Terra-medium
+  checks passed.
+- Main CI run `31589330598` passed Node 22 and Node 24. Hosted dry-run
+  `31589737265` passed the exact source without publication.
+- Annotated tag `v0.17.0-rc.14` has tag object
+  `923ed5408786e433ef771b528164c006b3f588b6`. Hosted OIDC run `31592109336`
+  published to npm `next` with SLSA provenance.
+- The downloaded registry tarball matches the detached one-pack artifact in
+  bytes, shasum, integrity, SHA-256, and SHA-512. npm `next` resolves to rc.14.
+  The GitHub prerelease is
+  https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.0-rc.14.
+- The durable [release receipt](../../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md)
+  records exact identifiers, gates, and proof limits.
