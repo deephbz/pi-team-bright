@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { admitRuntimeStartup, readRuntimeStatus, type AgentRuntimeStatus, writeRuntimeStatus } from "./runtime";
+import { admitRuntimeStartup, preflightRuntimeRecovery, readRuntimeStatus, type AgentRuntimeStatus, writeRuntimeStatus } from "./runtime";
 import * as paths from "./paths";
 import * as teams from "./teams";
 
@@ -76,6 +76,21 @@ describe("runtime startup admission", () => {
     expect(claims).toEqual([101]);
     expect(bind).toHaveBeenCalledOnce();
     expect(await readRuntimeStatus(teamName, "worker")).toMatchObject({ pid: 101, membershipId: worker.membershipId });
+  });
+
+  it("keeps recovery preflight pure while rejecting a live prepared or bound generation", () => {
+    const prepared = { name: "worker", membershipId: "member-1", pendingLaunchId: "launch-1" };
+    expect(preflightRuntimeRecovery(prepared, null, () => "occupied", "launch-1")).toEqual({ kind: "ready" });
+    expect(preflightRuntimeRecovery(prepared, generation, () => "occupied", "launch-1"))
+      .toMatchObject({ kind: "refused", reason: expect.stringMatching(/live or unverified/i) });
+    expect(preflightRuntimeRecovery(bound, generation, () => "absent"))
+      .toEqual({ kind: "ready", replaces: { membershipId: "member-1", pid: 4242, startedAt: 10 } });
+    expect(preflightRuntimeRecovery(bound, null, () => "absent"))
+      .toMatchObject({ kind: "refused", reason: expect.stringMatching(/missing/i) });
+    expect(preflightRuntimeRecovery(bound, { ...generation, pid: 0 }, () => "absent"))
+      .toMatchObject({ kind: "refused", reason: expect.stringMatching(/malformed/i) });
+    expect(preflightRuntimeRecovery(bound, { ...generation, membershipId: "old-member" }, () => "absent"))
+      .toMatchObject({ kind: "refused", reason: expect.stringMatching(/another Membership/i) });
   });
 
   it("refuses a live exact-Session incumbent before replacement", () => {

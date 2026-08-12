@@ -56,6 +56,8 @@ export class CoordinationObservationService {
   private readonly branchLineages = new Map<string, string[]>();
   private readonly pendingBySession = new Map<string, any>();
   private readonly taskProjections = new Map<string, any>();
+  /** One complete Task-authority projection read per Team at a time. */
+  private readonly taskProjectionReads = new Map<string, Promise<TaskProjectionReadResult>>();
   private readonly nudgeDebt?: CoordinationNudgeDebtService;
   constructor(
     private readonly coordinationQueries: CoordinationQueryBundle,
@@ -272,6 +274,18 @@ export class CoordinationObservationService {
   }
 
   async readTaskProjection(teamName: string): Promise<TaskProjectionReadResult> {
+    const current = this.taskProjectionReads.get(teamName);
+    if (current) return current;
+    const read = this.readTaskProjectionOnce(teamName);
+    this.taskProjectionReads.set(teamName, read);
+    try {
+      return await read;
+    } finally {
+      if (this.taskProjectionReads.get(teamName) === read) this.taskProjectionReads.delete(teamName);
+    }
+  }
+
+  private async readTaskProjectionOnce(teamName: string): Promise<TaskProjectionReadResult> {
     try {
       const taskIds = await this.coordinationQueries.taskStateDelivery.listTaskIds(teamName);
       const records = await this.coordinationQueries.taskStateDelivery.readTasks(teamName, taskIds);

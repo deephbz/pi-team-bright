@@ -9,6 +9,7 @@ import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
 import { createWorkerLaunchBridge } from "./worker-launch-bridge";
+import { materializeWorkerAggregate } from "./worker-resource-projection";
 
 type RegisteredTool = {
   name: string;
@@ -149,6 +150,116 @@ describe("compensated Worker launch", () => {
       membershipId: member.membershipId,
       terminalTarget: { backend: "launch-contract-terminal", kind: "pane", targetId: "pane-worker" },
       isActive: true,
+    });
+  });
+
+  it("compensates only a failed recovery target and leaves first Session admission to its child", async () => {
+    const f = await team("recovery-persistence-failure");
+    const a = adapter();
+    setAdapter(a.terminal);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
+    });
+    const member = {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: teams.newLaunchId(),
+      agentId: `worker@${f.name}`,
+      name: "worker",
+      agentType: "teammate" as const,
+      joinedAt: Date.now(),
+      cwd: process.cwd(),
+      subscriptions: [],
+      isActive: true,
+      prompt: "Own focused work.",
+      color: "blue",
+      terminalTarget: { backend: a.terminal.name, kind: "pane" as const, targetId: "dead-pane" },
+    };
+    await teams.addMember(f.name, member);
+    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("recovery target write failed"));
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .rejects.toThrow(/recovery target write failed.*exact recovery target was stopped/i);
+    expect(a.kill).toHaveBeenCalledWith("pane-worker");
+    expect(await teams.currentMembership(f.name, "worker")).toMatchObject({
+      membershipId: member.membershipId,
+      pendingLaunchId: member.pendingLaunchId,
+      isActive: true,
+    });
+  });
+
+  it("serializes concurrent recovery ensures after one exact target becomes live", async () => {
+    const f = await team("concurrent-recovery");
+    const a = adapter();
+    let recoveredTargetLive = false;
+    a.spawn.mockImplementation(() => {
+      recoveredTargetLive = true;
+      return "pane-recovered";
+    });
+    a.terminal.isAlive = vi.fn(() => recoveredTargetLive);
+    setAdapter(a.terminal);
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const firstAggregate = materializeWorkerAggregate({
+      cwd: process.cwd(),
+      policy: { appendGlobal: { path: "/fixture/first.md", content: "first" }, enable: [], disable: [], diagnostics: [] },
+    })!;
+    const staleEnsureAggregate = materializeWorkerAggregate({
+      cwd: process.cwd(),
+      policy: { appendGlobal: { path: "/fixture/stale.md", content: "stale" }, enable: [], disable: [], diagnostics: [] },
+    })!;
+    const aggregates = [firstAggregate, staleEnsureAggregate];
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ path: aggregates.shift(), projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
+    });
+    const member = {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: teams.newLaunchId(),
+      agentId: `worker@${f.name}`,
+      name: "worker",
+      agentType: "teammate" as const,
+      joinedAt: Date.now(),
+      cwd: process.cwd(),
+      subscriptions: [],
+      isActive: true,
+      prompt: "Own focused work.",
+      color: "blue",
+      terminalTarget: { backend: a.terminal.name, kind: "pane" as const, targetId: "dead-pane" },
+    };
+    await teams.addMember(f.name, member);
+    const withCurrentMembershipLease = teams.withCurrentMembershipLease;
+    let leaseCalls = 0;
+    let releaseFirstLease!: () => void;
+    const secondEnsureReachedLease = new Promise<void>((resolve) => { releaseFirstLease = resolve; });
+    vi.spyOn(teams, "withCurrentMembershipLease").mockImplementation(async (teamName, membershipId, action) => {
+      if (++leaseCalls === 1) await secondEnsureReachedLease;
+      else releaseFirstLease();
+      return withCurrentMembershipLease(teamName, membershipId, action);
+    });
+
+    const outcomes = await Promise.all([
+      bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }),
+      bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }),
+    ]);
+
+    expect(a.spawn).toHaveBeenCalledOnce();
+    expect(outcomes.map((outcome) => outcome.action).sort()).toEqual(["recovered", "reused"]);
+    const activeAggregate = (a.spawn.mock.calls as Array<Array<any>>)[0]?.[0]?.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
+    const unusedAggregate = [firstAggregate, staleEnsureAggregate].find((candidate) => candidate !== activeAggregate)!;
+    expect(activeAggregate).toBeOneOf([firstAggregate, staleEnsureAggregate]);
+    expect(fs.existsSync(activeAggregate)).toBe(true);
+    expect(fs.existsSync(unusedAggregate)).toBe(false);
+    fs.rmSync(activeAggregate, { force: true });
+    expect(await teams.currentMembership(f.name, "worker")).toMatchObject({
+      membershipId: member.membershipId,
+      pendingLaunchId: member.pendingLaunchId,
+      terminalTarget: { backend: a.terminal.name, kind: "pane", targetId: "pane-recovered" },
     });
   });
 

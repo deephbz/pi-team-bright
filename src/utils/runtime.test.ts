@@ -42,6 +42,21 @@ describe("runtime status", () => {
     expect(runtime?.ready).toBe(false);
   });
 
+  it("reads a complete runtime snapshot without waiting for a writer lock", async () => {
+    const statusPath = runtimeStatusPath(teamName, agentName);
+    fs.mkdirSync(path.dirname(statusPath), { recursive: true });
+    fs.writeFileSync(statusPath, JSON.stringify({ teamName, agentName, pid: 123, startedAt: 1 }));
+    fs.writeFileSync(`${statusPath}.lock`, JSON.stringify({ pid: process.pid, token: "writer-holds-lock" }));
+    try {
+      await expect(Promise.race([
+        readRuntimeStatus(teamName, agentName),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("runtime read waited for writer lock")), 50)),
+      ])).resolves.toMatchObject({ pid: 123, startedAt: 1 });
+    } finally {
+      fs.rmSync(`${statusPath}.lock`, { force: true });
+    }
+  });
+
   it("merges updates instead of overwriting status", async () => {
     await writeRuntimeStatus(teamName, agentName, {
       pid: 123,

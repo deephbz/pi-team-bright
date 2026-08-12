@@ -1,0 +1,16 @@
+{
+  "watchdog_sha256": "75871f02321bb6e189132d75e83dbcbc54945b254ab16f85888ffadb71383786",
+  "sync_timings_sha256": "0cd205363e6ac2d2ab809a5df62bf99d6cf16e7508a61b63a08cd61937ca99e1",
+  "fs_usage_sha256": "d282965c010697444e5517a53fa7d73cd47c2a25c3a56cb40855b1ba4dba2f07",
+  "sample_count": 74,
+  "sample_manifest_sha256": "4a7c71c888758c01418d7430eda9807378b7200ba1fb4658afee38e09a695153",
+  "fsevent_occurrence_min": 3,
+  "fsevent_occurrence_max": 3,
+  "all_samples_exactly_three": true,
+  "team_sync_calls": 27,
+  "product_duration_min_ms": 16,
+  "product_duration_max_ms": 5308,
+  "product_over_15000": 0,
+  "manual_marker_over_15000": [12, 20],
+  "maximum_live_descendant_bd_list_count": 1
+}

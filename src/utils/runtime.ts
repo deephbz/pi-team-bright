@@ -61,6 +61,11 @@ export type RuntimeStartupAdmission =
   | { kind: "admitted"; action: "claim" | "already_current"; replaces?: RuntimeGeneration }
   | { kind: "refused"; reason: string };
 
+/** A pure recovery check. Only the spawned child can claim and publish startup. */
+export type RuntimeRecoveryPreflight =
+  | { kind: "ready"; replaces?: RuntimeGeneration }
+  | { kind: "refused"; reason: string };
+
 /** ESRCH is the only bounded proof that a recorded PID is absent. */
 export function probePidPresence(pid: number): "absent" | "occupied" {
   try {
@@ -69,6 +74,32 @@ export function probePidPresence(pid: number): "absent" | "occupied" {
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ESRCH" ? "absent" : "occupied";
   }
+}
+
+/**
+ * Check a missing carrier before its replacement process is spawned. This
+ * never reserves, writes, or publishes a runtime generation.
+ */
+export function preflightRuntimeRecovery(
+  member: Pick<Member, "name" | "membershipId" | "sessionFile" | "pendingLaunchId">,
+  status: AgentRuntimeStatus | null,
+  probe: (pid: number) => "absent" | "occupied" = probePidPresence,
+  launchId?: string,
+): RuntimeRecoveryPreflight {
+  if (!member.membershipId) return { kind: "refused", reason: `Current Membership for ${member.name} has no stable identity.` };
+  if (!member.sessionFile && (!member.pendingLaunchId || launchId !== member.pendingLaunchId)) {
+    return { kind: "refused", reason: `Prepared Membership for ${member.name} has no matching launch capability.` };
+  }
+  const generation = runtimeGeneration(status);
+  if (!generation) {
+    if (!member.sessionFile && status === null) return { kind: "ready" };
+    return { kind: "refused", reason: `Runtime evidence for ${member.sessionFile ? "already Session-bound" : "prepared"} ${member.name} is ${status === null ? "missing" : "malformed"}.` };
+  }
+  if (generation.membershipId !== member.membershipId) {
+    return { kind: "refused", reason: `Runtime evidence for ${member.name} belongs to another Membership.` };
+  }
+  if (probe(generation.pid) === "absent") return { kind: "ready", replaces: generation };
+  return { kind: "refused", reason: `${member.sessionFile ? "Current" : "Prepared"} Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
 }
 
 /**
@@ -176,17 +207,16 @@ export async function readRuntimeStatus(
   agentName: string
 ): Promise<AgentRuntimeStatus | null> {
   const p = runtimeStatusPath(teamName, agentName);
-  if (!fs.existsSync(p)) return null;
-
-  return await withLock(p, async () => {
-    if (!fs.existsSync(p)) return null;
-    try {
-      return JSON.parse(fs.readFileSync(p, "utf-8")) as AgentRuntimeStatus;
-    } catch {
-      // Corrupted file
-      return null;
-    }
-  });
+  // Writers retain the lock and atomically replace this file. Readers must not
+  // join that lock: a liveness snapshot may use the prior complete generation.
+  try {
+    return JSON.parse(fs.readFileSync(p, "utf-8")) as AgentRuntimeStatus;
+  } catch (error) {
+    // A concurrent replacement can make the path absent between operations.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    // Corrupted or unavailable evidence fails closed at the caller.
+    return null;
+  }
 }
 
 /**

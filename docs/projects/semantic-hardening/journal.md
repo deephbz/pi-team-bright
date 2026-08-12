@@ -1544,3 +1544,41 @@ changes; append a correction.
   evidence.
 - The seven late assignments after `caught_up` describe a pre-existing or
   unclassified `caught_up`/backlog risk. They do not establish a regression.
+
+## 2026-08-12 — rc.14 incident artifact curation
+
+- The documentation Worker preflight recorded `openai-codex/gpt-5.6-terra` at
+  medium reasoning. It recorded `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and
+  `NO_PROXY` as present. It did not retain proxy values.
+- The shared tree contains uncommitted liveness and Worker-recovery work. The
+  owner-supplied macOS incident artifact is diagnostic evidence only. It does
+  not establish repair correctness.
+- No new-source real macOS Pi/Herdr eight-Worker stress or safe-recovery E2E
+  receipt exists. The reserved aggregate has not run for this tree. Therefore
+  rc.14 has no source candidate, release, or publication claim. The dated
+  [curation record](../../journal/2026-08-12-rc.14-artifact-curation.md)
+  preserves this status and its proof limits.
+
+## 2026-08-12 — rc.14 isolated exact-source acceptance
+
+- This entry supersedes the curation entry's open E2E status. It does not alter
+  the earlier incident or failed-launch evidence.
+- An isolated Pi home with no ambient packages loaded the exact working-tree
+  extension. The leader used `openai-codex/gpt-5.6-sol` at high reasoning.
+  Eight Workers used `openai-codex/gpt-5.6-terra` at medium reasoning and wrote
+  their own preflight and result Task events.
+- All nine Tasks closed. Logical Worker `e2e-1` stopped normally, recovered once
+  under the same name, and closed a second Task with Worker-authored evidence.
+  All eight current Workers stopped exactly, and Team shutdown returned no
+  unfinished Task IDs.
+- The external monitor matched 27 non-overlapping `team_sync` calls. Product
+  duration was 16 to 5,308 ms, no call crossed 15 seconds, and at most one live
+  descendant Beads list process appeared. Seventy-four one-second samples each
+  contained three FSEvent string occurrences, not the incident storm. `fs_usage`
+  was unavailable because it required root and is not acceptance evidence.
+- One Task create returned an unknown timeout and succeeded through identical
+  operation retry without a duplicate. Treat this as existing Beads contention.
+- The [exact-source receipt](../../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md),
+  [leader interview](../../journal/2026-08-12-rc14-e2e-leader-interview.md), and
+  machine timing artifacts preserve exact evidence and limits. No aggregate,
+  candidate commit, push, tag, publication, or release claim exists yet.

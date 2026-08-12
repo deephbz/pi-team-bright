@@ -91,11 +91,14 @@ type WorkerRecoveryInput = {
   teamConfig: TeamConfig;
   teamTerminal: ReturnType<typeof currentTerminalForTeam>;
   member: Member;
-  mode: WorkerRecoveryMode;
   argv: string[];
   env: Record<string, string>;
   useSeparateWindow: boolean;
 };
+
+type WorkerRecoveryExecution =
+  | { action: "reused"; member: Member; target?: TerminalTarget }
+  | { action: "recovered"; target: PreparedLaunchTarget; recoveryMode: WorkerRecoveryMode };
 
 function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStatus | null): runtime.RuntimeGeneration | null {
   const generation = runtime.runtimeGeneration(status);
@@ -186,60 +189,16 @@ export class WorkerLaunchBridge {
         ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
       };
 
-      if (workerPlan.recoveryMode === "first_binding_retry") {
-        const prepared = workerPlan.carrier;
-        env.PI_AGENT_LAUNCH_ID = prepared.pendingLaunchId;
-        let recoveryCursor: string;
-        try {
-          recoveryCursor = this.dependencies.lifecyclePublication.readEventCursor(teamName);
-        } catch (error) {
-          removeWorkerAggregate(aggregate.path);
-          throw error;
-        }
-        const target = await this.executeWorkerRecovery({
-          teamName,
-          teamConfig,
-          teamTerminal,
-          member: prepared.member,
-          mode: workerPlan.recoveryMode,
-          argv: baseArgv,
-          env,
-          useSeparateWindow,
-        });
-        const startup = await this.observeLaunchedWorker(teamName, workerName, existingMember.membershipId!, recoveryCursor, signal);
-        const current = await teams.currentMembership(teamName, workerName);
-        return {
-          action: "recovered",
-          member: current,
-          membershipId: existingMember.membershipId!,
-          recoveryMode: workerPlan.recoveryMode,
-          target,
-          startup,
-        };
+      const recovery = workerPlan.carrier;
+      if (recovery.kind === "prepared") {
+        env.PI_AGENT_LAUNCH_ID = recovery.pendingLaunchId;
+      } else {
+        delete env.PI_AGENT_LAUNCH_ID;
       }
-
-      const bound = workerPlan.carrier;
-      const resumeArgv = [...baseArgv, "--session", bound.sessionFile];
-      delete env.PI_AGENT_LAUNCH_ID;
-      let runtimeAdmission: runtime.RuntimeStartupAdmission;
-      try {
-        runtimeAdmission = await teams.withMembershipMutationLease(teamName, bound.membershipId, async () => {
-          const current = await teams.currentMembership(teamName, workerName);
-          return runtime.admitRuntimeStartup(
-            current,
-            bound.sessionFile,
-            await runtime.readRuntimeStatus(teamName, workerName),
-            -1,
-          );
-        });
-      } catch (error) {
-        removeWorkerAggregate(aggregate.path);
-        throw error;
-      }
-      if (runtimeAdmission.kind === "refused") {
-        removeWorkerAggregate(aggregate.path);
-        throw new Error(`Cannot resume ${workerName}: ${runtimeAdmission.reason} No terminal target changed and no candidate was spawned.`);
-      }
+      env.PI_TEAM_MEMBERSHIP_ID = recovery.membershipId;
+      const argv = recovery.kind === "bound"
+        ? [...baseArgv, "--session", recovery.sessionFile]
+        : baseArgv;
       let recoveryCursor: string;
       try {
         recoveryCursor = this.dependencies.lifecyclePublication.readEventCursor(teamName);
@@ -247,23 +206,34 @@ export class WorkerLaunchBridge {
         removeWorkerAggregate(aggregate.path);
         throw error;
       }
-      const target = await this.executeWorkerRecovery({
+      const execution = await this.executeWorkerRecovery({
         teamName,
         teamConfig,
         teamTerminal,
-        member: bound.member,
-        mode: workerPlan.recoveryMode,
-        argv: resumeArgv,
+        member: recovery.member,
+        argv,
         env,
         useSeparateWindow,
       });
-      const startup = await this.observeLaunchedWorker(teamName, workerName, existingMember.membershipId!, recoveryCursor, signal);
+      if (execution.action === "reused") {
+        // This ensure resolved a disposable aggregate before the leased
+        // revalidation found another ensure's live exact carrier.
+        removeWorkerAggregate(aggregate.path);
+        return {
+          action: "reused",
+          member: execution.member,
+          membershipId: execution.member.membershipId!,
+          ...(execution.target ? { target: execution.target } : {}),
+        };
+      }
+      const startup = await this.observeLaunchedWorker(teamName, workerName, recovery.membershipId, recoveryCursor, signal);
+      const current = await teams.currentMembership(teamName, workerName);
       return {
         action: "recovered",
-        member: { ...existingMember },
-        membershipId: existingMember.membershipId!,
-        recoveryMode: workerPlan.recoveryMode,
-        target,
+        member: current,
+        membershipId: recovery.membershipId,
+        recoveryMode: execution.recoveryMode,
+        target: execution.target,
         startup,
       };
     }
@@ -320,6 +290,7 @@ export class WorkerLaunchBridge {
       ...request.launchEnvironment,
       PI_TEAM_NAME: teamName,
       PI_AGENT_NAME: workerName,
+      PI_TEAM_MEMBERSHIP_ID: member.membershipId!,
       PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
       ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
     };
@@ -481,56 +452,70 @@ export class WorkerLaunchBridge {
     }
   }
 
-  private async executeWorkerRecovery(input: WorkerRecoveryInput): Promise<PreparedLaunchTarget> {
-    const { teamName, teamConfig, teamTerminal, member, mode, argv, env, useSeparateWindow } = input;
-    let recoveredTarget: PreparedLaunchTarget | null = null;
-    const action = mode === "first_binding_retry" ? "relaunch prepared Worker" : "recover";
-    const retained = mode === "first_binding_retry"
-      ? "The unconsumed Membership remains current for another exact retry."
-      : "The existing Membership and exact Session binding remain current.";
+  private async executeWorkerRecovery(input: WorkerRecoveryInput): Promise<WorkerRecoveryExecution> {
+    const { teamName, teamConfig, teamTerminal, member, argv, env, useSeparateWindow } = input;
+    let target: PreparedLaunchTarget | null = null;
     try {
-      recoveredTarget = this.spawnWorkerCarrier(teamConfig, teamTerminal, member, argv, env, useSeparateWindow);
-      const update = teamConfig.terminalBackend
-        ? { terminalTarget: terminalTarget(recoveredTarget.backend, recoveredTarget.isWindow ? "window" : "pane", recoveredTarget.terminalId) }
-        : recoveredTarget.isWindow
-          ? { windowId: recoveredTarget.terminalId }
-          : { tmuxPaneId: recoveredTarget.terminalId };
-      await teams.withCurrentMembershipLease(teamName, member.membershipId!, async () => {
+      return await teams.withCurrentMembershipLease(teamName, member.membershipId!, async (leased) => {
         const current = await teams.currentMembership(teamName, member.name);
-        const admission = runtime.admitRuntimeStartup(
-          current,
-          member.sessionFile || "",
-          await runtime.readRuntimeStatus(teamName, member.name),
-          -1,
-          runtime.probePidPresence,
-          member.pendingLaunchId,
-        );
-        if (admission.kind === "refused") throw new Error(admission.reason);
-        if (mode === "first_binding_retry") {
-          await teams.updateMembership(teamName, member.membershipId!, update);
-        } else {
-          await teams.bindMemberSession(teamName, member.name, member.sessionFile!, undefined, update, member.membershipId);
+        if (current.membershipId !== member.membershipId || leased.membershipId !== member.membershipId) {
+          throw new Error(`Cannot recover ${member.name}: the exact Membership is no longer current. No candidate was spawned.`);
         }
+        const currentTarget = memberTerminalTarget(current, teamConfig.terminalBackend || teamTerminal.name);
+        if (currentTarget) assertTargetSupportedByTerminal(teamTerminal, currentTarget);
+        const currentObservation = currentTarget?.kind === "window"
+          ? (teamTerminal.isWindowAlive(currentTarget.targetId) ? "live" : "missing")
+          : currentTarget?.kind === "pane"
+            ? (teamTerminal.isAlive(currentTarget.targetId) ? "live" : "missing")
+            : "missing";
+        const currentPlan = planWorkerEnsure(normalizeWorkerCarrier(current), currentObservation);
+        if (currentPlan.action === "reuse") {
+          return { action: "reused", member: current, ...(currentTarget ? { target: currentTarget } : {}) };
+        }
+        if (currentPlan.action !== "recover") {
+          throw new Error(`Cannot recover ${member.name}: current carrier evidence is ${currentPlan.action}. No candidate was spawned.`);
+        }
+        const preflight = runtime.preflightRuntimeRecovery(
+          current,
+          await runtime.readRuntimeStatus(teamName, member.name),
+          runtime.probePidPresence,
+          currentPlan.recoveryMode === "first_binding_retry" ? current.pendingLaunchId : undefined,
+        );
+        if (preflight.kind === "refused") {
+          throw new Error(`Cannot recover ${member.name}: ${preflight.reason} No terminal target changed and no candidate was spawned.`);
+        }
+        target = this.spawnWorkerCarrier(teamConfig, teamTerminal, member, argv, env, useSeparateWindow);
+        const update = teamConfig.terminalBackend
+          ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) }
+          : target.isWindow
+            ? { windowId: target.terminalId }
+            : { tmuxPaneId: target.terminalId };
+        // This records only the exact terminal carrier. The child alone claims
+        // runtime and binds its Pi Session after it starts.
+        await teams.updateMembership(teamName, member.membershipId!, update);
+        return { action: "recovered", target, recoveryMode: currentPlan.recoveryMode };
       });
-      return recoveredTarget;
     } catch (error) {
-      if (recoveredTarget) {
+      // TypeScript does not track assignment inside the leased callback.
+      const failedTarget = target as PreparedLaunchTarget | null;
+      if (failedTarget) {
         try {
-          stopLaunchTarget(recoveredTarget);
-          removeWorkerAggregate(env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
+          stopLaunchTarget(failedTarget);
         } catch (cleanupError) {
           throw new Error(
-            `Failed to ${action} ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
-            + `Compensation couldn't stop ${recoveredTarget.isWindow ? "window" : "pane"} ${recoveredTarget.terminalId}: `
+            `Failed to recover ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
+            + `Compensation could not stop ${failedTarget.isWindow ? "window" : "pane"} ${failedTarget.terminalId}: `
             + `${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
             + "The Membership remains current; reconcile the live process before retrying.",
           );
         }
-      } else {
-        removeWorkerAggregate(env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
       }
+      removeWorkerAggregate(env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
       throw new Error(
-        `Failed to ${action} ${member.name}: ${error instanceof Error ? error.message : String(error)}. ${retained}`,
+        `Failed to recover ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
+        + (failedTarget
+          ? "The exact recovery target was stopped; the Membership remains current for an exact child retry."
+          : "The Membership remains current for exact child startup admission."),
       );
     }
   }

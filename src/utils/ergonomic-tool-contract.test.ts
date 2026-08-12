@@ -482,12 +482,15 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(spawnOptions.env).toMatchObject({
       PI_TEAM_NAME: team,
       PI_AGENT_NAME: "worker",
+      PI_TEAM_MEMBERSHIP_ID: worker.membershipId,
       PI_AGENT_LAUNCH_ID: pendingLaunchId,
     });
     const current = await teams.currentMembership(team, "worker");
     expect(current).toMatchObject({
       membershipId: worker.membershipId,
       pendingLaunchId,
+      // The parent persists its exact carrier target. The child alone claims
+      // runtime and consumes the pending launch capability into a Session.
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-retried" },
     });
     expect(taskReads).toHaveBeenCalledTimes(0);
@@ -617,6 +620,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
     vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
     const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
+    const leaderAdmission = vi.spyOn(runtime, "admitRuntimeStartup");
 
     const result = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovered",
@@ -640,8 +644,11 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(spawnOptions.argv).toEqual(expect.arrayContaining([
       "--model", "openai-codex/example-model:medium", "--session", workerSession,
     ]));
-    expect(spawnOptions.env).toMatchObject({ PI_TEAM_NAME: team, PI_AGENT_NAME: "worker" });
+    expect(spawnOptions.env).toMatchObject({ PI_TEAM_NAME: team, PI_AGENT_NAME: "worker", PI_TEAM_MEMBERSHIP_ID: worker.membershipId });
     expect(spawnOptions.env).not.toHaveProperty("PI_AGENT_LAUNCH_ID");
+    expect(leaderAdmission).not.toHaveBeenCalled();
+    // The parent persists only the exact terminal target. The child retains
+    // sole ownership of runtime generation and Session binding.
     const current = (await teams.readConfig(team)).members.filter(candidate =>
       candidate.name === "worker" && candidate.isActive !== false);
     expect(current).toHaveLength(1);
@@ -695,7 +702,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     await teams.addMember(team, worker);
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
     vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
-    vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("simulated stale recovery binding"));
+    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("simulated recovery target persistence failure"));
     const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
 
     const refused = await registerTools().get("ensure_worker")!.execute(
@@ -706,8 +713,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       context(leadSession),
     );
     expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
-    expect(refused.details.message).toMatch(/existing Membership and exact Session binding remain current/);
-
+    expect(refused.details.message).toMatch(/simulated recovery target persistence failure.*exact recovery target was stopped/i);
     expect(kill).toHaveBeenCalledWith("pane-recovery-attempt");
     expect(live.has("pane-recovery-attempt")).toBe(false);
     const aggregate = resolved.mock.results[0]?.value.aggregatePath;
@@ -752,7 +758,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     await teams.addMember(team, worker);
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
     vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
-    vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("simulated stale recovery binding"));
+    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("simulated recovery target persistence failure"));
 
     const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovery-stop-unconfirmed",
@@ -762,7 +768,8 @@ describe("ergonomic agent-facing Team contracts", () => {
       context(leadSession),
     );
     expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
-    expect(refused.details.message).toMatch(/Compensation couldn't stop/);
+    expect(refused.details.message).toMatch(/Compensation could not stop.*pane-still-live/i);
+    expect(adapter.kill).toHaveBeenCalledWith("pane-still-live");
 
     const aggregate = resolved.mock.results[0]?.value.aggregatePath;
     expect(aggregate).toBeTruthy();
