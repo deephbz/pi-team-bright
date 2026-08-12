@@ -37,30 +37,32 @@ async function waitForDead(pid: number): Promise<void> {
 }
 
 describe("exhaustive test runner", () => {
-  it("runs the non-causal lane before the causal lane", async () => {
+  it("runs each non-causal file in order before the causal lane", async () => {
     const first = new Child(1);
     const second = new Child(2);
-    const spawn = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    const causal = new Child(3);
+    const spawn = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second).mockReturnValueOnce(causal);
     const runner = createExhaustiveRunner({ spawn });
-    const running = runExhaustiveTests("vitest.test.config.ts", runner);
+    const running = runExhaustiveTests("vitest.test.config.ts", runner, ["first.test.ts", "second.test.ts"]);
 
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn.mock.calls[0][1]).toContain("--exclude");
-    expect(spawn.mock.calls[0][1]).toContain(causalPath);
+    expect(spawn.mock.calls[0][1]).toContain("first.test.ts");
     first.emit("close", 0, null);
     await nextTurn();
     expect(spawn).toHaveBeenCalledTimes(2);
-    expect(spawn.mock.calls[1][1]).not.toContain("--exclude");
-    expect(spawn.mock.calls[1][1]).toContain(causalPath);
+    expect(spawn.mock.calls[1][1]).toContain("second.test.ts");
     second.emit("close", 0, null);
+    await nextTurn();
+    expect(spawn).toHaveBeenCalledTimes(3);
+    expect(spawn.mock.calls[2][1]).toContain(causalPath);
+    causal.emit("close", 0, null);
     await expect(running).resolves.toBeUndefined();
   });
 
-  it("does not start the causal lane after the non-causal lane fails", async () => {
+  it("short-circuits remaining files and the causal lane after a non-causal failure", async () => {
     const child = new Child();
     const spawn = vi.fn(() => child);
     const runner = createExhaustiveRunner({ spawn });
-    const running = runExhaustiveTests("vitest.test.config.ts", runner);
+    const running = runExhaustiveTests("vitest.test.config.ts", runner, ["first.test.ts", "second.test.ts"]);
 
     child.emit("close", 1, null);
     await expect(running).rejects.toThrow("vitest closed with code 1");
@@ -73,7 +75,7 @@ describe("exhaustive test runner", () => {
   ])("propagates a Vitest %s failure", async (_kind, code, signal, message) => {
     const child = new Child();
     const runner = createExhaustiveRunner({ spawn: () => child });
-    const running = runner.runNonCausal("vitest.test.config.ts");
+    const running = runner.runNonCausal("vitest.test.config.ts", ["example.test.ts"]);
 
     child.emit("close", code, signal);
     await expect(running).rejects.toThrow(message);
@@ -82,7 +84,7 @@ describe("exhaustive test runner", () => {
   it("propagates spawn failures", async () => {
     const child = new Child();
     const runner = createExhaustiveRunner({ spawn: () => child });
-    const running = runner.runNonCausal("vitest.test.config.ts");
+    const running = runner.runNonCausal("vitest.test.config.ts", ["example.test.ts"]);
 
     child.emit("error", new Error("spawn unavailable"));
     await expect(running).rejects.toThrow("spawn unavailable");
