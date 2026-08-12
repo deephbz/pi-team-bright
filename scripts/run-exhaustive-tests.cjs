@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const { spawn: nodeSpawn } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
@@ -15,6 +16,22 @@ function terminateProcessGroup(pid, signal) {
   // reach Vitest and every process it starts.
   if (process.platform === "win32") return process.kill(pid, signal);
   return process.kill(-pid, signal);
+}
+
+function listTestFiles(directory = root) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) return entry.name === "node_modules" || entry.name === ".git" ? [] : listTestFiles(file);
+    return /\.(test|spec)\.[cm]?[jt]sx?$/.test(entry.name) ? [path.relative(root, file).replaceAll(path.sep, "/")] : [];
+  }).sort();
+}
+
+function nonCausalFiles(config) {
+  if (path.basename(config) === "vitest.exhaustive.config.ts") {
+    const { exhaustiveOnly } = JSON.parse(fs.readFileSync(path.join(root, "test-lanes.json"), "utf8"));
+    return exhaustiveOnly.filter((file) => file !== causalPath);
+  }
+  return listTestFiles().filter((file) => file !== causalPath);
 }
 
 function createExhaustiveRunner({
@@ -72,8 +89,8 @@ function createExhaustiveRunner({
   }
 
   return {
-    runNonCausal(config) {
-      return run(config, ["--exclude", causalPath]);
+    async runNonCausal(config, files) {
+      for (const file of files) await run(config, [file]);
     },
     runCausal(config) {
       return run(config, [causalPath], causalTimeoutMs);
@@ -81,8 +98,8 @@ function createExhaustiveRunner({
   };
 }
 
-async function runExhaustiveTests(config, runner = createExhaustiveRunner()) {
-  await runner.runNonCausal(config);
+async function runExhaustiveTests(config, runner = createExhaustiveRunner(), files = nonCausalFiles(config)) {
+  await runner.runNonCausal(config, files);
   await runner.runCausal(config);
 }
 
@@ -95,4 +112,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { causalPath, causalTimeoutMs, createExhaustiveRunner, runExhaustiveTests, terminateProcessGroup };
+module.exports = { causalPath, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, runExhaustiveTests, terminateProcessGroup };
