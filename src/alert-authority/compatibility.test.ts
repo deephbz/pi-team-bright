@@ -170,7 +170,7 @@ describe("Alert canonical authority compatibility", () => {
         "package.json", "LICENSE", "README.md", "docs/current/README.md", "docs/reference.md", "dist",
       ],
       pi: {
-        image: "https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.17.0-rc.11/pi-team-in-action.png",
+        image: "https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.17.0-rc.13/pi-team-in-action.png",
         extensions: ["extensions/index.ts"],
         skills: ["skills"],
       },
