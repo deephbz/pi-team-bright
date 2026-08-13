@@ -316,7 +316,7 @@
     },
     {
       "id": "task-link-add-blocker",
-      "currentTool": "task_link",
+      "currentTool": "task_create",
       "setup": "Add a blocked-by relation between two Tasks.",
       "judgeFocus": [
         "Are relation kind and target explicit instead of hidden in a generic Task receipt?"
@@ -327,7 +327,7 @@
     },
     {
       "id": "task-link-add-related",
-      "currentTool": "task_link",
+      "currentTool": "task_create",
       "setup": "Add a related relation between two Tasks.",
       "judgeFocus": [
         "Does the result preserve the weaker relation semantics?"
@@ -338,7 +338,7 @@
     },
     {
       "id": "task-link-remove-blocker",
-      "currentTool": "task_link",
+      "currentTool": "task_create",
       "setup": "Remove a blocked-by relation.",
       "judgeFocus": [
         "Are relation removal and the resulting unblocked possibility explicit?"
@@ -349,7 +349,7 @@
     },
     {
       "id": "task-link-stale-version",
-      "currentTool": "task_link",
+      "currentTool": "task_create",
       "setup": "Mutate a relation with an obsolete Task version.",
       "judgeFocus": [
         "Is the retry action concise without backend implementation commentary?"
@@ -508,7 +508,7 @@
     },
     {
       "id": "task-link-duplicate",
-      "currentTool": "task_link",
+      "currentTool": "task_create",
       "setup": "Add a relation that already exists.",
       "judgeFocus": [
         "Is idempotent no-op distinguishable from a new mutation?"
@@ -519,7 +519,7 @@
     },
     {
       "id": "task-link-cycle-or-self",
-      "currentTool": "task_link",
+      "currentTool": "task_create",
       "setup": "Attempt a self-link or a blocked-by edge that creates an invalid cycle.",
       "judgeFocus": [
         "Are invalid topology and corrective action clear without backend graph detail?"

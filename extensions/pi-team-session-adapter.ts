@@ -20,6 +20,7 @@ import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconc
 import type { BeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
+import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
 import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 
@@ -47,8 +48,9 @@ export function createPiTeamSessionAdapter(options: {
   workerToolNames: ReadonlySet<string>;
   refreshAlertToolProjection: () => void;
   registerRecoveredWorkerTools: () => void;
+  taskReadyReconciliation?: Pick<TaskOrchestrationPort, "reconcileReady">;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, nudgeRecords, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, nudgeRecords, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation } = options;
   const terminal = getTerminalAdapter();
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
@@ -298,8 +300,22 @@ async function startTaskChangeDelivery(ctx: any) {
     pollMs: taskPollMs(),
     membership: taskDeliveryMembership,
     reconciliationQuery: new BeadsTaskReconciliationQuery(teamName, taskReadAdapterFactory),
+    ...(isTeammate && taskReadyReconciliation
+      // All Worker loops race through one Team lease. The winner repairs every
+      // free Worker's ready frontier, so a quiet Worker cannot be starved by a
+      // different Worker winning each periodic scan.
+      ? { reconcileReady: () => taskReadyReconciliation.reconcileReady(teamName!) }
+      : {}),
   });
   await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
+  if (isTeammate && taskReadyReconciliation) {
+    try {
+      const warnings = await taskReadyReconciliation.reconcileReady(teamName, agentName);
+      for (const warning of warnings) ctx.ui?.notify?.(`Pi Team Bright ready delivery: ${warning}`, "warning");
+    } catch (error) {
+      ctx.ui?.notify?.(`Pi Team Bright ready delivery is deferred: ${error instanceof Error ? error.message : String(error)}`, "warning");
+    }
+  }
 }
 
 /**

@@ -7,7 +7,7 @@ exhaustive parameter reference.
 
 ## Public agent interface
 
-- The release candidate leader surface is the ten-tool catalog in
+- The DAG-native leader surface is the nine-tool catalog in
   [`src/model-tool-contract/catalog.ts`](../src/model-tool-contract/catalog.ts),
   registered by [`pi-registration.ts`](../src/model-tool-contract/pi-registration.ts).
   [`ProjectedTool`](../src/model-tool-contract/result-projection.ts)
@@ -20,7 +20,7 @@ exhaustive parameter reference.
   procedure, not another schema. Pi presents the executable tool schemas to the
   agent directly.
 - [`src/utils/tool-surface.test.ts`](https://github.com/deephbz/pi-team-bright/blob/main/src/utils/tool-surface.test.ts)
-  verifies the ten-tool selection and the irreducible Task, Worker, sync, and
+  verifies the nine-tool selection and the irreducible Task, Worker, sync, and
   Alert distinctions.
 
 ## Read-only status diagnosis
@@ -53,8 +53,13 @@ exhaustive parameter reference.
   the exact current teammate Membership-generation and durable-Session resolver
   in `teams.ts`; it exposes no general policy registry.
 - [`src/model-tool-contract/task-domain.ts`](../src/model-tool-contract/task-domain.ts)
-  owns the neutral Task card and bounded card schema. [`task-version-ref.ts`](../src/model-tool-contract/task-version-ref.ts)
+  owns the neutral Task card, dependency relations, derived readiness, and bounded card schema. [`task-version-ref.ts`](../src/model-tool-contract/task-version-ref.ts)
   owns opaque public TaskVersionRef values.
+- [`src/task-authority/dag.ts`](../src/task-authority/dag.ts) owns portable DAG
+  validation, Beads edge translation, readiness, and ready-front selection.
+  [`mechanical-dispatch.ts`](../src/task-authority/mechanical-dispatch.ts) is the
+  backend-neutral recovery reference, while [`beads-graph-adapter.ts`](../src/task-authority/beads-graph-adapter.ts)
+  owns atomic native graph creation and exact request replay.
 - [`src/model-tool-contract/beads-task-adapter.ts`](../src/model-tool-contract/beads-task-adapter.ts)
   and [`beads-authority-adapter.ts`](../src/model-tool-contract/beads-authority-adapter.ts)
   form the Beads adapter boundary for native records, metadata, revisions, and

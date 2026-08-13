@@ -6,6 +6,8 @@ export {
   TaskCardStatusSchema,
   TaskCardContextSchema,
   TaskCardWarningSchema,
+  TaskDependencyRelationSchema,
+  TaskDependencyStateSchema,
   TaskCardCompleteSchema,
   TaskCardIncompleteSchema,
   TaskCardSchema,

@@ -43,7 +43,11 @@ export class TmuxAdapter implements TerminalAdapter {
 
   spawn(options: SpawnOptions): string {
     if (!options.panePlacement) throw new Error("tmux Worker spawn requires exact Team pane placement.");
-    const command = options.argv ? shellCommand(options) : options.command!;
+    // A tmux server can inherit Herdr identity from the shell that created it.
+    // Worker panes are tmux carriers, so clear foreign pane identity before Pi
+    // performs terminal-backend admission.
+    const baseCommand = options.argv ? shellCommand(options) : options.command!;
+    const command = `env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID ${baseCommand}`;
     const legacyEnvArgs = options.argv ? [] : Object.entries(options.env)
       .filter(([k]) => k.startsWith("PI_"))
       .map(([k, v]) => `${k}=${v}`);

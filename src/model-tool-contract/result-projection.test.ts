@@ -96,19 +96,27 @@ describe("raw semantic result projections", () => {
     }
   });
 
-  it("flattens singleton Task batches and preserves ordered multi-item batches", () => {
+  it("projects one atomic Task graph and preserves DAG decision coordinates", () => {
     const task = {
       id: "task-1",
       title: "Verify",
       goal: "g".repeat(1_000),
       status: "open" as const,
+      relations: [],
+      dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
       current_context: "Not started.",
       version: taskVersionRef("v1"),
     };
-    const singleton = { kind: "task_create_batch" as const, outcomes: [{ kind: "created" as const, input_index: 0, operation_id: "create-task-1", task }] };
-    const projected = projectToolResult("task_create", singleton) as any;
-    expect(projected).toEqual({ kind: "created", operation_id: "create-task-1", task: { id: "task-1", status: "open", version: taskVersionRef("v1") } });
-    expect(Check(TaskCreateResultSchema, singleton)).toBe(true);
+    const created = { kind: "task_graph_created" as const, operation_id: "create-task-1", replayed: false, tasks_by_key: { verify: task }, ready_task_ids: [task.id] };
+    const projected = projectToolResult("task_create", created) as any;
+    expect(projected).toEqual({
+      kind: "task_graph_created",
+      operation_id: "create-task-1",
+      replayed: false,
+      tasks_by_key: { verify: { id: "task-1", status: "open", relations: [], dependency_state: task.dependency_state, version: taskVersionRef("v1") } },
+      ready_task_ids: ["task-1"],
+    });
+    expect(Check(TaskCreateResultSchema, created)).toBe(true);
 
     const read = { kind: "task_read_batch" as const, outcomes: [
       { kind: "found" as const, input_index: 0, task_id: task.id, task },
@@ -123,19 +131,15 @@ describe("raw semantic result projections", () => {
 
   it("keeps unknown create outcomes retryable with the same operation", () => {
     const unknown = {
-      kind: "task_create_batch" as const,
-      outcomes: [{
-        kind: "unknown_outcome" as const,
-        input_index: 0,
-        operation_id: "create-retry-1",
-        message: "Authority may have committed before transport ended.",
-      }],
+      kind: "unknown_outcome" as const,
+      operation_id: "create-retry-1",
+      message: "Authority may have committed before transport ended.",
     };
     const model = projectToolResult("task_create", unknown) as any;
     expect(model).toEqual({
       kind: "unknown_outcome",
       operation_id: "create-retry-1",
-      message: unknown.outcomes[0].message,
+      message: unknown.message,
       recovery: { action: "retry_same_operation", operation_id: "create-retry-1" },
     });
     expect(projectTui({ tool: "task_create", details: unknown, expanded: false }).join("\n")).toMatch(/retry create operation.*create-retry-1/i);
@@ -248,7 +252,7 @@ describe("raw semantic result projections", () => {
   });
 
   it("rejects invalid Alert target combinations before execution", () => {
-    expect(Check(AlertSendParametersSchema, { target: { kind: "team" }, kind: "clarification", text: "No." })).toBe(false);
-    expect(Check(AlertSendParametersSchema, { target: { kind: "worker", name: "reviewer" }, kind: "attention", text: "Please check." })).toBe(true);
+    expect(Check(AlertSendParametersSchema, { to: "*", kind: "clarification", text: "No." })).toBe(true);
+    expect(Check(AlertSendParametersSchema, { to: "reviewer", kind: "attention", text: "Please check." })).toBe(true);
   });
 });

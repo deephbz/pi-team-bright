@@ -686,11 +686,15 @@ describe("release P1 public contracts", () => {
     expect(update).toHaveBeenCalledTimes(callsBeforeStaleAttempt);
   });
 
-  it("keeps graph edits out of task_update and on task_link", () => {
+  it("keeps graph edits in atomic task_create and out of task_update", () => {
     const tools = registerExtension();
+    const createSchema = tools.get("task_create")!.parameters;
     const updateSchema = tools.get("task_update")!.parameters;
+    expect(createSchema.properties).toHaveProperty("tasks");
+    expect((createSchema as any).properties.tasks.items.properties).toHaveProperty("needs");
+    expect(createSchema.properties).not.toHaveProperty("dependencies");
     expect(updateSchema.properties).not.toHaveProperty("blocked_by");
     expect(updateSchema.properties).not.toHaveProperty("blocks");
-    expect(tools.get("task_link")!.parameters.properties).toHaveProperty("relation");
+    expect(tools.has("task_link")).toBe(false);
   });
 });

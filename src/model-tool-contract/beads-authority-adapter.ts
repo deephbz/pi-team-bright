@@ -176,11 +176,21 @@ export interface TaskOwnerTransitionCompletionInput {
   task: TaskCard;
 }
 
+export interface TaskMutationPublicationRecoveryInput {
+  teamName: string;
+  taskId: string;
+  taskVersion: TaskVersionRef;
+  evidenceKind: "created" | "relation";
+  evidenceText: string;
+}
+
 export interface TaskMutationPublicationPort {
   prepareOwnerTransitionIntent(input: TaskOwnerTransitionPreparationInput): Promise<boolean>;
   suppressTaskVersionForSession(input: TaskMutationSuppressionInput): Promise<void>;
   publishTaskMutation(input: TaskMutationPublicationInput): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }>;
   completeOwnerTransitionIntent(input: TaskOwnerTransitionCompletionInput): Promise<string[]>;
+  /** Optional recovery query used after an atomic graph receipt is replayed. */
+  hasTaskMutationPublication?(input: TaskMutationPublicationRecoveryInput): Promise<boolean>;
 }
 
 export interface InternalTaskPublicationOptions {

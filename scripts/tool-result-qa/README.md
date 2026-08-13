@@ -82,7 +82,7 @@ The curated manifest has three derivations:
 
 Never replay historical calls verbatim. Older records include retired tools and
 status vocabularies; use their scenario semantics, then invoke the current
-ten-tool surface. `provenance.basis` records only whether a scenario came from
+nine-tool surface. `provenance.basis` records only whether a scenario came from
 direct observation, a legacy analog, or a synthetic coverage gap. Raw Sessions
 remain the local audit authority; no prompt, tool argument, result body, detail
 body, Alert text, Worker profile, local path, Session coordinate, or runtime
@@ -92,7 +92,7 @@ identifier payload is copied into the manifest.
 
 Real:
 
-- the registered ten-tool surface from `extensions/index.ts`;
+- the registered nine-tool surface from `extensions/index.ts`;
 - Team config, Membership generation, launch capability, and Session binding;
 - Beads Task creation, mutation, relations, versions, and queries;
 - Alert delivery records and Team event cursors;

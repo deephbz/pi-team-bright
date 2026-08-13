@@ -3,7 +3,7 @@ import type { TaskCard } from "../task-authority/task-domain";
 import type { ModelToolTaskJournalEntry } from "../task-authority/contracts";
 
 export type InMemoryTeamRecord = { id: string; leaderSessionId: ExactLeaderSessionId; name: string; purpose: string; workers: Map<string, ModelToolWorkerCurrent> };
-export type InMemoryTaskRecord = { tasks: Map<string, TaskCard>; journals: Map<string, ModelToolTaskJournalEntry[]>; updates: Map<string, { fingerprint: string; outcome: unknown }>; creates: Map<string, { fingerprint: string; taskId: string; deliveryWarnings?: string[] }> };
+export type InMemoryTaskRecord = { tasks: Map<string, TaskCard>; journals: Map<string, ModelToolTaskJournalEntry[]>; updates: Map<string, { fingerprint: string; outcome: unknown }>; creates: Map<string, { fingerprint: string; taskIdsByKey: Record<string, string>; deliveryWarnings?: string[] }> };
 export type InMemoryAlertDelivery = { id: string; teamId: string; recipients: string[]; kind: "clarification" | "attention" | "announcement"; text: string };
 export type InMemoryEvent = ModelToolTeamEvent & { teamId: string };
 

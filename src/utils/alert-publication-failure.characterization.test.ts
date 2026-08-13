@@ -142,6 +142,7 @@ async function fixture() {
   );
   const membershipIds: Record<string, string> = {};
   for (const worker of ["worker-a", "worker-b"]) {
+    await teams.ensureLogicalWorker(teamName, { name: worker, scope: `${worker} alert characterization capability` });
     const membershipId = teams.newMembershipId();
     membershipIds[worker] = membershipId;
     await teams.addMember(teamName, {
@@ -181,13 +182,15 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
     const lead = leaderHarness();
     const context = sessionContext(state.leaderSessionFile);
     const created = await lead.invoke("task_create", "create-task", {
+      operation_id: "alert-publication-task",
       tasks: [{
-        operation_id: "alert-publication-task",
+        key: "preserve",
         title: "Preserve Task state",
         goal: "Remain unchanged while Alert delivery and Coordination publication disagree.",
+        assignee: "worker-a",
       }],
     }, context);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.preserve;
     const beforeTask = await lead.invoke("task_read", "read-before-alert", { task_ids: [task.id] }, context);
     const beforeCard = beforeTask.details.outcomes[0].task;
     const beforeCursor = readTeamEventCursor(state.teamName);
@@ -208,7 +211,7 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
     }) as typeof fs.openSync);
 
     const alertCall = {
-      target: { kind: "team" },
+      to: "*",
       kind: "announcement",
       text: "Review the Task without changing it.",
       task_id: task.id,

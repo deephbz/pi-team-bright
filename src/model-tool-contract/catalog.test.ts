@@ -18,8 +18,6 @@ import {
   WorkerStopResultSchema,
   TeamShutdownParametersSchema,
   TeamShutdownResultSchema,
-  TaskLinkParametersSchema,
-  TaskLinkResultSchema,
   AlertSendParametersSchema,
   AlertSendResultSchema,
   modelToolCatalog,
@@ -51,7 +49,7 @@ const provenance = {
   designSha256: "design-sha",
 };
 
-function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "task_link" | "alert_send") {
+function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
   if (tool === "team_create") {
     return { parameters: TeamCreateParametersSchema, result: TeamCreateResultSchema };
   }
@@ -68,7 +66,6 @@ function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_
   if (tool === "task_update") return { parameters: TaskUpdateParametersSchema, result: TaskUpdateResultSchema };
   if (tool === "worker_stop") return { parameters: WorkerStopParametersSchema, result: WorkerStopResultSchema };
   if (tool === "team_shutdown") return { parameters: TeamShutdownParametersSchema, result: TeamShutdownResultSchema };
-  if (tool === "task_link") return { parameters: TaskLinkParametersSchema, result: TaskLinkResultSchema };
   return { parameters: AlertSendParametersSchema, result: AlertSendResultSchema };
 }
 
@@ -115,10 +112,10 @@ describe("candidate model-tool catalog", () => {
   });
 
   it("accepts Task goals through 1,000 string units across calls and Task cards", () => {
-    const createItem = { operation_id: "goal-boundary", title: "Goal boundary" };
+    const createItem = { key: "goal", title: "Goal boundary", assignee: "verifier" };
     for (const length of [160, 161, 1_000]) {
       const goal = "g".repeat(length);
-      expect(Check(TaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
+      expect(Check(TaskCreateParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
       expect(Check(TaskCardSchema, {
         id: "task-1",
         title: createItem.title,
@@ -130,7 +127,7 @@ describe("candidate model-tool catalog", () => {
     }
 
     const goal = "g".repeat(1_001);
-    expect(Check(TaskCreateParametersSchema, { tasks: [{ ...createItem, goal }] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] })).toBe(false);
     expect(Check(TaskCardSchema, {
       id: "task-1",
       title: createItem.title,
@@ -181,11 +178,15 @@ describe("candidate model-tool catalog", () => {
     expect(Check(TeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "cancelled", ...common })).toBe(false);
   });
 
-  it("requires a caller-chosen create operation ID", () => {
-    const task = { operation_id: "create-release", title: "Verify", goal: "Verify the release." };
-    expect(Check(TaskCreateParametersSchema, { tasks: [task] })).toBe(true);
-    expect(Check(TaskCreateParametersSchema, { tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
-    expect(Check(TaskCreateParametersSchema, { tasks: [{ ...task, operation_id: "" }] })).toBe(false);
+  it("requires one caller-chosen graph operation ID and local Task keys", () => {
+    const task = { key: "verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" };
+    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [task] })).toBe(true);
+    expect(Check(TaskCreateParametersSchema, { tasks: [task] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { operation_id: "", tasks: [task] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [{ ...task, needs: ["plan"] }] })).toBe(true);
+    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [{ ...task, needs: ["bad key"] }] })).toBe(false);
+    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [task], dependencies: [] })).toBe(false);
   });
 
   it("keeps Team identity implicit in both team_sync call forms", () => {
@@ -241,7 +242,7 @@ describe("candidate model-tool catalog", () => {
       status: "accepted",
       version: "2",
     });
-    expect(modelToolCatalog.tools.map((tool) => tool.name)).toEqual(["team_create", "task_create", "task_read", "task_update", "team_sync", "ensure_worker", "worker_stop", "team_shutdown", "task_link", "alert_send"]);
+    expect(modelToolCatalog.tools.map((tool) => tool.name)).toEqual(["team_create", "task_create", "task_read", "task_update", "team_sync", "ensure_worker", "worker_stop", "team_shutdown", "alert_send"]);
 
     for (const tool of modelToolCatalog.tools) {
       const schemas = schemasFor(tool.name);
@@ -290,17 +291,17 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("routine-supervision-update");
     expect(html).toContain("catalog-sha");
     expect(html).toContain("design-sha");
-    expect(html.indexOf("Leader scenarios first")).toBeLessThan(html.indexOf("Function 1 of 10"));
+    expect(html.indexOf("Leader scenarios first")).toBeLessThan(html.indexOf("Function 1 of 9"));
     expect(html).toContain("team_create({ name, purpose })");
     expect(html).toContain("team_sync({ view })");
     expect(html).toContain("ensure_worker({ name, scope })");
-    expect(html).toContain("task_create({ tasks: [{ operation_id, … }] })");
+    expect(html).toContain("task_create({ operation_id, tasks: [{ key, title, goal, assignee, needs? }] })");
     expect(html).toContain("task_read({ task_ids })");
     expect(html).toContain("task_update({ updates })");
     expect(html).toContain("worker_stop({ worker })");
     expect(html).toContain("team_shutdown({ })");
-    expect(html).toContain("task_link({ task_id, relation, target_id, action, expected_version })");
-    expect(html).toContain("alert_send({ target, kind, text, task_id, task_version })");
+    expect(html).not.toContain("task_link({");
+    expect(html).toContain("alert_send({ to, kind, text, task_id, task_version })");
     expect(html).toContain("Raw semantic JSON");
     expect(html).toContain("Validated model projection");
     expect(html).toContain("accepted");

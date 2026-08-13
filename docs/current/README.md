@@ -5,10 +5,11 @@ Updated: 2026-08-12
 Current release: `0.17.0-rc.14` is published to npm `next` from annotated tag
 `v0.17.0-rc.14`. The durable publication evidence is in
 [`2026-08-12-v0.17.0-rc.14-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md).
+The separate local DAG branch is based on the publication record at
+`origin/main` `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`.
 
-Lifecycle stage: **sharing** for the Task-first coordination and Membership-
-observation surfaces. The rc.14 liveness and recovery candidate is in final
-release hardening; residual Beads contention remains measured open work.
+Lifecycle stage: **hardening** for the DAG-native Task coordination release.
+The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
@@ -124,7 +125,7 @@ restating executable definitions.
 ## Current status and anchors
 
 - The current source uses the real main extension as its local switch. Leader
-  processes register the ten-tool model surface, with
+  processes register the nine-tool DAG-native model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
   Workers keep the narrow `task_read`, `task_update`, and `alert_send` surface;
   runtime Team binding supplies the Team identity, so Worker calls do not select
@@ -156,14 +157,14 @@ restating executable definitions.
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
-- `0.17.0-rc.14` is published to npm `next` from annotated tag
-  `v0.17.0-rc.14`. Its durable [release receipt](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md)
-  records exact source `8bb517bd32d8687e97b96a531db15833fd64420a`, product acceptance,
-  local and hosted gates, package identity, registry equality, SLSA provenance,
-  and the GitHub prerelease. The dated [plan](../journal/2026-08-12-v0.17.0-rc.14-release-plan.md),
-  [notes](../journal/2026-08-12-v0.17.0-rc.14-release-notes-draft.md), and
-  [checklist](../release/v0.17.0-rc.14-release-checklist.md) remain supporting
-  artifacts. Rc.13 records are historical evidence only.
+- `0.17.0-rc.14` is the published liveness and Worker-recovery base at exact
+  `origin/main` `8bb517bd32d8687e97b96a531db15833fd64420a`. The separate local
+  `feature/dag-native-rc13` branch adds atomic graph creation and mechanical
+  ready-front dispatch without changing the published tag or registry. Its
+  earlier eight-Worker stress closed 117/117 Tasks and stopped all Workers;
+  focused post-rebase integration and aggregate evidence is recorded in the
+  maintained [DAG-native context](../projects/dag-native/context.md). No DAG
+  push, tag, npm publication, registry change, or GitHub release is authorized.
 - `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release
@@ -205,16 +206,6 @@ restating executable definitions.
   resolves internal sync nudges: `nudge_enabled` defaults to `true`, and
   `nudge_delay_seconds` defaults to `1200`. A nudge is one exact-leader
   presentation record, not an Alert, Task mutation, or observation advance.
-- The rc.14 candidate makes runtime observation lock-free, filters unavailable
-  and unrelated macOS watch filenames, coalesces pending scans, and joins one
-  complete Task-authority projection per Team. It also fences Worker recovery
-  with an exact Membership lease and lets only the replacement child claim
-  runtime startup. The isolated [exact-source E2E receipt](../journal/2026-08-12-rc14-isolated-exact-source-e2e-receipt.md)
-  records eight Terra-medium Workers, nine closed Tasks, safe recovery, exact
-  cleanup, and 27 non-overlapping sync calls from 16 to 5,308 ms. This is the
-  acceptance anchor for the incident repair. The reserved aggregate, hosted
-  gates, npm publication, provenance, and GitHub prerelease then passed as
-  recorded in the rc.14 release receipt.
 - Task mutation publication now crosses a consumer-owned port. The durable
   adapter preserves Beads commit, Membership-lease release, acting-Session
   suppression, serial event, failed-hint, recipient delivery, inline recovery,

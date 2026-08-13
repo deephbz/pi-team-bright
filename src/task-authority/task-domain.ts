@@ -15,11 +15,24 @@ export const TaskCardWarningSchema = Type.Object({
   message: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
+export const TaskDependencyRelationSchema = Type.Object({
+  relation: Type.Enum(["blocked_by", "parent", "related"]),
+  target_task_id: Type.String({ minLength: 1, maxLength: 128 }),
+}, { additionalProperties: false });
+
+export const TaskDependencyStateSchema = Type.Union([
+  Type.Object({ kind: Type.Literal("ready"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { maxItems: 0 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("waiting"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { minItems: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("terminal"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: 128 })) }, { additionalProperties: false }),
+]);
+
 const TaskCardBase = {
   id: Type.String({ minLength: 1, maxLength: 128 }),
   title: Type.String({ minLength: 1, maxLength: TASK_CARD_TITLE_MAX_LENGTH }),
   status: TaskCardStatusSchema,
   assignee: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  relations: Type.Optional(Type.Array(TaskDependencyRelationSchema)),
+  dependency_state: Type.Optional(TaskDependencyStateSchema),
   current_context: TaskCardContextSchema,
   version: TaskVersionRefSchema,
 };
@@ -53,4 +66,5 @@ export type TaskCardWarning = {
   message: string;
 };
 
+/** DAG fields are optional only for stored pre-DAG cards during migration. */
 export type TaskCard = Static<typeof TaskCardCompleteSchema> | Static<typeof TaskCardIncompleteSchema>;

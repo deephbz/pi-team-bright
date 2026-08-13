@@ -70,6 +70,7 @@ export class InMemoryModelToolTeamPort implements LegacyModelToolTeamPort {
   ensureWorker(...args: Parameters<LegacyModelToolTeamPort["ensureWorker"]>) { return this.ports.team.ensureWorker(...args); }
   readSnapshot(...args: Parameters<LegacyModelToolTeamPort["readSnapshot"]>) { return this.ports.coordination.readSnapshot(...args); }
   createTask(...args: Parameters<LegacyModelToolTeamPort["createTask"]>) { return this.ports.task.createTask(...args); }
+  createTaskGraph(...args: Parameters<LegacyModelToolTeamPort["createTaskGraph"]>) { return this.ports.task.createTaskGraph(...args); }
   readTasks(...args: Parameters<LegacyModelToolTeamPort["readTasks"]>) { return this.ports.task.readTasks(...args); }
   updateTasks(...args: Parameters<LegacyModelToolTeamPort["updateTasks"]>) { return this.ports.task.updateTasks(...args); }
   stopWorker(...args: Parameters<LegacyModelToolTeamPort["stopWorker"]>) { return this.ports.team.stopWorker(...args); }

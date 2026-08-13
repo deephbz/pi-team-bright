@@ -24,7 +24,6 @@ type RegisteredTool = {
 const PUBLIC_TOOLS = [
   "alert_send",
   "task_create",
-  "task_link",
   "task_read",
   "task_update",
   "team_create",
@@ -140,7 +139,7 @@ afterEach(() => {
 });
 
 describe("ergonomic agent-facing Team contracts", () => {
-  it("exposes only the ten Task-first lifecycle tools", () => {
+  it("exposes only the nine Task-first lifecycle tools", () => {
     const tools = registerTools();
 
     expect([...tools.keys()].sort()).toEqual([...PUBLIC_TOOLS].sort());
@@ -896,9 +895,10 @@ describe("ergonomic agent-facing Team contracts", () => {
 
     const rejectedDescription = "Do not copy this underspecified prompt body into retry arguments.";
     const refused = await tools.get("task_create")!.execute("missing-criteria", {
-      tasks: [{ operation_id: "create-underspecified-work", title: "Underspecified assigned work", goal: "Add independently verifiable acceptance criteria before retrying.", assignee: "worker" }],
+      operation_id: "create-underspecified-work",
+      tasks: [{ key: "work", title: "Underspecified assigned work", goal: "Add independently verifiable acceptance criteria before retrying.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
-    expect(refused.details).toMatchObject({ kind: "task_create_batch", outcomes: [{ kind: "created", task: { title: "Underspecified assigned work", assignee: "worker" } }] });
+    expect(refused.details).toMatchObject({ kind: "task_graph_created", tasks_by_key: { work: { title: "Underspecified assigned work", assignee: "worker" } } });
     expect(JSON.stringify(refused.details)).not.toContain(rejectedDescription);
   }, 60_000);
 
@@ -921,10 +921,11 @@ describe("ergonomic agent-facing Team contracts", () => {
     }, undefined, undefined, leadContext);
 
     const task = await tools.get("task_create")!.execute("task", {
-      tasks: [{ operation_id: "create-restart-persistence", title: "Verify restart persistence", goal: "A fresh store reads the committed terminal state.", assignee: "worker" }],
+      operation_id: "create-restart-persistence",
+      tasks: [{ key: "restart", title: "Verify restart persistence", goal: "A fresh store reads the committed terminal state.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
-    const taskCard = task.details.outcomes[0].task;
-    expect(task.details).toMatchObject({ kind: "task_create_batch", outcomes: [{ kind: "created", task: { title: "Verify restart persistence", assignee: "worker", status: "open" } }] });
+    const taskCard = task.details.tasks_by_key.restart;
+    expect(task.details).toMatchObject({ kind: "task_graph_created", tasks_by_key: { restart: { title: "Verify restart persistence", assignee: "worker", status: "open" } } });
 
     const guarded = await tools.get("worker_stop")!.execute("guarded-stop", { worker: "worker" }, undefined, undefined, leadContext);
     expect(guarded.details).toMatchObject({ kind: "refused", worker: "worker", reason: "nonterminal_tasks_assigned", guarding_task_ids: [taskCard.id], state_changed: false });

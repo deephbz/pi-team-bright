@@ -630,6 +630,18 @@ export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRec
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await withLock(file, async () => {
     const records: TaskDeliveryRecoveryRecord[] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
+    const recipients = [...new Set(record.recipients)].sort();
+    const duplicate = records.some((existing) => {
+      const existingRecipients = [...new Set(existing.recipients)].sort();
+      return existing.taskId === record.taskId
+        && existing.taskVersion === record.taskVersion
+        && existing.changeKind === record.changeKind
+        && existing.reason === record.reason
+        && existingRecipients.length === recipients.length
+        && existingRecipients.every((recipient, index) => recipient === recipients[index])
+        && existing.recipients.some((recipient) => !existing.resolvedRecipients?.includes(recipient));
+    });
+    if (duplicate) return;
     records.push(record);
     writeJsonAtomic(file, records);
   });
@@ -870,6 +882,8 @@ export class TaskChangeDelivery {
        * only when a prepared intent needs commit evidence.
        */
       reconcileOwnerOutbox?: () => Promise<string[]>;
+      /** Periodic Task-authority ready-front recovery for this stable Worker. */
+      reconcileReady?: () => Promise<string[]>;
     },
   ) {}
 
@@ -1006,6 +1020,17 @@ export class TaskChangeDelivery {
   }
 
   private async scanOnce(generation: number): Promise<void> {
+    try {
+      await this.options.reconcileReady?.();
+    } catch (error) {
+      // Ready-front selection is authoritative and idempotent. Keep the local
+      // delivery loop alive so the next bounded poll retries transient failure.
+      console.error(
+        `[pi-teams] ready-front reconciliation failed for team ${this.options.teamName} Worker ${this.options.recipient}; continuing local Task delivery:`,
+        error,
+      );
+    }
+    if (this.stopped || generation !== this.generation) return;
     try {
       await (
         this.options.reconcileOwnerOutbox?.()

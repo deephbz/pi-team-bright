@@ -66,7 +66,7 @@ describe("Worker resource extension projection", () => {
     vi.resetModules();
     const worker = await extensionHarness();
 
-    expect(JSON.stringify(leader.tools.get("alert_send")!.parameters)).toContain("target");
+    expect(leader.tools.get("alert_send")!.parameters.properties).toHaveProperty("to");
     expect(JSON.stringify(leader.tools.get("alert_send")!.parameters)).toContain("announcement");
     expect(JSON.stringify(worker.tools.get("alert_send")!.parameters)).not.toContain("announcement");
     expect(worker.tools.get("task_read")!.parameters.properties).not.toHaveProperty("team_name");

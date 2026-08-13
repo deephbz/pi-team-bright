@@ -46,8 +46,13 @@ const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 const taskAuthorityReadTeamPort = new DurableTaskAuthorityReadTeam();
 const taskReadAdapterFactory = createReadOnlyBeadsTaskAdapterFactory(new DurableTaskAuthorityRead(taskAuthorityReadTeamPort));
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
-const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
+const applySemanticTaskUpdate = async (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) => {
+  const actor = await teams.currentMembership(args[0], args[3].actor);
+  return applyRawSemanticTaskUpdate(args[0], args[1], args[2], {
+    ...args[3],
+    authorityMembershipId: actor.membershipId,
+  }, publicationPort, taskAuthorityTeamPort);
+};
 
 function uniqueTeam(suffix: string): string {
   const name = `clean-cut-r2-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
@@ -381,8 +386,9 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     // post-commit enqueue while leaving Beads Task authority writable.
     fs.mkdirSync(paths.taskDeliveryPath(teamName, "worker"), { recursive: true });
     const result = await harness().tools.get("task_create")!.execute("create-degraded", {
+      operation_id: "create-delivery-degradation",
       tasks: [{
-        operation_id: "create-delivery-degradation",
+        key: "degraded",
         title: "Preserve delivery degradation",
         goal: "The Task commit must survive delivery degradation and remain readable.",
         assignee: "worker",
@@ -391,10 +397,11 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
       sessionManager: { getSessionFile: () => leadSession },
     });
 
-    const task = result.details.outcomes[0].task;
+    const task = result.details.tasks_by_key.degraded;
     expect(result.details).toMatchObject({
-      kind: "task_create_batch",
-      outcomes: [{ kind: "created", input_index: 0, task: { id: task.id, title: "Preserve delivery degradation", status: "open", assignee: "worker", version: task.version } }],
+      kind: "task_graph_created",
+      operation_id: "create-delivery-degradation",
+      tasks_by_key: { degraded: { id: task.id, title: "Preserve delivery degradation", status: "open", assignee: "worker", version: task.version } },
     });
     await expect(tasks.readTask(teamName, task.id, taskReadAdapterFactory)).resolves.toMatchObject({
       id: task.id,
@@ -418,12 +425,14 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     const context = { sessionManager: { getSessionFile: () => leadSession } };
 
     const createdResult = await tools.get("task_create")!.execute("create", {
-      tasks: [{ operation_id: "create-receipt-contract", title: "Receipt contract", goal: "Keep the mutation receipt concise and verifiable." }],
+      operation_id: "create-receipt-contract",
+      tasks: [{ key: "receipt", title: "Receipt contract", goal: "Keep the mutation receipt concise and verifiable.", assignee: "worker" }],
     }, undefined, undefined, context);
-    const created = createdResult.details.outcomes[0].task;
+    const created = createdResult.details.tasks_by_key.receipt;
     expect(createdResult.details).toMatchObject({
-      kind: "task_create_batch",
-      outcomes: [{ kind: "created", input_index: 0, task: { id: expect.any(String), status: "open", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } }],
+      kind: "task_graph_created",
+      operation_id: "create-receipt-contract",
+      tasks_by_key: { receipt: { id: expect.any(String), status: "open", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } },
     });
 
     const update = async (operationId: string, expectedVersion: string, status: "open" | "in_progress", text: string) => {
@@ -442,7 +451,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     const readResult = await tools.get("task_read")!.execute("read", { task_ids: [created.id] }, undefined, undefined, context);
     expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: created.id, task: { status: "in_progress", version: progressed.version } }] });
     await expect(update("safe-next-write", progressed.version, "open", "Safe next write.")).resolves.toMatchObject({ version: expect.any(String) });
-  }, 60_000);
+  }, 120_000);
 
   it("combines assignee plus nonterminal status in one native update and returns full post-state plus applied operations", async () => {
     const workspace = initWorkspace();
@@ -455,28 +464,35 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const tool = harness().tools.get("task_update")!;
     const createdResult = await harness().tools.get("task_create")!.execute("create", {
-      tasks: [{ operation_id: "create-semantic", title: "semantic", goal: "one agent call", assignee: "worker" }],
+      operation_id: "create-semantic",
+      tasks: [{ key: "semantic", title: "semantic", goal: "one agent call", assignee: "worker" }],
     }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    const created = createdResult.details.outcomes[0].task;
+    const created = createdResult.details.tasks_by_key.semantic;
     const traceFile = path.join(tempRoot("semantic-trace"), "trace.jsonl");
     vi.stubEnv("PI_TEAMS_TRACE_JSONL", traceFile);
     const result = await tool.execute("semantic", {
       updates: [{ task_id: created.id, operation_id: "semantic", status: "in_progress", current_context: "One native mutation.", journal_entries: [{ kind: "result", text: "One native mutation." }], expected_version: created.version }],
     }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
     expect(result.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: created.id, status: "in_progress", assignee: "worker" }, operation_id: "semantic" }] });
-    const trace = fs.readFileSync(traceFile, "utf8").trim().split("\n").map((line) => JSON.parse(line)).at(-1);
-    expect(trace.bdCalls.filter((call: any) => call.command === "update")).toHaveLength(1);
+    const trace = fs.readFileSync(traceFile, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    expect(trace.flatMap((entry) => entry.bdCalls).filter((call: any) => call.command === "update")).toHaveLength(1);
   }, 60_000);
 
   it("uses a short expected_version ref and rejects a supplied stale ref before mutation", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("optional-version");
-    writeTeam(teamName, workspace, [member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`)]);
+    writeTeam(teamName, workspace, [
+      member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`),
+      member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
+    ]);
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const tool = harness().tools.get("task_update")!;
-    const create = await harness().tools.get("task_create")!.execute("create", { tasks: [{ operation_id: "create-version", title: "version", goal: "v0" }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    const created = create.details.outcomes[0].task;
+    const create = await harness().tools.get("task_create")!.execute("create", {
+      operation_id: "create-version",
+      tasks: [{ key: "version", title: "version", goal: "v0", assignee: "worker" }],
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    const created = create.details.tasks_by_key.version;
     const firstUpdate = await tool.execute("first-update", { updates: [{ task_id: created.id, operation_id: "first-update", status: "in_progress", current_context: "v1", journal_entries: [{ kind: "progress", text: "v1" }], expected_version: created.version }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
     const current = firstUpdate.details.outcomes[0].task;
     const stale = await tool.execute("stale", { updates: [{ task_id: created.id, operation_id: "stale", status: "open", current_context: "stale", journal_entries: [{ kind: "blocker", text: "stale" }], expected_version: created.version }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
@@ -484,15 +500,21 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     expect(current.version).not.toBe(created.version);
   }, 60_000);
 
-  it("rejects claim combined with another mutation and keeps graph edits on task_link", async () => {
+  it("rejects duplicate Task mutations and keeps graph edits out of task_update", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("unsafe-composite");
-    writeTeam(teamName, workspace, [member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`)]);
+    writeTeam(teamName, workspace, [
+      member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`),
+      member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
+    ]);
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const tool = harness().tools.get("task_update")!;
-    const create = await harness().tools.get("task_create")!.execute("create", { tasks: [{ operation_id: "create-target", title: "target", goal: "unchanged" }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    const target = create.details.outcomes[0].task;
+    const create = await harness().tools.get("task_create")!.execute("create", {
+      operation_id: "create-target",
+      tasks: [{ key: "target", title: "target", goal: "unchanged", assignee: "worker" }],
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    const target = create.details.tasks_by_key.target;
     const ctx = { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } };
     const duplicate = await tool.execute("duplicate", { updates: [
       { task_id: target.id, operation_id: "one", current_context: "unchanged", journal_entries: [{ kind: "note", text: "one" }], expected_version: target.version },

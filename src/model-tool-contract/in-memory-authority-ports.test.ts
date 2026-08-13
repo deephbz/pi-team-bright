@@ -31,12 +31,13 @@ describe("isolated in-memory authority fakes", () => {
   it("returns replayable durable-style create warnings after Task publication failure", async () => {
     const { ports, debug } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });
+    await ports.team.ensureWorker(session, { name: "worker", scope: "scope" });
     ports.coordination.failNextPublication("task");
-    const created = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal" });
+    const created = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
     expect(created).toMatchObject({ kind: "created", deliveryWarnings: ["Injected task publication failure."] });
-    const replay = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal" });
+    const replay = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
     expect(replay).toEqual(created);
-    expect(debug.readRevision()).toBe(2);
+    expect(debug.readRevision()).toBe(3);
   });
 
   it("maps Alert publication failure to durable unavailable after retaining delivery without Coordination advance", async () => {

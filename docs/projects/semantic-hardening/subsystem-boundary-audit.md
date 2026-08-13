@@ -799,3 +799,16 @@ Membership-observation boundaries. ALERT-004 is compatibility-required and
 has hook-level later-presentation and replay characterization. Its external
 process boundary remains a proof limit, not a gate on behavior-identical Alert
 refactoring; semantic change still needs a separate owner-visible decision.
+
+## DAG-native side-branch composition
+
+Finalized semantic-hardening commit `dfe1552` remains the unchanged base. The
+separate `rc/v0.17.0-rc.12` branch adds DAG validation and ready-front selection
+inside Task authority. It injects `TaskOrchestrationPort` into the Task
+application and narrow ready reconciliation into Team and Pi Session consumers.
+`DurableTaskOrchestration` composes atomic Beads graph writes, publication
+recovery, and ready delivery outside the trio-facing façade. The composition
+uses the finalized explicit Task-read factory, Task-authority provisioning,
+Task-delivery Membership lease, Pi Session Team query, Coordination hidden
+observation, and Coordination event-journal seams. It does not add a reverse
+import into the semantic-hardening branch.

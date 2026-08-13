@@ -13,7 +13,7 @@ const legacyEnsureWorkerTool = ["worker", "ensure"].join("_");
 const currentTools = new Set([
   "team_create", "team_sync", "team_shutdown",
   "ensure_worker", "worker_stop",
-  "task_create", "task_read", "task_update", "task_link",
+  "task_create", "task_read", "task_update",
   "alert_send",
 ]);
 
@@ -24,6 +24,7 @@ const historicalProjection: Record<string, string> = {
   send_message: "alert_send",
   broadcast_message: "alert_send",
   task_list: "team_sync",
+  task_link: "task_create",
   check_teammate: "team_sync",
 };
 
@@ -78,7 +79,6 @@ function category(tool: string, isError: boolean, text: string, details: any): s
   if (tool === "team_shutdown") return /partial|failure/i.test(text) || details?.failures?.length ? "success/partial" : "success/complete";
   if (tool === "alert_send") return details?.failures?.length ? "success/partial" : "success/accepted";
   if (tool === "task_update") return `success/${details?.task?.status || "updated"}`;
-  if (tool === "task_link") return "success/relation-mutated";
   if (tool === "task_read") return text.length > 2_000 ? "success/large-read" : "success/read";
   if (tool === "task_create") return details?.task?.assignee ? "success/assigned" : "success/unassigned";
   if (tool === "worker_stop") return "success/stopped";

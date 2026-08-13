@@ -11,6 +11,7 @@ import { DurableModelToolCoordinationApplication } from "./durable-model-tool-co
 import { exactLeaderSessionId } from "./model-tool-contracts";
 import type { ExactLeaderSessionId, ModelToolTeamPort } from "./model-tool-contracts";
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
+import type { TaskOrchestrationPort } from "../task-authority/orchestration";
 
 export { DurableModelToolBindings } from "./durable-model-tool-bindings";
 export { DurableModelToolTeamApplication, type ModelToolLifecycle } from "./durable-model-tool-team-application";
@@ -35,10 +36,11 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
     alertSender: AlertSender | undefined,
     observationService: CoordinationObservationService,
     taskAuthority?: TaskAuthorityProvisioningPort,
+    taskOrchestration?: TaskOrchestrationPort,
   ) {
     const bindings = new DurableModelToolBindings();
-    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, taskAuthority);
-    this.task = new DurableModelToolTaskApplication(bindings, taskAdapterFactory);
+    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, taskAuthority, taskOrchestration);
+    this.task = new DurableModelToolTaskApplication(bindings, taskAdapterFactory, taskOrchestration);
     this.alert = new DurableModelToolAlertApplication(bindings, alertSender);
     this.coordination = new DurableModelToolCoordinationApplication(bindings, observationService);
   }
@@ -50,6 +52,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
   setLeaderSessionFile(...args: Parameters<NonNullable<DurableModelToolTeamApplication["setLeaderSessionFile"]>>) { return this.team.setLeaderSessionFile(...args); }
   setLeaderLaunchContext(...args: Parameters<NonNullable<DurableModelToolTeamApplication["setLeaderLaunchContext"]>>) { return this.team.setLeaderLaunchContext(...args); }
   createTask(...args: Parameters<DurableModelToolTaskApplication["createTask"]>) { return this.task.createTask(...args); }
+  createTaskGraph(...args: Parameters<DurableModelToolTaskApplication["createTaskGraph"]>) { return this.task.createTaskGraph(...args); }
   readTasks(...args: Parameters<DurableModelToolTaskApplication["readTasks"]>) { return this.task.readTasks(...args); }
   updateTasks(...args: Parameters<DurableModelToolTaskApplication["updateTasks"]>) { return this.task.updateTasks(...args); }
   linkTask(...args: Parameters<DurableModelToolTaskApplication["linkTask"]>) { return this.task.linkTask(...args); }

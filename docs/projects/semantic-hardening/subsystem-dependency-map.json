@@ -1159,6 +1159,29 @@
       "currentFact": "Coordination observation receives hidden projection read and commit operations through CoordinationHiddenObservationPort and its durable adapter.",
       "proofLimit": "Focused deterministic source and harness evidence does not prove real Pi persistence, external writers, watcher delivery, process forks, OS scheduling, or terminal pixels.",
       "aggregate": "not_run"
+    },
+    {
+      "id": "TASK-DAG-ORCHESTRATION-INVERSION",
+      "state": "implemented_focused_and_real_beads_verified",
+      "currentFact": "DAG validation and ready-front selection live in Task authority. The trio-facing durable port consumes an injected TaskOrchestrationPort and imports no Beads graph store or concrete Task-delivery records. Durable adapters compose atomic Beads graph commit, operation-specific missing-event recovery, and ready-delivery persistence through consumer-owned ports.",
+      "verification": {
+        "pureAndAdapterTests": "passed",
+        "realBeadsAtomicGraph": "passed",
+        "realBeadsCrashReplayRecovery": "passed",
+        "realBeadsMechanicalDelivery": "passed",
+        "aggregate": "passed_125_files_884_tests_node_22_22_1",
+        "livePiCanary": "passed_three_task_chain_two_exact_worker_sessions_on_82e3b41_over_dfe1552"
+      },
+      "proofLimit": "This gate proves DAG dependency direction and deterministic scheduling. It does not claim concurrent Task execution inside one Worker Session or completion of the broader Coordination facade split.",
+      "anchors": [
+        "src/task-authority/dag.ts",
+        "src/task-authority/ready-dispatch.ts",
+        "src/task-authority/orchestration.ts",
+        "src/adapters/durable-task-orchestration.ts",
+        "src/adapters/durable-task-mutation-publication.ts",
+        "src/task-authority/dag-delivery.e2e.external.test.ts",
+        "src/adapters/durable-task-mutation-publication.test.ts"
+      ]
     }
   ],
   "implemented": {
@@ -1242,6 +1265,44 @@
         "coordination_observation",
         "trio_facing_interface_and_projections",
         "additive_membership_observation"
+      ]
+    },
+    "taskDagOrchestrationBoundary": {
+      "state": "implemented_focused_and_real_beads_verified",
+      "taskOwnedPolicy": [
+        "src/task-authority/dag.ts",
+        "src/task-authority/ready-dispatch.ts",
+        "src/task-authority/orchestration.ts"
+      ],
+      "beadsGraphAdapter": "src/task-authority/beads-graph-adapter.ts",
+      "durableAdapters": [
+        "src/adapters/durable-task-orchestration.ts",
+        "src/adapters/durable-task-mutation-publication.ts"
+      ],
+      "compositionRoot": "extensions/index.ts",
+      "removedDependencies": [
+        "beads-task-adapter.ts -> task-delivery.ts",
+        "durable-model-tool-port.ts -> BeadsTaskStore",
+        "durable-model-tool-port.ts -> BeadsTaskGraphAdapter",
+        "durable-model-tool-port.ts -> concrete ready-delivery reconciliation"
+      ],
+      "preserved": [
+        "atomic_graph_commit_before_publication",
+        "one_task_owner_and_many_tasks_per_worker",
+        "one_active_execution_slot_per_worker",
+        "explicit_worker_claim",
+        "active_blocker_claim_refusal",
+        "ready_only_initial_delivery",
+        "mechanical_successor_delivery",
+        "exact_graph_replay_without_duplicate_tasks",
+        "operation_specific_missing_publication_recovery",
+        "successful_replay_event_silence",
+        "caught_up_and_indeterminate_observation_semantics"
+      ],
+      "remainingScope": [
+        "final_rc12_aggregate",
+        "installed_package_probe",
+        "stopped_epoch_required_dag_card_cutover"
       ]
     },
     "teamLeadDiscoveryOwnership": {

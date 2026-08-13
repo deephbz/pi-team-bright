@@ -109,7 +109,7 @@ describe("external current-binding contract", () => {
     const ctx = { sessionManager: { getSessionFile: () => "lead-session" } };
 
     const accepted: any = await send.execute("current", {
-      target: { kind: "worker", name: "worker" },
+      to: "worker",
       kind: "attention",
       text: "accepted while offline",
     }, undefined, undefined, ctx);
@@ -125,7 +125,7 @@ describe("external current-binding contract", () => {
     await teams.deactivateMember(name, "worker", "replaced");
     const inboxBefore = fs.readFileSync(paths.inboxPath(name, "worker"), "utf8");
     const removed: any = await send.execute("removed", {
-      target: { kind: "worker", name: "worker" },
+      to: "worker",
       kind: "attention",
       text: "must not append",
     }, undefined, undefined, ctx);
@@ -138,7 +138,7 @@ describe("external current-binding contract", () => {
     expect(fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8")).toBe(runtimeBefore);
 
     const unknown: any = await send.execute("unknown", {
-      target: { kind: "worker", name: "ghost" },
+      to: "ghost",
       kind: "attention",
       text: "must not create",
     }, undefined, undefined, ctx);

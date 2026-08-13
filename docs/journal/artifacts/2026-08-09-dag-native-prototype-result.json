@@ -1,0 +1,88 @@
+{
+  "schema": "pi-team-bright-dag-prototype-result/1",
+  "date": "2026-08-09",
+  "branch": "prototype/dag-native",
+  "baseline": "e55b4f2a9190d700a03d95cb9dee75e5c892ca0a",
+  "implementation_epoch": "0.18.0-dag-prototype.1",
+  "architecture_impact": "changed",
+  "focused": [
+    {
+      "scope": "DAG policy, registered surface, projection parity, Task adapter regressions, and blocker-aware claim",
+      "test_files": 7,
+      "tests": 38,
+      "result": "passed"
+    },
+    {
+      "scope": "catalog, result projection, semantic totality, tool surface, and registered journey",
+      "test_files": 5,
+      "tests": 35,
+      "result": "passed"
+    }
+  ],
+  "real_beads": [
+    {
+      "command": "npm exec vitest -- run src/task-authority/beads-graph-adapter.external.test.ts",
+      "tests": 3,
+      "result": "passed",
+      "claims": [
+        "atomic graph create",
+        "cycle rollback",
+        "exact replay",
+        "changed replay refusal",
+        "existing-dependent expansion"
+      ]
+    },
+    {
+      "command": "npm exec vitest -- run --config vitest.full.config.ts src/task-authority/dag-delivery.e2e.external.test.ts",
+      "tests": 1,
+      "result": "passed",
+      "claims": [
+        "ready-front delivery",
+        "blocker-aware claim",
+        "automatic successor delivery",
+        "parallel workers",
+        "one slot per worker",
+        "blocked slot release"
+      ]
+    }
+  ],
+  "aggregate": {
+    "fast": {
+      "command": "npm test",
+      "test_files": 57,
+      "tests": 442,
+      "result": "passed"
+    },
+    "full": {
+      "command": "npm run test:full",
+      "test_files": 77,
+      "tests": 593,
+      "result": "passed"
+    },
+    "lane_manifest": {
+      "command": "npm run test:lanes",
+      "tests": 77,
+      "fast_files": 57,
+      "exhaustive_files": 20,
+      "result": "passed"
+    }
+  },
+  "package": {
+    "command": "npm run verify:package",
+    "result": "passed",
+    "claims": [
+      "packed observation package probe passed",
+      "generated dist matches tracked files"
+    ]
+  },
+  "agent_surface": {
+    "command": "npm run qa:agent-surface",
+    "tests": 1,
+    "result": "passed"
+  },
+  "limits": [
+    "graph commit to creation-event publication is not yet one durable outbox",
+    "no interactive or headless real Pi multi-Session canary ran",
+    "pre-DAG stored Task cards remain schema-admissible during prototype cutover"
+  ]
+}

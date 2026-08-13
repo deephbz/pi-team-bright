@@ -1,0 +1,121 @@
+{
+  "schema": "pi-team-bright-live-canary/1",
+  "date": "2026-08-10",
+  "result": "passed",
+  "source": {
+    "branch": "rc/v0.17.0-rc.12",
+    "tested_commit": "e8b42b0cd80fb30ca4f7ba1347cda99c95d0a380",
+    "semantic_hardening_base": "ec7642a2d54c44b0c941048c74f14695c87f5c9d",
+    "package_version": "0.17.0-rc.12"
+  },
+  "launch": {
+    "pi_version": "0.83.0",
+    "coordinator_model": "openai-codex/gpt-5.6-terra",
+    "reasoning_level": "medium",
+    "proxy_wrapper": "_codex_with_proxy",
+    "required_proxy_names_present": [
+      "HTTPS_PROXY",
+      "ALL_PROXY",
+      "NO_PROXY"
+    ],
+    "isolated_pi_configuration": true,
+    "manual_session_fallback_used": false,
+    "agent_loop_ready_used_as_signal": false
+  },
+  "team": {
+    "name": "rc12-final-audit-canary-20260810-final2",
+    "operation_id": "rc12-final-canary-op-2",
+    "workers": [
+      "maker",
+      "reviewer"
+    ]
+  },
+  "graph": {
+    "tasks_by_key": {
+      "plan": "rc12-final-audit-canary-20260810-final2-syi",
+      "impl": "rc12-final-audit-canary-20260810-final2-oiu",
+      "review": "rc12-final-audit-canary-20260810-final2-3tb"
+    },
+    "dependencies": [
+      {
+        "task": "rc12-final-audit-canary-20260810-final2-oiu",
+        "needs": "rc12-final-audit-canary-20260810-final2-syi"
+      },
+      {
+        "task": "rc12-final-audit-canary-20260810-final2-3tb",
+        "needs": "rc12-final-audit-canary-20260810-final2-oiu"
+      }
+    ],
+    "assignments": {
+      "plan": "maker",
+      "impl": "maker",
+      "review": "reviewer"
+    },
+    "final_statuses": {
+      "plan": "closed",
+      "impl": "closed",
+      "review": "closed"
+    }
+  },
+  "task_event_sequence": [
+    {
+      "cursor": "8",
+      "task_key": "plan",
+      "actor": "maker",
+      "change": "assigned",
+      "evidence_kind": "assignment"
+    },
+    {
+      "cursor": "9",
+      "task_key": "plan",
+      "actor": "maker",
+      "change": "status",
+      "evidence_kind": "result"
+    },
+    {
+      "cursor": "10",
+      "task_key": "impl",
+      "actor": "maker",
+      "change": "assigned",
+      "evidence_kind": "assignment"
+    },
+    {
+      "cursor": "11",
+      "task_key": "impl",
+      "actor": "maker",
+      "change": "status",
+      "evidence_kind": "result"
+    },
+    {
+      "cursor": "12",
+      "task_key": "review",
+      "actor": "reviewer",
+      "change": "assigned",
+      "evidence_kind": "assignment"
+    },
+    {
+      "cursor": "13",
+      "task_key": "review",
+      "actor": "reviewer",
+      "change": "status",
+      "evidence_kind": "result"
+    }
+  ],
+  "mechanical_handoff": {
+    "leader_task_update_calls": 0,
+    "impl_claim_after_plan_result": true,
+    "review_claim_after_impl_result": true,
+    "worker_authored_task_event_signal_observed": true,
+    "final_task_cursor": "13"
+  },
+  "cleanup": {
+    "maker_stopped": true,
+    "reviewer_stopped": true,
+    "team_shutdown_succeeded": true,
+    "active_memberships": 0,
+    "unfinished_tasks": 0,
+    "final_event_cursor": "15",
+    "coordinator_pane_closed": true,
+    "isolated_pi_configuration_removed": true
+  }
+}

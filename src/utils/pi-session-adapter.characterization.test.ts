@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
+import { DurableTaskOrchestration } from "../adapters/durable-task-orchestration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
 import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
@@ -151,11 +152,16 @@ describe("registered Pi Session adapter characterization", () => {
     const event = vi.spyOn(teamEvents, "appendTeamEvent");
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockImplementation(async () => { order.push("direct"); });
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockImplementation(async () => { order.push("task"); });
+    vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady").mockImplementation(async () => {
+      order.push("ready");
+      return ["Task task-1 remains queued."];
+    });
 
     const ctx = context(sessionFile);
     await extension().get("session_start")!({ reason: "resume" }, ctx);
 
-    expect(order).toEqual(["direct", "task"]);
+    expect(order).toEqual(["direct", "task", "ready"]);
+    expect(ctx.ui.notify).toHaveBeenCalledWith("Pi Team Bright ready delivery: Task task-1 remains queued.", "warning");
     expect(claim).not.toHaveBeenCalled();
     expect(bind).not.toHaveBeenCalled();
     expect(event).not.toHaveBeenCalled();

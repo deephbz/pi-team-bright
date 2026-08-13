@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { Check } from "typebox/value";
 import {
-  CandidateEnsureWorkerParametersSchema,
-  CandidateEnsureWorkerResultSchema,
-  CandidateTeamCreateParametersSchema,
-  CandidateTeamCreateResultSchema,
-  CandidateTeamSyncParametersSchema,
-  CandidateTeamSyncResultSchema,
+  EnsureWorkerParametersSchema,
+  EnsureWorkerResultSchema,
+  TeamCreateParametersSchema,
+  TeamCreateResultSchema,
+  TeamSyncParametersSchema,
+  TeamSyncResultSchema,
 } from "../src/model-tool-contract/catalog";
-import { parseCandidateToolResult } from "../src/model-tool-contract/result-projection";
+import { parseToolResult } from "../src/model-tool-contract/result-projection";
 import {
   InMemoryModelToolTeamPort,
   registerModelToolJourney,
@@ -31,24 +31,24 @@ registerModelToolJourney({
 
 assert.deepEqual([...tools.keys()], [
   "team_create", "team_sync", "ensure_worker", "task_create", "task_read", "task_update",
-  "worker_stop", "team_shutdown", "task_link", "alert_send",
+  "worker_stop", "team_shutdown", "alert_send",
 ]);
-assert.equal(tools.get("team_create")?.parameters, CandidateTeamCreateParametersSchema);
-assert.equal(tools.get("team_sync")?.parameters, CandidateTeamSyncParametersSchema);
-assert.equal(tools.get("ensure_worker")?.parameters, CandidateEnsureWorkerParametersSchema);
+assert.equal(tools.get("team_create")?.parameters, TeamCreateParametersSchema);
+assert.equal(tools.get("team_sync")?.parameters, TeamSyncParametersSchema);
+assert.equal(tools.get("ensure_worker")?.parameters, EnsureWorkerParametersSchema);
 
-assert.equal(Check(CandidateTeamCreateParametersSchema, {
+assert.equal(Check(TeamCreateParametersSchema, {
   name: "release-team",
   purpose: "Prepare the release.",
   backend: "beads",
 }), false);
-assert.equal(Check(CandidateEnsureWorkerParametersSchema, {
+assert.equal(Check(EnsureWorkerParametersSchema, {
   name: "verifier",
   scope: "Own independent release verification.",
   team_name: "release-team",
 }), false);
 for (const forbidden of ["team_name", "cursor", "continuation", "limit", "wait_ms"]) {
-  assert.equal(Check(CandidateTeamSyncParametersSchema, { view: "snapshot", [forbidden]: "forbidden" }), false);
+  assert.equal(Check(TeamSyncParametersSchema, { view: "snapshot", [forbidden]: "forbidden" }), false);
 }
 
 function context(sessionId: string) {
@@ -66,13 +66,13 @@ async function invoke(tool: ToolName, parameters: unknown, sessionId: string) {
     context(sessionId),
   );
   const resultSchema = tool === "team_create"
-    ? CandidateTeamCreateResultSchema
+    ? TeamCreateResultSchema
     : tool === "team_sync"
-      ? CandidateTeamSyncResultSchema
-      : CandidateEnsureWorkerResultSchema;
+      ? TeamSyncResultSchema
+      : EnsureWorkerResultSchema;
   assert.equal(Check(resultSchema, result.details), true, `${tool} details must match its catalog result schema`);
   assert.equal(result.content.length, 1);
-  const model = parseCandidateToolResult(tool, result.content[0]!.text) as { kind: string };
+  const model = parseToolResult(tool, result.content[0]!.text) as { kind: string };
   assert.equal(model.kind, (result.details as { kind: string }).kind);
   return result.details as any;
 }

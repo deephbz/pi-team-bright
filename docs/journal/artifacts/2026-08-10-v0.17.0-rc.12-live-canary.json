@@ -1,0 +1,92 @@
+{
+  "schema": "pi-team-bright-live-canary/1",
+  "recorded_at": "2026-08-10T03:33:00Z",
+  "package": "@hypercarrier/pi-team-bright@0.17.0-rc.12",
+  "branch": "rc/v0.17.0-rc.12",
+  "source": {
+    "semantic_hardening_base": "a3c51d78c3e95549768a91a36535bee0b5c94755",
+    "rebased_prototype_commit": "ac95ffd",
+    "runtime_source_bundle_sha256": "ec2d3ff07a7e302ea39f67c34143c6a94e13a14bde34f719101d9d965f5685be",
+    "bundle_scope": "path-tagged hashes of the composition root, DAG orchestration, ready dispatch, publication, graph, model-tool port, and tmux/Herdr adapter sources"
+  },
+  "runtime": {
+    "pi_version": "0.83.0",
+    "coordinator_model": "openai-codex/gpt-5.6-terra:medium",
+    "worker_model": "openai-codex/gpt-5.6-terra",
+    "terminal_adapter": "tmux",
+    "isolated_pi_configuration": true,
+    "proxy_environment_present": {
+      "HTTPS_PROXY": true,
+      "ALL_PROXY": true,
+      "NO_PROXY": true
+    }
+  },
+  "team": {
+    "name": "rc12-dag-canary-tmux-8",
+    "operation_id": "rc12-live-dag-tmux-8",
+    "workers": ["maker", "reviewer"],
+    "graph": [
+      {
+        "key": "plan",
+        "task_id": "rc12-dag-canary-tmux-8-oaz",
+        "assignee": "maker",
+        "needs": []
+      },
+      {
+        "key": "impl",
+        "task_id": "rc12-dag-canary-tmux-8-7yr",
+        "assignee": "maker",
+        "needs": ["plan"]
+      },
+      {
+        "key": "review",
+        "task_id": "rc12-dag-canary-tmux-8-s82",
+        "assignee": "reviewer",
+        "needs": ["impl"]
+      }
+    ]
+  },
+  "event_order": [
+    { "cursor": 2, "kind": "worker_session_bound", "actor": "maker" },
+    { "cursor": 4, "kind": "worker_session_bound", "actor": "reviewer" },
+    { "cursor": 5, "kind": "task_created", "task_key": "plan", "actor": "team-lead" },
+    { "cursor": 6, "kind": "task_created", "task_key": "impl", "actor": "team-lead" },
+    { "cursor": 7, "kind": "task_created", "task_key": "review", "actor": "team-lead" },
+    { "cursor": 8, "kind": "task_claimed", "task_key": "plan", "actor": "maker" },
+    { "cursor": 9, "kind": "task_closed_with_result", "task_key": "plan", "actor": "maker" },
+    { "cursor": 10, "kind": "task_claimed_after_predecessor_close", "task_key": "impl", "actor": "maker" },
+    { "cursor": 11, "kind": "task_closed_with_result", "task_key": "impl", "actor": "maker" },
+    { "cursor": 12, "kind": "task_claimed_after_predecessor_close", "task_key": "review", "actor": "reviewer" },
+    { "cursor": 13, "kind": "task_closed_with_pass_result", "task_key": "review", "actor": "reviewer" },
+    { "cursor": 14, "kind": "worker_stopped", "actor": "maker" },
+    { "cursor": 15, "kind": "worker_stopped", "actor": "reviewer" }
+  ],
+  "assertions": {
+    "one_atomic_graph_create": true,
+    "no_separate_link_call": true,
+    "no_leader_task_update": true,
+    "worker_authored_launch_signal": true,
+    "one_worker_handled_multiple_tasks": true,
+    "different_worker_handled_review": true,
+    "mechanical_successor_delivery": true,
+    "all_tasks_closed": true,
+    "all_workers_stopped": true,
+    "team_shutdown_with_no_unfinished_tasks": true,
+    "reviewer_result": "pass"
+  },
+  "diagnostics": {
+    "terminal_cleanup_warnings": [
+      "The tmux adapter reported an already-absent pane for each Worker during cleanup; durable stopped events and Team shutdown completed."
+    ]
+  },
+  "raw_evidence": {
+    "location": "local Team authority, event, delivery, and Pi Session records outside Git",
+    "tracked_content_is_redacted": true
+  },
+  "proof_limits": [
+    "This canary proves one live three-Task chain across two Worker Sessions.",
+    "It does not establish throughput, high-contention behavior, or concurrent execution inside one Worker Session.",
+    "It does not authorize a tag, npm publication, registry change, or GitHub release."
+  ],
+  "result": "passed"
+}

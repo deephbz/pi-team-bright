@@ -14,6 +14,7 @@ import { taskVersionRef } from "./task-version-ref";
 
 const task = {
   id: "task-1", title: "Verify", goal: "Verify the release.", status: "open" as const,
+  relations: [], dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
   current_context: "Work has not started.", version: taskVersionRef("beads_task_1"),
 };
 const session = exactLeaderSessionId("totality-session");
@@ -42,16 +43,13 @@ function registered(port: ModelToolTeamPort) {
 describe("task semantic-result totality", () => {
   it("projects every declared task_create and task_update raw outcome without generic TUI failure", () => {
     const create = [
-      { kind: "created", input_index: 0, operation_id: "create-ok", task },
-      { kind: "refused", input_index: 0, operation_id: "create-conflict", reason: "worker_unavailable", message: "Worker is absent.", state_changed: false },
-      { kind: "refused", input_index: 0, operation_id: "create-replay", reason: "operation_conflict", message: "Operation differs.", state_changed: false },
-      { kind: "unavailable", input_index: 0, operation_id: "create-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
-      { kind: "unknown_outcome", input_index: 0, operation_id: "create-unknown", message: "Authority response was lost." },
+      { kind: "task_graph_created", operation_id: "create-ok", replayed: false, tasks_by_key: { verify: task }, ready_task_ids: [task.id] },
+      { kind: "refused", operation_id: "create-conflict", reason: "worker_unavailable", message: "Worker is absent.", state_changed: false },
+      { kind: "refused", operation_id: "create-replay", reason: "operation_conflict", message: "Operation differs.", state_changed: false },
+      { kind: "unavailable", operation_id: "create-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
+      { kind: "unknown_outcome", operation_id: "create-unknown", message: "Authority response was lost." },
     ];
-    for (const outcome of create) assertTotal("task_create", { kind: "task_create_batch", outcomes: [outcome] });
-    // A multi-item batch must retain recovery for an unknown item. Singleton
-    // flattening cannot hide a missing batch projection branch.
-    assertTotal("task_create", { kind: "task_create_batch", outcomes: [create[0], create[4]] });
+    for (const outcome of create) assertTotal("task_create", outcome);
 
     const update = [
       { kind: "updated", input_index: 0, task_id: task.id, operation_id: "update-ok", task, journal_entries: [] },
@@ -112,19 +110,19 @@ describe("task semantic-result totality", () => {
   it("keeps every expected port outcome semantic through Pi registration", async () => {
     const port = new InMemoryModelToolTeamPort();
     const invoke = registered(port);
-    const create = vi.spyOn(port, "createTask");
+    const create = vi.spyOn(port, "createTaskGraph");
     const update = vi.spyOn(port, "updateTasks");
 
     for (const outcome of [
-      { kind: "created", operationId: "create-ok", task },
-      { kind: "worker_unavailable", operationId: "create-worker" },
-      { kind: "operation_conflict", operationId: "create-conflict", message: "Operation differs." },
+      { kind: "created", operationId: "create-ok", replayed: false, tasksByKey: { verify: task }, readyTaskIds: [task.id] },
+      { kind: "refused", operationId: "create-worker", reason: "worker_unavailable", message: "Worker is absent." },
+      { kind: "refused", operationId: "create-conflict", reason: "operation_conflict", message: "Operation differs." },
       { kind: "unknown_outcome", operationId: "create-unknown", message: "Outcome is unknown." },
       { kind: "unavailable", operationId: "create-down", reason: "task_authority_unavailable", message: "Authority is unavailable." },
       { kind: "no_active_team", operationId: "create-unbound" },
     ]) {
       create.mockResolvedValueOnce(outcome as any);
-      const result = await invoke("task_create", { tasks: [{ operation_id: outcome.operationId, title: "Verify", goal: "Verify the release." }] });
+      const result = await invoke("task_create", { operation_id: outcome.operationId, tasks: [{ key: "verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" }] });
       assertTotal("task_create", result.details);
       if (outcome.kind === "unknown_outcome") {
         expect(JSON.parse(result.content[0].text)).toMatchObject({ recovery: { action: "retry_same_operation", operation_id: outcome.operationId } });

@@ -3,13 +3,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import * as messaging from "./messaging";
 import * as paths from "./paths";
+import { taskDeliveryRecoveryPath } from "./paths";
 import * as teams from "./teams";
 import type { TaskCard } from "../model-tool-contract/task-domain";
 import type { TaskReconciliationQuery } from "../task-authority/contracts";
+import type { TaskDeliveryRecoveryRecord } from "./task-delivery";
 import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import {
   enqueueTaskChange,
   prepareOwnerTransitionIntent,
+  recordTaskDeliveryRecovery,
   readTaskDeliveries,
   reconcileOwnerTransitionOutbox,
   TASK_CHANGE_CUSTOM_TYPE,
@@ -75,6 +78,42 @@ afterEach(() => {
 });
 
 describe("Task-native delivery", () => {
+  it("coalesces an identical unresolved delivery recovery obligation", async () => {
+    const { teamName, task } = await fixture("recovery-coalesce");
+    const version = taskVersionRef(task.version);
+    const record: TaskDeliveryRecoveryRecord = {
+      teamName,
+      taskId: task.id,
+      taskVersion: version,
+      recipients: ["worker", "reviewer"],
+      changeKind: "assigned" as const,
+      recordedAt: "2026-08-12T00:00:00.000Z",
+      reason: "enqueue-failed" as const,
+      taskProjection: { ...task, version, relations: [], dependency_state: { kind: "ready", active_blocker_ids: [] } },
+    };
+
+    await recordTaskDeliveryRecovery(record);
+    await recordTaskDeliveryRecovery({
+      ...record,
+      recipients: ["reviewer", "worker", "worker"],
+      recordedAt: "2026-08-12T00:00:01.000Z",
+      taskProjection: {
+        id: record.taskProjection.id,
+        title: record.taskProjection.title,
+        status: record.taskProjection.status,
+        assignee: record.taskProjection.assignee,
+        current_context: record.taskProjection.current_context,
+        version: record.taskProjection.version,
+        goal: "goal" in record.taskProjection ? record.taskProjection.goal : undefined,
+        dependency_state: record.taskProjection.dependency_state,
+        relations: record.taskProjection.relations,
+      } as TaskDeliveryRecoveryRecord["taskProjection"],
+    });
+
+    const records = JSON.parse(fs.readFileSync(taskDeliveryRecoveryPath(teamName), "utf8"));
+    expect(records).toEqual([record]);
+  });
+
   it("persists an authority-scoped Session-targeted change without creating a Message", async () => {
     const { teamName, sessionFile, task } = await fixture("authority");
     const first = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
@@ -493,6 +532,33 @@ describe("Task-native delivery", () => {
     expect(diagnostic).toHaveBeenCalledWith(
       expect.stringMatching(/continuing local Task delivery/),
       expect.objectContaining({ message: "Beads temporarily unavailable" }),
+    );
+    delivery.stop();
+  });
+
+  it("retries ready-front reconciliation from the durable Worker delivery loop", async () => {
+    const { teamName, sessionFile } = await fixture("ready-front-periodic-recovery");
+    const reconcileReady = vi.fn()
+      .mockRejectedValueOnce(new Error("temporary ready query timeout"))
+      .mockResolvedValueOnce([]);
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const delivery = new TaskChangeDelivery({ sendMessage: vi.fn(), appendEntry: vi.fn() }, {
+      teamName,
+      recipient: "worker",
+      sessionFile,
+      pollMs: 60_000,
+      membership: taskDeliveryMembership,
+      reconcile: async () => 0,
+      reconcileReady,
+    });
+
+    await delivery.start([]);
+    await delivery.scan();
+
+    expect(reconcileReady).toHaveBeenCalledTimes(2);
+    expect(diagnostic).toHaveBeenCalledWith(
+      expect.stringMatching(/ready-front reconciliation failed/),
+      expect.objectContaining({ message: "temporary ready query timeout" }),
     );
     delivery.stop();
   });

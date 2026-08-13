@@ -77,22 +77,27 @@ const ProjectedTask = Type.Object({
   id: TaskId,
   status: TaskStatus,
   assignee: Type.Optional(WorkerName),
+  relations: Type.Array(Type.Object({ relation: Type.Enum(["blocked_by", "parent", "related"]), target_task_id: TaskId }, { additionalProperties: false })),
+  dependency_state: Type.Union([
+    Type.Object({ kind: Type.Literal("ready"), active_blocker_ids: Type.Array(TaskId, { maxItems: 0 }) }, { additionalProperties: false }),
+    Type.Object({ kind: Type.Enum(["waiting", "terminal"]), active_blocker_ids: Type.Array(TaskId) }, { additionalProperties: false }),
+  ]),
   version: TaskVersion,
 }, { additionalProperties: false });
 
 const CreateOperationId = Type.String({ minLength: 1, maxLength: 128 });
-const ProjectedTaskOutcome = Type.Union([
-  Type.Object({ kind: Type.Literal("created"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, task: ProjectedTask, delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, reason: Type.Enum(["worker_unavailable", "operation_conflict"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("unknown_outcome"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, message: Type.String({ minLength: 1 }), recovery: Type.Object({ action: Type.Literal("retry_same_operation"), operation_id: CreateOperationId }, { additionalProperties: false }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("unavailable"), input_index: Type.Integer({ minimum: 0 }), operation_id: CreateOperationId, reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-]);
 export const TaskCreateModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("created"), operation_id: CreateOperationId, task: ProjectedTask, delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), operation_id: CreateOperationId, reason: Type.Enum(["worker_unavailable", "operation_conflict"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
+  Type.Object({
+    kind: Type.Literal("task_graph_created"),
+    operation_id: CreateOperationId,
+    replayed: Type.Boolean(),
+    tasks_by_key: Type.Record(Type.String({ pattern: "^[A-Za-z0-9_-]+$" }), ProjectedTask),
+    ready_task_ids: Type.Array(TaskId),
+    delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+  }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), operation_id: CreateOperationId, reason: Type.Enum(["worker_unavailable", "graph_conflict", "version_conflict", "operation_conflict"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unknown_outcome"), operation_id: CreateOperationId, message: Type.String({ minLength: 1 }), recovery: Type.Object({ action: Type.Literal("retry_same_operation"), operation_id: CreateOperationId }, { additionalProperties: false }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unavailable"), operation_id: CreateOperationId, reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("task_create_batch"), outcomes: Type.Array(ProjectedTaskOutcome) }, { additionalProperties: false }),
 ]);
 
 const TaskReadOutcome = Type.Union([
@@ -112,19 +117,19 @@ const UpdatedTask = Type.Object({ id: TaskId, status: TaskStatus, assignee: Type
 const RawUpdatedTask = TaskCard;
 const UpdateOutcome = Type.Union([
   Type.Object({ kind: Type.Literal("updated"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, task: RawUpdatedTask }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"]), message: Type.String({ minLength: 1 }), current_task: Type.Optional(TaskCard), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required", "active_blockers"]), message: Type.String({ minLength: 1 }), current_task: Type.Optional(TaskCard), active_blocker_ids: Type.Optional(Type.Array(TaskId, { minItems: 1 })), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("contract_gap"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_metadata_absent", "task_metadata_invalid", "external_writer_atomicity_unavailable"]), current_task: Type.Optional(TaskCard), unsupported: Type.Array(Type.String(), { minItems: 1 }), message: Type.String({ minLength: 1 }), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unavailable"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
 ]);
 const ProjectedUpdateOutcome = Type.Union([
   Type.Object({ kind: Type.Literal("updated"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, task: UpdatedTask }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"]), message: Type.String({ minLength: 1 }), current_task: Type.Optional(TaskCard), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required", "active_blockers"]), message: Type.String({ minLength: 1 }), current_task: Type.Optional(TaskCard), active_blocker_ids: Type.Optional(Type.Array(TaskId, { minItems: 1 })), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("contract_gap"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_metadata_absent", "task_metadata_invalid", "external_writer_atomicity_unavailable"]), current_task: Type.Optional(TaskCard), unsupported: Type.Array(Type.String(), { minItems: 1 }), message: Type.String({ minLength: 1 }), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unavailable"), input_index: Type.Integer({ minimum: 0 }), task_id: TaskId, reason: Type.Enum(["task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
 ]);
 export const TaskUpdateModelResultSchema = Type.Union([
   Type.Object({ kind: Type.Literal("updated"), task: UpdatedTask }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), task_id: Type.Optional(TaskId), reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required", "duplicate_task_id"]), message: Type.String({ minLength: 1 }), current_task: Type.Optional(TaskCard), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), task_id: Type.Optional(TaskId), reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required", "active_blockers", "duplicate_task_id"]), message: Type.String({ minLength: 1 }), current_task: Type.Optional(TaskCard), active_blocker_ids: Type.Optional(Type.Array(TaskId, { minItems: 1 })), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("contract_gap"), task_id: TaskId, reason: Type.Enum(["task_metadata_absent", "task_metadata_invalid", "external_writer_atomicity_unavailable"]), current_task: Type.Optional(TaskCard), unsupported: Type.Array(Type.String(), { minItems: 1 }), message: Type.String({ minLength: 1 }), recovery: Type.Optional(Recovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unavailable"), reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("task_update_batch"), outcomes: Type.Array(ProjectedUpdateOutcome) }, { additionalProperties: false }),
@@ -223,6 +228,14 @@ function taskSummary(task: any): Record<string, unknown> {
   };
 }
 
+function graphTaskSummary(task: any): Record<string, unknown> {
+  return {
+    ...taskSummary(task),
+    relations: task.relations,
+    dependency_state: task.dependency_state,
+  };
+}
+
 /** Authority versions remain raw evidence and never enter a public projection. */
 function taskUpdateMessage(raw: any): string {
   return raw.reason === "version_conflict" ? "The supplied Task version is stale." : raw.message;
@@ -230,18 +243,15 @@ function taskUpdateMessage(raw: any): string {
 
 function projectOutcome(tool: ProjectedTool, raw: any): any {
   if (tool === "task_create") {
-    if (raw.kind === "task_create_batch") {
-      if (raw.outcomes.length === 1) return projectOutcome("task_create", raw.outcomes[0]);
-      return { kind: raw.kind, outcomes: raw.outcomes.map((item: any) => {
-        const { state_changed: _stateChanged, ...rest } = item;
-        const projected = { ...rest, ...(item.task ? { task: taskSummary(item.task) } : {}) };
-        return item.kind === "unknown_outcome"
-          ? { ...projected, recovery: { action: "retry_same_operation", operation_id: item.operation_id } }
-          : projected;
-      }) };
-    }
-    if (raw.kind === "created") return { kind: raw.kind, operation_id: raw.operation_id, task: taskSummary(raw.task), ...(raw.delivery_warnings?.length ? { delivery_warnings: raw.delivery_warnings } : {}) };
-    const { state_changed: _stateChanged, input_index: _inputIndex, ...rest } = raw;
+    if (raw.kind === "task_graph_created") return {
+      kind: raw.kind,
+      operation_id: raw.operation_id,
+      replayed: raw.replayed,
+      tasks_by_key: Object.fromEntries(Object.entries(raw.tasks_by_key).map(([key, task]) => [key, graphTaskSummary(task)])),
+      ready_task_ids: raw.ready_task_ids,
+      ...(raw.delivery_warnings?.length ? { delivery_warnings: raw.delivery_warnings } : {}),
+    };
+    const { state_changed: _stateChanged, ...rest } = raw;
     return raw.kind === "unknown_outcome"
       ? { ...rest, recovery: { action: "retry_same_operation", operation_id: raw.operation_id } }
       : rest;

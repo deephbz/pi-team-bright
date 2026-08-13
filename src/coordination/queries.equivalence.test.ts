@@ -26,6 +26,8 @@ const task = {
   goal: "Preserve ordered complete hydration.",
   current_context: "Current Task context.",
   status: "open",
+  relations: [],
+  dependency_state: { kind: "ready", active_blocker_ids: [] },
   version: "v_0123456789abcdef",
 } as any;
 

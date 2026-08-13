@@ -30,7 +30,6 @@ const expectedTools = [
   "alert_send",
   "ensure_worker",
   "task_create",
-  "task_link",
   "task_read",
   "task_update",
   "team_create",
@@ -46,10 +45,10 @@ function tool(name: string): RegisteredTool {
 }
 
 describe("minimal PiTeams agent-facing surface", () => {
-  it("registers exactly ten composable tools", () => {
+  it("registers exactly nine composable tools", () => {
     const names = registeredTools.map(candidate => candidate.name);
-    expect(names).toHaveLength(10);
-    expect(new Set(names).size).toBe(10);
+    expect(names).toHaveLength(9);
+    expect(new Set(names).size).toBe(9);
     expect([...names].sort()).toEqual(expectedTools);
   });
 
@@ -70,7 +69,8 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(reference).not.toMatch(/Required:|Optional:/);
     expect(skill).toMatch(/executable schema.+source of truth/is);
     expect(skill).not.toMatch(/^### `[^`]+`$/m);
-    expect(current).toMatch(/Lifecycle stage: \*\*sharing\*\*/);
+    expect(current).toMatch(/Lifecycle stage: \*\*hardening\*\* for the DAG-native Task coordination release/);
+    expect(current).toMatch(/Membership-observation surface remains in \*\*sharing\*\*/);
     expect(current).toMatch(/Sources of truth/);
   });
 
@@ -101,7 +101,7 @@ describe("minimal PiTeams agent-facing surface", () => {
     const workerUpdate = workerTools.find(candidate => candidate.name === "task_update");
     expect(workerUpdate?.description).toMatch(/claim=true.+atomic claim.+no status/is);
     expect(JSON.stringify(workerUpdate?.parameters.properties?.claim)).toMatch(/do not include.+status/i);
-    expect(tool("task_link").description).toMatch(/latest Task version.+closure does not freeze/is);
+    expect(registeredTools.some((candidate) => candidate.name === "task_link")).toBe(false);
     expect(skill).toMatch(/claim=true.+alone/is);
     expect(skill).toMatch(/Beads timeout.+unknown authority outcome/is);
     expect(skill).toMatch(/same operation ID and identical/i);
@@ -117,7 +117,10 @@ describe("minimal PiTeams agent-facing surface", () => {
   it("binds goal-driven Tasks to Workers", () => {
     const create = tool("task_create");
     const update = tool("task_update");
+    expect(create.parameters.properties).toHaveProperty("operation_id");
     expect(create.parameters.properties).toHaveProperty("tasks");
+    expect((create.parameters as any).properties.tasks.items.properties).toHaveProperty("needs");
+    expect(create.parameters.properties).not.toHaveProperty("dependencies");
     expect(update.parameters.properties).toHaveProperty("updates");
     expect(JSON.stringify(update.parameters.properties?.updates)).toContain("expected_version");
     expect(JSON.stringify(update.parameters.properties?.updates)).toContain("journal_entries");
@@ -139,7 +142,12 @@ describe("minimal PiTeams agent-facing surface", () => {
 
   it("keeps exceptional communication to one typed Alert tool", () => {
     const alert = tool("alert_send");
-    expect(alert.parameters).toMatchObject({ anyOf: expect.any(Array) });
+    expect(alert.parameters).toMatchObject({
+      type: "object",
+      required: ["to", "kind", "text"],
+      additionalProperties: false,
+    });
+    expect(alert.parameters.properties).toHaveProperty("to");
     const alertSchema = JSON.stringify(alert.parameters);
     for (const kind of ["clarification", "attention", "announcement"]) {
       expect(alertSchema).toContain(kind);

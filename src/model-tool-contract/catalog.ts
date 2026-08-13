@@ -48,65 +48,56 @@ export const WorkerCurrentSchema = Type.Object({
   nonterminal_task_ids: Type.Array(TaskId),
 }, { additionalProperties: false });
 
+const TaskKey = Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" });
 const TaskCreateItemSchema = Type.Object({
-  operation_id: Type.String({ minLength: 1, maxLength: 128, description: "Opaque caller-chosen create operation identity. Reuse it only to reconcile an unknown create outcome." }),
+  key: Type.String({ ...TaskKey, description: "Request-local Task name used by prerequisites and the create receipt." }),
   title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_LIMITS.maxTaskTitleChars }),
   goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and external success signal in one field." }),
-  assignee: Type.Optional(WorkerName),
+  assignee: WorkerName,
+  needs: Type.Optional(Type.Array(TaskKey, { description: "Keys of prerequisite Tasks in this request." })),
 }, { additionalProperties: false });
 
 export const TaskCreateParametersSchema = Type.Object({
+  operation_id: Type.String({ minLength: 1, maxLength: 128, description: "Opaque identity for the complete atomic graph request. Reuse it only for an exact retry." }),
   tasks: Type.Array(TaskCreateItemSchema, { minItems: 1 }),
 }, {
   additionalProperties: false,
-  description: "Create independent assigned Task work contracts in input order. Each item commits separately.",
+  description: "Atomically create assigned Tasks. Each task needs the listed request-local prerequisites.",
 });
 
-const TaskCreateOutcomeBase = {
-  input_index: Type.Integer({ minimum: 0 }),
-  operation_id: Type.String({ minLength: 1, maxLength: 128 }),
-};
-
-export const TaskCreateResultSchema = Type.Object({
-  kind: Type.Literal("task_create_batch"),
-  outcomes: Type.Array(Type.Union([
-    Type.Object({
-      ...TaskCreateOutcomeBase,
-      kind: Type.Literal("created"),
-      task: TaskCardSchema,
-      delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-    }, { additionalProperties: false }),
-    Type.Object({
-      ...TaskCreateOutcomeBase,
-      kind: Type.Literal("refused"),
-      reason: Type.Enum(["worker_unavailable", "operation_conflict"]),
-      message: Type.String({ minLength: 1 }),
-      state_changed: Type.Literal(false),
-    }, { additionalProperties: false }),
-    Type.Object({
-      ...TaskCreateOutcomeBase,
-      kind: Type.Literal("unknown_outcome"),
-      message: Type.String({ minLength: 1 }),
-    }, { additionalProperties: false }),
-    Type.Object({
-      ...TaskCreateOutcomeBase,
-      kind: Type.Literal("unavailable"),
-      reason: Type.Enum(["no_active_team", "task_authority_unavailable"]),
-      message: Type.String({ minLength: 1 }),
-      state_changed: Type.Literal(false),
-    }, { additionalProperties: false }),
-  ])),
-}, {
-  additionalProperties: false,
-  description: "Independent ordered outcomes. A batch is not atomic.",
-});
+export const TaskCreateResultSchema = Type.Union([
+  Type.Object({
+    kind: Type.Literal("task_graph_created"),
+    operation_id: Type.String({ minLength: 1, maxLength: 128 }),
+    replayed: Type.Boolean(),
+    tasks_by_key: Type.Record(Type.String({ pattern: "^[A-Za-z0-9_-]+$" }), TaskCardSchema),
+    ready_task_ids: Type.Array(TaskId),
+    delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
+  }, { additionalProperties: false }),
+  Type.Object({
+    kind: Type.Literal("refused"),
+    operation_id: Type.String({ minLength: 1, maxLength: 128 }),
+    reason: Type.Enum(["worker_unavailable", "graph_conflict", "version_conflict", "operation_conflict"]),
+    message: Type.String({ minLength: 1 }),
+    state_changed: Type.Literal(false),
+  }, { additionalProperties: false }),
+  Type.Object({
+    kind: Type.Literal("unknown_outcome"),
+    operation_id: Type.String({ minLength: 1, maxLength: 128 }),
+    message: Type.String({ minLength: 1 }),
+  }, { additionalProperties: false }),
+  Type.Object({
+    kind: Type.Literal("unavailable"),
+    operation_id: Type.String({ minLength: 1, maxLength: 128 }),
+    reason: Type.Enum(["no_active_team", "task_authority_unavailable"]),
+    message: Type.String({ minLength: 1 }),
+    state_changed: Type.Literal(false),
+  }, { additionalProperties: false }),
+]);
 
 export const TaskReadParametersSchema = Type.Object({
   task_ids: Type.Array(TaskId, { minItems: 1 }),
-}, {
-  additionalProperties: false,
-  description: "Read current Task cards by ID without changing Team or observation state.",
-});
+}, { additionalProperties: false });
 
 const TaskReadFoundSchema = Type.Object({
   kind: Type.Literal("found"),
@@ -163,10 +154,7 @@ const TaskUpdateItemSchema = Type.Object({
 
 export const TaskUpdateParametersSchema = Type.Object({
   updates: Type.Array(TaskUpdateItemSchema, { minItems: 1 }),
-}, {
-  additionalProperties: false,
-  description: "Apply one or more supplied Task changes. Omit current_context when it remains relevant; omit journal_entries when no evidence or rationale changes.",
-});
+}, { additionalProperties: false });
 
 export const TaskJournalEntrySchema = Type.Object({
   id: Type.String({ minLength: 1, maxLength: 128 }),
@@ -196,9 +184,10 @@ export const TaskUpdateResultSchema = Type.Union([
       Type.Object({
         ...TaskUpdateOutcomeBase,
         kind: Type.Literal("refused"),
-        reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"]),
+        reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required", "active_blockers"]),
         message: Type.String({ minLength: 1 }),
         current_task: Type.Optional(TaskCardSchema),
+        active_blocker_ids: Type.Optional(Type.Array(TaskId, { minItems: 1 })),
         state_changed: Type.Literal(false),
       }, { additionalProperties: false }),
       Type.Object({
@@ -267,10 +256,7 @@ export const TeamCreateParametersSchema = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 64 }),
   purpose: Type.String({ minLength: 1, description: "The long-lived Team outcome and operating boundary." }),
   pane_layout: Type.Optional(TeamPaneLayoutSchema),
-}, {
-  additionalProperties: false,
-  description: "Create one long-lived Team and bind the exact calling Session as its leader.",
-});
+}, { additionalProperties: false });
 
 export const TeamCreateResultSchema = Type.Union([
   Type.Object({
@@ -293,12 +279,9 @@ export const TeamCreateResultSchema = Type.Union([
 
 export const TeamSyncParametersSchema = Type.Object({
   view: Type.Enum(["snapshot", "updates"], {
-    description: "Use snapshot to restore current context; use updates for routine supervision and waiting.",
+    description: "Use snapshot to restore context; use updates for supervision and waiting.",
   }),
-}, {
-  additionalProperties: false,
-  description: "Read the active Team's snapshot or incremental updates. Team identity is resolved from the exact leader Session binding.",
-});
+}, { additionalProperties: false });
 
 export const TeamSnapshotResultSchema = Type.Object({
   kind: Type.Literal("snapshot"),
@@ -377,12 +360,9 @@ export const EnsureWorkerParametersSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({
     minLength: 1,
-    description: "A semantically deep area with high internal cohesion, low prerequisite overlap, and few dependencies on other Workers.",
+    description: "Standing semantic area, not the current Task.",
   }),
-}, {
-  additionalProperties: false,
-  description: "Create, reconnect, or reuse one Worker in the active Team. Work is assigned separately through Tasks.",
-});
+}, { additionalProperties: false });
 
 const EnsuredWorker = Type.Object({
   name: WorkerName,
@@ -412,10 +392,7 @@ export const EnsureWorkerResultSchema = Type.Union([
 
 export const WorkerStopParametersSchema = Type.Object({
   worker: WorkerName,
-}, {
-  additionalProperties: false,
-  description: "Stop one Worker after its nonterminal Tasks are resolved and exact terminal stop evidence is available.",
-});
+}, { additionalProperties: false });
 
 export const WorkerStopResultSchema = Type.Union([
   Type.Object({
@@ -439,10 +416,7 @@ export const WorkerStopResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-export const TeamShutdownParametersSchema = Type.Object({}, {
-  additionalProperties: false,
-  description: "Stop every Worker and close the exact leader Team. Failed stops keep the Team active for retry.",
-});
+export const TeamShutdownParametersSchema = Type.Object({}, { additionalProperties: false });
 
 export const TeamShutdownResultSchema = Type.Union([
   Type.Object({
@@ -503,26 +477,13 @@ export const TaskLinkResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-const AlertFields = {
+export const AlertSendParametersSchema = Type.Object({
+  to: Type.String({ minLength: 1, maxLength: 64, description: "Worker name, or * for a Team announcement." }),
+  kind: Type.Enum(["clarification", "attention", "announcement"]),
   text: Type.String({ minLength: 1 }),
   task_id: Type.Optional(TaskId),
   task_version: Type.Optional(TaskVersionRefSchema),
-};
-
-export const AlertSendParametersSchema = Type.Union([
-  Type.Object({
-    target: Type.Object({ kind: Type.Literal("worker"), name: WorkerName }, { additionalProperties: false }),
-    kind: Type.Enum(["clarification", "attention"]),
-    ...AlertFields,
-  }, { additionalProperties: false }),
-  Type.Object({
-    target: Type.Object({ kind: Type.Literal("team") }, { additionalProperties: false }),
-    kind: Type.Literal("announcement"),
-    ...AlertFields,
-  }, { additionalProperties: false }),
-], {
-  description: "Send exceptional clarification, attention, or announcement. Team targets are valid only for announcements; Worker targets are valid for clarification and attention. An Alert never changes Task state.",
-});
+}, { additionalProperties: false });
 
 export const AlertSendResultSchema = Type.Union([
   Type.Object({
@@ -561,40 +522,39 @@ const ensureWorkerCall = {
   scope: "Own independent release verification: clean install, exported surface, provenance, and publication evidence.",
 } as const;
 const taskCreateCall = {
+  operation_id: "create-release-candidate",
   tasks: [{
-    operation_id: "create-release-candidate",
+    key: "verify",
     title: "Verify release candidate",
     goal: "Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.",
     assignee: "release-verifier",
   }],
 } as const;
 const taskCreateResult = {
-  kind: "task_create_batch",
-  outcomes: [{
-    kind: "created",
-    input_index: 0,
-    operation_id: "create-release-candidate",
-    task: {
+  kind: "task_graph_created",
+  operation_id: "create-release-candidate",
+  replayed: false,
+  tasks_by_key: {
+    verify: {
       id: "task-23",
       title: "Verify release candidate",
       goal: "Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.",
       status: "open",
       assignee: "release-verifier",
+      relations: [],
+      dependency_state: { kind: "ready", active_blocker_ids: [] },
       current_context: "Work has not started.",
       version: taskVersionRef("task_v1"),
     },
-  }],
+  },
+  ready_task_ids: ["task-23"],
 } as const;
 const taskCreateRefusedResult = {
-  kind: "task_create_batch",
-  outcomes: [{
-    kind: "refused",
-    input_index: 0,
-    operation_id: "create-release-candidate",
-    reason: "worker_unavailable",
-    message: "The assigned Worker is not present in the active Team.",
-    state_changed: false,
-  }],
+  kind: "refused",
+  operation_id: "create-release-candidate",
+  reason: "worker_unavailable",
+  message: "The assigned Worker is not present in the active Team.",
+  state_changed: false,
 } as const;
 
 const ensuredWorkerResult = {
@@ -649,6 +609,8 @@ const snapshotResult = {
       goal: "Produce an installable candidate package with a verified dry-run publication receipt.",
       status: "in_progress",
       assignee: "release-builder",
+      relations: [],
+      dependency_state: { kind: "ready", active_blocker_ids: [] },
       current_context: "Package is built. Dry-run publication is next; no blocker is known.",
       version: taskVersionRef("task_v7"),
     },
@@ -658,6 +620,8 @@ const snapshotResult = {
       goal: "Independently verify clean install, public exports, and provenance for the exact candidate digest.",
       status: "open",
       assignee: "release-verifier",
+      relations: [{ relation: "blocked_by", target_task_id: "task-17" }],
+      dependency_state: { kind: "waiting", active_blocker_ids: ["task-17"] },
       current_context: "Waiting for the candidate digest from task-17.",
       version: taskVersionRef("task_v2"),
     },
@@ -687,6 +651,8 @@ const updatesResult = {
         goal: "Build and verify the release candidate.",
         status: "closed",
         assignee: "release-builder",
+        relations: [],
+        dependency_state: { kind: "terminal", active_blocker_ids: [] },
         current_context: "Candidate delivered and verified locally. No further action remains.",
         version: taskVersionRef("task_v8"),
       },
@@ -709,6 +675,8 @@ const updatesResult = {
         goal: "Verify the release provenance digest.",
         status: "blocked",
         assignee: "release-verifier",
+        relations: [{ relation: "blocked_by", target_task_id: "task-17" }],
+        dependency_state: { kind: "terminal", active_blocker_ids: [] },
         current_context: "Verification is blocked by a digest mismatch. Leader must choose rebuild or provenance correction.",
         version: taskVersionRef("task_v3"),
       },
@@ -734,7 +702,7 @@ const taskReadResult = {
     kind: "found",
     input_index: 0,
     task_id: "task-23",
-    task: taskCreateResult.outcomes[0].task,
+    task: taskCreateResult.tasks_by_key.verify,
   }],
 } as const;
 const taskReadMissingResult = {
@@ -770,7 +738,7 @@ const taskUpdateResult = {
     task_id: "task-23",
     operation_id: "verify-release-1",
     task: {
-      ...taskCreateResult.outcomes[0].task,
+      ...taskCreateResult.tasks_by_key.verify,
       current_context: "Task is assigned but awaits a Worker carrier.",
       version: taskVersionRef("task_v2"),
     },
@@ -792,7 +760,7 @@ const taskUpdateConflictResult = {
     operation_id: "verify-release-1",
     reason: "version_conflict",
     message: "The Task version does not match the expected version.",
-    current_task: taskCreateResult.outcomes[0].task,
+    current_task: taskCreateResult.tasks_by_key.verify,
     state_changed: false,
   }],
 } as const;
@@ -811,7 +779,7 @@ export const modelToolCatalog = {
     {
       name: "team_create",
       label: "Create Team",
-      responsibility: "Create one long-lived Team and bind the exact calling Session as its leader.",
+      responsibility: "Create and bind one active Team for this leader Session. Does not create Workers or Tasks.",
       actors: ["unbound leader"],
       commonUseCases: [
         "Start the first Team for a durable coordination purpose.",
@@ -834,21 +802,21 @@ export const modelToolCatalog = {
     },
     {
       name: "task_create",
-      label: "Create Tasks",
-      responsibility: "Create independent executable Task contracts and assign each one to an existing Worker.",
+      label: "Create Task DAG",
+      responsibility: "Atomically create assigned Tasks with optional request-local prerequisites. Every assignee must already exist.",
       actors: ["leader"],
       commonUseCases: [
-        "Create one or more concrete work contracts after Worker areas exist.",
-        "Bind each Task to an existing Worker without claiming carrier readiness.",
+        "Create one Task or a predefined DAG after Worker areas exist.",
+        "Assign several Tasks to fewer stable Workers and put prerequisite keys in each Task's needs list.",
       ],
       whenNotToUse: [
-        "Do not include Team, backend, paging, relation, read, or update controls.",
+        "Do not create or link graph nodes through separate mutation calls.",
         "Do not create a Task for a Worker that is not in the active Team.",
       ],
       sideEffects: [
-        "Commits each input item independently in input order.",
-        "Creates open Tasks with current_context set to Work has not started.",
-        "A refused or unavailable item changes no state.",
+        "Commits every new node and dependency as one graph operation or changes nothing.",
+        "Presents only mechanically eligible ready-front Tasks, at most one per Worker.",
+        "An exact replay returns the original key mapping and creates no duplicate Task.",
       ],
       parameters: TaskCreateParametersSchema,
       result: TaskCreateResultSchema,
@@ -860,7 +828,7 @@ export const modelToolCatalog = {
     {
       name: "task_read",
       label: "Read Tasks",
-      responsibility: "Read current Task cards by ID without changing Team or observation state.",
+      responsibility: "Read complete current cards for selected Tasks. Use team_sync for whole-Team observation.",
       actors: ["leader"],
       commonUseCases: [
         "Recover current definitions and state for selected Task IDs.",
@@ -886,7 +854,7 @@ export const modelToolCatalog = {
     {
       name: "task_update",
       label: "Update Tasks",
-      responsibility: "Replace one Task's current context and append leader decision evidence with an expected-version check.",
+      responsibility: "Conditionally update Tasks with exact versions and operation IDs. Include at least one state, context, or evidence change.",
       actors: ["leader"],
       commonUseCases: [
         "Record a coordination decision and current context for an assigned Task.",
@@ -911,7 +879,7 @@ export const modelToolCatalog = {
     {
       name: "team_sync",
       label: "Sync Team",
-      responsibility: "Restore current whole-Team context or observe incremental coordination changes.",
+      responsibility: "Return a whole-Team snapshot or incremental coordination updates. Use task_read for selected complete Task cards.",
       actors: ["leader"],
       commonUseCases: [
         "Restore current Team context after startup or compaction.",
@@ -939,7 +907,7 @@ export const modelToolCatalog = {
     {
       name: "ensure_worker",
       label: "Ensure Worker",
-      responsibility: "Create or reuse a short-lived Worker for one semantically deep area in the active Team.",
+      responsibility: "Create, reconnect, or reuse a Worker for a standing semantic area. Assign executable work with task_create.",
       actors: ["leader"],
       commonUseCases: [
         "Create one Worker whose area can proceed with little prerequisite overlap.",
@@ -966,7 +934,7 @@ export const modelToolCatalog = {
     {
       name: "worker_stop",
       label: "Stop Worker",
-      responsibility: "Stop one Worker only after its nonterminal Tasks are resolved and exact terminal stop evidence is confirmed.",
+      responsibility: "Stop one Worker after its nonterminal assigned Tasks resolve. Does not change Tasks.",
       actors: ["leader"],
       commonUseCases: ["Retire a completed semantic Worker area without changing Task history."],
       whenNotToUse: ["Do not stop the leader or a Worker with nonterminal assigned Tasks."],
@@ -978,7 +946,7 @@ export const modelToolCatalog = {
     {
       name: "team_shutdown",
       label: "Shutdown Team",
-      responsibility: "Stop every Worker and close the exact leader Team; failed stops keep current Memberships and permit retry.",
+      responsibility: "Stop remaining Workers and close the Team. A partial failure leaves it active for retry.",
       actors: ["leader"],
       commonUseCases: ["Close a completed Team while retaining Task authority and history."],
       whenNotToUse: ["Do not recreate a Team while current Memberships remain."],
@@ -988,21 +956,9 @@ export const modelToolCatalog = {
       examples: [],
     },
     {
-      name: "task_link",
-      label: "Link Task",
-      responsibility: "Add or remove one typed Task relation with graph and version validation using the latest Task version; closure does not freeze the version.",
-      actors: ["leader"],
-      commonUseCases: ["Record a blocking, parent, or related relation between current Tasks."],
-      whenNotToUse: ["Do not use a relation as a substitute for assignment, progress, or an Alert."],
-      sideEffects: ["Changes only the requested relation when graph and version checks pass.", "A no-op or refusal changes no graph state."],
-      parameters: TaskLinkParametersSchema,
-      result: TaskLinkResultSchema,
-      examples: [],
-    },
-    {
       name: "alert_send",
       label: "Send Alert",
-      responsibility: "Send exceptional clarification, attention, or announcement without changing Task state.",
+      responsibility: "Send exceptional clarification or attention to one Worker, or an announcement to *. Never changes Task state.",
       actors: ["leader"],
       commonUseCases: ["Escalate exceptional coordination to one current Worker or announce to the Team."],
       whenNotToUse: ["Do not use an Alert to assign, advance, block, or complete a Task."],

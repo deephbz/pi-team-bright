@@ -150,8 +150,10 @@ describe("mixed Coordination observation records through registered team_sync", 
 
     const update = await invoke(harness, context, "mixed-update", "updates");
     const current = {
-      id: "current-task", title: "Current Task", status: "open", current_context: "Current Task evidence.",
-      version: taskVersionRef("task-v2"), goal: "Keep Coordination observations complete.",
+      id: "current-task", title: "Current Task", status: "open", relations: [],
+      dependency_state: { kind: "ready", active_blocker_ids: [] },
+      current_context: "Current Task evidence.", version: taskVersionRef("task-v2"),
+      goal: "Keep Coordination observations complete.",
     };
     const raw = {
       kind: "updates", team_changes: [],

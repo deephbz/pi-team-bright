@@ -183,8 +183,8 @@ describe("clean-cut public contract", () => {
     const leaderName = uniqueTeam("leader-surface");
     writeTeam(leaderName);
     const expectedLeaderTools = [
-      "alert_send", "ensure_worker", "task_create", "task_link", "task_read",
-      "task_update", "team_create", "team_shutdown", "team_sync", "worker_stop",
+      "alert_send", "ensure_worker", "task_create", "task_read", "task_update",
+      "team_create", "team_shutdown", "team_sync", "worker_stop",
     ];
 
     for (const [teamName, sessionFile] of [
@@ -652,10 +652,13 @@ describe("durability and recovery", () => {
 
   it.skipIf(!hasBd)("commits terminal status and its explanatory note in one Task mutation", async () => {
     const name = uniqueTeam("terminal-state-atomicity");
-    const config = writeTeam(name);
+    const config = writeTeam(name, { workerSession: `/tmp/${name}-worker.jsonl` });
     const store = new BeadsTaskStore({ teamName: name, workspace: config.taskWorkspace!, requireExpectedVersion: false });
-    const createResult = await extensionHarness().tools.get("task_create")!.execute("create", { tasks: [{ operation_id: "create-terminal-transition", title: "Terminal transition", goal: "Close with durable context." }] }, undefined, undefined, { sessionManager: { getSessionFile: () => "lead-session" } });
-    const created = createResult.details.outcomes[0].task;
+    const createResult = await extensionHarness().tools.get("task_create")!.execute("create", {
+      operation_id: "create-terminal-transition",
+      tasks: [{ key: "terminal", title: "Terminal transition", goal: "Close with durable context.", assignee: "worker" }],
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => "lead-session" } });
+    const created = createResult.details.tasks_by_key.terminal;
     const update = extensionHarness().tools.get("task_update")!;
     const result = await update.execute("update", {
       updates: [{

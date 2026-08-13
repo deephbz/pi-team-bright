@@ -46,24 +46,13 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
     else if (model.kind === "refused") lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · scope conflict.`);
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "task_create") {
-    if (model.kind === "task_create_batch") {
-      const failures = model.outcomes.filter((item: any) => item.kind !== "created");
-      lines.push(`${model.outcomes.length} Task results · ${failures.length} refused or unavailable.`);
-      for (const item of failures) {
-        lines.push(`${item.kind} · input ${item.input_index} · operation ${quoted(item.operation_id)}: ${compact(item.message)}`);
-        const retry = recoveryLine(item);
-        if (retry) lines.push(retry);
-      }
-      for (const item of model.outcomes.filter((item: any) => item.delivery_warnings?.length)) {
-        lines.push(`Delivery warnings for input ${item.input_index}: ${item.delivery_warnings.join("; ")}.`);
-      }
-      if (expanded) for (const item of model.outcomes.filter((item: any) => item.task)) {
-        lines.push(`Created ${taskLine(item.task)} · operation ${quoted(item.operation_id)}.`);
-        if (item.delivery_warnings?.length) lines.push(`Delivery warnings: ${item.delivery_warnings.join("; ")}.`);
-      }
-    } else if (model.kind === "created") {
-      lines.push(`Task ${taskLine(model.task)} was created · operation ${quoted(model.operation_id)}.`);
+    if (model.kind === "task_graph_created") {
+      const entries = Object.entries(model.tasks_by_key) as Array<[string, any]>;
+      lines.push(`${entries.length} Task DAG committed · ${model.ready_task_ids.length} dependency-ready · operation ${quoted(model.operation_id)}${model.replayed ? " · replayed" : ""}.`);
       if (model.delivery_warnings?.length) lines.push(`Delivery warnings: ${model.delivery_warnings.join("; ")}.`);
+      if (expanded) for (const [key, task] of entries) {
+        lines.push(`${quoted(key)} → ${taskLine(task)} · ${task.dependency_state.kind}${task.dependency_state.active_blocker_ids.length ? ` on ${task.dependency_state.active_blocker_ids.join(", ")}` : ""}.`);
+      }
     } else if (model.kind === "unknown_outcome") {
       lines.push(`unknown outcome · operation ${quoted(model.operation_id)}: ${compact(model.message)}`);
       const retry = recoveryLine(model);
@@ -154,11 +143,12 @@ export function projectTui(input: TuiInput): string[] {
   try {
     const model = projectToolResult(input.tool, input.details) as any;
     const kind = model.kind;
-    const mixedTaskBatch = (input.tool === "task_create" || input.tool === "task_update")
+    const mixedTaskBatch = input.tool === "task_update"
       && kind.endsWith("_batch")
-      && model.outcomes.some((item: any) => item.kind !== (input.tool === "task_create" ? "created" : "updated") || (input.tool === "task_create" && item.delivery_warnings?.length));
+      && model.outcomes.some((item: any) => item.kind !== "updated");
     const partialTaskCreate = input.tool === "task_create"
-      && ((kind === "created" && model.delivery_warnings?.length) || (kind === "task_create_batch" && model.outcomes.some((item: any) => item.delivery_warnings?.length)));
+      && kind === "task_graph_created"
+      && model.delivery_warnings?.length;
     const partialAlert = input.tool === "alert_send" && kind === "alert_sent" && model.failed_recipients.length > 0;
     const negative = ["refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "partial"].includes(kind) || mixedTaskBatch || partialTaskCreate || partialAlert;
     const tone = negative ? "!" : "✓";
