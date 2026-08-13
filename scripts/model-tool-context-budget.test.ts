@@ -7,7 +7,7 @@ const EXPECTED_TOOL_NAMES = [
   "team_create",
   "team_sync",
   "ensure_worker",
-  "task_create",
+  "task_graph_apply",
   "task_read",
   "task_update",
   "worker_stop",
@@ -19,7 +19,7 @@ const MAX_COMPACT_CHARACTERS = {
   team_create: 660,
   team_sync: 380,
   ensure_worker: 440,
-  task_create: 1_350,
+  task_graph_apply: 1_500,
   task_read: 360,
   task_update: 1_200,
   worker_stop: 330,
@@ -72,10 +72,10 @@ test("keeps the registered model-tool grammar compact and non-duplicative", { ti
     }
 
     const byName = new Map(tools.map(tool => [tool.name, tool]));
-    const create = byName.get("task_create")!;
-    expect(create.parameters.properties.tasks.items.properties).toHaveProperty("needs");
-    expect(create.parameters.properties).not.toHaveProperty("dependencies");
-    expect(compact(create.parameters)).not.toContain('"anyOf"');
+    const graphApply = byName.get("task_graph_apply")!;
+    expect(graphApply.parameters.properties.tasks.items.properties).toHaveProperty("needs");
+    expect(graphApply.parameters.properties).not.toHaveProperty("dependencies");
+    expect(compact(graphApply.parameters)).not.toContain('"anyOf"');
 
     const alert = byName.get("alert_send")!;
     expect(alert.parameters).toMatchObject({ type: "object", required: ["to", "kind", "text"], additionalProperties: false });

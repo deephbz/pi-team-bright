@@ -3,8 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TaskCardSchema = exports.TaskCardIncompleteSchema = exports.TaskCardCompleteSchema = exports.TaskDependencyStateSchema = exports.TaskDependencyRelationSchema = exports.TaskCardWarningSchema = exports.TaskCardContextSchema = exports.TaskCardStatusSchema = exports.TASK_CARD_CONTEXT_MAX_LENGTH = exports.TASK_CARD_GOAL_MAX_LENGTH = exports.TASK_CARD_TITLE_MAX_LENGTH = void 0;
 exports.isTaskCardContext = isTaskCardContext;
 exports.isTaskCardGoal = isTaskCardGoal;
+exports.isGraphTaskCard = isGraphTaskCard;
+exports.isTaskTerminal = isTaskTerminal;
 const typebox_1 = require("typebox");
 const task_version_ref_1 = require("./task-version-ref");
+const graph_control_schemas_1 = require("./graph-control-schemas");
 /** Neutral Task contract. This module imports no authority or persistence code. */
 exports.TASK_CARD_TITLE_MAX_LENGTH = 80;
 exports.TASK_CARD_GOAL_MAX_LENGTH = 1_000;
@@ -46,10 +49,24 @@ exports.TaskCardIncompleteSchema = typebox_1.Type.Object({
     goal_state: typebox_1.Type.Literal("incomplete"),
     projection_warnings: typebox_1.Type.Array(exports.TaskCardWarningSchema, { minItems: 1 }),
 }, { additionalProperties: false });
-exports.TaskCardSchema = typebox_1.Type.Union([exports.TaskCardCompleteSchema, exports.TaskCardIncompleteSchema]);
+/**
+ * Delivery and Coordination accept legacy cards during cutover, while the
+ * graph-native Task application writes GraphTaskCard only.
+ */
+exports.TaskCardSchema = typebox_1.Type.Union([exports.TaskCardCompleteSchema, exports.TaskCardIncompleteSchema, graph_control_schemas_1.GraphTaskCardSchema]);
 function isTaskCardContext(value) {
     return typeof value === "string" && value.length >= 1 && value.length <= exports.TASK_CARD_CONTEXT_MAX_LENGTH;
 }
 function isTaskCardGoal(value) {
     return typeof value === "string" && value.length >= 1 && value.length <= exports.TASK_CARD_GOAL_MAX_LENGTH;
+}
+function isGraphTaskCard(task) {
+    return "state" in task && "model" in task && "attempts_started" in task;
+}
+/** Terminal means no more assigned work can run without a graph revision. */
+function isTaskTerminal(task) {
+    return task.status === "closed"
+        || task.status === "goal_achieved"
+        || task.status === "goal_failed"
+        || task.status === "cancelled";
 }

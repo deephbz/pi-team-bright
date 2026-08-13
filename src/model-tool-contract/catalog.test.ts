@@ -3,8 +3,8 @@ import { Check } from "typebox/value";
 import {
   EnsureWorkerParametersSchema,
   EnsureWorkerResultSchema,
-  TaskCreateParametersSchema,
-  TaskCreateResultSchema,
+  TaskGraphApplyParametersSchema,
+  TaskGraphApplyResultSchema,
   TaskReadParametersSchema,
   TaskReadResultSchema,
   TaskUpdateParametersSchema,
@@ -60,7 +60,7 @@ function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_
     return { parameters: EnsureWorkerParametersSchema, result: EnsureWorkerResultSchema };
   }
   if (tool === "task_graph_apply") {
-    return { parameters: TaskCreateParametersSchema, result: TaskCreateResultSchema };
+    return { parameters: TaskGraphApplyParametersSchema, result: TaskGraphApplyResultSchema };
   }
   if (tool === "task_read") return { parameters: TaskReadParametersSchema, result: TaskReadResultSchema };
   if (tool === "task_update") return { parameters: TaskUpdateParametersSchema, result: TaskUpdateResultSchema };
@@ -99,15 +99,15 @@ describe("candidate model-tool catalog", () => {
       expected_version: "v_0123456789abcdef",
     };
     expect(Check(TaskUpdateParametersSchema, {
-      updates: [{ ...base, current_context: "a".repeat(2_000) }],
+      ...base, current_context: "a".repeat(2_000),
     })).toBe(true);
     expect(Check(TaskUpdateParametersSchema, {
-      updates: [{ ...base, current_context: "a".repeat(2_001) }],
+      ...base, current_context: "a".repeat(2_001),
     })).toBe(false);
     const multiCodeUnit = "👩🏽‍🚀".repeat(1_001);
     expect([...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(multiCodeUnit)]).toHaveLength(1_001);
     expect(Check(TaskUpdateParametersSchema, {
-      updates: [{ ...base, current_context: multiCodeUnit }],
+      ...base, current_context: multiCodeUnit,
     })).toBe(false);
   });
 
@@ -115,7 +115,7 @@ describe("candidate model-tool catalog", () => {
     const createItem = { key: "goal", title: "Goal boundary", assignee: "verifier" };
     for (const length of [160, 161, 1_000]) {
       const goal = "g".repeat(length);
-      expect(Check(TaskCreateParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
+      expect(Check(TaskGraphApplyParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
       expect(Check(TaskCardSchema, {
         id: "task-1",
         title: createItem.title,
@@ -127,7 +127,7 @@ describe("candidate model-tool catalog", () => {
     }
 
     const goal = "g".repeat(1_001);
-    expect(Check(TaskCreateParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] })).toBe(false);
     expect(Check(TaskCardSchema, {
       id: "task-1",
       title: createItem.title,
@@ -180,13 +180,13 @@ describe("candidate model-tool catalog", () => {
 
   it("requires one caller-chosen graph operation ID and local Task keys", () => {
     const task = { key: "verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" };
-    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [task] })).toBe(true);
-    expect(Check(TaskCreateParametersSchema, { tasks: [task] })).toBe(false);
-    expect(Check(TaskCreateParametersSchema, { operation_id: "", tasks: [task] })).toBe(false);
-    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
-    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [{ ...task, needs: ["plan"] }] })).toBe(true);
-    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [{ ...task, needs: ["bad key"] }] })).toBe(false);
-    expect(Check(TaskCreateParametersSchema, { operation_id: "create-release", tasks: [task], dependencies: [] })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "create-release", tasks: [task] })).toBe(true);
+    expect(Check(TaskGraphApplyParametersSchema, { tasks: [task] })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "", tasks: [task] })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "create-release", tasks: [{ title: task.title, goal: task.goal }] })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "create-release", tasks: [{ ...task, needs: ["plan"] }] })).toBe(true);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "create-release", tasks: [{ ...task, needs: ["bad key"] }] })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, { operation_id: "create-release", tasks: [task], dependencies: [] })).toBe(false);
   });
 
   it("keeps Team identity implicit in both team_sync call forms", () => {
@@ -295,9 +295,9 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("team_create({ name, purpose })");
     expect(html).toContain("team_sync({ view })");
     expect(html).toContain("ensure_worker({ name, scope })");
-    expect(html).toContain("task_create({ operation_id, tasks: [{ key, title, goal, assignee, needs? }] })");
+    expect(html).toContain("task_graph_apply({ operation_id, expected_graph_version?, tasks: [{ key, title, goal, assignee, model?, needs?, on_goal_failed? }] })");
     expect(html).toContain("task_read({ task_ids })");
-    expect(html).toContain("task_update({ updates })");
+    expect(html).toContain("task_update({ task_id, operation_id, expected_version, transition?, current_context?, evidence? })");
     expect(html).toContain("worker_stop({ worker })");
     expect(html).toContain("team_shutdown({ })");
     expect(html).not.toContain("task_link({");

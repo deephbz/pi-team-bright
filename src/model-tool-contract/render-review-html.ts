@@ -113,9 +113,9 @@ function governanceHtml(governance: ContractReviewGovernance): string {
 function toolSignature(name: string): string {
   if (name === "team_create") return "team_create({ name, purpose })";
   if (name === "team_sync") return "team_sync({ view })";
-  if (name === "task_create") return "task_create({ operation_id, tasks: [{ key, title, goal, assignee, needs? }] })";
+  if (name === "task_graph_apply") return "task_graph_apply({ operation_id, expected_graph_version?, tasks: [{ key, title, goal, assignee, model?, needs?, on_goal_failed? }] })";
   if (name === "task_read") return "task_read({ task_ids })";
-  if (name === "task_update") return "task_update({ updates })";
+  if (name === "task_update") return "task_update({ task_id, operation_id, expected_version, transition?, current_context?, evidence? })";
   if (name === "worker_stop") return "worker_stop({ worker })";
   if (name === "team_shutdown") return "team_shutdown({ })";
   if (name === "task_link") return "task_link({ task_id, relation, target_id, action, expected_version })";
