@@ -11,6 +11,7 @@
   "include": [
     "src/public/observation.ts",
     "src/model-tool-contract/task-version-ref.ts",
+    "src/task-authority/graph-control-schemas.ts",
     "src/utils/models.ts"
   ]
 }
