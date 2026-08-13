@@ -23,7 +23,7 @@ type RegisteredTool = {
 
 const PUBLIC_TOOLS = [
   "alert_send",
-  "task_create",
+  "task_graph_apply",
   "task_read",
   "task_update",
   "team_create",
@@ -258,7 +258,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(overflow.content[0].text).not.toMatch(/membership-machine-evidence|carrier/);
 
     for (let index = 1; index <= 2; index++) {
-      await tools.get("task_create")!.execute(`page-task-${index}`, {
+      await tools.get("task_graph_apply")!.execute(`page-task-${index}`, {
         team_name: team,
         title: `Paged Task ${index}`,
         description: `Exercise bounded snapshot page ${index}.`,
@@ -894,11 +894,11 @@ describe("ergonomic agent-facing Team contracts", () => {
     }, undefined, undefined, leadContext);
 
     const rejectedDescription = "Do not copy this underspecified prompt body into retry arguments.";
-    const refused = await tools.get("task_create")!.execute("missing-criteria", {
+    const refused = await tools.get("task_graph_apply")!.execute("missing-criteria", {
       operation_id: "create-underspecified-work",
       tasks: [{ key: "work", title: "Underspecified assigned work", goal: "Add independently verifiable acceptance criteria before retrying.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
-    expect(refused.details).toMatchObject({ kind: "task_graph_created", tasks_by_key: { work: { title: "Underspecified assigned work", assignee: "worker" } } });
+    expect(refused.details).toMatchObject({ kind: "task_graph_applied", tasks_by_key: { work: { title: "Underspecified assigned work", assignee: "worker" } } });
     expect(JSON.stringify(refused.details)).not.toContain(rejectedDescription);
   }, 60_000);
 
@@ -920,20 +920,31 @@ describe("ergonomic agent-facing Team contracts", () => {
       cwd: process.cwd(),
     }, undefined, undefined, leadContext);
 
-    const task = await tools.get("task_create")!.execute("task", {
+    const task = await tools.get("task_graph_apply")!.execute("task", {
       operation_id: "create-restart-persistence",
       tasks: [{ key: "restart", title: "Verify restart persistence", goal: "A fresh store reads the committed terminal state.", assignee: "worker" }],
     }, undefined, undefined, leadContext);
     const taskCard = task.details.tasks_by_key.restart;
-    expect(task.details).toMatchObject({ kind: "task_graph_created", tasks_by_key: { restart: { title: "Verify restart persistence", assignee: "worker", status: "open" } } });
+    expect(task.details).toMatchObject({ kind: "task_graph_applied", tasks_by_key: { restart: { title: "Verify restart persistence", assignee: "worker", status: "ready" } } });
 
     const guarded = await tools.get("worker_stop")!.execute("guarded-stop", { worker: "worker" }, undefined, undefined, leadContext);
     expect(guarded.details).toMatchObject({ kind: "refused", worker: "worker", reason: "nonterminal_tasks_assigned", guarding_task_ids: [taskCard.id], state_changed: false });
 
-    const closed = await tools.get("task_update")!.execute("close", {
-      updates: [{ task_id: taskCard.id, operation_id: "close", status: "closed", current_context: "Restarted the store and verified the committed terminal state.", journal_entries: [{ kind: "result", text: "Restarted the store and verified the committed terminal state." }], expected_version: taskCard.version }],
+    const contextUpdated = await tools.get("task_update")!.execute("context", {
+      task_id: taskCard.id,
+      operation_id: "context",
+      current_context: "Restarted the store and verified the committed terminal state.",
+      expected_version: taskCard.version,
     }, undefined, undefined, leadContext);
-    expect(closed.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { status: "closed", assignee: "worker" } }] });
+    expect(contextUpdated.details).toMatchObject({ kind: "updated", transition: "context_updated", task: { status: "ready", assignee: "worker" } });
+    const cancelled = await tools.get("task_update")!.execute("cancel", {
+      task_id: taskCard.id,
+      operation_id: "cancel",
+      transition: "cancel",
+      evidence: "The lifecycle fixture verified its contract and needs no Worker Attempt.",
+      expected_version: contextUpdated.details.task.version,
+    }, undefined, undefined, leadContext);
+    expect(cancelled.details).toMatchObject({ kind: "updated", transition: "cancel", task: { status: "cancelled", assignee: "worker" } });
 
     const stopped = await tools.get("worker_stop")!.execute("stop", { worker: "worker" }, undefined, undefined, leadContext);
     expect(stopped.details).toMatchObject({ kind: "worker_stopped", worker: "worker", state_changed: true });

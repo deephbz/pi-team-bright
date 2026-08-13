@@ -185,7 +185,7 @@ describe("Alert canonical authority compatibility", () => {
       sendUserMessage() {},
     } as any);
     expect(registered.sort()).toEqual([
-      "alert_send", "ensure_worker", "task_create", "task_read", "task_update",
+      "alert_send", "ensure_worker", "task_graph_apply", "task_read", "task_update",
       "team_create", "team_shutdown", "team_sync", "worker_stop",
     ]);
   });

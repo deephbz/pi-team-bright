@@ -1,8 +1,8 @@
 # Pi Team Bright DAG-native prototype context
 
-Updated: 2026-08-12
-Stage: hardening on the published RC13 semantic base
-Status: separate local `feature/dag-native-rc13` branch is rebased on RC14 publication tip `origin/main` `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`, whose release code is tagged at `8bb517bd32d8687e97b96a531db15833fd64420a`; focused DAG/liveness integration, full aggregate, package, agent-surface, lane, diff, and privacy-range checks pass; final work remains local and no push or tag is authorized
+Updated: 2026-08-13
+Stage: release-candidate hardening on the published RC14 semantic base
+Status: `release/v0.17.0-rc.15-dag-native` is a side-branch review candidate based on RC14 publication record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`, whose release code is tagged at `8bb517bd32d8687e97b96a531db15833fd64420a`; the DAG range is four semantic commits; focused DAG/liveness integration, real-Team acceptance, package, agent-surface, lane, diff, and privacy-range checks pass; the side branch does not update `main`, create a tag, publish npm, or create a GitHub Release
 
 ## RC14 liveness-hotfix rebase
 
@@ -331,7 +331,7 @@ independent Beads reads and exact Session/Task records.
 
 ## RC13 integration continuation
 
-The local `feature/dag-native-rc13` branch reconstructs the DAG-native work on
+The side branch `release/v0.17.0-rc.15-dag-native` reconstructs the DAG-native work on
 the published semantic-hardening `origin/main` at
 `53367e412ad0217bfcf4845d92a07bb9ebec6de2`. The published branch and RC13 tag
 remain unchanged. A backup ref preserves the pre-rewrite DAG tip `9ccd0a7`.

@@ -117,21 +117,21 @@ describe("narrow Worker Team binding surface", () => {
     expect(Check(tools.get("task_read")!.parameters as any, { team_name: "other-team", task_id: "task-binding" })).toBe(false);
     expect(Check(tools.get("task_update")!.parameters as any, {
       task_id: "task-binding",
-      operation_id: "worker-update",
-      status: "in_progress",
+      operation_id: "worker-claim",
+      transition: "claim",
       expected_version: task.version,
     })).toBe(true);
     expect(Check(tools.get("task_update")!.parameters as any, {
       task_id: "task-binding",
-      operation_id: "worker-claim",
-      claim: true,
+      operation_id: "worker-context",
+      current_context: "Worker is verifying the exact binding.",
       expected_version: task.version,
     })).toBe(true);
     expect(Check(tools.get("task_update")!.parameters as any, {
       team_name: "other-team",
       task_id: "task-binding",
-      operation_id: "worker-update",
-      status: "in_progress",
+      operation_id: "worker-claim",
+      transition: "claim",
       expected_version: task.version,
     })).toBe(false);
     expect(Check(tools.get("alert_send")!.parameters as any, { kind: "attention", text: "Needs review." })).toBe(true);
@@ -143,7 +143,7 @@ describe("narrow Worker Team binding surface", () => {
     expect([...tools.keys()].sort()).toEqual([
       "alert_send",
       "ensure_worker",
-      "task_create",
+      "task_graph_apply",
       "task_read",
       "task_update",
       "team_create",
@@ -153,18 +153,28 @@ describe("narrow Worker Team binding surface", () => {
     ]);
     expect(Check(TaskReadParametersSchema, { task_ids: ["task-binding"] })).toBe(true);
     expect(Check(TaskReadParametersSchema, { task_id: "task-binding" })).toBe(false);
-    expect(Check(TaskUpdateParametersSchema, { updates: [{ task_id: "task-binding", operation_id: "leader-update", expected_version: task.version, status: "open" }] })).toBe(true);
-    expect(Check(TaskUpdateParametersSchema, { task_id: "task-binding", operation_id: "leader-update", expected_version: task.version, status: "open" })).toBe(false);
+    expect(Check(TaskUpdateParametersSchema, {
+      task_id: "task-binding",
+      operation_id: "leader-claim",
+      expected_version: task.version,
+      transition: "claim",
+    })).toBe(true);
+    expect(Check(TaskUpdateParametersSchema, {
+      task_id: "task-binding",
+      operation_id: "leader-noop",
+      expected_version: task.version,
+    })).toBe(false);
     expect(Check(AlertSendParametersSchema, { to: "worker", kind: "attention", text: "Review this." })).toBe(true);
     expect(Check(AlertSendParametersSchema, { kind: "attention", text: "Worker form must not become the leader form." })).toBe(false);
     expect(tools.get("task_read")!.parameters).toBe(TaskReadParametersSchema);
     expect(tools.get("task_update")!.parameters).toBe(TaskUpdateParametersSchema);
     expect(tools.get("alert_send")!.parameters).toBe(AlertSendParametersSchema);
     expect((tools.get("task_read")!.parameters as any).properties).toHaveProperty("task_ids");
-    expect((tools.get("task_update")!.parameters as any).properties).toHaveProperty("updates");
+    expect((tools.get("task_update")!.parameters as any).properties).toHaveProperty("transition");
+    expect((tools.get("task_update")!.parameters as any).properties).not.toHaveProperty("updates");
   });
 
-  it("uses the exact Worker Team, Membership, and Session for Task execution", async () => {
+  it("uses the exact Worker Team, Membership, and Session for Task reads", async () => {
     const teamA = `worker-binding-a-${process.pid}-${Date.now()}`;
     const teamB = `worker-binding-b-${process.pid}-${Date.now()}`;
     const sessionA = `/tmp/${teamA}-worker.jsonl`;
@@ -173,20 +183,6 @@ describe("narrow Worker Team binding surface", () => {
     const read = vi.spyOn(BeadsTaskAdapter.prototype, "read").mockResolvedValue({
       kind: "found",
       task,
-    });
-    const update = vi.spyOn(BeadsTaskAdapter.prototype, "update").mockResolvedValue({
-      kind: "updated",
-      taskId: task.id,
-      operationId: "worker-update",
-      task,
-      journalEntries: [],
-    });
-    const claim = vi.spyOn(BeadsTaskAdapter.prototype, "claim").mockResolvedValue({
-      kind: "updated",
-      taskId: task.id,
-      operationId: "worker-claim",
-      task,
-      journalEntries: [],
     });
     const tools = registerWorker(teamA);
 
@@ -197,56 +193,22 @@ describe("narrow Worker Team binding surface", () => {
       undefined,
       context(sessionA),
     );
-    const updateResult = await tools.get("task_update")!.execute(
-      "update",
-      {
-        task_id: task.id,
-        operation_id: "worker-update",
-        status: "in_progress",
-        expected_version: task.version,
-        team_name: teamB,
-      },
-      undefined,
-      undefined,
-      context(sessionA),
-    );
-    const claimResult = await tools.get("task_update")!.execute(
-      "claim",
-      {
-        task_id: task.id,
-        operation_id: "worker-claim",
-        claim: true,
-        expected_version: task.version,
-        team_name: teamB,
-      },
-      undefined,
-      undefined,
-      context(sessionA),
-    );
 
     expect(read).toHaveBeenCalledOnce();
     expect(read.mock.instances[0]).toMatchObject({ teamName: teamA, actor: "worker" });
-    expect(update).toHaveBeenCalledOnce();
-    expect(update.mock.instances[0]).toMatchObject({ teamName: teamA, actor: "worker" });
-    expect(claim).toHaveBeenCalledOnce();
-    expect(claim.mock.instances[0]).toMatchObject({ teamName: teamA, actor: "worker" });
     expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: task.id }] });
-    expect(updateResult.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task_id: task.id, operation_id: "worker-update" }] });
-    expect(claimResult.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task_id: task.id, operation_id: "worker-claim" }] });
     await expect(tools.get("task_update")!.execute(
-      "invalid-claim",
+      "claim-without-graph",
       {
         task_id: task.id,
-        operation_id: "invalid-claim",
-        claim: true,
-        status: "in_progress",
+        operation_id: "claim-without-graph",
+        transition: "claim",
         expected_version: task.version,
       },
       undefined,
       undefined,
       context(sessionA),
-    )).rejects.toThrow(/claim=true is atomic/);
-    expect(claim).toHaveBeenCalledOnce();
+    )).rejects.toThrow(/Legacy Task mutation is disabled/);
     await expect(tools.get("task_read")!.execute(
       "stale-session",
       { task_id: task.id },

@@ -74,7 +74,9 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     const { DurableTaskAuthorityRead } = await import("../../src/adapters/durable-task-authority-read");
     const { createReadOnlyBeadsTaskAdapterFactory } = await import("../../src/model-tool-contract/beads-task-adapter");
     const { DurableTaskAuthorityReadTeam } = await import("../../src/adapters/durable-task-authority-read-team");
+    const { DurableGraphTaskAuthority } = await import("../../src/adapters/durable-graph-task-authority");
     const publicationPort = new DurableTaskMutationPublication();
+    const graphTaskAuthority = new DurableGraphTaskAuthority();
     const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
     const taskAuthorityReadTeamPort = new DurableTaskAuthorityReadTeam();
     const taskAuthorityRead = new DurableTaskAuthorityRead(taskAuthorityReadTeamPort);
@@ -162,7 +164,10 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
 
     async function snapshot(): Promise<unknown> {
       if (!teams.teamExists(teamName)) return { team: { name: teamName, lifecycle: "absent" }, workers: [], tasks: [] };
-      const [config, taskList] = await Promise.all([teams.readConfig(teamName), tasks.listTasks(teamName, taskReadFactory)]);
+      const [config, taskList] = await Promise.all([
+        teams.readConfig(teamName),
+        graphTaskAuthority.exists(teamName) ? graphTaskAuthority.readTasks(teamName) : tasks.listTasks(teamName, taskReadFactory),
+      ]);
       return {
         team: {
           name: config.name,
@@ -204,15 +209,10 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       if (!tool) throw new Error(`Tool ${options.tool} is not registered for ${options.actor}`);
       const args = { ...options.args };
       if (options.actor === "team-lead") {
-        if (options.tool === "task_create" && !Array.isArray(args.tasks)) {
-          args.operation_id = `qa-${options.id}`;
-          args.tasks = [{ key: "task", title: args.title, goal: args.description || args.goal || "Complete the requested Task and record evidence.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
-          delete args.team_name; delete args.title; delete args.description; delete args.goal; delete args.assignee;
-        } else if (options.tool === "task_read" && args.task_id && !args.task_ids) {
+        if (options.tool === "task_read" && args.task_id && !args.task_ids) {
           args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
-        } else if (options.tool === "task_update" && args.task_id && !args.updates) {
-          args.updates = [{ task_id: args.task_id, operation_id: `qa-${options.id}`, expected_version: taskVersionRef(args.expected_version || "1"), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
-          for (const key of ["team_name", "task_id", "status", "design", "append_note", "expected_version"]) delete args[key];
+        } else if (options.tool === "task_update") {
+          delete args.team_name;
         } else if (options.tool === "team_sync" && !args.view) {
           args.view = args.cursor ? "updates" : "snapshot";
           delete args.team_name;
@@ -261,9 +261,9 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     // Each non-create public operation requires an exact leader Team binding.
     // Exercise the unavailable boundary through registered tools before setup.
     const unavailableCalls: Array<{ id: string; tool: string; args: Record<string, unknown> }> = [
-      { id: "task-create-no-team", tool: "task_create", args: { operation_id: "qa-no-team-create", tasks: [{ key: "task", title: "Unavailable Task", goal: "Prove the unavailable Team boundary.", assignee: "unavailable-worker" }] } },
+      { id: "task-create-no-team", tool: "task_graph_apply", args: { operation_id: "qa-no-team-create", tasks: [{ key: "task", title: "Unavailable Task", goal: "Prove the unavailable Team boundary.", assignee: "unavailable-worker" }] } },
       { id: "task-read-no-team", tool: "task_read", args: { task_ids: ["unavailable-task"] } },
-      { id: "task-update-no-team", tool: "task_update", args: { updates: [{ task_id: "unavailable-task", operation_id: "qa-no-team-update", expected_version: taskVersionRef("unavailable"), status: "in_progress" }] } },
+      { id: "task-update-no-team", tool: "task_update", args: { task_id: "unavailable-task", operation_id: "qa-no-team-update", expected_version: taskVersionRef("unavailable"), transition: "claim" } },
       { id: "sync-no-team", tool: "team_sync", args: { view: "snapshot" } },
       { id: "ensure-worker-no-team", tool: "ensure_worker", args: { name: "unavailable-worker", scope: "Prove unavailable Team binding." } },
       { id: "worker-stop-no-team", tool: "worker_stop", args: { worker: "unavailable-worker" } },
@@ -294,6 +294,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       if (details.kind === "updates") return { ...details, cursor: String(details.head ?? "0") };
       const graphTask = Object.values(details.tasks_by_key ?? {})[0] as any;
       if (graphTask) return { ...graphTask, description: graphTask.goal, acceptanceCriteria: graphTask.goal };
+      if (details.task) return { ...details.task, description: details.task.goal, acceptanceCriteria: details.task.goal };
       const task = details.outcomes?.find((outcome: any) => outcome.task)?.task;
       if (task) return { ...task, description: task.goal, acceptanceCriteria: task.goal, relations: [] };
       if (details.task_id && details.version) return { ...details, id: details.task_id };
@@ -475,26 +476,37 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       evidence: { worker: "reviewer", queuePath: path.relative(fakeHome, brokenTaskQueue) },
     });
 
-    const deliveryWarningTask = await capture({
+    const initialGraph = await capture({
       id: "task-create-delivery-warning",
       scenario: "task-delivery-degradation",
       actor: "team-lead",
       tools: leadTools,
-      tool: "task_create",
+      tool: "task_graph_apply",
       args: {
-        team_name: teamName,
-        title: "Capture task-create delivery degradation",
-        description: "Create authoritative assigned work while its native delivery queue is unavailable.",
-        acceptance_criteria: "The Task exists in Beads and the receipt distinguishes committed authority from degraded delivery.",
-        assignee: "reviewer",
+        operation_id: "qa-initial-graph",
+        tasks: [
+          {
+            key: "projection-audit",
+            title: "Audit tool result projections",
+            goal: "Review each projection and report missing or excessive agent, machine, and human information.",
+            assignee: "reviewer",
+          },
+          {
+            key: "ambiguous-work",
+            title: "Ambiguous assigned work",
+            goal: "Record whether this goal alone is an independently verifiable success signal.",
+            assignee: "reviewer",
+            needs: ["projection-audit"],
+          },
+        ],
       },
       ctx: leadCtx,
       qaBrief: brief(
-        "Beads accepts an assigned Task, but deterministic queue corruption makes native delivery enqueue fail after commit.",
-        "Preserve the committed Task and investigate or retry delivery; never recreate the Task as if authority failed.",
-        "Was the Task created, and did its Worker delivery succeed?",
-        ["Task created authoritatively", "assignee", "authority committed", "delivery degraded"],
-        ["full committed Task", "applied create operation", "delivery warning", "delivery-degraded evidence"],
+        "Graph authority commits two assigned Tasks, but deterministic queue corruption makes ready delivery fail after commit.",
+        "Preserve the committed graph and investigate or retry delivery; never reapply it as if authority failed.",
+        "Was the graph committed, which Task is ready, and did its Worker delivery succeed?",
+        ["graph committed", "Task identities", "ready Task", "delivery degraded"],
+        ["full committed graph", "graph version", "delivery warning"],
         ["queue path", "opaque recovery identifiers"],
       ),
     });
@@ -504,78 +516,15 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       action: "restore the Task delivery queue path after the deterministic enqueue failure",
       evidence: { worker: "reviewer" },
     });
-    const leadMembership = (await teams.readConfig(teamName)).members.find((member) => member.name === "team-lead" && member.isActive !== false)!;
-    const deliveryWarningTaskState = postStateOf(deliveryWarningTask);
-    const deliveryWarningAuthority = await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, deliveryWarningTaskState.id);
-
-    const clearedDeliveryWarningTask = await authorityAdapter.applySemanticTaskUpdate(teamName, deliveryWarningTaskState.id, {
-      status: "blocked",
-      assignee: "",
-      appendNote: "QA fixture cleanup: delivery degradation was captured; the Worker is released from this synthetic Task.",
-    }, {
-      actor: "team-lead",
-      expectedVersion: deliveryWarningAuthority.task.version,
-      actingSessionFile: leadSession,
-      actingMembershipId: leadMembership.membershipId,
-      taskCardProjector: taskAdapter.projectTaskCard,
-    }, publicationPort, taskAuthorityTeamPort);
-    fixtureTransitions.push({
-      action: "release the Worker from the synthetic delivery-warning Task through real Task authority",
-      evidence: {
-        taskId: clearedDeliveryWarningTask.task.id,
-        status: clearedDeliveryWarningTask.task.status,
-        assignee: clearedDeliveryWarningTask.task.assignee ?? null,
-      },
-    });
 
     const workerTools = register("reviewer", teamName).tools;
     const workerCtx = context(workerSession);
-    const createdTask = await capture({
-      id: "task-created-assigned",
-      scenario: "task-lifecycle-and-events",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_create",
-      args: {
-        team_name: teamName,
-        title: "Audit tool result projections",
-        description: "Review each projection without changing the extension implementation.",
-        acceptance_criteria: "Report missing and excessive information for agent, machine, and human audiences.",
-        assignee: "reviewer",
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "A goal-driven Task is created and assigned to the current Worker.",
-        "Do not re-read it; wait for or act on later state changes.",
-        "What Task was created, for whom, and in what state?",
-        ["Task ID", "created status", "assignee", "write version"],
-        ["full authoritative Task post-state"],
-        ["constant create operation", "full Task body"],
-      ),
-    });
-    const taskCreated = postStateOf(createdTask);
-
-    await capture({
-      id: "task-create-assigned-without-criteria-created",
-      scenario: "task-lifecycle-and-events",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_create",
-      args: {
-        team_name: teamName,
-        title: "Ambiguous assigned work",
-        description: "This intentionally lacks independently verifiable success criteria.",
-        assignee: "reviewer",
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "An assigned Task supplies a goal but no separately structured acceptance field.",
-        "Use the created Task's version for any later conditional update.",
-        "Was this assigned Task created, and what contract field carried its outcome?",
-        ["created outcome", "Task ID", "assignee", "write version"],
-        ["full authoritative Task post-state", "goal"],
-      ),
-    });
+    const initialGraphDetails = detailsOf(initialGraph);
+    const taskCreated = initialGraphDetails.tasks_by_key["projection-audit"];
+    const ambiguousTask = initialGraphDetails.tasks_by_key["ambiguous-work"];
+    const createdTask = { ...initialGraph, id: "task-created-assigned" } as QaCase;
+    const ambiguousCreatedTask = { ...initialGraph, id: "task-create-assigned-without-criteria-created" } as QaCase;
+    cases.push(createdTask, ambiguousCreatedTask);
 
     const initialSync = await capture({
       id: "sync-snapshot",
@@ -624,7 +573,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
         team_name: teamName,
         task_id: taskCreated.id,
         operation_id: "qa-task-started",
-        status: "in_progress",
+        transition: "claim",
         expected_version: taskCreated.version,
       },
       ctx: workerCtx,
@@ -648,7 +597,8 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       args: {
         team_name: teamName,
         task_id: taskCreated.id,
-        design: "This stale write must not land.",
+        operation_id: "qa-task-update-stale-version",
+        current_context: "This stale write must not land.",
         expected_version: taskCreated.version,
       },
       ctx: leadCtx,
@@ -672,7 +622,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
         team_name: teamName,
         task_id: taskCreated.id,
         operation_id: "qa-task-terminal-without-evidence",
-        status: "closed",
+        transition: "goal_achieved",
         expected_version: currentTask.version,
       },
       ctx: workerCtx,
@@ -848,11 +798,32 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       scenario: "relations-alerts-and-guards",
       actor: "team-lead",
       tools: leadTools,
-      tool: "task_create",
+      tool: "task_graph_apply",
       args: {
-        team_name: teamName,
-        title: "Decide QA scoring threshold",
-        description: "Choose the minimum evidence needed for an acceptable projection.",
+        operation_id: "qa-add-scoring-threshold",
+        expected_graph_version: initialGraphDetails.graph_version,
+        tasks: [
+          {
+            key: "projection-audit",
+            title: "Audit tool result projections",
+            goal: "Review each projection and report missing or excessive agent, machine, and human information.",
+            assignee: "reviewer",
+          },
+          {
+            key: "ambiguous-work",
+            title: "Ambiguous assigned work",
+            goal: "Record whether this goal alone is an independently verifiable success signal.",
+            assignee: "reviewer",
+            needs: ["projection-audit"],
+          },
+          {
+            key: "scoring-threshold",
+            title: "Decide QA scoring threshold",
+            goal: "Choose and record the minimum evidence needed for an acceptable projection.",
+            assignee: "reviewer",
+            needs: ["projection-audit"],
+          },
+        ],
       },
       ctx: leadCtx,
       qaBrief: brief(
@@ -1014,10 +985,9 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
         team_name: teamName,
         task_id: currentTask.id,
         operation_id: "qa-task-blocked-unassigned",
-        status: "blocked",
-        assignee: "",
-        current_context: "Blocked on the QA scoring threshold; next action: team-lead chooses the threshold and reassigns the Task.",
-        journal_entries: [{ kind: "blocker", text: "Blocked on the QA scoring threshold; next action: team-lead chooses the threshold and reassigns the Task." }],
+        transition: "block",
+        current_context: "Blocked on the QA scoring threshold; next action: team-lead chooses the threshold.",
+        evidence: "The scoring threshold is absent; team-lead must choose it before work continues.",
         expected_version: currentTask.version,
       },
       ctx: workerCtx,
@@ -1144,7 +1114,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     expect(publicTools).toEqual([
       "alert_send",
       "ensure_worker",
-      "task_create",
+      "task_graph_apply",
       "task_read",
       "task_update",
       "team_create",
@@ -1174,10 +1144,6 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
         else expect(details, id).toMatchObject({ kind: expect.stringMatching(/refused|unavailable/) });
       }
     }
-    const executionErrorCaseIds = ["task-terminal-without-evidence-execution-error"];
-    for (const id of executionErrorCaseIds) {
-      expect(cases.find((item) => item.id === id)?.execution, id).toEqual({ threw: true, isError: true });
-    }
     for (const item of cases.filter((candidate) => !candidate.execution.threw)) {
       const details = detailsOf(item);
       expect(details, item.id).toMatchObject({ kind: expect.any(String) });
@@ -1188,13 +1154,13 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       cases.find((item) => item.id === "alert-zero-recipients")?.oracle.before,
     );
     expect(caseAfter("task-create-delivery-warning").tasks).toContainEqual(expect.objectContaining({
-      title: "Capture task-create delivery degradation",
-      status: "open",
+      title: "Audit tool result projections",
+      status: "ready",
       assignee: "reviewer",
     }));
     expect(caseAfter("task-created-assigned").tasks).toContainEqual(expect.objectContaining({
       title: "Audit tool result projections",
-      status: "open",
+      status: "ready",
       assignee: "reviewer",
     }));
     expect(caseAfter("task-started").tasks).toContainEqual(expect.objectContaining({
@@ -1243,12 +1209,12 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     }> = [
       {
         id: "task-created-assigned",
-        facts: () => ["task_graph_created", "1 Task DAG committed", "1 dependency-ready", "qa-task-created-assigned"],
+        facts: () => ["partial", "2 Task graph committed", "1 ready", "qa-initial-graph", "delivery failed"],
       },
       {
         id: "task-update-stale-version",
         facts: (item) => {
-          const outcome = detailsOf(item).outcomes[0];
+          const outcome = detailsOf(item);
           return ["refused", outcome.reason, `retry at version ${outcome.current_task.version}`];
         },
       },
@@ -1262,7 +1228,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       },
       {
         id: "task-terminal-without-evidence-execution-error",
-        facts: () => ["task_update execution error", "Raw report follows", "requires a nonempty evidence note"],
+        facts: () => ["refused", "evidence_required", "evidence must not be empty"],
       },
     ];
     for (const semanticCase of semanticTuiCases) {
@@ -1274,7 +1240,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
 
     const trioCoverage = [
       ["team_create", "team-created"],
-      ["task_create", "task-created-assigned"],
+      ["task_graph_apply", "task-created-assigned"],
       ["task_read", "task-read-full"],
       ["task_update", "task-started"],
       ["team_sync", "sync-snapshot"],

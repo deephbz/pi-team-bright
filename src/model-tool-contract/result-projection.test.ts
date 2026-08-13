@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import {
   AlertSendParametersSchema,
-  TaskCreateResultSchema,
+  TaskGraphApplyResultSchema,
   TaskReadResultSchema,
   TaskUpdateResultSchema,
   modelToolCatalog,
@@ -101,22 +101,46 @@ describe("raw semantic result projections", () => {
       id: "task-1",
       title: "Verify",
       goal: "g".repeat(1_000),
-      status: "open" as const,
-      relations: [],
-      dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
+      assignee: "verifier",
+      model: "default" as const,
+      needs: [],
+      status: "ready" as const,
+      state: { kind: "ready" as const },
       current_context: "Not started.",
       version: taskVersionRef("v1"),
+      attempts_started: 0,
+      relations: [],
+      dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
     };
-    const created = { kind: "task_graph_created" as const, operation_id: "create-task-1", replayed: false, tasks_by_key: { verify: task }, ready_task_ids: [task.id] };
-    const projected = projectToolResult("task_create", created) as any;
-    expect(projected).toEqual({
-      kind: "task_graph_created",
-      operation_id: "create-task-1",
+    const applied = {
+      kind: "task_graph_applied" as const,
+      operation_id: "apply-task-1",
+      graph_version: "g_0123456789abcdef",
       replayed: false,
-      tasks_by_key: { verify: { id: "task-1", status: "open", relations: [], dependency_state: task.dependency_state, version: taskVersionRef("v1") } },
+      tasks_by_key: { verify: task },
+      ready_task_ids: [task.id],
+    };
+    const projected = projectToolResult("task_graph_apply", applied) as any;
+    expect(projected).toEqual({
+      kind: "task_graph_applied",
+      operation_id: "apply-task-1",
+      graph_version: "g_0123456789abcdef",
+      replayed: false,
+      tasks_by_key: {
+        verify: {
+          id: "task-1",
+          status: "ready",
+          assignee: "verifier",
+          model: "default",
+          needs: [],
+          state: { kind: "ready" },
+          attempts_started: 0,
+          version: taskVersionRef("v1"),
+        },
+      },
       ready_task_ids: ["task-1"],
     });
-    expect(Check(TaskCreateResultSchema, created)).toBe(true);
+    expect(Check(TaskGraphApplyResultSchema, applied)).toBe(true);
 
     const read = { kind: "task_read_batch" as const, outcomes: [
       { kind: "found" as const, input_index: 0, task_id: task.id, task },
@@ -129,31 +153,55 @@ describe("raw semantic result projections", () => {
     expect(Check(ModelResultSchemas.task_read, projectedRead)).toBe(true);
   });
 
-  it("keeps unknown create outcomes retryable with the same operation", () => {
+  it("keeps unknown graph-apply outcomes retryable with the same operation", () => {
     const unknown = {
       kind: "unknown_outcome" as const,
-      operation_id: "create-retry-1",
+      operation_id: "apply-retry-1",
       message: "Authority may have committed before transport ended.",
     };
-    const model = projectToolResult("task_create", unknown) as any;
+    const model = projectToolResult("task_graph_apply", unknown) as any;
     expect(model).toEqual({
       kind: "unknown_outcome",
-      operation_id: "create-retry-1",
+      operation_id: "apply-retry-1",
       message: unknown.message,
-      recovery: { action: "retry_same_operation", operation_id: "create-retry-1" },
+      recovery: { action: "retry_same_operation", operation_id: "apply-retry-1" },
     });
-    expect(projectTui({ tool: "task_create", details: unknown, expanded: false }).join("\n")).toMatch(/retry create operation.*create-retry-1/i);
+    expect(projectTui({ tool: "task_graph_apply", details: unknown, expanded: false }).join("\n")).toMatch(/retry create operation.*apply-retry-1/i);
   });
 
   it("keeps exact conflict and sync recovery coordinates", () => {
     const currentTask = {
-      id: "task-1", title: "Verify", goal: "Verify the release.", status: "in_progress" as const,
-      current_context: "Worker is verifying.", version: taskVersionRef("v4"),
+      id: "task-1",
+      title: "Verify",
+      goal: "Verify the release.",
+      assignee: "verifier",
+      model: "capable" as const,
+      needs: [],
+      status: "in_progress" as const,
+      state: { kind: "in_progress" as const, attempt_id: "task-1@1" },
+      current_context: "Worker is verifying.",
+      version: taskVersionRef("v4"),
+      activation_key: "activation-task-1",
+      current_attempt: {
+        id: "task-1@1",
+        ordinal: 1,
+        resolved_model: "openai-codex/gpt-5.6-terra:medium",
+        input_attempt_ids: {},
+      },
+      attempts_started: 1,
+      relations: [],
+      dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
     };
-    const conflict = { kind: "task_update_batch" as const, outcomes: [{
-      kind: "refused" as const, input_index: 0, task_id: "task-1", operation_id: "op-2",
-      reason: "version_conflict" as const, message: "Stale version.", current_task: currentTask, state_changed: false as const,
-    }] };
+    const conflict = {
+      kind: "refused" as const,
+      input_index: 0,
+      task_id: "task-1",
+      operation_id: "op-2",
+      reason: "version_conflict" as const,
+      message: "Stale version.",
+      current_task: currentTask,
+      state_changed: false as const,
+    };
     const model = projectToolResult("task_update", conflict) as any;
     expect(model).toMatchObject({ kind: "refused", current_task: { ...currentTask, version: taskVersionRef("v4") } });
     expect(model.recovery).toEqual({ action: "reconcile_and_retry", expected_version: taskVersionRef("v4") });
@@ -191,13 +239,34 @@ describe("raw semantic result projections", () => {
     };
     expect(projectTui({ tool: "alert_send", details: alert, expanded: false }).join("\n")).toMatch(/partial|offline/);
 
-    const mixed = { kind: "task_update_batch" as const, outcomes: [
-      { kind: "updated" as const, input_index: 0, task_id: "task-1", operation_id: "op-1", task: { id: "task-1", title: "One", goal: "One goal", status: "closed" as const, current_context: "Done", version: taskVersionRef("v2") }, journal_entries: [] },
-      { kind: "refused" as const, input_index: 1, task_id: "task-2", operation_id: "op-2", reason: "operation_conflict" as const, message: "Operation already has a different receipt.", current_task: { id: "task-2", title: "Two", goal: "Two goal", status: "in_progress" as const, current_context: "Still running", version: taskVersionRef("v4") }, state_changed: false as const },
-    ] };
-    const projected = projectToolResult("task_update", mixed) as any;
-    expect(projected.outcomes[1].recovery).toEqual({ action: "reconcile_and_retry", expected_version: taskVersionRef("v4"), new_operation_id: true });
-    expect(projectTui({ tool: "task_update", details: mixed, expanded: false }).join("\n")).toMatch(/new operation_id/);
+    const currentTask = {
+      id: "task-2",
+      title: "Two",
+      goal: "Two goal",
+      assignee: "verifier",
+      model: "default" as const,
+      needs: [],
+      status: "in_progress" as const,
+      state: { kind: "in_progress" as const, attempt_id: "task-2@1" },
+      current_context: "Still running",
+      version: taskVersionRef("v4"),
+      activation_key: "activation-task-2",
+      current_attempt: { id: "task-2@1", ordinal: 1, resolved_model: "default-model", input_attempt_ids: {} },
+      attempts_started: 1,
+    };
+    const operationConflict = {
+      kind: "refused" as const,
+      input_index: 0,
+      task_id: "task-2",
+      operation_id: "op-2",
+      reason: "operation_conflict" as const,
+      message: "Operation already has a different receipt.",
+      current_task: currentTask,
+      state_changed: false as const,
+    };
+    const projected = projectToolResult("task_update", operationConflict) as any;
+    expect(projected.recovery).toEqual({ action: "reconcile_and_retry", expected_version: taskVersionRef("v4"), new_operation_id: true });
+    expect(projectTui({ tool: "task_update", details: operationConflict, expanded: false }).join("\n")).toMatch(/new operation_id/);
   });
 
   it("uses a read-before-retry action when a Task-link refusal has no current version", () => {
@@ -228,16 +297,16 @@ describe("raw semantic result projections", () => {
     expect(success).not.toContain("Raw report follows");
 
     const executionError = projectTui({
-      tool: "task_create",
-      content: [{ type: "text", text: "Invalid semantic result for task_create." }],
-      details: { operation_id: "create-release" },
+      tool: "task_graph_apply",
+      content: [{ type: "text", text: "Invalid semantic result for task_graph_apply." }],
+      details: { operation_id: "apply-release" },
       expanded: false,
       isError: true,
     }).join("\n");
-    expect(executionError).toContain("task_create execution error");
+    expect(executionError).toContain("task_graph_apply execution error");
     expect(executionError).toContain("Raw report follows");
-    expect(executionError).toContain("Invalid semantic result for task_create.");
-    expect(executionError).toContain('"operation_id": "create-release"');
+    expect(executionError).toContain("Invalid semantic result for task_graph_apply.");
+    expect(executionError).toContain('"operation_id": "apply-release"');
     expect(executionError).not.toContain("did not produce a semantic result");
 
     const malformedResult = projectTui({

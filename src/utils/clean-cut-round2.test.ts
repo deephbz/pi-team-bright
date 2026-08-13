@@ -370,7 +370,7 @@ describe("delivery scheduling and exact Session scope", () => {
 });
 
 describe.skipIf(!hasBd)("semantic task_update surface", () => {
-  it("preserves task_create post-commit delivery warnings in backend and public receipts", async () => {
+  it("preserves task_graph_apply post-commit delivery warnings in backend and public receipts", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("create-delivery-warning");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
@@ -385,7 +385,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     // A directory at the recipient spool path deterministically fails the
     // post-commit enqueue while leaving Beads Task authority writable.
     fs.mkdirSync(paths.taskDeliveryPath(teamName, "worker"), { recursive: true });
-    const result = await harness().tools.get("task_create")!.execute("create-degraded", {
+    const result = await harness().tools.get("task_graph_apply")!.execute("create-degraded", {
       operation_id: "create-delivery-degradation",
       tasks: [{
         key: "degraded",
@@ -399,19 +399,27 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
 
     const task = result.details.tasks_by_key.degraded;
     expect(result.details).toMatchObject({
-      kind: "task_graph_created",
+      kind: "task_graph_applied",
       operation_id: "create-delivery-degradation",
-      tasks_by_key: { degraded: { id: task.id, title: "Preserve delivery degradation", status: "open", assignee: "worker", version: task.version } },
+      tasks_by_key: { degraded: { id: task.id, title: "Preserve delivery degradation", status: "ready", assignee: "worker", version: task.version } },
     });
-    await expect(tasks.readTask(teamName, task.id, taskReadAdapterFactory)).resolves.toMatchObject({
-      id: task.id,
-      title: "Preserve delivery degradation",
-      assignee: "worker",
-      version: task.version,
+    const readResult = await harness().tools.get("task_read")!.execute("read-degraded", {
+      task_ids: [task.id],
+    }, undefined, undefined, {
+      sessionManager: { getSessionFile: () => leadSession },
+    });
+    expect(readResult.details).toMatchObject({
+      kind: "task_read_batch",
+      outcomes: [{ kind: "found", task: {
+        id: task.id,
+        title: "Preserve delivery degradation",
+        assignee: "worker",
+        version: task.version,
+      } }],
     });
   }, 60_000);
 
-  it("returns concise model-visible post-state and version for every Task mutation tool", async () => {
+  it("returns concise model-visible post-state and version for graph-native Task transitions", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("mutation-receipts");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
@@ -424,106 +432,97 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     const tools = harness().tools;
     const context = { sessionManager: { getSessionFile: () => leadSession } };
 
-    const createdResult = await tools.get("task_create")!.execute("create", {
+    const createdResult = await tools.get("task_graph_apply")!.execute("create", {
       operation_id: "create-receipt-contract",
       tasks: [{ key: "receipt", title: "Receipt contract", goal: "Keep the mutation receipt concise and verifiable.", assignee: "worker" }],
     }, undefined, undefined, context);
     const created = createdResult.details.tasks_by_key.receipt;
     expect(createdResult.details).toMatchObject({
-      kind: "task_graph_created",
+      kind: "task_graph_applied",
       operation_id: "create-receipt-contract",
-      tasks_by_key: { receipt: { id: expect.any(String), status: "open", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } },
+      tasks_by_key: { receipt: { id: expect.any(String), status: "ready", version: expect.stringMatching(/^v_[0-9a-f]{16}$/) } },
     });
 
-    const update = async (operationId: string, expectedVersion: string, status: "open" | "in_progress", text: string) => {
-      const result = await tools.get("task_update")!.execute(operationId, {
-        updates: [{ task_id: created.id, operation_id: operationId, expected_version: expectedVersion, status, current_context: text, journal_entries: [{ kind: "progress", text }] }],
-      }, undefined, undefined, context);
-      expect(result.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task_id: created.id, operation_id: operationId, task: { id: created.id, status }, journal_entries: [expect.objectContaining({ text })] }] });
-      return result.details.outcomes[0].task;
-    };
-    const designed = await update("design", created.version, "open", "Inspect then test.");
-    const evaluated = await update("approve", designed.version, "in_progress", "Leader approved execution.");
-    const progressed = await update("progress", evaluated.version, "in_progress", "Comment-backed revision.");
-
+    const contextUpdate = await tools.get("task_update")!.execute("context", {
+      task_id: created.id,
+      operation_id: "context",
+      expected_version: created.version,
+      current_context: "Inspect then test.",
+    }, undefined, undefined, context);
+    expect(contextUpdate.details).toMatchObject({
+      kind: "updated",
+      task_id: created.id,
+      operation_id: "context",
+      transition: "context_updated",
+      task: { id: created.id, status: "ready" },
+    });
+    const current = contextUpdate.details.task;
     const syncResult = await tools.get("team_sync")!.execute("sync", { view: "snapshot" }, undefined, undefined, context);
-    expect(syncResult.details).toMatchObject({ kind: "snapshot", tasks: [expect.objectContaining({ id: created.id, version: progressed.version })] });
+    expect(syncResult.details).toMatchObject({ kind: "snapshot", tasks: [expect.objectContaining({ id: created.id, version: current.version })] });
     const readResult = await tools.get("task_read")!.execute("read", { task_ids: [created.id] }, undefined, undefined, context);
-    expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: created.id, task: { status: "in_progress", version: progressed.version } }] });
-    await expect(update("safe-next-write", progressed.version, "open", "Safe next write.")).resolves.toMatchObject({ version: expect.any(String) });
+    expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: created.id, task: { status: "ready", version: current.version } }] });
   }, 120_000);
 
-  it("combines assignee plus nonterminal status in one native update and returns full post-state plus applied operations", async () => {
+  it("claims an assigned ready Task in one graph-native mutation", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("semantic-update");
+    const leadSession = `/tmp/${teamName}-lead.jsonl`;
     writeTeam(teamName, workspace, [
-      member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`),
+      member(teamName, "team-lead", leadSession),
       member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
     ]);
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const tool = harness().tools.get("task_update")!;
-    const createdResult = await harness().tools.get("task_create")!.execute("create", {
+    const tools = harness().tools;
+    const createdResult = await tools.get("task_graph_apply")!.execute("create", {
       operation_id: "create-semantic",
       tasks: [{ key: "semantic", title: "semantic", goal: "one agent call", assignee: "worker" }],
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => leadSession } });
     const created = createdResult.details.tasks_by_key.semantic;
-    const traceFile = path.join(tempRoot("semantic-trace"), "trace.jsonl");
-    vi.stubEnv("PI_TEAMS_TRACE_JSONL", traceFile);
-    const result = await tool.execute("semantic", {
-      updates: [{ task_id: created.id, operation_id: "semantic", status: "in_progress", current_context: "One native mutation.", journal_entries: [{ kind: "result", text: "One native mutation." }], expected_version: created.version }],
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    expect(result.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "updated", task: { id: created.id, status: "in_progress", assignee: "worker" }, operation_id: "semantic" }] });
-    const trace = fs.readFileSync(traceFile, "utf8").trim().split("\n").map((line) => JSON.parse(line));
-    expect(trace.flatMap((entry) => entry.bdCalls).filter((call: any) => call.command === "update")).toHaveLength(1);
+    const result = await tools.get("task_update")!.execute("semantic", {
+      task_id: created.id,
+      operation_id: "semantic",
+      transition: "claim",
+      current_context: "One native mutation.",
+      expected_version: created.version,
+    }, undefined, undefined, { sessionManager: { getSessionFile: () => leadSession } });
+    expect(result.details).toMatchObject({ kind: "refused", reason: "worker_mismatch", task_id: created.id, operation_id: "semantic" });
   }, 60_000);
 
   it("uses a short expected_version ref and rejects a supplied stale ref before mutation", async () => {
     const workspace = initWorkspace();
     const teamName = uniqueTeam("optional-version");
-    writeTeam(teamName, workspace, [
-      member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`),
-      member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
-    ]);
+    const leadSession = `/tmp/${teamName}-lead.jsonl`;
+    writeTeam(teamName, workspace, [member(teamName, "team-lead", leadSession), member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`)]);
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const tool = harness().tools.get("task_update")!;
-    const create = await harness().tools.get("task_create")!.execute("create", {
+    const tools = harness().tools;
+    const context = { sessionManager: { getSessionFile: () => leadSession } };
+    const create = await tools.get("task_graph_apply")!.execute("create", {
       operation_id: "create-version",
       tasks: [{ key: "version", title: "version", goal: "v0", assignee: "worker" }],
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
+    }, undefined, undefined, context);
     const created = create.details.tasks_by_key.version;
-    const firstUpdate = await tool.execute("first-update", { updates: [{ task_id: created.id, operation_id: "first-update", status: "in_progress", current_context: "v1", journal_entries: [{ kind: "progress", text: "v1" }], expected_version: created.version }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    const current = firstUpdate.details.outcomes[0].task;
-    const stale = await tool.execute("stale", { updates: [{ task_id: created.id, operation_id: "stale", status: "open", current_context: "stale", journal_entries: [{ kind: "blocker", text: "stale" }], expected_version: created.version }] }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    expect(stale.details).toMatchObject({ kind: "task_update_batch", outcomes: [{ kind: "refused", reason: "version_conflict", task_id: created.id, current_task: { status: "in_progress", version: current.version }, state_changed: false }] });
+    const firstUpdate = await tools.get("task_update")!.execute("first-update", {
+      task_id: created.id, operation_id: "first-update", current_context: "v1", expected_version: created.version,
+    }, undefined, undefined, context);
+    const current = firstUpdate.details.task;
+    const stale = await tools.get("task_update")!.execute("stale", {
+      task_id: created.id, operation_id: "stale", current_context: "stale", expected_version: created.version,
+    }, undefined, undefined, context);
+    expect(stale.details).toMatchObject({ kind: "refused", reason: "version_conflict", task_id: created.id, current_task: { status: "ready", version: current.version }, state_changed: false });
     expect(current.version).not.toBe(created.version);
   }, 60_000);
 
-  it("rejects duplicate Task mutations and keeps graph edits out of task_update", async () => {
-    const workspace = initWorkspace();
-    const teamName = uniqueTeam("unsafe-composite");
-    writeTeam(teamName, workspace, [
-      member(teamName, "team-lead", `/tmp/${teamName}-lead.jsonl`),
-      member(teamName, "worker", `/tmp/${teamName}-worker.jsonl`),
-    ]);
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", "");
+  it("keeps batch mutations and graph edits out of task_update", async () => {
     const tool = harness().tools.get("task_update")!;
-    const create = await harness().tools.get("task_create")!.execute("create", {
-      operation_id: "create-target",
-      tasks: [{ key: "target", title: "target", goal: "unchanged", assignee: "worker" }],
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } });
-    const target = create.details.tasks_by_key.target;
-    const ctx = { sessionManager: { getSessionFile: () => `/tmp/${teamName}-lead.jsonl` } };
-    const duplicate = await tool.execute("duplicate", { updates: [
-      { task_id: target.id, operation_id: "one", current_context: "unchanged", journal_entries: [{ kind: "note", text: "one" }], expected_version: target.version },
-      { task_id: target.id, operation_id: "two", current_context: "unchanged", journal_entries: [{ kind: "note", text: "two" }], expected_version: target.version },
-    ] }, undefined, undefined, ctx);
-    expect(duplicate.details).toMatchObject({ kind: "refused", reason: "duplicate_task_id", state_changed: false });
+    expect(tool.parameters.properties).toHaveProperty("task_id");
+    expect(tool.parameters.properties).toHaveProperty("expected_version");
+    expect(tool.parameters.properties).not.toHaveProperty("updates");
     expect(tool.parameters.properties).not.toHaveProperty("blocked_by");
     expect(tool.parameters.properties).not.toHaveProperty("progress");
-  }, 60_000);
+  });
+
 });
 
 describe("canonical Task versions", () => {

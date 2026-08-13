@@ -1,6 +1,6 @@
 {
   "name": "@hypercarrier/pi-team-bright",
-  "version": "0.17.0-rc.14",
+  "version": "0.17.0-rc.15",
   "description": "Task-first Pi teams, visible in terminal panes.",
   "repository": {
     "type": "git",

@@ -404,11 +404,11 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);
     expect(source.match(/const alertPublication = new DurableAlertPublication\(\)/g)).toHaveLength(1);
     expect(source).toContain("const alertSender = createAlertSender(alertMembership, alertPublication)");
-    expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory\)/g)).toHaveLength(1);
+    expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory, graphTaskOrchestration\)/g)).toHaveLength(1);
     expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
     expect(source).toContain("const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning()");
     expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
-    expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration)");
+    expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration)");
     expect(source).toContain("new DurableModelToolAlertApplication(modelToolBindings, alertSender)");
     expect(source).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });
@@ -863,7 +863,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
         acceptanceCriteria: "Compatibility text",
         status: "open" as const,
         relations: [],
-        version: `beads_${id}`,
+        version: id === "event-task" ? "event-v1" : `beads_${id}`,
         provenance: { authority: "beads" as const, teamName: name },
       },
       taskMetadata: {
@@ -944,7 +944,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
         acceptanceCriteria: "Compatibility text",
         status: "open" as const,
         relations: [],
-        version: `beads_${id}`,
+        version: id === "event-task" ? "event-v1" : `beads_${id}`,
         provenance: { authority: "beads" as const, teamName: name },
       },
       taskMetadata: { schema: TASK_METADATA_SCHEMA, goal: "Require complete batches.", current_context: "Current context." },

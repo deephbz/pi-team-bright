@@ -686,9 +686,9 @@ describe("release P1 public contracts", () => {
     expect(update).toHaveBeenCalledTimes(callsBeforeStaleAttempt);
   });
 
-  it("keeps graph edits in atomic task_create and out of task_update", () => {
+  it("keeps graph edits in atomic task_graph_apply and out of task_update", () => {
     const tools = registerExtension();
-    const createSchema = tools.get("task_create")!.parameters;
+    const createSchema = tools.get("task_graph_apply")!.parameters;
     const updateSchema = tools.get("task_update")!.parameters;
     expect(createSchema.properties).toHaveProperty("tasks");
     expect((createSchema as any).properties.tasks.items.properties).toHaveProperty("needs");
