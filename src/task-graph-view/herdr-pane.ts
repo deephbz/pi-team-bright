@@ -100,7 +100,11 @@ export class TaskGraphPaneController {
       if (!pane || pane.paneId !== paneId || !sameLocation(pane, input.origin)) {
         throw new Error("The new Task graph pane did not stay in the originating Herdr tab and workspace.");
       }
+      // The pane inherits the operator's cwd, which can be outside this package.
+      // Pin ts-node to this package's config instead of its cwd-based discovery.
+      const tsconfigPath = path.resolve(path.dirname(this.cliPath), "../../tsconfig.json");
       const command = [
+        "env", shellQuote(`TS_NODE_PROJECT=${tsconfigPath}`),
         shellQuote(this.nodePath),
         "--require", shellQuote(require.resolve("ts-node/register/transpile-only")),
         shellQuote(this.cliPath),
