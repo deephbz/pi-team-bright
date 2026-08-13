@@ -468,20 +468,24 @@ export function layoutTaskGraph(
   };
 }
 
+// Use semantic terminal slots, not fixed xterm-256 colors. The terminal theme
+// owns each slot's concrete color and polarity, so one running pane follows a
+// light or dark Colorstack/Ghostty theme without reading configuration files.
+// ANSI 8 (bright black) is the theme-owned legible secondary-text role.
 const ANSI: Record<TaskGraphCellTone, string> = {
-  dependency_waiting: "\u001b[38;5;214m",
-  ready: "\u001b[1;38;5;46m",
-  in_progress: "\u001b[1;38;5;51m",
-  blocked: "\u001b[1;38;5;201m",
-  goal_failed: "\u001b[1;38;5;196m",
-  goal_achieved: "\u001b[38;5;40m",
-  cancelled: "\u001b[38;5;244m",
-  legacy_completed: "\u001b[2;38;5;250m",
-  success_edge: "\u001b[38;5;40m",
-  failure_edge: "\u001b[38;5;214m",
-  legacy_edge: "\u001b[38;5;45m",
-  intersection: "\u001b[1;38;5;255m",
-  muted: "\u001b[2;38;5;250m",
+  dependency_waiting: "\u001b[33m",
+  ready: "\u001b[1;32m",
+  in_progress: "\u001b[1;36m",
+  blocked: "\u001b[1;35m",
+  goal_failed: "\u001b[1;31m",
+  goal_achieved: "\u001b[32m",
+  cancelled: "\u001b[90m",
+  legacy_completed: "\u001b[90m",
+  success_edge: "\u001b[32m",
+  failure_edge: "\u001b[33m",
+  legacy_edge: "\u001b[36m",
+  intersection: "\u001b[1;39m",
+  muted: "\u001b[90m",
 };
 const RESET = "\u001b[0m";
 

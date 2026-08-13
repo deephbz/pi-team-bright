@@ -63,7 +63,7 @@ describe("Task graph Herdr pane lifecycle", () => {
     expect(controller.toggle({ origin, source: graph(), limit: 50 })).toEqual({ kind: "opened", paneId: "pane-graph" });
     expect(host.calls.find((call) => call.name === "split")?.args).toEqual(["pane-origin", "/repo", "--no-focus"]);
     const command = host.calls.find((call) => call.name === "run")?.args[1] as string;
-    expect(command).toContain("'/runtime/node' --require");
+    expect(command).toContain("env 'TS_NODE_PROJECT=/package/tsconfig.json' '/runtime/node' --require");
     expect(command).toContain("--source");
     expect(command).not.toContain("Task A");
     expect(controller.toggle({ origin, source: graph() })).toEqual({ kind: "closed", paneId: "pane-graph" });

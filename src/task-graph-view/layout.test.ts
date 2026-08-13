@@ -62,6 +62,15 @@ describe("Task graph terminal layout", () => {
     expect(plain).not.toContain("\u001b");
   });
 
+  it("uses semantic ANSI slots that follow the active terminal palette", () => {
+    const canvas = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32 });
+    const styled = renderTaskGraphViewport({ canvas, x: 0, y: 0, width: canvas.width, height: canvas.height }).join("\n");
+    expect(styled).toContain("\u001b[1;36m");
+    expect(styled).toContain("\u001b[32m");
+    expect(styled).toContain("\u001b[33m");
+    expect(styled).not.toMatch(/\u001b\[[^m]*38;5;/u);
+  });
+
   it("packs disconnected islands without the all-at-once Dagre crash", () => {
     const graph = islands(20);
     const first = layoutTaskGraph(graph, "all", { packWidth: 120, nodeWidth: 24 });
