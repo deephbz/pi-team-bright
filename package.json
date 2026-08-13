@@ -45,6 +45,8 @@
     "docs:model-tools": "ts-node --transpile-only src/cli/render-model-tool-contract.ts",
     "probe:model-tools": "ts-node --transpile-only scripts/probe-model-tool-vertical-slice.ts",
     "benchmark:task-hydration": "ts-node --transpile-only scripts/task-hydration-benchmark.ts",
+    "benchmark:task-graph": "ts-node --transpile-only scripts/task-graph-layout-benchmark.ts",
+    "smoke:task-graph": "ts-node --transpile-only scripts/task-graph-renderer-smoke.ts",
     "test:lanes": "node scripts/verify-test-lanes.cjs"
   },
   "main": "extensions/index.ts",
@@ -74,6 +76,7 @@
   },
   "dependencies": {
     "@beads/bd": "1.1.0",
+    "@dagrejs/dagre": "3.1.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },

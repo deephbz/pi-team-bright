@@ -1,4 +1,4 @@
-import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
+import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 
 /** Minimum current Membership evidence used to derive Worker run state. */
@@ -79,7 +79,7 @@ export interface CoordinationTaskReadContractGap {
 }
 
 export type CoordinationTaskReadOutcome =
-  | { kind: "found"; task: TaskCard }
+  | { kind: "found"; task: CanonicalTaskCard }
   | CoordinationTaskReadContractGap
   | undefined;
 
@@ -107,6 +107,8 @@ export interface CoordinationTeamRuntimeQuery {
 
 /** Task authority state plus its pending delivery evidence. */
 export interface CoordinationTaskStateDeliveryQuery {
+  /** True when listTaskIds is the complete current set, not an eventually consistent index. */
+  completeTaskSet?(teamName: string): boolean;
   listTaskIds(teamName: string): Promise<string[]>;
   readTasks(teamName: string, taskIds: readonly string[]): Promise<readonly CoordinationTaskReadOutcome[]>;
   readDeliveryEvidence(teamName: string, worker: string): Promise<CoordinationActuationEvidence>;
@@ -125,6 +127,6 @@ export interface CoordinationQueryBundle {
 }
 
 export interface CoordinationTaskProjection {
-  tasks: TaskCard[];
+  tasks: CanonicalTaskCard[];
   warnings: TaskCardWarning[];
 }

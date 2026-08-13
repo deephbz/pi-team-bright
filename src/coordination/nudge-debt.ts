@@ -1,4 +1,4 @@
-import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
+import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { CoordinationLeaderBindingEvidence } from "./queries";
 import { taskProjectionRevision } from "./task-projection-revision";
 
@@ -13,7 +13,7 @@ type BoundNudgeTeam = { teamName: string; sessionFile: string; config: Coordinat
 /** Narrow Task-projection dependency for nudge debt; it is not an observation service dependency. */
 export interface CoordinationNudgeTaskProjectionReader {
   readTaskProjection(teamName: string): Promise<
-    | { kind: "tasks"; tasks: TaskCard[]; warnings: TaskCardWarning[] }
+    | { kind: "tasks"; tasks: CanonicalTaskCard[]; warnings: TaskCardWarning[] }
     | { kind: "contract_gap" | "unavailable"; message: string }
   >;
 }
@@ -39,7 +39,7 @@ export interface CoordinationNudgeHint {
 export interface CoordinationNudgeStore {
   readHidden(teamName: string, input: { teamEpochId: string; exactSessionId: string; branchLineage: string[] }): CoordinationNudgeHiddenResult | Promise<CoordinationNudgeHiddenResult>;
   readEvents(teamName: string, input: { afterCursor?: string }): { events: CoordinationNudgeEvent[]; headCursor: string; cursor: string; truncated: boolean };
-  readFailureHints(teamName: string, afterCursor: string, input: { teamEpochId: string; taskReferences: Array<{ taskId: string; taskVersion: TaskCard["version"] }> }): { headCursor: string; hints: CoordinationNudgeHint[] };
+  readFailureHints(teamName: string, afterCursor: string, input: { teamEpochId: string; taskReferences: Array<{ taskId: string; taskVersion: CanonicalTaskCard["version"] }> }): { headCursor: string; hints: CoordinationNudgeHint[] };
 }
 
 function currentLead(config: CoordinationLeaderBindingEvidence, sessionFile: string) {

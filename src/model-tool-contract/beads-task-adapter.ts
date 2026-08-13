@@ -34,6 +34,8 @@ import {
   TASK_CARD_CONTEXT_MAX_LENGTH,
   TASK_CARD_GOAL_MAX_LENGTH,
   TASK_CARD_TITLE_MAX_LENGTH,
+  isTaskTerminal,
+  type CanonicalTaskCard,
   type TaskCard,
   type TaskCardWarning,
 } from "../task-authority/task-domain";
@@ -145,7 +147,7 @@ export interface TaskChangeProjection {
   taskId: string;
   changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">;
   journalEntries: ModelToolTaskJournalEntry[];
-  current: TaskCard;
+  current: CanonicalTaskCard;
 }
 
 export type TaskChangesOutcome =
@@ -688,11 +690,11 @@ export class BeadsTaskAdapter {
 
 /** Derive Worker work from authoritative assignment and status; store no index. */
 export function projectNonterminalTaskIds(
-  tasks: readonly TaskCard[],
+  tasks: readonly CanonicalTaskCard[],
   workerName: string,
 ): string[] {
   return tasks
-    .filter((task) => task.assignee === workerName && task.status !== "closed")
+    .filter((task) => task.assignee === workerName && !isTaskTerminal(task))
     .map((task) => task.id)
     .sort();
 }
@@ -728,7 +730,7 @@ function changeKind(event: TeamEvent): TaskChangeProjection["changeKinds"][numbe
 /** Group committed Task evidence and attach one latest canonical current state. */
 export function projectTaskChanges(
   events: readonly TeamEvent[],
-  currentTasks: readonly TaskCard[],
+  currentTasks: readonly CanonicalTaskCard[],
 ): TaskChangesOutcome {
   const currentById = new Map(currentTasks.map((task) => [task.id, task]));
   const grouped = new Map<string, Omit<TaskChangeProjection, "current">>();

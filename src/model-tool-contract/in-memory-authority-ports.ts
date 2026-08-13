@@ -16,6 +16,7 @@ const cloneTask = (task: TaskCard): TaskCard => ({ ...task });
 const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical((value as Record<string, unknown>)[key])])) : value;
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const taskKey = (taskId: string, operationId: string) => `${taskId}\u0000${operationId}`;
+const legacyTransition = (status: TaskCard["status"]): "claim" | "block" | "context_updated" => status === "in_progress" ? "claim" : status === "blocked" ? "block" : "context_updated";
 
 /** Team fake owns only Team identity, binding, and logical Worker state. */
 export class InMemoryTeamApplicationPort implements ModelToolTeamApplicationPort, InMemoryTeamQuery {
@@ -62,7 +63,7 @@ export class InMemoryTaskApplicationPort implements ModelToolTaskApplicationPort
     if (prior) {
       if (prior.fingerprint !== fingerprint) return { kind: "refused", operationId: input.operationId, reason: "operation_conflict", message: "The create operation ID was already used with different graph semantics." };
       const tasksByKey = Object.fromEntries(Object.entries(prior.taskIdsByKey).map(([key, taskId]) => [key, cloneTask(record.tasks.get(taskId)!)]));
-      return { kind: "created", operationId: input.operationId, replayed: true, tasksByKey, readyTaskIds: Object.values(tasksByKey).filter(task => task.dependency_state?.kind === "ready").map(task => task.id).sort(), ...(prior.deliveryWarnings?.length ? { deliveryWarnings: [...prior.deliveryWarnings] } : {}) };
+      return { kind: "created", operationId: input.operationId, replayed: true, graphVersion: "g_0000000000000000", tasksByKey, readyTaskIds: Object.values(tasksByKey).filter(task => task.dependency_state?.kind === "ready").map(task => task.id).sort(), ...(prior.deliveryWarnings?.length ? { deliveryWarnings: [...prior.deliveryWarnings] } : {}) };
     }
     const graphInput = {
       operation_id: input.operationId,
@@ -106,12 +107,12 @@ export class InMemoryTaskApplicationPort implements ModelToolTaskApplicationPort
     record.creates.set(input.operationId, { fingerprint, taskIdsByKey, ...(warnings.length ? { deliveryWarnings: warnings } : {}) });
     this.revision.commit();
     const tasksByKey = Object.fromEntries(Object.entries(taskIdsByKey).map(([key, taskId]) => [key, cloneTask(record.tasks.get(taskId)!)]));
-    return { kind: "created", operationId: input.operationId, replayed: false, tasksByKey, readyTaskIds: Object.values(tasksByKey).filter(task => task.dependency_state?.kind === "ready").map(task => task.id).sort(), ...(warnings.length ? { deliveryWarnings: warnings } : {}) };
+    return { kind: "created", operationId: input.operationId, replayed: false, graphVersion: "g_0000000000000000", tasksByKey, readyTaskIds: Object.values(tasksByKey).filter(task => task.dependency_state?.kind === "ready").map(task => task.id).sort(), ...(warnings.length ? { deliveryWarnings: warnings } : {}) };
   }
   async createTask(session: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult> {
     if (!input.assignee) return { kind: "worker_unavailable", operationId: input.operationId };
     const result = await this.createTaskGraph(session, { operationId: input.operationId, tasks: [{ key: "task", title: input.title, goal: input.goal, assignee: input.assignee }] });
-    if (result.kind === "created") return { kind: "created", operationId: result.operationId, task: result.tasksByKey.task, ...(result.deliveryWarnings?.length ? { deliveryWarnings: result.deliveryWarnings } : {}) };
+    if (result.kind === "created") return { kind: "created", operationId: result.operationId, task: result.tasksByKey.task as TaskCard, ...(result.deliveryWarnings?.length ? { deliveryWarnings: result.deliveryWarnings } : {}) };
     if (result.kind === "refused") return result.reason === "worker_unavailable" ? { kind: "worker_unavailable", operationId: result.operationId } : { kind: "operation_conflict", operationId: result.operationId, message: result.message };
     return result;
   }
@@ -119,10 +120,10 @@ export class InMemoryTaskApplicationPort implements ModelToolTaskApplicationPort
   async updateTasks(session: ExactLeaderSessionId, updates: ModelToolTaskUpdateInput[]): Promise<UpdateTasksPortResult> {
     if (new Set(updates.map(update => update.taskId)).size !== updates.length) return { kind: "duplicate_task_id" }; const team = this.teams.active(session); if (!team) return { kind: "no_active_team" }; const record = this.record(team.id); const outcomes: TaskUpdatePortOutcome[] = [];
     for (const input of updates) { const task = record.tasks.get(input.taskId); const fingerprint = JSON.stringify(canonical(input)); const key = taskKey(input.taskId, input.operationId); const prior = record.updates.get(key) as { fingerprint: string; outcome: Extract<TaskUpdatePortOutcome, { kind: "updated" }> } | undefined;
-      if (prior) { outcomes.push(prior.fingerprint === fingerprint ? { ...prior.outcome, task: cloneTask(prior.outcome.task), journalEntries: prior.outcome.journalEntries.map(entry => ({ ...entry })) } : { kind: "refused", taskId: input.taskId, operationId: input.operationId, reason: "operation_conflict", message: "The operation ID was already used with different input.", ...(task ? { currentTask: cloneTask(task) } : {}) }); continue; }
+      if (prior) { outcomes.push(prior.fingerprint === fingerprint ? { ...prior.outcome, task: cloneTask(prior.outcome.task as TaskCard), journalEntries: prior.outcome.journalEntries.map(entry => ({ ...entry })) } : { kind: "refused", taskId: input.taskId, operationId: input.operationId, reason: "operation_conflict", message: "The operation ID was already used with different input.", ...(task ? { currentTask: cloneTask(task) } : {}) }); continue; }
       if (!task) { outcomes.push({ kind: "refused", taskId: input.taskId, operationId: input.operationId, reason: "task_not_found", message: "The Task does not exist in the exact active Team." }); continue; }
       if (task.version !== input.expectedVersion) { outcomes.push({ kind: "refused", taskId: input.taskId, operationId: input.operationId, reason: "version_conflict", message: `Expected Task version ${input.expectedVersion}, but current version is ${task.version}.`, currentTask: cloneTask(task) }); continue; }
-      const updated: TaskCard = { ...task, ...(input.currentContext !== undefined ? { current_context: input.currentContext } : {}), ...(input.status ? { status: input.status } : {}), version: taskVersionRef(task.version) }; const journalEntries = (input.journalEntries ?? []).map(entry => ({ id: `journal-${input.taskId}-${this.state.nextJournal++}`, at: new Date().toISOString(), actor: "leader" as const, kind: entry.kind, text: entry.text })); record.tasks.set(task.id, updated); record.journals.set(task.id, [...(record.journals.get(task.id) ?? []), ...journalEntries]); const outcome = { kind: "updated" as const, taskId: task.id, operationId: input.operationId, task: cloneTask(updated), journalEntries: journalEntries.map(entry => ({ ...entry })) }; record.updates.set(key, { fingerprint, outcome }); this.revision.commit(); this.publication.publish({ teamId: team.id, kind: "task_updated", taskId: task.id, journalEntries, statusChanged: task.status !== updated.status }, "task"); outcomes.push(outcome);
+      const updated: TaskCard = { ...task, ...(input.currentContext !== undefined ? { current_context: input.currentContext } : {}), ...(input.status ? { status: input.status } : {}), version: taskVersionRef(task.version) }; const journalEntries = (input.journalEntries ?? []).map(entry => ({ id: `journal-${input.taskId}-${this.state.nextJournal++}`, at: new Date().toISOString(), actor: "leader" as const, kind: entry.kind, text: entry.text })); record.tasks.set(task.id, updated); record.journals.set(task.id, [...(record.journals.get(task.id) ?? []), ...journalEntries]); const outcome = { kind: "updated" as const, taskId: task.id, operationId: input.operationId, replayed: false, transition: legacyTransition(updated.status), readyTaskIds: [] as string[], task: cloneTask(updated), journalEntries: journalEntries.map(entry => ({ ...entry })) }; record.updates.set(key, { fingerprint, outcome }); this.revision.commit(); this.publication.publish({ teamId: team.id, kind: "task_updated", taskId: task.id, journalEntries, statusChanged: task.status !== updated.status }, "task"); outcomes.push(outcome);
     } return { kind: "batch", outcomes };
   }
   async linkTask(_session: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult> { return { kind: "unavailable", reason: "task_authority_unavailable", message: `The in-memory model-tool port has no relation authority for ${input.taskId}.` }; }

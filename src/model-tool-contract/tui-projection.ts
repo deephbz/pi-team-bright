@@ -45,13 +45,13 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
     if (model.kind === "worker_ensured") lines.push(`Worker ${quoted(model.worker.name)} ${model.effect} · carrier ${model.worker.carrier}.`);
     else if (model.kind === "refused") lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · scope conflict.`);
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
-  } else if (tool === "task_create") {
-    if (model.kind === "task_graph_created") {
+  } else if (tool === "task_graph_apply" || tool === "task_create") {
+    if (model.kind === "task_graph_applied") {
       const entries = Object.entries(model.tasks_by_key) as Array<[string, any]>;
-      lines.push(`${entries.length} Task DAG committed · ${model.ready_task_ids.length} dependency-ready · operation ${quoted(model.operation_id)}${model.replayed ? " · replayed" : ""}.`);
+      lines.push(`${entries.length} Task graph committed · ${model.ready_task_ids.length} ready · graph ${model.graph_version} · operation ${quoted(model.operation_id)}${model.replayed ? " · replayed" : ""}.`);
       if (model.delivery_warnings?.length) lines.push(`Delivery warnings: ${model.delivery_warnings.join("; ")}.`);
       if (expanded) for (const [key, task] of entries) {
-        lines.push(`${quoted(key)} → ${taskLine(task)} · ${task.dependency_state.kind}${task.dependency_state.active_blocker_ids.length ? ` on ${task.dependency_state.active_blocker_ids.join(", ")}` : ""}.`);
+        lines.push(`${quoted(key)} → ${taskLine(task)} · model ${task.model} · ${task.needs.length ? `needs ${task.needs.join(", ")}` : "no prerequisites"}.`);
       }
     } else if (model.kind === "unknown_outcome") {
       lines.push(`unknown outcome · operation ${quoted(model.operation_id)}: ${compact(model.message)}`);
@@ -68,17 +68,12 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
     } else if (model.kind === "found") lines.push(`Task ${taskLine(model.task)} · ${compact(model.task.current_context)}.`);
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message ?? `Task ${model.task_id} was not found.`)}`);
   } else if (tool === "task_update") {
-    if (model.kind === "task_update_batch") {
-      const failures = model.outcomes.filter((item: any) => item.kind !== "updated");
-      lines.push(`${model.outcomes.length} Task update results · ${failures.length} refused or unavailable.`);
-      for (const item of failures) {
-        lines.push(`${item.kind} · Task ${quoted(item.task_id)}: ${compact(item.message)}`);
-        const retry = recoveryLine(item);
-        if (retry) lines.push(retry);
-      }
-      if (expanded) for (const item of model.outcomes.filter((item: any) => item.task)) lines.push(`Updated ${taskLine(item.task)}.`);
-    } else if (model.kind === "updated") lines.push(`Task ${taskLine(model.task)} was updated.`);
-    else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
+    if (model.kind === "updated") {
+      lines.push(`Task ${taskLine(model.task)} · ${model.transition}${model.replayed ? " · replayed" : ""}.`);
+      if (model.failure_traversal) lines.push(`Failure edge ${quoted(model.failure_traversal.source_task_id)} → ${quoted(model.failure_traversal.target_task_id)} · traversal ${model.failure_traversal.traversal}.`);
+      if (model.ready_task_ids.length) lines.push(`Ready Tasks: ${model.ready_task_ids.join(", ")}.`);
+      if (model.delivery_warnings?.length) lines.push(`Delivery warnings: ${model.delivery_warnings.join("; ")}.`);
+    } else lines.push(`${model.kind} · ${model.reason ?? "unknown outcome"}: ${compact(model.message)}`);
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
   } else if (tool === "team_sync") {
@@ -143,11 +138,9 @@ export function projectTui(input: TuiInput): string[] {
   try {
     const model = projectToolResult(input.tool, input.details) as any;
     const kind = model.kind;
-    const mixedTaskBatch = input.tool === "task_update"
-      && kind.endsWith("_batch")
-      && model.outcomes.some((item: any) => item.kind !== "updated");
-    const partialTaskCreate = input.tool === "task_create"
-      && kind === "task_graph_created"
+    const mixedTaskBatch = false;
+    const partialTaskCreate = (input.tool === "task_graph_apply" || input.tool === "task_create")
+      && kind === "task_graph_applied"
       && model.delivery_warnings?.length;
     const partialAlert = input.tool === "alert_send" && kind === "alert_sent" && model.failed_recipients.length > 0;
     const negative = ["refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "partial"].includes(kind) || mixedTaskBatch || partialTaskCreate || partialAlert;

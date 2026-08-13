@@ -26,7 +26,7 @@ import {
 import { teamDir } from "../utils/paths";
 import { withSemanticTrace } from "../utils/trace";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
-import type { TaskCard } from "../task-authority/task-domain";
+import type { CanonicalTaskCard, TaskCard } from "../task-authority/task-domain";
 import type { TaskAuthorityTeamPort } from "../task-authority/contracts";
 
 export const BEADS_WORKSPACE_ENV = "PI_TEAMS_BEADS_WORKSPACE";
@@ -141,7 +141,13 @@ export interface TaskMutationEventEvidenceInput {
   text: string;
 }
 
-export type TaskMutationCoordinates = Pick<TaskCard, "id" | "title" | "status" | "assignee"> & { version: TaskVersionRef };
+export type TaskMutationCoordinates = {
+  id: string;
+  title: string;
+  status: CanonicalTaskCard["status"];
+  assignee?: string;
+  version: TaskVersionRef;
+};
 
 export interface TaskMutationPublicationInput {
   teamName: string;
@@ -152,13 +158,13 @@ export interface TaskMutationPublicationInput {
   actor?: string;
   taskEventEvidence: readonly TaskMutationEventEvidenceInput[];
   deliver: boolean;
-  taskCard?: TaskCard;
+  taskCard?: CanonicalTaskCard;
 }
 
 export interface TaskOwnerTransitionPreparationInput {
   operationId: string;
   teamName: string;
-  before: TaskCard;
+  before: CanonicalTaskCard;
   afterOwner?: string;
   previousOperationId?: string;
 }
@@ -167,13 +173,13 @@ export interface TaskMutationSuppressionInput {
   teamName: string;
   recipient: string;
   sessionFile: string;
-  task: TaskCard | TaskMutationCoordinates;
+  task: CanonicalTaskCard | TaskMutationCoordinates;
 }
 
 export interface TaskOwnerTransitionCompletionInput {
   teamName: string;
   operationId: string;
-  task: TaskCard;
+  task: CanonicalTaskCard;
 }
 
 export interface TaskMutationPublicationRecoveryInput {

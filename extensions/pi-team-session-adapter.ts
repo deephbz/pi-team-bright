@@ -23,6 +23,7 @@ import type { TeamSessionLifecycleService } from "../src/team-authority/team-ses
 import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
 import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
+import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 
 export interface PiTeamSessionAdapter {
   readonly modelToolLifecycle: ModelToolLifecycle;
@@ -49,9 +50,11 @@ export function createPiTeamSessionAdapter(options: {
   refreshAlertToolProjection: () => void;
   registerRecoveredWorkerTools: () => void;
   taskReadyReconciliation?: Pick<TaskOrchestrationPort, "reconcileReady">;
+  taskGraphControlSource?: TaskGraphControlReadSource;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, nudgeRecords, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, nudgeRecords, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
   const terminal = getTerminalAdapter();
+  const taskGraphPane = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: taskGraphControlSource });
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
   let agentName = process.env.PI_AGENT_NAME || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
@@ -95,6 +98,36 @@ function configureWorkerResources(ctx: any): void {
 }
 
 const registerCommand = (pi as any).registerCommand?.bind(pi);
+registerCommand?.("pi-team-graph", {
+  description: "Toggle a read-only Task graph pane in this exact Herdr tab (limit: 25, 50, 100, 200, or all)",
+  getArgumentCompletions: (prefix: string) => ["25", "50", "100", "200", "all"]
+    .filter((value) => value.startsWith(prefix.trim()))
+    .map((value) => ({ value, label: value })),
+  handler: async (args: string, ctx: any) => {
+    const present = (text: string, level: "info" | "warning" | "error" = "info") => {
+      if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
+      else process.stderr.write(`${text}\n`);
+    };
+    if (!teamName) {
+      present("No current Team is bound to this Pi Session. Create or resume a Team first.", "warning");
+      return;
+    }
+    try {
+      const result = await taskGraphPane.toggle({
+        teamName,
+        actor: agentName,
+        cwd: ctx.cwd ?? process.cwd(),
+        limitText: args,
+      });
+      present(result.kind === "opened"
+        ? "Task graph pane opened in this Herdr tab. Run /pi-team-graph again to close it."
+        : "Task graph pane closed.");
+    } catch (error) {
+      present(`Task graph pane failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+    }
+  },
+});
+
 registerCommand?.("pi-team-bright", {
   description: "Pi Team Bright status/help — read-only Team and Beads authority diagnosis",
   getArgumentCompletions: getPiTeamsArgumentCompletions,
@@ -505,6 +538,7 @@ pi.on("session_shutdown", async (event, ctx) => {
     removeWorkerAggregate(process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
   }
   stopDeliveries();
+  taskGraphPane.shutdown();
   clearTeamFooter(ctx);
 });
 
@@ -596,7 +630,7 @@ pi.on("before_agent_start", async (event, ctx) => {
     }
 
     const taskInstruction = taskChangeSessionEligible
-      ? "Assigned Tasks are your work contracts. Canonical Task changes are delivered in context, but presentation never changes Task state. Stopped-epoch migration is explicit and never runs during normal runtime. Set an accepted Task in_progress when work starts. When you finish, call task_update yourself to set it closed and append verification evidence; never leave completion only in a TUI reply. If the work is blocked, call task_update with status blocked, concrete blocker evidence, and the next action. Use alert_send only for exceptional clarification or escalation; an alert never completes or blocks a Task. Re-read Task authority before a conflicting write."
+      ? "Assigned Tasks are your work contracts. Canonical Task changes are delivered in context, but presentation never changes Task state. Waiting and ready are derived. Claim a ready Task before work. When the goal passes its external criteria, call task_update with goal_achieved and exact evidence. Use goal_failed when criteria fail; Task authority then applies any bounded failure edge. Use block only for an external blocker, and include blocker evidence. Use alert_send only for exceptional clarification or escalation; an alert never changes Task state. Re-read Task authority before a conflicting write."
       : "This fork is a new Session identity and receives none of the source Agent's pending Task changes.";
     return {
       systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,

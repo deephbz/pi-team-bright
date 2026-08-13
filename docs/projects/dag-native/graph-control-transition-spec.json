@@ -1,0 +1,297 @@
+{
+  "schema": "pi-team-bright-graph-control-design/2",
+  "status": "proposal",
+  "source_commit": "8b6d82876a133e96ef8614ef2916e55d28b4ac03",
+  "problem_artifact": "docs/projects/dag-native/graph-control-and-tui-kickoff.md",
+  "problem_artifact_sha256": "bd7a39de669d3bb9655fec85d3f946e7d6276c7b82c35069d8c2323c2492dedf",
+  "stage": "shaping_with_executable_first_contract",
+  "design_intent": "The leader declares and can atomically revise a mission Task graph. Task authority executes its internal control flow deterministically. It is graph engineering, not a Workflow authority or leader-driven orchestration loop.",
+  "ontology": {
+    "entities": {
+      "TaskGraphRevision": "One immutable leader-authored definition of current Task nodes and typed control edges.",
+      "Task": "Stable graph node with goal criterion, Worker assignment, model alias, and identity across graph revisions. It is not one execution run.",
+      "Attempt": "Immutable execution history for one Task activation and its exact accepted prerequisite Attempts.",
+      "OperationReceipt": "Durable identity and result for exact graph or Task command replay. It is not Task state."
+    },
+    "value_objects": {
+      "ModelAlias": "A configured model-selection label. It is separate from stable Worker identity and resolves when an Attempt starts.",
+      "CriterionResult": ["goal_achieved", "goal_failed"],
+      "TaskVersionRef": "Opaque concurrency coordinate for the current derived Task projection.",
+      "GraphVersionRef": "Opaque concurrency coordinate for the current complete graph revision.",
+      "ActivationKey": "Digest of current Task definition lineage, repair traversals, and accepted prerequisite Attempt IDs."
+    },
+    "relations": {
+      "goal_achieved": "Forward edge from prerequisite to dependent. The complete forward subgraph is acyclic.",
+      "goal_failed": "Explicit bounded edge from a failed Task to itself or one earlier transitive prerequisite. It can close a directed cycle."
+    },
+    "excluded_entities": {
+      "Workflow": "Task authority already owns graph revisions and deterministic control transitions.",
+      "Criterion": "Criterion meaning remains in Task goal prose until machines must address criteria separately.",
+      "RetryTask": "A new Attempt preserves stable Task identity and avoids replacement Tasks.",
+      "SchedulerState": "Ready, waiting, occupancy, and failure gates are derived from authority records."
+    }
+  },
+  "limits": {
+    "maximum_failure_edge_traversals": 8,
+    "failure_edges_per_task": 1,
+    "active_attempts_per_executor": 1,
+    "model_alias_capacity": "one in the prototype; a later configured resolver can expose a different finite capacity"
+  },
+  "task_states": [
+    "dependency_waiting",
+    "ready",
+    "in_progress",
+    "goal_failed",
+    "goal_achieved",
+    "blocked",
+    "cancelled"
+  ],
+  "task_state_notes": {
+    "dependency_waiting": "Derived from current unaccepted prerequisites. It is never authored as blocked.",
+    "ready": "Derived when all current success prerequisites achieved their goals and one executor slot is eligible.",
+    "in_progress": "One exact Attempt is current and occupies its executor slot.",
+    "goal_failed": "The current goal cannot advance. A typed reason distinguishes criterion failure, dependency failure, and exhausted failure edge.",
+    "goal_achieved": "The current Attempt passed the current criterion and is the only state that satisfies a success edge.",
+    "blocked": "An in-progress Attempt has an external non-graph impediment with evidence. It releases its executor slot without completing.",
+    "cancelled": "Administrative termination. It is not goal failure and never traverses a failure edge."
+  },
+  "attempt_states": [
+    "in_progress",
+    "blocked",
+    "completed",
+    "superseded",
+    "cancelled"
+  ],
+  "commands": [
+    "apply_graph",
+    "claim",
+    "block",
+    "resume",
+    "complete_attempt",
+    "cancel_task"
+  ],
+  "transition_rules": [
+    {
+      "id": "apply_graph_create_or_revise",
+      "command": "apply_graph",
+      "from": ["absent_graph", "current_graph"],
+      "guards": ["exact_graph_version_for_revision", "valid_forward_dag", "bounded_failure_edges", "exact_operation_replay"],
+      "appends": ["graph_revision_applied"],
+      "effect": "Unchanged Task definitions and current exact inputs retain accepted results. Changed or removed definitions supersede in-flight Attempts."
+    },
+    {
+      "id": "claim_ready",
+      "command": "claim",
+      "from": ["ready"],
+      "guards": ["exact_task_version", "matching_worker", "free_worker_slot"],
+      "appends": ["attempt_started"],
+      "to": "in_progress"
+    },
+    {
+      "id": "block_in_progress",
+      "command": "block",
+      "from": ["in_progress"],
+      "guards": ["exact_task_version", "matching_worker", "nonempty_external_blocker_evidence"],
+      "appends": ["attempt_blocked"],
+      "to": "blocked"
+    },
+    {
+      "id": "resume_blocked",
+      "command": "resume",
+      "from": ["blocked"],
+      "guards": ["exact_task_version", "matching_worker", "activation_still_current", "free_worker_slot"],
+      "appends": ["attempt_resumed"],
+      "to": "in_progress"
+    },
+    {
+      "id": "complete_goal_achieved",
+      "command": "complete_attempt",
+      "input": "goal_achieved",
+      "from": ["in_progress"],
+      "guards": ["exact_task_version", "matching_worker", "current_attempt", "nonempty_result_evidence"],
+      "appends": ["attempt_completed_goal_achieved"],
+      "to": "goal_achieved"
+    },
+    {
+      "id": "complete_goal_failed_with_edge",
+      "command": "complete_attempt",
+      "input": "goal_failed",
+      "from": ["in_progress"],
+      "guards": ["exact_task_version", "matching_worker", "current_attempt", "nonempty_failure_evidence", "failure_edge_budget_remaining", "current_failure_target"],
+      "appends": ["attempt_completed_goal_failed", "failure_edge_traversed"],
+      "to": "dependency_waiting_or_ready"
+    },
+    {
+      "id": "complete_goal_failed_without_edge",
+      "command": "complete_attempt",
+      "input": "goal_failed",
+      "from": ["in_progress"],
+      "guards": ["exact_task_version", "matching_worker", "current_attempt", "no_failure_edge"],
+      "appends": ["attempt_completed_goal_failed"],
+      "to": "goal_failed"
+    },
+    {
+      "id": "complete_goal_failed_exhausted",
+      "command": "complete_attempt",
+      "input": "goal_failed",
+      "from": ["in_progress"],
+      "guards": ["exact_task_version", "matching_worker", "current_attempt", "failure_edge_budget_exhausted_or_target_unavailable"],
+      "appends": ["attempt_completed_goal_failed", "failure_edge_exhausted"],
+      "to": "goal_failed"
+    },
+    {
+      "id": "cancel_nonterminal",
+      "command": "cancel_task",
+      "from": ["dependency_waiting", "ready", "in_progress", "blocked"],
+      "guards": ["exact_task_version", "nonempty_cancellation_reason"],
+      "appends": ["task_cancelled"],
+      "to": "cancelled"
+    }
+  ],
+  "invariants": [
+    {
+      "id": "GC-01",
+      "text": "Dependency waiting is derived. A dependency_waiting Task has no block transition or blocker evidence requirement."
+    },
+    {
+      "id": "GC-02",
+      "text": "Attempt completion is historical fact. Only current goal_achieved satisfies a forward edge."
+    },
+    {
+      "id": "GC-03",
+      "text": "Every Attempt captures graph revision, Task definition lineage, Worker, model-alias resolution, and exact prerequisite Attempt IDs."
+    },
+    {
+      "id": "GC-04",
+      "text": "A superseded Attempt cannot become current goal_achieved or release successors."
+    },
+    {
+      "id": "GC-05",
+      "text": "The goal_achieved subgraph is acyclic. A goal_failed edge targets self or one transitive prerequisite and has a finite traversal bound."
+    },
+    {
+      "id": "GC-06",
+      "text": "Every directed cycle contains a bounded goal_failed edge. Exact traversals remain immutable Attempt provenance."
+    },
+    {
+      "id": "GC-07",
+      "text": "A join is ready only when all current prerequisite Attempts are goal_achieved."
+    },
+    {
+      "id": "GC-08",
+      "text": "A terminal failed, exhausted, or cancelled prerequisite becomes a typed dependency failure on each dependent."
+    },
+    {
+      "id": "GC-09",
+      "text": "Cancellation never traverses goal_failed and never erases Attempt or graph-revision history."
+    },
+    {
+      "id": "GC-10",
+      "text": "Exact operation replay returns the durable receipt. Changed reuse refuses before graph, Task, event, or delivery changes."
+    },
+    {
+      "id": "GC-11",
+      "text": "One current in_progress Attempt occupies one Worker slot. Waiting, blocked, superseded, and terminal Attempts do not."
+    },
+    {
+      "id": "GC-12",
+      "text": "Task authority commits control events and operation receipt before coordination publication or presentation."
+    },
+    {
+      "id": "GC-13",
+      "text": "A graph revision is atomic. Unchanged Task definitions retain meaning; changed definitions get a new lineage and recompute control state."
+    },
+    {
+      "id": "GC-14",
+      "text": "Worker identity and model alias are separate coordinates. Alias resolution is captured per Attempt, not rewritten into Task history."
+    }
+  ],
+  "graph_validation": [
+    "Task keys are unique; every Task has one stable Worker assignee and one configured model alias, defaulting to default.",
+    "needs contains unique current Task keys and the complete goal_achieved subgraph has no cycle.",
+    "on_goal_failed contains one target and max_traversals from 1 through 8.",
+    "A goal_failed target is self or one transitive success prerequisite.",
+    "Graph revision uses one operation ID and the exact current GraphVersionRef.",
+    "Removing or changing a Task never deletes its prior revisions, Attempts, results, or edge traversals."
+  ],
+  "recovery_order": [
+    "Fold committed graph revisions, Attempt events, failure-edge traversals, cancellations, and operation receipts.",
+    "Derive current Task definition lineage and ActivationKeys.",
+    "Derive goal_achieved inputs, dependency_waiting, goal_failed gates, and Worker occupancy.",
+    "Fence deliveries whose TaskVersionRef or ActivationKey is stale.",
+    "Persist missing ready-front delivery intent at most once per Task version.",
+    "Publish missing coordination evidence without changing Task control state."
+  ],
+  "adversarial_scenarios": [
+    "dependency_wait_is_not_blocked",
+    "failed_review_does_not_release_verification",
+    "bounded_failure_cycle_reaches_goal_achieved",
+    "join_waits_for_all_current_inputs",
+    "join_reports_dependency_goal_failed",
+    "graph_revision_supersedes_in_flight_attempt",
+    "unrelated_graph_revision_preserves_goal_achieved",
+    "cancel_does_not_follow_failure_edge",
+    "failure_edge_exhaustion_is_goal_failed",
+    "exact_replay_after_recovery",
+    "changed_replay_refuses",
+    "stale_task_version_refuses",
+    "stale_graph_version_refuses",
+    "executor_slot_serializes_ready_siblings",
+    "permutation_claim_then_revision",
+    "permutation_revision_then_claim",
+    "permutation_complete_then_cancel",
+    "permutation_cancel_then_complete"
+  ],
+  "model_surface": {
+    "leader_tool_count": 9,
+    "worker_tool_count": 3,
+    "new_tools": 0,
+    "measured_o200k_base_tokens": {
+      "current_registered_leader_tools": 1181,
+      "proposed_leader_tools": 1177,
+      "delta": -4,
+      "measurement_scope": "provider name, description, and parameters; compact registration-order JSON; provider framing excluded"
+    },
+    "replacement": "Replace task_create with declarative task_graph_apply. Replace closed with goal_achieved and remove authored open/dependency states.",
+    "task_graph_apply": {
+      "operation_id": "string",
+      "expected_graph_version": "optional GraphVersionRef; absent only for first apply",
+      "tasks": [
+        {
+          "key": "string",
+          "title": "string",
+          "goal": "string",
+          "assignee": "stable Worker name",
+          "model": "optional configured alias: default or capable",
+          "needs": "optional Task key array",
+          "on_goal_failed": {
+            "target": "Task key",
+            "max_traversals": "integer"
+          }
+        }
+      ]
+    },
+    "task_update_transition": [
+      "claim",
+      "progress",
+      "block",
+      "resume",
+      "goal_achieved",
+      "goal_failed",
+      "cancel"
+    ],
+    "routine_task_card": {
+      "state": "dependency_waiting, ready, in_progress, goal_failed, goal_achieved, blocked, or cancelled",
+      "attempts": "started count",
+      "failure": "optional typed reason and Task IDs",
+      "assignee": "stable Worker name",
+      "model": "configured alias; resolved model remains in Attempt trace"
+    },
+    "full_attempt_history": "Machine trace only; it is not repeated in routine model cards."
+  },
+  "source_allocation": {
+    "current_authority": "This JSON and graph-control-design.md own the unratified shaping proposal.",
+    "executable_contract": "src/task-authority/graph-control.ts and its smoke test execute the proposal but are not wired to production.",
+    "migration": "After ratification, exact semantics move into Task authority types and tests; these docs trim to rationale and pointers."
+  }
+}

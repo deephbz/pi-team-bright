@@ -1,4 +1,4 @@
-import type { TaskCard } from "./task-domain";
+import type { CanonicalTaskCard, TaskCard } from "./task-domain";
 import {
   selectDispatchFrontier,
   type DeliveryCoordinate,
@@ -25,7 +25,7 @@ export interface TaskReadyQuery {
  */
 export interface TaskReadyDeliveryPort {
   readDeliveryCoordinates(teamName: string, worker: string): Promise<DeliveryCoordinate[]>;
-  enqueueReadyTask(teamName: string, task: TaskCard, worker: string): Promise<boolean>;
+  enqueueReadyTask(teamName: string, task: CanonicalTaskCard, worker: string): Promise<boolean>;
 }
 
 /**

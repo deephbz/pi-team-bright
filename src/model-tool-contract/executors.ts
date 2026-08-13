@@ -23,7 +23,7 @@ import {
 } from "./catalog";
 import type { AlertTarget, ExactLeaderSessionId, ReadTaskContractGap } from "./model-tool-contracts";
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
-import type { TaskCard } from "../task-authority/task-domain";
+import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { projectToolResult } from "./result-projection";
 
@@ -48,7 +48,7 @@ export type TaskLinkResult = Static<typeof TaskLinkResultSchema>;
 export type AlertSendParameters = Static<typeof AlertSendParametersSchema>;
 export type AlertSendResult = Static<typeof AlertSendResultSchema>;
 
-function isReadTaskContractGap(value: TaskCard | ReadTaskContractGap): value is ReadTaskContractGap {
+function isReadTaskContractGap(value: CanonicalTaskCard | ReadTaskContractGap): value is ReadTaskContractGap {
   return (value as ReadTaskContractGap).kind === "contract_gap";
 }
 
@@ -105,23 +105,33 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
     async taskCreate(leaderSessionId, parameters) {
       const outcome = await port.task.createTaskGraph(leaderSessionId, {
         operationId: parameters.operation_id,
+        ...(parameters.expected_graph_version ? { expectedGraphVersion: parameters.expected_graph_version as any } : {}),
         tasks: parameters.tasks.map(task => ({
           key: task.key,
           title: task.title,
           goal: task.goal,
           assignee: task.assignee,
+          ...(task.model ? { model: task.model } : {}),
           ...(task.needs ? { needs: [...task.needs] } : {}),
+          ...(task.on_goal_failed ? { onGoalFailed: { target: task.on_goal_failed.target, maxTraversals: task.on_goal_failed.max_traversals } } : {}),
         })),
       });
       if (outcome.kind === "created") return {
-        kind: "task_graph_created",
+        kind: "task_graph_applied",
         operation_id: outcome.operationId,
+        graph_version: outcome.graphVersion,
         replayed: outcome.replayed,
-        tasks_by_key: outcome.tasksByKey,
+        tasks_by_key: outcome.tasksByKey as any,
         ready_task_ids: outcome.readyTaskIds,
         ...(outcome.deliveryWarnings?.length ? { delivery_warnings: outcome.deliveryWarnings } : {}),
       };
-      if (outcome.kind === "refused") return { kind: "refused", operation_id: outcome.operationId, reason: outcome.reason, message: outcome.message, state_changed: false };
+      if (outcome.kind === "refused") return {
+        kind: "refused",
+        operation_id: outcome.operationId,
+        reason: outcome.reason === "graph_conflict" ? "invalid_graph" : outcome.reason === "version_conflict" ? "graph_version_conflict" : outcome.reason,
+        message: outcome.message,
+        state_changed: false,
+      };
       if (outcome.kind === "unknown_outcome") return { kind: "unknown_outcome", operation_id: outcome.operationId, message: outcome.message };
       return {
         kind: "unavailable",
@@ -175,90 +185,74 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
     },
 
     async taskUpdate(leaderSessionId, parameters) {
-      const duplicateTaskIds = new Set<string>();
-      const seenTaskIds = new Set<string>();
-      for (const update of parameters.updates) {
-        if (seenTaskIds.has(update.task_id)) duplicateTaskIds.add(update.task_id);
-        seenTaskIds.add(update.task_id);
-      }
-      if (duplicateTaskIds.size > 0) {
-        return {
-          kind: "refused",
-          reason: "duplicate_task_id",
-          message: "The update batch contains duplicate Task IDs; no item was changed.",
-          state_changed: false,
-        };
-      }
-
-      const outcome = await port.task.updateTasks(leaderSessionId, parameters.updates.map((update) => ({
-        taskId: update.task_id,
-        operationId: update.operation_id,
-        expectedVersion: update.expected_version as TaskVersionRef,
-        currentContext: update.current_context,
-        journalEntries: update.journal_entries,
-        status: update.status,
-      })));
-      if (outcome.kind === "no_active_team") {
-        return {
-          kind: "unavailable",
-          reason: "no_active_team",
-          message: "The exact leader Session is not bound to an active Team.",
-          state_changed: false,
-        };
-      }
-      if (outcome.kind === "duplicate_task_id") {
-        return {
-          kind: "refused",
-          reason: "duplicate_task_id",
-          message: "The update batch contains duplicate Task IDs; no item was changed.",
-          state_changed: false,
-        };
-      }
+      const outcome = await port.task.updateTasks(leaderSessionId, [{
+        taskId: parameters.task_id,
+        operationId: parameters.operation_id,
+        expectedVersion: parameters.expected_version as TaskVersionRef,
+        ...(parameters.transition ? { transition: parameters.transition } : {}),
+        ...(parameters.current_context ? { currentContext: parameters.current_context } : {}),
+        ...(parameters.evidence ? { evidence: parameters.evidence } : {}),
+      }]);
+      if (outcome.kind === "no_active_team") return {
+        kind: "unavailable",
+        input_index: 0,
+        task_id: parameters.task_id,
+        operation_id: parameters.operation_id,
+        reason: "no_active_team",
+        message: "The exact leader Session is not bound to an active Team.",
+        state_changed: false,
+      };
+      if (outcome.kind !== "batch" || !outcome.outcomes[0]) return {
+        kind: "unavailable",
+        input_index: 0,
+        task_id: parameters.task_id,
+        operation_id: parameters.operation_id,
+        reason: "task_authority_unavailable",
+        message: "Task authority returned no transition outcome.",
+        state_changed: false,
+      };
+      const item = outcome.outcomes[0];
+      if (item.kind === "updated") return {
+        kind: "updated",
+        input_index: 0,
+        task_id: item.taskId,
+        operation_id: item.operationId,
+        replayed: item.replayed ?? false,
+        transition: item.transition ?? parameters.transition ?? "context_updated",
+        task: item.task as any,
+        ready_task_ids: item.readyTaskIds ?? [],
+        ...(item.failureTraversal ? { failure_traversal: {
+          source_task_id: item.failureTraversal.sourceTaskId,
+          target_task_id: item.failureTraversal.targetTaskId,
+          traversal: item.failureTraversal.traversal,
+        } } : {}),
+        ...(item.deliveryWarnings?.length ? { delivery_warnings: item.deliveryWarnings } : {}),
+      };
+      if (item.kind === "refused") return {
+        kind: "refused",
+        input_index: 0,
+        task_id: item.taskId,
+        operation_id: item.operationId,
+        reason: item.reason as any,
+        message: item.message,
+        ...(item.currentTask ? { current_task: item.currentTask as any } : {}),
+        state_changed: false,
+      };
+      if (item.kind === "unknown_outcome") return {
+        kind: "unknown_outcome",
+        input_index: 0,
+        task_id: item.taskId,
+        operation_id: item.operationId,
+        message: item.message,
+      };
       return {
-        kind: "task_update_batch",
-        outcomes: outcome.outcomes.map((item, inputIndex) => item.kind === "updated"
-          ? {
-            kind: "updated",
-            input_index: inputIndex,
-            task_id: item.taskId,
-            operation_id: item.operationId,
-            task: item.task,
-            journal_entries: item.journalEntries,
-            ...(item.deliveryWarnings?.length ? { delivery_warnings: item.deliveryWarnings } : {}),
-          }
-          : item.kind === "refused"
-            ? {
-              kind: "refused",
-              input_index: inputIndex,
-              task_id: item.taskId,
-              operation_id: item.operationId,
-              reason: item.reason,
-              message: item.message,
-              ...(item.currentTask ? { current_task: item.currentTask } : {}),
-              ...(item.blockerIds?.length ? { active_blocker_ids: item.blockerIds } : {}),
-              state_changed: false,
-            }
-            : item.kind === "contract_gap"
-              ? {
-                kind: "contract_gap",
-                input_index: inputIndex,
-                task_id: item.taskId,
-                operation_id: item.operationId,
-                reason: item.reason,
-                ...(item.currentTask ? { current_task: item.currentTask } : {}),
-                unsupported: item.unsupported,
-                message: item.message,
-                state_changed: false,
-              }
-              : {
-                kind: "unavailable",
-                input_index: inputIndex,
-                task_id: item.taskId,
-                operation_id: item.operationId,
-                reason: item.reason,
-                message: item.message,
-                state_changed: false,
-              }),
+        kind: "unavailable",
+        input_index: 0,
+        task_id: item.taskId,
+        operation_id: item.operationId,
+        reason: "task_authority_unavailable",
+        message: item.message,
+        state_changed: false,
       };
     },
 

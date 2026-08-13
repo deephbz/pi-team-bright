@@ -1,5 +1,6 @@
-import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
-import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
+import type { CanonicalTaskCard, TaskCard, TaskCardWarning } from "../task-authority/task-domain";
+import type { GraphTaskTransition, GraphVersionRef } from "../task-authority/graph-control";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
 import type { CoordinationPendingPresentation, CoordinationSnapshotResult, CoordinationSyncResult, CoordinationTeamCurrent, CoordinationWorkerCurrent } from "../coordination/observation-contracts";
 import type {
@@ -45,12 +46,30 @@ export type TeamSnapshotPortResult = CoordinationSnapshotResult;
 
 export interface ModelToolTaskGraphInput {
   operationId: string;
-  tasks: Array<{ key: string; title: string; goal: string; assignee: string; needs?: string[] }>;
+  expectedGraphVersion?: GraphVersionRef;
+  tasks: Array<{
+    key: string;
+    title: string;
+    goal: string;
+    assignee: string;
+    model?: "default" | "capable";
+    needs?: string[];
+    onGoalFailed?: { target: string; maxTraversals: number };
+  }>;
+}
+
+export interface ModelToolGraphTaskUpdateInput {
+  taskId: string;
+  operationId: string;
+  expectedVersion: TaskVersionRef;
+  transition?: GraphTaskTransition;
+  currentContext?: string;
+  evidence?: string;
 }
 
 export type CreateTaskGraphPortResult =
-  | { kind: "created"; operationId: string; replayed: boolean; tasksByKey: Record<string, TaskCard>; readyTaskIds: string[]; deliveryWarnings?: string[] }
-  | { kind: "refused"; operationId: string; reason: "worker_unavailable" | "graph_conflict" | "version_conflict" | "operation_conflict"; message: string }
+  | { kind: "created"; operationId: string; replayed: boolean; graphVersion: GraphVersionRef; tasksByKey: Record<string, CanonicalTaskCard>; readyTaskIds: string[]; deliveryWarnings?: string[] }
+  | { kind: "refused"; operationId: string; reason: "worker_unavailable" | "invalid_graph" | "graph_version_conflict" | "graph_conflict" | "version_conflict" | "operation_conflict"; message: string }
   | { kind: "unknown_outcome"; operationId: string; message: string }
   | { kind: "unavailable"; operationId: string; reason: "task_authority_unavailable"; message: string }
   | { kind: "no_active_team"; operationId: string };
@@ -73,14 +92,15 @@ export type ReadTaskContractGap = {
 };
 
 export type ReadTasksPortResult =
-  | { kind: "read"; tasks: Array<TaskCard | undefined | ReadTaskContractGap> }
+  | { kind: "read"; tasks: Array<CanonicalTaskCard | undefined | ReadTaskContractGap> }
   | { kind: "unavailable"; reason: "task_authority_unavailable"; message: string }
   | { kind: "no_active_team" };
 
 export type TaskUpdatePortOutcome =
-  | { kind: "updated"; taskId: string; operationId: string; task: TaskCard; journalEntries: ModelToolTaskJournalEntry[]; deliveryWarnings?: string[] }
-  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict" | "active_blockers"; message: string; currentTask?: TaskCard; blockerIds?: string[] }
+  | { kind: "updated"; taskId: string; operationId: string; replayed?: boolean; task: CanonicalTaskCard; journalEntries: ModelToolTaskJournalEntry[]; transition?: GraphTaskTransition | "context_updated"; readyTaskIds?: string[]; failureTraversal?: { sourceTaskId: string; targetTaskId: string; traversal: number }; deliveryWarnings?: string[] }
+  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict" | "active_blockers" | "invalid_transition" | "worker_mismatch" | "worker_occupied" | "evidence_required" | "model_alias_unresolved"; message: string; currentTask?: CanonicalTaskCard; blockerIds?: string[] }
   | { kind: "contract_gap"; taskId: string; operationId: string; reason: "task_metadata_absent" | "task_metadata_invalid" | "external_writer_atomicity_unavailable"; message: string; currentTask?: TaskCard; unsupported: string[] }
+  | { kind: "unknown_outcome"; taskId: string; operationId: string; message: string }
   | { kind: "unavailable"; taskId: string; operationId: string; reason: "task_authority_unavailable"; message: string };
 
 export type UpdateTasksPortResult =
@@ -148,7 +168,7 @@ export interface ModelToolTeamPort {
   createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
   createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;
   readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult>;
-  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolTaskUpdateInput[]): Promise<UpdateTasksPortResult>;
+  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: Array<ModelToolTaskUpdateInput | ModelToolGraphTaskUpdateInput>, actor?: string): Promise<UpdateTasksPortResult>;
   stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult>;
   shutdownTeam(leaderSessionId: ExactLeaderSessionId): Promise<TeamShutdownPortResult>;
   linkTask(leaderSessionId: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult>;

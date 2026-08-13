@@ -42,8 +42,8 @@ variables do not.
 | Team authority, exact Session binding, and logical Worker persistence | [`src/utils/teams.ts`](../../src/utils/teams.ts) |
 | Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
 | Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation`; [`src/team-authority/membership-observation-reader.ts`](../../src/team-authority/membership-observation-reader.ts) is its private read-only decoder |
-| Canonical Task card and opaque TaskVersionRef | [`src/model-tool-contract/task-domain.ts`](../../src/model-tool-contract/task-domain.ts) and [`src/model-tool-contract/task-version-ref.ts`](../../src/model-tool-contract/task-version-ref.ts) |
-| Task authority, reads, mutation semantics, and Beads translation | [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts) owns Task commands, reconciliation, and generic `TaskAuthorityReadPort`/distinct read-Team contracts. [`durable-task-authority-read.ts`](../../src/adapters/durable-task-authority-read.ts) and [`durable-task-authority-read-team.ts`](../../src/adapters/durable-task-authority-read-team.ts) implement the read boundary outside Task authority; [`beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts) receives explicit read-only or publishing factories. [`beads-authority-adapter.ts`](../../src/model-tool-contract/beads-authority-adapter.ts) owns the consumer-side mutation-publication port, while [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) implements its concrete Coordination and delivery bridge outside Task authority; [`src/utils/tasks.ts`](../../src/utils/tasks.ts) is semantic-only |
+| Canonical Task card and opaque TaskVersionRef | [`src/task-authority/task-domain.ts`](../../src/task-authority/task-domain.ts) and [`src/task-authority/task-version-ref.ts`](../../src/task-authority/task-version-ref.ts) |
+| Task authority, reads, mutation semantics, and legacy Beads translation | [`src/task-authority/graph-control.ts`](../../src/task-authority/graph-control.ts) owns graph revisions, Attempts, derived state, bounded failure traversal, replay, and recovery. [`durable-graph-task-authority.ts`](../../src/adapters/durable-graph-task-authority.ts) owns the Team snapshot, and [`graph-orchestration.ts`](../../src/task-authority/graph-orchestration.ts) owns publication and ready delivery. [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts), the durable read adapters, and the Beads adapters remain the legacy pre-graph path. [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) is the shared Coordination and delivery bridge. |
 | Semantic-hardening status and dependency evidence | Maintained [`context`](../projects/semantic-hardening/context.md), [`subsystem audit`](../projects/semantic-hardening/subsystem-boundary-audit.md), and machine [`dependency map`](../projects/semantic-hardening/subsystem-dependency-map.json) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
 | Human operating introduction | [Repository README](../../README.md) |
@@ -124,6 +124,20 @@ restating executable definitions.
 
 ## Current status and anchors
 
+- The local `feature/dag-graph-control` branch now has an unmerged graph-native
+  production path. `task_graph_apply` replaces `task_create` without adding a
+  leader tool. A Team-scoped snapshot stores complete graph revisions,
+  immutable Attempts, replay receipts, and per-Attempt model resolution.
+  `dependency_waiting` and `ready` are derived; only `goal_achieved` releases a
+  prerequisite, while `goal_failed` applies a bounded failure edge. Runtime
+  composition includes recovery, ready delivery, Coordination reads, lifecycle
+  guards, and Worker transitions. Beads remains a legacy read fallback before
+  the first graph apply and is not a graph-state mirror. The durable integration
+  result and exact remaining gaps are in
+  [`2026-08-13-graph-control-integration-result.md`](../journal/2026-08-13-graph-control-integration-result.md).
+  This changes internal Task authority, persistence, dispatch, and model
+  contracts. HyperCarrier's diagram stays unchanged because it keeps Pi Team
+  Bright opaque.
 - The current source uses the real main extension as its local switch. Leader
   processes register the nine-tool DAG-native model surface, with
   `ensure_worker` and exact Session binding removing low-level Team locators.
@@ -333,16 +347,23 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Design immutable Task-create operation identity before changing replay code.
-2. Measure and repair Beads contention before making a Worker-capacity claim.
-3. Keep malformed-event diagnostics distinct from normal structural Task
+1. Review and integrate the graph-native production branch, or reverse it with
+   evidence from the recorded integration gaps.
+2. Define carrier actuation for Attempt model aliases before claiming that
+   `capable` changes an existing Worker's active model.
+3. Decide whether graph persistence needs an append-only transaction store and
+   exact Coordination publication outbox.
+4. Design immutable legacy Task-create operation identity before changing Beads
+   replay code.
+5. Measure and repair Beads contention before making a Worker-capacity claim.
+6. Keep malformed-event diagnostics distinct from normal structural Task
    events; structural creation, assignment, status, and relation events now
    sync without narrative evidence.
-4. Add payload-free outer-operation trace correlation before the representative
+7. Add payload-free outer-operation trace correlation before the representative
    performance epoch.
-5. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
+8. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-6. Define observation and cleanup for a reserved recovery carrier that never
+9. Define observation and cleanup for a reserved recovery carrier that never
    publishes runtime evidence. Keep it pending; do not infer readiness or work.
 
 
