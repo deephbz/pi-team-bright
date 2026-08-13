@@ -11,6 +11,7 @@ import type { Member, TeamConfig } from "../team-authority/contracts";
 import type { ModelToolTeamApplicationPort } from "./model-tool-journey-port";
 import type { CreateTeamPortResult, EnsureWorkerPortResult, ExactLeaderSessionId, ModelToolTeamCurrent, ModelToolWorkerCurrent, TeamShutdownPortResult, WorkerStopPortResult } from "./model-tool-contracts";
 import { DurableModelToolBindings } from "./durable-model-tool-bindings";
+import type { TaskOrchestrationPort } from "../task-authority/orchestration";
 export interface ModelToolLifecycle { teamCreated?(teamName: string, sessionFile: string): Promise<void>; stopWorker(teamName: string, worker: string): Promise<WorkerStopPortResult>; shutdownTeam(teamName: string): Promise<TeamShutdownPortResult>; }
 function currentTeam(config: TeamConfig): ModelToolTeamCurrent { return { name: config.name, purpose: config.description, lifecycle: "active" }; }
 function workerCarrier(member: Member | undefined): ModelToolWorkerCurrent["carrier"] { return !member ? "absent" : member.sessionFile ? "connected" : member.pendingLaunchId ? "starting" : "absent"; }
@@ -18,7 +19,7 @@ function resolveWorkerAggregate(cwd: string, leaderCwd: string, trusted?: boolea
 export class DurableModelToolTeamApplication implements ModelToolTeamApplicationPort {
   setLeaderSessionFile: NonNullable<ModelToolTeamApplicationPort["setLeaderSessionFile"]>;
   setLeaderLaunchContext: NonNullable<ModelToolTeamApplicationPort["setLeaderLaunchContext"]>;
-  constructor(private readonly bindings: DurableModelToolBindings, private readonly launchBridge?: WorkerLaunchBridge, private readonly lifecycle?: ModelToolLifecycle, private readonly taskAuthority?: TaskAuthorityProvisioningPort) {
+  constructor(private readonly bindings: DurableModelToolBindings, private readonly launchBridge?: WorkerLaunchBridge, private readonly lifecycle?: ModelToolLifecycle, private readonly taskAuthority?: TaskAuthorityProvisioningPort, private readonly taskOrchestration?: Pick<TaskOrchestrationPort, "reconcileReady">) {
     this.setLeaderSessionFile = bindings.setLeaderSessionFile.bind(bindings);
     this.setLeaderLaunchContext = bindings.setLeaderLaunchContext.bind(bindings);
   }
@@ -41,6 +42,7 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
     const logical = await teams.ensureLogicalWorker(bound.teamName, input); if (logical.kind === "contract_gap") return { kind: "no_active_team" }; if (logical.kind === "scope_conflict") return { kind: "scope_conflict", worker: { name: logical.worker.name, scope: logical.worker.scope, carrier: "absent" } };
     const context = this.bindings.launchContext(id); const cwd = context?.cwd ?? process.cwd(); let launch;
     try { launch = await this.launchBridge.ensureWorker({ teamName: bound.teamName, workerName: input.name, scope: logical.worker.scope, cwd, workerAggregate: (workerCwd) => resolveWorkerAggregate(workerCwd, cwd, context?.projectTrusted), launchEnvironment: { [MODEL_TOOL_WORKER_MARKER]: "1" } }); } catch (error) { return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) }; }
+    try { await this.taskOrchestration?.reconcileReady(bound.teamName); } catch { /* Worker creation committed; later Task transitions retry. */ }
     return { kind: launch.action === "reused" ? "reused" : "created", worker: { name: logical.worker.name, scope: logical.worker.scope, carrier: launch.action === "reused" ? workerCarrier(launch.member) : launch.startup.observed ? "connected" : "starting" } };
   }
   async stopWorker(id: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult> { const bound = await this.bindings.boundTeam(id); if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." }; return this.lifecycle ? this.lifecycle.stopWorker(bound.teamName, worker) : { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." }; }

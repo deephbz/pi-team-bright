@@ -5,6 +5,7 @@ import {
   spawnArgv,
   validateSpawnOptions,
 } from "../utils/terminal-adapter";
+import { createHash } from "node:crypto";
 import { DEFAULT_TEAM_PANE_LAYOUT, type TeamPaneLayout } from "../utils/team-pane-layout";
 
 type HerdrEnvelope = {
@@ -62,6 +63,17 @@ function isPaneNotFound(error: unknown): boolean {
 
 function isAgentPaneBusy(error: unknown): boolean {
   return error instanceof Error && /(?:^|\W)agent_pane_busy(?:\W|$)/.test(error.message);
+}
+
+/** Herdr names are lowercase identifiers with a fixed 32-character limit. */
+export function herdrCarrierName(teamName: string | undefined, workerName: string): string {
+  const source = teamName?.trim() ? `${teamName.trim()}-${workerName}` : workerName;
+  if (/^[a-z][a-z0-9_-]{0,31}$/.test(source)) return source;
+  const normalized = source.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  const prefixed = /^[a-z]/.test(normalized) ? normalized : `agent-${normalized}`;
+  const digest = createHash("sha256").update(source).digest("hex").slice(0, 8);
+  const prefix = (prefixed.slice(0, 23) || "agent").padEnd(1, "a");
+  return `${prefix}-${digest}`;
 }
 
 /** Herdr owns the `pi` executable for its named Pi agent kind; it receives only Pi CLI arguments. */
@@ -230,8 +242,12 @@ export class HerdrAdapter implements TerminalAdapter {
     }
 
     try {
+      // Herdr agent names are live carrier identity, not stable Worker identity.
+      // Qualify them by Team so a reused Worker name cannot collide with a
+      // stale or concurrent agent in another Team.
+      const carrierName = herdrCarrierName(options.env.PI_TEAM_NAME, options.name);
       const startArgs = [
-        "agent", "start", options.name,
+        "agent", "start", carrierName,
         "--kind", "pi",
         "--pane", paneId,
         "--",
@@ -307,14 +323,9 @@ export class HerdrAdapter implements TerminalAdapter {
     }
   }
 
-  setTitle(title: string): void {
-    const paneId = currentHerdrPane();
-    if (!paneId) return;
-    try {
-      this.invoke(["pane", "rename", paneId, title]);
-    } catch {
-      // Title presentation must not disrupt the teammate process.
-    }
+  setTitle(_title: string): void {
+    // Herdr owns recognized-agent lifecycle while `agent start` waits for Pi.
+    // Do not mutate pane or display metadata from inside that startup window.
   }
 
   supportsWindows(): boolean {

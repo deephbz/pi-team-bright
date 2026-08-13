@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TaskCardSchema = exports.TaskCardIncompleteSchema = exports.TaskCardCompleteSchema = exports.TaskCardWarningSchema = exports.TaskCardContextSchema = exports.TaskCardStatusSchema = exports.TASK_CARD_CONTEXT_MAX_LENGTH = exports.TASK_CARD_GOAL_MAX_LENGTH = exports.TASK_CARD_TITLE_MAX_LENGTH = void 0;
+exports.TaskCardSchema = exports.TaskCardIncompleteSchema = exports.TaskCardCompleteSchema = exports.TaskDependencyStateSchema = exports.TaskDependencyRelationSchema = exports.TaskCardWarningSchema = exports.TaskCardContextSchema = exports.TaskCardStatusSchema = exports.TASK_CARD_CONTEXT_MAX_LENGTH = exports.TASK_CARD_GOAL_MAX_LENGTH = exports.TASK_CARD_TITLE_MAX_LENGTH = void 0;
 exports.isTaskCardContext = isTaskCardContext;
 exports.isTaskCardGoal = isTaskCardGoal;
 const typebox_1 = require("typebox");
@@ -17,11 +17,22 @@ exports.TaskCardWarningSchema = typebox_1.Type.Object({
     incomplete_fields: typebox_1.Type.Array(typebox_1.Type.Enum(["title", "goal", "current_context"])),
     message: typebox_1.Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
+exports.TaskDependencyRelationSchema = typebox_1.Type.Object({
+    relation: typebox_1.Type.Enum(["blocked_by", "parent", "related"]),
+    target_task_id: typebox_1.Type.String({ minLength: 1, maxLength: 128 }),
+}, { additionalProperties: false });
+exports.TaskDependencyStateSchema = typebox_1.Type.Union([
+    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("ready"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: 128 }), { maxItems: 0 }) }, { additionalProperties: false }),
+    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("waiting"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: 128 }), { minItems: 1 }) }, { additionalProperties: false }),
+    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("terminal"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: 128 })) }, { additionalProperties: false }),
+]);
 const TaskCardBase = {
     id: typebox_1.Type.String({ minLength: 1, maxLength: 128 }),
     title: typebox_1.Type.String({ minLength: 1, maxLength: exports.TASK_CARD_TITLE_MAX_LENGTH }),
     status: exports.TaskCardStatusSchema,
     assignee: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1, maxLength: 64 })),
+    relations: typebox_1.Type.Optional(typebox_1.Type.Array(exports.TaskDependencyRelationSchema)),
+    dependency_state: typebox_1.Type.Optional(exports.TaskDependencyStateSchema),
     current_context: exports.TaskCardContextSchema,
     version: task_version_ref_1.TaskVersionRefSchema,
 };

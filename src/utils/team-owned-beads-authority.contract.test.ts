@@ -140,13 +140,17 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
     expect(fs.statSync(path.join(expectedWorkspace, ".beads", "metadata.json")).isFile()).toBe(true);
     expect(fs.existsSync(paths.taskDir(teamName))).toBe(false);
 
+    await teams.ensureLogicalWorker(teamName, { name: "worker", scope: "Own the first executable Task." });
+
     const created = await tools.get("task_create")!.execute(
       "create-task",
       {
+        operation_id: "create-default-authority",
         tasks: [{
-          operation_id: "create-default-authority",
+          key: "default",
           title: "Use the default private authority",
           goal: "The first Task must work without operator setup.",
+          assignee: "worker",
         }],
       },
       undefined,
@@ -154,13 +158,13 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
       ctx,
     );
     expect(created.details).toMatchObject({
-      kind: "task_create_batch",
-      outcomes: [{ kind: "created", task: {
+      kind: "task_graph_created",
+      tasks_by_key: { default: {
         title: "Use the default private authority",
         goal: "The first Task must work without operator setup.",
-      } }],
+      } },
     });
-    const createdTaskId = created.details.outcomes[0].task.id as string;
+    const createdTaskId = created.details.tasks_by_key.default.id as string;
 
     const restartedStore = new BeadsTaskStore({
       teamName,

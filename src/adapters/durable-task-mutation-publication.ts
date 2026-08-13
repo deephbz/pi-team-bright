@@ -4,8 +4,14 @@ import {
   prepareOwnerTransitionIntent,
   recordTaskDeliveryRecovery,
   suppressTaskVersionForSession,
+  readTaskDeliveries,
+  readTaskDeliveryTombstones,
 } from "../utils/task-delivery";
-import { appendTaskEvidenceEvent } from "../coordination/event-journal";
+import {
+  appendTaskEvidenceEvent,
+  projectTaskEventEvidence,
+  readTeamEvents,
+} from "../coordination/event-journal";
 import { appendTaskEventFailureHint } from "../utils/task-event-failure-hints";
 import { readConfig } from "../utils/teams";
 import type {
@@ -14,11 +20,14 @@ import type {
   TaskMutationPublicationInput,
   TaskMutationPublicationPort,
   TaskMutationSuppressionInput,
+  TaskMutationPublicationRecoveryInput,
   TaskOwnerTransitionCompletionInput,
   TaskOwnerTransitionPreparationInput,
   TaskPublicationEvidence,
 } from "../model-tool-contract/beads-authority-adapter";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskCard } from "../task-authority/task-domain";
+import type { TaskReadyDeliveryPort } from "../task-authority/ready-dispatch";
 
 function defaultTaskEventEvidence(input: TaskMutationPublicationInput): TaskMutationEventEvidenceInput {
   if (input.created) return { kind: "created", text: "Task created." };
@@ -41,7 +50,7 @@ function deliveryTargets(input: TaskMutationPublicationInput): Array<{ recipient
 }
 
 /** Durable Coordination and delivery bridge for committed Task mutations. */
-export class DurableTaskMutationPublication implements TaskMutationPublicationPort {
+export class DurableTaskMutationPublication implements TaskMutationPublicationPort, TaskReadyDeliveryPort {
   prepareOwnerTransitionIntent(input: TaskOwnerTransitionPreparationInput): Promise<boolean> {
     return prepareOwnerTransitionIntent(input);
   }
@@ -52,6 +61,56 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
 
   completeOwnerTransitionIntent(input: TaskOwnerTransitionCompletionInput): Promise<string[]> {
     return completeOwnerTransitionIntent(input.teamName, input.operationId, input.task, {});
+  }
+
+  async hasTaskMutationPublication(input: TaskMutationPublicationRecoveryInput): Promise<boolean> {
+    let cursor: string | undefined;
+    do {
+      const batch = readTeamEvents(input.teamName, cursor === undefined ? {} : { afterCursor: cursor });
+      if (batch.events.some((event) => event.type === "task"
+        && event.ref.taskId === input.taskId
+        && projectTaskEventEvidence(event)?.kind === input.evidenceKind
+        && projectTaskEventEvidence(event)?.text === input.evidenceText)) return true;
+      if (!batch.truncated) return false;
+      if (batch.cursor === cursor) throw new Error("Task publication recovery pagination did not advance.");
+      cursor = batch.cursor;
+    } while (cursor !== undefined);
+    return false;
+  }
+
+  async readDeliveryCoordinates(teamName: string, worker: string) {
+    const [pending, observed] = await Promise.all([
+      readTaskDeliveries(teamName, worker),
+      readTaskDeliveryTombstones(teamName, worker),
+    ]);
+    return [...pending, ...observed].map((record) => ({
+      taskId: record.ref.taskId,
+      taskVersion: record.ref.version,
+      worker,
+      state: "presented" as const,
+    }));
+  }
+
+  async enqueueReadyTask(teamName: string, task: TaskCard, worker: string): Promise<boolean> {
+    try {
+      return !!await enqueueTaskChangeForRecipient(teamName, task, worker, "assigned");
+    } catch (error) {
+      try {
+        await recordTaskDeliveryRecovery({
+          teamName,
+          taskId: task.id,
+          taskVersion: task.version as TaskVersionRef,
+          recipients: [worker],
+          changeKind: "assigned",
+          recordedAt: new Date().toISOString(),
+          reason: "enqueue-failed",
+          taskProjection: task,
+        });
+      } catch (recoveryError) {
+        throw new Error(`delivery enqueue failed and recovery evidence could not be persisted: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`, { cause: error });
+      }
+      throw error;
+    }
   }
 
   async publishTaskMutation(input: TaskMutationPublicationInput): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }> {

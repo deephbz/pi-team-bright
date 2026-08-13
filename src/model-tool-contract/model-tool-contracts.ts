@@ -43,6 +43,19 @@ export type EnsureWorkerPortResult =
 
 export type TeamSnapshotPortResult = CoordinationSnapshotResult;
 
+export interface ModelToolTaskGraphInput {
+  operationId: string;
+  tasks: Array<{ key: string; title: string; goal: string; assignee: string; needs?: string[] }>;
+}
+
+export type CreateTaskGraphPortResult =
+  | { kind: "created"; operationId: string; replayed: boolean; tasksByKey: Record<string, TaskCard>; readyTaskIds: string[]; deliveryWarnings?: string[] }
+  | { kind: "refused"; operationId: string; reason: "worker_unavailable" | "graph_conflict" | "version_conflict" | "operation_conflict"; message: string }
+  | { kind: "unknown_outcome"; operationId: string; message: string }
+  | { kind: "unavailable"; operationId: string; reason: "task_authority_unavailable"; message: string }
+  | { kind: "no_active_team"; operationId: string };
+
+/** Compatibility result for non-model one-Task callers. */
 export type CreateTaskPortResult =
   | { kind: "created"; operationId: string; task: TaskCard; deliveryWarnings?: string[] }
   | { kind: "operation_conflict"; operationId: string; message: string }
@@ -65,8 +78,8 @@ export type ReadTasksPortResult =
   | { kind: "no_active_team" };
 
 export type TaskUpdatePortOutcome =
-  | { kind: "updated"; taskId: string; operationId: string; task: TaskCard; journalEntries: ModelToolTaskJournalEntry[] }
-  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict"; message: string; currentTask?: TaskCard }
+  | { kind: "updated"; taskId: string; operationId: string; task: TaskCard; journalEntries: ModelToolTaskJournalEntry[]; deliveryWarnings?: string[] }
+  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict" | "active_blockers"; message: string; currentTask?: TaskCard; blockerIds?: string[] }
   | { kind: "contract_gap"; taskId: string; operationId: string; reason: "task_metadata_absent" | "task_metadata_invalid" | "external_writer_atomicity_unavailable"; message: string; currentTask?: TaskCard; unsupported: string[] }
   | { kind: "unavailable"; taskId: string; operationId: string; reason: "task_authority_unavailable"; message: string };
 
@@ -109,6 +122,7 @@ export interface ModelToolTeamEvent {
   workerName?: string;
   journalEntries?: ModelToolTaskJournalEntry[];
   statusChanged?: boolean;
+  relationChanged?: boolean;
 }
 
 export type TeamSyncPortResult = CoordinationSyncResult;
@@ -132,6 +146,7 @@ export interface ModelToolTeamPort {
   ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string }): Promise<EnsureWorkerPortResult>;
   readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult>;
   createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
+  createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;
   readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult>;
   updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolTaskUpdateInput[]): Promise<UpdateTasksPortResult>;
   stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult>;

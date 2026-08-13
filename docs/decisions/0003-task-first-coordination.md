@@ -48,4 +48,5 @@ verification contract.
 
 - [Problem and design](../journal/2026-07-17-task-first-agent-coordination-design.md)
 - [Public tool registration](../../extensions/index.ts)
+- [Model-tool result projection](../../src/model-tool-contract/result-projection.ts)
 - [Headless QA harness](../../scripts/tool-result-qa/README.md)

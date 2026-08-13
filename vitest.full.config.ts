@@ -5,5 +5,8 @@ export default defineConfig({
   test: {
     globalSetup: ["./test/global-setup.ts"],
     setupFiles: ["./test/setup.ts"],
+    // Real Beads/Dolt files launch native processes. Bound aggregate parallelism
+    // so unrelated workspaces do not cause timeout-only release failures.
+    maxWorkers: 4,
   },
 });

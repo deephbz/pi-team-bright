@@ -42,7 +42,7 @@ function productionAdapterUses(file: string): string[] {
     if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "BeadsTaskAdapter") {
       const argumentsLength = node.arguments?.length ?? 0;
       const authorityArgument = node.arguments?.[2];
-      if (argumentsLength !== 3 || (authorityArgument && ts.isIdentifier(authorityArgument) && authorityArgument.text === "undefined")) {
+      if (argumentsLength < 3 || argumentsLength > 4 || (authorityArgument && ts.isIdentifier(authorityArgument) && authorityArgument.text === "undefined")) {
         location(node, "BeadsTaskAdapter has implicit authority");
       }
       if (path.relative(process.cwd(), file) !== "src/model-tool-contract/beads-task-adapter.ts") {

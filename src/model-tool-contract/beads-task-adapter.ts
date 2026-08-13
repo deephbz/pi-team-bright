@@ -29,6 +29,7 @@ import type {
 } from "../task-authority/contracts";
 import type { TaskWriteOptions } from "../utils/beads";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskOrchestrationPort } from "../task-authority/orchestration";
 import {
   TASK_CARD_CONTEXT_MAX_LENGTH,
   TASK_CARD_GOAL_MAX_LENGTH,
@@ -87,13 +88,15 @@ export type TaskUpdateOutcome =
     operationId: string;
     task: TaskCard;
     journalEntries: ModelToolTaskJournalEntry[];
+    deliveryWarnings?: string[];
   }
   | {
     kind: "refused";
-    reason: "version_conflict" | "operation_conflict";
+    reason: "version_conflict" | "operation_conflict" | "active_blockers";
     taskId: string;
     operationId: string;
     currentTask: TaskCard;
+    blockerIds?: string[];
     message: string;
   }
   | {
@@ -288,11 +291,21 @@ function projectTask(task: TaskAuthorityRecord, metadata: TaskMetadata): TaskCar
       message: "Some Task meaning exceeds the bounded display contract; review the current authority record before acting.",
     }
     : undefined;
+  const activeBlockerIds = [...(task.activeBlockerIds ?? task.relations
+    .filter((relation) => relation.relation === "blocked_by")
+    .map((relation) => relation.targetId))].sort();
+  const dependencyState = task.status === "closed" || task.status === "blocked"
+    ? { kind: "terminal" as const, active_blocker_ids: activeBlockerIds }
+    : activeBlockerIds.length
+      ? { kind: "waiting" as const, active_blocker_ids: activeBlockerIds }
+      : { kind: "ready" as const, active_blocker_ids: [] as [] };
   const base = {
     id: task.id,
     title,
     status: task.status,
     ...(task.assignee ? { assignee: task.assignee } : {}),
+    relations: task.relations.map((relation) => ({ relation: relation.relation, target_task_id: relation.targetId })),
+    dependency_state: dependencyState,
     current_context: context,
     version: taskVersionRef(task.version),
   };
@@ -373,6 +386,7 @@ export function createPublishingBeadsTaskAdapterFactory(
   publicationPort: TaskMutationPublicationPort,
   teamPort: TaskAuthorityTeamPort,
   readPort: TaskAuthorityReadPort<TaskAuthorityRecordEnvelope>,
+  readyReconciliation?: Pick<TaskOrchestrationPort, "reconcileReady">,
 ): BeadsTaskAdapterFactory {
   return (teamName, actor, actorFence) => new BeadsTaskAdapter(
     teamName,
@@ -382,6 +396,7 @@ export function createPublishingBeadsTaskAdapterFactory(
       readMany: (taskIds) => readPort.readTaskAuthorityRecordEnvelopes(teamName, taskIds),
       list: () => readPort.listTaskIds(teamName),
     }, actorFence),
+    readyReconciliation,
   );
 }
 
@@ -398,6 +413,7 @@ export class BeadsTaskAdapter {
     readonly teamName: string,
     readonly actor: string,
     authority: TaskAdapterAuthority,
+    private readonly readyReconciliation?: Pick<TaskOrchestrationPort, "reconcileReady">,
   ) {
     this.authority = authority;
   }
@@ -548,6 +564,10 @@ export class BeadsTaskAdapter {
     return results.flatMap((result) => result && result.kind === "found" ? [result.task] : []);
   }
 
+  listCurrentTasks(): Promise<TaskCard[]> {
+    return this.list();
+  }
+
   async claim(input: { taskId: string; operationId: string; expectedVersion: TaskVersionRef }): Promise<TaskUpdateOutcome> {
     return this.update({ ...input, claim: true } as ModelToolTaskUpdateInput & { claim: true });
   }
@@ -576,6 +596,18 @@ export class BeadsTaskAdapter {
         operationId: input.operationId,
         task: currentTask,
         journalEntries: prior.journal_entries,
+        deliveryWarnings: [],
+      };
+    }
+    if (input.claim && currentTask.dependency_state?.kind === "waiting") {
+      return {
+        kind: "refused",
+        reason: "active_blockers",
+        taskId: input.taskId,
+        operationId: input.operationId,
+        currentTask,
+        blockerIds: [...currentTask.dependency_state.active_blocker_ids],
+        message: `Task ${input.taskId} has active blockers: ${currentTask.dependency_state.active_blocker_ids.join(", ")}.`,
       };
     }
     if (currentTask.version !== input.expectedVersion) {
@@ -624,12 +656,23 @@ export class BeadsTaskAdapter {
         ...input,
         expectedVersion: record.task.version,
       }, nextMetadata);
+      const deliveryWarnings = [...result.deliveryWarnings];
+      // Ordinary dependency advancement is Task-authority work, not a leader
+      // model turn. The injected port owns durable delivery, not selection.
+      if (this.readyReconciliation) {
+        try {
+          deliveryWarnings.push(...await this.readyReconciliation.reconcileReady(this.teamName));
+        } catch (error) {
+          deliveryWarnings.push(`Task ${input.taskId} committed but ready-delivery reconciliation failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
       return {
         kind: "updated",
         taskId: input.taskId,
         operationId: input.operationId,
         task: result.taskCard ?? projectTask(result.task, nextMetadata),
         journalEntries,
+        deliveryWarnings,
       };
     } catch (error) {
       if (error instanceof BeadsError && error.kind === "conflict") {

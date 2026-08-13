@@ -1,0 +1,81 @@
+{
+  "schema": "pi-team-bright-live-canary/1",
+  "date": "2026-08-10",
+  "result": "passed",
+  "evidenceStatus": "pre-final-rebase working-tree evidence",
+  "team": {
+    "name": "rc12-audit-canary-20260810c",
+    "workers": ["maker", "reviewer"],
+    "activeMembersAfterShutdown": []
+  },
+  "source": {
+    "branch": "rc/v0.17.0-rc.12",
+    "committedHeadAtRun": "774f8a3f0e08bc9245e156f1f5552adff57ee64f",
+    "auditBaseAtRun": "a74350e8ca43eae00f2434fbbabd9fc7ce9c60f3",
+    "workingTreeDigests": {
+      "extensions/index.ts": "7d865f36e0b188c16ea7cbd18f3515d38fbe2973d00d117db2a5eef36e0ea50a",
+      "extensions/pi-team-session-adapter.ts": "c9a5340f7f33116873ce3f4ac2c922b7b4fb119d93b1e9e4545f67253260312d",
+      "src/adapters/herdr-adapter.ts": "bdd10db8f2d3e77bafc18fc5b5f4e5e44eb9aedc88e89cc5af88ed355257dd39",
+      "src/adapters/durable-task-orchestration.ts": "8a60f23b362462291d7e41c616f7fcb82c18e6613a659e52ee1b07611d2f1941",
+      "src/task-authority/ready-dispatch.ts": "561c941804f5027c23d18842562a97f7df0288a698663777c5a974b752cb696e"
+    }
+  },
+  "launch": {
+    "coordinator": "_codex_with_proxy Pi 0.83.0",
+    "model": "openai-codex/gpt-5.6-terra:medium",
+    "workerModel": "openai-codex/gpt-5.6-terra",
+    "proxyEnvironmentNamesPresent": ["HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"],
+    "manualSessionFallbackUsed": false
+  },
+  "graph": {
+    "operationId": "rc12-audit-canary-op-3",
+    "order": ["plan", "impl", "review"],
+    "tasks": [
+      {
+        "key": "plan",
+        "id": "rc12-audit-canary-20260810c-3dj",
+        "assignee": "maker",
+        "statusAfterShutdown": "closed",
+        "finalVersion": "v_c14cd9004803923c",
+        "resultEventCursor": "9",
+        "resultActor": "maker",
+        "observedPackageVersion": "0.17.0-rc.12"
+      },
+      {
+        "key": "impl",
+        "id": "rc12-audit-canary-20260810c-mtk",
+        "assignee": "maker",
+        "statusAfterShutdown": "closed",
+        "finalVersion": "v_ec8cf993081e75eb",
+        "resultEventCursor": "11",
+        "resultActor": "maker",
+        "observedPackageVersion": "0.17.0-rc.12"
+      },
+      {
+        "key": "review",
+        "id": "rc12-audit-canary-20260810c-c9y",
+        "assignee": "reviewer",
+        "statusAfterShutdown": "closed",
+        "finalVersion": "v_1c453062282caab8",
+        "resultEventCursor": "13",
+        "resultActor": "reviewer",
+        "observedPackageVersion": "0.17.0-rc.12"
+      }
+    ]
+  },
+  "mechanicalEvidence": {
+    "leaderTaskUpdates": 0,
+    "workerClaimCursors": ["8", "10", "12"],
+    "workerResultCursors": ["9", "11", "13"],
+    "successorOrder": "plan -> impl -> review",
+    "makerStopped": true,
+    "reviewerStopped": true,
+    "shutdownSucceeded": true,
+    "unfinishedTasksAfterShutdown": 0
+  },
+  "diagnosticsBeforePass": [
+    "A first run exposed Herdr's 32-character agent-name limit; the carrier-name adapter now uses a deterministic bounded name.",
+    "A second run omitted the isolated Worker default-model setting and was aborted without a success claim."
+  ],
+  "proofLimit": "This proves one live three-Task chain across two exact Worker Sessions on the recorded working tree. It does not verify later rebases, throughput, contention, or parallel execution inside one Worker Session."
+}

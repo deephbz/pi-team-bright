@@ -16,9 +16,12 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
    `team_sync({view:"snapshot"})` to restore its current projection.
 2. Use `ensure_worker` only when no suitable current Worker exists. A Worker
    scope is a standing role, never the current work item.
-3. Create assigned Tasks with explicit goals and independently verifiable
-   success signals.
-4. A Worker starts accepted work with an atomic claim. Send `claim=true` alone;
+3. Create one atomic Task DAG with request-local keys, explicit goals, success signals,
+   and stable Worker assignees. Put prerequisite keys in each Task's `needs` list.
+   One Task is the one-node case. If order matters, encode it with `needs`.
+4. Task authority presents the ready front mechanically, with at most one Task
+   per Worker. A Worker starts presented work with an atomic claim. Send
+   `claim=true` alone;
    don't combine it with status, context, or evidence changes. Use the returned
    Task version for the next update. The Worker verifies work, then closes with
    evidence or blocks with blocker evidence and a next action.
@@ -29,8 +32,9 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
    read the current Task. If retry is still required, reuse the same operation
    ID and identical semantics with the current exact version. For Task creation,
    retry an `unknown_outcome` with the same operation ID and identical input.
-7. Use `task_link` for typed graph relations and `alert_send` only for
-   clarification, attention, or announcements. An Alert never changes a Task.
+7. Put request-local prerequisite keys in `tasks[].needs`. There is no separate
+   model-facing link tool. Use `alert_send` only for clarification, attention, or announcements.
+   An Alert never changes a Task.
 8. Reuse current Workers. Stop a Worker only after its nonterminal assigned
    Tasks are resolved. Reconcile once more, then use `team_shutdown`.
 
@@ -39,7 +43,9 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
 - Task and Team authorities own current state. Events wake observers but are
   not a second authority.
 - Delivery acknowledgement proves presentation to one exact Session only; it
-  never changes Task state.
+  never changes Task state. Explicit Worker claim accepts responsibility.
+- Task authority derives readiness from current prerequisite states. It reserves
+  one execution slot per Worker and advances successors without a leader turn.
 - Team topology and lifecycle mutations are lead-only.
 - Expected refusals and partial outcomes are semantic results. Follow their
   next action instead of treating them as infrastructure crashes.
@@ -47,9 +53,8 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
   it only after Pi persists the model-visible result.
 - Task updates require the exact opaque Task version ref and an operation ID.
   Identical retries replay the durable receipt; stale or conflicting writes refuse.
-- Closed is a work state, not an immutable Task. Later evidence or relation
-  writes can advance its version. Use the latest receipt or read before another
-  conditional mutation.
+- Closed is a work state, not an immutable Task. Later evidence can advance its
+  version. Use the latest receipt or read before another conditional mutation.
 - Provide `current_context` only when still-relevant Task meaning changes. Provide
   `journal_entries` for evidence or rationale. A status-only update is valid only
   when neither information class changes.

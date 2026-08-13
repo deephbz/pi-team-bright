@@ -169,6 +169,7 @@ function extensionHarness() {
 }
 
 function leaderHarness() {
+  vi.stubEnv("PI_TEAMS_TASK_POLL_MS", "600000");
   vi.stubEnv("PI_TEAM_NAME", "");
   vi.stubEnv("PI_AGENT_NAME", "");
   vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
@@ -177,6 +178,7 @@ function leaderHarness() {
 }
 
 function workerHarness(teamName: string) {
+  vi.stubEnv("PI_TEAMS_TASK_POLL_MS", "600000");
   vi.stubEnv("PI_TEAM_NAME", teamName);
   vi.stubEnv("PI_AGENT_NAME", "worker");
   vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
@@ -314,18 +316,21 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     const lead = leaderHarness();
     const leadCtx = sessionContext(state.leaderSessionFile);
     const createInput = {
+      operation_id: "assign-causal-task",
       tasks: [{
-        operation_id: "assign-causal-task",
+        key: "causal",
         title: "Characterize causal delivery",
         goal: "Prove assignment reaches only the exact Worker Session and remains Task authority state.",
         assignee: "worker",
       }],
     };
     const created = await invoke(lead, "task_create", "assign", createInput, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.causal;
     expect(created.details).toMatchObject({
-      kind: "task_create_batch",
-      outcomes: [{ kind: "created", task: { status: "open", assignee: "worker" } }],
+      kind: "task_graph_created",
+      operation_id: "assign-causal-task",
+      replayed: false,
+      tasks_by_key: { causal: { status: "open", assignee: "worker" } },
     });
     const queued = deliveryRecords(state.teamName);
     expect(queued).toEqual([expect.objectContaining({
@@ -399,7 +404,8 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     });
 
     const replay = await invoke(lead, "task_create", "assign-replay", createInput, leadCtx);
-    expect(replay.details.outcomes[0].task).toEqual(task);
+    expect(replay.details.tasks_by_key.causal).toEqual(task);
+    expect(replay.details.replayed).toBe(true);
     expect(deliveryRecords(state.teamName)).toHaveLength(1);
     expect(taskMessages(worker)).toHaveLength(1);
 
@@ -412,7 +418,7 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     await startWorker(restarted, restartedCtx);
     expect(taskMessages(restarted)).toHaveLength(0);
     expect(deliveryRecords(state.teamName)).toHaveLength(1);
-  }, 60_000);
+  }, 120_000);
 
   it("requires an acknowledged snapshot and keeps observation position on the exact active branch", async () => {
     const state = await fixture("branch-position");
@@ -438,9 +444,10 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     const acknowledgedSnapshotBranch = structuredClone(leadCtx.branch);
 
     const created = await invoke(lead, "task_create", "branch-task", {
-      tasks: [{ operation_id: "branch-task", title: "Branch-visible Task", goal: "Remain visible only from an acknowledged active-branch baseline.", assignee: "worker" }],
+      operation_id: "branch-task",
+      tasks: [{ key: "branch", title: "Branch-visible Task", goal: "Remain visible only from an acknowledged active-branch baseline.", assignee: "worker" }],
     }, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.branch;
     const updates = await invoke(lead, "team_sync", "branch-updates", { view: "updates" }, leadCtx);
     expect(updates.details).toMatchObject({
       kind: "updates",
@@ -535,9 +542,10 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     });
 
     const created = await invoke(lead, "task_create", "after-cancel", {
-      tasks: [{ operation_id: "after-cancel", title: "Visible after cancel", goal: "Remain observable after cancellation.", assignee: "worker" }],
+      operation_id: "after-cancel",
+      tasks: [{ key: "after_cancel", title: "Visible after cancel", goal: "Remain observable after cancellation.", assignee: "worker" }],
     }, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.after_cancel;
     const afterCancel = await invoke(lead, "team_sync", "after-cancel-sync", { view: "updates" }, leadCtx);
     expect(afterCancel.details).toMatchObject({
       kind: "updates",
@@ -550,9 +558,10 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     const lead = leaderHarness();
     const leadCtx = sessionContext(state.leaderSessionFile);
     const created = await invoke(lead, "task_create", "assign-stale", {
-      tasks: [{ operation_id: "assign-stale", title: "Replace binding", goal: "Deliver only to the replacement exact Session.", assignee: "worker" }],
+      operation_id: "assign-stale",
+      tasks: [{ key: "stale", title: "Replace binding", goal: "Deliver only to the replacement exact Session.", assignee: "worker" }],
     }, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.stale;
     const staleRecord = deliveryRecords(state.teamName)[0];
 
     await teams.deactivateMembership(state.teamName, state.worker.membershipId!, "replaced");
@@ -603,14 +612,15 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     await acknowledgeSync(lead, leadCtx, "unavailable-baseline", snapshot, "unavailable-baseline-entry");
 
     const created = await invoke(lead, "task_create", "unavailable-create", {
+      operation_id: "unavailable-create",
       tasks: [{
-        operation_id: "unavailable-create",
+        key: "unavailable",
         title: "Retry unavailable hydration",
         goal: "Keep the acknowledgement boundary behind complete Task authority evidence.",
         assignee: "worker",
       }],
     }, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.unavailable;
     const hydrate = vi.spyOn(BeadsTaskAdapter.prototype, "readMany")
       .mockRejectedValueOnce(new Error("injected Task authority outage"));
 
@@ -704,14 +714,15 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     const lead = leaderHarness();
     const leadCtx = sessionContext(state.leaderSessionFile);
     const created = await invoke(lead, "task_create", "quiet-create", {
+      operation_id: "quiet-create",
       tasks: [{
-        operation_id: "quiet-create",
+        key: "quiet",
         title: "Quiet authority revision",
         goal: "Make a Task revision visible after the bounded quiet-authority cadence.",
         assignee: "worker",
       }],
     }, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.quiet;
     const baseline = await invoke(lead, "team_sync", "quiet-baseline", { view: "snapshot" }, leadCtx);
     await acknowledgeSync(lead, leadCtx, "quiet-baseline", baseline, "quiet-baseline-entry");
     fs.writeFileSync(paths.taskDeliveryPath(state.teamName, "worker"), JSON.stringify(deliveryRecords(state.teamName).map((record) => ({
@@ -810,23 +821,24 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
     });
 
     const created = await invoke(lead, "task_create", "degraded", {
-      tasks: [{ operation_id: "degraded", title: "Recover publication", goal: "Remain committed when delivery publication fails.", assignee: "worker" }],
+      operation_id: "degraded",
+      tasks: [{ key: "degraded", title: "Recover publication", goal: "Remain committed when delivery publication fails.", assignee: "worker" }],
     }, leadCtx);
-    const outcome = created.details.outcomes[0];
+    const task = created.details.tasks_by_key.degraded;
     expect(injected).toBe(true);
-    expect(outcome).toMatchObject({
-      kind: "created",
-      task: { status: "open", assignee: "worker" },
+    expect(created.details).toMatchObject({
+      kind: "task_graph_created",
+      tasks_by_key: { degraded: { status: "open", assignee: "worker" } },
       delivery_warnings: [expect.stringContaining("delivery enqueue for worker failed")],
     });
     expect(deliveryRecords(state.teamName)).toEqual([]);
     expect(JSON.parse(fs.readFileSync(paths.taskDeliveryRecoveryPath(state.teamName), "utf8"))).toEqual([
       expect.objectContaining({
-        taskId: outcome.task.id,
-        taskVersion: outcome.task.version,
+        taskId: task.id,
+        taskVersion: task.version,
         recipients: ["worker"],
         reason: "enqueue-failed",
-        taskProjection: outcome.task,
+        taskProjection: task,
       }),
     ]);
 
@@ -838,7 +850,7 @@ describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered 
       display: true,
       details: expect.objectContaining({
         recipientMembershipId: state.worker.membershipId,
-        changes: [{ ref: { kind: "task", taskId: outcome.task.id, version: outcome.task.version }, changeKind: "task_changed" }],
+        changes: [{ ref: { kind: "task", taskId: task.id, version: task.version }, changeKind: "task_changed" }],
       }),
     })]);
     expect(deliveryRecords(state.teamName)).toHaveLength(1);

@@ -52,7 +52,8 @@ describe("TmuxAdapter", () => {
 
     expect(mockExecCommand).toHaveBeenCalledWith("tmux", [
       "split-window", "-h", "-l", "40%", "-dP", "-F", "#{pane_id}", "-t", "%leader",
-      "-c", "/tmp/project", "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=worker-1", "sh", "-c", "pi",
+      "-c", "/tmp/project", "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=worker-1", "sh", "-c",
+      "env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID pi",
     ]);
     expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["select-layout"]));
   });
@@ -89,7 +90,8 @@ describe("TmuxAdapter", () => {
 
     expect(mockExecCommand).toHaveBeenCalledWith("tmux", [
       "split-window", "-v", "-dP", "-F", "#{pane_id}", "-t", "%worker-1",
-      "-c", "/tmp/project", "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=worker-2", "sh", "-c", "pi",
+      "-c", "/tmp/project", "env", "PI_TEAM_NAME=team-1", "PI_AGENT_NAME=worker-2", "sh", "-c",
+      "env -u HERDR_ENV -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID pi",
     ]);
     expect(mockExecCommand).not.toHaveBeenCalledWith("tmux", expect.arrayContaining(["select-layout"]));
   });

@@ -134,7 +134,7 @@ describe("durable Task adapter", () => {
       readTaskAuthorityRecordEnvelope: async () => authorityRecord(metadata()),
       readTaskAuthorityRecordEnvelopes: async () => [],
       listTaskIds: async () => [],
-    });
+    }, { reconcileReady: vi.fn(async () => []) });
     expect(factory("candidate-team", "team-lead")).toBeInstanceOf(BeadsTaskAdapter);
 
     const readPort = {
@@ -193,6 +193,8 @@ describe("durable Task adapter", () => {
         goal: "Verify the exact release digest.",
         status: "open",
         assignee: "verifier",
+        relations: [],
+        dependency_state: { kind: "ready", active_blocker_ids: [] },
         current_context: "Work has not started.",
         version: taskVersionRef("beads_authority_version"),
       },
@@ -506,8 +508,8 @@ describe("durable Task adapter", () => {
     const records = await store.readTaskAuthorityRecordEnvelopes([...ids].reverse());
     const showCommands = commands.filter((args) => args[3] === "show");
 
-    expect(showCommands).toHaveLength(3);
-    expect(showCommands.map((args) => args.slice(4, -1).length)).toEqual([16, 16, 1]);
+    expect(showCommands).toHaveLength(9);
+    expect(showCommands.map((args) => args.slice(4, -1).length)).toEqual([4, 4, 4, 4, 4, 4, 4, 4, 1]);
     expect(showCommands.flatMap((args) => args.slice(4, -1))).toEqual([...ids].reverse());
     expect(records.map((record) => record?.task.id)).toEqual([...ids].reverse());
   });
@@ -522,11 +524,14 @@ describe("durable Task adapter", () => {
       metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata(id) },
     });
     const runner: BdRunner = {
-      run: vi.fn(async (args) => ({
-        stdout: JSON.stringify(args.slice(4, -1).length === 16 ? ids.slice(0, 16).map(raw) : [raw(ids[16])]),
-        stderr: args.slice(4, -1).length === 16 ? "" : "Error fetching candidate-task-18: no issue found matching candidate-task-18",
-        exitCode: 0,
-      })),
+      run: vi.fn(async (args) => {
+        const requested = args.slice(4, -1);
+        return {
+          stdout: JSON.stringify(requested.filter((id: string) => id !== ids[17]).map(raw)),
+          stderr: requested.includes(ids[17]) ? "Error fetching candidate-task-18: no issue found matching candidate-task-18" : "",
+          exitCode: 0,
+        };
+      }),
     };
     const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
 
@@ -535,7 +540,7 @@ describe("durable Task adapter", () => {
     expect(records).toHaveLength(ids.length);
     expect(records.slice(0, 17).map((record) => record?.task.id)).toEqual(ids.slice(0, 17));
     expect(records[17]).toBeUndefined();
-    expect(runner.run).toHaveBeenCalledTimes(3);
+    expect(runner.run).toHaveBeenCalledTimes(6);
   });
 
   it.each([
@@ -556,14 +561,17 @@ describe("durable Task adapter", () => {
       metadata: { pi_teams_team: "candidate-team", [TASK_METADATA_KEY]: metadata(id) },
     });
     const runner: BdRunner = {
-      run: vi.fn(async (args) => args.slice(4, -1).length === 16
-        ? { stdout: JSON.stringify(ids.slice(0, 16).map(raw)), stderr: "", exitCode: 0 }
-        : result),
+      run: vi.fn(async (args) => {
+        const requested = args.slice(4, -1);
+        return requested.includes(ids[16])
+          ? result
+          : { stdout: JSON.stringify(requested.map(raw)), stderr: "", exitCode: 0 };
+      }),
     };
     const store = new BeadsTaskStore({ teamName: "candidate-team", workspace: "/tmp/candidate-team-authority", runner });
 
     await expect(store.readTaskAuthorityRecordEnvelopes(ids)).rejects.toThrow();
-    expect(runner.run).toHaveBeenCalledTimes(3);
+    expect(runner.run).toHaveBeenCalledTimes(6);
   });
 
   it("projects batched Task records with the same found and gap semantics", async () => {

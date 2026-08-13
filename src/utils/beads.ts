@@ -15,6 +15,8 @@ export interface TaskAuthorityRecord {
   assignee?: string;
   notes?: string;
   relations: TaskRelation[];
+  /** Active outgoing blocking dependencies from the same hydrated authority read. */
+  activeBlockerIds?: string[];
   version: string;
   provenance: {
     authority: "beads";
@@ -380,6 +382,11 @@ interface RawBead {
   error?: string;
 }
 
+export interface BeadsReadyDispatchSnapshot {
+  readyTasks: TaskAuthorityRecordEnvelope[];
+  occupiedWorkers: string[];
+}
+
 export interface BeadsTaskStoreOptions {
   teamName: string;
   workspace: string;
@@ -439,6 +446,26 @@ export interface TaskCreateResult {
   /** Raw envelope from the committed create/replay read. */
   taskEnvelope?: TaskAuthorityRecordEnvelope;
   replayed: boolean;
+}
+
+export interface BeadsGraphCreateInput {
+  operationId: string;
+  fingerprint: string;
+  nodes: Array<CreateTaskInput & { key: string }>;
+  edges: Array<{
+    from: { key: string } | { id: string };
+    to: { key: string } | { id: string };
+  }>;
+}
+
+export interface BeadsGraphCreateResult {
+  tasksByKey: Record<string, TaskAuthorityRecordEnvelope>;
+  replayed: boolean;
+}
+
+export interface BeadsGraphOperationReceipt {
+  fingerprint: string;
+  tasksByKey: Record<string, TaskAuthorityRecordEnvelope>;
 }
 
 export function beadsLabel(teamName: string): string {
@@ -549,6 +576,10 @@ function mapTask(raw: RawBead): TaskAuthorityRecord {
     assignee: raw.assignee,
     notes: raw.notes || undefined,
     relations,
+    activeBlockerIds: (raw.dependencies || []).flatMap((dependency) => {
+      const targetId = dependencyId(dependency);
+      return targetId && dependencyType(dependency) === "blocks" && dependency.status !== "closed" ? [targetId] : [];
+    }).sort(),
     version: authorityVersion(raw),
     provenance: { authority: "beads", teamName: metadataValue(raw, "pi_teams_team") || "unknown" },
   };
@@ -686,8 +717,14 @@ export class BeadsTaskStore {
       && /(?:error fetching .+: no issue found matching|no issues found matching the provided ids)/i.test(error.message);
   }
 
-  /** Keep native multi-ID show commands below the observed Beads timeout tail. */
-  private static readonly MAX_SHOW_IDS = 16;
+  /**
+   * Keep canonical show fallback below the measured contention tail.
+   *
+   * The native implementation still loops per ID. Four preserves bounded
+   * exact hydration while avoiding the 13/16-ID deadline failures observed in
+   * live DAG creation and sync.
+   */
+  private static readonly MAX_SHOW_IDS = 4;
 
   /**
    * Hydrate exact IDs in bounded native shows. Beads returns found IDs and omits
@@ -745,16 +782,50 @@ export class BeadsTaskStore {
   }
 
   /** Native `bd list` filters keep candidate discovery in the authority. */
-  private async listRaw(options: { ids?: readonly string[]; metadataField?: { key: string; value: string }; assignee?: string; statuses?: readonly TaskStatus[] } = {}): Promise<RawBead[]> {
-    const args = ["list", "--label", beadsLabel(this.teamName), "--all", "--no-pager", "--limit", "0"];
+  private async listRaw(options: { ids?: readonly string[]; metadataField?: { key: string; value: string }; assignee?: string; statuses?: readonly TaskStatus[]; ready?: boolean } = {}): Promise<RawBead[]> {
+    const args = [
+      "list", "--label", beadsLabel(this.teamName),
+      ...(options.ready ? [] : ["--all"]),
+      "--no-pager", "--limit", "0",
+    ];
     if (options.ids?.length) args.push("--id", options.ids.join(","));
     if (options.metadataField) args.push("--metadata-field", `${options.metadataField.key}=${options.metadataField.value}`);
     if (options.assignee) args.push("--assignee", sanitizeName(options.assignee));
     if (options.statuses?.length) args.push("--status", options.statuses.join(","));
+    if (options.ready) args.push("--ready");
     const result = await this.command<RawBead[]>(args);
     if (!Array.isArray(result)) throw new BeadsError("Beads list returned a non-array JSON value.", "malformed", "bd list");
     for (const raw of result) this.verifyScope(raw);
     return result;
+  }
+
+  /**
+   * Read only dispatch candidates and active Worker slots.
+   *
+   * Native ready/status filters avoid a whole-Team canonical hydration. At
+   * most one ready Task per free Worker then crosses the exact show boundary.
+   */
+  async readReadyDispatchSnapshot(workerName?: string): Promise<BeadsReadyDispatchSnapshot> {
+    const assignee = workerName ? sanitizeName(workerName) : undefined;
+    const inProgress = await this.listRaw({ ...(assignee ? { assignee } : {}), statuses: ["in_progress"] });
+    const occupiedWorkers = [...new Set(inProgress.flatMap((raw) => raw.assignee ? [raw.assignee] : []))].sort();
+    const occupied = new Set(occupiedWorkers);
+    const ready = (await this.listRaw({ ...(assignee ? { assignee } : {}), ready: true }))
+      .filter((raw) => raw.assignee && !occupied.has(raw.assignee))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const selected: RawBead[] = [];
+    const selectedWorkers = new Set<string>();
+    for (const raw of ready) {
+      if (!raw.assignee || selectedWorkers.has(raw.assignee)) continue;
+      selected.push(raw);
+      selectedWorkers.add(raw.assignee);
+    }
+    const exact = await this.showManyRawAllowMissing(selected.map((raw) => raw.id));
+    const readyTasks = exact.map((raw, index) => {
+      if (!raw) throw new BeadsError(`Ready Task ${selected[index].id} disappeared before exact hydration.`, "command", `bd show ${selected[index].id}`);
+      return this.taskAuthorityRecordEnvelope(raw);
+    });
+    return { readyTasks, occupiedWorkers };
   }
 
   /** Exact Worker stop guard; it does not hydrate the full Team Task set. */
@@ -836,6 +907,94 @@ export class BeadsTaskStore {
 
   async create(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskAuthorityRecord> {
     return (await this.createWithResult(input, options)).task;
+  }
+
+  /** Read graph-operation metadata without validating now-stale expansion refs. */
+  async readGraphOperationReceipt(operationId: string, expectedKeys: readonly string[]): Promise<BeadsGraphOperationReceipt | undefined> {
+    const existing = (await this.listRaw()).filter((raw) => metadataValue(raw, "pi_teams_graph_operation") === operationId);
+    if (existing.length === 0) return undefined;
+    const fingerprints = new Set(existing.map((raw) => metadataValue(raw, "pi_teams_graph_fingerprint")));
+    const byKey = new Map(existing.map((raw) => [metadataValue(raw, "pi_teams_graph_key"), raw]));
+    if (fingerprints.size !== 1 || fingerprints.has(undefined) || byKey.size !== expectedKeys.length || expectedKeys.some((key) => !byKey.has(key))) {
+      throw new BeadsError("The graph operation receipt is incomplete or ambiguous; refusing duplicate recovery.", "conflict", `bd create --graph ${operationId}`);
+    }
+    return {
+      fingerprint: [...fingerprints][0]!,
+      tasksByKey: Object.fromEntries(expectedKeys.map((key) => [key, this.taskAuthorityRecordEnvelope(byKey.get(key)!)])),
+    };
+  }
+
+  /**
+   * Commit one Task DAG through Beads' atomic graph-plan command.
+   * Pi Team Bright metadata supplies request replay because native graph
+   * creation otherwise duplicates nodes on an exact retry.
+   */
+  async createGraphWithResult(input: BeadsGraphCreateInput, options: TaskWriteOptions = {}): Promise<BeadsGraphCreateResult> {
+    if (!input.operationId.trim()) throw new Error("Graph operation ID must not be empty");
+    if (input.nodes.length === 0) throw new Error("A Task graph must create at least one Task");
+    const nodeKeys = new Set<string>();
+    for (const node of input.nodes) {
+      if (!node.key.trim() || nodeKeys.has(node.key)) throw new Error(`Task graph key must be unique and nonempty: ${node.key}`);
+      nodeKeys.add(node.key);
+      if (!node.title.trim()) throw new Error(`Task ${node.key} title must not be empty`);
+      if (node.assignee && !node.acceptanceCriteria?.trim()) throw new Error(`Assigned Task ${node.key} requires nonempty acceptance criteria`);
+      if (node.internalMetadata && TASK_METADATA_KEY in node.internalMetadata) assertTaskMetadataContext(node.internalMetadata[TASK_METADATA_KEY]);
+    }
+    const operationHash = crypto.createHash("sha256").update(input.operationId).digest("hex");
+    fs.mkdirSync(teamDir(this.teamName), { recursive: true });
+    return withLock(path.join(teamDir(this.teamName), `.beads-graph-create-${operationHash}`), async () => {
+      const receipt = await this.readGraphOperationReceipt(input.operationId, input.nodes.map((node) => node.key));
+      if (receipt) {
+        if (receipt.fingerprint !== input.fingerprint) {
+          throw new BeadsError("The graph operation ID was already used with different initial semantics.", "conflict", `bd create --graph ${input.operationId}`);
+        }
+        return { replayed: true, tasksByKey: receipt.tasksByKey };
+      }
+
+      const metadataFor = (node: BeadsGraphCreateInput["nodes"][number]) => ({
+        ...(node.internalMetadata || {}),
+        pi_teams_team: this.teamName,
+        pi_teams_source: "pi-teams",
+        pi_teams_schema: PI_TEAMS_SCHEMA,
+        pi_teams_graph_operation: input.operationId,
+        pi_teams_graph_fingerprint: input.fingerprint,
+        pi_teams_graph_key: node.key,
+      });
+      const plan = {
+        nodes: input.nodes.map((node) => ({
+          key: node.key,
+          title: node.title,
+          description: node.description,
+          ...(node.assignee ? { assignee: node.assignee } : {}),
+          labels: [beadsLabel(this.teamName)],
+          metadata: Object.fromEntries(Object.entries(metadataFor(node)).map(([key, value]) => [
+            key,
+            typeof value === "string" ? value : JSON.stringify(value),
+          ])),
+        })),
+        edges: input.edges.map((edge) => ({
+          ...( "key" in edge.from ? { from_key: edge.from.key } : { from_id: edge.from.id }),
+          ...( "key" in edge.to ? { to_key: edge.to.key } : { to_id: edge.to.id }),
+          type: "blocks",
+        })),
+      };
+      const planPath = path.join(this.workspace, `.pi-teams-graph-${operationHash}-${process.pid}.json`);
+      fs.writeFileSync(planPath, JSON.stringify(plan), { encoding: "utf8", mode: 0o600, flag: "wx" });
+      let result: { ids?: Record<string, string>; schema_version?: number };
+      try {
+        result = await this.command(["create", "--graph", planPath, "--actor", actorName(options.actor || this.actor)]);
+      } finally {
+        try { fs.unlinkSync(planPath); } catch { /* best-effort removal of a non-authority intermediate */ }
+      }
+      if (!result || result.schema_version !== 1 || !result.ids || input.nodes.some((node) => typeof result.ids![node.key] !== "string")) {
+        throw new BeadsError("Beads graph create returned no complete schema-1 key mapping.", "malformed", "bd create --graph");
+      }
+      const raws = await this.showManyRaw(input.nodes.map((node) => result.ids![node.key]));
+      return {
+        replayed: false,
+        tasksByKey: Object.fromEntries(input.nodes.map((node, index) => [node.key, this.taskAuthorityRecordEnvelope(raws[index])])),
+      };
+    }, options.retries);
   }
 
   async createWithResult(input: CreateTaskInput, options: TaskWriteOptions = {}): Promise<TaskCreateResult> {
@@ -1075,6 +1234,10 @@ export class BeadsTaskStore {
       const beforeRaw = await this.showRaw(safeId);
       this.assertNotDeleted(beforeRaw, "claim");
       this.assertNotImplicitCompletedReopen(beforeRaw, "claim");
+      const activeBlockers = mapTask(beforeRaw).activeBlockerIds ?? [];
+      if (activeBlockers.length > 0) {
+        throw new BeadsError(`Task ${taskId} has active blockers: ${activeBlockers.join(", ")}.`, "conflict", `bd update ${taskId} --claim`);
+      }
       if (options.expectedVersion && authorityVersion(beforeRaw) !== options.expectedVersion) {
         throw new BeadsError(`Task ${taskId} changed before claim; re-read and retry.`, "conflict", `bd update ${taskId} --claim`);
       }
@@ -1084,7 +1247,13 @@ export class BeadsTaskStore {
           metadataValue(beforeRaw, OWNER_TRANSITION_OPERATION_METADATA),
         )
         : false;
-      const args = ["update", safeId, "--claim", "--actor", actorName(actor || options.actor || this.actor)];
+      const claimActor = actorName(actor || options.actor || this.actor);
+      if (beforeRaw.assignee && beforeRaw.assignee !== claimActor) {
+        throw new BeadsError(`Task ${taskId} is assigned to ${beforeRaw.assignee}, not ${claimActor}; refusing claim.`, "conflict", `bd update ${taskId} --claim`);
+      }
+      const args = beforeRaw.assignee === claimActor
+        ? ["update", safeId, "--status", "in_progress", "--actor", claimActor]
+        : ["update", safeId, "--claim", "--actor", claimActor];
       if (prepared && options.internalOwnerTransition) {
         args.push("--set-metadata", `${OWNER_TRANSITION_OPERATION_METADATA}=${options.internalOwnerTransition.operationId}`);
       }

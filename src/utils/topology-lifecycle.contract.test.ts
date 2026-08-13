@@ -4,13 +4,13 @@ import piTeams from "../../extensions/index";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
+import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../model-tool-contract/tui-projection";
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 
 type RegisteredTool = {
@@ -181,7 +181,10 @@ describe("Team topology/lifecycle lease", () => {
       (error) => ({ status: "rejected" as const, error }),
     ).finally(() => { ensureSettled = true; });
 
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await Promise.race([
+      ensured.then(() => undefined),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("ensure_worker waited behind Team shutdown")), 15_000)),
+    ]);
     expect(ensureSettled).toBe(true);
     expect(spawned).toEqual(["new"]);
     expect((await teams.readConfig(name)).members.some((candidate) => candidate.name === "new")).toBe(true);
@@ -255,7 +258,6 @@ describe("Team topology/lifecycle lease", () => {
       "! refused",
       "  Worker \"guarded\" was not stopped · nonterminal_tasks_assigned · guarding Tasks task-guarded.",
     ]);
-
     const leaderResult = await stop.execute("stop-leader", { team_name: name, worker: "team-lead" }, undefined, undefined, context(leadSession));
     expect(leaderResult.details).toMatchObject({ kind: "refused", worker: "team-lead", reason: "leader_reserved", state_changed: false });
 

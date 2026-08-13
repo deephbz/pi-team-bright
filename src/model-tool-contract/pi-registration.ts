@@ -8,7 +8,6 @@ import {
   TeamSyncParametersSchema,
   WorkerStopParametersSchema,
   TeamShutdownParametersSchema,
-  TaskLinkParametersSchema,
   AlertSendParametersSchema,
   modelToolCatalog,
 } from "./catalog";
@@ -22,7 +21,6 @@ import {
   type TeamSyncResult,
   type WorkerStopResult,
   type TeamShutdownResult,
-  type TaskLinkResult,
   type AlertSendResult,
   type ModelToolJourneyExecutors,
 } from "./executors";
@@ -32,7 +30,7 @@ import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import { assembleToolResult } from "./result-projection";
 import { createToolResultRenderer } from "./tui-projection";
 
-function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "task_link" | "alert_send") {
+function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
   const entry = modelToolCatalog.tools.find((tool) => tool.name === name);
   if (!entry) throw new Error(`Model tool catalog has no ${name} entry.`);
   return entry;
@@ -46,7 +44,6 @@ const taskReadCatalogEntry = catalogEntry("task_read");
 const taskUpdateCatalogEntry = catalogEntry("task_update");
 const workerStopCatalogEntry = catalogEntry("worker_stop");
 const teamShutdownCatalogEntry = catalogEntry("team_shutdown");
-const taskLinkCatalogEntry = catalogEntry("task_link");
 const alertSendCatalogEntry = catalogEntry("alert_send");
 
 export interface RegisteredModelToolJourney {
@@ -249,19 +246,6 @@ export function registerModelToolJourney(
     },
   };
   pi.registerTool(teamShutdownTool);
-
-  const taskLinkTool: ToolDefinition<typeof TaskLinkParametersSchema, TaskLinkResult> = {
-    name: "task_link",
-    label: taskLinkCatalogEntry.label,
-    description: taskLinkCatalogEntry.responsibility,
-    renderResult: createToolResultRenderer("task_link"),
-    parameters: TaskLinkParametersSchema,
-    executionMode: "sequential",
-    async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
-      return assembleToolResult("task_link", await executors.taskLink(leaderSessionId(ctx), parameters));
-    },
-  };
-  pi.registerTool(taskLinkTool);
 
   const alertSendTool: ToolDefinition<typeof AlertSendParametersSchema, AlertSendResult> = {
     name: "alert_send",

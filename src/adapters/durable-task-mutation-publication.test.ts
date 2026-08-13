@@ -12,9 +12,17 @@ const calls = vi.hoisted(() => ({
   complete: vi.fn(),
   hint: vi.fn(),
   readConfig: vi.fn(),
+  readDeliveries: vi.fn(),
+  readTombstones: vi.fn(),
+  projectEvidence: vi.fn(),
+  readEvents: vi.fn(),
 }));
 
-vi.mock("../coordination/event-journal", () => ({ appendTaskEvidenceEvent: calls.append }));
+vi.mock("../coordination/event-journal", () => ({
+  appendTaskEvidenceEvent: calls.append,
+  projectTaskEventEvidence: calls.projectEvidence,
+  readTeamEvents: calls.readEvents,
+}));
 vi.mock("../utils/task-event-failure-hints", () => ({ appendTaskEventFailureHint: calls.hint }));
 vi.mock("../utils/teams", () => ({ readConfig: calls.readConfig }));
 vi.mock("../utils/task-delivery", () => ({
@@ -23,11 +31,13 @@ vi.mock("../utils/task-delivery", () => ({
   recordTaskDeliveryRecovery: calls.recovery,
   suppressTaskVersionForSession: calls.suppress,
   completeOwnerTransitionIntent: calls.complete,
+  readTaskDeliveries: calls.readDeliveries,
+  readTaskDeliveryTombstones: calls.readTombstones,
 }));
 
 import { DurableTaskMutationPublication } from "./durable-task-mutation-publication";
 import type { TaskMutationCoordinates, TaskMutationPublicationInput } from "../model-tool-contract/beads-authority-adapter";
-import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskCard } from "../task-authority/task-domain";
 
 const before: TaskCard & TaskMutationCoordinates = {
   id: "task-1",
@@ -74,6 +84,8 @@ describe("DurableTaskMutationPublication", () => {
     calls.prepare.mockResolvedValue(true);
     calls.suppress.mockResolvedValue(undefined);
     calls.complete.mockResolvedValue([]);
+    calls.readDeliveries.mockResolvedValue([]);
+    calls.readTombstones.mockResolvedValue([]);
   });
 
   it("publishes the serial Team event before prior-owner and new-owner delivery", async () => {
@@ -179,6 +191,37 @@ describe("DurableTaskMutationPublication", () => {
     expect(warn).toHaveBeenCalledWith("[pi-teams] Task task-1 committed but failed-event hint persistence also failed: hint unavailable");
   });
 
+  it("projects durable delivery coordinates and persists ready presentation through the bridge", async () => {
+    calls.readDeliveries.mockResolvedValue([{ ref: { taskId: "task-1", version: before.version } }]);
+    calls.readTombstones.mockResolvedValue([{ ref: { taskId: "task-2", version: after.version } }]);
+    calls.enqueue.mockResolvedValue({ id: "delivery-1" });
+    const bridge = new DurableTaskMutationPublication();
+
+    await expect(bridge.readDeliveryCoordinates("publication-team", "bob")).resolves.toEqual([
+      { taskId: "task-1", taskVersion: before.version, worker: "bob", state: "presented" },
+      { taskId: "task-2", taskVersion: after.version, worker: "bob", state: "presented" },
+    ]);
+    await expect(bridge.enqueueReadyTask("publication-team", after, "bob")).resolves.toBe(true);
+    expect(calls.enqueue).toHaveBeenCalledWith("publication-team", after, "bob", "assigned");
+  });
+
+  it("records ready-delivery recovery before it returns the enqueue failure", async () => {
+    calls.enqueue.mockRejectedValueOnce(new Error("spool unavailable"));
+    const bridge = new DurableTaskMutationPublication();
+
+    await expect(bridge.enqueueReadyTask("publication-team", after, "bob")).rejects.toThrow("spool unavailable");
+    expect(calls.recovery).toHaveBeenCalledWith({
+      teamName: "publication-team",
+      taskId: after.id,
+      taskVersion: after.version,
+      recipients: ["bob"],
+      changeKind: "assigned",
+      recordedAt: expect.any(String),
+      reason: "enqueue-failed",
+      taskProjection: after,
+    });
+  });
+
   it("delegates lease-time preparation, suppression, and completion without retained state", async () => {
     const bridge = new DurableTaskMutationPublication();
     await bridge.prepareOwnerTransitionIntent({ operationId: "op-1", teamName: "publication-team", before, afterOwner: "bob" });
@@ -198,16 +241,25 @@ describe("Task mutation publication import fence", () => {
     const taskAdapter = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/beads-task-adapter.ts"), "utf8");
     const bridge = fs.readFileSync(path.join(process.cwd(), "src/adapters/durable-task-mutation-publication.ts"), "utf8");
     const durablePort = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-port.ts"), "utf8");
+    const orchestration = fs.readFileSync(path.join(process.cwd(), "src/adapters/durable-task-orchestration.ts"), "utf8");
     const extension = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
+    const sessionAdapter = fs.readFileSync(path.join(process.cwd(), "extensions/pi-team-session-adapter.ts"), "utf8");
 
     expect(authority).not.toMatch(/from ["'][^"']*(?:team-events|task-delivery|task-event-failure-hints)["']/);
     expect(taskAdapter).not.toMatch(/from ["'][^"']*(?:task-delivery|task-event-failure-hints)["']/);
+    expect(durablePort).not.toMatch(/from ["'][^"']*task-delivery["']/);
+    expect(durablePort).not.toMatch(/BeadsTaskStore|BeadsTaskGraphAdapter|reconcileReadyTaskDeliveries/);
+    expect(orchestration).not.toMatch(/from ["'][^"']*(?:team-events|task-delivery|task-event-failure-hints)["']/);
     expect(bridge).toMatch(/from ["'][^"']*coordination\/event-journal["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-delivery["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-event-failure-hints["']/);
-    expect(durablePort).toContain("new DurableModelToolTaskApplication(bindings, taskAdapterFactory)");
+    expect(durablePort).toContain("new DurableModelToolTaskApplication(bindings, taskAdapterFactory, taskOrchestration)");
     expect(extension).toContain("const taskAuthorityTeam = new DurableTaskAuthorityTeam()");
-    expect(extension).toContain("createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), taskAuthorityTeam, taskAuthorityRead)");
-    expect(extension).toContain("taskAdapterFactory(binding.teamName, binding.member.name)");
+    expect(extension).toContain("new DurableTaskOrchestration(taskPublication, taskPublication)");
+    expect(extension).toContain("createPublishingBeadsTaskAdapterFactory(taskPublication, taskAuthorityTeam, taskAuthorityRead, taskOrchestration)");
+    expect(extension).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
+    expect(extension).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration)");
+    expect(extension).toMatch(/taskAdapterFactory\([\s\S]*binding\.teamName,[\s\S]*binding\.member\.name,[\s\S]*membershipId/);
+    expect(sessionAdapter).toMatch(/reconcileReady: \(\) => taskReadyReconciliation\.reconcileReady\(teamName!\)[\s\S]*await taskChangeDelivery\.start/);
   });
 });

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HerdrAdapter } from "./herdr-adapter";
+import { HerdrAdapter, herdrCarrierName } from "./herdr-adapter";
 import * as terminalAdapter from "../utils/terminal-adapter";
 
 const success = (result: unknown) => ({
@@ -61,6 +61,16 @@ describe("HerdrAdapter", () => {
     expect(adapter.isDirectCarrier()).toBe(false);
   });
 
+  it("keeps qualified carrier names valid, bounded, and deterministic", () => {
+    expect(herdrCarrierName("team-a", "worker")).toBe("team-a-worker");
+    const reviewer = herdrCarrierName("rc12-audit-canary-20260810", "reviewer");
+    expect(reviewer).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
+    expect(reviewer).toHaveLength(32);
+    expect(herdrCarrierName("rc12-audit-canary-20260810", "reviewer")).toBe(reviewer);
+    expect(herdrCarrierName("rc12-audit-canary-20260810", "maker")).not.toBe(reviewer);
+    expect(herdrCarrierName("12 TEAM", "Reviewer")).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
+  });
+
   it("splits a direct Herdr pane then starts Pi there with structured argv and allowlisted environment", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
@@ -92,7 +102,7 @@ describe("HerdrAdapter", () => {
       "--no-focus",
     ]);
     expect(exec).toHaveBeenNthCalledWith(4, "herdr", [
-      "agent", "start", "worker",
+      "agent", "start", "team-a-worker",
       "--kind", "pi",
       "--pane", "pane-worker",
       "--",
@@ -309,16 +319,11 @@ describe("HerdrAdapter", () => {
     expect(adapter.isAlive("")).toBe(false);
   });
 
-  it("renames only the originating pane and keeps title failures non-fatal", () => {
-    exec.mockReturnValue(success({ pane_id: "pane-origin" }));
+  it("leaves Herdr pane and recognized-agent metadata unchanged during title projection", () => {
     adapter.setTitle("team-a: worker");
-    expect(exec).toHaveBeenCalledWith("herdr", ["pane", "rename", "pane-origin", "team-a: worker"]);
-
-    exec.mockReturnValue(failure("pane_not_found", "closed"));
-    expect(() => adapter.setTitle("ignored")).not.toThrow();
     vi.stubEnv("HERDR_PANE_ID", "");
     adapter.setTitle("no target");
-    expect(exec).toHaveBeenCalledTimes(2);
+    expect(exec).not.toHaveBeenCalled();
   });
 
   it("does not support separate OS windows", () => {

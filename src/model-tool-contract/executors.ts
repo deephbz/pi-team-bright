@@ -103,46 +103,33 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
     },
 
     async taskCreate(leaderSessionId, parameters) {
-      const outcomes: TaskCreateResult["outcomes"] = [];
-      for (const [inputIndex, input] of parameters.tasks.entries()) {
-        const outcome = await port.task.createTask(leaderSessionId, {
-          operationId: input.operation_id,
-          title: input.title,
-          goal: input.goal,
-          ...(input.assignee ? { assignee: input.assignee } : {}),
-        });
-        if (outcome.kind === "created") {
-          outcomes.push({ kind: "created", input_index: inputIndex, operation_id: outcome.operationId, task: outcome.task, ...(outcome.deliveryWarnings?.length ? { delivery_warnings: outcome.deliveryWarnings } : {}) });
-        } else if (outcome.kind === "worker_unavailable" || outcome.kind === "operation_conflict") {
-          outcomes.push({
-            kind: "refused",
-            input_index: inputIndex,
-            operation_id: outcome.operationId,
-            reason: outcome.kind === "worker_unavailable" ? "worker_unavailable" : "operation_conflict",
-            message: outcome.kind === "worker_unavailable"
-              ? `The assigned Worker ${input.assignee} is not present in the active Team.`
-              : outcome.message,
-            state_changed: false,
-          });
-        } else if (outcome.kind === "unknown_outcome") {
-          outcomes.push({
-            kind: "unknown_outcome",
-            input_index: inputIndex,
-            operation_id: outcome.operationId,
-            message: outcome.message,
-          });
-        } else {
-          outcomes.push({
-            kind: "unavailable",
-            input_index: inputIndex,
-            operation_id: outcome.operationId,
-            reason: outcome.kind === "unavailable" ? outcome.reason : "no_active_team",
-            message: outcome.kind === "unavailable" ? outcome.message : "The exact leader Session is not bound to an active Team.",
-            state_changed: false,
-          });
-        }
-      }
-      return { kind: "task_create_batch", outcomes };
+      const outcome = await port.task.createTaskGraph(leaderSessionId, {
+        operationId: parameters.operation_id,
+        tasks: parameters.tasks.map(task => ({
+          key: task.key,
+          title: task.title,
+          goal: task.goal,
+          assignee: task.assignee,
+          ...(task.needs ? { needs: [...task.needs] } : {}),
+        })),
+      });
+      if (outcome.kind === "created") return {
+        kind: "task_graph_created",
+        operation_id: outcome.operationId,
+        replayed: outcome.replayed,
+        tasks_by_key: outcome.tasksByKey,
+        ready_task_ids: outcome.readyTaskIds,
+        ...(outcome.deliveryWarnings?.length ? { delivery_warnings: outcome.deliveryWarnings } : {}),
+      };
+      if (outcome.kind === "refused") return { kind: "refused", operation_id: outcome.operationId, reason: outcome.reason, message: outcome.message, state_changed: false };
+      if (outcome.kind === "unknown_outcome") return { kind: "unknown_outcome", operation_id: outcome.operationId, message: outcome.message };
+      return {
+        kind: "unavailable",
+        operation_id: outcome.operationId,
+        reason: outcome.kind === "unavailable" ? outcome.reason : "no_active_team",
+        message: outcome.kind === "unavailable" ? outcome.message : "The exact leader Session is not bound to an active Team.",
+        state_changed: false,
+      };
     },
 
     async taskRead(leaderSessionId, parameters) {
@@ -237,6 +224,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
             operation_id: item.operationId,
             task: item.task,
             journal_entries: item.journalEntries,
+            ...(item.deliveryWarnings?.length ? { delivery_warnings: item.deliveryWarnings } : {}),
           }
           : item.kind === "refused"
             ? {
@@ -247,6 +235,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
               reason: item.reason,
               message: item.message,
               ...(item.currentTask ? { current_task: item.currentTask } : {}),
+              ...(item.blockerIds?.length ? { active_blocker_ids: item.blockerIds } : {}),
               state_changed: false,
             }
             : item.kind === "contract_gap"
@@ -328,9 +317,25 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
     },
 
     async alertSend(leaderSessionId, parameters) {
-      const target: AlertTarget = parameters.target.kind === "team"
+      const target: AlertTarget = parameters.to === "*"
         ? { kind: "team" }
-        : { kind: "worker", name: parameters.target.name };
+        : { kind: "worker", name: parameters.to };
+      if ((target.kind === "team") !== (parameters.kind === "announcement")) {
+        return {
+          kind: "refused",
+          reason: "invalid_fanout",
+          message: "Use kind announcement only with to '*'; use clarification or attention with a Worker name.",
+          state_changed: false,
+        };
+      }
+      if (parameters.task_version && !parameters.task_id) {
+        return {
+          kind: "refused",
+          reason: "invalid_fanout",
+          message: "task_version requires task_id.",
+          state_changed: false,
+        };
+      }
       const outcome = await port.alert.sendAlert(leaderSessionId, {
         target,
         kind: parameters.kind,

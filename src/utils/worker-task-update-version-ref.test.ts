@@ -156,9 +156,10 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", operation_id: "unexpected-team", status: "in_progress", expected_version: taskVersionRef("beads_v1") })).toBe(false);
 
     const created = await create.execute("create", {
-      tasks: [{ operation_id: "create-version-safe-mutation", title: "Version-safe mutation", goal: "Prove Worker CAS version conversion.", assignee: "worker" }],
+      operation_id: "create-version-safe-mutation",
+      tasks: [{ key: "mutation", title: "Version-safe mutation", goal: "Prove Worker CAS version conversion.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.mutation;
     const readResult = await read.execute("read", { task_id: task.id }, undefined, undefined, workerCtx);
     const modelVersion = JSON.parse(readResult.content[0].text).task.version;
     expect(modelVersion).toBe(task.version);
@@ -216,9 +217,10 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(appended.details.outcomes[0]).toMatchObject({ kind: "updated", task: { status: "in_progress" } });
 
     const claimCreated = await create.execute("create-claim", {
-      tasks: [{ operation_id: "create-version-safe-claim", title: "Version-safe claim", goal: "Prove claim uses the same version boundary." }],
+      operation_id: "create-version-safe-claim",
+      tasks: [{ key: "claim", title: "Version-safe claim", goal: "Prove claim uses the same version boundary.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
-    const claimTask = claimCreated.details.outcomes[0].task;
+    const claimTask = claimCreated.details.tasks_by_key.claim;
     const claimVersion = JSON.parse((await read.execute("read-claim", {
       task_id: claimTask.id,
     }, undefined, undefined, workerCtx)).content[0].text).task.version;
@@ -298,9 +300,10 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const leadCtx = context(teamName, "team-lead");
     const workerCtx = context(teamName, "worker");
     const created = await lead.get("task_create")!.execute("create", {
-      tasks: [{ operation_id: "create-worker-read", title: "Worker read", goal: "Read one exact Task authority record.", assignee: "worker" }],
+      operation_id: "create-worker-read",
+      tasks: [{ key: "read", title: "Worker read", goal: "Read one exact Task authority record.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.read;
     const taskAuthorityReadSpy = vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelope");
     const genericRead = vi.spyOn(tasks, "readTask");
 
@@ -324,9 +327,10 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const staleSessionFile = `/tmp/${teamName}-worker.jsonl`;
     const staleWorkerCtx = context(teamName, "worker", staleSessionFile);
     const created = await lead.get("task_create")!.execute("create", {
-      tasks: [{ operation_id: "create-stale-actor", title: "Stale actor", goal: "Record current stale Worker mutation behavior.", assignee: "worker" }],
+      operation_id: "create-stale-actor",
+      tasks: [{ key: "stale", title: "Stale actor", goal: "Record current stale Worker mutation behavior.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.stale;
     const beforeAuthority = structuredClone(await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id));
     const beforeCanonicalTask = structuredClone(await taskReadFactory(teamName, "worker").read(task.id));
     const beforeOperationMetadata = structuredClone(beforeAuthority.taskMetadata);
@@ -527,9 +531,10 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const leadCtx = context(teamName, "team-lead");
     const workerCtx = context(teamName, "worker");
     const created = await lead.get("task_create")!.execute("create", {
-      tasks: [{ operation_id: "create-race", title: "Race", goal: "Keep the post-resolution raw preflight.", assignee: "worker" }],
+      operation_id: "create-race",
+      tasks: [{ key: "race", title: "Race", goal: "Keep the post-resolution raw preflight.", assignee: "worker" }],
     }, undefined, undefined, leadCtx);
-    const task = created.details.outcomes[0].task;
+    const task = created.details.tasks_by_key.race;
     const visibleVersion = JSON.parse((await worker.get("task_read")!.execute("read", { task_id: task.id }, undefined, undefined, workerCtx)).content[0].text).task.version;
     const store = new BeadsTaskStore({ teamName, workspace: root, authorityFingerprint: config.taskAuthorityFingerprint!, requireExpectedVersion: true });
     const originalRead = DurableTaskAuthorityRead.prototype.readTaskAuthorityRecordEnvelope;

@@ -17,6 +17,8 @@ function task(id: string): TaskCard & { goal: string } {
     current_context: `Current context for ${id}.`,
     status: "open",
     assignee: "worker",
+    relations: [],
+    dependency_state: { kind: "ready", active_blocker_ids: [] },
     version: taskVersionRef(`reconciliation-${id}`),
   };
 }
@@ -40,7 +42,7 @@ describe("BeadsTaskReconciliationQuery", () => {
     const query = new BeadsTaskReconciliationQuery(teamName, createReadOnlyBeadsTaskAdapterFactory(readPort));
 
     await expect(query.readCurrentTasks()).resolves.toEqual([
-      { kind: "found", task: { id: first.id, title: first.title, goal: first.goal, current_context: first.current_context, status: first.status, version: taskVersionRef("raw-first") } },
+      { kind: "found", task: { id: first.id, title: first.title, goal: first.goal, current_context: first.current_context, status: first.status, relations: [], dependency_state: { kind: "ready", active_blocker_ids: [] }, version: taskVersionRef("raw-first") } },
       { kind: "contract_gap", reason: "task_metadata_invalid", taskId: second.id, version: taskVersionRef("raw-second"), message: `Task ${second.id} has unsupported or incomplete canonical ${TASK_METADATA_KEY} metadata.` },
     ]);
     expect(readPort.listTaskIds).toHaveBeenCalledWith(teamName);
@@ -49,7 +51,7 @@ describe("BeadsTaskReconciliationQuery", () => {
 
   it("uses the injected Team-scoped owner-transition evidence reader without translating failures", async () => {
     const owner = task("task-owner");
-    const evidence = { task: { id: owner.id, title: owner.title, goal: owner.goal, current_context: owner.current_context, status: owner.status, version: taskVersionRef("raw-owner") }, operationId: "owner-transition-operation" };
+    const evidence = { task: { id: owner.id, title: owner.title, goal: owner.goal, current_context: owner.current_context, status: owner.status, relations: [], dependency_state: { kind: "ready", active_blocker_ids: [] }, version: taskVersionRef("raw-owner") }, operationId: "owner-transition-operation" };
     const envelope: TaskAuthorityRecordEnvelope = {
       task: { id: evidence.task.id, title: evidence.task.title, description: "Compatibility", acceptanceCriteria: "Compatibility", status: "open", relations: [], version: "raw-owner", provenance: { authority: "beads", teamName: "owner-evidence-team" } },
       taskMetadata: metadata(evidence.task.goal, evidence.task.current_context),

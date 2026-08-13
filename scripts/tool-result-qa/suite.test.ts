@@ -35,7 +35,7 @@ function brief(
   return { situation, agentNextDecision, humanQuestion, requiredAgentFacts, machineEvidence, agentNoiseCandidates };
 }
 
-test("captures real ten-tool results for agent, machine, and TUI QA", async () => {
+test("captures real nine-tool results for agent, machine, and TUI QA", async () => {
   expect(spawnSync("bd", ["--version"], { stdio: "ignore" }).status, "headless QA requires the real Beads CLI").toBe(0);
 
   const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-tool-result-qa-"));
@@ -205,7 +205,8 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       const args = { ...options.args };
       if (options.actor === "team-lead") {
         if (options.tool === "task_create" && !Array.isArray(args.tasks)) {
-          args.tasks = [{ operation_id: `qa-${options.id}`, title: args.title, goal: args.description || args.goal || "Complete the requested Task and record evidence.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
+          args.operation_id = `qa-${options.id}`;
+          args.tasks = [{ key: "task", title: args.title, goal: args.description || args.goal || "Complete the requested Task and record evidence.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
           delete args.team_name; delete args.title; delete args.description; delete args.goal; delete args.assignee;
         } else if (options.tool === "task_read" && args.task_id && !args.task_ids) {
           args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
@@ -215,13 +216,9 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
         } else if (options.tool === "team_sync" && !args.view) {
           args.view = args.cursor ? "updates" : "snapshot";
           delete args.team_name;
-        } else if (["ensure_worker", "alert_send", "worker_stop", "task_link"].includes(options.tool)) {
+        } else if (["ensure_worker", "alert_send", "worker_stop"].includes(options.tool)) {
           delete args.team_name;
           delete args.cwd;
-          if (options.tool === "alert_send" && args.to !== undefined) {
-            args.target = args.to === "*" ? { kind: "team" } : { kind: "worker", name: args.to };
-            delete args.to;
-          }
         }
       }
       for (const field of ["expected_version", "task_version"] as const) {
@@ -264,15 +261,14 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     // Each non-create public operation requires an exact leader Team binding.
     // Exercise the unavailable boundary through registered tools before setup.
     const unavailableCalls: Array<{ id: string; tool: string; args: Record<string, unknown> }> = [
-      { id: "task-create-no-team", tool: "task_create", args: { tasks: [{ operation_id: "qa-no-team-create", title: "Unavailable Task", goal: "Prove the unavailable Team boundary." }] } },
+      { id: "task-create-no-team", tool: "task_create", args: { operation_id: "qa-no-team-create", tasks: [{ key: "task", title: "Unavailable Task", goal: "Prove the unavailable Team boundary.", assignee: "unavailable-worker" }] } },
       { id: "task-read-no-team", tool: "task_read", args: { task_ids: ["unavailable-task"] } },
       { id: "task-update-no-team", tool: "task_update", args: { updates: [{ task_id: "unavailable-task", operation_id: "qa-no-team-update", expected_version: taskVersionRef("unavailable"), status: "in_progress" }] } },
       { id: "sync-no-team", tool: "team_sync", args: { view: "snapshot" } },
       { id: "ensure-worker-no-team", tool: "ensure_worker", args: { name: "unavailable-worker", scope: "Prove unavailable Team binding." } },
       { id: "worker-stop-no-team", tool: "worker_stop", args: { worker: "unavailable-worker" } },
       { id: "team-shutdown-no-team", tool: "team_shutdown", args: {} },
-      { id: "task-link-no-team", tool: "task_link", args: { task_id: "unavailable-task", relation: "related", target_id: "other-task", action: "add", expected_version: taskVersionRef("unavailable") } },
-      { id: "alert-no-team", tool: "alert_send", args: { target: { kind: "worker", name: "unavailable-worker" }, kind: "attention", text: "Prove unavailable Team binding." } },
+      { id: "alert-no-team", tool: "alert_send", args: { to: "unavailable-worker", kind: "attention", text: "Prove unavailable Team binding." } },
     ];
     for (const unavailable of unavailableCalls) {
       await capture({
@@ -296,6 +292,8 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       if (details.postState) return details.postState;
       if (details.kind === "snapshot") return { ...details, cursor: String(details.head ?? "0"), journalHeadCursor: String(details.head ?? "0"), projection: details };
       if (details.kind === "updates") return { ...details, cursor: String(details.head ?? "0") };
+      const graphTask = Object.values(details.tasks_by_key ?? {})[0] as any;
+      if (graphTask) return { ...graphTask, description: graphTask.goal, acceptanceCriteria: graphTask.goal };
       const task = details.outcomes?.find((outcome: any) => outcome.task)?.task;
       if (task) return { ...task, description: task.goal, acceptanceCriteria: task.goal, relations: [] };
       if (details.task_id && details.version) return { ...details, id: details.task_id };
@@ -845,7 +843,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       ),
     });
 
-    const blockerCreated = await capture({
+    await capture({
       id: "blocker-created",
       scenario: "relations-alerts-and-guards",
       actor: "team-lead",
@@ -865,133 +863,6 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
         ["full Task post-state"],
       ),
     });
-    const blocker = postStateOf(blockerCreated);
-
-    const linkedTask = await capture({
-      id: "task-linked",
-      scenario: "relations-alerts-and-guards",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_link",
-      args: {
-        team_name: teamName,
-        task_id: currentTask.id,
-        relation: "blocked_by",
-        target_id: blocker.id,
-        action: "add",
-        expected_version: currentTask.version,
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "The primary Task gains one typed blocked_by relation.",
-        "Continue using the new version or inspect/wait; do not infer status changed.",
-        "Which relation was added between which Tasks?",
-        ["source Task", "add action", "blocked_by relation", "target Task", "new version"],
-        ["graph mutation result", "authoritative source Task ID and version", "resulting typed relations"],
-        ["unchanged assignee and status unless needed to disambiguate"],
-      ),
-    });
-    currentTask = postStateOf(linkedTask);
-
-    await capture({
-      id: "task-link-stale-version",
-      scenario: "relations-alerts-and-guards",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_link",
-      args: {
-        team_name: teamName,
-        task_id: currentTask.id,
-        relation: "blocked_by",
-        target_id: blocker.id,
-        action: "remove",
-        expected_version: taskCreated.version,
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "A relation mutation uses a Task version from before later status and graph changes.",
-        "Re-read the source Task and retry the graph mutation with its current version.",
-        "Was the stale graph edit rejected?",
-        ["conflict outcome", "source Task changed", "relation remains"],
-        ["unchanged graph projection"],
-      ),
-    });
-
-    const removedLink = await capture({
-      id: "task-link-removed",
-      scenario: "relations-alerts-and-guards",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_link",
-      args: {
-        team_name: teamName,
-        task_id: currentTask.id,
-        relation: "blocked_by",
-        target_id: blocker.id,
-        action: "remove",
-        expected_version: currentTask.version,
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "The existing blocked_by edge is removed with the current source version.",
-        "Use the returned Task version for any next graph mutation.",
-        "Which relation was removed?",
-        ["source Task", "remove action", "blocked_by relation", "target Task", "new version"],
-        ["authoritative relation-free Task post-state"],
-      ),
-    });
-    currentTask = postStateOf(removedLink);
-
-    const relinkedTask = await capture({
-      id: "task-link-readded",
-      scenario: "relations-alerts-and-guards",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_link",
-      args: {
-        team_name: teamName,
-        task_id: currentTask.id,
-        relation: "blocked_by",
-        target_id: blocker.id,
-        action: "add",
-        expected_version: currentTask.version,
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "The removed blocked_by edge is restored with the latest source version.",
-        "Continue from the returned version; don't reuse either prior graph token.",
-        "Was the typed relation restored?",
-        ["source Task", "add action", "target Task", "new version"],
-        ["authoritative Task with one relation"],
-      ),
-    });
-    currentTask = postStateOf(relinkedTask);
-
-    const duplicateLink = await capture({
-      id: "task-link-duplicate",
-      scenario: "relations-alerts-and-guards",
-      actor: "team-lead",
-      tools: leadTools,
-      tool: "task_link",
-      args: {
-        team_name: teamName,
-        task_id: currentTask.id,
-        relation: "blocked_by",
-        target_id: blocker.id,
-        action: "add",
-        expected_version: currentTask.version,
-      },
-      ctx: leadCtx,
-      qaBrief: brief(
-        "The requested blocked_by edge already exists at the supplied current Task version.",
-        "Treat the request as an idempotent no-op and continue from the unchanged Task version; don't imply a new mutation or delivery.",
-        "Did this add another relation, change the Task, or trigger Task-change delivery?",
-        ["relation already existed", "no-op outcome", "no version change"],
-        ["empty applied operations", "unchanged Task and relation graph", "delivery not degraded"],
-        ["success wording that implies a new edge"],
-      ),
-    });
-    currentTask = postStateOf(duplicateLink);
 
     await capture({
       id: "alert-task-clarification",
@@ -1274,7 +1145,6 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       "alert_send",
       "ensure_worker",
       "task_create",
-      "task_link",
       "task_read",
       "task_update",
       "team_create",
@@ -1290,7 +1160,6 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       "worker-stop-missing",
       "task-update-stale-version",
       "task-terminal-without-evidence-execution-error",
-      "task-link-stale-version",
       "alert-invalid-team-target",
       "alert-missing-recipient",
       "worker-stop-refused",
@@ -1313,7 +1182,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       const details = detailsOf(item);
       expect(details, item.id).toMatchObject({ kind: expect.any(String) });
     }
-    expect(cases).toHaveLength(48);
+    expect(cases).toHaveLength(42);
     const caseAfter = (id: string) => cases.find((item) => item.id === id)?.oracle.after as any;
     expect(caseAfter("alert-zero-recipients")).toEqual(
       cases.find((item) => item.id === "alert-zero-recipients")?.oracle.before,
@@ -1333,25 +1202,6 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       status: "in_progress",
       assignee: "reviewer",
     }));
-    expect(caseAfter("task-linked").tasks).toContainEqual(expect.objectContaining({
-      title: "Audit tool result projections",
-      status: "in_progress",
-    }));
-    expect(caseAfter("task-link-removed").tasks).toContainEqual(expect.objectContaining({
-      title: "Audit tool result projections",
-    }));
-    expect(caseAfter("task-link-readded").tasks).toContainEqual(expect.objectContaining({
-      title: "Audit tool result projections",
-    }));
-    expect(caseAfter("task-link-duplicate")).toEqual(
-      cases.find((item) => item.id === "task-link-duplicate")?.oracle.before,
-    );
-    const duplicateDetails = detailsOf(cases.find((item) => item.id === "task-link-duplicate")!);
-    if (duplicateDetails.schema) {
-      expect(evidenceOf(cases.find((item) => item.id === "task-link-duplicate")!)).toMatchObject({ appliedOperations: [], deliveryDegraded: false });
-    } else {
-      expect(duplicateDetails).toMatchObject({ kind: expect.stringMatching(/task_linked|refused/) });
-    }
     expect(caseAfter("worker-stop-refused")).toEqual(
       cases.find((item) => item.id === "worker-stop-refused")?.oracle.before,
     );
@@ -1393,10 +1243,7 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     }> = [
       {
         id: "task-created-assigned",
-        facts: (item) => {
-          const task = detailsOf(item).outcomes[0].task;
-          return ["created", JSON.stringify(task.id), "@ reviewer", task.version];
-        },
+        facts: () => ["task_graph_created", "1 Task DAG committed", "1 dependency-ready", "qa-task-created-assigned"],
       },
       {
         id: "task-update-stale-version",
@@ -1434,7 +1281,6 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       ["ensure_worker", "worker-started"],
       ["worker_stop", "worker-stopped"],
       ["team_shutdown", "team-shutdown"],
-      ["task_link", "task-linked"],
       ["alert_send", "alert-task-clarification"],
     ] as const;
     const privatePresentationValues = [fakeHome, leadSession, workerSession, "qa-pane-"];
@@ -1443,11 +1289,12 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
     }
     for (const unavailable of unavailableCalls) {
       const item = cases.find((candidate) => candidate.id === unavailable.id)!;
+      expect(item.execution.threw, unavailable.id).toBe(false);
       const details = detailsOf(item);
       if (Array.isArray(details.outcomes)) {
         expect(details.outcomes).toEqual([expect.objectContaining({ kind: "unavailable", state_changed: false })]);
       } else {
-        expect(details).toMatchObject({ kind: "unavailable", state_changed: false });
+        expect(details, unavailable.id).toMatchObject({ kind: "unavailable", state_changed: false });
       }
     }
     for (const item of cases) {
@@ -1502,4 +1349,4 @@ test("captures real ten-tool results for agent, machine, and TUI QA", async () =
       else process.env[name] = value;
     }
   }
-}, 300_000);
+}, 600_000);

@@ -68,7 +68,8 @@ describe("canonical Task cutover acceptance", () => {
     expect(Check(TaskCardSchema, result.task)).toBe(true);
     expect(result.task).toMatchObject({ version: taskVersionRef("beads_authority_version_7"), goal: "Run the focused acceptance check and report its result." });
     expect(result.task).not.toHaveProperty("description");
-    expect(result.task).not.toHaveProperty("relations");
+    expect(result.task).toHaveProperty("relations", []);
+    expect(result.task).toHaveProperty("dependency_state", { kind: "ready", active_blocker_ids: [] });
     expect(result.task).not.toHaveProperty("provenance");
     expect(result.task.version).not.toBe("beads_authority_version_7");
   });
@@ -174,6 +175,7 @@ describe("canonical Task cutover acceptance", () => {
   it("keeps Task command ownership and reconciliation below the trio-facing port", () => {
     const contracts = fs.readFileSync(path.join(process.cwd(), "src/task-authority/contracts.ts"), "utf8");
     const inMemoryPort = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/in-memory-team-port.ts"), "utf8");
+    const modelContracts = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/model-tool-contracts.ts"), "utf8");
     const taskAdapter = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/beads-task-adapter.ts"), "utf8");
     const reconciliationAdapter = fs.readFileSync(path.join(process.cwd(), "src/task-authority/beads-reconciliation-query.ts"), "utf8");
     const delivery = fs.readFileSync(path.join(process.cwd(), "src/utils/task-delivery.ts"), "utf8");
@@ -182,6 +184,7 @@ describe("canonical Task cutover acceptance", () => {
     expect(inMemoryPort).toMatch(/import type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\/model-tool-contracts"/);
     expect(inMemoryPort).toMatch(/export type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\/model-tool-contracts"/);
     expect(inMemoryPort).not.toContain('from "../task-authority/contracts"');
+    expect(modelContracts).toMatch(/export type \{[\s\S]*ModelToolTaskUpdateInput[\s\S]*\} from "\.\.\/task-authority\/contracts"/);
     expect(taskAdapter).not.toMatch(/from "\.\/in-memory-team-port"/);
     expect(reconciliationAdapter).toContain("implements TaskReconciliationQuery");
     expect(delivery).not.toMatch(/import\([^)]*beads-(?:task|authority)-adapter/);

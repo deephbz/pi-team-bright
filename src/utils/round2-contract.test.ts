@@ -27,8 +27,13 @@ const roots: string[] = [];
 const publicationPort = new DurableTaskMutationPublication();
 const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
 type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
-const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
+const applySemanticTaskUpdate = async (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) => {
+  const actor = await teams.currentMembership(args[0], args[3].actor);
+  return applyRawSemanticTaskUpdate(args[0], args[1], args[2], {
+    ...args[3],
+    authorityMembershipId: actor.membershipId,
+  }, publicationPort, taskAuthorityTeamPort);
+};
 const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 
 function root(prefix: string): string {

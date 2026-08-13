@@ -407,8 +407,8 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory\)/g)).toHaveLength(1);
     expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
     expect(source).toContain("const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning()");
-    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning)");
-    expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory)");
+    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
+    expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration)");
     expect(source).toContain("new DurableModelToolAlertApplication(modelToolBindings, alertSender)");
     expect(source).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });

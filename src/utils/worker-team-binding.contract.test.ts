@@ -137,14 +137,13 @@ describe("narrow Worker Team binding surface", () => {
     expect(Check(tools.get("alert_send")!.parameters as any, { kind: "attention", text: "Needs review." })).toBe(true);
   });
 
-  it("keeps the leader schemas and ten-tool capability unchanged", () => {
+  it("keeps the leader schemas and nine-tool DAG capability bounded", () => {
     const tools = registerLeader();
 
     expect([...tools.keys()].sort()).toEqual([
       "alert_send",
       "ensure_worker",
       "task_create",
-      "task_link",
       "task_read",
       "task_update",
       "team_create",
@@ -156,7 +155,7 @@ describe("narrow Worker Team binding surface", () => {
     expect(Check(TaskReadParametersSchema, { task_id: "task-binding" })).toBe(false);
     expect(Check(TaskUpdateParametersSchema, { updates: [{ task_id: "task-binding", operation_id: "leader-update", expected_version: task.version, status: "open" }] })).toBe(true);
     expect(Check(TaskUpdateParametersSchema, { task_id: "task-binding", operation_id: "leader-update", expected_version: task.version, status: "open" })).toBe(false);
-    expect(Check(AlertSendParametersSchema, { target: { kind: "worker", name: "worker" }, kind: "attention", text: "Review this." })).toBe(true);
+    expect(Check(AlertSendParametersSchema, { to: "worker", kind: "attention", text: "Review this." })).toBe(true);
     expect(Check(AlertSendParametersSchema, { kind: "attention", text: "Worker form must not become the leader form." })).toBe(false);
     expect(tools.get("task_read")!.parameters).toBe(TaskReadParametersSchema);
     expect(tools.get("task_update")!.parameters).toBe(TaskUpdateParametersSchema);

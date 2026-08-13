@@ -65,7 +65,7 @@ describe("current team binding correctness", () => {
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const refused: any = await sendAlert.execute("rejected", {
-      target: { kind: "worker", name: "worker" },
+      to: "worker",
       kind: "attention",
       text: "must not be written",
     }, undefined, undefined, context("/tmp/missing-session.jsonl"));
@@ -91,7 +91,7 @@ describe("current team binding correctness", () => {
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const accepted: any = await sendAlert.execute("accepted", {
-      target: { kind: "worker", name: "worker" },
+      to: "worker",
       kind: "attention",
       text: "before removal",
     }, undefined, undefined, context("session"));
@@ -107,7 +107,7 @@ describe("current team binding correctness", () => {
     await teams.deactivateMember(teamName, "worker", "replaced");
 
     const refused: any = await sendAlert.execute("rejected", {
-      target: { kind: "worker", name: "worker" },
+      to: "worker",
       kind: "attention",
       text: "after removal",
     }, undefined, undefined, context("session"));
@@ -182,7 +182,7 @@ describe("current team binding correctness", () => {
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("partial", {
-      target: { kind: "team" },
+      to: "*",
       kind: "announcement",
       text: "body",
     }, undefined, undefined, context("receipt-session"));
@@ -203,7 +203,7 @@ describe("current team binding correctness", () => {
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("zero", {
-      target: { kind: "team" },
+      to: "*",
       kind: "announcement",
       text: "nobody else is here",
     }, undefined, undefined, context("lead-session"));

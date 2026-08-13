@@ -11,637 +11,222 @@ maintenance: Replace superseded shaping content; move exact accepted contracts t
 
 # Model-invoked tool contract Project
 
-Updated: 2026-08-07
+Updated: 2026-08-09
 
 Stage: **hardening**
 
-Status: active. The accepted `team_create` → `ensure_worker` →
-`task_create` → snapshot → updates journey runs through the shipped durable
-model-tool surface in the real main extension. Leaders register the complete
-ten-tool surface; the four parity tools are `worker_stop`, `team_shutdown`,
-`task_link`, and `alert_send`. Workers keep the narrow `task_read`,
-`task_update`, and `alert_send` surface over the same Team and Beads authorities;
-exact runtime binding supplies Team identity, so Worker calls do not select
-`team_name`. The adapter composes explicit Team
-epochs, logical Worker meaning, exact lead-Session resolution, the existing
-Worker launch bridge, model-tool Beads metadata, structured events,
-acknowledged branch-position storage, and authoritative Task projection
-rescan. Missing metadata remains a typed gap. Structural Task events do not
-need narrative evidence; journal entries still require committed task evidence.
-Leader Task updates use expected-version preflight plus durable operation
-metadata replay; Beads 1.1 still lacks database-native compare-and-swap against
-arbitrary external writers, so the adapter verifies post-write authority. One
-real two-Session Luna workflow passed this mixed-surface decision loop. The
-batch Task result preserves independent input order, exact
-Task-card fields,
-assignment, and Worker nonterminal Task indexes. The read slice returns
-complete-or-none ordered found/missing outcomes, preserves duplicate input
-occurrences, and leaves the preliminary authority revision unchanged. The
-update slice now atomically replaces current context and appends leader journal
-provenance, replays identical operations, and refuses duplicate, stale-version,
-and conflicting-operation requests without mutation. Raw semantic results remain
-machine truth. The accepted projection boundary derives a small validated model
-result, a concise collapsed TUI, a structured expanded TUI, and an exact QA
-trace from that truth. The retired pass-through projection and result-envelope
-path are not part of the current surface. Task-update
-operation receipts are scoped by Team,
-Task, and operation ID; status transitions keep the assigned Worker's
-nonterminal index derived from current Task state. Snapshot projection reads
-one Task projection for both Task cards and Worker indexes. Snapshot and
-updates now use
-hidden branch- and Team-epoch-safe observation state, named cancellation, and
-provider-input acknowledgement. Model compaction has no Task or observation
-state effect. Team mutations are fenced to the implementation version, while
-legacy Team records remain readable and fail closed for the new surface. The
-release parity matrix is [`docs/release/model-tool-parity-checklist.md`](../release/model-tool-parity-checklist.md).
+Status: DAG-native rc.12 candidate on the semantic-hardened subsystem base. The
+leader surface has nine tools. `task_create` atomically creates one Task or a
+Task DAG. It replaces separate batch creation and model-driven relation edits.
+`task_link` is no longer a normal model tool.
 
-Architecture impact: **changed** for the accepted persistence milestone and
-public result-projection contract. Pi Team Bright owns explicit Team-epoch and
-logical Worker coordinates plus a private exact-Session branch-position
-projection. It also owns model, TUI, and QA projections derived from raw tool
-semantics. The canonical diagram records that responsibility. No new component,
-persistence, authority, trust, or deployment boundary is proposed.
+Architecture impact: **changed** inside Task authority and the trio-facing
+contract. No process, deployment, or trust boundary changed. The post-refactor
+port must keep Task policy behind the Task-authority boundary.
 
 ## Outcome
 
-Give one long-lived leader a small model surface for a long-lived Team. The
-leader creates relatively short-lived Workers for deep semantic areas, assigns
-work through Tasks, and supervises the Team through current and incremental
-views.
+Give one leader a small surface for one long-lived Team. The leader creates
+stable Workers for cohesive areas. It then commits executable work as Tasks.
 
-`team_create` bootstraps the journey from an unbound leader Session. The two
-ongoing coordination calls are complementary:
+A Task DAG can map many Tasks to fewer Workers. Task authority dispatches ready
+Tasks mechanically. The leader does not spend model turns on normal dependency
+advancement.
 
-- `ensure_worker` establishes or restores capacity for one cohesive semantic
-  area; and
-- `team_sync` restores current Team context or returns changes for routine
-  supervision.
+Exact Session binding resolves the active Team. The model does not manage Team
+locators, cursors, wait durations, paging tokens, backend graph syntax, or
+delivery records.
 
-The model does not manage Team locators, cursors, wait times, paging tokens, or
-event filters. Exact Session binding resolves the leader's zero or one active
-Team. Typed unavailable results cover missing or inaccessible authority.
+## Ontology and invariants
 
-This Project closes when real leader workflows show fast warm-up, low-noise
-supervision, useful Worker boundaries, and fewer invalid calls. Accepted exact
-contracts then move to registered schemas, implementations, and tests.
+Tasks are the only executable work authority. One Task has at most one stable
+Worker assignee. A Worker can own many Tasks but has one active execution slot.
+Use separate Tasks and a join Task when work needs independent Workers.
+
+A dependency links a dependent Task to a prerequisite Task. A dependent Task is
+ready only when all active prerequisites are closed. A blocked Task releases
+its Worker slot but does not satisfy its dependents.
+
+Delivery proves presentation. It does not prove claim, understanding, progress,
+or completion. A Worker must claim a ready Task. A claim with active blockers
+refuses and reports their Task IDs.
+
+Worker, Membership, Session, process, pane, Task, delivery, event, and Alert
+identities remain distinct. Alerts are exceptional communication. They never
+assign or advance work. `team_sync` observes committed state and events. It
+never schedules Tasks.
+
+## Model surface
+
+The leader surface has these nine tools:
+
+- `team_create` creates one Team and binds the calling Session as leader.
+- `ensure_worker` creates, reconnects, or reuses one stable Worker.
+- `task_create` atomically creates or expands one Task DAG.
+- `task_read` reads complete current Task cards.
+- `task_update` applies one conditional Task mutation with evidence.
+- `team_sync` returns a snapshot or incremental coordination changes.
+- `alert_send` sends exceptional typed communication.
+- `worker_stop` stops a Worker after its nonterminal Tasks resolve.
+- `team_shutdown` closes the Team after lifecycle guards pass.
+
+Workers retain their bounded Task and Alert surface. Team topology and lifecycle
+mutations remain leader-only.
+
+The executable catalog owns exact parameters and result unions in
+[`src/model-tool-contract/catalog.ts`](../../src/model-tool-contract/catalog.ts).
+Registration and role filtering live in
+[`src/model-tool-contract/pi-registration.ts`](../../src/model-tool-contract/pi-registration.ts)
+and [`extensions/index.ts`](../../extensions/index.ts).
+
+## DAG creation intent
+
+One `task_create` call has one operation identity, a keyed Task set, and optional
+dependency declarations. Request-local keys let one transaction reference new
+Tasks. Exact Task IDs and versions let a later request extend an existing graph.
+
+`task` names the dependent. `needs` names its prerequisites. The Beads adapter
+translates this relation to native `blocks` edges. Backend syntax does not leak
+through the public contract.
+
+The complete request commits or refuses. It must reject duplicate keys, unknown
+references, stale existing-Task versions, unavailable Workers, duplicate or
+self edges, cycles, and operation-ID conflicts without partial mutation. An
+exact retry returns the prior key-to-Task mapping and never creates duplicates.
+
+After commit, Task authority derives the ready frontier. It reserves at most one
+Task-version delivery per free Worker. It persists delivery intent before
+presentation. Task closure, blocking, Worker recovery, and process restart must
+reconcile the next ready frontier without a leader scheduling call.
+
+The accepted contract and reversal conditions are in
+[decision 0010](../decisions/0010-dag-native-task-creation.md). Prototype evidence
+is in the
+[DAG-native result journal](../journal/2026-08-09-dag-native-prototype-result.md).
+
+## Current Task information
+
+A Task card contains its stable identity, title, goal, status, optional assignee,
+replaceable current context, opaque version, outgoing relations, and derived
+dependency state. Projection warnings preserve identity when external records
+exceed owned display limits.
+
+Current context states what still matters. Journal entries preserve append-only
+progress, decisions, blockers, results, and notes. A Task update can replace
+current context, append evidence, and change status in one versioned operation.
+A stale version or changed replay refuses without mutation.
+
+Snapshots and updates reuse the canonical Task card. A snapshot restores current
+orientation. Updates carry new evidence and the latest changed state. `caught_up`
+means the exact leader is current at the returned head and no current producer
+requires a wait. It does not promise that future changes cannot occur.
+`indeterminate` means current run-state or actuation evidence cannot prove a safe
+observation; it does not advance hidden position. Hidden observation position is
+branch-, Team-epoch-, and Session-specific. Model compaction does not change it.
+
+## Mechanical scheduling and recovery
+
+Dispatch eligibility requires all of these facts:
+
+```text
+status is open
+assignee exists
+all active prerequisites are closed
+this Task version has no pending or presented delivery
+the assigned Worker has no active execution slot
+```
+
+Different Workers can receive the ready frontier in parallel. Several ready
+Tasks for one Worker remain queued. Dependencies define required order.
+Otherwise, Task authority uses one stable order.
+
+Task authority owns readiness, slot policy, graph replay, delivery intent, and
+recovery. Team authority supplies stable Worker and current Membership/Session
+resolution. Pi Session actuation only presents committed work. Coordination
+observation projects changes but owns no scheduling state.
+
+At-least-once presentation uses Task version and Membership generation identity.
+Restart reconciliation must not duplicate Task authority or lose committed work.
+The Beads graph-operation receipt is durable commit evidence. An exact replay
+queries operation-specific Task evidence, repairs only missing creation or
+relation publication, then reconciles ready delivery. A successful exact replay
+appends no duplicate event and creates no duplicate Task.
+
+## Result and audience projections
+
+Each tool produces one validated raw semantic result. That result is machine
+truth. Pure, allowlisted projections derive:
+
+- compact JSON for the model's next decision;
+- concise collapsed TUI output;
+- structured expanded TUI output; and
+- exact raw/model/TUI QA evidence.
+
+A projection can omit facts but cannot invent or change them. Thrown execution
+errors remain distinct from typed refusals and unavailable outcomes. The
+payload-free operational trace must not gain Task or Alert text.
+
+The owning sources are
+[`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts),
+[`src/model-tool-contract/tui-projection.ts`](../../src/model-tool-contract/tui-projection.ts),
+and the
+[generated contract review](../generated/model-tool-contract-review.html).
 
 ## Source allocation
 
-This file owns shaping intent, rationale, constraints, open choices, and
-reversal conditions. Replace superseded content instead of appending it.
+Task-authority DAG meaning, orchestration contracts, ready-front selection, and
+portable tests live in [`src/task-authority/`](../../src/task-authority/).
+Current Beads translation lives in [`src/utils/beads.ts`](../../src/utils/beads.ts)
+and [`src/task-authority/beads-graph-adapter.ts`](../../src/task-authority/beads-graph-adapter.ts).
+The consumer-owned durable publication and orchestration adapters live in
+[`src/adapters/`](../../src/adapters/). The trio-facing durable port consumes the
+Task orchestration boundary and owns no Beads graph or delivery implementation.
 
-The executable model-tool source is
-[`src/model-tool-contract/catalog.ts`](../../src/model-tool-contract/catalog.ts).
-Its result-projection boundary is
-[`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts).
-The result-projection implementation is the owning seam for the accepted
-model, TUI, and QA projections below. The durable model-tool port is
-[`src/model-tool-contract/durable-model-tool-port.ts`](../../src/model-tool-contract/durable-model-tool-port.ts).
-The internal Beads Task projection is
-[`src/model-tool-contract/beads-task-adapter.ts`](../../src/model-tool-contract/beads-task-adapter.ts).
-The runtime and registration adapters are
-[`runtime.ts`](../../src/model-tool-contract/runtime.ts) and
-[`pi-registration.ts`](../../src/model-tool-contract/pi-registration.ts). The
-[generated scenario review](../generated/model-tool-contract-review.html) is a
-human projection of the catalog. The executable modules own shipped behavior.
-
-The accepted initial journey is recorded in
-[decision 0009](../decisions/0009-initial-model-tool-journey.md).
-
-Current historical evidence:
-
-- [first in-process vertical-slice result](../journal/2026-08-02-model-tool-first-vertical-slice.md);
-- [real-session tool-call audit](../journal/artifacts/2026-08-02-pi-team-toolcall-audit/README.md);
-- [design dogfood observation](../journal/2026-08-02-tool-contract-design-dogfood.md);
-- [Task-adapter conformance gap](../journal/2026-08-02-task-adapter-conformance-gap.md); and
-- [current Team coordination context](../current/README.md).
-
-Current shipped behavior remains authoritative in
-[`extensions/index.ts`](../../extensions/index.ts) and the modules routed by
+Code and tests own exact schemas, variants, state transitions, and limits. This
+file owns product intent, boundaries, risks, and reversal conditions. Dated
+observations belong in the journal. The one-hop implementation map is
 [`docs/reference.md`](../reference.md).
 
-## Starting ontology and lifecycle
-
-The implementation-independent starting topology is one leader and multiple
-Workers. The Team and leader are long-lived. Each Worker lives for a shorter,
-semantically deep area with:
-
-- high internal cohesion;
-- low prerequisite-context overlap with other Workers; and
-- few cross-Worker dependencies.
-
-A Worker is not one Task. Reuse it while its semantic area remains active, then
-stop it after that area and its nonterminal Tasks are complete. Worker identity
-also remains distinct from its more replaceable Session, process, and terminal
-carrier.
-
-Tasks are the only executable work authority. Alerts are exceptional
-coordination. Runtime activity, delivery, and terminal state do not prove Task
-progress.
-
-The model-tool surface preserves the conceptual capabilities needed for a complete
-surface: Team creation, Alerts, Task notification and mutation, Worker ensure,
-Worker stop, and Team shutdown. This round designs from first principles and
-does not preserve old parameter shapes.
-
-## Current context and journal evidence
-
-Team coordination has two complementary information axes:
-
-```text
-Team snapshot = current Team + current Workers + current Task cards
-Team updates  = new Team/Worker changes + new Task journal entries
-                + latest changed Task state + Alerts
-
-Task current  = title + goal + workflow state + assignee
-                + concise current context + version
-Task journal  = append-only progress, decision, blocker, result, and note evidence
-```
-
-Current context is corrected and replaceable. Journal evidence preserves what
-actors reported. Updates avoid repeated context cost. A snapshot restores
-orientation after startup, compaction, or suspected context loss.
-
-## Current `team_create`
-
-### Call intent
-
-```ts
-type TeamCreateCall = {
-  name: TeamName;
-  purpose: string;
-};
-```
-
-An unbound leader creates one long-lived Team. The exact calling Session becomes
-the leader binding used by later leader-only calls. `purpose` states the durable
-coordination outcome and boundary, not one Task.
-
-The call has no carrier placement, Task-backend, terminal, or model settings.
-Those choices remain internal and can change without changing the public
-contract.
-
-The result reports a created active Team, a refusal because the Session already
-has an active Team or the name is unavailable, or unavailable Team/binding
-authority. Refusal and unavailable outcomes change no state.
-
-## Current `ensure_worker`
-
-### Call intent
-
-```ts
-type EnsureWorkerCall = {
-  name: WorkerName;
-  scope: string;
-};
-```
-
-The leader chooses a stable name and one deep semantic area. The exact active
-Team comes from the leader Session binding. The call does not accept
-`team_name`, assign a Task, or claim Worker readiness.
-
-### Result intent
-
-The result reports one of three semantic outcomes:
-
-- created, reused, or reconnected Worker;
-- refusal because the name already has a materially different scope; or
-- unavailable Team or carrier authority.
-
-The same name cannot silently acquire a new meaning. A separate explicit
-operation can change scope if a demonstrated workflow needs it.
-
-## Current `team_sync`
-
-### Call intent
-
-```ts
-type TeamSyncCall = {
-  view: "snapshot" | "updates";
-};
-```
-
-The exact leader Session binding resolves the active Team. The call has no
-`team_name`, cursor, continuation, limit, Task selector, Worker selector, event
-selector, or wait duration.
-
-### Snapshot view
-
-Call `team_sync({view:"snapshot"})` after startup, compaction, deliberate
-reorientation, or suspected context loss. The result contains the current Team,
-Workers, and nonterminal Task cards.
-
-A Task card contains only the coordinates needed for the leader's next choice:
-
-```ts
-type TaskProjectionWarning = {
-  task_id: TaskId;
-  truncated_fields: ("title" | "goal" | "current_context")[];
-  incomplete_fields: ("title" | "goal" | "current_context")[];
-  message: string;
-};
-
-type TaskCard = CompleteTaskCard | IncompleteTaskCard;
-
-type CompleteTaskCard = {
-  id: TaskId;
-  title: string;
-  goal: string;
-  status: TaskStatus;
-  assignee?: WorkerName;
-  current_context: string;
-  version: TaskVersion;
-  projection_warnings?: TaskProjectionWarning[];
-};
-
-type IncompleteTaskCard = {
-  id: TaskId;
-  title: string;
-  goal_state: "incomplete";
-  status: TaskStatus;
-  assignee?: WorkerName;
-  current_context: string;
-  version: TaskVersion;
-  projection_warnings: TaskProjectionWarning[];
-};
-```
-
-`goal` combines the desired outcome, relevant boundary, and success signal.
-Separate `scope` and `success_criteria` fields add surface without a required
-machine distinction, so they are not in the current surface.
-
-`current_context` contains only still-relevant progress, decisions, blockers,
-and next actions. Each update replaces it. The executable candidate schema in
-[`src/utils/beads.ts`](../../src/utils/beads.ts) limits it to 2,000 TypeBox
-string-length units. Superseded detail stays in the Task journal. External
-records can exceed display limits without a Beads write: title and context are
-bounded for display and carry `projection_warnings`; an oversized goal keeps
-its Task identity and structural coordinates but is marked incomplete and
-non-executable, never presented as ordinary executable goal prose.
-
-Native task notes remain unbounded raw evidence. A marked Worker evidence write
-that would exceed the candidate context limit refuses without mutation. Worker
-candidate receipts use validated canonical metadata, or return a typed metadata
-gap; they never copy native notes into `current_context`.
-
-A completed snapshot establishes the hidden incremental baseline at its
-observed Team head. It supersedes unseen older updates because the current
-projection contains what still matters. Model-context compaction does not reset,
-advance, or otherwise participate in this position. A leader requests a
-snapshot when its visible context is insufficient.
-
-### Updates view
-
-Call `team_sync({view:"updates"})` for routine supervision. If unseen changes
-exist, return them. If the leader is caught up and no current Worker producer or
-actuation requires a wait, return normal `caught_up` state. If required run-state
-or actuation evidence is incomplete, return `indeterminate` without advancing
-the hidden position. Otherwise, wait for a positive producer hint or the bounded
-configured timeout. Owner input can cancel a wait without returning a Team
-observation or advancing the hidden position. Pi `>=0.83` is the minimum
-supported peer for exact Worker `agent_start` and `agent_settled` evidence; the
-resolved global `pi_team_bright.team.wait_seconds` default is 120 seconds.
-
-Group changes by Task. Each Task delta contains all new journal entries and one
-latest current state:
-
-```ts
-type TaskDelta = {
-  task_id: TaskId;
-  change_kinds: TaskChangeKind[];
-  journal_entries: TaskJournalEntry[];
-  current: {
-    status: TaskStatus;
-    assignee?: WorkerName;
-    current_context: string;
-    version: TaskVersion;
-  };
-};
-```
-
-There are no journal-summary caps, omitted-entry counts, continuations, or
-paging semantics. Structural changes may have an empty `journal_entries`
-array; narrative meaning appears only when committed task evidence exists. A
-snapshot plus a batch Task read is the explicit recovery
-path if hidden observation state and model-visible context ever diverge.
-
-## Hidden observation position
-
-The observation position is machine evidence, not a model decision. Each
-completed observation must bind to the exact Pi Session and active branch,
-Team epoch, tool call, Team event range, authority revisions, and freshness.
-
-The next updates call derives its baseline only from matching completed results
-on the active branch. Do not commit a separate position before Pi persists the
-model-visible result. A crash can replay but cannot skip an update. Same-Session
-calls serialize and advance monotonically. A fork creates a new Agent and does
-not inherit the source Session's position or Team binding.
-
-Team and Task stores can remain separate authorities. A snapshot is a bounded
-current projection with per-authority revisions, not one global linearizable
-transaction. If a required authority cannot supply a coherent result, return
-`unavailable`, publish no observation, and advance no baseline.
-
-Events wake the reader but do not own Task truth. Failed Task-event appends
-record payload-light hints, and updates combine event and Task-authority
-revisions so an eventless authority change remains observable. Required Task
-references are hydrated before publication; a missing required card publishes no
-observation. A durable outbox, controller rescan, or an equivalent mechanism
-must prevent a lost wake event from hiding an authoritative change forever.
-
-## No domain count caps or paging
-
-The model-tool surface places no arbitrary count limit on Workers, nonterminal Tasks, or
-journal entries. It also exposes no paging mechanism. The only accepted
-starting field budgets are 80 TypeBox string-length units for Task title, 1,000
-for goal, and 2,000 for current context.
-
-Scale remains a performance and evaluation question. Measure serialized size,
-latency, decision quality, and failure behavior at realistic Team sizes. Do not
-convert benchmark workload points into public domain limits without evidence
-that a semantic limit is necessary.
-
-## Accepted result-projection contract
-
-The raw per-tool semantic union in the TypeBox catalog is the sole result
-authority. A tool validates that result once, then derives separate projections
-for the model, human TUI, and QA trace. A projection can omit or reorganize
-facts, but it cannot invent state or change the semantic outcome.
-
-This is a breaking cutover. The retired envelope, pass-through model
-projection, generic legacy normalizer, and recursive object renderer are not
-part of the current surface. Do not add a compatibility detector. An
-unsupported persisted result must fail closed with one explicit
-unsupported-result diagnostic. It must never render as accepted. Historical
-journals remain historical evidence and are not rewritten.
-
-### Model projection
-
-Each tool has a TypeBox model-result schema derived from its semantic union.
-The serialized JSON contains only facts needed for the model's next decision.
-The tool call already supplies the operation name, so model content does not
-repeat an envelope schema or operation field. Named fields remain preferable
-to positional encoding. The catalog records a model-projection version for QA
-and source-bundle reproduction. That version is not repeated in each model
-result.
-
-Common rules:
-
-- omit input text that the model just supplied when the semantic result did not
-  normalize or reject it;
-- omit constant `state_changed: false` fields when the result kind already
-  guarantees no mutation;
-- keep Task IDs and versions because later conditional actions require them;
-- keep full Task cards for deliberate reads, snapshots, update deltas, and
-  version conflicts;
-- keep accepted and failed recipient names, but omit opaque Alert and delivery
-  IDs;
-- preserve runtime-specific failure messages only when a typed reason and
-  recovery action are not sufficient; and
-- keep thrown execution or provider errors on Pi's error path. Never convert
-  them into semantic refusals.
-
-Per-tool model projections retain these facts:
-
-- `team_create`: created Team name and lifecycle, or refusal/unavailable reason
-  and recovery. Omit the echoed purpose.
-- `ensure_worker`: Worker name, created/reused/reconnected effect, and carrier.
-  A scope conflict keeps the existing Worker's scope.
-- `task_create`: its caller-supplied `operation_id`, Task ID, status, assignee,
-  and version per input. Omit echoed title and goal after success. An unknown
-  outcome retains the same operation coordinate and directs an exact retry.
-- `task_read`: complete current Task cards, or explicit missing and contract-gap
-  outcomes. A deliberate read is not compressed into a mutation receipt.
-- `task_update`: Task ID, status, assignee, and new version after success. A
-  conflict keeps the complete current Task and typed retry coordinate.
-- `team_sync`: complete snapshot or update data. Non-observation outcomes keep
-  reason, unchanged observation state, and recovery only.
-- `task_link`: source, relation, target, action, changed state, and version.
-- `alert_send`: accepted and failed recipients plus an optional Task reference.
-  Omit Alert ID and echoed text.
-- `worker_stop`: stopped/refused state and guarding Task IDs.
-- `team_shutdown`: lifecycle, stopped and failed Workers, and unfinished Task
-  IDs. A partial result states that the Team remains active.
-
-For `task_create`, `task_read`, and `task_update`, a one-item semantic batch
-projects as one result. It has no outer `outcomes` array or `input_index`.
-Multi-item calls retain an ordered batch and input indexes. The raw semantic
-result remains batch-shaped in both cases.
-
-Each `task_create` item has one required opaque `operation_id`. The adapter
-scopes it to the active Team and persists it in the same Beads create command.
-A retry returns the existing Task only when title, goal, assignee, and initial
-canonical candidate semantics still match. Different input with the same
-operation ID refuses without mutation. A post-authority error is
-`unknown_outcome`; retry exactly that operation ID, never a new create.
-
-A successful Task mutation returns the Task ID, status, assignee, and new
-version. It does not echo submitted context, journal text, or generated journal
-provenance. A version or operation conflict returns the complete current Task
-and a typed `reconcile_and_retry` recovery coordinate containing the exact
-current version. It never copies the full prior mutation into retry arguments.
-
-A `team_sync` snapshot and update result retains the complete bounded
-orientation or delta. `contract_gap`, `unavailable`, `cancelled`, and
-`snapshot_required` results state that observation did not advance. They return
-no entity counts. Structural Task events can produce deltas without narrative
-text; `journal_entries` is empty in that case. The obsolete
-`structured_task_event_evidence_absent` recovery is reserved for malformed
-authority behavior, not a normal structural event.
-
-### Human TUI projection
-
-Collapsed output has one semantic outcome line plus only the facts needed to
-understand the effect or next action. Batch output starts with a count and then
-names failures, conflicts, or guarded resources. It never prints `unknown` or a
-zero count when the semantic result does not contain a collection.
-
-Expanded successful output uses allowlisted per-tool cards and lists. It shows
-semantic details once. It does not show model JSON, recursive raw objects,
-legacy warnings, private paths, Session or Membership IDs, or opaque backend
-identifiers. Recovery guidance appears as `Next:` only when action is required.
-
-Thrown execution errors and malformed result details bypass the successful
-semantic renderer. Their TUI output names the tool and shows the unmodified
-`content` and `details` in one copyable JSON report. It tells the operator to
-review sensitive fields before sharing. It never replaces the source error with
-a generic “no semantic result” message.
-
-Human tone derives from the semantic discriminant. `refused`, `unavailable`,
-`contract_gap`, `cancelled`, `snapshot_required`, and `partial` remain distinct.
-A thrown execution error remains distinct from all semantic outcomes.
-
-### Trace and QA projection
-
-The projection QA bundle contains the exact raw semantic result, exact model
-projection, serialized model content, and collapsed and expanded TUI lines. Its
-bundle metadata records the catalog version, source revision, and projection
-version. Synthetic QA fixtures can retain complete payloads.
-
-The existing `PI_TEAMS_TRACE_JSONL` operational trace remains payload-free. Do
-not put Task text, Alert text, raw semantic results, or model content into it.
-Real Pi Session records already retain tool content and details. A new
-production payload trace requires a separate privacy and retention decision.
-
-### Current model-surface ergonomic rules
-
-Use `ensure_worker` in current code, schemas, skills, tests, and generated
-artifacts. Retired tool names stay out of the current surface and remain only
-in dated historical evidence.
-
-Preferred plan: replace `alert_send.to` and its magic `"*"` value with a
-discriminated target:
-
-```ts
-type AlertTarget =
-  | { kind: "worker"; name: WorkerName }
-  | { kind: "team" };
-```
-
-Only an `announcement` accepts the Team target. `clarification` and `attention`
-accept one Worker target. The provider schema must explain and reject invalid
-combinations before execution. The smaller alternative keeps `to` and adds an
-explicit schema rule for `"*"`; choose it only if provider tests reject the
-discriminated form.
-
-Keep exact Task versions as required safety coordinates. The projection cutover
-will remove heavy successful receipts and singleton batch nesting first. After
-that cutover, measure `task_update` invalid calls, turns, and latency. If the
-call remains too heavy, evaluate a discriminated status-only change that keeps
-an exact version and durable journal evidence but does not require replacement
-current context. Do not weaken mutation auditability or idempotent replay only
-to shorten a schema. Any proposal to make `operation_id` optional must first
-prove crash, resume, and receipt-replay safety.
-
-### Implementation plan
-
-1. Add exhaustive TypeBox model-result schemas and pure projectors for all
-   semantic variants. Add typed recovery actions for conflicts and sync gaps.
-2. Change assembly to validate one semantic result, serialize only the model
-   projection into `content`, and retain the raw semantic result in `details`.
-3. Replace the generic renderer with exhaustive per-tool collapsed and expanded
-   human projectors. Invalid details fail closed.
-4. Keep leader and Worker-facing `task_read`, `task_update`, and `alert_send`
-   receipts on the same semantic authority. Retire the old envelope, legacy
-   normalization, raw model-content echo, recursive rendering, and old leader
-   registrations.
-5. Keep `ensure_worker` as the current name and keep `alert_send` on the
-   discriminated target. Regenerate provider schemas, the contract review, the
-   skill, and current documentation from the accepted surface.
-6. Maintain an exhaustive semantic-variant matrix. Capture exact model, raw
-   machine, collapsed TUI, and expanded TUI projections in the QA artifact.
-7. Run focused type and contract tests, `qa:tool-results`, the full release lane,
-   and a restarted real-Pi ten-tool session at narrow and normal terminal
-   widths. Investigate the structured-event evidence defect separately; a
-   renderer change cannot close it.
-
-## Task operations forced by this shape
-
-Future Task create, read, and update calls must accept batches. This avoids one
-model call per Task during planning, recovery, and supervision. A multi-Task
-request does not imply one cross-Task transaction. Each Task mutation can keep
-its own version check, outcome, and receipt.
-
-Mutation receipts must contain enough post-state to avoid an immediate read.
-A Task read defaults to current definition and state. Journal history is a
-deliberate drill-down. Snapshot plus batch read supplies recovery without
-turning `team_sync` into full historical replay.
-
-A meaningful single-Task progress operation must atomically replace current
-context, append identified journal entries, apply an optional workflow change,
-and commit one new version. An operation ID enables receipt replay without
-duplicate evidence. A failed version precondition changes nothing.
-
-The current Beads adapter scopes each mutation receipt by Team, Task, and
-caller-supplied operation ID. It replays only an identical operation fingerprint
-and refuses reuse of that operation ID with different input. Expected-version
-checks remain preflight reads rather than database-native compare-and-swap
-against arbitrary external writers; the adapter verifies post-write authority.
-Exposure remains gated on a backend-neutral conformance suite.
-
-## Task and Communication adapters
-
-A Task-engine adapter must provide durable Task identity, atomic single-Task
-version checks and progress commits, identified journal evidence, typed graph
-validation, current and change queries, and durable change publication.
-
-Communication remains a separate authority. Task changes and typed Alerts can
-share delivery mechanics without sharing meaning. Alert acceptance, delivery
-attempt, Session observation, and semantic action remain separate evidence.
-
-Beads/Dolt and Pi custom messages are current adapter choices. They do not
-define the semantic surface.
-
-## Short skill boundary
-
-Keep a short shipped skill after cutover. It contains tactical guidance only:
-
-- one leader coordinates Workers with bounded, deep semantic areas;
-- choose scopes that reduce prerequisite overlap and dependencies;
-- Tasks are work authority;
-- snapshots restore context;
-- updates drive routine supervision; and
-- Alerts are exceptional.
-
-The skill must not copy exact parameters, result variants, state machines, or
-provider schemas. Do not update the current skill before cutover because it
-must still describe the shipped cursor-based surface.
-
-## Schema and review source
-
-Use one TypeBox catalog to derive provider JSON Schema, runtime validation,
-contract tests, examples, and static review HTML. Do not add OpenAPI or OpenRPC
-without a transport that requires it.
-
-Correct-by-construction rules:
-
-- start with the leader situation, then decision, operation, and schema;
-- expose one coherent form per intent;
-- use required fields and string enums where providers preserve them;
-- split operations if provider projection erases a behavioral distinction;
-- keep authorization and exact Session binding in runtime enforcement;
-- return a complete semantic projection or no observation; and
-- never replay historical prose by default.
-
-## Verification
-
-The model-tool evaluator covers:
-
-1. Team creation and exact leader binding from an unbound Session;
-2. refusal without state change when an active Team already exists;
-3. Worker creation for a deep area with low prerequisite overlap;
-4. Worker reuse, reconnection, scope conflict, and unavailable outcomes;
-5. explicit warm-up snapshot after compaction;
-6. immediate grouped updates without snapshot replay;
-7. waiting and cancellation when caught up;
-8. full new journal entries with latest Task state shown once;
-9. snapshot reset of the hidden baseline;
-10. interruption, crash, exact-Session resume, branch, and fork behavior;
-11. Task-authority failure with no baseline advance;
-12. lost or delayed wake events followed by authoritative rescan;
-13. validated model, raw semantic, collapsed TUI, expanded TUI, and QA-trace
-    projections for every result variant;
-14. provider schemas that reject forbidden fields, invalid Alert targets, and
-    retired locator or compatibility fields;
-15. singleton Task results without batch nesting and ordered multi-Task outcomes;
-16. exact current Task and typed retry coordinates for Task version conflicts;
-17. sync-gap recovery with no baseline advance or fabricated entity counts; and
-18. semantic outcomes kept separate from thrown execution and provider errors.
-
-Measure model-facing bytes and tokens, invalid calls, extra turns, warm-up
-quality, time to leader decision, missed or duplicate changes, current-context
-staleness, and scale behavior.
+## Verification contract
+
+The executable evidence must cover:
+
+1. exact leader binding and role-specific registration;
+2. one-node and multi-node atomic creation;
+3. local and existing Task references;
+4. cycle, stale-version, Worker, edge, and replay refusal without mutation;
+5. exact replay without duplicate Tasks;
+6. only ready Tasks presented after commit;
+7. active-blocker claim refusal with blocker IDs;
+8. automatic successor presentation after a committed transition;
+9. parallel dispatch to different Workers;
+10. one active execution slot per Worker;
+11. blocked-slot release without false dependency satisfaction;
+12. graph and pending-delivery recovery after restart;
+13. raw, model, collapsed TUI, expanded TUI, and QA projection agreement;
+14. unchanged Team, Worker, Alert, and observation behavior outside this cutover;
+15. real Beads graph semantics and package-installed behavior; and
+16. a real multi-Session Pi canary after the semantic-hardening port.
+
+Measure invalid model calls, extra scheduling turns, ready-to-presentation
+latency, duplicate or missed delivery, recovery behavior, and model-facing
+bytes. Do not turn benchmark sizes into public count limits.
 
 ## Current frontier
 
-1. Complete the fresh full-suite and QA projection gates before publication.
-2. Repair or explain the repeated
-   `structured_task_event_evidence_absent` gap with external runtime evidence.
-3. Keep the Team implementation-version fence and authoritative Task rescan as
-   release requirements for mixed writers and lost event publication.
-4. Run the focused checks and exact-tree independent release lane.
-5. Publish only after the clean package install, real-Pi projection smoke, and
-   external verification pass.
+The rc.12 candidate is ported to the semantic-hardened boundaries. Task mutation,
+graph publication recovery, and ready delivery cross injected consumer-owned
+ports. The trio-facing adapter no longer imports Beads graph or Task-delivery
+implementation. Pure scheduling tests and real Beads E2E evidence cover atomic
+creation, crash recovery, replay silence, active blockers, parallel fronts,
+one slot per Worker, blocked-slot release, and automatic successor delivery.
 
-Reversal condition: expose a cursor, filter, paging control, or entity count
-limit only when a real leader workflow cannot be served safely without it.
+Before branch publication, run the exact full contract, package, external, and
+multi-Session Pi lanes. Keep DAG Task-card fields tolerant during the pre-DAG
+delivery-record cutover; make them required only after stopped-epoch migration
+evidence proves old projections cannot enter the current surface.
+
+Reverse the one-slot default only if measured Worker behavior proves safe
+concurrent execution in one durable Session context. Add a separate Workflow
+authority or more graph tools only if Task DAGs cannot express a demonstrated
+operator decision.

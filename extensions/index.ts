@@ -21,6 +21,7 @@ import { createPublishingBeadsTaskAdapterFactory, createReadOnlyBeadsTaskAdapter
 import { DurableTaskAuthorityProvisioning } from "../src/adapters/durable-task-authority-provisioning";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
+import { DurableTaskOrchestration } from "../src/adapters/durable-task-orchestration";
 import { DurableTaskAuthorityTeam } from "../src/adapters/durable-task-authority-team";
 import { DurableTaskAuthorityRead } from "../src/adapters/durable-task-authority-read";
 import { DurableTaskAuthorityReadTeam } from "../src/adapters/durable-task-authority-read-team";
@@ -288,7 +289,7 @@ export default function (pi: ExtensionAPI) {
   // the current model-tool journey; Workers own the three Task/Alert tools.
   const leaderToolNames = new Set([
     "team_create", "ensure_worker", "task_create", "task_read", "task_update", "team_sync",
-    "worker_stop", "team_shutdown", "task_link", "alert_send",
+    "worker_stop", "team_shutdown", "alert_send",
   ]);
   const workerToolNames = new Set(["task_read", "task_update", "alert_send"]);
   // `team-lead` is a reserved leader identity, even when explicitly supplied
@@ -342,7 +343,9 @@ export default function (pi: ExtensionAPI) {
   const taskAuthorityReadTeam = new DurableTaskAuthorityReadTeam();
   const taskAuthorityRead = new DurableTaskAuthorityRead(taskAuthorityReadTeam);
   const taskReadAdapterFactory = createReadOnlyBeadsTaskAdapterFactory(taskAuthorityRead);
-  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(new DurableTaskMutationPublication(), taskAuthorityTeam, taskAuthorityRead);
+  const taskPublication = new DurableTaskMutationPublication();
+  const taskOrchestration = new DurableTaskOrchestration(taskPublication, taskPublication);
+  const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(taskPublication, taskAuthorityTeam, taskAuthorityRead, taskOrchestration);
   const alertMembership = new DurableAlertMembership();
   const taskDeliveryMembership = new DurableTaskChangeDeliveryMembership();
   const piSessionTeamQuery = new DurablePiSessionTeamQuery();
@@ -399,8 +402,8 @@ export default function (pi: ExtensionAPI) {
     };
     const modelToolBindings = new DurableModelToolBindings();
     const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning();
-    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning);
-    const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory);
+    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration);
+    const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration);
     const modelToolAlert = new DurableModelToolAlertApplication(modelToolBindings, alertSender);
     const modelToolCoordination = new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService);
     modelToolJourney = registerModelToolJourney(pi, new ModelToolJourneyFacade(modelToolTeam, modelToolTask, modelToolAlert, modelToolCoordination));
@@ -506,6 +509,7 @@ export default function (pi: ExtensionAPI) {
     workerToolNames,
     refreshAlertToolProjection,
     registerRecoveredWorkerTools,
+    taskReadyReconciliation: taskOrchestration,
   });
   modelToolLifecycleAdapter = sessionAdapter.modelToolLifecycle;
   sessionAdapter.register();

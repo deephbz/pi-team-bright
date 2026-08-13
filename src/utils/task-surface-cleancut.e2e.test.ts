@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { BeadsTaskStore, readBeadsAuthorityFingerprint, type TaskWriteOptions } from "./beads";
+import { BeadsTaskStore, defaultBdRunner, readBeadsAuthorityFingerprint, type TaskWriteOptions } from "./beads";
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
@@ -106,14 +106,22 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
     appendEntry: vi.fn(),
   } as never);
   if (actor === "team-lead") {
-    for (const name of ["task_create", "task_update", "task_read", "task_link", "team_sync"]) {
+    for (const name of ["task_create", "task_update", "task_read", "team_sync"]) {
       const tool = tools.get(name);
       if (!tool) continue;
       const originalExecute = tool.execute;
       tools.set(name, { ...tool, execute: async (id, params, signal, update, ctx) => {
         const args: any = { ...params };
-        if (name === "task_create" && !args.tasks) {
-          args.tasks = [{ operation_id: `cleancut-${id}`, title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
+        if (name === "task_create") {
+          const sourceTasks = args.tasks ?? [{ title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
+          args.operation_id = args.operation_id || sourceTasks[0]?.operation_id || `cleancut-${id}`;
+          args.tasks = sourceTasks.map((task: any, index: number) => ({
+            key: task.key || `task-${index + 1}`,
+            title: task.title,
+            goal: task.goal || task.acceptance_criteria || task.description || "Complete the requested Task.",
+            ...(task.assignee ? { assignee: task.assignee } : {}),
+            ...(task.needs ? { needs: [...task.needs] } : {}),
+          }));
           for (const key of ["team_name", "title", "description", "acceptance_criteria", "assignee", "design", "idempotency_key"]) delete args[key];
         } else if (name === "task_update" && !args.updates) {
           args.updates = [{ task_id: args.task_id, operation_id: `cleancut-${id}`, expected_version: expectedVersionRef(args.expected_version || ""), current_context: args.design || args.append_note || "Task evidence was reviewed.", journal_entries: [{ kind: "note", text: args.append_note || args.design || "Task evidence was reviewed." }], ...(args.status ? { status: args.status } : {}) }];
@@ -122,9 +130,6 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
           args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
         } else if (name === "team_sync") {
           args.view = args.view || (args.cursor ? "updates" : "snapshot"); delete args.team_name; delete args.cursor; delete args.wait_ms; delete args.event_types; delete args.task_ids; delete args.limit; delete args.continuation;
-        } else if (name === "task_link") {
-          delete args.team_name;
-          if (typeof args.expected_version === "string") args.expected_version = expectedVersionRef(args.expected_version);
         }
         return originalExecute(id, args, signal, update, ctx);
       } });
@@ -150,9 +155,10 @@ function schemaKeys(tool: RegisteredTool | undefined): string[] {
 
 function taskFrom(result: any): Record<string, any> {
   const outcome = result?.details?.outcomes?.find((candidate: any) => candidate.task);
-  const task = result?.details?.postState || outcome?.task || (result?.details?.kind === "task_linked"
-    ? { id: result.details.task_id, relations: result.details.action === "add" ? [{ relation: result.details.relation, targetId: result.details.target_id }] : [], version: result.details.version }
-    : undefined);
+  const graphTask = result?.details?.kind === "task_graph_created"
+    ? Object.values(result.details.tasks_by_key)[0]
+    : undefined;
+  const task = result?.details?.postState || outcome?.task || graphTask;
   if (!task || typeof task !== "object") throw new Error(`missing structured Task receipt: ${JSON.stringify(result)}`);
   const projected = task.goal ? { ...task, description: task.goal, acceptanceCriteria: task.goal, relations: task.relations || [] } : { ...task };
   if (task.current_context) projected.design = task.current_context;
@@ -206,19 +212,19 @@ afterEach(() => {
 });
 
 describe("clean-cut Task public surface", () => {
-  it("exports four stable Task verbs plus team_sync and no plan or legacy-schema escape hatches", () => {
+  it("exports three stable Task verbs plus team_sync and no plan or legacy-schema escape hatches", () => {
     const tools = extensionHarness();
     expect([...tools.keys()].filter((name) => name.startsWith("task_")).sort()).toEqual([
       "task_create",
-      "task_link",
       "task_read",
       "task_update",
     ]);
     expect(tools.has("team_sync")).toBe(true);
 
-    expect(schemaKeys(tools.get("task_create"))).toEqual(["tasks"]);
+    expect(schemaKeys(tools.get("task_create"))).toEqual(["operation_id", "tasks"]);
+    expect((tools.get("task_create")!.parameters as any).properties.tasks.items.properties).toHaveProperty("needs");
     expect(schemaKeys(tools.get("task_update"))).toEqual(["updates"]);
-    expect(schemaKeys(tools.get("task_link"))).toEqual(["action", "expected_version", "relation", "target_id", "task_id"]);
+    expect(tools.has("task_link")).toBe(false);
 
     const serialized = JSON.stringify([...tools.values()]
       .filter((tool) => tool.name.startsWith("task_"))
@@ -253,8 +259,11 @@ describe("clean-cut Task public surface", () => {
     expect(fs.existsSync(root)).toBe(false);
   });
 
-  it("supports direct execution, prose design review, stale-write rejection, notes, claims, and graph relations", async () => {
+  it("supports DAG creation, direct execution, prose review, stale-write rejection, notes, and claims", async () => {
     expect(hasBd, "The clean-cut E2E requires the sole Task authority CLI (`bd`) to be installed.").toBe(true);
+    const runBd = defaultBdRunner.run.bind(defaultBdRunner);
+    vi.spyOn(defaultBdRunner, "run").mockImplementation((args, options) =>
+      runBd(args, { ...options, timeoutMs: Math.max(options.timeoutMs, 30_000) }));
     const teamName = uniqueTeam("workflow");
     const taskWorkspace = initBeadsWorkspace();
     writeTeam(teamName, taskWorkspace);
@@ -270,7 +279,6 @@ describe("clean-cut Task public surface", () => {
     const updateA = workerA.get("task_update")!;
     const updateB = workerB.get("task_update")!;
     const read = lead.get("task_read")!;
-    const link = lead.get("task_link")!;
     const sync = lead.get("team_sync")!;
 
     // Simple work skips review: atomic claim is the only safety-specialized mutation.
@@ -279,6 +287,7 @@ describe("clean-cut Task public surface", () => {
         operation_id: "create-deterministic-checks",
         title: "Run deterministic checks",
         goal: "Execute the deterministic test command and confirm it exits successfully.",
+        assignee: "worker-a",
       }],
     }, undefined, undefined, leadCtx);
     const direct = taskFrom(directResult);
@@ -286,8 +295,9 @@ describe("clean-cut Task public surface", () => {
     expect(direct.status).toBe("open");
     expect(directResult.content[0].text).not.toBe(JSON.stringify(directResult.details));
     expect(directResult.details).toMatchObject({
-      kind: "task_create_batch",
-      outcomes: [{ kind: "created", task: { id: direct.id, status: "open", version: direct.version } }],
+      kind: "task_graph_created",
+      operation_id: "create-deterministic-checks",
+      tasks_by_key: { "task-1": { id: direct.id, status: "open", version: direct.version } },
     });
     expect(directResult.content[0].text).not.toContain("deterministic test command");
 
@@ -337,13 +347,14 @@ describe("clean-cut Task public surface", () => {
         kind: "refused",
         task_id: direct.id,
         reason: "version_conflict",
-        current_task: { id: direct.id, status: "in_progress", version: expect.any(String) },
+        current_task: { id: direct.id, version: expect.any(String) },
         state_changed: false,
       }],
     });
-    // Each concurrent receipt projects authority independently. Both versions
-    // must be post-create revisions; exact equality between concurrent opaque
-    // observations is not the stale-write safety invariant.
+    // Each concurrent receipt projects authority independently. The refused
+    // read can observe owner-transition preparation before the winning claim.
+    // Both versions must be post-create revisions; exact status or equality
+    // between concurrent observations isn't the stale-write safety invariant.
     const refusedCurrent = refusedClaims[0].details.outcomes[0].current_task;
     expect(claimed.version).not.toBe(direct.version);
     expect(refusedCurrent.version).not.toBe(direct.version);
@@ -433,248 +444,31 @@ describe("clean-cut Task public surface", () => {
       }],
     });
 
-    const rejectedCreated = taskFrom(await create.execute("create-review-reject", {
-      team_name: teamName,
-      title: "Evaluate risky cleanup",
-      description: "Do not execute until the current design has been reviewed.",
-      acceptance_criteria: "Every generated path is inventoried and classified before deletion.",
-      assignee: "worker-a",
-    }, undefined, undefined, leadCtx));
-    const rejectedDesign = taskFrom(await updateA.execute("design-for-rejection", {
-      team_name: teamName,
-      task_id: rejectedCreated.id,
-      operation_id: "design-for-rejection",
-      current_context: "Delete every generated directory in one pass.",
-      journal_entries: [{ kind: "note", text: "Requesting review because this cleanup is destructive." }],
-      expected_version: expectedVersionRef(rejectedCreated.version),
-    }, undefined, undefined, workerACtx));
-    const rejected = taskFrom(await updateLead.execute("reject-by-feedback", {
-      team_name: teamName,
-      task_id: rejectedCreated.id,
-      append_note: "Rejected: inventory and classify paths first; keep the Task open and revise its design.",
-      expected_version: rejectedDesign.version,
-    }, undefined, undefined, leadCtx));
-    expect(rejected.status).toBe("open");
-    expect(rejected.design).toContain("Rejected:");
-    expect(rejected.notes).toContain("Rejected:");
-
-    const blocker = taskFrom(await create.execute("create-blocker", {
-      team_name: teamName,
-      title: "Resolve upstream format",
-      description: "Choose one stable format.",
-    }, undefined, undefined, leadCtx));
-    const dependent = taskFrom(await create.execute("create-dependent", {
-      team_name: teamName,
-      title: "Consume upstream format",
-      description: "Integrate the chosen format.",
-    }, undefined, undefined, leadCtx));
-    const linked = taskFrom(await link.execute("link-blocked", {
-      team_name: teamName,
-      task_id: dependent.id,
-      relation: "blocked_by",
-      target_id: blocker.id,
-      action: "add",
-      expected_version: dependent.version,
-    }, undefined, undefined, leadCtx));
-    expect(linked.relations).toContainEqual({ relation: "blocked_by", targetId: blocker.id });
-
-    const staleBlockedRemove = await link.execute("unlink-blocked-stale", {
-      team_name: teamName,
-      task_id: dependent.id,
-      relation: "blocked_by",
-      target_id: blocker.id,
-      action: "remove",
-      expected_version: dependent.version,
+    const graphResult = await create.execute("create-dependent-graph", {
+      operation_id: "create-dependent-graph",
+      tasks: [
+        { key: "format", title: "Resolve upstream format", goal: "Choose one stable format.", assignee: "worker-a" },
+        { key: "consume", title: "Consume upstream format", goal: "Integrate the chosen format.", assignee: "worker-b", needs: ["format"] },
+      ],
     }, undefined, undefined, leadCtx);
-    expect(staleBlockedRemove.details).toMatchObject({
-      kind: "refused",
-      task_id: dependent.id,
-      reason: "version_conflict",
-      state_changed: false,
+    expect(graphResult.details).toMatchObject({
+      kind: "task_graph_created",
+      ready_task_ids: [graphResult.details.tasks_by_key.format.id],
+      tasks_by_key: {
+        format: { dependency_state: { kind: "ready", active_blocker_ids: [] } },
+        consume: {
+          relations: [{ relation: "blocked_by", target_task_id: graphResult.details.tasks_by_key.format.id }],
+          dependency_state: { kind: "waiting", active_blocker_ids: [graphResult.details.tasks_by_key.format.id] },
+        },
+      },
     });
 
-    const freshBlocker = taskFrom(await read.execute("read-blocker-before-cycle", {
-      team_name: teamName,
-      task_id: blocker.id,
-    }, undefined, undefined, leadCtx));
-    const cycle = await link.execute("reject-cycle", {
-      team_name: teamName,
-      task_id: blocker.id,
-      relation: "blocked_by",
-      target_id: dependent.id,
-      action: "add",
-      expected_version: freshBlocker.version,
+    const dependentRead = await read.execute("read-dependent", {
+      task_ids: [graphResult.details.tasks_by_key.consume.id],
     }, undefined, undefined, leadCtx);
-    expect(cycle.details).toMatchObject({ kind: "refused", reason: "graph_conflict", state_changed: false });
-
-    const unlinked = taskFrom(await link.execute("unlink-blocked", {
-      team_name: teamName,
-      task_id: dependent.id,
-      relation: "blocked_by",
-      target_id: blocker.id,
-      action: "remove",
-      expected_version: linked.version,
-    }, undefined, undefined, leadCtx));
-    expect(unlinked.relations).not.toContainEqual({ relation: "blocked_by", targetId: blocker.id });
-
-    const related = taskFrom(await link.execute("link-related", {
-      team_name: teamName,
-      task_id: dependent.id,
-      relation: "related",
-      target_id: blocker.id,
-      action: "add",
-      expected_version: unlinked.version,
-    }, undefined, undefined, leadCtx));
-    expect(related.relations).toContainEqual({ relation: "related", targetId: blocker.id });
-    const unrelated = taskFrom(await link.execute("unlink-related", {
-      team_name: teamName,
-      task_id: dependent.id,
-      relation: "related",
-      target_id: blocker.id,
-      action: "remove",
-      expected_version: related.version,
-    }, undefined, undefined, leadCtx));
-    expect(unrelated.relations).not.toContainEqual({ relation: "related", targetId: blocker.id });
-
-    const parent = taskFrom(await create.execute("create-parent", {
-      team_name: teamName,
-      title: "Parent work",
-      description: "Own the larger outcome.",
-    }, undefined, undefined, leadCtx));
-    const child = taskFrom(await create.execute("create-child", {
-      team_name: teamName,
-      title: "Child work",
-      description: "Deliver one contained part.",
-    }, undefined, undefined, leadCtx));
-    const parentedResult = await link.execute("link-parent", {
-      team_name: teamName,
-      task_id: child.id,
-      relation: "parent",
-      target_id: parent.id,
-      action: "add",
-      expected_version: child.version,
-    }, undefined, undefined, leadCtx);
-    const parented = taskFrom(parentedResult);
-    expect(parented.relations).toContainEqual({ relation: "parent", targetId: parent.id });
-    expect(parentedResult.details).toMatchObject({ kind: "task_linked", task_id: child.id, target_id: parent.id, relation: "parent", action: "add", changed: true, version: parented.version });
-
-    const duplicateParent = await link.execute("link-parent-idempotent", {
-      team_name: teamName,
-      task_id: child.id,
-      relation: "parent",
-      target_id: parent.id,
-      action: "add",
-      expected_version: parented.version,
-    }, undefined, undefined, leadCtx);
-    expect(duplicateParent.details).toMatchObject({ kind: "task_linked", task_id: child.id, target_id: parent.id, relation: "parent", action: "add", changed: false, version: parented.version });
-    expect(duplicateParent.content[0].text).not.toMatch(/delivery/i);
-    const competingParent = taskFrom(await create.execute("create-competing-parent", {
-      team_name: teamName,
-      title: "Competing parent",
-      description: "Must not silently replace the existing parent.",
-    }, undefined, undefined, leadCtx));
-    const refusedReparent = await link.execute("reject-implicit-reparent", {
-      team_name: teamName,
-      task_id: child.id,
-      relation: "parent",
-      target_id: competingParent.id,
-      action: "add",
-      expected_version: parented.version,
-    }, undefined, undefined, leadCtx);
-    expect(refusedReparent.content[0].text).toMatch(/already has parent|remove.*parent/i);
-    expect(refusedReparent.details).toMatchObject({
-      kind: "refused",
-      task_id: child.id,
-      reason: "graph_conflict",
-      state_changed: false,
+    expect(dependentRead.details).toMatchObject({
+      kind: "task_read_batch",
+      outcomes: [{ kind: "found", task: { dependency_state: { kind: "waiting" } } }],
     });
-    const unparentedResult = await link.execute("unlink-parent", {
-      team_name: teamName,
-      task_id: child.id,
-      relation: "parent",
-      target_id: parent.id,
-      action: "remove",
-      expected_version: parented.version,
-    }, undefined, undefined, leadCtx);
-    const unparented = taskFrom(unparentedResult);
-    expect(unparented.relations).not.toContainEqual({ relation: "parent", targetId: parent.id });
-    expect(unparentedResult.details).toMatchObject({
-      kind: "task_linked",
-      task_id: child.id,
-      target_id: parent.id,
-      relation: "parent",
-      action: "remove",
-      changed: true,
-      version: unparented.version,
-    });
-
-    const duplicateUnparent = await link.execute("unlink-parent-idempotent", {
-      team_name: teamName,
-      task_id: child.id,
-      relation: "parent",
-      target_id: parent.id,
-      action: "remove",
-      expected_version: unparented.version,
-    }, undefined, undefined, leadCtx);
-    expect(duplicateUnparent.details).toMatchObject({
-      kind: "task_linked",
-      task_id: child.id,
-      target_id: parent.id,
-      relation: "parent",
-      action: "remove",
-      changed: false,
-      version: unparented.version,
-    });
-    expect(duplicateUnparent.content[0].text).not.toMatch(/delivery/i);
-
-    // Reasoning reads expose full prose; mutation content stays compact and the
-    // machine-facing receipt retains the post-state and safety evidence.
-    const readResult = await read.execute("read-full", {
-      team_name: teamName,
-      task_id: designed.id,
-    }, undefined, undefined, leadCtx);
-    expect(readResult.content[0].text).not.toBe(JSON.stringify(readResult.details));
-    const readTask = taskFrom(readResult);
-    assertCurrentTaskShape(readTask);
-    expect(readTask).toMatchObject({
-      id: designed.id,
-      title: "Refactor persistence boundary",
-      description: "The durability evaluator passes and conflicting writes fail closed.",
-      status: "in_progress",
-      assignee: "worker-a",
-      version: approved.version,
-    });
-    expect(designedResult.details).toMatchObject({
-      kind: "task_update_batch",
-      outcomes: [{
-        kind: "updated",
-        task_id: designed.id,
-        operation_id: "supplement-design",
-        task: expect.objectContaining({ id: designed.id, status: "open" }),
-        journal_entries: expect.any(Array),
-      }],
-    });
-
-    // `deferred` exists in native Beads but is deliberately outside this
-    // minimal collaboration vocabulary. The adapter must expose it honestly
-    // or reject it; silently projecting it as `open` would lose authority state.
-    const deferred = taskFrom(await create.execute("create-deferred", {
-      team_name: teamName,
-      title: "Externally deferred work",
-      description: "Used to exercise backend schema drift.",
-    }, undefined, undefined, leadCtx));
-    execFileSync("bd", ["--directory", taskWorkspace, "--json", "update", deferred.id, "--status", "deferred"], {
-      stdio: "ignore",
-    });
-    const deferredRead = await read.execute("read-deferred", {
-      team_name: teamName,
-      task_id: deferred.id,
-    }, undefined, undefined, leadCtx);
-    expect(deferredRead.details).toMatchObject({
-      kind: "unavailable",
-      reason: "task_authority_unavailable",
-      state_changed: false,
-    });
-    expect(deferredRead.details.message).toMatch(/deferred|unsupported|status/i);
   });
 });

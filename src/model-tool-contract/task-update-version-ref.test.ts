@@ -19,9 +19,11 @@ describe("Task update version refs", () => {
     const port = new InMemoryModelToolTeamPort();
     const session = exactLeaderSessionId("leader-session");
     await port.createTeam(session, { name: "release", purpose: "Verify refs." });
-    await port.createTask(session, { operationId: "create-verify", title: "Verify", goal: "Verify opaque refs." });
-    const updated = await port.updateTasks(session, [{ taskId: "task-1", operationId: "status", expectedVersion: v1, status: "in_progress" }]);
-    expect(updated).toMatchObject({ kind: "batch", outcomes: [{ kind: "updated", task: { current_context: "Work has not started.", version: taskVersionRef(v1) } }] });
+    await port.ensureWorker(session, { name: "verifier", scope: "Verify opaque Task refs." });
+    const created = await port.createTask(session, { operationId: "create-verify", title: "Verify", goal: "Verify opaque refs.", assignee: "verifier" });
+    if (created.kind !== "created") throw new Error("Expected created Task.");
+    const updated = await port.updateTasks(session, [{ taskId: "task-1", operationId: "status", expectedVersion: created.task.version as ReturnType<typeof taskVersionRef>, status: "in_progress" }]);
+    expect(updated).toMatchObject({ kind: "batch", outcomes: [{ kind: "updated", task: { current_context: "Work has not started.", version: taskVersionRef(created.task.version) } }] });
 
     if (updated.kind !== "batch" || updated.outcomes[0]?.kind !== "updated") throw new Error("Expected updated Task outcome.");
     const raw = { kind: "task_update_batch" as const, outcomes: [{

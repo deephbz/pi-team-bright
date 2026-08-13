@@ -116,6 +116,7 @@ describe("DurableTaskAuthorityTeam", () => {
     expect(extension.match(/const taskAuthorityTeam = new DurableTaskAuthorityTeam\(\);/g)).toHaveLength(1);
     expect(extension.match(/const taskAuthorityReadTeam = new DurableTaskAuthorityReadTeam\(\);/g)).toHaveLength(1);
     expect(extension.match(/const taskAuthorityRead = new DurableTaskAuthorityRead\(taskAuthorityReadTeam\);/g)).toHaveLength(1);
-    expect(extension.match(/createPublishingBeadsTaskAdapterFactory\(new DurableTaskMutationPublication\(\), taskAuthorityTeam, taskAuthorityRead\)/g)).toHaveLength(1);
+    expect(extension.match(/const taskPublication = new DurableTaskMutationPublication\(\);/g)).toHaveLength(1);
+    expect(extension.match(/createPublishingBeadsTaskAdapterFactory\(taskPublication, taskAuthorityTeam, taskAuthorityRead, taskOrchestration\)/g)).toHaveLength(1);
   });
 });
