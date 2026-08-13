@@ -29,7 +29,7 @@ piTeams({
 const expectedTools = [
   "alert_send",
   "ensure_worker",
-  "task_create",
+  "task_graph_apply",
   "task_read",
   "task_update",
   "team_create",
@@ -60,7 +60,7 @@ describe("minimal PiTeams agent-facing surface", () => {
       "src/model-tool-contract/tui-projection.ts",
       "src/utils/models.ts",
       "src/utils/tasks.ts",
-      "src/utils/team-events.ts",
+      "src/coordination/event-journal.ts",
       "src/utils/tool-surface.test.ts",
     ]) {
       expect(reference).toContain(source);
@@ -99,13 +99,14 @@ describe("minimal PiTeams agent-facing surface", () => {
       else process.env.PI_AGENT_NAME = previousAgentName;
     }
     const workerUpdate = workerTools.find(candidate => candidate.name === "task_update");
-    expect(workerUpdate?.description).toMatch(/claim=true.+atomic claim.+no status/is);
-    expect(JSON.stringify(workerUpdate?.parameters.properties?.claim)).toMatch(/do not include.+status/i);
+    expect(workerUpdate?.description).toMatch(/explicit graph-native Task transition.+exact Task version/is);
+    expect(JSON.stringify(workerUpdate?.parameters.properties?.transition)).toContain("claim");
+    expect(JSON.stringify(workerUpdate?.parameters.properties?.transition)).not.toMatch(/dependency_waiting|ready/);
     expect(registeredTools.some((candidate) => candidate.name === "task_link")).toBe(false);
-    expect(skill).toMatch(/claim=true.+alone/is);
+    expect(skill).toMatch(/sends `claim` with the exact Task version/is);
     expect(skill).toMatch(/Beads timeout.+unknown authority outcome/is);
     expect(skill).toMatch(/same operation ID and identical/i);
-    expect(skill).toMatch(/Closed is a work state.+latest receipt or read/is);
+    expect(skill).toMatch(/Only `goal_achieved` satisfies a.+prerequisite/is);
   });
 
   it("keeps terminal window placement as Team policy", () => {
@@ -115,17 +116,18 @@ describe("minimal PiTeams agent-facing surface", () => {
   });
 
   it("binds goal-driven Tasks to Workers", () => {
-    const create = tool("task_create");
+    const create = tool("task_graph_apply");
     const update = tool("task_update");
     expect(create.parameters.properties).toHaveProperty("operation_id");
     expect(create.parameters.properties).toHaveProperty("tasks");
     expect((create.parameters as any).properties.tasks.items.properties).toHaveProperty("needs");
     expect(create.parameters.properties).not.toHaveProperty("dependencies");
-    expect(update.parameters.properties).toHaveProperty("updates");
-    expect(JSON.stringify(update.parameters.properties?.updates)).toContain("expected_version");
-    expect(JSON.stringify(update.parameters.properties?.updates)).toContain("journal_entries");
+    expect(update.parameters.properties).toHaveProperty("task_id");
+    expect(update.parameters.properties).toHaveProperty("expected_version");
+    expect(update.parameters.properties).toHaveProperty("transition");
+    expect(update.parameters.properties).not.toHaveProperty("updates");
     expect(skill).toMatch(/success signals|acceptance criteria/);
-    expect(skill).toMatch(/closes with evidence|blocks with blocker evidence/);
+    expect(skill).toMatch(/`goal_achieved` with.+success evidence|`block` only.+blocker/is);
   });
 
   it("separates stable Worker identity from assigned work", () => {

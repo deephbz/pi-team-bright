@@ -96,10 +96,15 @@ async function acknowledgeSnapshot(
   await expect(port.acknowledgePendingObservationAsync(leaderSessionId, entryId, [entryId])).resolves.toBe(true);
 }
 
-async function appendTaskEvent(name: string, id: string, change: "created" | "status" = "status") {
+async function appendTaskEvent(
+  name: string,
+  id: string,
+  change: "created" | "status" = "status",
+  status: "open" | "closed" = "open",
+) {
   return teamEvents.appendTeamEvent(name, {
     type: "task",
-    ref: { taskId: id, version: taskVersionRef(`event-${id}`) },
+    ref: { taskId: id, version: taskVersionRef(`beads-${id}-${status}`) },
     change,
     actor: "worker",
   });
@@ -127,7 +132,7 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
 
     await acknowledgeSnapshot(fixture);
     current = taskEnvelope(fixture.name, taskId, "closed");
-    await appendTaskEvent(fixture.name, taskId);
+    await appendTaskEvent(fixture.name, taskId, "status", "closed");
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "close-update"))
       .resolves.toMatchObject({

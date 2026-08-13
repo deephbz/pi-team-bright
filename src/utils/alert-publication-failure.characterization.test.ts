@@ -181,7 +181,7 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
     const state = await fixture();
     const lead = leaderHarness();
     const context = sessionContext(state.leaderSessionFile);
-    const created = await lead.invoke("task_create", "create-task", {
+    const created = await lead.invoke("task_graph_apply", "create-task", {
       operation_id: "alert-publication-task",
       tasks: [{
         key: "preserve",

@@ -183,7 +183,7 @@ describe("clean-cut public contract", () => {
     const leaderName = uniqueTeam("leader-surface");
     writeTeam(leaderName);
     const expectedLeaderTools = [
-      "alert_send", "ensure_worker", "task_create", "task_read", "task_update",
+      "alert_send", "ensure_worker", "task_graph_apply", "task_read", "task_update",
       "team_create", "team_shutdown", "team_sync", "worker_stop",
     ];
 
@@ -280,7 +280,7 @@ describe("clean-cut public contract", () => {
       ctx,
     );
     expect(beforeStart?.systemPrompt).toContain("delivered in context");
-    expect(beforeStart?.systemPrompt).toContain("call task_update yourself to set it closed");
+    expect(beforeStart?.systemPrompt).toContain("call task_update with goal_achieved and exact evidence");
     expect(beforeStart?.systemPrompt).toContain("Use alert_send only for exceptional clarification or escalation");
     expect(beforeStart?.systemPrompt).not.toContain("Start by calling read_inbox");
     await harness.handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
@@ -650,37 +650,50 @@ describe("durability and recovery", () => {
     settled.stop();
   });
 
-  it.skipIf(!hasBd)("commits terminal status and its explanatory note in one Task mutation", async () => {
+  it("commits goal success and its evidence in one graph-native Task mutation", async () => {
     const name = uniqueTeam("terminal-state-atomicity");
-    const config = writeTeam(name, { workerSession: `/tmp/${name}-worker.jsonl` });
-    const store = new BeadsTaskStore({ teamName: name, workspace: config.taskWorkspace!, requireExpectedVersion: false });
-    const createResult = await extensionHarness().tools.get("task_create")!.execute("create", {
+    writeTeam(name, { workerSession: `/tmp/${name}-worker.jsonl` });
+    vi.stubEnv("PI_TEAM_NAME", name);
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const leader = extensionHarness();
+    const context = sessionContext("lead-session");
+    const createResult = await leader.tools.get("task_graph_apply")!.execute("create", {
       operation_id: "create-terminal-transition",
       tasks: [{ key: "terminal", title: "Terminal transition", goal: "Close with durable context.", assignee: "worker" }],
-    }, undefined, undefined, { sessionManager: { getSessionFile: () => "lead-session" } });
+    }, undefined, undefined, context);
     const created = createResult.details.tasks_by_key.terminal;
-    const update = extensionHarness().tools.get("task_update")!;
-    const result = await update.execute("update", {
-      updates: [{
-        task_id: created.id,
-        operation_id: "terminal-close",
-        status: "closed",
-        current_context: "Acceptance criteria verified; closing the Task.",
-        journal_entries: [{ kind: "result", text: "Acceptance criteria verified; closing the Task." }],
-        expected_version: created.version,
-      }],
-    }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "lead-session" },
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    vi.spyOn(teams, "resolveCurrentTeammateSessionBinding").mockResolvedValue({
+      status: "bound",
+      teamName: name,
+      member: (await teams.readConfig(name)).members.find((member) => member.name === "worker")!,
     });
+    const update = extensionHarness().tools.get("task_update")!;
+    const claimed = await update.execute("claim", {
+      task_id: created.id,
+      operation_id: "terminal-claim",
+      transition: "claim",
+      expected_version: created.version,
+    }, undefined, undefined, sessionContext(`/tmp/${name}-worker.jsonl`));
+    expect(claimed.details).toMatchObject({ kind: "updated", transition: "claim" });
+    const result = await update.execute("update", {
+      task_id: created.id,
+      operation_id: "terminal-achieved",
+      transition: "goal_achieved",
+      current_context: "Acceptance criteria verified; the goal is achieved.",
+      evidence: "Acceptance criteria passed in the external verification run.",
+      expected_version: claimed.details.task.version,
+    }, undefined, undefined, context);
     expect(result.details).toMatchObject({
-      kind: "task_update_batch",
-      outcomes: [{
-        kind: "updated",
-        task_id: created.id,
-        operation_id: "terminal-close",
-        task: { status: "closed", current_context: "Acceptance criteria verified; closing the Task." },
-        journal_entries: [expect.objectContaining({ kind: "result", text: "Acceptance criteria verified; closing the Task." })],
-      }],
+      kind: "updated",
+      task_id: created.id,
+      operation_id: "terminal-achieved",
+      transition: "goal_achieved",
+      task: {
+        status: "goal_achieved",
+        current_context: "Acceptance criteria verified; the goal is achieved.",
+        state: { kind: "goal_achieved" },
+      },
     });
   });
 });

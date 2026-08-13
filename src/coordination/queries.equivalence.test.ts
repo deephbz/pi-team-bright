@@ -114,7 +114,7 @@ describe("durable Coordination query equivalence", () => {
     expect(() => composedDurableModelToolPort()).not.toThrow();
     const root = process.cwd();
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
-    expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory\);/g)).toHaveLength(1);
+    expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory, graphTaskOrchestration\);/g)).toHaveLength(1);
     expect(extension).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });
 

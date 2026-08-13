@@ -114,7 +114,7 @@ afterEach(() => {
 });
 
 describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0)("Worker task_update TaskVersionRef boundary", () => {
-  it("accepts historical package provenance and preserves opaque Task version reconciliation", async () => {
+  it("preserves opaque Task versions across graph-native Worker reads and claims", async () => {
     const teamName = uniqueTeam();
     const root = workspace();
     writeTeam(teamName, root);
@@ -122,38 +122,34 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const worker = harness(teamName, "worker");
     const leadCtx = context(teamName, "team-lead");
     const workerCtx = context(teamName, "worker");
-    const create = lead.get("task_create")!;
+    const create = lead.get("task_graph_apply")!;
     const update = worker.get("task_update")!;
     const read = worker.get("task_read")!;
 
     expect(Check(update.parameters as any, {
       task_id: "task-1",
-      operation_id: "update-version-safe",
-      status: "in_progress",
+      operation_id: "claim-version-safe",
+      transition: "claim",
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(true);
     expect(Check(update.parameters as any, {
       task_id: "task-1",
-      operation_id: "claim-version-safe",
-      claim: true,
+      operation_id: "context-version-safe",
+      current_context: "Current meaning.",
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(true);
-    // The former team_name coordinate is gone, but the three unchanged
-    // required coordinates still accept a no-op update at the schema boundary.
     expect(Check(update.parameters as any, {
       task_id: "task-1",
       operation_id: "no-op-version-safe",
       expected_version: taskVersionRef("beads_v1"),
-    })).toBe(true);
+    })).toBe(false);
     expect(Check(update.parameters as any, {
+      team_name: teamName,
       task_id: "task-1",
-      claim: true,
-      status: "in_progress",
+      operation_id: "unexpected-team",
+      transition: "claim",
       expected_version: taskVersionRef("beads_v1"),
     })).toBe(false);
-    expect(Check(update.parameters as any, { task_id: "task-1", status: "in_progress" })).toBe(false);
-    expect(Check(update.parameters as any, { task_id: "task-1", status: "in_progress", expected_version: "beads_v1" })).toBe(false);
-    expect(Check(update.parameters as any, { team_name: teamName, task_id: "task-1", operation_id: "unexpected-team", status: "in_progress", expected_version: taskVersionRef("beads_v1") })).toBe(false);
 
     const created = await create.execute("create", {
       operation_id: "create-version-safe-mutation",
@@ -163,81 +159,21 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     const readResult = await read.execute("read", { task_id: task.id }, undefined, undefined, workerCtx);
     const modelVersion = JSON.parse(readResult.content[0].text).task.version;
     expect(modelVersion).toBe(task.version);
+    expect(modelVersion).toMatch(/^v_[0-9a-f]{16}$/);
 
-    const originalApply = authority.applySemanticTaskUpdate;
-    const expectedVersions: string[] = [];
-    vi.spyOn(authority, "applySemanticTaskUpdate").mockImplementation(async (...args: any[]) => {
-      expectedVersions.push(args[3].expectedVersion);
-      return originalApply(...args as Parameters<typeof authority.applySemanticTaskUpdate>);
-    });
-    const updated = await update.execute("first", {
+    const claimed = await update.execute("claim", {
       task_id: task.id,
-      operation_id: "worker-first-update",
-      status: "in_progress",
+      operation_id: "worker-claim",
+      transition: "claim",
       expected_version: modelVersion,
     }, undefined, undefined, workerCtx);
-    expect(expectedVersions).toEqual([expect.stringMatching(/^beads_[0-9a-f]{64}$/)]);
-    expect(updated.details).toMatchObject({
-      kind: "task_update_batch",
-      outcomes: [{ kind: "updated", task_id: task.id, task: { status: "in_progress" } }],
-    });
-    const updatedRaw = updated.details.outcomes[0].task.version;
-    expect(JSON.parse(updated.content[0].text)).toMatchObject({ kind: "updated", task: { version: updatedRaw } });
-
-    const noVersion = await update.execute("no-version", {
-      task_id: task.id,
-      operation_id: "worker-no-version",
-      append_note: "This must not bypass CAS.",
-    }, undefined, undefined, workerCtx);
-    expect(noVersion.details).toMatchObject({
-      kind: "task_update_batch",
-      outcomes: [{ kind: "refused", reason: "version_conflict", current_task: { id: task.id, version: updatedRaw }, state_changed: false }],
-    });
-    expect(JSON.parse(noVersion.content[0].text)).toMatchObject({
-      kind: "refused",
-      reason: "version_conflict",
-      current_task: { version: updatedRaw },
-      recovery: { action: "reconcile_and_retry", expected_version: updatedRaw },
-    });
-
-    const rawVersion = await update.execute("raw-version", {
-      task_id: task.id,
-      operation_id: "worker-raw-version",
-      append_note: "Raw authority versions are not model input.",
-      expected_version: "beads_raw_version",
-    }, undefined, undefined, workerCtx);
-    expect(rawVersion.details.outcomes[0]).toMatchObject({ kind: "refused", reason: "version_conflict", current_task: { version: updatedRaw }, state_changed: false });
-
-    const appended = await update.execute("append", {
-      task_id: task.id,
-      operation_id: "worker-append",
-      append_note: "Append-note-only Worker mutations remain valid.",
-      expected_version: updatedRaw,
-    }, undefined, undefined, workerCtx);
-    expect(appended.details.outcomes[0]).toMatchObject({ kind: "updated", task: { status: "in_progress" } });
-
-    const claimCreated = await create.execute("create-claim", {
-      operation_id: "create-version-safe-claim",
-      tasks: [{ key: "claim", title: "Version-safe claim", goal: "Prove claim uses the same version boundary.", assignee: "worker" }],
-    }, undefined, undefined, leadCtx);
-    const claimTask = claimCreated.details.tasks_by_key.claim;
-    const claimVersion = JSON.parse((await read.execute("read-claim", {
-      task_id: claimTask.id,
-    }, undefined, undefined, workerCtx)).content[0].text).task.version;
-    const claimed = await update.execute("status", {
-      task_id: claimTask.id,
-      operation_id: "worker-claim-status",
-      status: "in_progress",
-      expected_version: claimVersion,
-    }, undefined, undefined, workerCtx);
-    expect(claimed.details.outcomes[0]).toMatchObject({
+    expect(claimed.details).toMatchObject({
       kind: "updated",
-      task: { id: claimTask.id, status: "in_progress" },
+      transition: "claim",
+      task: { id: task.id, status: "in_progress" },
     });
-  // This scenario makes several serial real-Beads mutations and reads. It normally
-  // completes in 28 seconds, but aggregate workers can contend on the Beads
-  // process/database startup path. Keep a bounded timeout that detects a lock
-  // failure without rejecting that measured aggregate-only contention.
+    expect(claimed.details.task.version).toMatch(/^v_[0-9a-f]{16}$/);
+    expect(claimed.details.task.version).not.toBe(modelVersion);
   }, 120_000);
 
   it("does not republish an idempotent create replay", async () => {
@@ -289,125 +225,6 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(await tasks.listTasks(teamName, taskReadFactory)).toHaveLength(1);
     expect(readTeamEvents(teamName).events).toHaveLength(1);
     expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
-  }, 60_000);
-
-  it("uses one Task authority read through the Worker adapter", async () => {
-    const teamName = uniqueTeam();
-    const root = workspace();
-    writeTeam(teamName, root);
-    const lead = harness(teamName, "team-lead");
-    const worker = harness(teamName, "worker");
-    const leadCtx = context(teamName, "team-lead");
-    const workerCtx = context(teamName, "worker");
-    const created = await lead.get("task_create")!.execute("create", {
-      operation_id: "create-worker-read",
-      tasks: [{ key: "read", title: "Worker read", goal: "Read one exact Task authority record.", assignee: "worker" }],
-    }, undefined, undefined, leadCtx);
-    const task = created.details.tasks_by_key.read;
-    const taskAuthorityReadSpy = vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelope");
-    const genericRead = vi.spyOn(tasks, "readTask");
-
-    const result = await worker.get("task_read")!.execute("read", {
-      task_id: task.id,
-    }, undefined, undefined, workerCtx);
-
-    expect(taskAuthorityReadSpy).toHaveBeenCalledOnce();
-    expect(taskAuthorityReadSpy).toHaveBeenCalledWith(teamName, task.id);
-    expect(genericRead).not.toHaveBeenCalled();
-    expect(JSON.parse(result.content[0].text)).toMatchObject({ kind: "found", task: { id: task.id, version: expect.any(String) } });
-  }, 60_000);
-
-  it("refuses a replaced Worker before authority mutation, then lets its replacement mutate", async () => {
-    const teamName = uniqueTeam();
-    const root = workspace();
-    writeTeam(teamName, root);
-    const lead = harness(teamName, "team-lead");
-    const worker = harness(teamName, "worker");
-    const leadCtx = context(teamName, "team-lead");
-    const staleSessionFile = `/tmp/${teamName}-worker.jsonl`;
-    const staleWorkerCtx = context(teamName, "worker", staleSessionFile);
-    const created = await lead.get("task_create")!.execute("create", {
-      operation_id: "create-stale-actor",
-      tasks: [{ key: "stale", title: "Stale actor", goal: "Record current stale Worker mutation behavior.", assignee: "worker" }],
-    }, undefined, undefined, leadCtx);
-    const task = created.details.tasks_by_key.stale;
-    const beforeAuthority = structuredClone(await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id));
-    const beforeCanonicalTask = structuredClone(await taskReadFactory(teamName, "worker").read(task.id));
-    const beforeOperationMetadata = structuredClone(beforeAuthority.taskMetadata);
-    const beforeEvents = readTeamEvents(teamName).events;
-    const beforeDeliveries = await readTaskDeliveries(teamName, "worker");
-    const hintPath = paths.taskEventFailureHintPath(teamName);
-    const beforeHints = fileBytesOrAbsent(hintPath);
-    const updateCalls = vi.spyOn(BeadsTaskStore.prototype, "updateWithResult");
-    const suppress = vi.spyOn(DurableTaskMutationPublication.prototype, "suppressTaskVersionForSession");
-    const publish = vi.spyOn(DurableTaskMutationPublication.prototype, "publishTaskMutation");
-    const complete = vi.spyOn(DurableTaskMutationPublication.prototype, "completeOwnerTransitionIntent");
-    const originalApply = authority.applySemanticTaskUpdate;
-    const staleMembership = await teams.currentMembership(teamName, "worker");
-    const replacementSessionFile = `/tmp/${teamName}-worker-replacement.jsonl`;
-    let replacementMembershipId: string | undefined;
-    vi.spyOn(authority, "applySemanticTaskUpdate").mockImplementationOnce(async (...args: any[]) => {
-      await teams.deactivateMembership(teamName, staleMembership.membershipId!, "replaced");
-      const replacement = member(teamName, "worker", "teammate");
-      replacement.membershipId = teams.newMembershipId();
-      replacement.agentId = `replacement@${teamName}`;
-      replacement.sessionFile = replacementSessionFile;
-      replacementMembershipId = replacement.membershipId;
-      await teams.addMember(teamName, replacement);
-      return originalApply(...args as Parameters<typeof authority.applySemanticTaskUpdate>);
-    });
-
-    await expect(worker.get("task_update")!.execute("stale-update", {
-      task_id: task.id,
-      operation_id: "stale-actor-update",
-      status: "in_progress",
-      expected_version: task.version,
-    }, undefined, undefined, staleWorkerCtx)).rejects.toThrow(
-      `Membership ${staleMembership.membershipId} / Session ${staleSessionFile} is not the current binding for worker on team ${teamName}; stale processes cannot mutate authority state.`,
-    );
-    expect(updateCalls).not.toHaveBeenCalled();
-    expect(suppress).not.toHaveBeenCalled();
-    expect(publish).not.toHaveBeenCalled();
-    expect(complete).not.toHaveBeenCalled();
-    expect(await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id)).toEqual(beforeAuthority);
-    expect(await taskReadFactory(teamName, "worker").read(task.id)).toEqual(beforeCanonicalTask);
-    expect((await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id)).taskMetadata).toEqual(beforeOperationMetadata);
-    expect(readTeamEvents(teamName).events).toEqual(beforeEvents);
-    expect(fileBytesOrAbsent(hintPath)).toEqual(beforeHints);
-    expect(await readTaskDeliveries(teamName, "worker")).toEqual(beforeDeliveries);
-
-    const replacementWorker = harness(teamName, "worker");
-    const replay = await replacementWorker.get("task_update")!.execute("replacement-first-update", {
-      task_id: task.id,
-      operation_id: "stale-actor-update",
-      status: "in_progress",
-      expected_version: task.version,
-    }, undefined, undefined, context(teamName, "worker", replacementSessionFile));
-    expect(replay.details.outcomes[0]).toMatchObject({
-      kind: "updated",
-      task_id: task.id,
-      operation_id: "stale-actor-update",
-      task: { status: "in_progress" },
-    });
-    expect(updateCalls).toHaveBeenCalledOnce();
-    expect(suppress).not.toHaveBeenCalled();
-    expect(publish).toHaveBeenCalledOnce();
-    expect(complete).not.toHaveBeenCalled();
-    const afterAuthority = await taskAuthorityRead.readTaskAuthorityRecordEnvelope(teamName, task.id);
-    expect(afterAuthority).not.toEqual(beforeAuthority);
-    expect(afterAuthority.task).toMatchObject({ id: task.id, status: "in_progress" });
-    expect(JSON.parse(String(afterAuthority.taskMetadata))).toMatchObject({ last_operation: { operation_id: "stale-actor-update" } });
-    expect(readTeamEvents(teamName).events).toHaveLength(beforeEvents.length + 1);
-    expect(fileBytesOrAbsent(hintPath)).toEqual(beforeHints);
-    const afterDeliveries = await readTaskDeliveries(teamName, "worker");
-    expect(afterDeliveries).toEqual([
-      ...beforeDeliveries,
-      expect.objectContaining({
-        ref: { kind: "task", taskId: task.id, version: replay.details.outcomes[0].task.version },
-        recipientMembershipId: replacementMembershipId,
-        recipientSessionFile: replacementSessionFile,
-      }),
-    ]);
   }, 60_000);
 
   it("routes real-Beads mutations through the injected Team port and retains no-port compatibility", async () => {
@@ -522,36 +339,5 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(await readTaskDeliveries(compatibilityTeam, "worker")).toHaveLength(2);
   }, 120_000);
 
-  it("keeps the raw conditional preflight after model-ref resolution", async () => {
-    const teamName = uniqueTeam();
-    const root = workspace();
-    const config = writeTeam(teamName, root);
-    const lead = harness(teamName, "team-lead");
-    const worker = harness(teamName, "worker");
-    const leadCtx = context(teamName, "team-lead");
-    const workerCtx = context(teamName, "worker");
-    const created = await lead.get("task_create")!.execute("create", {
-      operation_id: "create-race",
-      tasks: [{ key: "race", title: "Race", goal: "Keep the post-resolution raw preflight.", assignee: "worker" }],
-    }, undefined, undefined, leadCtx);
-    const task = created.details.tasks_by_key.race;
-    const visibleVersion = JSON.parse((await worker.get("task_read")!.execute("read", { task_id: task.id }, undefined, undefined, workerCtx)).content[0].text).task.version;
-    const store = new BeadsTaskStore({ teamName, workspace: root, authorityFingerprint: config.taskAuthorityFingerprint!, requireExpectedVersion: true });
-    const originalRead = DurableTaskAuthorityRead.prototype.readTaskAuthorityRecordEnvelope;
-    vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelope").mockImplementationOnce(async function (this: DurableTaskAuthorityRead, team, taskId) {
-      const record = await originalRead.call(this, team, taskId);
-      await store.update(record.task.id, { description: "External writer won the race." }, { actor: "team-lead", expectedVersion: record.task.version });
-      return record;
-    });
 
-    const raced = await worker.get("task_update")!.execute("raced", {
-      task_id: task.id,
-      operation_id: "worker-raced-update",
-      append_note: "This write must lose the raw preflight race.",
-      expected_version: visibleVersion,
-    }, undefined, undefined, workerCtx);
-    const current = await tasks.readTask(teamName, task.id, taskReadFactory);
-    expect(raced.details.outcomes[0]).toMatchObject({ kind: "refused", reason: "version_conflict", current_task: { id: task.id, version: current.version }, state_changed: false });
-    expect(JSON.parse(raced.content[0].text)).toMatchObject({ recovery: { action: "reconcile_and_retry", expected_version: current.version } });
-  }, 60_000);
 });

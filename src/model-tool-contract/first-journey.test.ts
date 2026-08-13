@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import {
-  TaskCreateParametersSchema,
-  TaskCreateResultSchema,
+  TaskGraphApplyParametersSchema,
+  TaskGraphApplyResultSchema,
   TeamCreateParametersSchema,
 } from "./catalog";
 import { InMemoryModelToolTeamPort, exactLeaderSessionId, registerModelToolJourney } from "./runtime";
@@ -43,14 +43,14 @@ describe("DAG-native model-tool journey", () => {
   it("registers one atomic graph create tool and removes task_link", () => {
     const { tools } = journey();
     expect([...tools.keys()]).toEqual([
-      "team_create", "team_sync", "ensure_worker", "task_create", "task_read",
+      "team_create", "team_sync", "ensure_worker", "task_graph_apply", "task_read",
       "task_update", "worker_stop", "team_shutdown", "alert_send",
     ]);
     expect(tools.get("team_create")!.parameters).toBe(TeamCreateParametersSchema);
-    expect(tools.get("task_create")!.parameters).toBe(TaskCreateParametersSchema);
+    expect(tools.get("task_graph_apply")!.parameters).toBe(TaskGraphApplyParametersSchema);
     expect(tools.has("task_link")).toBe(false);
-    expect(Check(TaskCreateParametersSchema, dagCall)).toBe(true);
-    expect(Check(TaskCreateParametersSchema, { tasks: dagCall.tasks })).toBe(false);
+    expect(Check(TaskGraphApplyParametersSchema, dagCall)).toBe(true);
+    expect(Check(TaskGraphApplyParametersSchema, { tasks: dagCall.tasks })).toBe(false);
   });
 
   it("creates a four-Task DAG atomically across two stable Workers", async () => {
@@ -59,9 +59,9 @@ describe("DAG-native model-tool journey", () => {
     await invoke("ensure_worker", { name: "maker", scope: "Own release implementation." });
     await invoke("ensure_worker", { name: "reviewer", scope: "Own independent review and verification." });
 
-    const result = await invoke("task_create", dagCall);
-    expect(Check(TaskCreateResultSchema, result.details)).toBe(true);
-    expect(result.details.kind).toBe("task_graph_created");
+    const result = await invoke("task_graph_apply", dagCall);
+    expect(Check(TaskGraphApplyResultSchema, result.details)).toBe(true);
+    expect(result.details.kind).toBe("task_graph_applied");
     const cards = result.details.tasks_by_key;
     expect(Object.keys(cards)).toEqual(["plan", "impl", "review", "verify"]);
     expect(result.details.ready_task_ids).toEqual([cards.plan.id]);
@@ -75,29 +75,29 @@ describe("DAG-native model-tool journey", () => {
     await invoke("ensure_worker", { name: "maker", scope: "Own release implementation." });
     await invoke("ensure_worker", { name: "reviewer", scope: "Own independent review and verification." });
 
-    const bad = await invoke("task_create", {
+    const bad = await invoke("task_graph_apply", {
       ...dagCall,
       operation_id: "bad-cycle",
       tasks: dagCall.tasks.map(task => task.key === "plan" ? { ...task, needs: ["verify"] } : task),
     });
-    expect(bad.details).toMatchObject({ kind: "refused", reason: "graph_conflict", state_changed: false });
+    expect(bad.details).toMatchObject({ kind: "refused", reason: "invalid_graph", state_changed: false });
     const empty = await port.readSnapshot(session);
     expect(empty.kind === "snapshot" && empty.tasks).toHaveLength(0);
 
-    const first = (await invoke("task_create", dagCall)).details;
-    const replay = (await invoke("task_create", dagCall)).details;
+    const first = (await invoke("task_graph_apply", dagCall)).details;
+    const replay = (await invoke("task_graph_apply", dagCall)).details;
     expect(replay.replayed).toBe(true);
     expect(Object.fromEntries(Object.entries(replay.tasks_by_key).map(([key, task]: [string, any]) => [key, task.id])))
       .toEqual(Object.fromEntries(Object.entries(first.tasks_by_key).map(([key, task]: [string, any]) => [key, task.id])));
     const snapshot = await port.readSnapshot(session);
     expect(snapshot.kind === "snapshot" && snapshot.tasks).toHaveLength(4);
 
-    const changed = await invoke("task_create", { ...dagCall, tasks: dagCall.tasks.map((task, index) => index ? task : { ...task, title: "Changed" }) });
+    const changed = await invoke("task_graph_apply", { ...dagCall, tasks: dagCall.tasks.map((task, index) => index ? task : { ...task, title: "Changed" }) });
     expect(changed.details).toMatchObject({ kind: "refused", reason: "operation_conflict", state_changed: false });
   });
 
   it("keeps existing-Task expansion out of the frequent create grammar", () => {
-    expect(Check(TaskCreateParametersSchema, {
+    expect(Check(TaskGraphApplyParametersSchema, {
       operation_id: "expand-existing-dependent",
       tasks: [{ key: "audit", title: "Audit", goal: "Verify the release.", assignee: "reviewer" }],
       dependencies: [{ task: { task_id: "task-release", expected_version: "v_0123456789abcdef" }, needs: [{ key: "audit" }] }],
@@ -122,13 +122,14 @@ describe("DAG-native model-tool journey", () => {
     await invoke("team_create", { name: "release-team", purpose: "Prepare the release." });
     await invoke("ensure_worker", { name: "maker", scope: "Own release implementation." });
     await invoke("ensure_worker", { name: "reviewer", scope: "Own independent review and verification." });
-    const raw = (await invoke("task_create", dagCall)).details;
-    const model = projectToolResult("task_create", raw) as any;
-    expect(Check(ModelResultSchemas.task_create, model)).toBe(true);
+    const raw = (await invoke("task_graph_apply", dagCall)).details;
+    const model = projectToolResult("task_graph_apply", raw) as any;
+    expect(Check(ModelResultSchemas.task_graph_apply, model)).toBe(true);
     expect(model.ready_task_ids).toEqual(raw.ready_task_ids);
-    expect(model.tasks_by_key.impl.dependency_state).toEqual(raw.tasks_by_key.impl.dependency_state);
-    expect(projectTui({ tool: "task_create", details: raw, expanded: false }).join("\n")).toContain("4 Task DAG committed");
-    const expanded = projectTui({ tool: "task_create", details: raw, expanded: true }).join("\n");
+    expect(model.tasks_by_key.impl.status).toEqual(raw.tasks_by_key.impl.status);
+    expect(model.tasks_by_key.impl.state).toEqual(raw.tasks_by_key.impl.state);
+    expect(projectTui({ tool: "task_graph_apply", details: raw, expanded: false }).join("\n")).toContain("4 Task graph committed");
+    const expanded = projectTui({ tool: "task_graph_apply", details: raw, expanded: true }).join("\n");
     expect(expanded).toContain('"impl"');
     expect(expanded).toContain(raw.tasks_by_key.plan.id);
   });

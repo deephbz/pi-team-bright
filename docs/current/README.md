@@ -2,11 +2,12 @@
 
 Updated: 2026-08-12
 
-Current release: `0.17.0-rc.14` is published to npm `next` from annotated tag
-`v0.17.0-rc.14`. The durable publication evidence is in
+Current published release: `0.17.0-rc.14` remains on npm `next` from annotated
+tag `v0.17.0-rc.14`. The durable publication evidence is in
 [`2026-08-12-v0.17.0-rc.14-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md).
-The separate local DAG branch is based on the publication record at
-`origin/main` `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`.
+The `release/v0.17.0-rc.15-dag-native` side branch prepares the DAG-native
+candidate from publication record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`.
+It is not an npm publication, Git tag, GitHub Release, or `main` update.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -172,13 +173,13 @@ restating executable definitions.
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
 - `0.17.0-rc.14` is the published liveness and Worker-recovery base at exact
-  `origin/main` `8bb517bd32d8687e97b96a531db15833fd64420a`. The separate local
-  `feature/dag-native-rc13` branch adds atomic graph creation and mechanical
-  ready-front dispatch without changing the published tag or registry. Its
+  release code `8bb517bd32d8687e97b96a531db15833fd64420a`. The side branch
+  `release/v0.17.0-rc.15-dag-native` prepares atomic graph creation, mechanical
+  ready-front dispatch, graph control, and the read-only Task graph pane. Its
   earlier eight-Worker stress closed 117/117 Tasks and stopped all Workers;
   focused post-rebase integration and aggregate evidence is recorded in the
-  maintained [DAG-native context](../projects/dag-native/context.md). No DAG
-  push, tag, npm publication, registry change, or GitHub release is authorized.
+  maintained [DAG-native context](../projects/dag-native/context.md). The side
+  branch is a review candidate only. It does not change npm, a tag, or `main`.
 - `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release

@@ -25,7 +25,7 @@ The implementation:
 - routes explicit failure edges in separate right-side lanes, outside Dagre ranking;
 - packs islands into deterministic bounded shelves;
 - renders island labels and exposes island coordinates on the canvas;
-- distinguishes state and edge colors with a 256-color palette;
+- distinguishes state and edge colors with semantic ANSI roles that the active light or dark terminal palette resolves;
 - marks mixed edge crossings separately;
 - adds state filters (`all`, `actionable`, `nonterminal`, `failed`), recent limits, visible omission counts, and boundary-edge counts;
 - adds `[`/`]` island navigation while retaining arrows/`hjkl`, `f`, `s`, `r`, and `Home`;

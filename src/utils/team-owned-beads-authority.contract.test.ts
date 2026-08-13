@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { BeadsTaskStore, readBeadsAuthorityFingerprint } from "./beads";
+import { readBeadsAuthorityFingerprint } from "./beads";
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import { BEADS_WORKSPACE_ENV } from "../model-tool-contract/beads-authority-adapter";
@@ -142,7 +142,7 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
 
     await teams.ensureLogicalWorker(teamName, { name: "worker", scope: "Own the first executable Task." });
 
-    const created = await tools.get("task_create")!.execute(
+    const created = await tools.get("task_graph_apply")!.execute(
       "create-task",
       {
         operation_id: "create-default-authority",
@@ -158,7 +158,7 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
       ctx,
     );
     expect(created.details).toMatchObject({
-      kind: "task_graph_created",
+      kind: "task_graph_applied",
       tasks_by_key: { default: {
         title: "Use the default private authority",
         goal: "The first Task must work without operator setup.",
@@ -166,15 +166,19 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
     });
     const createdTaskId = created.details.tasks_by_key.default.id as string;
 
-    const restartedStore = new BeadsTaskStore({
-      teamName,
-      workspace: expectedWorkspace,
-      authorityFingerprint: config.taskAuthorityFingerprint,
-      requireExpectedVersion: false,
-    });
-    await expect(restartedStore.read(createdTaskId)).resolves.toMatchObject({
-      id: createdTaskId,
-      title: "Use the default private authority",
+    const read = await tools.get("task_read")!.execute(
+      "read-task",
+      { task_ids: [createdTaskId] },
+      undefined,
+      undefined,
+      ctx,
+    );
+    expect(read.details).toMatchObject({
+      kind: "task_read_batch",
+      outcomes: [{ kind: "found", task: {
+        id: createdTaskId,
+        title: "Use the default private authority",
+      } }],
     });
   });
 

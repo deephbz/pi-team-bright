@@ -13,13 +13,23 @@ import type { TaskAuthorityRecord } from "../utils/beads";
 import { taskVersionRef } from "./task-version-ref";
 
 const task = {
-  id: "task-1", title: "Verify", goal: "Verify the release.", status: "open" as const,
-  relations: [], dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
-  current_context: "Work has not started.", version: taskVersionRef("beads_task_1"),
+  id: "task-1",
+  title: "Verify",
+  goal: "Verify the release.",
+  assignee: "verifier",
+  model: "default" as const,
+  needs: [],
+  status: "ready" as const,
+  state: { kind: "ready" as const },
+  current_context: "Work has not started.",
+  version: taskVersionRef("beads_task_1"),
+  attempts_started: 0,
+  relations: [],
+  dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
 };
 const session = exactLeaderSessionId("totality-session");
 
-function assertTotal(tool: "task_create" | "task_update", raw: any) {
+function assertTotal(tool: "task_graph_apply" | "task_update", raw: any) {
   const assembly = assembleToolResult(tool, raw);
   const model = projectToolResult(tool, raw);
   expect(Check(ModelResultSchemas[tool], model)).toBe(true);
@@ -33,7 +43,7 @@ function registered(port: ModelToolTeamPort) {
   const tools = new Map<string, ModelToolRegistration>();
   registerModelToolJourney({ registerTool: (tool) => tools.set(tool.name, tool) }, port);
   const context = { sessionManager: { getSessionId: () => session } };
-  return async (name: "task_create" | "task_update", params: any) => {
+  return async (name: "task_graph_apply" | "task_update", params: any) => {
     const tool = tools.get(name)!;
     expect(Check(tool.parameters as any, params)).toBe(true);
     return tool.execute("totality-call", params, new AbortController().signal, undefined, context);
@@ -41,23 +51,23 @@ function registered(port: ModelToolTeamPort) {
 }
 
 describe("task semantic-result totality", () => {
-  it("projects every declared task_create and task_update raw outcome without generic TUI failure", () => {
+  it("projects every declared task_graph_apply and task_update raw outcome without generic TUI failure", () => {
     const create = [
-      { kind: "task_graph_created", operation_id: "create-ok", replayed: false, tasks_by_key: { verify: task }, ready_task_ids: [task.id] },
+      { kind: "task_graph_applied", operation_id: "create-ok", graph_version: "g_0123456789abcdef", replayed: false, tasks_by_key: { verify: task }, ready_task_ids: [task.id] },
       { kind: "refused", operation_id: "create-conflict", reason: "worker_unavailable", message: "Worker is absent.", state_changed: false },
       { kind: "refused", operation_id: "create-replay", reason: "operation_conflict", message: "Operation differs.", state_changed: false },
       { kind: "unavailable", operation_id: "create-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
       { kind: "unknown_outcome", operation_id: "create-unknown", message: "Authority response was lost." },
     ];
-    for (const outcome of create) assertTotal("task_create", outcome);
+    for (const outcome of create) assertTotal("task_graph_apply", outcome);
 
     const update = [
-      { kind: "updated", input_index: 0, task_id: task.id, operation_id: "update-ok", task, journal_entries: [] },
-      ...["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"].map((reason) => ({ kind: "refused", input_index: 0, task_id: task.id, operation_id: `update-${reason}`, reason, message: `${reason}.`, current_task: task, state_changed: false })),
-      { kind: "contract_gap", input_index: 0, task_id: task.id, operation_id: "update-gap", reason: "task_metadata_invalid", message: "Metadata is invalid.", unsupported: ["task_metadata"], current_task: task, state_changed: false },
+      { kind: "updated", input_index: 0, task_id: task.id, operation_id: "update-ok", replayed: false, transition: "context_updated", task, ready_task_ids: [] },
+      ...["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"].map((reason) => ({ kind: "refused", input_index: 0, task_id: task.id, operation_id: `update-${reason}`, reason, message: `${reason}.`, current_task: task, state_changed: false })),
+      { kind: "unknown_outcome", input_index: 0, task_id: task.id, operation_id: "update-unknown", message: "Authority response was lost." },
       { kind: "unavailable", input_index: 0, task_id: task.id, operation_id: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
     ];
-    for (const outcome of update) assertTotal("task_update", { kind: "task_update_batch", outcomes: [outcome] });
+    for (const outcome of update) assertTotal("task_update", outcome);
   });
 
   it("labels a post-create authority exception as an unknown outcome with its same-operation coordinate", async () => {
@@ -114,7 +124,7 @@ describe("task semantic-result totality", () => {
     const update = vi.spyOn(port, "updateTasks");
 
     for (const outcome of [
-      { kind: "created", operationId: "create-ok", replayed: false, tasksByKey: { verify: task }, readyTaskIds: [task.id] },
+      { kind: "created", operationId: "create-ok", graphVersion: "g_0123456789abcdef", replayed: false, tasksByKey: { verify: task }, readyTaskIds: [task.id] },
       { kind: "refused", operationId: "create-worker", reason: "worker_unavailable", message: "Worker is absent." },
       { kind: "refused", operationId: "create-conflict", reason: "operation_conflict", message: "Operation differs." },
       { kind: "unknown_outcome", operationId: "create-unknown", message: "Outcome is unknown." },
@@ -122,21 +132,21 @@ describe("task semantic-result totality", () => {
       { kind: "no_active_team", operationId: "create-unbound" },
     ]) {
       create.mockResolvedValueOnce(outcome as any);
-      const result = await invoke("task_create", { operation_id: outcome.operationId, tasks: [{ key: "verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" }] });
-      assertTotal("task_create", result.details);
+      const result = await invoke("task_graph_apply", { operation_id: outcome.operationId, tasks: [{ key: "verify", title: "Verify", goal: "Verify the release.", assignee: "verifier" }] });
+      assertTotal("task_graph_apply", result.details);
       if (outcome.kind === "unknown_outcome") {
         expect(JSON.parse(result.content[0].text)).toMatchObject({ recovery: { action: "retry_same_operation", operation_id: outcome.operationId } });
       }
     }
 
     for (const outcome of [
-      { kind: "updated", taskId: task.id, operationId: "update-ok", task, journalEntries: [] },
-      ...["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required"].map((reason) => ({ kind: "refused", taskId: task.id, operationId: `update-${reason}`, reason, message: `${reason}.`, currentTask: task })),
-      { kind: "contract_gap", taskId: task.id, operationId: "update-gap", reason: "task_metadata_invalid", message: "Metadata is invalid.", currentTask: task, unsupported: ["task_metadata"] },
+      { kind: "updated", taskId: task.id, operationId: "update-ok", replayed: false, transition: "context_updated", task, journalEntries: [], readyTaskIds: [] },
+      ...["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"].map((reason) => ({ kind: "refused", taskId: task.id, operationId: `update-${reason}`, reason, message: `${reason}.`, currentTask: task })),
+      { kind: "unknown_outcome", taskId: task.id, operationId: "update-unknown", message: "Outcome is unknown." },
       { kind: "unavailable", taskId: task.id, operationId: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable." },
     ]) {
       update.mockResolvedValueOnce({ kind: "batch", outcomes: [outcome] } as any);
-      const result = await invoke("task_update", { updates: [{ task_id: task.id, operation_id: outcome.operationId, expected_version: "v_0123456789abcdef", current_context: "Work has not started." }] });
+      const result = await invoke("task_update", { task_id: task.id, operation_id: outcome.operationId, expected_version: "v_0123456789abcdef", current_context: "Work has not started." });
       assertTotal("task_update", result.details);
     }
   });
