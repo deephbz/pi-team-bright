@@ -3,7 +3,7 @@ import { currentMember, deriveWorkerRunObservation, livenessIsComplete, liveness
 import { DEFAULT_SYNC_WAIT_SECONDS } from "../utils/sync-liveness-settings";
 import { readTaskEventFailureHintsAfter } from "../utils/task-event-failure-hints";
 import { taskVersionRef } from "../task-authority/task-version-ref";
-import type { TaskCard, TaskCardWarning } from "../task-authority/task-domain";
+import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TeamEvent } from "./contracts";
 import type { CoordinationHiddenObservationPort, CoordinationHiddenObservationProjection, CoordinationQueryBundle, CoordinationTaskReadOutcome, CoordinationLeaderBindingEvidence } from "./queries";
 import { CoordinationNudgeDebtService, type CoordinationNudgeStore, type SyncNudgeDebt } from "./nudge-debt";
@@ -15,8 +15,8 @@ type TaskProjection = CoordinationTaskProjection;
 type TaskProjectionReadResult = | ({ kind: "tasks" } & TaskProjection) | Extract<CoordinationSyncResult, { kind: "contract_gap" | "unavailable" }>;
 type BoundTeam = { teamName: string; config: Required<Pick<CoordinationLeaderBindingEvidence, "teamName" | "sessionFile" | "members">> & CoordinationLeaderBindingEvidence & { epochId: string }; sessionFile: string };
 export interface CoordinationProjectionDependencies {
-  projectNonterminalTaskIds(tasks: readonly TaskCard[], workerName: string): string[];
-  projectTaskChanges(events: readonly TeamEvent[], tasks: readonly TaskCard[]): { kind: "projected"; changes: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: import("../task-authority/contracts").ModelToolTaskJournalEntry[]; current: TaskCard }> } | Extract<CoordinationSyncResult, { kind: "contract_gap" }>;
+  projectNonterminalTaskIds(tasks: readonly CanonicalTaskCard[], workerName: string): string[];
+  projectTaskChanges(events: readonly TeamEvent[], tasks: readonly CanonicalTaskCard[]): { kind: "projected"; changes: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: import("../task-authority/contracts").ModelToolTaskJournalEntry[]; current: CanonicalTaskCard }> } | Extract<CoordinationSyncResult, { kind: "contract_gap" }>;
 }
 
 function asNumber(cursor: string): number { const value = Number(cursor); return Number.isSafeInteger(value) ? value : 0; }
@@ -219,21 +219,31 @@ export class CoordinationObservationService {
       }
 
       if (batch.events.length > 0) {
-        const baseline = tasksResult ?? this.cachedProjectionForBound(bound, observation.projection);
-        if (!baseline) {
-          // A restarted port has no memory cache. A complete authority rescan
-          // is the safe recovery path; it is never merged from another branch.
-          const recovered = await this.readTaskProjection(bound.teamName);
-          if (recovered.kind !== "tasks") return recovered;
-          tasksResult = recovered;
+        const completeTaskSet = this.coordinationQueries.taskStateDelivery.completeTaskSet?.(bound.teamName) === true;
+        if (completeTaskSet) {
+          // Graph authority owns a complete current set. Rescan it before
+          // projecting historical events, so removed IDs are subtracted and
+          // are never hydrated as if they were current authority gaps.
+          const current = await this.readTaskProjection(bound.teamName);
+          if (current.kind !== "tasks") return current;
+          tasksResult = current;
         } else {
-          tasksResult = baseline;
-        }
-        const idsToHydrate = this.staleEventTaskIds(batch.events, tasksResult);
-        if (idsToHydrate.length > 0) {
-          const refreshed = await this.hydrateTaskIds(bound.teamName, idsToHydrate);
-          if (refreshed.kind !== "tasks") return refreshed;
-          tasksResult = this.mergeTaskProjection(tasksResult, refreshed);
+          const baseline = tasksResult ?? this.cachedProjectionForBound(bound, observation.projection);
+          if (!baseline) {
+            // A restarted port has no memory cache. A complete authority rescan
+            // is the safe recovery path; it is never merged from another branch.
+            const recovered = await this.readTaskProjection(bound.teamName);
+            if (recovered.kind !== "tasks") return recovered;
+            tasksResult = recovered;
+          } else {
+            tasksResult = baseline;
+          }
+          const idsToHydrate = this.staleEventTaskIds(batch.events, tasksResult);
+          if (idsToHydrate.length > 0) {
+            const refreshed = await this.hydrateTaskIds(bound.teamName, idsToHydrate);
+            if (refreshed.kind !== "tasks") return refreshed;
+            tasksResult = this.mergeTaskProjection(tasksResult, refreshed);
+          }
         }
       }
       if (!tasksResult) {
@@ -266,7 +276,7 @@ export class CoordinationObservationService {
     return result;
   }
 
-  private taskEventFailureHintCursor(teamName: string, teamEpochId: string, tasks: readonly TaskCard[], afterCursor: string): string {
+  private taskEventFailureHintCursor(teamName: string, teamEpochId: string, tasks: readonly CanonicalTaskCard[], afterCursor: string): string {
     return this.store.readFailureHints(teamName, afterCursor, {
       teamEpochId,
       taskReferences: tasks.map((task) => ({ taskId: task.id, taskVersion: taskVersionRef(task.version) })),
@@ -290,7 +300,7 @@ export class CoordinationObservationService {
       const taskIds = await this.coordinationQueries.taskStateDelivery.listTaskIds(teamName);
       const records = await this.coordinationQueries.taskStateDelivery.readTasks(teamName, taskIds);
       this.assertCompleteTaskBatch(taskIds, records, "listed Task");
-      const projected: TaskCard[] = [];
+      const projected: CanonicalTaskCard[] = [];
       const warnings: TaskCardWarning[] = [];
       for (const result of records) {
         if (!result) throw new Error("A listed Task disappeared before exact hydration completed.");
@@ -384,7 +394,13 @@ export class CoordinationObservationService {
       .map((task) => task.id);
   }
 
-  private readWorkers(bound: BoundTeam, taskProjection: TaskCard[]): Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }> {
+  private currentTaskEvents(events: readonly TeamEvent[], tasks: readonly CanonicalTaskCard[]): TeamEvent[] {
+    const currentById = new Map(tasks.map((task) => [task.id, task.version]));
+    return events.filter((event) => event.type !== "task"
+      || currentById.get(event.ref.taskId) === event.ref.version);
+  }
+
+  private readWorkers(bound: BoundTeam, taskProjection: CanonicalTaskCard[]): Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }> {
     return (bound.config.logicalWorkers ?? []).map((logical) => {
       const member = latestMember(bound.config, logical.name);
       return {
@@ -410,7 +426,7 @@ export class CoordinationObservationService {
     }));
   }
 
-  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: CoordinationHiddenObservationProjection, taskProjection?: TaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<CoordinationSyncResult, { kind: "updates" | "contract_gap" | "unavailable" }>> {
+  private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: CoordinationHiddenObservationProjection, taskProjection?: CanonicalTaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<CoordinationSyncResult, { kind: "updates" | "contract_gap" | "unavailable" }>> {
     const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection, warnings: taskWarnings } : await this.readTaskProjection(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
     const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];
@@ -421,7 +437,7 @@ export class CoordinationObservationService {
       workerChanges.push({ worker: logical.name, scope: logical.scope, kind: workerEventChange(event), text: `Worker ${logical.name} ${event.phase.replaceAll("_", " ")}.` });
     }
     const taskChanges = events.length > 0
-      ? this.projection.projectTaskChanges(events, taskResult.tasks)
+      ? this.projection.projectTaskChanges(this.currentTaskEvents(events, taskResult.tasks), taskResult.tasks)
       : { kind: "projected" as const, changes: taskRevisionChanged ? taskResult.tasks.map((task) => ({
         taskId: task.id,
         changeKinds: ["progress" as const],

@@ -1,5 +1,6 @@
 import { Type, type Static } from "typebox";
 import { TaskVersionRefSchema } from "./task-version-ref";
+import { GraphTaskCardSchema, type GraphTaskCard } from "./graph-control-schemas";
 
 /** Neutral Task contract. This module imports no authority or persistence code. */
 export const TASK_CARD_TITLE_MAX_LENGTH = 80;
@@ -49,7 +50,11 @@ export const TaskCardIncompleteSchema = Type.Object({
   projection_warnings: Type.Array(TaskCardWarningSchema, { minItems: 1 }),
 }, { additionalProperties: false });
 
-export const TaskCardSchema = Type.Union([TaskCardCompleteSchema, TaskCardIncompleteSchema]);
+/**
+ * Delivery and Coordination accept legacy cards during cutover, while the
+ * graph-native Task application writes GraphTaskCard only.
+ */
+export const TaskCardSchema = Type.Union([TaskCardCompleteSchema, TaskCardIncompleteSchema, GraphTaskCardSchema]);
 
 export function isTaskCardContext(value: unknown): value is string {
   return typeof value === "string" && value.length >= 1 && value.length <= TASK_CARD_CONTEXT_MAX_LENGTH;
@@ -67,4 +72,20 @@ export type TaskCardWarning = {
 };
 
 /** DAG fields are optional only for stored pre-DAG cards during migration. */
-export type TaskCard = Static<typeof TaskCardCompleteSchema> | Static<typeof TaskCardIncompleteSchema>;
+export type LegacyTaskCard = Static<typeof TaskCardCompleteSchema> | Static<typeof TaskCardIncompleteSchema>;
+/** Historical source alias retained for legacy Beads consumers. */
+export type TaskCard = LegacyTaskCard;
+/** Current delivery and observation boundary during graph cutover. */
+export type CanonicalTaskCard = LegacyTaskCard | GraphTaskCard;
+
+export function isGraphTaskCard(task: CanonicalTaskCard): task is GraphTaskCard {
+  return "state" in task && "model" in task && "attempts_started" in task;
+}
+
+/** Terminal means no more assigned work can run without a graph revision. */
+export function isTaskTerminal(task: CanonicalTaskCard): boolean {
+  return task.status === "closed"
+    || task.status === "goal_achieved"
+    || task.status === "goal_failed"
+    || task.status === "cancelled";
+}

@@ -4,8 +4,9 @@ import {
   prepareOwnerTransitionIntent,
   recordTaskDeliveryRecovery,
   suppressTaskVersionForSession,
-  readTaskDeliveries,
+  readCurrentTaskDeliveries,
   readTaskDeliveryTombstones,
+  retireGraphRevisionDeliveries,
 } from "../utils/task-delivery";
 import {
   appendTaskEvidenceEvent,
@@ -26,8 +27,12 @@ import type {
   TaskPublicationEvidence,
 } from "../model-tool-contract/beads-authority-adapter";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
-import type { TaskCard } from "../task-authority/task-domain";
+import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskReadyDeliveryPort } from "../task-authority/ready-dispatch";
+import type {
+  GraphRevisionRetirementInput,
+  GraphRevisionRetirementPort,
+} from "../task-authority/graph-revision-retirement";
 
 function defaultTaskEventEvidence(input: TaskMutationPublicationInput): TaskMutationEventEvidenceInput {
   if (input.created) return { kind: "created", text: "Task created." };
@@ -50,7 +55,11 @@ function deliveryTargets(input: TaskMutationPublicationInput): Array<{ recipient
 }
 
 /** Durable Coordination and delivery bridge for committed Task mutations. */
-export class DurableTaskMutationPublication implements TaskMutationPublicationPort, TaskReadyDeliveryPort {
+export class DurableTaskMutationPublication implements TaskMutationPublicationPort, TaskReadyDeliveryPort, GraphRevisionRetirementPort {
+  retireGraphRevision(input: GraphRevisionRetirementInput): Promise<void> {
+    return retireGraphRevisionDeliveries(input);
+  }
+
   prepareOwnerTransitionIntent(input: TaskOwnerTransitionPreparationInput): Promise<boolean> {
     return prepareOwnerTransitionIntent(input);
   }
@@ -80,7 +89,7 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
 
   async readDeliveryCoordinates(teamName: string, worker: string) {
     const [pending, observed] = await Promise.all([
-      readTaskDeliveries(teamName, worker),
+      readCurrentTaskDeliveries(teamName, worker),
       readTaskDeliveryTombstones(teamName, worker),
     ]);
     return [...pending, ...observed].map((record) => ({
@@ -91,7 +100,7 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
     }));
   }
 
-  async enqueueReadyTask(teamName: string, task: TaskCard, worker: string): Promise<boolean> {
+  async enqueueReadyTask(teamName: string, task: CanonicalTaskCard, worker: string): Promise<boolean> {
     try {
       return !!await enqueueTaskChangeForRecipient(teamName, task, worker, "assigned");
     } catch (error) {

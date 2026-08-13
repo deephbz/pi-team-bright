@@ -5,7 +5,7 @@ source of truth.**
 
 Pi Team Bright lets one Pi lead assign durable Tasks to stable, named Workers.
 Workers remain visible through terminal adapters, but the work lives in the
-Task: who owns it, what done means, and the evidence that closed or blocked it.
+Task: who owns it, what done means, and the evidence that achieved, failed, or blocked its goal.
 The lead can wait for changes instead of watching panes.
 
 ## From terminal juggling to accountable delegation
@@ -20,8 +20,8 @@ proved completion?”
 
 **With Pi Team Bright:** the lead ensures an `auditor` and a `writer`, then
 creates one assigned Task for each outcome with explicit acceptance criteria.
-The auditor closes with file-and-command evidence. The writer blocks with the
-missing decision, blocker evidence, and a next action. The lead observes those
+The auditor reports `goal_achieved` with file-and-command evidence. The writer
+blocks with the missing decision, blocker evidence, and a next action. The lead observes those
 state changes through `team_sync`, resolves the blocker, and reviews the Task
 evidence before stopping either Worker.
 
@@ -33,8 +33,8 @@ The Task plus its assignee is the only executable work contract.
 
 The release-candidate sequence is:
 
-`team_create` → `ensure_worker` → assigned `task_create` → snapshot and updates
-through `team_sync` → inspect evidence → resolve Tasks → `worker_stop` or
+`team_create` → `ensure_worker` → `task_graph_apply` → snapshot and updates
+through `team_sync` → inspect goal evidence → resolve Tasks → `worker_stop` or
 `team_shutdown`.
 
 A minimal agent-led run looks like this:
@@ -47,9 +47,10 @@ ensure_worker({
   scope: "Contract reviewer who reports reproducible evidence."
 })
 
-task_create({
+task_graph_apply({
+  operation_id: "audit-recovery-contract-1",
   tasks: [{
-    operation_id: "audit-recovery-contract-1",
+    key: "audit",
     title: "Audit the recovery contract",
     goal: "Compare implementation with the documented recovery path and report exact evidence.",
     assignee: "auditor"
@@ -62,8 +63,8 @@ team_sync({ view: "updates" })
 
 Use the initial `team_sync` snapshot to reconcile the Team, then use updates
 for event-driven supervision. Inspect the authoritative Task and its evidence
-after a change. A Worker either closes with completion evidence or blocks with a
-next action; a blocked Task requires an explicit resolution, not an inference
+after a change. A Worker reports `goal_achieved` or `goal_failed` with evidence,
+or blocks with a next action. A blocked Task requires an explicit resolution, not an inference
 from terminal output.
 
 Reuse Workers across Tasks. Before `worker_stop`, resolve every nonterminal Task
@@ -240,7 +241,7 @@ observations do not become accidental authority:
 |---|---|
 | **Team and Membership** | The durable roster, lifecycle, current Membership generation, and Team-wide placement policy. |
 | **Pi Session identity** | The exact conversational Session bound to a current Membership; a matching name, process, pane, or environment variable is not identity proof. |
-| **Task authority** | Durable Task content, assignee, status, relations, versions, and evidence, owned by the Team's local Beads backend. |
+| **Task authority** | Durable graph revisions, Task goals, assignments, Attempts, versions, outcomes, and evidence. The graph-native path uses a Team-scoped snapshot; Beads remains a legacy pre-graph fallback. |
 | **Delivery** | Presentation of a Task change or Alert to one exact Session. A delivery receipt never changes Task state. |
 | **Runtime observation** | Bounded evidence that an exact Membership process generation was observed. It does not prove readiness or progress. |
 | **Terminal surface** | An adapter-owned pane or window carrying a Worker process. It is replaceable and is neither Worker identity nor work state. |

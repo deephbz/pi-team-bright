@@ -3,6 +3,7 @@ import type {
   CreateTaskPortResult,
   CreateTaskGraphPortResult,
   ModelToolTaskGraphInput,
+  ModelToolGraphTaskUpdateInput,
   CreateTeamPortResult,
   EnsureWorkerPortResult,
   ExactLeaderSessionId,
@@ -36,7 +37,7 @@ export interface ModelToolTaskApplicationPort {
   createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
   createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;
   readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult>;
-  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolTaskUpdateInput[]): Promise<UpdateTasksPortResult>;
+  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: Array<ModelToolTaskUpdateInput | ModelToolGraphTaskUpdateInput>, actor?: string): Promise<UpdateTasksPortResult>;
   linkTask(leaderSessionId: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult>;
 }
 

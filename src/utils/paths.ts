@@ -31,8 +31,18 @@ export function taskDir(teamName: string) {
   return path.join(TASKS_DIR, sanitizeName(teamName));
 }
 
+/** Durable graph-native Task authority snapshot and replay history. */
+export function graphTaskAuthorityPath(teamName: string) {
+  return path.join(teamDir(teamName), "task-authority", "graph-control.json");
+}
+
 export function inboxPath(teamName: string, agentName: string) {
   return path.join(teamDir(teamName), "inboxes", `${sanitizeName(agentName)}.json`);
+}
+
+/** Latest complete graph fence plus append-only replacement history. */
+export function graphRevisionRetirementPath(teamName: string) {
+  return path.join(teamDir(teamName), "task-authority", "graph-revision-retirement.json");
 }
 
 /** Task-authority-local delivery evidence for one resolved recipient. */

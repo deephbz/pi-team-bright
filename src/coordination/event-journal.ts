@@ -3,7 +3,7 @@ import path from "node:path";
 import { withLock } from "../utils/lock";
 import type { TaskTeamEvent, TeamEvent, TeamEventInput, TeamEventType } from "./contracts";
 import type { Member, TeamConfig } from "../team-authority/contracts";
-import type { TaskCard } from "../task-authority/task-domain";
+import { isTaskTerminal, type CanonicalTaskCard } from "../task-authority/task-domain";
 import { configPath, teamEventCursorStatePath, teamEventJournalPath } from "../utils/paths";
 import { type TaskVersionRef } from "../task-authority/task-version-ref";
 
@@ -49,6 +49,18 @@ export interface ProjectedTaskEventEvidence extends TaskEventEvidenceInput {
   actor: string;
 }
 
+export interface TaskActivityCoordinate {
+  taskId: string;
+  cursor: string;
+  at: string;
+}
+
+export interface TaskActivityProjection {
+  headCursor: string;
+  /** One latest committed activity coordinate per Task, newest first. */
+  tasks: TaskActivityCoordinate[];
+}
+
 export interface TeamEventBatch {
   /** Safe continuation position. It advances to journal head unless truncated. */
   cursor: string;
@@ -73,7 +85,7 @@ export interface TeamEventWaitResult extends TeamEventBatch {
 export interface TeamTaskSummary {
   id: string;
   title: string;
-  status: TaskCard["status"];
+  status: CanonicalTaskCard["status"];
   assignee?: string;
   version?: TaskVersionRef;
 }
@@ -82,7 +94,7 @@ export interface TeamWorkerProjection {
   name: string;
   membershipId?: string;
   carrier: "prepared" | "session_bound" | "absent";
-  nonterminalTasks: Array<{ id: string; status: TaskCard["status"] }>;
+  nonterminalTasks: Array<{ id: string; status: CanonicalTaskCard["status"] }>;
 }
 
 export interface TeamCurrentProjection {
@@ -356,6 +368,27 @@ export function readTeamEventCursor(teamName: string): string {
   return readJournal(teamName).at(-1)?.cursor ?? ZERO_CURSOR;
 }
 
+/**
+ * Read the journal once and project only latest per-Task activity coordinates.
+ * This is ordering evidence for derived views, not Task state authority.
+ */
+export function readTaskActivity(teamName: string): TaskActivityProjection {
+  const events = readJournal(teamName);
+  const latest = new Map<string, TaskActivityCoordinate>();
+  for (const event of events) {
+    if (event.type !== "task") continue;
+    latest.set(event.ref.taskId, { taskId: event.ref.taskId, cursor: event.cursor, at: event.at });
+  }
+  return {
+    headCursor: events.at(-1)?.cursor ?? ZERO_CURSOR,
+    tasks: [...latest.values()].sort((a, b) => {
+      const left = parseCursor(a.cursor);
+      const right = parseCursor(b.cursor);
+      return right > left ? 1 : right < left ? -1 : a.taskId.localeCompare(b.taskId);
+    }),
+  };
+}
+
 function abortError(): Error {
   const error = new Error("Team event wait aborted");
   error.name = "AbortError";
@@ -449,7 +482,7 @@ function latestWorkerMemberships(members: readonly Member[]): Map<string, Member
  * by the caller. This stays pure so the event journal never imports the Task
  * adapter and Task mutations can append events without a dependency cycle.
  */
-export function projectTeamCurrentState(config: TeamConfig, tasks: ReadonlyArray<TaskCard>): TeamCurrentProjection {
+export function projectTeamCurrentState(config: TeamConfig, tasks: ReadonlyArray<CanonicalTaskCard>): TeamCurrentProjection {
   const taskSummaries: TeamTaskSummary[] = tasks.map((task) => ({
     id: task.id,
     title: task.title,
@@ -464,7 +497,7 @@ export function projectTeamCurrentState(config: TeamConfig, tasks: ReadonlyArray
       ...(current && member.membershipId ? { membershipId: member.membershipId } : {}),
       carrier: current ? (member.sessionFile ? "session_bound" : "prepared") : "absent",
       nonterminalTasks: tasks
-        .filter((task) => task.assignee === member.name && task.status !== "closed")
+        .filter((task) => task.assignee === member.name && !isTaskTerminal(task))
         .map((task) => ({ id: task.id, status: task.status })),
     };
   }).sort((left, right) => left.name.localeCompare(right.name));
@@ -565,8 +598,8 @@ export function pageTeamCurrentProjection(
 export async function hydrateTeamSyncTasks(
   events: readonly TeamEvent[],
   requestedTaskIds: readonly string[] | undefined,
-  readTasks: (taskIds: readonly string[]) => Promise<TaskCard[]>,
-): Promise<TaskCard[]> {
+  readTasks: (taskIds: readonly string[]) => Promise<CanonicalTaskCard[]>,
+): Promise<CanonicalTaskCard[]> {
   const ids = new Set(requestedTaskIds ?? []);
   for (const event of events) {
     if (event.type === "task") ids.add(event.ref.taskId);

@@ -11,6 +11,10 @@ import type {
 export class DurableCoordinationTaskStateDeliveryQuery implements CoordinationTaskStateDeliveryQuery {
   constructor(private readonly factory: BeadsTaskAdapterFactory) {}
 
+  completeTaskSet(_teamName: string): boolean {
+    return false;
+  }
+
   async listTaskIds(teamName: string): Promise<string[]> {
     return this.factory(teamName, "team-lead").listIds();
   }

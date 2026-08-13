@@ -5,10 +5,15 @@ import {
   TASK_CARD_CONTEXT_MAX_LENGTH,
   TASK_CARD_GOAL_MAX_LENGTH,
   TASK_CARD_TITLE_MAX_LENGTH,
-  TaskCardContextSchema,
   TaskCardSchema,
   TaskCardWarningSchema,
 } from "../task-authority/task-domain";
+import {
+  GraphTaskCardSchema,
+  GraphTaskUpdateParametersSchema,
+  GraphVersionRefSchema,
+  TaskGraphApplyParametersSchema,
+} from "../task-authority/graph-control-schemas";
 
 /**
  * Model-facing contract shaped in
@@ -28,9 +33,6 @@ const TaskId = Type.String({ minLength: 1, maxLength: 128 });
 export { TaskVersionRefSchema } from "../task-authority/task-version-ref";
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const Timestamp = Type.String({ minLength: 1, maxLength: 64 });
-const TaskStatus = Type.Enum(["open", "in_progress", "blocked", "closed"], {
-  description: "Authoritative Task workflow state.",
-});
 const WorkerCarrier = Type.Enum(["starting", "connected", "absent"], {
   description: "Current carrier observation. It is not Task progress or readiness.",
 });
@@ -48,36 +50,24 @@ export const WorkerCurrentSchema = Type.Object({
   nonterminal_task_ids: Type.Array(TaskId),
 }, { additionalProperties: false });
 
-const TaskKey = Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" });
-const TaskCreateItemSchema = Type.Object({
-  key: Type.String({ ...TaskKey, description: "Request-local Task name used by prerequisites and the create receipt." }),
-  title: Type.String({ minLength: 1, maxLength: MODEL_TOOL_LIMITS.maxTaskTitleChars }),
-  goal: Type.String({ minLength: 1, maxLength: MODEL_TOOL_LIMITS.maxTaskGoalChars, description: "Desired outcome, relevant boundary, and external success signal in one field." }),
-  assignee: WorkerName,
-  needs: Type.Optional(Type.Array(TaskKey, { description: "Keys of prerequisite Tasks in this request." })),
-}, { additionalProperties: false });
+export { TaskGraphApplyParametersSchema, GraphTaskUpdateParametersSchema, GraphVersionRefSchema };
+/** Compatibility export for source consumers during the breaking tool rename. */
+export const TaskCreateParametersSchema = TaskGraphApplyParametersSchema;
 
-export const TaskCreateParametersSchema = Type.Object({
-  operation_id: Type.String({ minLength: 1, maxLength: 128, description: "Opaque identity for the complete atomic graph request. Reuse it only for an exact retry." }),
-  tasks: Type.Array(TaskCreateItemSchema, { minItems: 1 }),
-}, {
-  additionalProperties: false,
-  description: "Atomically create assigned Tasks. Each task needs the listed request-local prerequisites.",
-});
-
-export const TaskCreateResultSchema = Type.Union([
+export const TaskGraphApplyResultSchema = Type.Union([
   Type.Object({
-    kind: Type.Literal("task_graph_created"),
+    kind: Type.Literal("task_graph_applied"),
     operation_id: Type.String({ minLength: 1, maxLength: 128 }),
+    graph_version: GraphVersionRefSchema,
     replayed: Type.Boolean(),
-    tasks_by_key: Type.Record(Type.String({ pattern: "^[A-Za-z0-9_-]+$" }), TaskCardSchema),
+    tasks_by_key: Type.Record(Type.String({ pattern: "^[A-Za-z0-9_-]+$" }), GraphTaskCardSchema),
     ready_task_ids: Type.Array(TaskId),
     delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
     operation_id: Type.String({ minLength: 1, maxLength: 128 }),
-    reason: Type.Enum(["worker_unavailable", "graph_conflict", "version_conflict", "operation_conflict"]),
+    reason: Type.Enum(["worker_unavailable", "invalid_graph", "graph_version_conflict", "operation_conflict"]),
     message: Type.String({ minLength: 1 }),
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
@@ -94,6 +84,8 @@ export const TaskCreateResultSchema = Type.Union([
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
 ]);
+/** Compatibility schema name; the registered tool is task_graph_apply. */
+export const TaskCreateResultSchema = TaskGraphApplyResultSchema;
 
 export const TaskReadParametersSchema = Type.Object({
   task_ids: Type.Array(TaskId, { minItems: 1 }),
@@ -138,23 +130,8 @@ export const TaskReadResultSchema = Type.Union([
   }, { additionalProperties: false }),
 ]);
 
-const TaskUpdateJournalEntrySchema = Type.Object({
-  kind: Type.Enum(["progress", "decision", "blocker", "result", "note"]),
-  text: Type.String({ minLength: 1 }),
-}, { additionalProperties: false });
-
-const TaskUpdateItemSchema = Type.Object({
-  task_id: TaskId,
-  operation_id: Type.String({ minLength: 1, maxLength: 128 }),
-  expected_version: TaskVersionRefSchema,
-  current_context: Type.Optional(TaskCardContextSchema),
-  journal_entries: Type.Optional(Type.Array(TaskUpdateJournalEntrySchema, { minItems: 1 })),
-  status: Type.Optional(TaskStatus),
-}, { additionalProperties: false, minProperties: 4 });
-
-export const TaskUpdateParametersSchema = Type.Object({
-  updates: Type.Array(TaskUpdateItemSchema, { minItems: 1 }),
-}, { additionalProperties: false });
+/** Breaking singleton transition contract shared by leader and Worker. */
+export const TaskUpdateParametersSchema = GraphTaskUpdateParametersSchema;
 
 export const TaskJournalEntrySchema = Type.Object({
   id: Type.String({ minLength: 1, maxLength: 128 }),
@@ -172,51 +149,36 @@ const TaskUpdateOutcomeBase = {
 
 export const TaskUpdateResultSchema = Type.Union([
   Type.Object({
-    kind: Type.Literal("task_update_batch"),
-    outcomes: Type.Array(Type.Union([
-      Type.Object({
-        ...TaskUpdateOutcomeBase,
-        kind: Type.Literal("updated"),
-        task: TaskCardSchema,
-        journal_entries: Type.Array(TaskJournalEntrySchema),
-        delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-      }, { additionalProperties: false }),
-      Type.Object({
-        ...TaskUpdateOutcomeBase,
-        kind: Type.Literal("refused"),
-        reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "terminal_evidence_required", "active_blockers"]),
-        message: Type.String({ minLength: 1 }),
-        current_task: Type.Optional(TaskCardSchema),
-        active_blocker_ids: Type.Optional(Type.Array(TaskId, { minItems: 1 })),
-        state_changed: Type.Literal(false),
-      }, { additionalProperties: false }),
-      Type.Object({
-        ...TaskUpdateOutcomeBase,
-        kind: Type.Literal("contract_gap"),
-        reason: Type.Enum(["task_metadata_absent", "task_metadata_invalid", "external_writer_atomicity_unavailable"]),
-        current_task: Type.Optional(TaskCardSchema),
-        unsupported: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-        message: Type.String({ minLength: 1 }),
-        state_changed: Type.Literal(false),
-      }, { additionalProperties: false }),
-      Type.Object({
-        ...TaskUpdateOutcomeBase,
-        kind: Type.Literal("unavailable"),
-        reason: Type.Enum(["no_active_team", "task_authority_unavailable"]),
-        message: Type.String({ minLength: 1 }),
-        state_changed: Type.Literal(false),
-      }, { additionalProperties: false }),
-    ])),
+    ...TaskUpdateOutcomeBase,
+    kind: Type.Literal("updated"),
+    replayed: Type.Boolean(),
+    transition: Type.Enum(["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel", "context_updated"]),
+    task: GraphTaskCardSchema,
+    ready_task_ids: Type.Array(TaskId),
+    failure_traversal: Type.Optional(Type.Object({
+      source_task_id: TaskId,
+      target_task_id: TaskId,
+      traversal: Type.Integer({ minimum: 1 }),
+    }, { additionalProperties: false })),
+    delivery_warnings: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
   }, { additionalProperties: false }),
   Type.Object({
+    ...TaskUpdateOutcomeBase,
     kind: Type.Literal("refused"),
-    reason: Type.Literal("duplicate_task_id"),
+    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"]),
     message: Type.String({ minLength: 1 }),
+    current_task: Type.Optional(GraphTaskCardSchema),
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
   Type.Object({
+    ...TaskUpdateOutcomeBase,
+    kind: Type.Literal("unknown_outcome"),
+    message: Type.String({ minLength: 1 }),
+  }, { additionalProperties: false }),
+  Type.Object({
+    ...TaskUpdateOutcomeBase,
     kind: Type.Literal("unavailable"),
-    reason: Type.Literal("no_active_team"),
+    reason: Type.Enum(["no_active_team", "task_authority_unavailable"]),
     message: Type.String({ minLength: 1 }),
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
@@ -531,23 +493,29 @@ const taskCreateCall = {
   }],
 } as const;
 const taskCreateResult = {
-  kind: "task_graph_created",
+  kind: "task_graph_applied",
   operation_id: "create-release-candidate",
+  graph_version: "g_0123456789abcdef",
   replayed: false,
   tasks_by_key: {
     verify: {
-      id: "task-23",
+      id: "verify",
       title: "Verify release candidate",
       goal: "Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.",
-      status: "open",
       assignee: "release-verifier",
-      relations: [],
-      dependency_state: { kind: "ready", active_blocker_ids: [] },
+      model: "default",
+      needs: [],
+      status: "ready",
+      state: { kind: "ready" },
       current_context: "Work has not started.",
       version: taskVersionRef("task_v1"),
+      activation_key: "activation-verify-1",
+      attempts_started: 0,
+      relations: [],
+      dependency_state: { kind: "ready", active_blocker_ids: [] },
     },
   },
-  ready_task_ids: ["task-23"],
+  ready_task_ids: ["verify"],
 } as const;
 const taskCreateRefusedResult = {
   kind: "refused",
@@ -694,14 +662,14 @@ const unavailableResult = {
 } as const;
 
 const taskReadCall = {
-  task_ids: ["task-23"],
+  task_ids: ["verify"],
 } as const;
 const taskReadResult = {
   kind: "task_read_batch",
   outcomes: [{
     kind: "found",
     input_index: 0,
-    task_id: "task-23",
+    task_id: "verify",
     task: taskCreateResult.tasks_by_key.verify,
   }],
 } as const;
@@ -722,47 +690,42 @@ const taskReadUnavailableResult = {
   state_changed: false,
 } as const;
 const taskUpdateCall = {
-  updates: [{
-    task_id: "task-23",
-    operation_id: "verify-release-1",
-    expected_version: "v_3680fa021836b49f",
-    current_context: "Task is assigned but awaits a Worker carrier.",
-    journal_entries: [{ kind: "decision", text: "Keep the Task open until a Worker carrier is available." }],
-  }],
+  task_id: "verify",
+  operation_id: "verify-release-claim-1",
+  expected_version: taskCreateResult.tasks_by_key.verify.version,
+  transition: "claim",
 } as const;
 const taskUpdateResult = {
-  kind: "task_update_batch",
-  outcomes: [{
-    kind: "updated",
-    input_index: 0,
-    task_id: "task-23",
-    operation_id: "verify-release-1",
-    task: {
-      ...taskCreateResult.tasks_by_key.verify,
-      current_context: "Task is assigned but awaits a Worker carrier.",
-      version: taskVersionRef("task_v2"),
+  kind: "updated",
+  input_index: 0,
+  task_id: "verify",
+  operation_id: "verify-release-claim-1",
+  replayed: false,
+  transition: "claim",
+  task: {
+    ...taskCreateResult.tasks_by_key.verify,
+    status: "in_progress",
+    state: { kind: "in_progress", attempt_id: "verify@1" },
+    current_attempt: {
+      id: "verify@1",
+      ordinal: 1,
+      resolved_model: "openai-codex/gpt-5.6-codex:medium",
+      input_attempt_ids: {},
     },
-    journal_entries: [{
-      id: "journal-task-23-1",
-      at: "2026-08-02T00:00:00.000Z",
-      actor: "leader",
-      kind: "decision",
-      text: "Keep the Task open until a Worker carrier is available.",
-    }],
-  }],
+    attempts_started: 1,
+    version: taskVersionRef("task_v2"),
+  },
+  ready_task_ids: [],
 } as const;
 const taskUpdateConflictResult = {
-  kind: "task_update_batch",
-  outcomes: [{
-    kind: "refused",
-    input_index: 0,
-    task_id: "task-23",
-    operation_id: "verify-release-1",
-    reason: "version_conflict",
-    message: "The Task version does not match the expected version.",
-    current_task: taskCreateResult.tasks_by_key.verify,
-    state_changed: false,
-  }],
+  kind: "refused",
+  input_index: 0,
+  task_id: "verify",
+  operation_id: "verify-release-claim-1",
+  reason: "version_conflict",
+  message: "The Task version does not match the expected version.",
+  current_task: taskCreateResult.tasks_by_key.verify,
+  state_changed: false,
 } as const;
 
 export const modelToolCatalog = {
@@ -771,7 +734,7 @@ export const modelToolCatalog = {
   sourceDocument: "docs/projects/model-invoked-tool-contract.md",
   modelResultProjection: {
     status: "accepted",
-    version: "2",
+    version: "3",
     responsibility: "Validate raw semantic truth once, then derive decision-relevant model JSON and allowlisted human projections.",
     boundary: "The raw result remains machine truth; model and human projections cannot add facts or change outcomes.",
   },
@@ -801,9 +764,9 @@ export const modelToolCatalog = {
       ],
     },
     {
-      name: "task_create",
-      label: "Create Task DAG",
-      responsibility: "Atomically create assigned Tasks with optional request-local prerequisites. Every assignee must already exist.",
+      name: "task_graph_apply",
+      label: "Apply Task Graph",
+      responsibility: "Atomically apply the complete assigned Task graph revision. Task authority then derives readiness and bounded failure routing.",
       actors: ["leader"],
       commonUseCases: [
         "Create one Task or a predefined DAG after Worker areas exist.",
@@ -818,7 +781,7 @@ export const modelToolCatalog = {
         "Presents only mechanically eligible ready-front Tasks, at most one per Worker.",
         "An exact replay returns the original key mapping and creates no duplicate Task.",
       ],
-      parameters: TaskCreateParametersSchema,
+      parameters: TaskGraphApplyParametersSchema,
       result: TaskCreateResultSchema,
       examples: [
         { id: "create-task", title: "Assign one verification Task", call: taskCreateCall, result: taskCreateResult },
@@ -854,20 +817,20 @@ export const modelToolCatalog = {
     {
       name: "task_update",
       label: "Update Tasks",
-      responsibility: "Conditionally update Tasks with exact versions and operation IDs. Include at least one state, context, or evidence change.",
-      actors: ["leader"],
+      responsibility: "Apply one exact-version Task transition or context update. Waiting and ready remain derived.",
+      actors: ["leader", "assigned Worker"],
       commonUseCases: [
-        "Record a coordination decision and current context for an assigned Task.",
-        "Keep a Task open while its assigned Worker awaits a carrier.",
+        "Claim, block, resume, or report a Task goal outcome.",
+        "Record concise current context without authoring derived readiness.",
       ],
       whenNotToUse: [
-        "Do not change assignment, relations, or Worker state.",
-        "Do not use it to read history or observe Team updates.",
+        "Do not change assignment, model alias, dependencies, or failure edges.",
+        "Do not author dependency_waiting or ready.",
       ],
       sideEffects: [
-        "Commits current context and generated journal provenance atomically per item.",
-        "Rejects duplicate Task IDs before mutation and refuses version or operation conflicts.",
-        "Does not claim Worker execution or carrier readiness.",
+        "Commits one idempotent transition against an exact Task version.",
+        "goal_achieved releases dependents; goal_failed applies the bounded failure edge mechanically.",
+        "A stale result or mismatched Worker changes no state.",
       ],
       parameters: TaskUpdateParametersSchema,
       result: TaskUpdateResultSchema,
@@ -907,7 +870,7 @@ export const modelToolCatalog = {
     {
       name: "ensure_worker",
       label: "Ensure Worker",
-      responsibility: "Create, reconnect, or reuse a Worker for a standing semantic area. Assign executable work with task_create.",
+      responsibility: "Create, reconnect, or reuse a Worker for a standing semantic area. Assign executable work with task_graph_apply.",
       actors: ["leader"],
       commonUseCases: [
         "Create one Worker whose area can proceed with little prerequisite overlap.",

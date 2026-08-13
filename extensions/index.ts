@@ -22,6 +22,11 @@ import { DurableTaskAuthorityProvisioning } from "../src/adapters/durable-task-a
 import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableTaskOrchestration } from "../src/adapters/durable-task-orchestration";
+import { DurableGraphTaskAuthority } from "../src/adapters/durable-graph-task-authority";
+import { graphTaskAuthorityPath } from "../src/utils/paths";
+import { DurableGraphTaskOrchestration } from "../src/task-authority/graph-orchestration";
+import { DurableGraphAssignedWorkGuard } from "../src/adapters/durable-graph-assigned-work";
+import { CompositeAssignedWorkGuard } from "../src/adapters/composite-assigned-work-guard";
 import { DurableTaskAuthorityTeam } from "../src/adapters/durable-task-authority-team";
 import { DurableTaskAuthorityRead } from "../src/adapters/durable-task-authority-read";
 import { DurableTaskAuthorityReadTeam } from "../src/adapters/durable-task-authority-read-team";
@@ -34,10 +39,9 @@ import { createDurableCoordinationNudgeStore } from "../src/adapters/durable-coo
 import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../src/coordination/observation-service";
 import { DurableCoordinationHiddenObservation } from "../src/adapters/durable-coordination-hidden-observation";
-import type { TaskCard, TaskCardWarning } from "../src/task-authority/task-domain";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
-import { TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
+import { GraphTaskUpdateParametersSchema, TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
 import {
   DurableModelToolAlertApplication,
   DurableModelToolBindings,
@@ -288,7 +292,7 @@ export default function (pi: ExtensionAPI) {
   // Leader and Worker tools are separate role projections. The leader owns
   // the current model-tool journey; Workers own the three Task/Alert tools.
   const leaderToolNames = new Set([
-    "team_create", "ensure_worker", "task_create", "task_read", "task_update", "team_sync",
+    "team_create", "ensure_worker", "task_graph_apply", "task_read", "task_update", "team_sync",
     "worker_stop", "team_shutdown", "alert_send",
   ]);
   const workerToolNames = new Set(["task_read", "task_update", "alert_send"]);
@@ -345,13 +349,15 @@ export default function (pi: ExtensionAPI) {
   const taskReadAdapterFactory = createReadOnlyBeadsTaskAdapterFactory(taskAuthorityRead);
   const taskPublication = new DurableTaskMutationPublication();
   const taskOrchestration = new DurableTaskOrchestration(taskPublication, taskPublication);
+  const graphTaskAuthority = new DurableGraphTaskAuthority();
+  const graphTaskOrchestration = new DurableGraphTaskOrchestration(graphTaskAuthority, taskPublication, taskPublication, taskPublication);
   const taskAdapterFactory = createPublishingBeadsTaskAdapterFactory(taskPublication, taskAuthorityTeam, taskAuthorityRead, taskOrchestration);
   const alertMembership = new DurableAlertMembership();
   const taskDeliveryMembership = new DurableTaskChangeDeliveryMembership();
   const piSessionTeamQuery = new DurablePiSessionTeamQuery();
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
-  const coordinationQueries = createDurableCoordinationQueries(taskReadAdapterFactory);
+  const coordinationQueries = createDurableCoordinationQueries(taskReadAdapterFactory, graphTaskOrchestration);
   const coordinationHiddenObservation = new DurableCoordinationHiddenObservation();
   const coordinationNudgeStore = createDurableCoordinationNudgeStore(coordinationHiddenObservation);
   const coordinationObservationService = new CoordinationObservationService(
@@ -364,11 +370,13 @@ export default function (pi: ExtensionAPI) {
   const nudgeRecords = new DurableCoordinationNudgeRecord();
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
+  const legacyAssignedWorkGuard = new DurableAssignedWorkGuard(
+    taskReadAdapterFactory,
+    new DurableNonterminalAssignedTaskQuery(taskAuthorityRead),
+  );
+  const graphAssignedWorkGuard = new DurableGraphAssignedWorkGuard(graphTaskOrchestration);
   const teamLifecycleService = new TeamLifecycleService({
-    assignedWorkGuard: new DurableAssignedWorkGuard(
-      taskReadAdapterFactory,
-      new DurableNonterminalAssignedTaskQuery(taskAuthorityRead),
-    ),
+    assignedWorkGuard: new CompositeAssignedWorkGuard(graphAssignedWorkGuard, legacyAssignedWorkGuard),
     lifecyclePublication,
   });
   const teamSessionLifecycleService = new TeamSessionLifecycleService(lifecyclePublication);
@@ -403,7 +411,7 @@ export default function (pi: ExtensionAPI) {
     const modelToolBindings = new DurableModelToolBindings();
     const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning();
     const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration);
-    const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration);
+    const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration);
     const modelToolAlert = new DurableModelToolAlertApplication(modelToolBindings, alertSender);
     const modelToolCoordination = new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService);
     modelToolJourney = registerModelToolJourney(pi, new ModelToolJourneyFacade(modelToolTeam, modelToolTask, modelToolAlert, modelToolCoordination));
@@ -509,7 +517,16 @@ export default function (pi: ExtensionAPI) {
     workerToolNames,
     refreshAlertToolProjection,
     registerRecoveredWorkerTools,
-    taskReadyReconciliation: taskOrchestration,
+    taskReadyReconciliation: {
+      reconcileReady: (team, worker) => graphTaskOrchestration.hasGraph(team)
+        ? graphTaskOrchestration.reconcileReady(team, worker)
+        : taskOrchestration.reconcileReady(team, worker),
+    },
+    taskGraphControlSource: {
+      hasGraph: (teamName) => graphTaskAuthority.exists(teamName),
+      trace: (teamName) => graphTaskAuthority.trace(teamName),
+      watchPath: (teamName) => graphTaskAuthorityPath(teamName),
+    },
   });
   modelToolLifecycleAdapter = sessionAdapter.modelToolLifecycle;
   sessionAdapter.register();
@@ -526,6 +543,15 @@ export default function (pi: ExtensionAPI) {
       }, { additionalProperties: false }),
       async execute(_toolCallId, params: { task_id: string }, _signal, _onUpdate, ctx) {
         const binding = await sessionAdapter.resolveCurrentWorkerContext(ctx);
+        if (graphTaskOrchestration.hasGraph(binding.teamName)) {
+          const task = (await graphTaskOrchestration.readTasks(binding.teamName, [params.task_id]))[0];
+          return assembleToolResult("task_read", {
+            kind: "task_read_batch",
+            outcomes: [task
+              ? { kind: "found", input_index: 0, task_id: task.id, task }
+              : { kind: "missing", input_index: 0, task_id: params.task_id, reason: "task_not_found", state_changed: false }],
+          } as any);
+        }
         const outcome = await taskAdapterFactory(binding.teamName, binding.member.name).read(params.task_id);
         return assembleToolResult("task_read", {
           kind: "task_read_batch",
@@ -539,44 +565,34 @@ export default function (pi: ExtensionAPI) {
     registerWorkerTool({
       name: "task_update",
       label: "Update Task",
-      description: "Apply current Task changes, or set claim=true alone for an atomic claim with no status change, using an exact opaque TaskVersionRef.",
-      parameters: Type.Object({
-        task_id: Type.String({ minLength: 1 }),
-        operation_id: Type.String({ minLength: 1 }),
-        claim: Type.Optional(Type.Literal(true, { description: "Do not include current_context, journal_entries, or status with claim=true." })),
-        expected_version: TaskVersionRefSchema,
-        current_context: Type.Optional(Type.String({ minLength: 1 })),
-        journal_entries: Type.Optional(Type.Array(Type.Object({ kind: Type.Enum(["progress", "decision", "blocker", "result", "note"]), text: Type.String({ minLength: 1 }) }, { additionalProperties: false }), { minItems: 1 })),
-        status: Type.Optional(StringEnum(["open", "in_progress", "blocked", "closed"])),
-      }, { additionalProperties: false, minProperties: 3 }),
+      description: "Apply one explicit graph-native Task transition with an exact Task version. dependency_waiting and ready are derived.",
+      parameters: GraphTaskUpdateParametersSchema,
       async execute(_toolCallId, params: any, _signal, _onUpdate, ctx) {
         const binding = await sessionAdapter.resolveCurrentWorkerContext(ctx);
-        const adapter = taskAdapterFactory(
-          binding.teamName,
-          binding.member.name,
-          binding.member.membershipId && binding.member.sessionFile
-            ? { membershipId: binding.member.membershipId, sessionFile: binding.member.sessionFile }
-            : undefined,
-        );
-        if (params.claim === true && (params.current_context !== undefined || params.journal_entries !== undefined || params.status !== undefined)) {
-          throw new Error("claim=true is atomic; do not include current_context, journal_entries, or status.");
-        }
-        const result = params.claim === true
-          ? await adapter.claim({ taskId: params.task_id, operationId: params.operation_id, expectedVersion: params.expected_version })
-          : await adapter.update({
+        if (graphTaskOrchestration.hasGraph(binding.teamName)) {
+          const result = await graphTaskOrchestration.transition(binding.teamName, {
             taskId: params.task_id,
             operationId: params.operation_id,
             expectedVersion: params.expected_version,
-            ...(params.current_context !== undefined ? { currentContext: params.current_context } : {}),
-            ...(params.journal_entries !== undefined ? { journalEntries: params.journal_entries } : {}),
-            ...(params.status !== undefined ? { status: params.status } : {}),
-          });
-        const outcome = result.kind === "updated"
-          ? { kind: "updated", input_index: 0, task_id: result.taskId, operation_id: result.operationId, task: result.task, journal_entries: result.journalEntries }
-          : result.kind === "refused"
-            ? { kind: "refused", input_index: 0, task_id: result.taskId, operation_id: result.operationId, reason: result.reason, message: result.message, current_task: result.currentTask, state_changed: false }
-            : { kind: "contract_gap", input_index: 0, task_id: result.taskId, operation_id: "operationId" in result ? result.operationId : params.operation_id, reason: result.reason, message: result.message, ...( "currentTask" in result ? { current_task: result.currentTask } : {}), unsupported: "unsupported" in result ? [...result.unsupported] : ["task_authority"], state_changed: false };
-        return assembleToolResult("task_update", { kind: "task_update_batch", outcomes: [outcome] } as any);
+            ...(params.transition ? { transition: params.transition } : {}),
+            ...(params.current_context ? { currentContext: params.current_context } : {}),
+            ...(params.evidence ? { evidence: params.evidence } : {}),
+            ...(params.transition && params.transition !== "cancel" ? { worker: binding.member.name } : {}),
+          }, binding.member.name);
+          const outcome = result.kind === "updated"
+            ? {
+              kind: "updated", input_index: 0, task_id: result.task.id, operation_id: result.operationId,
+              replayed: result.replayed, transition: result.transition, task: result.task,
+              ready_task_ids: result.readyTaskIds,
+              ...(result.failureTraversal ? { failure_traversal: { source_task_id: result.failureTraversal.sourceTaskId, target_task_id: result.failureTraversal.targetTaskId, traversal: result.failureTraversal.traversal } } : {}),
+              ...(result.deliveryWarnings.length ? { delivery_warnings: result.deliveryWarnings } : {}),
+            }
+            : result.kind === "refused"
+              ? { kind: "refused", input_index: 0, task_id: result.taskId, operation_id: result.operationId, reason: result.reason, message: result.message, ...(result.currentTask ? { current_task: result.currentTask } : {}), state_changed: false }
+              : { kind: "unknown_outcome", input_index: 0, task_id: result.taskId, operation_id: result.operationId, message: result.message };
+          return assembleToolResult("task_update", outcome as any);
+        }
+        throw new Error("Legacy Task mutation is disabled on the graph-native Worker surface; apply a graph revision first.");
       },
     });
 

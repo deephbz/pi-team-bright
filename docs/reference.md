@@ -52,21 +52,28 @@ exhaustive parameter reference.
   answers only Rarebit's versioned automatic-Summary inhibition query, using
   the exact current teammate Membership-generation and durable-Session resolver
   in `teams.ts`; it exposes no general policy registry.
-- [`src/model-tool-contract/task-domain.ts`](../src/model-tool-contract/task-domain.ts)
-  owns the neutral Task card, dependency relations, derived readiness, and bounded card schema. [`task-version-ref.ts`](../src/model-tool-contract/task-version-ref.ts)
-  owns opaque public TaskVersionRef values.
-- [`src/task-authority/dag.ts`](../src/task-authority/dag.ts) owns portable DAG
-  validation, Beads edge translation, readiness, and ready-front selection.
-  [`mechanical-dispatch.ts`](../src/task-authority/mechanical-dispatch.ts) is the
-  backend-neutral recovery reference, while [`beads-graph-adapter.ts`](../src/task-authority/beads-graph-adapter.ts)
-  owns atomic native graph creation and exact request replay.
+- [`src/task-authority/task-domain.ts`](../src/task-authority/task-domain.ts)
+  owns the legacy/graph card boundary and bounded card schema.
+  [`task-version-ref.ts`](../src/task-authority/task-version-ref.ts) owns opaque
+  public TaskVersionRef values.
+- [`src/task-authority/graph-control.ts`](../src/task-authority/graph-control.ts)
+  owns graph revisions, derived state, immutable Attempts, bounded failure
+  traversal, replay, recovery, and trace output. Its TypeBox public contract is
+  [`graph-control-schemas.ts`](../src/task-authority/graph-control-schemas.ts).
+  [`durable-graph-task-authority.ts`](../src/adapters/durable-graph-task-authority.ts)
+  owns the Team-scoped snapshot, while
+  [`graph-orchestration.ts`](../src/task-authority/graph-orchestration.ts) owns
+  publication and ready delivery. The older [`dag.ts`](../src/task-authority/dag.ts),
+  [`mechanical-dispatch.ts`](../src/task-authority/mechanical-dispatch.ts), and
+  [`beads-graph-adapter.ts`](../src/task-authority/beads-graph-adapter.ts) remain
+  the legacy Beads graph path.
 - [`src/model-tool-contract/beads-task-adapter.ts`](../src/model-tool-contract/beads-task-adapter.ts)
   and [`beads-authority-adapter.ts`](../src/model-tool-contract/beads-authority-adapter.ts)
   form the Beads adapter boundary for native records, metadata, revisions, and
   mutations. [`src/utils/tasks.ts`](../src/utils/tasks.ts) exposes only semantic
   Task operations; the delivery stopped-epoch migration is
   [`src/utils/task-delivery-migration.ts`](../src/utils/task-delivery-migration.ts).
-- [`src/utils/team-events.ts`](../src/utils/team-events.ts) owns cursor ordering,
+- [`src/coordination/event-journal.ts`](../src/coordination/event-journal.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
 - [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)
   owns Worker-only Pi settings parsing plus context and model-tool projection;

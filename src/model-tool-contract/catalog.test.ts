@@ -49,7 +49,7 @@ const provenance = {
   designSha256: "design-sha",
 };
 
-function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
+function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_graph_apply" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
   if (tool === "team_create") {
     return { parameters: TeamCreateParametersSchema, result: TeamCreateResultSchema };
   }
@@ -59,7 +59,7 @@ function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_
   if (tool === "ensure_worker") {
     return { parameters: EnsureWorkerParametersSchema, result: EnsureWorkerResultSchema };
   }
-  if (tool === "task_create") {
+  if (tool === "task_graph_apply") {
     return { parameters: TaskCreateParametersSchema, result: TaskCreateResultSchema };
   }
   if (tool === "task_read") return { parameters: TaskReadParametersSchema, result: TaskReadResultSchema };
@@ -240,9 +240,9 @@ describe("candidate model-tool catalog", () => {
     expect(modelToolCatalog.status).toBe("candidate");
     expect(modelToolCatalog.modelResultProjection).toMatchObject({
       status: "accepted",
-      version: "2",
+      version: "3",
     });
-    expect(modelToolCatalog.tools.map((tool) => tool.name)).toEqual(["team_create", "task_create", "task_read", "task_update", "team_sync", "ensure_worker", "worker_stop", "team_shutdown", "alert_send"]);
+    expect(modelToolCatalog.tools.map((tool) => tool.name)).toEqual(["team_create", "task_graph_apply", "task_read", "task_update", "team_sync", "ensure_worker", "worker_stop", "team_shutdown", "alert_send"]);
 
     for (const tool of modelToolCatalog.tools) {
       const schemas = schemasFor(tool.name);

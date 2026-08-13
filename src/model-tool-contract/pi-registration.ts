@@ -30,7 +30,7 @@ import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import { assembleToolResult } from "./result-projection";
 import { createToolResultRenderer } from "./tui-projection";
 
-function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_create" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
+function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_graph_apply" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
   const entry = modelToolCatalog.tools.find((tool) => tool.name === name);
   if (!entry) throw new Error(`Model tool catalog has no ${name} entry.`);
   return entry;
@@ -39,7 +39,7 @@ function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "tas
 const teamCreateCatalogEntry = catalogEntry("team_create");
 const teamSyncCatalogEntry = catalogEntry("team_sync");
 const ensureWorkerCatalogEntry = catalogEntry("ensure_worker");
-const taskCreateCatalogEntry = catalogEntry("task_create");
+const taskCreateCatalogEntry = catalogEntry("task_graph_apply");
 const taskReadCatalogEntry = catalogEntry("task_read");
 const taskUpdateCatalogEntry = catalogEntry("task_update");
 const workerStopCatalogEntry = catalogEntry("worker_stop");
@@ -165,10 +165,10 @@ export function registerModelToolJourney(
     typeof TaskCreateParametersSchema,
     TaskCreateResult
   > = {
-    name: "task_create",
+    name: "task_graph_apply",
     label: taskCreateCatalogEntry.label,
     description: taskCreateCatalogEntry.responsibility,
-    renderResult: createToolResultRenderer("task_create"),
+    renderResult: createToolResultRenderer("task_graph_apply"),
     parameters: TaskCreateParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
@@ -176,7 +176,7 @@ export function registerModelToolJourney(
         leaderSessionId(ctx),
         parameters,
       );
-      return assembleToolResult("task_create", result);
+      return assembleToolResult("task_graph_apply", result);
     },
   };
   pi.registerTool(taskCreateTool);

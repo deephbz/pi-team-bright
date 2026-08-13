@@ -20,11 +20,11 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
    and stable Worker assignees. Put prerequisite keys in each Task's `needs` list.
    One Task is the one-node case. If order matters, encode it with `needs`.
 4. Task authority presents the ready front mechanically, with at most one Task
-   per Worker. A Worker starts presented work with an atomic claim. Send
-   `claim=true` alone;
-   don't combine it with status, context, or evidence changes. Use the returned
-   Task version for the next update. The Worker verifies work, then closes with
-   evidence or blocks with blocker evidence and a next action.
+   per Worker. A Worker sends `claim` with the exact Task version before work.
+   Use the returned version for the next command. Send `goal_achieved` with
+   external success evidence, or `goal_failed` when criteria fail. Task authority
+   applies any bounded failure edge. Use `block` only for an external blocker,
+   and include blocker evidence.
 5. Use `team_sync({view:"updates"})` for routine supervision. Mutation receipts
    already contain post-state; don't immediately re-read them.
 6. Treat a Beads timeout as an unknown authority outcome, not an empty Task set
@@ -53,11 +53,10 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
   it only after Pi persists the model-visible result.
 - Task updates require the exact opaque Task version ref and an operation ID.
   Identical retries replay the durable receipt; stale or conflicting writes refuse.
-- Closed is a work state, not an immutable Task. Later evidence can advance its
-  version. Use the latest receipt or read before another conditional mutation.
-- Provide `current_context` only when still-relevant Task meaning changes. Provide
-  `journal_entries` for evidence or rationale. A status-only update is valid only
-  when neither information class changes.
+- `dependency_waiting` and `ready` are derived. Only `goal_achieved` satisfies a
+  prerequisite. `goal_failed` and `cancelled` never release a success edge.
+- Provide `current_context` only when still-relevant Task meaning changes. Use
+  transition `evidence` for blockers, goal outcomes, and cancellation reasons.
 - Team lifecycle and terminal placement remain durable authorities. The public
   model surface does not expose carrier placement or backend controls.
 

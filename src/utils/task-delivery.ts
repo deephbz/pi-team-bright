@@ -5,6 +5,7 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { TeamConfig } from "../team-authority/contracts";
 import { withLock } from "./lock";
 import {
+  graphRevisionRetirementPath,
   taskDeliveryPath,
   taskDeliveryRecoveryPath,
   taskDeliveryTombstonePath,
@@ -13,9 +14,15 @@ import {
 import { readConfig } from "./teams";
 import { writeJsonAtomic } from "./atomic-json";
 import { Check } from "typebox/value";
-import { TaskCardSchema, type TaskCard } from "../task-authority/task-domain";
+import { TaskCardSchema, type CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskReconciliationQuery } from "../task-authority/contracts";
+import type { GraphRevisionRetirementInput } from "../task-authority/graph-revision-retirement";
+import {
+  readGraphRevisionRetirementLocked,
+  recordGraphRevisionRetirementLocked,
+  taskIsCurrentInGraphLocked,
+} from "./graph-revision-retirement";
 
 export const TASK_CHANGE_CUSTOM_TYPE = "pi-teams.task-change";
 export const TASK_CHANGE_RESUME_TYPE = "pi-teams.task-change-resume";
@@ -38,9 +45,9 @@ export interface TaskChangeRef {
   version: TaskVersionRef;
 }
 
-export type TaskChangeTaskProjection = TaskCard;
+export type TaskChangeTaskProjection = CanonicalTaskCard;
 /** Coordinates used only while preparing an ownership transition. */
-type TaskCoordinates = Pick<TaskCard, "id" | "title" | "status" | "assignee" | "version">;
+type TaskCoordinates = Pick<CanonicalTaskCard, "id" | "title" | "status" | "assignee" | "version">;
 
 export interface TaskDeliveryRecord {
   deliveryId: string;
@@ -59,6 +66,9 @@ export interface TaskDeliveryRecord {
   attemptedAt?: string;
   attemptCount: number;
   successfulTurnAckAt?: string;
+  /** Derived obligation retired by a later complete graph revision. */
+  retiredAt?: string;
+  retiredByGraphVersion?: string;
 }
 
 export interface TaskDeliveryTombstone {
@@ -82,6 +92,8 @@ export interface TaskDeliveryRecoveryRecord {
   /** Canonical task_read card captured before the enqueue attempt. */
   taskProjection: TaskChangeTaskProjection;
   resolvedRecipients?: string[];
+  retiredAt?: string;
+  retiredByGraphVersion?: string;
 }
 
 export interface OwnerTransitionTarget {
@@ -106,6 +118,8 @@ export interface OwnerTransitionIntent {
   /** Raw authority revision needed to reconstruct the internal delivery ref. */
   committedTaskVersion?: TaskVersionRef;
   resolvedTargetKeys?: string[];
+  retiredAt?: string;
+  retiredByGraphVersion?: string;
 }
 
 export interface OwnerTransitionOutboxDependencies {
@@ -113,7 +127,7 @@ export interface OwnerTransitionOutboxDependencies {
   query?: TaskReconciliationQuery;
   enqueueExact?: (
     config: TeamConfig,
-    task: TaskCard,
+    task: CanonicalTaskCard,
     target: OwnerTransitionTarget,
   ) => Promise<TaskDeliveryRecord | null>;
 }
@@ -179,7 +193,7 @@ function sessionRef(sessionFile: string) {
 }
 
 /** Validate the exact canonical card supplied by the Task adapter. */
-export function projectTaskForAgent(task: TaskCard): TaskChangeTaskProjection {
+export function projectTaskForAgent(task: CanonicalTaskCard): TaskChangeTaskProjection {
   if (!Check(TaskCardSchema, task)) {
     const error = new Error("Task delivery requires the canonical TaskCard supplied by the adapter.");
     error.name = "upgrade_required";
@@ -204,17 +218,17 @@ export function taskPollMs(env: NodeJS.ProcessEnv = process.env): number {
  * Persist Task-adapter delivery evidence after a successful Task mutation.
  * The Task backend remains the only authority for Task business state.
  */
-export async function enqueueTaskChange(teamName: string, task: TaskCard, changeKind: TaskChangeKind, actor?: string): Promise<TaskDeliveryRecord | null> {
+export async function enqueueTaskChange(teamName: string, task: CanonicalTaskCard, changeKind: TaskChangeKind, actor?: string): Promise<TaskDeliveryRecord | null> {
   if (!task.assignee) return null;
   return enqueueTaskChangeForRecipient(teamName, task, task.assignee, changeKind);
 }
 
-export async function enqueueTaskChangeForRecipient(teamName: string, task: TaskCard, recipient: string, changeKind: TaskChangeKind): Promise<TaskDeliveryRecord | null> {
+export async function enqueueTaskChangeForRecipient(teamName: string, task: CanonicalTaskCard, recipient: string, changeKind: TaskChangeKind): Promise<TaskDeliveryRecord | null> {
   const config = await readConfig(teamName);
   return enqueueTaskChangeWithConfig(config, task, recipient, changeKind);
 }
 
-export async function enqueueTaskChangeForExactRecipient(config: TeamConfig, task: TaskCard, target: OwnerTransitionTarget): Promise<TaskDeliveryRecord | null> {
+export async function enqueueTaskChangeForExactRecipient(config: TeamConfig, task: CanonicalTaskCard, target: OwnerTransitionTarget): Promise<TaskDeliveryRecord | null> {
   return enqueueTaskChangeWithConfig(
     config,
     task,
@@ -226,7 +240,7 @@ export async function enqueueTaskChangeForExactRecipient(config: TeamConfig, tas
 
 async function enqueueTaskChangeWithConfig(
   config: TeamConfig,
-  task: TaskCard,
+  task: CanonicalTaskCard,
   recipient: string,
   changeKind: TaskChangeKind,
   exactBinding?: { membershipId: string; sessionFile: string },
@@ -276,7 +290,8 @@ async function enqueueTaskProjectionWithConfig(
   };
   const file = taskDeliveryPath(teamName, recipient);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  return withLock(file, async () => {
+  return withLock(graphRevisionRetirementPath(teamName), () => withLock(file, async () => {
+    if (!taskIsCurrentInGraphLocked(config.name, taskId, version)) return null;
     const records = readRecordsUnsafe(file);
     const tombstones = readTombstonesUnsafe(taskDeliveryTombstonePath(teamName, recipient));
     if (tombstones.some((item) => item.deliveryId === deliveryId)) return null;
@@ -297,7 +312,7 @@ async function enqueueTaskProjectionWithConfig(
     records.push(record);
     writeJsonAtomic(file, compactRecords(records));
     return record;
-  });
+  }));
 }
 
 function ownerTargetKey(target: OwnerTransitionTarget): string {
@@ -355,7 +370,7 @@ function ownerTransitionTargets(
 export async function prepareOwnerTransitionIntent(input: {
   operationId: string;
   teamName: string;
-  before: TaskCard;
+  before: CanonicalTaskCard;
   afterOwner?: string;
   previousOperationId?: string;
 }): Promise<boolean> {
@@ -431,7 +446,7 @@ export async function prepareOwnerTransitionIntent(input: {
 export async function completeOwnerTransitionIntent(
   teamName: string,
   operationId: string,
-  task: TaskCard,
+  task: CanonicalTaskCard,
   dependencies: OwnerTransitionOutboxDependencies = {},
 ): Promise<string[]> {
   const postStateCard = projectTaskForAgent(task);
@@ -469,7 +484,7 @@ export async function reconcileOwnerTransitionOutbox(
   if (prepared.length > 0 && !dependencies.query) {
     throw new Error("Task owner-transition recovery requires an injected TaskReconciliationQuery.");
   }
-  const evidence = new Map<string, { task: TaskCard; operationId?: string }>();
+  const evidence = new Map<string, { task: CanonicalTaskCard; operationId?: string }>();
   for (const record of prepared) {
     if (!evidence.has(record.taskId)) {
       evidence.set(
@@ -509,7 +524,7 @@ async function deliverCommittedOwnerTransitionIntents(
   await withLock(file, async () => {
     const records = readOwnerTransitionIntentsUnsafe(file);
     for (const record of records) {
-      if (record.state !== "committed") continue;
+      if (record.state !== "committed" || record.retiredAt) continue;
       const projection = record.committedTaskProjection;
       if (!projection) continue;
       for (const target of record.targets) {
@@ -603,7 +618,7 @@ async function reconcileRecoveryRecords(config: TeamConfig, recipient: string): 
     let count = 0;
     let changed = false;
     for (const record of records) {
-      if (!record.recipients.includes(recipient) || record.resolvedRecipients?.includes(recipient)) continue;
+      if (record.retiredAt || !record.recipients.includes(recipient) || record.resolvedRecipients?.includes(recipient)) continue;
       const delivered = record.taskProjection
         ? await enqueueTaskProjectionWithConfig(config, record.taskProjection, recipient, record.changeKind)
         : null;
@@ -628,7 +643,8 @@ export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRec
   }
   const file = taskDeliveryRecoveryPath(record.teamName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  await withLock(file, async () => {
+  await withLock(graphRevisionRetirementPath(record.teamName), () => withLock(file, async () => {
+    if (!taskIsCurrentInGraphLocked(record.teamName, record.taskId, record.taskVersion)) return;
     const records: TaskDeliveryRecoveryRecord[] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
     const recipients = [...new Set(record.recipients)].sort();
     const duplicate = records.some((existing) => {
@@ -644,7 +660,7 @@ export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRec
     if (duplicate) return;
     records.push(record);
     writeJsonAtomic(file, records);
-  });
+  }));
 }
 
 export async function readTaskDeliveries(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
@@ -653,10 +669,93 @@ export async function readTaskDeliveries(teamName: string, recipient: string): P
   return withLock(file, async () => readRecordsUnsafe(file));
 }
 
+/** Read current records while the caller owns the graph-revision fence lock. */
+async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
+  const records = await readTaskDeliveries(teamName, recipient);
+  const retirement = readGraphRevisionRetirementLocked(teamName);
+  if (!retirement) return records.filter((record) => !record.retiredAt);
+  const current = new Set(retirement.current.currentTasks.map((task) => `${task.taskId}\u0000${task.taskVersion}`));
+  return records.filter((record) => !record.retiredAt && current.has(`${record.ref.taskId}\u0000${record.ref.version}`));
+}
+
+/** Pending delivery records still actionable in the current complete graph. */
+export async function readCurrentTaskDeliveries(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
+  const fenceFile = graphRevisionRetirementPath(teamName);
+  return withLock(fenceFile, async () => readCurrentTaskDeliveriesLocked(teamName, recipient));
+}
+
 export async function readTaskDeliveryTombstones(teamName: string, recipient: string): Promise<TaskDeliveryTombstone[]> {
   const file = taskDeliveryTombstonePath(teamName, recipient);
   if (!fs.existsSync(file)) return [];
   return withLock(file, async () => readTombstonesUnsafe(file));
+}
+
+/**
+ * Fence one committed complete graph revision, then retire its derived work.
+ *
+ * The fence is the read-time authority. Derived record rewrites are repeatable
+ * cleanup, so a crash between files cannot make removed work actionable.
+ */
+export async function retireGraphRevisionDeliveries(input: GraphRevisionRetirementInput): Promise<void> {
+  const fenceFile = graphRevisionRetirementPath(input.teamName);
+  fs.mkdirSync(path.dirname(fenceFile), { recursive: true });
+  await withLock(fenceFile, async () => {
+    const snapshot = recordGraphRevisionRetirementLocked(input);
+    if (snapshot.current.authoritySequence !== input.authoritySequence) return;
+    const current = new Set(snapshot.current.currentTasks.map((task) => `${task.taskId}\u0000${task.taskVersion}`));
+    const retiredAt = snapshot.current.recordedAt;
+    const retiredByGraphVersion = snapshot.current.graphVersion;
+    const deliveryDir = path.dirname(taskDeliveryPath(input.teamName, "retirement-scan"));
+    if (fs.existsSync(deliveryDir)) {
+      for (const name of fs.readdirSync(deliveryDir)) {
+        if (!name.endsWith(".json") || name.endsWith(".observed.json") || name === "recovery.json" || name === "owner-transitions.json") continue;
+        const recipient = name.slice(0, -".json".length);
+        if (!/^[a-zA-Z0-9_-]+$/.test(recipient)) continue;
+        const file = taskDeliveryPath(input.teamName, recipient);
+        await withLock(file, async () => {
+          const records = readRecordsUnsafe(file);
+          let changed = false;
+          for (const record of records) {
+            if (current.has(`${record.ref.taskId}\u0000${record.ref.version}`) || record.retiredAt) continue;
+            record.retiredAt = retiredAt;
+            record.retiredByGraphVersion = retiredByGraphVersion;
+            changed = true;
+          }
+          if (changed) writeJsonAtomic(file, compactRecords(records));
+        });
+      }
+    }
+
+    const recoveryFile = taskDeliveryRecoveryPath(input.teamName);
+    if (fs.existsSync(recoveryFile)) await withLock(recoveryFile, async () => {
+      const records = JSON.parse(fs.readFileSync(recoveryFile, "utf8")) as TaskDeliveryRecoveryRecord[];
+      let changed = false;
+      for (const record of records) {
+        if (current.has(`${record.taskId}\u0000${record.taskVersion}`) || record.retiredAt) continue;
+        record.retiredAt = retiredAt;
+        record.retiredByGraphVersion = retiredByGraphVersion;
+        changed = true;
+      }
+      if (changed) writeJsonAtomic(recoveryFile, records);
+    });
+
+    const outboxFile = taskOwnerTransitionOutboxPath(input.teamName);
+    if (fs.existsSync(outboxFile)) await withLock(outboxFile, async () => {
+      const records = readOwnerTransitionIntentsUnsafe(outboxFile);
+      let changed = false;
+      for (const record of records) {
+        const obligationVersion = record.state === "committed"
+          ? record.committedTaskVersion
+          : record.beforeVersion;
+        if ((obligationVersion && current.has(`${record.taskId}\u0000${obligationVersion}`)) || record.retiredAt) continue;
+        record.state = "abandoned";
+        record.retiredAt = retiredAt;
+        record.retiredByGraphVersion = retiredByGraphVersion;
+        changed = true;
+      }
+      if (changed) writeJsonAtomic(outboxFile, compactOwnerTransitionIntents(records));
+    });
+  });
 }
 
 async function mutateRecords(
@@ -719,8 +818,8 @@ function readTombstonesUnsafe(file: string): TaskDeliveryTombstone[] {
 
 function compactRecords(records: TaskDeliveryRecord[]): TaskDeliveryRecord[] {
   const settledLimit = 128;
-  const pending = records.filter((record) => !record.successfulTurnAckAt);
-  const settled = records.filter((record) => !!record.successfulTurnAckAt).slice(-settledLimit);
+  const pending = records.filter((record) => !record.successfulTurnAckAt && !record.retiredAt);
+  const settled = records.filter((record) => !!record.successfulTurnAckAt || !!record.retiredAt).slice(-settledLimit);
   return [...pending, ...settled];
 }
 
@@ -748,7 +847,7 @@ export async function suppressTaskVersionForSession(
   teamName: string,
   recipient: string,
   sessionFile: string,
-  task: TaskCard | TaskCoordinates,
+  task: CanonicalTaskCard | TaskCoordinates,
 ): Promise<void> {
   const config = await readConfig(teamName);
   const binding = recipientBinding(config, recipient);
@@ -758,15 +857,19 @@ export async function suppressTaskVersionForSession(
   const ref: TaskChangeRef = { kind: "task", taskId: task.id, version: assertTaskVersionRef(task.version) };
   const targetAgentRef = sessionRef(sessionFile);
   const deliveryId = `task_delivery_${digest({ ref, recipient, recipientMembershipId: binding.membershipId, targetAgentRef }).slice(0, 32)}`;
-  await persistTombstones(teamName, recipient, [{
-    deliveryId,
-    ref,
-    recipient,
-    recipientMembershipId: binding.membershipId,
-    recipientSessionFile: sessionFile,
-    observedAt: new Date().toISOString(),
-    evidence: "tool-post-state",
-  }]);
+  const fenceFile = graphRevisionRetirementPath(teamName);
+  await withLock(fenceFile, async () => {
+    if (!taskIsCurrentInGraphLocked(teamName, task.id, assertTaskVersionRef(task.version))) return;
+    await persistTombstones(teamName, recipient, [{
+      deliveryId,
+      ref,
+      recipient,
+      recipientMembershipId: binding.membershipId,
+      recipientSessionFile: sessionFile,
+      observedAt: new Date().toISOString(),
+      evidence: "tool-post-state",
+    }]);
+  });
 }
 
 function detailsFrom(value: unknown): TaskChangeBatchDetails | null {
@@ -900,19 +1003,22 @@ export class TaskChangeDelivery {
     this.attempted.clear();
     this.acknowledged = acknowledgedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
     this.staged.clear();
-    const observedRecords = (await readTaskDeliveries(this.options.teamName, this.options.recipient))
-      .filter((record) => this.acknowledged.has(record.deliveryId));
-    await persistTombstones(this.options.teamName, this.options.recipient, observedRecords.map((record) => ({
-      deliveryId: record.deliveryId,
-      ref: record.ref,
-      recipient: record.recipient,
-      recipientMembershipId: record.recipientMembershipId,
-      recipientSessionFile: record.recipientSessionFile,
-      observedAt: new Date().toISOString(),
-      evidence: "successful-turn-ack" as const,
-    })));
-    await mutateRecords(this.options.teamName, this.options.recipient, this.acknowledged, (record) => {
-      record.successfulTurnAckAt ||= new Date().toISOString();
+    const fenceFile = graphRevisionRetirementPath(this.options.teamName);
+    await withLock(fenceFile, async () => {
+      const observedRecords = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
+        .filter((record) => this.acknowledged.has(record.deliveryId));
+      await persistTombstones(this.options.teamName, this.options.recipient, observedRecords.map((record) => ({
+        deliveryId: record.deliveryId,
+        ref: record.ref,
+        recipient: record.recipient,
+        recipientMembershipId: record.recipientMembershipId,
+        recipientSessionFile: record.recipientSessionFile,
+        observedAt: new Date().toISOString(),
+        evidence: "successful-turn-ack" as const,
+      })));
+      await mutateRecords(this.options.teamName, this.options.recipient, this.acknowledged, (record) => {
+        record.successfulTurnAckAt ||= new Date().toISOString();
+      });
     });
     if (this.stopped || generation !== this.generation) return;
     await (this.options.reconcile?.() ?? reconcileTaskChanges(
@@ -997,19 +1103,24 @@ export class TaskChangeDelivery {
       sessionFile: this.options.sessionFile,
       membershipId: this.resolvedMembershipId,
     }, async () => {
-        const details = this.details(records);
-        this.sink.appendEntry(TASK_CHANGE_ACK_ENTRY_TYPE, details);
-        await persistTombstones(this.options.teamName, this.options.recipient, records.map((record) => ({
-          deliveryId: record.deliveryId,
-          ref: record.ref,
-          recipient: record.recipient,
-          recipientMembershipId: record.recipientMembershipId,
-          recipientSessionFile: record.recipientSessionFile,
-          observedAt: new Date().toISOString(),
-          evidence: "successful-turn-ack" as const,
-        })));
-        return mutateRecords(this.options.teamName, this.options.recipient, ids, (record) => {
-          record.successfulTurnAckAt ||= new Date().toISOString();
+        return withLock(graphRevisionRetirementPath(this.options.teamName), async () => {
+          const currentRecords = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
+            .filter((record) => ids.has(record.deliveryId));
+          if (currentRecords.length === 0) return 0;
+          const details = this.details(currentRecords);
+          this.sink.appendEntry(TASK_CHANGE_ACK_ENTRY_TYPE, details);
+          await persistTombstones(this.options.teamName, this.options.recipient, currentRecords.map((record) => ({
+            deliveryId: record.deliveryId,
+            ref: record.ref,
+            recipient: record.recipient,
+            recipientMembershipId: record.recipientMembershipId,
+            recipientSessionFile: record.recipientSessionFile,
+            observedAt: new Date().toISOString(),
+            evidence: "successful-turn-ack" as const,
+          })));
+          return mutateRecords(this.options.teamName, this.options.recipient, currentRecords.map((record) => record.deliveryId), (record) => {
+            record.successfulTurnAckAt ||= new Date().toISOString();
+          });
         });
     });
     for (const id of ids) {
@@ -1081,7 +1192,7 @@ export class TaskChangeDelivery {
     });
     if (!this.resolvedMembershipId || binding?.membershipId !== this.resolvedMembershipId) return [];
     const tombstones = new Set((await readTaskDeliveryTombstones(this.options.teamName, this.options.recipient)).map((item) => item.deliveryId));
-    return (await readTaskDeliveries(this.options.teamName, this.options.recipient))
+    return (await readCurrentTaskDeliveries(this.options.teamName, this.options.recipient))
       .filter((record) => record.recipientMembershipId === this.resolvedMembershipId && record.recipientSessionFile === this.options.sessionFile && !tombstones.has(record.deliveryId));
   }
 
