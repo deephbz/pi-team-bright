@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GraphTaskController, type GraphTaskDefinitionInput } from "../task-authority/graph-control";
-import { layoutTaskGraph, renderTaskGraphViewport } from "./layout";
+import { findDirectionalTaskGraphNode, layoutTaskGraph, renderTaskGraphViewport } from "./layout";
 import { projectGraphControlTaskGraphViewSource } from "./source";
 
 function source() {
@@ -52,13 +52,19 @@ describe("Task graph terminal layout", () => {
     expect(first.islands).toHaveLength(1);
     const plain = renderTaskGraphViewport({ canvas: first, x: 0, y: 0, width: first.width, height: first.height, color: false }).join("\n");
     expect(plain).toContain("island 1/1 · 4 tasks");
-    expect(plain).toContain("▶ in_progress");
-    expect(plain).toContain("◷ dependency_waiting ⋈ ↺0/2");
-    expect(plain).toContain("try 1/1 · default current");
-    expect(plain).toContain("tries 0 · capable");
-    expect(plain).toMatch(/[━┃]/u);
+    expect(plain).toContain("[in_progress] plan@planner");
+    expect(plain).toContain("[dependency_waiting]");
+    expect(plain).toContain("⋈ ↺0/2 Ship");
+    expect(first.nodes.find((box) => box.node.id === "plan")?.node.display_attempt).toMatchObject({
+      ordinal: 1,
+      current: true,
+      resolved_model: "provider/default:medium",
+    });
+    expect(first.nodes.find((box) => box.node.id === "build")?.node.model_alias).toBe("capable");
+    expect(plain).toMatch(/[━┃┏┓┗┛]/u);
     expect(plain).toMatch(/[╌╎]/u);
     expect(plain).toContain("↺0/2");
+    expect(plain).not.toContain("╳");
     expect(plain).not.toContain("\u001b");
   });
 
@@ -68,6 +74,15 @@ describe("Task graph terminal layout", () => {
     expect(styled).toContain("\u001b[1;36m");
     expect(styled).toContain("\u001b[32m");
     expect(styled).toContain("\u001b[33m");
+    const selected = renderTaskGraphViewport({
+      canvas,
+      x: 0,
+      y: 0,
+      width: canvas.width,
+      height: canvas.height,
+      selectedTaskId: "plan",
+    }).join("\n");
+    expect(selected).toContain("\u001b[1;97;44m");
     expect(styled).not.toMatch(/\u001b\[[^m]*38;5;/u);
   });
 
@@ -148,6 +163,13 @@ describe("Task graph terminal layout", () => {
       layoutTaskGraph(graph, "all", { packWidth: 100, nodeWidth: 24 }).islands.map(({ x, y }) => `${x},${y}`),
     );
     expect(new Set(first.islands.map(({ x, y }) => `${x},${y}`))).toHaveLength(12);
+  });
+
+  it("selects stable spatial neighbors without changing the graph", () => {
+    const canvas = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32 });
+    const below = findDirectionalTaskGraphNode(canvas, "plan", "down");
+    expect(["build", "test"]).toContain(below?.node.id);
+    expect(findDirectionalTaskGraphNode(canvas, below!.node.id, "up")?.node.id).toBe("plan");
   });
 
   it("clips a packed canvas without changing its cached island coordinates", () => {

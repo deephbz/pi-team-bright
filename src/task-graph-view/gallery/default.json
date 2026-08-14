@@ -1,0 +1,167 @@
+{
+  "schema": "pi-team-bright/task-dag-islands-gallery/1",
+  "name": "default sentinel DAG islands",
+  "review_now": "2026-08-14T12:00:00.000Z",
+  "initial_limit": "all",
+  "start_mode": "select",
+  "expand_selected": true,
+  "source": {
+    "schema": "pi-team-bright-task-graph-view/3",
+    "team_name": "task-dag-islands-gallery",
+    "authority": "graph_control",
+    "source_revision": "120-gallery-sentinel-v1",
+    "graph_version": "g_0123456789abcdef",
+    "authority_sequence": "120",
+    "nodes": [
+      {
+        "id": "dag1-task1",
+        "title": "DAG 1 Task 1",
+        "goal": "goal1: establish the first DAG island input.",
+        "current_context": "context1: input work is complete and accepted.",
+        "assignee": "worker1",
+        "state": "goal_achieved",
+        "waiting_on_task_ids": [],
+        "activity_cursor": "120",
+        "first_activity_at": "2026-08-14T08:00:00.000Z",
+        "last_activity_at": "2026-08-14T09:00:00.000Z",
+        "model_alias": "capable",
+        "attempts_started": 1,
+        "display_attempt": {
+          "id": "dag1-task1@1",
+          "ordinal": 1,
+          "state": "completed",
+          "current": false,
+          "model_alias": "capable",
+          "resolved_model": "model1-capable",
+          "outcome": "goal_achieved"
+        }
+      },
+      {
+        "id": "dag1-task2",
+        "title": "DAG 1 Task 2",
+        "goal": "goal2: build the active branch.",
+        "current_context": "context2: branch construction is in progress.",
+        "assignee": "worker2",
+        "state": "in_progress",
+        "waiting_on_task_ids": [],
+        "activity_cursor": "119",
+        "first_activity_at": "2026-08-14T09:05:00.000Z",
+        "last_activity_at": "2026-08-14T11:50:00.000Z",
+        "model_alias": "default",
+        "attempts_started": 1,
+        "display_attempt": {
+          "id": "dag1-task2@1",
+          "ordinal": 1,
+          "state": "in_progress",
+          "current": true,
+          "model_alias": "default",
+          "resolved_model": "model2-default"
+        }
+      },
+      {
+        "id": "dag1-task3",
+        "title": "DAG 1 Task 3",
+        "goal": "goal3: run the ready parallel branch.",
+        "current_context": "context3: prerequisites are complete and work can start.",
+        "assignee": "worker3",
+        "state": "ready",
+        "waiting_on_task_ids": [],
+        "activity_cursor": "118",
+        "first_activity_at": "2026-08-14T09:05:00.000Z",
+        "last_activity_at": "2026-08-14T09:05:00.000Z",
+        "model_alias": "default",
+        "attempts_started": 0
+      },
+      {
+        "id": "dag1-task4",
+        "title": "DAG 1 Task 4",
+        "goal": "goal4: join both DAG 1 branches.",
+        "current_context": "context4: the join waits for task2 and task3.",
+        "assignee": "worker4",
+        "state": "dependency_waiting",
+        "waiting_on_task_ids": ["dag1-task2", "dag1-task3"],
+        "activity_cursor": "117",
+        "first_activity_at": "2026-08-14T09:05:00.000Z",
+        "last_activity_at": "2026-08-14T09:05:00.000Z",
+        "model_alias": "capable",
+        "attempts_started": 0
+      },
+      {
+        "id": "dag2-task1",
+        "title": "DAG 2 Task 1",
+        "goal": "goal5: show blocked work in the second island.",
+        "current_context": "context5: an external decision blocks progress.",
+        "assignee": "worker5",
+        "state": "blocked",
+        "waiting_on_task_ids": [],
+        "activity_cursor": "116",
+        "first_activity_at": "2026-08-14T08:30:00.000Z",
+        "last_activity_at": "2026-08-14T11:40:00.000Z",
+        "model_alias": "default",
+        "attempts_started": 1,
+        "display_attempt": {
+          "id": "dag2-task1@1",
+          "ordinal": 1,
+          "state": "blocked",
+          "current": true,
+          "model_alias": "default",
+          "resolved_model": "model5-default"
+        }
+      },
+      {
+        "id": "dag2-task2",
+        "title": "DAG 2 Task 2",
+        "goal": "goal6: show a failed criterion and bounded failure route.",
+        "current_context": "context6: the criterion failed and routed to task1.",
+        "assignee": "worker6",
+        "state": "goal_failed",
+        "waiting_on_task_ids": [],
+        "activity_cursor": "115",
+        "first_activity_at": "2026-08-14T07:00:00.000Z",
+        "last_activity_at": "2026-08-14T10:30:00.000Z",
+        "model_alias": "capable",
+        "attempts_started": 1,
+        "display_attempt": {
+          "id": "dag2-task2@1",
+          "ordinal": 1,
+          "state": "completed",
+          "current": false,
+          "model_alias": "capable",
+          "resolved_model": "model6-capable",
+          "outcome": "goal_failed"
+        },
+        "failure_reason": "criterion_failed"
+      },
+      {
+        "id": "dag3-task1",
+        "title": "DAG 3 Task 1",
+        "goal": "goal7: show cancelled work as a separate island.",
+        "current_context": "context7: the work became obsolete before completion.",
+        "assignee": "worker7",
+        "state": "cancelled",
+        "waiting_on_task_ids": [],
+        "activity_cursor": "114",
+        "first_activity_at": "2026-08-14T06:00:00.000Z",
+        "last_activity_at": "2026-08-14T08:00:00.000Z",
+        "model_alias": "default",
+        "attempts_started": 1,
+        "display_attempt": {
+          "id": "dag3-task1@1",
+          "ordinal": 1,
+          "state": "cancelled",
+          "current": false,
+          "model_alias": "default",
+          "resolved_model": "model7-default"
+        }
+      }
+    ],
+    "edges": [
+      { "from_task_id": "dag1-task1", "to_task_id": "dag1-task2", "kind": "goal_achieved" },
+      { "from_task_id": "dag1-task1", "to_task_id": "dag1-task3", "kind": "goal_achieved" },
+      { "from_task_id": "dag1-task2", "to_task_id": "dag1-task4", "kind": "goal_achieved" },
+      { "from_task_id": "dag1-task3", "to_task_id": "dag1-task4", "kind": "goal_achieved" },
+      { "from_task_id": "dag1-task4", "to_task_id": "dag1-task1", "kind": "goal_failed", "traversals": 0, "max_traversals": 2 },
+      { "from_task_id": "dag2-task2", "to_task_id": "dag2-task1", "kind": "goal_failed", "traversals": 1, "max_traversals": 2 }
+    ]
+  }
+}

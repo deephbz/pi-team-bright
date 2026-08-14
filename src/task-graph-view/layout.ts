@@ -13,8 +13,10 @@ import {
 } from "./source";
 
 export type TaskGraphDirection = "TB" | "LR";
+export type TaskGraphNavigationDirection = "left" | "right" | "up" | "down";
 export type TaskGraphCellTone =
   | TaskGraphNodeState
+  | "selected"
   | "success_edge"
   | "failure_edge"
   | "legacy_edge"
@@ -35,12 +37,24 @@ export interface TaskGraphIsland {
   height: number;
 }
 
+export interface TaskGraphNodeBox {
+  node: TaskGraphViewNode;
+  islandIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+}
+
 export interface TaskGraphCanvas {
   width: number;
   height: number;
   rows: TaskGraphCell[][];
   visible: VisibleTaskGraph;
   islands: TaskGraphIsland[];
+  nodes: TaskGraphNodeBox[];
 }
 
 export interface TaskGraphLayoutOptions {
@@ -49,6 +63,8 @@ export interface TaskGraphLayoutOptions {
   /** Desired shelf width for deterministic disconnected-island packing. */
   packWidth?: number;
   stateFilter?: TaskGraphStateFilter;
+  /** Stable render instant. It affects time labels, never graph placement. */
+  now?: number;
 }
 
 interface Point {
@@ -59,6 +75,7 @@ interface Point {
 interface IslandEdgeLayout {
   edge: TaskGraphViewEdge;
   points: Point[];
+  rasterPoints?: Point[];
 }
 
 interface IslandLayout {
@@ -76,8 +93,8 @@ interface PackedIsland extends IslandLayout {
 }
 
 const EMPTY_CELL: TaskGraphCell = { char: " ", tone: "muted" };
-const MIN_NODE_WIDTH = 20;
-const DEFAULT_NODE_WIDTH = 30;
+const MIN_NODE_WIDTH = 28;
+const DEFAULT_NODE_WIDTH = 38;
 const NODE_HEIGHT = 5;
 const CONTENT_MARGIN = 2;
 const ISLAND_HEADER_HEIGHT = 2;
@@ -90,6 +107,17 @@ const EDGE_TONES = new Set<TaskGraphCellTone>([
   "legacy_edge",
   "intersection",
 ]);
+const NORTH = 1;
+const EAST = 2;
+const SOUTH = 4;
+const WEST = 8;
+
+interface RouteCell {
+  mask: number;
+  tones: Set<TaskGraphCellTone>;
+}
+
+type RoutePlane = Map<string, RouteCell>;
 
 function blankRows(width: number, height: number): TaskGraphCell[][] {
   return Array.from({ length: height }, () => Array.from({ length: width }, () => ({ ...EMPTY_CELL })));
@@ -98,22 +126,6 @@ function blankRows(width: number, height: number): TaskGraphCell[][] {
 function setCell(rows: TaskGraphCell[][], x: number, y: number, char: string, tone: TaskGraphCellTone): void {
   if (y < 0 || y >= rows.length || x < 0 || x >= (rows[0]?.length ?? 0)) return;
   rows[y][x] = { char, tone };
-}
-
-function setPathCell(rows: TaskGraphCell[][], x: number, y: number, char: string, tone: TaskGraphCellTone): void {
-  if (y < 0 || y >= rows.length || x < 0 || x >= (rows[0]?.length ?? 0)) return;
-  const current = rows[y][x];
-  if (current.char === " " || !EDGE_TONES.has(current.tone)) {
-    rows[y][x] = { char, tone };
-    return;
-  }
-  if (current.tone !== tone) {
-    rows[y][x] = { char: "╳", tone: "intersection" };
-    return;
-  }
-  if (current.char !== char && !["▶", "◀", "▲", "▼"].includes(current.char)) {
-    rows[y][x] = { char: "┼", tone };
-  }
 }
 
 function edgeTone(kind: TaskGraphEdgeKind): TaskGraphCellTone {
@@ -133,36 +145,98 @@ function arrow(from: Point, to: Point): string {
   return dy >= 0 ? "▼" : "▲";
 }
 
-function drawPath(
-  rows: TaskGraphCell[][],
-  points: Point[],
-  edge: TaskGraphViewEdge,
-  offsetX: number,
-  offsetY: number,
-): void {
-  const tone = edgeTone(edge.kind);
-  const horizontal = edge.kind === "goal_failed" ? "╌" : edge.kind === "legacy_dependency" ? "─" : "━";
-  const vertical = edge.kind === "goal_failed" ? "╎" : edge.kind === "legacy_dependency" ? "│" : "┃";
-  for (let index = 1; index < points.length; index++) {
-    let x = Math.round(points[index - 1].x) + offsetX;
-    let y = Math.round(points[index - 1].y) + offsetY;
-    const targetX = Math.round(points[index].x) + offsetX;
-    const targetY = Math.round(points[index].y) + offsetY;
-    while (x !== targetX) {
-      setPathCell(rows, x, y, horizontal, tone);
-      x += Math.sign(targetX - x);
-    }
-    while (y !== targetY) {
-      setPathCell(rows, x, y, vertical, tone);
-      y += Math.sign(targetY - y);
-    }
-    if (index < points.length - 1) setPathCell(rows, x, y, "┼", tone);
+function routeKey(point: Point): string {
+  return `${point.x},${point.y}`;
+}
+
+function directionBit(from: Point, to: Point): number {
+  if (to.x > from.x) return EAST;
+  if (to.x < from.x) return WEST;
+  if (to.y > from.y) return SOUTH;
+  return NORTH;
+}
+
+function opposite(bit: number): number {
+  return bit === NORTH ? SOUTH : bit === SOUTH ? NORTH : bit === EAST ? WEST : EAST;
+}
+
+function addConnection(routes: RoutePlane, from: Point, to: Point, tone: TaskGraphCellTone): void {
+  const bit = directionBit(from, to);
+  const left = routes.get(routeKey(from)) ?? { mask: 0, tones: new Set<TaskGraphCellTone>() };
+  const right = routes.get(routeKey(to)) ?? { mask: 0, tones: new Set<TaskGraphCellTone>() };
+  left.mask |= bit;
+  right.mask |= opposite(bit);
+  left.tones.add(tone);
+  right.tones.add(tone);
+  routes.set(routeKey(from), left);
+  routes.set(routeKey(to), right);
+}
+
+function appendStraight(result: Point[], target: Point): void {
+  let current = result.at(-1)!;
+  while (current.x !== target.x || current.y !== target.y) {
+    current = {
+      x: current.x + Math.sign(target.x - current.x),
+      y: current.y + Math.sign(target.y - current.y),
+    };
+    result.push(current);
   }
-  if (points.length > 1) {
-    const before = points[points.length - 2];
-    const end = points[points.length - 1];
-    setPathCell(rows, Math.round(end.x) + offsetX, Math.round(end.y) + offsetY, arrow(before, end), tone);
+}
+
+/** Convert Dagre splines into stable orthogonal terminal cells. */
+function rasterizePath(points: readonly Point[], direction: TaskGraphDirection, offsetX: number, offsetY: number): Point[] {
+  if (!points.length) return [];
+  const translated = points.map((point) => ({ x: Math.round(point.x) + offsetX, y: Math.round(point.y) + offsetY }));
+  const result = [translated[0]];
+  for (const target of translated.slice(1)) {
+    const start = result.at(-1)!;
+    if (start.x === target.x || start.y === target.y) {
+      appendStraight(result, target);
+      continue;
+    }
+    if (direction === "TB") {
+      const middleY = Math.round((start.y + target.y) / 2);
+      appendStraight(result, { x: start.x, y: middleY });
+      appendStraight(result, { x: target.x, y: middleY });
+    } else {
+      const middleX = Math.round((start.x + target.x) / 2);
+      appendStraight(result, { x: middleX, y: start.y });
+      appendStraight(result, { x: middleX, y: target.y });
+    }
+    appendStraight(result, target);
   }
+  return result.filter((point, index) => index === 0 || point.x !== result[index - 1].x || point.y !== result[index - 1].y);
+}
+
+function addPath(routes: RoutePlane, points: readonly Point[], tone: TaskGraphCellTone): void {
+  for (let index = 1; index < points.length; index++) addConnection(routes, points[index - 1], points[index], tone);
+}
+
+function routeCharacter(mask: number, tone: TaskGraphCellTone): string {
+  const heavy = tone === "success_edge";
+  const horizontal = tone === "failure_edge" ? "╌" : heavy ? "━" : "─";
+  const vertical = tone === "failure_edge" ? "╎" : heavy ? "┃" : "│";
+  if (mask === (EAST | WEST)) return horizontal;
+  if (mask === (NORTH | SOUTH)) return vertical;
+  const glyphs = heavy
+    ? new Map([[EAST | SOUTH, "┏"], [WEST | SOUTH, "┓"], [EAST | NORTH, "┗"], [WEST | NORTH, "┛"], [NORTH | EAST | SOUTH, "┣"], [NORTH | WEST | SOUTH, "┫"], [EAST | SOUTH | WEST, "┳"], [EAST | NORTH | WEST, "┻"], [NORTH | EAST | SOUTH | WEST, "╋"]])
+    : new Map([[EAST | SOUTH, "┌"], [WEST | SOUTH, "┐"], [EAST | NORTH, "└"], [WEST | NORTH, "┘"], [NORTH | EAST | SOUTH, "├"], [NORTH | WEST | SOUTH, "┤"], [EAST | SOUTH | WEST, "┬"], [EAST | NORTH | WEST, "┴"], [NORTH | EAST | SOUTH | WEST, "┼"]]);
+  return glyphs.get(mask) ?? (mask & (EAST | WEST) ? horizontal : vertical);
+}
+
+function paintRoutes(rows: TaskGraphCell[][], routes: RoutePlane): void {
+  for (const [key, route] of routes) {
+    const [x, y] = key.split(",").map(Number);
+    const tones = [...route.tones];
+    const tone = tones.length === 1 ? tones[0] : "intersection";
+    setCell(rows, x, y, routeCharacter(route.mask, tone), tone);
+  }
+}
+
+function drawArrow(rows: TaskGraphCell[][], points: readonly Point[], edge: TaskGraphViewEdge): void {
+  if (points.length < 2) return;
+  const end = points.at(-1)!;
+  setCell(rows, end.x, end.y, arrow(points.at(-2)!, end), edgeTone(edge.kind));
 }
 
 function drawEdgeLabel(
@@ -172,14 +246,24 @@ function drawEdgeLabel(
   offsetY: number,
 ): void {
   const label = [...edgeLabel(layout.edge)];
-  const point = layout.points[Math.floor(layout.points.length / 2)];
-  if (!point) return;
-  const centerX = Math.round(point.x) + offsetX;
-  const centerY = Math.round(point.y) + offsetY;
-  const candidates = [
-    ...[-1, 0, 1].flatMap((dy) => [centerX + 1, centerX - label.length - 1].map((x) => ({ x, y: centerY + dy }))),
-    ...[-2, 2].flatMap((dy) => [centerX, centerX - label.length].map((x) => ({ x, y: centerY + dy }))),
+  const points = layout.rasterPoints ?? layout.points;
+  if (!points.length) return;
+  const anchorIndexes = [
+    Math.floor(points.length / 2),
+    Math.floor(points.length / 3),
+    Math.floor(points.length * 2 / 3),
+    ...points.map((_point, index) => index),
   ];
+  const candidates = [...new Set(anchorIndexes)].flatMap((index) => {
+    const anchor = points[index];
+    if (!anchor) return [];
+    const centerX = Math.round(anchor.x) + (layout.rasterPoints ? 0 : offsetX);
+    const centerY = Math.round(anchor.y) + (layout.rasterPoints ? 0 : offsetY);
+    return [-1, 0, 1, -2, 2].flatMap((dy) => [
+      { x: centerX + 1, y: centerY + dy },
+      { x: centerX - label.length - 1, y: centerY + dy },
+    ]);
+  });
   const location = candidates.find(({ x, y }) => label.every((_char, index) => {
     const cell = rows[y]?.[x + index];
     return cell && (cell.char === " " || EDGE_TONES.has(cell.tone));
@@ -208,20 +292,7 @@ function failureLabel(node: TaskGraphViewNode): string {
   }
 }
 
-function stateIcon(state: TaskGraphNodeState): string {
-  switch (state) {
-    case "dependency_waiting": return "◷";
-    case "ready": return "●";
-    case "in_progress": return "▶";
-    case "blocked": return "■";
-    case "goal_failed": return "✕";
-    case "goal_achieved": return "✓";
-    case "cancelled": return "⊘";
-    case "legacy_completed": return "?";
-  }
-}
-
-function attemptLabel(node: TaskGraphViewNode): string {
+export function taskGraphAttemptLabel(node: TaskGraphViewNode): string {
   if (node.attempts_started === undefined || node.model_alias === undefined) return "legacy Task card";
   const attempt = node.display_attempt;
   if (!attempt) return `tries ${node.attempts_started} · ${node.model_alias}`;
@@ -229,17 +300,46 @@ function attemptLabel(node: TaskGraphViewNode): string {
   return `try ${attempt.ordinal}/${node.attempts_started} · ${attempt.model_alias}${current} · ${attempt.resolved_model}`;
 }
 
+export function formatTaskGraphDuration(milliseconds: number): string {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return "unknown";
+  const seconds = Math.floor(milliseconds / 1_000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function terminalState(state: TaskGraphNodeState): boolean {
+  return ["goal_achieved", "goal_failed", "cancelled", "legacy_completed"].includes(state);
+}
+
+function timingLabel(node: TaskGraphViewNode, now: number): string {
+  if (!node.first_activity_at || !node.last_activity_at) return "updated unknown · elapsed unknown";
+  const updated = Date.parse(node.last_activity_at);
+  const end = terminalState(node.state) ? updated : now;
+  return `updated ${formatTaskGraphDuration(Math.max(0, now - updated))} ago · elapsed ${formatTaskGraphDuration(Math.max(0, end - Date.parse(node.first_activity_at)))}`;
+}
+
+function priorityLine(prefix: string, value: string, width: number): string {
+  if (visibleWidth(prefix) >= width) return padded(prefix, width);
+  return padded(prefix + plainTruncate(value, width - visibleWidth(prefix)), width);
+}
+
 function nodeLabel(
   node: TaskGraphViewNode,
   isJoin: boolean,
   failureEdge: TaskGraphViewEdge | undefined,
   innerWidth: number,
+  now: number,
 ): [string, string, string] {
-  const stateDetail = node.state === "goal_failed" ? ` · ${failureLabel(node)}` : "";
-  const badges = `${isJoin ? " ⋈" : ""}${failureEdge ? ` ↺${failureEdge.traversals}/${failureEdge.max_traversals}` : ""}`;
-  const first = padded(`${stateIcon(node.state)} ${node.state}${stateDetail}${badges}`, innerWidth);
-  const owner = node.assignee ? ` · ${node.assignee}` : "";
-  return [first, padded(`${node.title}${owner}`, innerWidth), padded(attemptLabel(node), innerWidth)];
+  const identity = `${node.id}@${node.assignee ?? "unassigned"}`;
+  const first = priorityLine(`[${node.state}] `, identity, innerWidth);
+  const stateDetail = node.state === "goal_failed" ? `${failureLabel(node)} ` : "";
+  const badges = `${isJoin ? "⋈ " : ""}${failureEdge ? `↺${failureEdge.traversals}/${failureEdge.max_traversals} ` : ""}${stateDetail}`;
+  return [first, priorityLine(badges, node.title, innerWidth), padded(timingLabel(node, now), innerWidth)];
 }
 
 function drawNode(
@@ -249,17 +349,18 @@ function drawNode(
   y: number,
   width: number,
   isJoin: boolean,
+  now: number,
   failureEdge?: TaskGraphViewEdge,
 ): void {
   const left = Math.round(x - width / 2);
   const top = Math.round(y - NODE_HEIGHT / 2);
   const innerWidth = width - 2;
-  const [status, title, attempt] = nodeLabel(node, isJoin, failureEdge, innerWidth);
+  const [status, title, timing] = nodeLabel(node, isJoin, failureEdge, innerWidth, now);
   const lines = [
     `┌${"─".repeat(innerWidth)}┐`,
     `│${status}│`,
     `│${title}│`,
-    `│${attempt}│`,
+    `│${timing}│`,
     `└${"─".repeat(innerWidth)}┘`,
   ];
   for (const [dy, line] of lines.entries()) {
@@ -420,7 +521,7 @@ export function layoutTaskGraph(
   const direction = options.direction ?? "TB";
   const nodeWidth = Math.max(MIN_NODE_WIDTH, Math.min(60, Math.round(options.nodeWidth ?? DEFAULT_NODE_WIDTH)));
   if (visible.nodes.length === 0) {
-    return { width: 1, height: 1, rows: [[{ ...EMPTY_CELL }]], visible, islands: [] };
+    return { width: 1, height: 1, rows: [[{ ...EMPTY_CELL }]], visible, islands: [], nodes: [] };
   }
 
   const layouts = weakComponents(visible).map((component) => layoutIsland(component, direction, nodeWidth));
@@ -428,26 +529,48 @@ export function layoutTaskGraph(
   const width = Math.max(1, ...packed.map((island) => island.x + island.width));
   const height = Math.max(1, ...packed.map((island) => island.y + island.height));
   const rows = blankRows(width, height);
+  const routes: RoutePlane = new Map();
   for (const [index, island] of packed.entries()) {
     const label = plainTruncate(`island ${index + 1}/${packed.length} · ${island.nodeIds.length} task${island.nodeIds.length === 1 ? "" : "s"}`, island.width - 1);
     for (const [dx, char] of [...label].entries()) setCell(rows, island.x + dx + 1, island.y, char, "muted");
-    for (const edge of island.edges) drawPath(rows, edge.points, edge.edge, island.x, island.y);
+    for (const edge of island.edges) {
+      edge.rasterPoints = rasterizePath(edge.points, direction, island.x, island.y);
+      addPath(routes, edge.rasterPoints, edgeTone(edge.edge.kind));
+    }
   }
-  for (const island of packed) {
+  paintRoutes(rows, routes);
+  const nodeBoxes: TaskGraphNodeBox[] = [];
+  for (const [islandIndex, island] of packed.entries()) {
     const failureBySource = new Map(island.edges
       .filter(({ edge }) => edge.kind === "goal_failed")
       .map(({ edge }) => [edge.from_task_id, edge]));
     for (const position of island.nodes) {
+      const centerX = position.x + island.x;
+      const centerY = position.y + island.y;
       drawNode(
         rows,
         position.node,
-        position.x + island.x,
-        position.y + island.y,
+        centerX,
+        centerY,
         nodeWidth,
         visible.joinTaskIds.has(position.node.id),
+        options.now ?? Date.now(),
         failureBySource.get(position.node.id),
       );
+      nodeBoxes.push({
+        node: position.node,
+        islandIndex,
+        x: Math.round(centerX - nodeWidth / 2),
+        y: Math.round(centerY - NODE_HEIGHT / 2),
+        width: nodeWidth,
+        height: NODE_HEIGHT,
+        centerX,
+        centerY,
+      });
     }
+  }
+  for (const island of packed) {
+    for (const edge of island.edges) drawArrow(rows, edge.rasterPoints ?? [], edge.edge);
   }
   for (const island of packed) {
     for (const edge of island.edges) drawEdgeLabel(rows, edge, island.x, island.y);
@@ -465,7 +588,35 @@ export function layoutTaskGraph(
       width: island.width,
       height: island.height,
     })),
+    nodes: nodeBoxes,
   };
+}
+
+/** Select the nearest node in one visual direction with stable tie-breaking. */
+export function findDirectionalTaskGraphNode(
+  canvas: TaskGraphCanvas,
+  taskId: string,
+  direction: TaskGraphNavigationDirection,
+): TaskGraphNodeBox | undefined {
+  const current = canvas.nodes.find((box) => box.node.id === taskId);
+  if (!current) return undefined;
+  const candidates = canvas.nodes.flatMap((candidate) => {
+    if (candidate.node.id === taskId) return [];
+    const dx = candidate.centerX - current.centerX;
+    const dy = candidate.centerY - current.centerY;
+    const primary = direction === "left" ? -dx
+      : direction === "right" ? dx
+        : direction === "up" ? -dy
+          : dy;
+    if (primary <= 0) return [];
+    const perpendicular = direction === "left" || direction === "right" ? Math.abs(dy) : Math.abs(dx);
+    return [{ candidate, primary, perpendicular, score: primary * 2 + perpendicular }];
+  });
+  candidates.sort((left, right) => left.score - right.score
+    || left.perpendicular - right.perpendicular
+    || left.primary - right.primary
+    || left.candidate.node.id.localeCompare(right.candidate.node.id));
+  return candidates[0]?.candidate;
 }
 
 // Use semantic terminal slots, not fixed xterm-256 colors. The terminal theme
@@ -481,6 +632,7 @@ const ANSI: Record<TaskGraphCellTone, string> = {
   goal_achieved: "\u001b[32m",
   cancelled: "\u001b[90m",
   legacy_completed: "\u001b[90m",
+  selected: "\u001b[1;97;44m",
   success_edge: "\u001b[32m",
   failure_edge: "\u001b[33m",
   legacy_edge: "\u001b[36m",
@@ -496,20 +648,31 @@ export function renderTaskGraphViewport(input: {
   width: number;
   height: number;
   color?: boolean;
+  selectedTaskId?: string;
 }): string[] {
   const width = Math.max(1, Math.floor(input.width));
   const height = Math.max(0, Math.floor(input.height));
   const x = Math.max(0, Math.min(Math.floor(input.x), Math.max(0, input.canvas.width - width)));
   const y = Math.max(0, Math.min(Math.floor(input.y), Math.max(0, input.canvas.height - height)));
+  const selected = input.selectedTaskId
+    ? input.canvas.nodes.find((node) => node.node.id === input.selectedTaskId)
+    : undefined;
   return Array.from({ length: height }, (_, rowOffset) => {
     const row = input.canvas.rows[y + rowOffset] ?? [];
     let tone: TaskGraphCellTone | undefined;
     let output = "";
     for (let columnOffset = 0; columnOffset < width; columnOffset++) {
-      const cell = row[x + columnOffset] ?? EMPTY_CELL;
-      if (input.color !== false && cell.tone !== tone) {
-        output += `${RESET}${ANSI[cell.tone]}`;
-        tone = cell.tone;
+      const canvasX = x + columnOffset;
+      const canvasY = y + rowOffset;
+      const cell = row[canvasX] ?? EMPTY_CELL;
+      const cellTone = selected
+        && canvasX >= selected.x && canvasX < selected.x + selected.width
+        && canvasY >= selected.y && canvasY < selected.y + selected.height
+        ? "selected"
+        : cell.tone;
+      if (input.color !== false && cellTone !== tone) {
+        output += `${RESET}${ANSI[cellTone]}`;
+        tone = cellTone;
       }
       output += cell.char;
     }

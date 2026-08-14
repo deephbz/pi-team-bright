@@ -7,14 +7,14 @@ import type {
 } from "../task-authority/graph-control";
 import type { TaskCard } from "../task-authority/task-domain";
 
-export const TASK_GRAPH_VIEW_SCHEMA = "pi-team-bright-task-graph-view/2" as const;
+export const TASK_GRAPH_VIEW_SCHEMA = "pi-team-bright-task-graph-view/3" as const;
 export const TASK_GRAPH_DEFAULT_LIMIT = 50;
 export const TASK_GRAPH_LIMITS = [25, 50, 100, 200] as const;
 export const TASK_GRAPH_MAX_NODES = 5_000;
 export const TASK_GRAPH_MAX_EDGES = 20_000;
 export const TASK_GRAPH_MAX_ATTEMPTS = 100_000;
 export const TASK_GRAPH_MAX_EVENTS = 200_000;
-export const TASK_GRAPH_MAX_SOURCE_BYTES = 2_000_000;
+export const TASK_GRAPH_MAX_SOURCE_BYTES = 24_000_000;
 
 export type TaskGraphRecentLimit = (typeof TASK_GRAPH_LIMITS)[number] | "all";
 export type TaskGraphStateFilter = "all" | "actionable" | "nonterminal" | "failed";
@@ -42,6 +42,8 @@ export type TaskGraphControlTrace = ReturnType<GraphTaskController["trace"]>;
 export interface TaskGraphActivityCoordinate {
   taskId: string;
   cursor: string;
+  firstActivityAt?: string;
+  lastActivityAt?: string;
 }
 
 export interface TaskGraphActivityProjection {
@@ -62,10 +64,14 @@ export interface TaskGraphAttemptDetail {
 export interface TaskGraphViewNode {
   id: string;
   title: string;
+  goal?: string;
+  current_context?: string;
   assignee?: string;
   state: TaskGraphNodeState;
   waiting_on_task_ids: string[];
   activity_cursor: string;
+  first_activity_at?: string;
+  last_activity_at?: string;
   model_alias?: GraphControlModelAlias;
   attempts_started?: number;
   display_attempt?: TaskGraphAttemptDetail;
@@ -179,6 +185,15 @@ function parseCursor(value: unknown, field: string): string {
   return cursor;
 }
 
+function isoInstant(value: unknown, field: string): string {
+  const text = identityString(value, field, 64);
+  const milliseconds = Date.parse(text);
+  if (!Number.isFinite(milliseconds) || new Date(milliseconds).toISOString() !== text) {
+    throw new Error(`${field} must be a canonical ISO-8601 instant.`);
+  }
+  return text;
+}
+
 function parseBoundedInteger(value: unknown, field: string, minimum: number, maximum: number): number {
   if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > maximum) {
     throw new Error(`${field} must be an integer from ${minimum} through ${maximum}.`);
@@ -250,10 +265,14 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
   exactKeys(node, [
     "id",
     "title",
+    "goal",
+    "current_context",
     "assignee",
     "state",
     "waiting_on_task_ids",
     "activity_cursor",
+    "first_activity_at",
+    "last_activity_at",
     "model_alias",
     "attempts_started",
     "display_attempt",
@@ -286,13 +305,28 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
   if (displayAttempt && attemptsStarted !== undefined && displayAttempt.ordinal > attemptsStarted) {
     throw new Error(`${field}.display_attempt ordinal exceeds attempts_started.`);
   }
+  const firstActivityAt = node.first_activity_at === undefined
+    ? undefined
+    : isoInstant(node.first_activity_at, `${field}.first_activity_at`);
+  const lastActivityAt = node.last_activity_at === undefined
+    ? undefined
+    : isoInstant(node.last_activity_at, `${field}.last_activity_at`);
+  if ((firstActivityAt === undefined) !== (lastActivityAt === undefined)) {
+    throw new Error(`${field} must include first_activity_at and last_activity_at together.`);
+  }
+  if (firstActivityAt && lastActivityAt && Date.parse(lastActivityAt) < Date.parse(firstActivityAt)) {
+    throw new Error(`${field}.last_activity_at cannot be before first_activity_at.`);
+  }
   return {
     id: identityString(node.id, `${field}.id`, 128),
     title: displayString(node.title, `${field}.title`, 256),
+    ...(node.goal === undefined ? {} : { goal: displayString(node.goal, `${field}.goal`, 1_000) }),
+    ...(node.current_context === undefined ? {} : { current_context: displayString(node.current_context, `${field}.current_context`, 2_000) }),
     ...(node.assignee === undefined ? {} : { assignee: displayString(node.assignee, `${field}.assignee`, 128) }),
     state,
     waiting_on_task_ids: waiting,
     activity_cursor: parseCursor(node.activity_cursor, `${field}.activity_cursor`),
+    ...(firstActivityAt ? { first_activity_at: firstActivityAt, last_activity_at: lastActivityAt! } : {}),
     ...(node.model_alias === undefined ? {} : { model_alias: node.model_alias as GraphControlModelAlias }),
     ...(attemptsStarted === undefined ? {} : { attempts_started: attemptsStarted }),
     ...(displayAttempt ? { display_attempt: displayAttempt } : {}),
@@ -356,8 +390,9 @@ export function parseTaskGraphViewSource(value: unknown): TaskGraphViewSource {
     if (nodeIds.has(node.id)) throw new Error(`Task graph source contains duplicate node ${JSON.stringify(node.id)}.`);
     nodeIds.add(node.id);
     if (authority === "graph_control") {
-      if (node.state === "legacy_completed" || node.model_alias === undefined || node.attempts_started === undefined) {
-        throw new Error(`Graph-control Task ${node.id} lacks graph-control state, model alias, or Attempt count.`);
+      if (node.state === "legacy_completed" || node.model_alias === undefined || node.attempts_started === undefined
+        || node.goal === undefined || node.current_context === undefined) {
+        throw new Error(`Graph-control Task ${node.id} lacks graph-control state, detail, model alias, or Attempt count.`);
       }
     } else if (node.model_alias !== undefined || node.attempts_started !== undefined || node.display_attempt !== undefined
       || node.failure_reason !== undefined || ["goal_failed", "goal_achieved", "cancelled"].includes(node.state)) {
@@ -416,20 +451,38 @@ export function parseTaskGraphViewSourceJson(raw: string): TaskGraphViewSource {
   return parseTaskGraphViewSource(value);
 }
 
+interface ParsedTaskGraphActivity {
+  cursor: string;
+  firstActivityAt?: string;
+  lastActivityAt?: string;
+}
+
 function activityCoordinates(
   activity: TaskGraphActivityProjection,
   taskIds: ReadonlySet<string>,
-): { headCursor: string; byTask: Map<string, string> } {
+): { headCursor: string; byTask: Map<string, ParsedTaskGraphActivity> } {
   const headCursor = parseCursor(activity.headCursor, "activity.headCursor");
-  const byTask = new Map<string, string>();
+  const byTask = new Map<string, ParsedTaskGraphActivity>();
   for (const [index, coordinate] of activity.tasks.entries()) {
     const taskId = identityString(coordinate.taskId, `activity.tasks[${index}].taskId`, 128);
     const cursor = parseCursor(coordinate.cursor, `activity.tasks[${index}].cursor`);
+    const firstActivityAt = coordinate.firstActivityAt === undefined
+      ? undefined
+      : isoInstant(coordinate.firstActivityAt, `activity.tasks[${index}].firstActivityAt`);
+    const lastActivityAt = coordinate.lastActivityAt === undefined
+      ? undefined
+      : isoInstant(coordinate.lastActivityAt, `activity.tasks[${index}].lastActivityAt`);
+    if ((firstActivityAt === undefined) !== (lastActivityAt === undefined)) {
+      throw new Error(`activity.tasks[${index}] must include firstActivityAt and lastActivityAt together.`);
+    }
+    if (firstActivityAt && lastActivityAt && Date.parse(lastActivityAt) < Date.parse(firstActivityAt)) {
+      throw new Error(`activity.tasks[${index}].lastActivityAt cannot be before firstActivityAt.`);
+    }
     // Historical activity can name a Task removed by the current graph
     // revision. It remains evidence but is outside this current projection.
     if (!taskIds.has(taskId)) continue;
     if (byTask.has(taskId)) throw new Error(`Activity projection contains duplicate Task ${JSON.stringify(taskId)}.`);
-    byTask.set(taskId, cursor);
+    byTask.set(taskId, { cursor, ...(firstActivityAt ? { firstActivityAt, lastActivityAt } : {}) });
   }
   return { headCursor, byTask };
 }
@@ -486,13 +539,20 @@ export function projectTaskGraphViewSource(input: {
   const activity = activityCoordinates(input.activity, taskIds);
   const nodes: TaskGraphViewNode[] = input.tasks.map((task) => {
     const projected = legacyState(task);
+    const coordinate = activity.byTask.get(task.id);
     return {
       id: task.id,
       title: task.title,
+      ...("goal" in task ? { goal: task.goal } : {}),
+      current_context: task.current_context,
       ...(task.assignee ? { assignee: task.assignee } : {}),
       state: projected.state,
       waiting_on_task_ids: projected.waiting,
-      activity_cursor: activity.byTask.get(task.id) ?? "0",
+      activity_cursor: coordinate?.cursor ?? "0",
+      ...(coordinate?.firstActivityAt ? {
+        first_activity_at: coordinate.firstActivityAt,
+        last_activity_at: coordinate.lastActivityAt!,
+      } : {}),
     };
   });
   const edges: TaskGraphViewEdge[] = [];
@@ -587,7 +647,13 @@ export function projectGraphControlTaskGraphViewSource(input: {
       assignee: task.assignee,
       state: task.state.kind,
       waiting_on_task_ids: task.state.kind === "dependency_waiting" ? [...task.state.prerequisiteTaskIds] : [],
-      activity_cursor: activity.byTask.get(task.id) ?? "0",
+      goal: task.goal,
+      current_context: task.currentContext,
+      activity_cursor: activity.byTask.get(task.id)?.cursor ?? "0",
+      ...(activity.byTask.get(task.id)?.firstActivityAt ? {
+        first_activity_at: activity.byTask.get(task.id)!.firstActivityAt,
+        last_activity_at: activity.byTask.get(task.id)!.lastActivityAt!,
+      } : {}),
       model_alias: task.modelAlias,
       attempts_started: task.attemptsStarted,
       ...(attempt ? {
