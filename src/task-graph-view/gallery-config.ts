@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import type { TaskGraphDirection } from "./layout";
 import {
   parseTaskGraphLimit,
   parseTaskGraphViewSource,
@@ -15,6 +16,7 @@ export interface TaskDagIslandsGalleryConfig {
   name: string;
   review_now: string;
   initial_limit: TaskGraphRecentLimit;
+  initial_direction: TaskGraphDirection;
   start_mode: "pan" | "select";
   expand_selected: boolean;
   source: TaskGraphViewSource;
@@ -30,7 +32,7 @@ function record(value: unknown): Record<string, unknown> {
 /** Validate the durable gallery input before any text reaches the terminal. */
 export function parseTaskDagIslandsGalleryConfig(value: unknown): TaskDagIslandsGalleryConfig {
   const config = record(value);
-  const allowed = new Set(["schema", "name", "review_now", "initial_limit", "start_mode", "expand_selected", "source"]);
+  const allowed = new Set(["schema", "name", "review_now", "initial_limit", "initial_direction", "start_mode", "expand_selected", "source"]);
   const extra = Object.keys(config).find((key) => !allowed.has(key));
   if (extra) throw new Error(`Task DAG islands gallery config contains unsupported field ${JSON.stringify(extra)}.`);
   if (config.schema !== TASK_DAG_ISLANDS_GALLERY_SCHEMA) throw new Error("Task DAG islands gallery config schema is unsupported.");
@@ -38,6 +40,9 @@ export function parseTaskDagIslandsGalleryConfig(value: unknown): TaskDagIslands
   const reviewNow = typeof config.review_now === "string" ? Date.parse(config.review_now) : Number.NaN;
   if (!Number.isFinite(reviewNow) || new Date(reviewNow).toISOString() !== config.review_now) {
     throw new Error("Task DAG islands gallery review_now must be a canonical ISO-8601 instant.");
+  }
+  if (config.initial_direction !== undefined && config.initial_direction !== "TB" && config.initial_direction !== "LR") {
+    throw new Error("Task DAG islands gallery initial_direction must be TB or LR.");
   }
   if (config.start_mode !== "pan" && config.start_mode !== "select") throw new Error("Task DAG islands gallery start_mode must be pan or select.");
   if (typeof config.expand_selected !== "boolean") throw new Error("Task DAG islands gallery expand_selected must be boolean.");
@@ -47,6 +52,7 @@ export function parseTaskDagIslandsGalleryConfig(value: unknown): TaskDagIslands
     name: config.name,
     review_now: config.review_now,
     initial_limit: initialLimit,
+    initial_direction: config.initial_direction ?? "TB",
     start_mode: config.start_mode,
     expand_selected: config.expand_selected,
     source: parseTaskGraphViewSource(config.source),

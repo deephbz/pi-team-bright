@@ -1,0 +1,42 @@
+Task graph: task-dag-islands-gallery · graph control · rev 120-gallery-sentinel-v1 · updated 2026-08-14 11:50:00Z
+View: SELECT · 7/7 tasks · all tasks · all states · LR · island 1/3 · offset 0,0 · hidden 0 tasks/0 edges
+Legend: ◷ wait · ● ready · ▶ active · ■ blocked · ✓ achieved · ✕ failed · ⊘ cancelled · ━ success · ╌ failure
+Details: [in_progress] dag1-task2@worker2 · DAG 1 Task 2
+Timing: first observed 2026-08-14 09:05:00Z · last update 2026-08-14 11:50:00Z · elapsed 2h 55m
+Attempt: try 1/1 · default current · model2-default
+Goal: goal2: build the active branch.
+Context: context2: branch construction is in progress.
+ island 1/3 · 4 tasks                                                                                                                                     island 2/3 · 2 tasks
+
+
+
+
+                                                     ┌────────────────────────────────────────┐                                                            ┌────────────────────────
+                                                     │[ready] dag1-task3@worker3              │                                                            │[blocked] dag2-task1@wor
+                                               ┏━━━━▶│DAG 1 Task 3                            │━━━━━━━┓                                                    │DAG 2 Task 1
+                                               ┃     │updated 2h 55m ago · elapsed 2h 55m     │       ┃                                                    │updated 20m ago · elapse
+  ┌────────────────────────────────────────┐   ┃     └────────────────────────────────────────┘       ┃ ┌────────────────────────────────────────┐         └────────────────────────
+  │[goal_achieved] dag1-task1@worker1      │   ┃                                                      ┃ │[dependency_waiting] dag1-task4@worker4 │                              ▲
+  │DAG 1 Task 1                            │━━━┫                                                      ┣▶│⋈ ↺0/2 DAG 1 Task 4                     │                              ╎
+  │updated 3h 0m ago · elapsed 1h 0m       │   ┃                                                      ┃ │updated 2h 55m ago · elapsed 2h 55m     │                              ╎
+  └────────────────────────────────────────┘   ┃     ┌────────────────────────────────────────┐       ┃ └────────────────────────────────────────┘         ┌────────────────────────
+                       ▲                       ┃     │[in_progress] dag1-task2@worker2        │       ┃                      ╎                             │[goal_failed] dag2-task2
+                       ╎                       ┗━━━━▶│DAG 1 Task 2                            │━━━━━━━┛                      ╎                             │↺1/2 criterion DAG 2 Tas
+                       ╎                             │updated 10m ago · elapsed 2h 55m        │                              ╎                             │updated 1h 30m ago · ela
+                       ╎                             └────────────────────────────────────────┘                              ╎                             └────────────────────────
+                       ╎                                                                                                     ╎                                                  ╎
+                       └╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌┘                                                  ╎
+
+
+
+
+
+
+
+
+
+
+
+
+
+Shortcuts: Tab/Esc pan · hjkl/arrows select · Enter details · [/] island · f recent · s state · r rotate · Home reset

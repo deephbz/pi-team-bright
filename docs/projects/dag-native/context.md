@@ -2,7 +2,7 @@
 
 Updated: 2026-08-14
 Stage: release-candidate hardening on the immutable RC15 DAG side-branch base
-Status: `release/v0.17.0-rc.16-dag-native` is a review candidate extending `a8e3cb48a6ce3405f86df08114e0a4b73dccdf98`; that base and its ancestors remain unchanged; the five-commit unpublished range integrates Worker-startup hardening, unified TUI projection, interactive graph refinement, and the configurable DAG gallery; exact executable source `3ee1d4c5d5606bd6b0014695f29a4e9288902a42` passed the one allowed 1,004-test aggregate, all release-specific gates, a sequential 197-file package dry run, candidate-range privacy, and a proxy-backed real Team canary with stable Worker reuse and mechanical `A -> B` success progression; only the documentation-only receipt amendment, minimal exact-tip checks, and side-branch push remain; the side branch does not update `main`, create a tag, publish npm, or create a GitHub Release
+Status: `release/v0.17.0-rc.16-dag-native` is a review candidate extending `a8e3cb48a6ce3405f86df08114e0a4b73dccdf98`; that base and its ancestors remain unchanged; the six-commit range integrates Worker-startup hardening, unified TUI projection, interactive graph refinement, the configurable DAG gallery, and the rebased edge-routing follow-up; exact executable source `3ee1d4c5d5606bd6b0014695f29a4e9288902a42` passed the one allowed 1,004-test aggregate, all release-specific gates, a sequential 197-file package dry run, candidate-range privacy, and a proxy-backed real Team canary with stable Worker reuse and mechanical `A -> B` success progression; the routing follow-up then passed exact graph-path comparison, typecheck, 35 focused tests, TB and LR sentinels, gallery/export, and package verification on RC16; only its final fast-forward and remote confirmation remain; the side branch does not update `main`, create a tag, publish npm, or create a GitHub Release
 
 ## RC14 liveness-hotfix rebase
 
@@ -35,19 +35,24 @@ because no canary or stress trace required it.
 
 The read-only Task graph pane now has one pure, fixed full-component evaluator:
 [`sentinel.ts`](../../../src/task-graph-view/sentinel.ts) generates a representative
-fork/join and failure-route DAG, while
-[`sentinel-120x42.txt`](../../../src/task-graph-view/fixtures/sentinel-120x42.txt)
-is the human-reviewable render artifact. `npm run check:task-graph:sentinel`
-compares the current renderer with that artifact. This tests the three-line HUD,
-legend, node content, routes, detail panel, and shortcut HUD together; focused
-layout tests still own individual geometry properties.
+fork/join and failure-route DAG. The
+[TB artifact](../../../src/task-graph-view/fixtures/sentinel-120x42.txt) and
+[LR artifact](../../../src/task-graph-view/fixtures/sentinel-lr-180x42.txt) are
+human-reviewable render projections. `npm run check:task-graph:sentinel`
+compares the current renderer with both artifacts. This tests the three-line
+HUD, legend, node content, routes, detail panel, and shortcut HUD together;
+focused layout tests still own individual geometry properties.
 
 The renderer now rasterizes each orthogonal route as directional connectivity,
-then chooses correct corner, junction, and crossing glyphs. It draws node boxes,
-route arrows, and labels in explicit layers. Each node starts with
-`[task_state] task_id@worker`; width allocation preserves the state before it
-truncates identity. The second line holds title and structural badges. The third
-line shows last observed update age and observed elapsed duration.
+then chooses correct corner, junction, and crossing glyphs. It draws node boxes
+and route arrows in explicit layers. TB failure routes use an outside right
+repair lane. LR failure routes use an outside lower repair lane. Target arrows
+remain outside intact borders and point toward their nodes. Inline labels no
+longer overwrite topology; the legend and node retry badge retain edge meaning.
+Each node starts with `[task_state] task_id@worker`; width allocation preserves
+the state before it truncates identity. The second line holds title and
+structural badges. The third line shows last observed update age and observed
+elapsed duration.
 
 `Tab` switches between canvas pan and node selection. In selection mode,
 `hjkl` and arrows choose a stable spatial neighbor, and Enter expands only the

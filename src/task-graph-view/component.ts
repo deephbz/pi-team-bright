@@ -65,6 +65,7 @@ function detailField(label: string, value: string, width: number): string[] {
 export interface TaskGraphPaneComponentOptions {
   source: TaskGraphViewSource;
   initialLimit: TaskGraphRecentLimit;
+  initialDirection?: TaskGraphDirection;
   terminalRows: () => number;
   requestRender: () => void;
   now?: () => number;
@@ -95,6 +96,7 @@ export class TaskGraphPaneComponent implements Component {
   constructor(options: TaskGraphPaneComponentOptions) {
     this.source = parseTaskGraphViewSource(options.source);
     this.limit = options.initialLimit;
+    this.direction = options.initialDirection ?? "TB";
     this.terminalRows = options.terminalRows;
     this.request = options.requestRender;
     this.now = options.now ?? Date.now;
