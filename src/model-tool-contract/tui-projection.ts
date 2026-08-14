@@ -1,6 +1,11 @@
-import { Text } from "@earendil-works/pi-tui";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { projectToolResult, type ProjectedTool } from "./result-projection";
+import {
+  projectionLines,
+  renderProjectionWithTheme,
+  type PiTeamBrightTuiMessage,
+  type TuiMessageTone,
+} from "./tui-message-projection";
 
 export interface TuiInput {
   tool: ProjectedTool;
@@ -36,37 +41,32 @@ function recoveryLine(value: any): string | undefined {
   return undefined;
 }
 
-function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean): string[] {
+function toolLines(tool: ProjectedTool, model: any): string[] {
   const lines: string[] = [];
   if (tool === "team_create") {
     if (model.kind === "team_created") lines.push(`Team ${quoted(model.team.name)} is active.`);
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "ensure_worker") {
     if (model.kind === "worker_ensured") lines.push(`Worker ${quoted(model.worker.name)} ${model.effect} · carrier ${model.worker.carrier}.`);
-    else if (model.kind === "refused") lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · scope conflict.`);
+    else if (model.kind === "refused" && model.existing_worker) lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · scope conflict.`);
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "task_graph_apply" || tool === "task_create") {
     if (model.kind === "task_graph_applied") {
       const entries = Object.entries(model.tasks_by_key) as Array<[string, any]>;
       lines.push(`${entries.length} Task graph committed · ${model.ready_task_ids.length} ready · graph ${model.graph_version} · operation ${quoted(model.operation_id)}${model.replayed ? " · replayed" : ""}.`);
       if (model.delivery_warnings?.length) lines.push(`Delivery warnings: ${model.delivery_warnings.join("; ")}.`);
-      if (expanded) for (const [key, task] of entries) {
-        lines.push(`${quoted(key)} → ${taskLine(task)} · model ${task.model} · ${task.needs.length ? `needs ${task.needs.join(", ")}` : "no prerequisites"}.`);
-      }
     } else if (model.kind === "unknown_outcome") {
       lines.push(`unknown outcome · operation ${quoted(model.operation_id)}: ${compact(model.message)}`);
       const retry = recoveryLine(model);
       if (retry) lines.push(retry);
-    }
-    else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
+    } else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "task_read") {
     if (model.kind === "task_read_batch") {
       const missing = model.outcomes.filter((item: any) => item.kind !== "found");
       lines.push(`${model.outcomes.length} Task results · ${missing.length} missing or incomplete.`);
-      for (const item of missing) lines.push(`${item.kind} · Task ${quoted(item.task_id)}${item.message ? `: ${compact(item.message)}` : "."}`);
-      if (expanded) for (const item of model.outcomes.filter((item: any) => item.task)) lines.push(`Task ${taskLine(item.task)} · ${compact(item.task.current_context)}.`);
+      for (const item of missing.slice(0, 4)) lines.push(`${item.kind} · Task ${quoted(item.task_id)}${item.message ? `: ${compact(item.message)}` : "."}`);
     } else if (model.kind === "found") lines.push(`Task ${taskLine(model.task)} · ${compact(model.task.current_context)}.`);
-    else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message ?? `Task ${model.task_id} was not found.`)}`);
+    else lines.push(`${model.kind} · ${model.reason ?? "read failed"}: ${compact(model.message ?? `Task ${model.task_id ?? "unknown"} was not found.`)}`);
   } else if (tool === "task_update") {
     if (model.kind === "updated") {
       lines.push(`Task ${taskLine(model.task)} · ${model.transition}${model.replayed ? " · replayed" : ""}.`);
@@ -84,8 +84,7 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
         const blocker = change.journal_entries.find((entry: any) => entry.kind === "blocker");
         lines.push(`Task ${quoted(change.task_id)} changed · ${change.current.status}${change.current.assignee ? ` · @ ${change.current.assignee}` : " · unassigned"}${blocker ? ` · blocker: ${compact(blocker.text)}` : ""}.`);
       }
-    }
-    else if (model.kind === "caught_up") lines.push("Caught up: no current Worker producer requires a wait.");
+    } else if (model.kind === "caught_up") lines.push("Caught up: no current Worker producer requires a wait.");
     else lines.push(`${model.kind} · ${model.reason ?? "observation not advanced"}${model.message ? `: ${compact(model.message)}` : "."}`);
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
@@ -99,11 +98,10 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
       lines.push(model.failed_recipients.length > 0
         ? `Alert partially accepted by ${model.accepted_recipients.join(", ") || "no recipients"}; failed recipients: ${model.failed_recipients.join(", ")}. Task state unchanged.`
         : `Alert accepted by ${model.accepted_recipients.join(", ") || "no recipients"}; Task state unchanged.`);
-    }
-    else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
+    } else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "worker_stop") {
     if (model.kind === "worker_stopped") lines.push(`Worker ${quoted(model.worker)} stopped; Task state unchanged.`);
-    else if (model.kind === "refused") lines.push(`Worker ${quoted(model.worker)} was not stopped · ${model.reason}${model.guarding_task_ids?.length ? ` · guarding Tasks ${model.guarding_task_ids.join(", ")}` : ""}.`);
+    else if (model.kind === "refused" && model.worker) lines.push(`Worker ${quoted(model.worker)} was not stopped · ${model.reason}${model.guarding_task_ids?.length ? ` · guarding Tasks ${model.guarding_task_ids.join(", ")}` : ""}.`);
     else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "team_shutdown") {
     if (model.kind === "team_shutdown") lines.push(`Team stopped · ${model.stopped_workers.length} Worker${model.stopped_workers.length === 1 ? "" : "s"} stopped · ${model.unfinished_task_ids.length} unfinished Task${model.unfinished_task_ids.length === 1 ? "" : "s"} retained.`);
@@ -112,50 +110,80 @@ function toolLines(tool: ProjectedTool, raw: any, model: any, expanded: boolean)
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
   }
-  if (expanded && (tool === "team_sync" || tool === "task_read") && model.kind === "snapshot") {
-    for (const task of model.tasks) lines.push(`  ${taskLine(task)} · ${compact(task.current_context)}.`);
-  }
   return lines;
 }
 
-function rawErrorLines(input: TuiInput, issue: "execution_error" | "result_projection_error"): string[] {
-  const report = {
-    tool: input.tool,
-    issue,
-    content: input.content ?? [],
-    details: input.details,
-  };
-  const raw = JSON.stringify(report, null, 2) ?? String(report);
-  return [
-    `✗ ${input.tool} ${issue === "execution_error" ? "execution error" : "result projection error"}`,
-    "  Raw report follows. Review sensitive fields before sharing.",
-    ...raw.split("\n").map((line) => `  ${line}`),
-  ];
+function toneFor(tool: ProjectedTool, model: any): { tone: TuiMessageTone; label: string } {
+  const partialTaskGraph = (tool === "task_graph_apply" || tool === "task_create") && model.kind === "task_graph_applied" && model.delivery_warnings?.length;
+  const partialAlert = tool === "alert_send" && model.kind === "alert_sent" && model.failed_recipients.length > 0;
+  const warningKinds = ["missing", "refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "partial", "unknown_outcome"];
+  const warning = partialTaskGraph || partialAlert || warningKinds.includes(model.kind);
+  return { tone: warning ? "warning" : "success", label: warning ? (partialTaskGraph || partialAlert ? "partial" : model.kind) : model.kind };
 }
 
-export function projectTui(input: TuiInput): string[] {
-  if (input.isError) return rawErrorLines(input, "execution_error");
+/** Project an already validated model result. The gallery uses this exhaustive seam. */
+export function projectModelToolTuiMessage(tool: ProjectedTool, model: any, detail: unknown = model): PiTeamBrightTuiMessage {
+  const { tone, label } = toneFor(tool, model);
+  return {
+    type: tool,
+    tone,
+    lines: [`${tone === "success" ? "✓" : "!"} ${label}`, ...toolLines(tool, model).map((line) => `  ${line}`)],
+    detail,
+    provenance: "tool-result",
+  };
+}
+
+function errorMessage(input: TuiInput, issue: "execution_error" | "result_projection_error"): PiTeamBrightTuiMessage {
+  const report = { tool: input.tool, issue, content: input.content ?? [], details: input.details };
+  return {
+    type: input.tool,
+    tone: "error",
+    lines: [
+      `✗ ${issue === "execution_error" ? "execution error" : "result projection error"}`,
+      "  Press Ctrl+O to inspect the raw JSON report. Review sensitive fields before sharing.",
+    ],
+    detail: report,
+    provenance: "tool-result",
+  };
+}
+
+export function projectToolTuiMessage(input: TuiInput): PiTeamBrightTuiMessage {
+  if (input.isError) return errorMessage(input, "execution_error");
   try {
-    const model = projectToolResult(input.tool, input.details) as any;
-    const kind = model.kind;
-    const mixedTaskBatch = false;
-    const partialTaskCreate = (input.tool === "task_graph_apply" || input.tool === "task_create")
-      && kind === "task_graph_applied"
-      && model.delivery_warnings?.length;
-    const partialAlert = input.tool === "alert_send" && kind === "alert_sent" && model.failed_recipients.length > 0;
-    const negative = ["refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "partial"].includes(kind) || mixedTaskBatch || partialTaskCreate || partialAlert;
-    const tone = negative ? "!" : "✓";
-    return [`${tone} ${mixedTaskBatch || partialTaskCreate || partialAlert ? "partial" : kind}`, ...toolLines(input.tool, input.details, model, input.expanded).map((line) => `  ${line}`)];
+    return projectModelToolTuiMessage(input.tool, projectToolResult(input.tool, input.details), input.details);
   } catch {
-    return rawErrorLines(input, "result_projection_error");
+    return errorMessage(input, "result_projection_error");
   }
 }
 
+/** Full plain projection used by tests and non-Pi exporters. */
+export function projectTui(input: TuiInput): string[] {
+  return projectionLines(projectToolTuiMessage(input), { expanded: input.expanded });
+}
+
+export type RenderCall = NonNullable<ToolDefinition["renderCall"]>;
 export type RenderResult = NonNullable<ToolDefinition["renderResult"]>;
 
+export function createToolCallRenderer(tool: ProjectedTool): RenderCall {
+  return (_args, theme) => renderProjectionWithTheme({
+    type: tool,
+    tone: "info",
+    lines: [],
+    detail: null,
+    provenance: "tool-result",
+  }, { expanded: false }, theme);
+}
+
 export function createToolResultRenderer(tool: ProjectedTool): RenderResult {
-  return (result, options, _theme, context) => {
-    const lines = projectTui({ tool, content: result.content, details: result.details, expanded: options.expanded, isError: (context as any)?.isError === true });
-    return new Text(lines.join("\n"), 0, 0);
-  };
+  return (result, options, theme, context) => renderProjectionWithTheme(
+    projectToolTuiMessage({
+      tool,
+      content: result.content,
+      details: result.details,
+      expanded: options.expanded,
+      isError: (context as any)?.isError === true,
+    }),
+    { expanded: options.expanded, includeHeader: false },
+    theme,
+  );
 }

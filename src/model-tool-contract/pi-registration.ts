@@ -29,7 +29,7 @@ import { InMemoryModelToolTeamPort } from "./in-memory-team-port";
 import { exactLeaderSessionId, type ModelToolTeamPort } from "./model-tool-contracts";
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import { assembleToolResult } from "./result-projection";
-import { createToolResultRenderer } from "./tui-projection";
+import { createToolCallRenderer, createToolResultRenderer } from "./tui-projection";
 import { withSemanticTrace } from "../utils/trace";
 
 function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_graph_apply" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
@@ -108,6 +108,7 @@ export function registerModelToolJourney(
     name: "team_create",
     label: teamCreateCatalogEntry.label,
     description: teamCreateCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("team_create"),
     renderResult: createToolResultRenderer("team_create"),
     parameters: TeamCreateParametersSchema,
     executionMode: "sequential",
@@ -128,6 +129,7 @@ export function registerModelToolJourney(
     name: "team_sync",
     label: teamSyncCatalogEntry.label,
     description: teamSyncCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("team_sync"),
     renderResult: createToolResultRenderer("team_sync"),
     parameters: TeamSyncParametersSchema,
     executionMode: "sequential",
@@ -150,6 +152,7 @@ export function registerModelToolJourney(
     name: "ensure_worker",
     label: ensureWorkerCatalogEntry.label,
     description: ensureWorkerCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("ensure_worker"),
     renderResult: createToolResultRenderer("ensure_worker"),
     parameters: EnsureWorkerParametersSchema,
     executionMode: "sequential",
@@ -174,6 +177,7 @@ export function registerModelToolJourney(
     name: "task_graph_apply",
     label: taskCreateCatalogEntry.label,
     description: taskCreateCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("task_graph_apply"),
     renderResult: createToolResultRenderer("task_graph_apply"),
     parameters: TaskCreateParametersSchema,
     executionMode: "sequential",
@@ -194,6 +198,7 @@ export function registerModelToolJourney(
     name: "task_read",
     label: taskReadCatalogEntry.label,
     description: taskReadCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("task_read"),
     renderResult: createToolResultRenderer("task_read"),
     parameters: TaskReadParametersSchema,
     executionMode: "sequential",
@@ -214,6 +219,7 @@ export function registerModelToolJourney(
     name: "task_update",
     label: taskUpdateCatalogEntry.label,
     description: taskUpdateCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("task_update"),
     renderResult: createToolResultRenderer("task_update"),
     parameters: TaskUpdateParametersSchema,
     executionMode: "sequential",
@@ -231,6 +237,7 @@ export function registerModelToolJourney(
     name: "worker_stop",
     label: workerStopCatalogEntry.label,
     description: workerStopCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("worker_stop"),
     renderResult: createToolResultRenderer("worker_stop"),
     parameters: WorkerStopParametersSchema,
     executionMode: "sequential",
@@ -244,6 +251,7 @@ export function registerModelToolJourney(
     name: "team_shutdown",
     label: teamShutdownCatalogEntry.label,
     description: teamShutdownCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("team_shutdown"),
     renderResult: createToolResultRenderer("team_shutdown"),
     parameters: TeamShutdownParametersSchema,
     executionMode: "sequential",
@@ -257,6 +265,7 @@ export function registerModelToolJourney(
     name: "alert_send",
     label: alertSendCatalogEntry.label,
     description: alertSendCatalogEntry.responsibility,
+    renderCall: createToolCallRenderer("alert_send"),
     renderResult: createToolResultRenderer("alert_send"),
     parameters: AlertSendParametersSchema,
     executionMode: "sequential",

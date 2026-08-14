@@ -24,9 +24,13 @@ import {
   taskIsCurrentInGraphLocked,
 } from "./graph-revision-retirement";
 
-export const TASK_CHANGE_CUSTOM_TYPE = "pi-teams.task-change";
-export const TASK_CHANGE_RESUME_TYPE = "pi-teams.task-change-resume";
-export const TASK_CHANGE_ACK_ENTRY_TYPE = "pi-teams.task-change-successful-turn-ack";
+export const TASK_CHANGE_CUSTOM_TYPE = "pi-team-bright.task-change";
+export const TASK_CHANGE_RESUME_TYPE = "pi-team-bright.task-change-resume";
+export const TASK_CHANGE_ACK_ENTRY_TYPE = "pi-team-bright.task-change-successful-turn-ack";
+/** Read-only Session compatibility. New entries always use pi-team-bright.*. */
+export const LEGACY_TASK_CHANGE_CUSTOM_TYPE = "pi-teams.task-change";
+export const LEGACY_TASK_CHANGE_RESUME_TYPE = "pi-teams.task-change-resume";
+export const LEGACY_TASK_CHANGE_ACK_ENTRY_TYPE = "pi-teams.task-change-successful-turn-ack";
 export const TASK_POLL_MS_ENV = "PI_TEAMS_TASK_POLL_MS";
 export const DEFAULT_TASK_POLL_MS = 30_000;
 
@@ -888,7 +892,7 @@ function detailsFrom(value: unknown): TaskChangeBatchDetails | null {
 }
 
 function idsFromCustom(customType: unknown, raw: unknown, teamName: string, recipient: string): string[] {
-  if (customType !== TASK_CHANGE_CUSTOM_TYPE) return [];
+  if (customType !== TASK_CHANGE_CUSTOM_TYPE && customType !== LEGACY_TASK_CHANGE_CUSTOM_TYPE) return [];
   const details = detailsFrom(raw);
   if (!details || details.teamName !== teamName || details.recipient !== recipient) return [];
   return details.deliveryIds;
@@ -897,7 +901,7 @@ function idsFromCustom(customType: unknown, raw: unknown, teamName: string, reci
 export function acknowledgedTaskDeliveryIdsFromEntries(entries: readonly SessionEntry[], teamName: string, recipient: string, recipientMembershipId?: string): Set<string> {
   const ids = new Set<string>();
   for (const entry of entries) {
-    if (entry.type !== "custom" || entry.customType !== TASK_CHANGE_ACK_ENTRY_TYPE) continue;
+    if (entry.type !== "custom" || (entry.customType !== TASK_CHANGE_ACK_ENTRY_TYPE && entry.customType !== LEGACY_TASK_CHANGE_ACK_ENTRY_TYPE)) continue;
     const details = detailsFrom(entry.data);
     if (!details || details.teamName !== teamName || details.recipient !== recipient || (recipientMembershipId && details.recipientMembershipId !== recipientMembershipId)) continue;
     for (const id of details.deliveryIds) ids.add(id);
@@ -930,10 +934,9 @@ function contextIds(messages: readonly ContextMessage[], teamName: string, recip
   return ids;
 }
 
-function formatBatch(records: TaskDeliveryRecord[]): string {
+export function formatTaskChangeBatch(records: TaskDeliveryRecord[]): string {
   return [
-    "[PiTeams Task changes]",
-    "These changes were already accepted by the Task authority. The payload is a versioned snapshot for action, not a substitute for task_read/task_list when you need current state.",
+    "These changes were already accepted by the Task authority. The payload is a versioned snapshot for action, not a substitute for task_read when you need current state.",
     JSON.stringify({
       changes: records.map((record) => ({
         task: record.taskProjection,
@@ -1177,7 +1180,7 @@ export class TaskChangeDelivery {
         recipient: this.options.recipient,
         sessionFile: this.options.sessionFile,
         membershipId: this.resolvedMembershipId,
-      }, async () => this.sink.sendMessage({ customType: TASK_CHANGE_CUSTOM_TYPE, content: formatBatch(records), display: true, details: this.details(records) }, { triggerTurn: true, deliverAs: "steer" }));
+      }, async () => this.sink.sendMessage({ customType: TASK_CHANGE_CUSTOM_TYPE, content: formatTaskChangeBatch(records), display: true, details: this.details(records) }, { triggerTurn: true, deliverAs: "steer" }));
     } catch (error) {
       for (const record of records) this.attempted.delete(record.deliveryId);
       throw error;

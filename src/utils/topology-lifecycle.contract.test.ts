@@ -255,6 +255,7 @@ describe("Team topology/lifecycle lease", () => {
       guarding_task_ids: ["task-guarded"], state_changed: false,
     });
     expect(projectTui({ tool: "worker_stop", details: guardedResult.details, expanded: false })).toEqual([
+      "[pi-team-bright.worker_stop]",
       "! refused",
       "  Worker \"guarded\" was not stopped · nonterminal_tasks_assigned · guarding Tasks task-guarded.",
     ]);
@@ -268,6 +269,7 @@ describe("Team topology/lifecycle lease", () => {
     const stoppedResult = await stop.execute("stop-ready", { team_name: name, worker: "ready" }, undefined, undefined, context(leadSession));
     expect(stoppedResult.details).toEqual({ kind: "worker_stopped", worker: "ready", state_changed: true });
     expect(projectTui({ tool: "worker_stop", details: stoppedResult.details, expanded: false })).toEqual([
+      "[pi-team-bright.worker_stop]",
       "✓ worker_stopped",
       "  Worker \"ready\" stopped; Task state unchanged.",
     ]);
@@ -286,6 +288,7 @@ describe("Team topology/lifecycle lease", () => {
       kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: [], state_changed: true,
     });
     expect(projectTui({ tool: "team_shutdown", details: partial.details, expanded: false })).toEqual([
+      "[pi-team-bright.team_shutdown]",
       "! partial",
       "  Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: none.",
       "  Next: resolve the named Worker stop failures, then retry Team shutdown.",
@@ -297,6 +300,7 @@ describe("Team topology/lifecycle lease", () => {
     const final = await shutdown.execute("shutdown-final", { team_name: name }, undefined, undefined, context(leadSession));
     expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: [] });
     expect(projectTui({ tool: "team_shutdown", details: final.details, expanded: false })).toEqual([
+      "[pi-team-bright.team_shutdown]",
       "✓ team_shutdown",
       "  Team stopped · 2 Workers stopped · 0 unfinished Tasks retained.",
     ]);
