@@ -18,9 +18,13 @@ export {
   type DirectMessageDeliverySink,
 } from "./contracts";
 
-export const DIRECT_MESSAGE_CUSTOM_TYPE = "pi-teams.direct-message";
-export const DIRECT_MESSAGE_RESUME_TYPE = "pi-teams.direct-message-resume";
-export const DIRECT_MESSAGE_ACK_ENTRY_TYPE = "pi-teams.direct-message-successful-turn-ack";
+export const DIRECT_MESSAGE_CUSTOM_TYPE = "pi-team-bright.direct-message";
+export const DIRECT_MESSAGE_RESUME_TYPE = "pi-team-bright.direct-message-resume";
+export const DIRECT_MESSAGE_ACK_ENTRY_TYPE = "pi-team-bright.direct-message-successful-turn-ack";
+/** Read-only Session compatibility. New entries always use pi-team-bright.*. */
+export const LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE = "pi-teams.direct-message";
+export const LEGACY_DIRECT_MESSAGE_RESUME_TYPE = "pi-teams.direct-message-resume";
+export const LEGACY_DIRECT_MESSAGE_ACK_ENTRY_TYPE = "pi-teams.direct-message-successful-turn-ack";
 export const MESSAGE_POLL_MS_ENV = "PI_TEAMS_MESSAGE_POLL_MS";
 export const DEFAULT_MESSAGE_POLL_MS = 30_000;
 
@@ -56,7 +60,6 @@ export function messagePollMs(env: NodeJS.ProcessEnv = process.env): number {
 
 export function formatDirectMessageBatch(messages: IdentifiedInboxMessage[]): string {
   return [
-    "[PiTeams native coordination delivery]",
     "These accepted coordination records were delivered to this exact Session. Act on their full contents; presentation does not change Task state.",
     JSON.stringify({
       messages: messages.map((message) => ({
@@ -96,7 +99,7 @@ function observedIdsFromCustom(
   membershipId: string,
   sessionFile: string,
 ): string[] {
-  if (customType !== DIRECT_MESSAGE_CUSTOM_TYPE) return [];
+  if (customType !== DIRECT_MESSAGE_CUSTOM_TYPE && customType !== LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE) return [];
   const details = detailsFromValue(detailsValue);
   if (
     !details
@@ -118,7 +121,7 @@ export function acknowledgedMessageIdsFromEntries(
 ): Set<string> {
   const ids = new Set<string>();
   for (const entry of entries) {
-    if (entry.type !== "custom" || entry.customType !== DIRECT_MESSAGE_ACK_ENTRY_TYPE) continue;
+    if (entry.type !== "custom" || (entry.customType !== DIRECT_MESSAGE_ACK_ENTRY_TYPE && entry.customType !== LEGACY_DIRECT_MESSAGE_ACK_ENTRY_TYPE)) continue;
     const details = detailsFromValue(entry.data);
     if (
       !details

@@ -117,7 +117,7 @@ export interface DirectMessageBatchDetails {
 }
 
 export interface DirectMessageBatch {
-  customType: "pi-teams.direct-message";
+  customType: "pi-team-bright.direct-message";
   content: string;
   display: true;
   details: DirectMessageBatchDetails;
@@ -129,7 +129,7 @@ export interface DirectMessageObservation extends DirectMessageBatchDetails {}
 export interface DirectMessageDeliverySink {
   sendMessage(
     message: DirectMessageBatch | {
-      customType: "pi-teams.direct-message-resume";
+      customType: "pi-team-bright.direct-message-resume";
       content: string;
       display: false;
       details: DirectMessageObservation;
@@ -137,7 +137,7 @@ export interface DirectMessageDeliverySink {
     options: { triggerTurn: true; deliverAs: "steer" },
   ): void;
   appendEntry(
-    customType: "pi-teams.direct-message-successful-turn-ack",
+    customType: "pi-team-bright.direct-message-successful-turn-ack",
     data: DirectMessageObservation,
   ): void;
 }

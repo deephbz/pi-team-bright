@@ -35,7 +35,7 @@ variables do not.
 
 | Concern | Authority |
 |---|---|
-| Public tool selection and TUI renderer attachment | [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts), [`src/model-tool-contract/tui-projection.ts`](../../src/model-tool-contract/tui-projection.ts), and [`extensions/index.ts`](../../extensions/index.ts) |
+| Public tool selection and TUI message projection | [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts), [`src/model-tool-contract/tui-projection.ts`](../../src/model-tool-contract/tui-projection.ts), [`src/model-tool-contract/tui-message-projection.ts`](../../src/model-tool-contract/tui-message-projection.ts), and [`extensions/index.ts`](../../extensions/index.ts). The executable review inventory is [`tui-message-gallery.ts`](../../src/model-tool-contract/tui-message-gallery.ts). |
 | Worker-only settings resource projection | [`src/utils/worker-resource-projection.ts`](../../src/utils/worker-resource-projection.ts) and its focused tests |
 | Tool parameters, descriptions, guards, and execution | TypeBox registrations in [`extensions/index.ts`](../../extensions/index.ts) |
 | Machine result schema | Raw catalog unions and model projection schemas in [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts) |
@@ -70,6 +70,13 @@ restating executable definitions.
   keeps environment precedence and hook timing. Architecture impact: **changed**
   for these internal authority boundaries. HyperCarrier's canonical Structurizr DSL
   remains unchanged because it keeps Pi Team Bright internals opaque.
+- Displayed extension messages use one audience projection and one bold
+  `[pi-team-bright.<message-type>]` first line. Collapsed mode is concise, and
+  detail mode adds raw structured JSON. Tool calls own the header while results
+  own the body. New Task and direct-message entries use `pi-team-bright.*`;
+  historical `pi-teams.*` entries remain read-compatible only. The exhaustive,
+  non-mutating terminal gallery is the human review surface. This is
+  [decision 0011](../decisions/0011-unified-tui-message-projection.md).
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
   exceptional coordination.
 - Task authority, Team/Membership authority, Pi Session identity, event
@@ -168,9 +175,9 @@ restating executable definitions.
   still require committed task evidence. These public Task-card invariants change the contract, but no depicted component,
   flow, or topology, so the Structurizr DSL is unchanged. Successful TUI results
   remain concise semantic projections. Execution and result-projection errors
-  instead show one copyable raw `content` and `details` report, with a warning to
-  review sensitive fields before sharing. The renderer no longer hides the
-  source error behind a generic missing-semantic-result message. It removes the
+  stay concise when collapsed and add one copyable raw `content` and `details`
+  report in detail mode, with a warning to review sensitive fields before
+  sharing. The renderer no longer hides the source error behind a generic missing-semantic-result message. It removes the
   old `/1` result envelope and compatibility path rather than preserving them. The internal
   diagnostic schema remains `pi-teams-status/1`. See the durable [projection
   contract](../projects/model-invoked-tool-contract.md) and [parity

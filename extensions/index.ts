@@ -1,11 +1,18 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type, type TSchema } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { createAlertSender } from "../src/alert-authority/alerts";
-import { createToolResultRenderer } from "../src/model-tool-contract/tui-projection";
+import { createToolCallRenderer, createToolResultRenderer } from "../src/model-tool-contract/tui-projection";
+import {
+  createCustomMessageRenderer,
+  projectDirectMessage,
+  projectSyncNudgeMessage,
+  projectTaskChangeMessage,
+} from "../src/model-tool-contract/custom-message-projection";
 import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
-import { SYNC_NUDGE_CUSTOM_TYPE, syncNudgeTuiLine, validateSyncNudgeRecord } from "../src/utils/sync-nudge";
+import { SYNC_NUDGE_CUSTOM_TYPE } from "../src/utils/sync-nudge";
+import { LEGACY_TASK_CHANGE_CUSTOM_TYPE, TASK_CHANGE_CUSTOM_TYPE } from "../src/utils/task-delivery";
+import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../src/alert-authority/direct-delivery";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -285,10 +292,13 @@ export function inspectAgentSessionCleanup(
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, (message: any) => {
-    const record = validateSyncNudgeRecord(message.details);
-    return record ? new Text(syncNudgeTuiLine(record), 0, 0) : undefined;
-  });
+  const taskChangeRenderer = createCustomMessageRenderer(projectTaskChangeMessage);
+  const directMessageRenderer = createCustomMessageRenderer(projectDirectMessage);
+  pi.registerMessageRenderer?.(TASK_CHANGE_CUSTOM_TYPE, taskChangeRenderer as any);
+  pi.registerMessageRenderer?.(LEGACY_TASK_CHANGE_CUSTOM_TYPE, taskChangeRenderer as any);
+  pi.registerMessageRenderer?.(DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
+  pi.registerMessageRenderer?.(LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
+  pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, createCustomMessageRenderer(projectSyncNudgeMessage) as any);
   registerAutomaticSummaryPolicyProvider(pi);
   // Leader and Worker tools are separate role projections. The leader owns
   // the current model-tool journey; Workers own the three Task/Alert tools.
@@ -309,6 +319,7 @@ export default function (pi: ExtensionAPI) {
     registerPublicTool({
       ...tool,
       execute: async (...callArgs: any[]) => (tool.execute as any)(...callArgs),
+      renderCall: createToolCallRenderer(tool.name as any),
       renderResult: createToolResultRenderer(tool.name as any),
     } as any);
   }

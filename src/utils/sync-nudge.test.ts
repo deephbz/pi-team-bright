@@ -29,7 +29,7 @@ describe("sync nudge derived presentation", () => {
     expect(readSyncNudges(team)).toHaveLength(1);
     expect(syncNudgeContent(reserved)).not.toContain("task-");
     expect(syncNudgeTuiLine(reserved)).toContain("pending");
-    expect(syncNudgeTuiLine(readSyncNudges(team)[0])).toContain("presented");
+    expect(syncNudgeTuiLine(readSyncNudges(team)[0])).toContain("needs reconciliation");
   });
 
   it("uses the latest valid record by ID and ignores malformed or foreign receipt history", () => {

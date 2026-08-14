@@ -303,11 +303,21 @@ describe("raw semantic result projections", () => {
       expanded: false,
       isError: true,
     }).join("\n");
-    expect(executionError).toContain("task_graph_apply execution error");
-    expect(executionError).toContain("Raw report follows");
-    expect(executionError).toContain("Invalid semantic result for task_graph_apply.");
-    expect(executionError).toContain('"operation_id": "apply-release"');
-    expect(executionError).not.toContain("did not produce a semantic result");
+    expect(executionError).toContain("[pi-team-bright.task_graph_apply]");
+    expect(executionError).toContain("execution error");
+    expect(executionError).toContain("Press Ctrl+O");
+    expect(executionError).not.toContain("Invalid semantic result for task_graph_apply.");
+    expect(executionError).not.toContain('"operation_id": "apply-release"');
+
+    const expandedExecutionError = projectTui({
+      tool: "task_graph_apply",
+      content: [{ type: "text", text: "Invalid semantic result for task_graph_apply." }],
+      details: { operation_id: "apply-release" },
+      expanded: true,
+      isError: true,
+    }).join("\n");
+    expect(expandedExecutionError).toContain("Invalid semantic result for task_graph_apply.");
+    expect(expandedExecutionError).toContain('"operation_id": "apply-release"');
 
     const malformedResult = projectTui({
       tool: "task_read",
@@ -315,7 +325,8 @@ describe("raw semantic result projections", () => {
       details: { malformed: true },
       expanded: true,
     }).join("\n");
-    expect(malformedResult).toContain("task_read result projection error");
+    expect(malformedResult).toContain("[pi-team-bright.task_read]");
+    expect(malformedResult).toContain("result projection error");
     expect(malformedResult).toContain('"malformed": true');
     expect(malformedResult).toContain("unprojected content");
   });

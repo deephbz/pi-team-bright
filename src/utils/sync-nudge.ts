@@ -100,8 +100,8 @@ export function findSyncNudgeReservation(teamName: string, debtKey: string, bran
 /** Stable, human-facing projection from the same validated custom-message record. */
 export function syncNudgeTuiLine(record: SyncNudgeRecord): string {
   return record.kind === "presented"
-    ? `Sync nudge presented; call team_sync({view:"${record.requestedView}"}) to reconcile Team state.`
-    : `Sync nudge pending; call team_sync({view:"${record.requestedView}"}) when it is delivered.`;
+    ? `Team state needs reconciliation. Call team_sync({view:"${record.requestedView}"}) now.`
+    : `Team state reconciliation is pending. Call team_sync({view:"${record.requestedView}"}) after delivery.`;
 }
 
 export function syncNudgeContent(record: SyncNudgeRecord): string {

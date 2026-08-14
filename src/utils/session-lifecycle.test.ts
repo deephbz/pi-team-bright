@@ -6,7 +6,7 @@ import * as teams from "./teams";
 import * as messaging from "./messaging";
 import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
-import { DIRECT_MESSAGE_CUSTOM_TYPE } from "./message-delivery";
+import { DIRECT_MESSAGE_ACK_ENTRY_TYPE, DIRECT_MESSAGE_CUSTOM_TYPE } from "./message-delivery";
 
 type Handler = (event: unknown, ctx: SessionContext) => Promise<void>;
 
@@ -291,7 +291,7 @@ describe("Pi session lifecycle", () => {
     await handlers.get("turn_end")?.({ message: { role: "assistant", stopReason: "toolUse" } }, ctx);
     expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(true);
     expect(appendEntry).toHaveBeenCalledWith(
-      "pi-teams.direct-message-successful-turn-ack",
+      DIRECT_MESSAGE_ACK_ENTRY_TYPE,
       expect.objectContaining({ messageIds: [first.id, second.id] }),
     );
     expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(0);

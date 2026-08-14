@@ -529,7 +529,7 @@ describe("hardened coordination liveness boundaries", () => {
     const content = syncNudgeContent(record);
     expect(content).toContain('team_sync({view:"updates"})');
     expect(content).not.toContain("task-");
-    expect(syncNudgeTuiLine(record)).toContain("Sync nudge presented");
+    expect(syncNudgeTuiLine(record)).toContain("Team state needs reconciliation");
     expect(SYNC_NUDGE_CUSTOM_TYPE).toBe("pi-team-bright.sync-nudge");
   });
 
