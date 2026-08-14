@@ -2,12 +2,11 @@
 
 Updated: 2026-08-14
 
-Current published release: `0.17.0-rc.14` remains on npm `next` from annotated
-tag `v0.17.0-rc.14`. The durable publication evidence is in
-[`2026-08-12-v0.17.0-rc.14-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md).
-Stable `0.17.0` source is now selected on `release/v0.17.0`, rebased onto
-current `origin/main`. Its package, tag, npm `latest`, provenance, and GitHub
-Release remain pending until every release gate passes.
+Current published release: stable `0.17.0` is on npm `latest` from annotated
+tag `v0.17.0`. The durable source, CI, package-integrity, provenance, registry,
+and GitHub Release evidence is in
+[`2026-08-14-v0.17.0-release-receipt.md`](../journal/2026-08-14-v0.17.0-release-receipt.md).
+npm `next` remains on historical prerelease `0.17.0-rc.14`.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -390,10 +389,8 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Complete the [`v0.17.0` release checklist](../release/v0.17.0-release-checklist.md):
-   exact-source E2E, aggregate and package gates, privacy classification, main
-   CI, dry-run workflow, immutable tag, OIDC publication to npm `latest`,
-   registry verification, and stable GitHub Release.
+1. Keep stable `v0.17.0` and its package bytes immutable. Record downstream
+   HyperCarrier gitlink adoption as separate composition evidence.
 2. Define carrier actuation for Attempt model aliases before claiming that
    `capable` changes an existing Worker's active model.
 3. Decide whether graph persistence needs an append-only transaction store and
