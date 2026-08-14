@@ -83,7 +83,7 @@ function writeTeam(teamName: string, root: string): TeamConfig {
   return config;
 }
 
-function harness(teamName: string, actor: "team-lead" | "worker"): Map<string, Tool> {
+function harness(teamName: string, actor: string): Map<string, Tool> {
   vi.stubEnv("PI_TEAM_NAME", teamName);
   vi.stubEnv("PI_AGENT_NAME", actor === "team-lead" ? "" : actor);
   vi.stubEnv("TMUX", "");
@@ -337,6 +337,222 @@ describe.skipIf(spawnSync("bd", ["--version"], { stdio: "ignore" }).status !== 0
     expect(compatibilityUpdated).toMatchObject({ kind: updated.kind, task: { status: updated.task.status, assignee: updated.task.assignee, current_context: updated.task.current_context } });
     expect(readTeamEvents(compatibilityTeam).events.map((event) => event.type)).toEqual(["task", "task"]);
     expect(await readTaskDeliveries(compatibilityTeam, "worker")).toHaveLength(2);
+  }, 120_000);
+
+  it("bridges graph-native Worker transitions to assigned pre-graph Beads Tasks, then yields to graph authority", async () => {
+    const teamName = uniqueTeam();
+    const root = workspace();
+    const config = writeTeam(teamName, root);
+    config.logicalWorkers = [...(config.logicalWorkers ?? []), { name: "other", scope: "prove replay does not transfer Task ownership" }];
+    config.members.push(member(teamName, "other", "teammate"));
+    teams.writeConfigAtomic(paths.configPath(teamName), config);
+    const lead = harness(teamName, "team-lead");
+    const worker = harness(teamName, "worker");
+    const other = harness(teamName, "other");
+    const workerCtx = context(teamName, "worker");
+    const otherCtx = context(teamName, "other");
+    const leadCtx = context(teamName, "team-lead");
+    const update = worker.get("task_update")!;
+    const otherUpdate = other.get("task_update")!;
+    const graphApply = lead.get("task_graph_apply")!;
+    // This is the durable write path used by a resumed pre-graph leader's
+    // legacy task_create surface.
+    const legacyLead = createPublishingBeadsTaskAdapterFactory(
+      publicationPort,
+      taskAuthorityTeamPort,
+      taskAuthorityRead,
+    )(teamName, "team-lead");
+    let operation = 0;
+    const createLegacy = async (title: string, assignee = "worker") => {
+      const created = await legacyLead.create({
+        operationId: `legacy-create-${++operation}`,
+        title,
+        goal: `Complete ${title}.`,
+        assignee,
+      });
+      if (created.kind !== "created") throw new Error(`Could not create legacy Task: ${created.message ?? created.kind}`);
+      return created.task;
+    };
+    const workerTransition = (parameters: Record<string, unknown>) => update.execute(
+      `worker-${++operation}`,
+      parameters,
+      undefined,
+      undefined,
+      workerCtx,
+    );
+
+    const claimedTask = await createLegacy("Claim and replay legacy Task");
+    const claimed = await workerTransition({
+      task_id: claimedTask.id,
+      operation_id: "legacy-claim",
+      expected_version: claimedTask.version,
+      transition: "claim",
+    });
+    expect(claimed.details).toMatchObject({
+      kind: "updated",
+      transition: "claim",
+      replayed: false,
+      task: { id: claimedTask.id, status: "in_progress", assignee: "worker" },
+    });
+    const claimReplay = await workerTransition({
+      task_id: claimedTask.id,
+      operation_id: "legacy-claim",
+      expected_version: claimedTask.version,
+      transition: "claim",
+    });
+    expect(claimReplay.details).toMatchObject({
+      kind: "updated",
+      transition: "claim",
+      replayed: true,
+      task: { id: claimedTask.id, status: "in_progress" },
+    });
+    const otherReplay = await otherUpdate.execute("other-replay", {
+      task_id: claimedTask.id,
+      operation_id: "legacy-claim",
+      expected_version: claimedTask.version,
+      transition: "claim",
+    }, undefined, undefined, otherCtx);
+    expect(otherReplay.details).toMatchObject({
+      kind: "refused",
+      reason: "worker_mismatch",
+      task_id: claimedTask.id,
+      current_task: { assignee: "worker", status: "in_progress" },
+      state_changed: false,
+    });
+    const stale = await workerTransition({
+      task_id: claimedTask.id,
+      operation_id: "legacy-stale-block",
+      expected_version: claimedTask.version,
+      transition: "block",
+      evidence: "This must refuse before a stale write.",
+    });
+    expect(stale.details).toMatchObject({
+      kind: "refused",
+      reason: "version_conflict",
+      task_id: claimedTask.id,
+      state_changed: false,
+    });
+
+    const succeeded = await workerTransition({
+      task_id: claimedTask.id,
+      operation_id: "legacy-goal-achieved",
+      expected_version: claimed.details.task.version,
+      transition: "goal_achieved",
+      evidence: "The legacy Task goal passed its external check.",
+    });
+    expect(succeeded.details).toMatchObject({
+      kind: "updated",
+      transition: "goal_achieved",
+      task: { id: claimedTask.id, status: "closed" },
+    });
+
+    const unsafeTask = await createLegacy("Refuse unsafe legacy outcomes");
+    const unsafeClaim = await workerTransition({
+      task_id: unsafeTask.id,
+      operation_id: "legacy-unsafe-claim",
+      expected_version: unsafeTask.version,
+      transition: "claim",
+      current_context: "Worker started the legacy Task through the claim path.",
+    });
+    expect(unsafeClaim.details).toMatchObject({
+      kind: "updated",
+      transition: "claim",
+      task: {
+        id: unsafeTask.id,
+        status: "in_progress",
+        current_context: "Worker started the legacy Task through the claim path.",
+      },
+    });
+    const failed = await workerTransition({
+      task_id: unsafeTask.id,
+      operation_id: "legacy-goal-failed",
+      expected_version: unsafeClaim.details.task.version,
+      transition: "goal_failed",
+      evidence: "The criterion did not pass.",
+    });
+    expect(failed.details).toMatchObject({
+      kind: "refused",
+      reason: "legacy_transition_unsupported",
+      task_id: unsafeTask.id,
+      state_changed: false,
+    });
+    const cancelled = await workerTransition({
+      task_id: unsafeTask.id,
+      operation_id: "legacy-cancel",
+      expected_version: unsafeClaim.details.task.version,
+      transition: "cancel",
+      evidence: "Stop this legacy Task.",
+    });
+    expect(cancelled.details).toMatchObject({
+      kind: "refused",
+      reason: "legacy_transition_unsupported",
+      task_id: unsafeTask.id,
+      state_changed: false,
+    });
+    const blocked = await workerTransition({
+      task_id: unsafeTask.id,
+      operation_id: "legacy-block",
+      expected_version: unsafeClaim.details.task.version,
+      transition: "block",
+      evidence: "An external dependency is unavailable.",
+    });
+    expect(blocked.details).toMatchObject({
+      kind: "updated",
+      transition: "block",
+      task: { id: unsafeTask.id, status: "blocked" },
+    });
+
+    const blocker = await createLegacy("Legacy prerequisite");
+    const waitingTask = await createLegacy("Legacy dependent");
+    const linked = await legacyLead.link({
+      taskId: waitingTask.id,
+      targetId: blocker.id,
+      relation: "blocked_by",
+      action: "add",
+      expectedVersion: waitingTask.version as TaskVersionRef,
+    });
+    if (linked.kind !== "linked") throw new Error(`Could not create legacy dependency: ${linked.message}`);
+    const waiting = await workerTransition({
+      task_id: waitingTask.id,
+      operation_id: "legacy-waiting-claim",
+      expected_version: linked.version,
+      transition: "claim",
+    });
+    expect(waiting.details).toMatchObject({
+      kind: "refused",
+      reason: "invalid_transition",
+      task_id: waitingTask.id,
+      current_task: {
+        status: "open",
+        dependency_state: { kind: "waiting", active_blocker_ids: [blocker.id] },
+      },
+      state_changed: false,
+    });
+    expect(waiting.details.message).toMatch(/dependency waiting.*not blocked/i);
+
+    const graph = await graphApply.execute("graph-switch", {
+      operation_id: "switch-to-graph",
+      tasks: [{
+        key: "graph-task",
+        title: "Graph Task",
+        goal: "Prove graph authority wins after its first revision.",
+        assignee: "worker",
+      }],
+    }, undefined, undefined, leadCtx);
+    expect(graph.details).toMatchObject({ kind: "task_graph_applied" });
+    const afterSwitch = await workerTransition({
+      task_id: waitingTask.id,
+      operation_id: "legacy-after-switch",
+      expected_version: linked.version,
+      transition: "claim",
+    });
+    expect(afterSwitch.details).toMatchObject({
+      kind: "refused",
+      reason: "task_not_found",
+      task_id: waitingTask.id,
+      state_changed: false,
+    });
+    await expect(legacyLead.read(waitingTask.id)).resolves.toMatchObject({ kind: "found", task: { status: "open" } });
   }, 120_000);
 
 

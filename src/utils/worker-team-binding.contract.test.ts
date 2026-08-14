@@ -180,9 +180,27 @@ describe("narrow Worker Team binding surface", () => {
     const sessionA = `/tmp/${teamA}-worker.jsonl`;
     await createBoundTeam(teamA, sessionA);
     await createBoundTeam(teamB, `/tmp/${teamB}-worker.jsonl`);
+    const legacyTask = {
+      ...task,
+      status: "open" as const,
+      dependency_state: { kind: "ready" as const, active_blocker_ids: [] as [] },
+    };
     const read = vi.spyOn(BeadsTaskAdapter.prototype, "read").mockResolvedValue({
       kind: "found",
-      task,
+      task: legacyTask,
+    });
+    const claim = vi.spyOn(BeadsTaskAdapter.prototype, "claim").mockResolvedValue({
+      kind: "updated",
+      taskId: task.id,
+      operationId: "claim-without-graph",
+      task: {
+        ...legacyTask,
+        status: "in_progress" as const,
+        current_context: "Claim context remains atomic.",
+        version: taskVersionRef("beads_binding_claimed"),
+      },
+      journalEntries: [],
+      deliveryWarnings: [],
     });
     const tools = registerWorker(teamA);
 
@@ -197,18 +215,32 @@ describe("narrow Worker Team binding surface", () => {
     expect(read).toHaveBeenCalledOnce();
     expect(read.mock.instances[0]).toMatchObject({ teamName: teamA, actor: "worker" });
     expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: task.id }] });
-    await expect(tools.get("task_update")!.execute(
+    const claimed = await tools.get("task_update")!.execute(
       "claim-without-graph",
       {
         task_id: task.id,
         operation_id: "claim-without-graph",
         transition: "claim",
+        current_context: "Claim context remains atomic.",
         expected_version: task.version,
       },
       undefined,
       undefined,
       context(sessionA),
-    )).rejects.toThrow(/Legacy Task mutation is disabled/);
+    );
+    expect(claim).toHaveBeenCalledWith({
+      taskId: task.id,
+      operationId: "claim-without-graph",
+      expectedVersion: task.version,
+      currentContext: "Claim context remains atomic.",
+    });
+    expect(claimed.details).toMatchObject({
+      kind: "updated",
+      task_id: task.id,
+      transition: "claim",
+      replayed: false,
+      task: { status: "in_progress", current_context: "Claim context remains atomic." },
+    });
     await expect(tools.get("task_read")!.execute(
       "stale-session",
       { task_id: task.id },

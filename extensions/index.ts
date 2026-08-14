@@ -42,6 +42,7 @@ import { DurableCoordinationHiddenObservation } from "../src/adapters/durable-co
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 
 import { GraphTaskUpdateParametersSchema, TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
+import { transitionLegacyGraphTask } from "../src/model-tool-contract/legacy-graph-task-transition-adapter";
 import {
   DurableModelToolAlertApplication,
   DurableModelToolBindings,
@@ -592,7 +593,38 @@ export default function (pi: ExtensionAPI) {
               : { kind: "unknown_outcome", input_index: 0, task_id: result.taskId, operation_id: result.operationId, message: result.message };
           return assembleToolResult("task_update", outcome as any);
         }
-        throw new Error("Legacy Task mutation is disabled on the graph-native Worker surface; apply a graph revision first.");
+        const result = await transitionLegacyGraphTask(
+          taskAdapterFactory(
+            binding.teamName,
+            binding.member.name,
+            binding.member.membershipId && binding.member.sessionFile
+              ? { membershipId: binding.member.membershipId, sessionFile: binding.member.sessionFile }
+              : undefined,
+          ),
+          {
+            taskId: params.task_id,
+            operationId: params.operation_id,
+            expectedVersion: params.expected_version,
+            ...(params.transition ? { transition: params.transition } : {}),
+            ...(params.current_context ? { currentContext: params.current_context } : {}),
+            ...(params.evidence ? { evidence: params.evidence } : {}),
+            worker: binding.member.name,
+          },
+        );
+        const outcome = result.kind === "updated"
+          ? {
+            kind: "updated", input_index: 0, task_id: result.taskId, operation_id: result.operationId,
+            replayed: result.replayed ?? false, transition: result.transition ?? "context_updated", task: result.task,
+            ready_task_ids: result.readyTaskIds ?? [],
+            ...(result.failureTraversal ? { failure_traversal: { source_task_id: result.failureTraversal.sourceTaskId, target_task_id: result.failureTraversal.targetTaskId, traversal: result.failureTraversal.traversal } } : {}),
+            ...(result.deliveryWarnings?.length ? { delivery_warnings: result.deliveryWarnings } : {}),
+          }
+          : result.kind === "refused"
+            ? { kind: "refused", input_index: 0, task_id: result.taskId, operation_id: result.operationId, reason: result.reason, message: result.message, ...(result.currentTask ? { current_task: result.currentTask } : {}), state_changed: false }
+            : result.kind === "unknown_outcome"
+              ? { kind: "unknown_outcome", input_index: 0, task_id: result.taskId, operation_id: result.operationId, message: result.message }
+              : { kind: "unavailable", input_index: 0, task_id: result.taskId, operation_id: result.operationId, reason: result.reason, message: result.message, state_changed: false };
+        return assembleToolResult("task_update", outcome as any);
       },
     });
 

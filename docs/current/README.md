@@ -132,9 +132,12 @@ restating executable definitions.
   `dependency_waiting` and `ready` are derived; only `goal_achieved` releases a
   prerequisite, while `goal_failed` applies a bounded failure edge. Runtime
   composition includes recovery, ready delivery, Coordination reads, lifecycle
-  guards, and Worker transitions. Beads remains a legacy read fallback before
-  the first graph apply and is not a graph-state mirror. The durable integration
-  result and exact remaining gaps are in
+  guards, and Worker transitions. Before the first graph apply, Beads remains
+  the legacy Task authority and read fallback; graph-native Worker transitions
+  bridge claim, block, resume, explicit goal success, and context through its
+  versioned adapter. Goal failure and cancellation refuse there, rather than
+  overload legacy `closed` or `blocked` state. Beads is not a graph-state mirror.
+  The durable integration result and exact remaining gaps are in
   [`2026-08-13-graph-control-integration-result.md`](../journal/2026-08-13-graph-control-integration-result.md).
   This changes internal Task authority, persistence, dispatch, and model
   contracts. HyperCarrier's diagram stays unchanged because it keeps Pi Team

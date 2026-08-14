@@ -17,6 +17,7 @@ import type {
   UpdateTasksPortResult,
 } from "./model-tool-contracts";
 import { DurableModelToolBindings } from "./durable-model-tool-bindings";
+import { transitionLegacyGraphTask } from "./legacy-graph-task-transition-adapter";
 
 export class DurableModelToolTaskApplication implements ModelToolTaskApplicationPort {
   constructor(
@@ -182,29 +183,45 @@ export class DurableModelToolTaskApplication implements ModelToolTaskApplication
     }
 
     const outcomes: TaskUpdatePortOutcome[] = [];
-    for (const input of updates as ModelToolTaskUpdateInput[]) {
-      const result = await this.factory(bound.teamName, actor).update(input);
-      if (result.kind === "updated" || result.kind === "refused") outcomes.push(result);
-      else if ("operationId" in result) {
-        outcomes.push({
-          kind: "contract_gap",
-          taskId: result.taskId,
-          operationId: result.operationId,
-          reason: result.reason,
-          message: result.message,
-          currentTask: result.currentTask,
-          unsupported: [...result.unsupported],
-        });
-      } else {
-        outcomes.push({
-          kind: "contract_gap",
-          taskId: input.taskId,
-          operationId: input.operationId,
-          reason: result.reason,
-          message: result.message,
-          unsupported: ["task_metadata"],
-        });
+    for (const input of updates) {
+      // Retain direct legacy callers during cutover. Graph-shaped commands use
+      // the explicit bridge until the first graph revision selects graph
+      // authority for this Team.
+      if ("status" in input || "journalEntries" in input) {
+        const result = await this.factory(bound.teamName, actor).update(input as ModelToolTaskUpdateInput);
+        if (result.kind === "updated" || result.kind === "refused") outcomes.push(result);
+        else if ("operationId" in result) {
+          outcomes.push({
+            kind: "contract_gap",
+            taskId: result.taskId,
+            operationId: result.operationId,
+            reason: result.reason,
+            message: result.message,
+            currentTask: result.currentTask,
+            unsupported: [...result.unsupported],
+          });
+        } else {
+          outcomes.push({
+            kind: "contract_gap",
+            taskId: input.taskId,
+            operationId: input.operationId,
+            reason: result.reason,
+            message: result.message,
+            unsupported: ["task_metadata"],
+          });
+        }
+        continue;
       }
+      const graphInput = input as ModelToolGraphTaskUpdateInput;
+      outcomes.push(await transitionLegacyGraphTask(this.factory(bound.teamName, actor), {
+        taskId: graphInput.taskId,
+        operationId: graphInput.operationId,
+        expectedVersion: graphInput.expectedVersion,
+        ...(graphInput.transition ? { transition: graphInput.transition } : {}),
+        ...(graphInput.currentContext ? { currentContext: graphInput.currentContext } : {}),
+        ...(graphInput.evidence ? { evidence: graphInput.evidence } : {}),
+        worker: actor,
+      }));
     }
     return { kind: "batch", outcomes };
   }
