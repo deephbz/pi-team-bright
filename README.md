@@ -31,7 +31,7 @@ The Task plus its assignee is the only executable work contract.
 
 ## The normal flow
 
-The release-candidate sequence is:
+The normal sequence is:
 
 `team_create` → `ensure_worker` → `task_graph_apply` → snapshot and updates
 through `team_sync` → inspect goal evidence → resolve Tasks → `worker_stop` or
@@ -49,12 +49,29 @@ ensure_worker({
 
 task_graph_apply({
   operation_id: "audit-recovery-contract-1",
-  tasks: [{
-    key: "audit",
-    title: "Audit the recovery contract",
-    goal: "Compare implementation with the documented recovery path and report exact evidence.",
-    assignee: "auditor"
-  }]
+  tasks: [
+    {
+      key: "audit",
+      title: "Audit the recovery contract",
+      goal: "Compare implementation with the documented recovery path and report exact evidence.",
+      assignee: "auditor"
+    },
+    {
+      key: "repair",
+      title: "Repair a failed contract",
+      goal: "Apply the smallest coherent repair and report focused verification evidence.",
+      assignee: "writer",
+      needs: ["audit"]
+    },
+    {
+      key: "verify",
+      title: "Verify the repaired contract",
+      goal: "Independently verify the repair and report the acceptance result.",
+      assignee: "auditor",
+      needs: ["repair"],
+      on_goal_failed: { target: "repair", max_traversals: 2 }
+    }
+  ]
 })
 
 team_sync({ view: "snapshot" })
@@ -73,6 +90,29 @@ assigned to that Worker. Reconcile once more before `team_shutdown`.
 Alerts are only for exceptional clarification, attention, or announcements.
 They never assign, advance, block, or complete work, and they are not a chat-
 based substitute for Tasks.
+
+## Mission graph semantics
+
+`task_graph_apply` atomically applies the complete assigned Task graph. On the
+first revision, omit `expected_graph_version`. Later revisions must supply the
+exact current graph version. Success edges in `needs` remain acyclic. An
+explicit `on_goal_failed` edge may return to earlier repair work, but its
+traversal limit must be from 1 through 8.
+
+Only `goal_achieved` satisfies a prerequisite. `goal_failed`, `cancelled`, and
+`blocked` never release a success edge. `dependency_waiting` and `ready` are
+derived states and cannot be authored. Every claim starts an immutable Attempt,
+and joins bind the accepted Attempt lineage of all prerequisites.
+
+Task authority presents at most one ready Task to each stable Worker. Different
+Workers can execute the ready front in parallel. Several unordered ready Tasks
+for one Worker remain queued; add `needs` edges when their order matters.
+
+In Herdr, `/pi-team-graph` toggles a read-only graph pane in the exact current
+tab. An optional limit is `25`, `50`, `100`, `200`, or `all`. The pane supports
+TB and LR layouts, disconnected islands, pan and selection modes, bounded Task
+details, and terminal-owned semantic colors. It never schedules or changes a
+Task.
 
 ## Candid limits
 
@@ -114,11 +154,16 @@ based substitute for Tasks.
 
 ## Install and upgrade
 
-Install the current published release candidate by exact version:
+Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.15
+pi install npm:@hypercarrier/pi-team-bright@0.17.0
 ```
+
+Version `0.17.0` replaces the leader tool `task_create` with
+`task_graph_apply`. It also replaces authored Task status changes with explicit
+transitions such as `claim`, `block`, `resume`, `goal_achieved`, and
+`goal_failed`. Update saved prompts or scripts that call the old contract.
 
 The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.

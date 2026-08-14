@@ -5,10 +5,9 @@ Updated: 2026-08-14
 Current published release: `0.17.0-rc.14` remains on npm `next` from annotated
 tag `v0.17.0-rc.14`. The durable publication evidence is in
 [`2026-08-12-v0.17.0-rc.14-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md).
-The `release/v0.17.0-rc.16-dag-native` side branch extends immutable DAG base
-`a8e3cb48a6ce3405f86df08114e0a4b73dccdf98`, which descends from publication
-record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`. It is not an npm publication,
-Git tag, GitHub Release, or `main` update.
+Stable `0.17.0` source is now selected on `release/v0.17.0`, rebased onto
+current `origin/main`. Its package, tag, npm `latest`, provenance, and GitHub
+Release remain pending until every release gate passes.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -133,8 +132,8 @@ restating executable definitions.
 
 ## Current status and anchors
 
-- The local `feature/dag-graph-control` branch now has an unmerged graph-native
-  production path. `task_graph_apply` replaces `task_create` without adding a
+- The selected stable source now contains the graph-native production path.
+  `task_graph_apply` replaces `task_create` without adding a
   leader tool. A Team-scoped snapshot stores complete graph revisions,
   immutable Attempts, replay receipts, and per-Attempt model resolution.
   `dependency_waiting` and `ready` are derived; only `goal_achieved` releases a
@@ -184,8 +183,8 @@ restating executable definitions.
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
 - `0.17.0-rc.14` is the published liveness and Worker-recovery base at exact
-  release code `8bb517bd32d8687e97b96a531db15833fd64420a`. The
-  `release/v0.17.0-rc.16-dag-native` branch prepares atomic graph creation,
+  release code `8bb517bd32d8687e97b96a531db15833fd64420a`. Selected stable
+  `0.17.0` source adds atomic graph creation,
   mechanical ready-front dispatch, graph control, the read-only Task graph
   pane, and Worker-startup hardening. Its earlier eight-Worker stress closed
   117/117 Tasks and stopped all Workers. The maintained
@@ -206,8 +205,10 @@ restating executable definitions.
   canary mechanically advanced `A -> B`, recorded Worker-authored accepted
   Attempts, reused the same stable Worker, and shut down cleanly. The rebased
   routing follow-up passed exact graph-path comparison, typecheck, 35 focused
-  tests, both sentinels, gallery/export, and package verification. The branch is
-  a review candidate only. It does not change npm, a tag, or `main`.
+  tests, both sentinels, gallery/export, and package verification. Stable source
+  then passed 142 aggregate files and 1,007 tests, package and lane gates, and a
+  fresh all-tool Team E2E. Main CI, immutable package integrity, registry,
+  provenance, tag, and GitHub Release evidence remain pending.
 - Worker startup hardening removes two avoidable serial costs without weakening
   admission. Herdr may return after exact accepted actuation, but exact current
   Membership, Session, and runtime-generation binding remains the commit point.
@@ -389,9 +390,10 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Push only the reviewed `release/v0.17.0-rc.16-dag-native` side branch after
-   the documentation-only amendment and minimal exact-tip checks. Keep RC15,
-   `main`, tags, npm, GitHub Releases, and Herdr unchanged.
+1. Complete the [`v0.17.0` release checklist](../release/v0.17.0-release-checklist.md):
+   exact-source E2E, aggregate and package gates, privacy classification, main
+   CI, dry-run workflow, immutable tag, OIDC publication to npm `latest`,
+   registry verification, and stable GitHub Release.
 2. Define carrier actuation for Attempt model aliases before claiming that
    `capable` changes an existing Worker's active model.
 3. Decide whether graph persistence needs an append-only transaction store and
