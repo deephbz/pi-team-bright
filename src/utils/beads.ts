@@ -1229,6 +1229,7 @@ export class BeadsTaskStore {
   }
 
   async claimWithResult(taskId: string, actor?: string, options: TaskWriteOptions = {}): Promise<TaskMutationResult> {
+    if (options.taskMetadata !== undefined) assertTaskMetadataContext(options.taskMetadata);
     const safeId = sanitizeName(taskId);
     return withLock(this.lockPath(safeId), async () => {
       const beforeRaw = await this.showRaw(safeId);
@@ -1256,6 +1257,9 @@ export class BeadsTaskStore {
         : ["update", safeId, "--claim", "--actor", claimActor];
       if (prepared && options.internalOwnerTransition) {
         args.push("--set-metadata", `${OWNER_TRANSITION_OPERATION_METADATA}=${options.internalOwnerTransition.operationId}`);
+      }
+      if (options.taskMetadata) {
+        args.push("--set-metadata", `${TASK_METADATA_KEY}=${JSON.stringify(options.taskMetadata)}`);
       }
       const result = await this.command<RawBead | RawBead[]>(args);
       const after = Array.isArray(result) ? result[0] : result;

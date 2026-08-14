@@ -98,7 +98,7 @@ export type ReadTasksPortResult =
 
 export type TaskUpdatePortOutcome =
   | { kind: "updated"; taskId: string; operationId: string; replayed?: boolean; task: CanonicalTaskCard; journalEntries: ModelToolTaskJournalEntry[]; transition?: GraphTaskTransition | "context_updated"; readyTaskIds?: string[]; failureTraversal?: { sourceTaskId: string; targetTaskId: string; traversal: number }; deliveryWarnings?: string[] }
-  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict" | "active_blockers" | "invalid_transition" | "worker_mismatch" | "worker_occupied" | "evidence_required" | "model_alias_unresolved"; message: string; currentTask?: CanonicalTaskCard; blockerIds?: string[] }
+  | { kind: "refused"; taskId: string; operationId: string; reason: "task_not_found" | "version_conflict" | "operation_conflict" | "active_blockers" | "invalid_transition" | "legacy_transition_unsupported" | "worker_mismatch" | "worker_occupied" | "evidence_required" | "model_alias_unresolved"; message: string; currentTask?: CanonicalTaskCard; blockerIds?: string[] }
   | { kind: "contract_gap"; taskId: string; operationId: string; reason: "task_metadata_absent" | "task_metadata_invalid" | "external_writer_atomicity_unavailable"; message: string; currentTask?: TaskCard; unsupported: string[] }
   | { kind: "unknown_outcome"; taskId: string; operationId: string; message: string }
   | { kind: "unavailable"; taskId: string; operationId: string; reason: "task_authority_unavailable"; message: string };

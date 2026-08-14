@@ -90,6 +90,8 @@ export type TaskUpdateOutcome =
     operationId: string;
     task: TaskCard;
     journalEntries: ModelToolTaskJournalEntry[];
+    /** True when the durable Task operation receipt supplied this result. */
+    replayed?: boolean;
     deliveryWarnings?: string[];
   }
   | {
@@ -570,7 +572,7 @@ export class BeadsTaskAdapter {
     return this.list();
   }
 
-  async claim(input: { taskId: string; operationId: string; expectedVersion: TaskVersionRef }): Promise<TaskUpdateOutcome> {
+  async claim(input: { taskId: string; operationId: string; expectedVersion: TaskVersionRef; currentContext?: string }): Promise<TaskUpdateOutcome> {
     return this.update({ ...input, claim: true } as ModelToolTaskUpdateInput & { claim: true });
   }
 
@@ -598,6 +600,7 @@ export class BeadsTaskAdapter {
         operationId: input.operationId,
         task: currentTask,
         journalEntries: prior.journal_entries,
+        replayed: true,
         deliveryWarnings: [],
       };
     }
@@ -674,6 +677,7 @@ export class BeadsTaskAdapter {
         operationId: input.operationId,
         task: result.taskCard ?? projectTask(result.task, nextMetadata),
         journalEntries,
+        replayed: false,
         deliveryWarnings,
       };
     } catch (error) {

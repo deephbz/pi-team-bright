@@ -63,7 +63,7 @@ describe("task semantic-result totality", () => {
 
     const update = [
       { kind: "updated", input_index: 0, task_id: task.id, operation_id: "update-ok", replayed: false, transition: "context_updated", task, ready_task_ids: [] },
-      ...["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"].map((reason) => ({ kind: "refused", input_index: 0, task_id: task.id, operation_id: `update-${reason}`, reason, message: `${reason}.`, current_task: task, state_changed: false })),
+      ...["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "legacy_transition_unsupported", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"].map((reason) => ({ kind: "refused", input_index: 0, task_id: task.id, operation_id: `update-${reason}`, reason, message: `${reason}.`, current_task: task, state_changed: false })),
       { kind: "unknown_outcome", input_index: 0, task_id: task.id, operation_id: "update-unknown", message: "Authority response was lost." },
       { kind: "unavailable", input_index: 0, task_id: task.id, operation_id: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
     ];
@@ -141,7 +141,7 @@ describe("task semantic-result totality", () => {
 
     for (const outcome of [
       { kind: "updated", taskId: task.id, operationId: "update-ok", replayed: false, transition: "context_updated", task, journalEntries: [], readyTaskIds: [] },
-      ...["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"].map((reason) => ({ kind: "refused", taskId: task.id, operationId: `update-${reason}`, reason, message: `${reason}.`, currentTask: task })),
+      ...["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "legacy_transition_unsupported", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"].map((reason) => ({ kind: "refused", taskId: task.id, operationId: `update-${reason}`, reason, message: `${reason}.`, currentTask: task })),
       { kind: "unknown_outcome", taskId: task.id, operationId: "update-unknown", message: "Outcome is unknown." },
       { kind: "unavailable", taskId: task.id, operationId: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable." },
     ]) {

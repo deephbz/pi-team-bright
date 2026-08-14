@@ -141,7 +141,7 @@ export const TaskUpdateModelResultSchema = Type.Union([
     kind: Type.Literal("refused"),
     task_id: TaskId,
     operation_id: CreateOperationId,
-    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"]),
+    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "legacy_transition_unsupported", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"]),
     message: Type.String({ minLength: 1 }),
     current_task: Type.Optional(TaskCard),
     recovery: Type.Optional(Recovery),

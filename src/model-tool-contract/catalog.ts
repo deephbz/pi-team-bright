@@ -153,7 +153,7 @@ export const TaskUpdateResultSchema = Type.Union([
     kind: Type.Literal("updated"),
     replayed: Type.Boolean(),
     transition: Type.Enum(["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel", "context_updated"]),
-    task: GraphTaskCardSchema,
+    task: TaskCardSchema,
     ready_task_ids: Type.Array(TaskId),
     failure_traversal: Type.Optional(Type.Object({
       source_task_id: TaskId,
@@ -165,9 +165,9 @@ export const TaskUpdateResultSchema = Type.Union([
   Type.Object({
     ...TaskUpdateOutcomeBase,
     kind: Type.Literal("refused"),
-    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"]),
+    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "legacy_transition_unsupported", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"]),
     message: Type.String({ minLength: 1 }),
-    current_task: Type.Optional(GraphTaskCardSchema),
+    current_task: Type.Optional(TaskCardSchema),
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
   Type.Object({

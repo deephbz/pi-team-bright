@@ -70,8 +70,11 @@ exhaustive parameter reference.
 - [`src/model-tool-contract/beads-task-adapter.ts`](../src/model-tool-contract/beads-task-adapter.ts)
   and [`beads-authority-adapter.ts`](../src/model-tool-contract/beads-authority-adapter.ts)
   form the Beads adapter boundary for native records, metadata, revisions, and
-  mutations. [`src/utils/tasks.ts`](../src/utils/tasks.ts) exposes only semantic
-  Task operations; the delivery stopped-epoch migration is
+  mutations. [`legacy-graph-task-transition-adapter.ts`](../src/model-tool-contract/legacy-graph-task-transition-adapter.ts)
+  maps graph-shaped Worker commands to that legacy authority before first graph
+  apply and refuses meanings that Beads cannot preserve.
+  [`src/utils/tasks.ts`](../src/utils/tasks.ts) exposes only semantic Task
+  operations; the delivery stopped-epoch migration is
   [`src/utils/task-delivery-migration.ts`](../src/utils/task-delivery-migration.ts).
 - [`src/coordination/event-journal.ts`](../src/coordination/event-journal.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
