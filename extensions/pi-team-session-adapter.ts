@@ -24,6 +24,7 @@ import type { TaskOrchestrationPort } from "../src/task-authority/orchestration"
 import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
+import { withSemanticTrace } from "../src/utils/trace";
 
 export interface PiTeamSessionAdapter {
   readonly modelToolLifecycle: ModelToolLifecycle;
@@ -337,13 +338,21 @@ async function startTaskChangeDelivery(ctx: any) {
       // All Worker loops race through one Team lease. The winner repairs every
       // free Worker's ready frontier, so a quiet Worker cannot be starved by a
       // different Worker winning each periodic scan.
-      ? { reconcileReady: () => taskReadyReconciliation.reconcileReady(teamName!) }
+      ? { reconcileReady: () => withSemanticTrace(
+        "worker_periodic_ready_reconciliation",
+        { teamName: teamName!, workerName: agentName },
+        () => taskReadyReconciliation.reconcileReady(teamName!),
+      ) }
       : {}),
   });
   await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
   if (isTeammate && taskReadyReconciliation) {
     try {
-      const warnings = await taskReadyReconciliation.reconcileReady(teamName, agentName);
+      const warnings = await withSemanticTrace(
+        "worker_session_ready_reconciliation",
+        { teamName, workerName: agentName },
+        () => taskReadyReconciliation.reconcileReady(teamName!, agentName),
+      );
       for (const warning of warnings) ctx.ui?.notify?.(`Pi Team Bright ready delivery: ${warning}`, "warning");
     } catch (error) {
       ctx.ui?.notify?.(`Pi Team Bright ready delivery is deferred: ${error instanceof Error ? error.message : String(error)}`, "warning");

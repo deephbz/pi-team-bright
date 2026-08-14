@@ -41,6 +41,8 @@ export interface TeamLifecyclePublication {
     workerName: string;
     membershipId: string;
     afterCursor: string;
+    /** Adapter-supplied default; an explicit operator override still wins. */
+    defaultTimeoutMs?: number;
     signal?: AbortSignal;
   }): Promise<WorkerStartupObservation>;
 }

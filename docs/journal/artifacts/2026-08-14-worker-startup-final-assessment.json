@@ -1,0 +1,151 @@
+{
+  "schema": "pi-team-bright-worker-startup-final-assessment/1",
+  "recorded_at": "2026-08-14",
+  "stage": "release-candidate-hardening",
+  "source_identity": "the commit containing this artifact",
+  "question": "Can ensure_worker make a usable Worker available in about 100 ms without weakening exact admission, recovery, or resource semantics?",
+  "answer": {
+    "stable_exact_bound_worker_reuse": "supported below 100 ms in the observed canary",
+    "fresh_worker": "not supported below 100 ms",
+    "fresh_pi_dominates_after_safe_serial_reductions": true,
+    "generic_warm_pool": "rejected"
+  },
+  "authority_endpoint": {
+    "name": "exact_session_bound",
+    "coordinates": [
+      "current Membership generation",
+      "durable Pi Session",
+      "runtime PID and start generation"
+    ],
+    "not_equivalent": [
+      "actuation accepted",
+      "pane or process present",
+      "raw session_bound event",
+      "RPC ready",
+      "interactive ready",
+      "model responsive"
+    ]
+  },
+  "accepted_changes": [
+    "Request Herdr accepted actuation with exact legacy parser fallback.",
+    "Validate configured Worker defaults from the invocation-local Pi ModelRegistry without persisting the catalog.",
+    "Remove leader Task reconciliation from ensure_worker; Session start, Task transitions, and periodic recovery own delivery.",
+    "Use one 6000 ms exact-binding failure detector after accepted actuation; keep 3000 ms for ordinary and legacy-ready paths; explicit override wins.",
+    "Preserve the mixed-version Worker Task transition bridge."
+  ],
+  "measurements": {
+    "stable_worker_reuse": {
+      "n": 5,
+      "ensure_worker_p50_ms": 31,
+      "ensure_worker_p95_ms": 33,
+      "launch_bridge_p50_ms": 13,
+      "launch_bridge_p95_ms": 16,
+      "evidence": "docs/journal/artifacts/2026-08-14-ensure-reconciliation-real-team-canary.json"
+    },
+    "fresh_pi_normal_discovery_rpc": {
+      "n": 10,
+      "p50_ms": 447.806,
+      "p95_ms": 460.567,
+      "boundary": "fresh process start through successful exact RPC get_state response; no Membership binding",
+      "evidence": "docs/journal/artifacts/2026-08-14-worker-bootstrap-discovery.json"
+    },
+    "pre_actuation_membership_preparation": {
+      "n": 7,
+      "p50_ms": 10.552,
+      "p95_ms": 22.221,
+      "four_way_contention_p95_ms": 44.713,
+      "evidence": "docs/journal/artifacts/2026-08-14-pre-actuation-ensure-latency-results.json"
+    },
+    "herdr": {
+      "accepted_protocol17_backport_p50_ms": 39.85,
+      "accepted_protocol17_backport_p95_ms": 64.8,
+      "legacy_interactive_ready_p50_ms": 3047.4,
+      "legacy_interactive_ready_p95_ms": 3059.3,
+      "installed_client_has_public_accepted_flag": false,
+      "evidence": "docs/journal/artifacts/2026-08-14-herdr-accepted-start.json"
+    },
+    "configured_default_model_validation": {
+      "samples": 5,
+      "removed_cli_p50_ms": 3270.9278,
+      "removed_cli_p95_ms": 4464.1951,
+      "registry_snapshot_p50_ms": 0.1255,
+      "registry_snapshot_p95_ms": 0.8831,
+      "evidence": "docs/journal/artifacts/2026-08-14-model-registry-independent-verification.json"
+    },
+    "accepted_binding_failure_detector": {
+      "default_ms": 6000,
+      "normal_delay_3207_ms_outcome": "bound at 4166.834 ms",
+      "normal_delay_6200_ms_outcome": "carrier_unavailable at 6016.792 ms; exact stop; no late bind",
+      "same_membership_retry_ms": 485.476,
+      "override_30000_delay_6210_ms_outcome": "bound at 7054.606 ms",
+      "evidence": "docs/journal/artifacts/2026-08-14-startup-adversary-binding-budget-repair.json"
+    },
+    "node_compile_cache": {
+      "cold_pairs": 15,
+      "cold_mean_enabled_minus_disabled_ms": 12.38,
+      "cold_confidence_interval_95_ms": [-15.792, 31.3],
+      "cold_positive_pairs": 13,
+      "warm_pairs": 15,
+      "warm_mean_enabled_minus_disabled_ms": -15.137,
+      "warm_confidence_interval_95_ms": [-26.568, -4.025],
+      "warm_negative_pairs": 12,
+      "approximate_cache_files": 1506,
+      "approximate_cache_bytes": 3850000,
+      "decision": "reject production cache",
+      "evidence": "docs/journal/artifacts/2026-08-14-pi-compile-cache-paired-results.json"
+    },
+    "team_creation": {
+      "observed_range_seconds": [6, 9],
+      "classification": "separate operation from Worker reuse"
+    }
+  },
+  "rejected_shortcuts": [
+    "Treat accepted actuation as Worker admission.",
+    "Reduce the binding timeout and call timeout readiness.",
+    "Disable normal Worker resource discovery.",
+    "Use the observed Bun bundle with its unproved binding and worse tail.",
+    "Add a generic Node compile cache.",
+    "Reuse a prepared but unbound carrier.",
+    "Reuse or sanitize a prior Pi Session for a new Worker profile.",
+    "Blindly retry external actuation after a lost reply."
+  ],
+  "theory": {
+    "amdahl": "After multi-second serial waits are removed, the approximately 450 ms fresh Pi path bounds cold speedup.",
+    "linearization": "Exact current Membership, Session, and runtime-generation binding commits Worker admission.",
+    "failure_detector": "Timeout is suspicion, not proof of process death; exact compensation and generation fencing preserve safety.",
+    "pool_tail_condition": "If misses cannot meet the SLO, P(hit) multiplied by P(within SLO given hit) must be at least the target percentile."
+  },
+  "recommended_current_action": [
+    "Keep stable Workers bound and reuse them.",
+    "Upstream Herdr accepted-start support.",
+    "Add public Pi startup phase tracing.",
+    "Keep normal resource discovery and exact admission fences."
+  ],
+  "future_strict_100ms_contract": {
+    "status": "shape and test before implementation",
+    "name": "single-use sealed launcher",
+    "states": [
+      "empty",
+      "warming(profile_digest)",
+      "sealed(slot)",
+      "leased(activationId,membershipId,expiry)",
+      "bound",
+      "consumed"
+    ],
+    "required_properties": [
+      "no productive Session, model, tool, input, Task, Alert, or delivery authority before binding",
+      "CAS or lease reservation",
+      "one-use activation identity",
+      "exact Membership and runtime-generation fences",
+      "destroy after every activation outcome",
+      "lost-actuation reconciliation",
+      "separate warm-hit, miss, stockout, burst, replenishment, delivery, and cleanup distributions"
+    ]
+  },
+  "limits": [
+    "First provider response and Task execution are outside this result.",
+    "Installed Herdr still uses the safe legacy-ready fallback.",
+    "Real prompt cancellation during a synchronous module block is unproven.",
+    "Small local reuse and recovery samples verify changes, not a population capacity SLO."
+  ]
+}

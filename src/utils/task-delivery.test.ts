@@ -562,4 +562,66 @@ describe("Task-native delivery", () => {
     );
     delivery.stop();
   });
+
+  it("repairs a ready Task missed before Worker delivery starts on its next owned scan", async () => {
+    const { teamName, sessionFile, task } = await fixture("ready-front-missed-delivery");
+    const sendMessage = vi.fn();
+    let scans = 0;
+    const reconcileReady = vi.fn(async () => {
+      scans += 1;
+      if (scans === 2) await enqueueTaskChange(teamName, task, "assigned", "team-lead");
+      return [];
+    });
+    const delivery = new TaskChangeDelivery({ sendMessage, appendEntry: vi.fn() }, {
+      teamName,
+      recipient: "worker",
+      sessionFile,
+      pollMs: 60_000,
+      membership: taskDeliveryMembership,
+      reconcile: async () => 0,
+      reconcileReady,
+    });
+
+    await delivery.start([]);
+    expect(sendMessage).not.toHaveBeenCalled();
+    await delivery.scan();
+
+    expect(reconcileReady).toHaveBeenCalledTimes(2);
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage.mock.calls[0]?.[0]).toMatchObject({
+      customType: TASK_CHANGE_CUSTOM_TYPE,
+      details: { changes: [{ ref: { taskId: task.id, version: task.version } }] },
+    });
+    delivery.stop();
+  });
+
+  it("keeps an existing recipient delivery live when ready-front recovery fails", async () => {
+    const { teamName, sessionFile, task } = await fixture("ready-front-failure-isolation");
+    const record = await enqueueTaskChange(teamName, task, "assigned", "team-lead");
+    const sendMessage = vi.fn();
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const reconcileReady = vi.fn(async () => { throw new Error("ready authority unavailable"); });
+    const delivery = new TaskChangeDelivery({ sendMessage, appendEntry: vi.fn() }, {
+      teamName,
+      recipient: "worker",
+      sessionFile,
+      pollMs: 60_000,
+      membership: taskDeliveryMembership,
+      reconcile: async () => 0,
+      reconcileReady,
+    });
+
+    await delivery.start([]);
+
+    expect(reconcileReady).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage.mock.calls[0]?.[0]).toMatchObject({
+      details: { deliveryIds: [record?.deliveryId] },
+    });
+    expect(diagnostic).toHaveBeenCalledWith(
+      expect.stringMatching(/ready-front reconciliation failed/),
+      expect.objectContaining({ message: "ready authority unavailable" }),
+    );
+    delivery.stop();
+  });
 });

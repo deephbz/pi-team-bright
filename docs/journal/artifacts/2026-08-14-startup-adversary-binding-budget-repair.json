@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "taskId": "ptb-worker-startup-opt-aeg",
+  "sourceRevision": "019eb844e2e4c288ade6954b27087815db965354",
+  "status": "completed accepted-binding-budget repair verification; bounded limits remain",
+  "focusedVerification": {
+    "typecheck": "passed",
+    "tests": "60 passed",
+    "files": [
+      "src/adapters/herdr-adapter.test.ts",
+      "src/utils/worker-startup-observation.test.ts",
+      "src/team-authority/worker-launch-bridge.boundary.test.ts",
+      "src/utils/launch-compensation.contract.test.ts"
+    ]
+  },
+  "contract": {
+    "acceptedDefaultObservationMs": 6000,
+    "ordinaryAndLegacyObservationMs": 3000,
+    "override": "PI_TEAMS_WORKER_STARTUP_WAIT_MS takes precedence",
+    "meaning": "The accepted value is a bounded exact-binding failure detector. It is not legacy interactive-ready equivalence."
+  },
+  "realCarrierMethod": {
+    "carrier": "real Herdr accepted-start client and real Pi Worker",
+    "delay": "isolated discovered test extension blocked module evaluation, then returned normally",
+    "testFence": "The extension lived only in isolated Pi configuration. Production source, launch argv, and tool discovery were unchanged.",
+    "discoveryProof": "The delay extension and an unrelated discovered probe each loaded once in each tested Worker. The production extension remained explicitly loaded."
+  },
+  "defaultAcceptedBudget": {
+    "normalInitialAcceptedToExactBindingMs": 493.283,
+    "normalExecutionDelay3200": {
+      "actualModuleBlockMs": 3207,
+      "acceptedToExactBindingMs": 4166.834,
+      "outcome": "bound",
+      "sameMembership": true,
+      "newRuntimeGeneration": true
+    },
+    "normalExecutionDelay6200": {
+      "moduleBlockReturned": false,
+      "acceptedToNoExactBindingMs": 6016.792,
+      "outcome": "carrier_unavailable",
+      "compensation": "started; exact carrier stop confirmed; no late session_bound",
+      "exactRetryAcceptedToExactBindingMs": 485.476,
+      "sameMembership": true,
+      "newRuntimeGeneration": true
+    }
+  },
+  "explicit30000MsOverride": {
+    "normalExecutionDelayMs": 6210,
+    "acceptedToExactBindingMs": 7054.606,
+    "outcome": "bound",
+    "interpretation": "The real override extends exact-binding observation beyond six seconds. It does not reproduce legacy interactive readiness."
+  },
+  "suspendResumeControl": {
+    "result": "excluded from latency interpretation",
+    "reason": "Two SIGSTOP/SIGCONT 3.2-second trials timed out near six seconds despite recorded resume. Earlier short suspend trials had the same behavior. The normal-execution extension replaced this as the faithful delay method."
+  },
+  "cancellationAndFencing": {
+    "realEscapeIntervention": "Escape was sent exactly when a normal-execution delayed Worker began module blocking. Pi reported operation aborted only after the six-second timeout and normal compensation. The synchronous block prevented this from proving prompt bridge cancellation.",
+    "realRecovery": "After that timeout the same Membership retried and bound with a new runtime generation.",
+    "deterministicEvidence": "The focused source lane proves AbortError propagation, unbound carrier compensation, exact binding winning cleanup races, and exact Membership/runtime-generation fencing.",
+    "limit": "A real cancellation before the timeout and a real concurrent Membership replacement were not proven."
+  },
+  "cleanup": {
+    "disposableTeams": "Each Team shutdown stopped one Worker and retained zero unfinished Tasks.",
+    "workerPanes": "absent after shutdown",
+    "runtimeRecords": "absent after shutdown",
+    "memberships": "inactive after shutdown",
+    "temporaryExtensionsAndReceipts": "removed after durable capture, with the isolated worktree, copied auth, helpers, Team state, and panes"
+  },
+  "finding": "The exact repair preserves accepted-mode exact-binding headroom for a faithful 3.2-second normal-execution bootstrap delay, safely compensates a delay beyond six seconds, and honors an explicit 30-second observation override. The prior SIGSTOP result was an invalid latency proxy.",
+  "limits": [
+    "This does not measure TUI readiness, first model response, or a natural-load population latency.",
+    "It does not make accepted actuation Worker admission or capacity.",
+    "No production source changed during verification."
+  ],
+  "architectureImpact": "none"
+}

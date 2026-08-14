@@ -3,7 +3,7 @@ import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-vers
 import type { CanonicalTaskCard, TaskCard } from "../task-authority/task-domain";
 import type { ModelToolTaskJournalEntry, ModelToolTaskUpdateInput } from "../task-authority/contracts";
 import type { ModelToolTeamApplicationPort, ModelToolTaskApplicationPort, ModelToolAlertApplicationPort, ModelToolCoordinationApplicationPort } from "./model-tool-journey-port";
-import type { AlertTarget, AlertSendPortResult, CreateTaskGraphPortResult, CreateTaskPortResult, CreateTeamPortResult, EnsureWorkerPortResult, ExactLeaderSessionId, ModelToolTaskGraphInput, ModelToolTeamCurrent, ModelToolWorkerCurrent, PendingObservation, ReadTasksPortResult, TaskLinkPortInput, TaskLinkPortResult, TaskUpdatePortOutcome, TeamShutdownPortResult, TeamSnapshotPortResult, TeamSyncPortResult, UpdateTasksPortResult, WorkerStopPortResult } from "./model-tool-contracts";
+import type { AlertTarget, AlertSendPortResult, CreateTaskGraphPortResult, CreateTaskPortResult, CreateTeamPortResult, EnsureWorkerExecutionContext, EnsureWorkerPortResult, ExactLeaderSessionId, ModelToolTaskGraphInput, ModelToolTeamCurrent, ModelToolWorkerCurrent, PendingObservation, ReadTasksPortResult, TaskLinkPortInput, TaskLinkPortResult, TaskUpdatePortOutcome, TeamShutdownPortResult, TeamSnapshotPortResult, TeamSyncPortResult, UpdateTasksPortResult, WorkerStopPortResult } from "./model-tool-contracts";
 import { TaskGraphValidationError, validateTaskGraph } from "../task-authority/dag";
 import type { InMemoryAlertState, InMemoryCoordinationState, InMemoryEvent, InMemorySupportRevisionClock, InMemoryTaskRecord, InMemoryTaskState, InMemoryTeamRecord, InMemoryTeamState } from "./in-memory-state";
 
@@ -49,7 +49,7 @@ export class InMemoryTeamApplicationPort implements ModelToolTeamApplicationPort
     this.publication.publish({ teamId: team.id, kind: "team_created" }, "team");
     return { kind: "created", team: this.snapshot(team).team };
   }
-  async ensureWorker(session: ExactLeaderSessionId, input: { name: string; scope: string }): Promise<EnsureWorkerPortResult> {
+  async ensureWorker(session: ExactLeaderSessionId, input: { name: string; scope: string }, _execution?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult> {
     const team = this.active(session); if (!team) return { kind: "no_active_team" };
     const existing = team.workers.get(input.name); if (existing) return existing.scope === input.scope ? { kind: "reused", worker: { ...existing } } : { kind: "scope_conflict", worker: { ...existing } };
     const worker: ModelToolWorkerCurrent = { name: input.name, scope: input.scope, carrier: "absent" }; team.workers.set(worker.name, worker); this.revision.commit();

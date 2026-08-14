@@ -1,0 +1,135 @@
+{
+  "schema": "pi-team-bright-model-registry-independent-verification/1",
+  "recordedAt": "2026-08-14",
+  "task": {
+    "id": "ptb-worker-startup-opt-pwi",
+    "version": "v_c8ffebbdd9083fb5",
+    "assignee": "startup-theory-reviewer",
+    "authorityMutation": "legacy Worker claim refused; lead must reconcile completion"
+  },
+  "scope": "Independent verification only. No production implementation change and no push.",
+  "testedSource": {
+    "isolatedSourceRevision": "1fdac31a99b7b9b3dfd5d9390c48eea8dcb8c723",
+    "integratedRevision": "bb1fcf8f5fd5e39a55239c554e2eb0830ccea3b2",
+    "checkout": "detached isolated worktree at the integrated revision",
+    "relationStatus": "stable-patch-equivalent",
+    "stablePatchId": "f3469d22bdb7d702f5a4614df6d0096572218cb0",
+    "relationFacts": [
+      "The integrated revision is a cherry-pick of the isolated source patch.",
+      "git show <revision> | git patch-id --stable produced the same stable patch ID for both revisions.",
+      "Different parents explain the non-ancestry and different full trees."
+    ],
+    "claimBoundary": "This record validates the shared source patch. It does not require tree or ancestry identity."
+  },
+  "deterministicVerification": [
+    {
+      "command": "cd <isolated-verification-worktree> && npm run typecheck",
+      "outcome": "passed"
+    },
+    {
+      "command": "cd <isolated-verification-worktree> && npx vitest run src/utils/worker-resource-projection.test.ts src/model-tool-contract/durable-model-tool-port.test.ts",
+      "outcome": "passed",
+      "testFiles": 2,
+      "tests": 49
+    },
+    {
+      "command": "cd <isolated-verification-worktree> && npx vitest run --config vitest.full.config.ts src/utils/launch-compensation.contract.test.ts",
+      "outcome": "passed",
+      "testFiles": 1,
+      "tests": 21
+    },
+    {
+      "command": "cd <isolated-verification-worktree> && npx vitest run src/utils/pwi-model-registry-edge.test.ts",
+      "outcome": "passed; temporary test file removed after run",
+      "testFiles": 1,
+      "tests": 3,
+      "cases": [
+        "A present empty snapshot rejects without a CLI call.",
+        "A throwing registry becomes unavailable and uses only the bounded CLI fallback.",
+        "A non-array registry becomes unavailable and uses only the bounded CLI fallback."
+      ]
+    }
+  ],
+  "contractEvidence": {
+    "contextCapture": "The exact ensure_worker registration reads ctx.modelRegistry once and passes only availableModelKeys into the executor execution context.",
+    "transience": "EnsureWorkerExecutionContext marks availableModelKeys as ephemeral, not tool input or durable Team state.",
+    "precedence": [
+      "Explicit Worker request model wins.",
+      "Team default model wins over configured Worker default.",
+      "Configured Worker default is validated only after those two choices do not apply."
+    ],
+    "preActuationRefusal": "Configured-default validation runs before Membership construction, prepared-event publication, or carrier spawn.",
+    "recovery": "An existing Membership uses its captured model without new-default resolution.",
+    "fallback": "Only an unavailable snapshot uses pi --list-models with encoding utf8 and a 10000 ms timeout. A present empty Set is known-empty and does not fall back."
+  },
+  "runtimeCanary": {
+    "mode": "Actual child Pi process through a test-only direct-canary terminal adapter",
+    "sourceRegistration": true,
+    "productTerminalCanary": false,
+    "limits": [
+      "This is not a Herdr or TUI terminal-start measurement.",
+      "This is one sample, not a p95 result."
+    ],
+    "checks": {
+      "configuredDefaultCapturedFromEnsureContext": true,
+      "registryReadOnceAtExactHandler": true,
+      "firstWorkerExactSessionBound": true,
+      "workerProcessClaimAndGoalEvidenceAccepted": true,
+      "allToolResultsExcludedCatalogKeys": true,
+      "semanticTracesExcludedCatalogKeys": true,
+      "teamEventsExcludedCatalogKeys": true,
+      "durableWorkerPromptExcludedCatalogKeys": true,
+      "recoveryWithPresentEmptySnapshotRetainedCapturedModel": true,
+      "removedConfiguredDefaultWithPresentEmptySnapshotRefusedBeforeMembership": true,
+      "removedConfiguredDefaultWithPresentEmptySnapshotRefusedBeforeCarrier": true,
+      "teamShutdownStoppedCarrierAndInactivatedMemberships": true
+    },
+    "timingsMs": {
+      "ensureToolElapsed": 1876.357,
+      "membershipPrepared": 37.928,
+      "carrierStartAccepted": 46.596,
+      "carrierTargetPersisted": 62.677,
+      "exactSessionBoundObserved": 557.902,
+      "childAdmissionDuration": 44
+    },
+    "catalogHandling": "The receipt retains no model key or catalog. Runtime leak checks used nonselected sentinels and retained only boolean results."
+  },
+  "observedHerdrProbe": {
+    "status": "pre-binding failure",
+    "failureClass": "agent_name_not_found",
+    "compensation": "Prepared Membership was deactivated.",
+    "conclusion": "The synthetic raw-pane runner did not own the terminal needed for agent start. This is not evidence of a production defect and does not replace an independent live Herdr canary."
+  },
+  "timingComparison": {
+    "recordedSubprocessBenchmark": {
+      "samples": 5,
+      "scope": "resolver only; not full Worker startup",
+      "cliValidationP50Ms": 3270.9278,
+      "cliValidationP95Ms": 4464.1951,
+      "snapshotCaptureAndValidationP50Ms": 0.1255,
+      "snapshotCaptureAndValidationP95Ms": 0.8831
+    },
+    "interpretation": "The snapshot removes the measured resolver subprocess on its own boundary. The direct canary's prepared-to-bound path includes child Pi startup, extension/session admission, and a test carrier, so it cannot be subtracted from or compared as an end-to-end Herdr result."
+  },
+  "cleanup": {
+    "runtimeTeamShutdown": true,
+    "externalTemporaryResources": "removed",
+    "verification": [
+      "The detached checkout, temporary install home, runtime tree, and install log were removed.",
+      "The raw test pane reports pane_not_found after close.",
+      "Herdr agent list has no matching temporary canary agent or pane."
+    ]
+  },
+  "conclusion": {
+    "status": "conditional pass for stable-patch-equivalent 1fdac31 and bb1fcf8 source semantics",
+    "supported": [
+      "The context snapshot is used for configured-default validation without durable catalog propagation.",
+      "Precedence, refusal, recovery, and bounded compatibility behavior have deterministic anchors.",
+      "The direct runtime canary supports exact-source first-Worker behavior and leak checks."
+    ],
+    "openEvidence": [
+      "A successful independent live Herdr/TUI canary remains unproven by this Worker."
+    ],
+    "architectureImpact": "none"
+  }
+}

@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "taskId": "ptb-worker-startup-opt-br6",
+  "sourceRevision": "bcf57707b9bc546e5e754681db7d29e6bd094fea",
+  "status": "completed corrected-source prototype verification; production warm pooling rejected",
+  "focusedVerification": {
+    "typecheck": "passed",
+    "workerEnsureLifecycleTests": "8 passed"
+  },
+  "nonblockingAcceptedSupervision": {
+    "kind": "current-source-coupled synthetic accepted-actuation benchmark",
+    "sourceBundleSha256": "5d5f05b0544e5d061aae094a2682e6bb5cc81cfed78632975c4234deeb927437",
+    "samples": {
+      "acceptedBound": 3,
+      "stableBoundReuse": 3,
+      "adversarial": 9
+    },
+    "allSamplesComplete": true,
+    "allSafetyAssertionsPass": true,
+    "acceptedBoundMs": {
+      "responseP50": 4.022,
+      "responseP95": 4.034,
+      "laterExactBindingP50": 2.947,
+      "laterExactBindingP95": 3.337
+    },
+    "stableBoundReuseMs": {
+      "firstResponseP50": 4.052,
+      "firstResponseP95": 4.069,
+      "exactBoundReuseP50": 0.796,
+      "exactBoundReuseP95": 0.915
+    },
+    "adversarialCasesPassed": [
+      "early exit compensation",
+      "live unbound timeout",
+      "pane loss",
+      "late binding at expiry fence",
+      "concurrent ensure",
+      "synthetic leader restart",
+      "stop",
+      "shutdown",
+      "Task delivery refusal before binding"
+    ],
+    "livePreparedCarrier": {
+      "integratedPlannerAction": "refuse",
+      "reason": "unbound_live",
+      "finding": "The corrected source does not reuse a live unbound prepared carrier."
+    },
+    "limits": [
+      "Accepted actuation and carrier lifecycle are synthetic.",
+      "The installed Herdr 0.7.5 help has no accepted-start wait option.",
+      "The bound simulation proves source ordering and fences, not real Herdr or Pi Worker startup."
+    ]
+  },
+  "warmActivation": {
+    "kind": "isolated Session and carrier experiments; no Worker Membership or Task delivery",
+    "samplesPerMechanism": 3,
+    "modelPromptsSent": false,
+    "networkMode": "offline",
+    "rpcSessionReplacementMs": {
+      "coldP50": 356.687,
+      "coldP95": 416.006,
+      "warmP50": 6.127,
+      "warmP95": 7.321,
+      "sessionIdAndFileChanged": true,
+      "moduleInstanceRetained": true
+    },
+    "sdkSessionReplacementMs": {
+      "coldP50": 10.247,
+      "coldP95": 14.17,
+      "warmP50": 6.048,
+      "warmP95": 6.385,
+      "sessionIdAndFileChanged": true,
+      "moduleInstanceRetained": true
+    },
+    "preloadedSingleUseMainMs": {
+      "importP50": 316.46,
+      "importP95": 318.305,
+      "activationP50": 63.515,
+      "activationP95": 67.189,
+      "failedActivationDestroyedProcess": true,
+      "secondLeaseNotAttempted": true
+    },
+    "preloadedInlinePiTeamBrightMs": {
+      "importP50": 449.381,
+      "importP95": 573.896,
+      "activationP50": 58.644,
+      "activationP95": 61.308,
+      "preBindLeaderSurface": true,
+      "commonTaskToolsOnLeaderSurface": 3,
+      "exactWorkerAdmission": "not attempted because no prepared Membership exists"
+    },
+    "reservedUnboundHerdrCarrierMs": {
+      "stockInteractiveStartP50": 3043.744,
+      "stockInteractiveStartP95": 3046.656,
+      "localActivationCommandP50": 17.585,
+      "localActivationCommandP95": 18.837,
+      "finding": "The quick command is local work in an unbound carrier, not Worker admission, readiness, or Task authority."
+    },
+    "otherProbes": {
+      "rpcPreBindLeaderSurface": true,
+      "rpcPreBindCommonTaskTools": 3,
+      "rpcCancellationAcknowledged": true,
+      "rpcCancellationCompletedMs": 103.271,
+      "rpcCrashRecoveryCreatedNewProcessAndSession": true,
+      "allSessionProjectionsMatchedConfiguredCwdAndModel": true,
+      "runnerCreatedPanesClosedAndAbsent": true,
+      "runnerTemporaryRootRemoved": true
+    }
+  },
+  "assessment": {
+    "productionWarmPool": "rejected",
+    "strongestDisqualifiers": [
+      "Session replacement retains process-scoped extension module state.",
+      "The unbound exact Pi Team Bright extension exposes a leader surface and common Task tools before Worker admission.",
+      "No experiment created a real Worker Membership, exact session_bound admission, or post-bind Worker-only authority.",
+      "The installed Herdr contract cannot prove real accepted-start actuation."
+    ],
+    "unsupportedOrUnknown": [
+      "real pool capacity or exhaustion",
+      "stale lease or Membership replacement",
+      "real Worker restart and replacement",
+      "real Worker cancellation during admission",
+      "TTY readiness and first model response",
+      "real Task delivery after warm activation",
+      "real accepted-start Herdr and Pi cleanup"
+    ],
+    "interpretation": "Fast Session replacement and a fast local carrier command are narrow measurements. Neither gives a reusable Worker carrier authority."
+  },
+  "cleanup": {
+    "correctedRunnerCreatedPanes": "closed and absent",
+    "ownedSourcePane": "closed after result capture",
+    "temporaryRawArtifactsAndCorrectedWorktree": "removed after durable capture, including the dependency link and temporary run data"
+  },
+  "architectureImpact": "none"
+}

@@ -24,7 +24,7 @@ function member(overrides: Partial<Member> = {}): Member {
 describe("Worker ensure lifecycle planner", () => {
   it.each([
     [undefined, "missing", { action: "create" }],
-    [member(), "live", { action: "reuse", carrier: { kind: "prepared" } }],
+    [member(), "live", { action: "refuse", reason: "unbound_live", carrier: { kind: "prepared" } }],
     [member(), "missing", { action: "recover", recoveryMode: "first_binding_retry", carrier: { kind: "prepared" } }],
     [member({ sessionFile: "/sessions/worker.jsonl", pendingLaunchId: undefined }), "live", { action: "reuse", carrier: { kind: "bound" } }],
     [member({ sessionFile: "/sessions/worker.jsonl", pendingLaunchId: undefined }), "missing", { action: "recover", recoveryMode: "exact_session_resume", carrier: { kind: "bound" } }],

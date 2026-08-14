@@ -1,0 +1,90 @@
+{
+  "schema": "pi-team-bright-herdr-accepted-start/1",
+  "recorded_at": "2026-08-14T06:48:00Z",
+  "source_revision": "a8e3cb48a6ce3405f86df08114e0a4b73dccdf98",
+  "environment": {
+    "pi_version": "0.83.0",
+    "node_version": "25.6.0",
+    "herdr_version": "0.7.5",
+    "platform": "macos-arm64",
+    "network_mode": "offline",
+    "server": "isolated owned Herdr server"
+  },
+  "contract_probes": {
+    "accepted_start_help": "--wait accepted returns after server acceptance and reports launch_pending until interactive readiness.",
+    "legacy_capability_rejection": {
+      "command_result": "exit status 2",
+      "stderr": "unknown option: --wait",
+      "actuation": "CLI parser rejection before server request"
+    },
+    "legacy_ready_response": {
+      "result_type": "agent_started",
+      "required_agent_fields": ["name", "pane_id", "terminal_id", "interactive_ready"],
+      "interactive_ready": true,
+      "launch_pending_present": false
+    }
+  },
+  "baseline": {
+    "source": "docs/journal/artifacts/2026-08-14-worker-startup-performance.json",
+    "mode": "cold owned pane, Herdr interactive-ready wait",
+    "samples_per_case": 5,
+    "minimal": { "min_ms": 3022.4, "p50_ms": 3039.4, "p95_ms": 3057.1, "max_ms": 3057.1 },
+    "exact_extension": { "min_ms": 3038.2, "p50_ms": 3047.4, "p95_ms": 3059.3, "max_ms": 3059.3 }
+  },
+  "protocol18_isolated_trial": {
+    "mode": "cold owned pane, --wait accepted --timeout 10000",
+    "samples_per_case": 5,
+    "minimal": {
+      "pane_split": { "min_ms": 21.06, "p50_ms": 22.92, "p95_ms": 55.67, "max_ms": 55.67, "samples_ms": [21.62, 22.92, 21.06, 33.01, 55.67] },
+      "agent_start_accepted": { "min_ms": 13.4, "p50_ms": 100.68, "p95_ms": 149.69, "max_ms": 149.69, "samples_ms": [13.4, 100.68, 86.89, 149.69, 109.52] },
+      "cleanup": { "min_ms": 35.68, "p50_ms": 40.7, "p95_ms": 95.53, "max_ms": 95.53, "samples_ms": [35.68, 40.7, 39.66, 95.53, 59.12] }
+    },
+    "exact_extension": {
+      "pane_split": { "min_ms": 23.89, "p50_ms": 25.95, "p95_ms": 38.1, "max_ms": 38.1, "samples_ms": [38.1, 25.95, 29.66, 23.89, 23.95] },
+      "agent_start_accepted": { "min_ms": 20.84, "p50_ms": 83.62, "p95_ms": 119.42, "max_ms": 119.42, "samples_ms": [108.65, 20.84, 119.42, 82.34, 83.62] },
+      "cleanup": { "min_ms": 41.91, "p50_ms": 44.36, "p95_ms": 47.36, "max_ms": 47.36, "samples_ms": [44.36, 42.99, 47.36, 41.91, 44.51] }
+    }
+  },
+  "protocol17_backport_final_canary": {
+    "mode": "cold owned pane, exact v0.7.5 protocol-17 server/client, --wait accepted",
+    "samples_per_case": 5,
+    "exact_extension": {
+      "pane_split": { "p50_ms": 50.86, "p95_ms": 71.5 },
+      "agent_start_accepted": { "p50_ms": 39.85, "p95_ms": 64.8 },
+      "cleanup": "all exact recognized agents and panes removed"
+    }
+  },
+  "comparison": {
+    "baseline_to_protocol17_backport_exact_extension": {
+      "p50_reduction_ms": 3007.55,
+      "p50_reduction_percent": 98.69,
+      "p95_reduction_ms": 2994.5,
+      "p95_reduction_percent": 97.88
+    },
+    "protocol18_isolated_trial": {
+      "exact_extension_p50_reduction_ms": 2963.78,
+      "exact_extension_p50_reduction_percent": 97.26,
+      "exact_extension_p95_reduction_ms": 2939.88,
+      "exact_extension_p95_reduction_percent": 96.1
+    }
+  },
+  "cleanup_verification": {
+    "accepted_runs": 10,
+    "method": "closed each owned pane, then checked agent list for the exact accepted name and pane",
+    "result": "no recognized agent or closed pane remained after any run"
+  },
+  "limits": [
+    "The baseline and protocol-18 isolated lanes used separate owned Herdr servers, so compare the three-second removal, not pane-split noise.",
+    "The current tip accepted-start client uses protocol 18 and cannot connect to the live protocol-17 server; the final canary used the exact v0.7.5 protocol-17 backport.",
+    "Accepted start proves server actuation, not Pi Session binding or task delivery.",
+    "The production bounded exact session-bound observation remains the authority gate."
+  ],
+  "verification": {
+    "benchmark_source": "scripts/worker-startup-accepted-benchmark.mjs",
+    "commands": [
+      "node --check scripts/worker-startup-accepted-benchmark.mjs",
+      "node scripts/worker-startup-accepted-benchmark.mjs --samples 5 with an isolated owned Herdr server",
+      "Herdr agent list after each close"
+    ]
+  }
+}

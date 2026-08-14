@@ -1,0 +1,49 @@
+{
+  "schema": "pi-team-bright-worker-model-registry-benchmark/1",
+  "recorded_at": "2026-08-14T08:41:15.528Z",
+  "environment": {
+    "node_version": "v25.6.0",
+    "platform": "darwin",
+    "pi_version": "0.83.0"
+  },
+  "workload": {
+    "samples_per_case": 5,
+    "candidate_source": "first qualified key from an initial pi --list-models result; key omitted from output",
+    "cli_validation": "exact pi --list-models parse and equality check",
+    "snapshot_validation": "in-process qualified-key Set construction and equality check"
+  },
+  "measurements": {
+    "cli_default_model_validation": {
+      "samples": 5,
+      "min_ms": 2308.2831,
+      "p50_ms": 3270.9278,
+      "p95_ms": 4464.1951,
+      "max_ms": 4464.1951,
+      "samples_ms": [
+        4007.2768,
+        2308.2831,
+        2726.6447,
+        3270.9278,
+        4464.1951
+      ]
+    },
+    "snapshot_capture_and_validation": {
+      "samples": 5,
+      "min_ms": 0.0927,
+      "p50_ms": 0.1255,
+      "p95_ms": 0.8831,
+      "max_ms": 0.8831,
+      "samples_ms": [
+        0.8831,
+        0.1255,
+        0.0927,
+        0.2309,
+        0.1032
+      ]
+    }
+  },
+  "limits": [
+    "The snapshot case measures the local set conversion used after the exact tool context already owns ModelRegistry; it does not refresh model availability.",
+    "The CLI case measures the removed subprocess path and includes local Pi startup and catalog formatting."
+  ]
+}

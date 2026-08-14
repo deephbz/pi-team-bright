@@ -260,9 +260,10 @@ describe("Task mutation publication import fence", () => {
     expect(extension).toContain("const taskAuthorityTeam = new DurableTaskAuthorityTeam()");
     expect(extension).toContain("new DurableTaskOrchestration(taskPublication, taskPublication)");
     expect(extension).toContain("createPublishingBeadsTaskAdapterFactory(taskPublication, taskAuthorityTeam, taskAuthorityRead, taskOrchestration)");
-    expect(extension).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
+    expect(extension).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning)");
+    expect(extension).not.toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
     expect(extension).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration)");
     expect(extension).toMatch(/taskAdapterFactory\(binding\.teamName, binding\.member\.name\)\.read/);
-    expect(sessionAdapter).toMatch(/reconcileReady: \(\) => taskReadyReconciliation\.reconcileReady\(teamName!\)[\s\S]*await taskChangeDelivery\.start/);
+    expect(sessionAdapter).toMatch(/worker_periodic_ready_reconciliation[\s\S]*taskReadyReconciliation\.reconcileReady\(teamName!\)[\s\S]*await taskChangeDelivery\.start[\s\S]*worker_session_ready_reconciliation[\s\S]*taskReadyReconciliation\.reconcileReady\(teamName!, agentName\)/);
   });
 });

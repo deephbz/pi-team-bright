@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "taskId": "ptb-worker-startup-opt-aeg",
+  "status": "completed_baseline_matrix",
+  "sourceRevision": "bcf57707b9bc546e5e754681db7d29e6bd094fea",
+  "carrierMode": "real Herdr compatible accepted-start client and real Pi Worker",
+  "observationDeadlineMs": 3000,
+  "membership": "one stable Membership across all recoveries",
+  "normalInitialStart": {
+    "acceptedToExactSessionBoundMs": 636.052,
+    "fullEnsureMs": 1065.603
+  },
+  "controlledAcceptedRecoveries": [
+    {
+      "requestedPauseMs": 2800,
+      "actualPauseMs": 2861,
+      "acceptedToNoExactBindingMs": 3021.305,
+      "fullEnsureMs": 3387.938,
+      "outcome": "carrier_unavailable",
+      "compensation": "started; exact carrier stop confirmed; target absent",
+      "lateSessionBound": false,
+      "exactRetry": {
+        "acceptedToExactSessionBoundMs": 489.362,
+        "fullEnsureMs": 801.137,
+        "sameMembership": true,
+        "newRuntimeGeneration": true
+      }
+    },
+    {
+      "requestedPauseMs": 3000,
+      "actualPauseMs": "carrier stopped by compensation before resume",
+      "acceptedToNoExactBindingMs": 3032.066,
+      "fullEnsureMs": 3849.07,
+      "outcome": "carrier_unavailable",
+      "compensation": "started; exact carrier stop confirmed; target absent",
+      "lateSessionBound": false,
+      "exactRetry": {
+        "acceptedToExactSessionBoundMs": 804.442,
+        "fullEnsureMs": 1127.131,
+        "sameMembership": true,
+        "newRuntimeGeneration": true
+      }
+    },
+    {
+      "requestedPauseMs": 3200,
+      "actualPauseMs": "carrier stopped by compensation before resume",
+      "acceptedToNoExactBindingMs": 3019.553,
+      "fullEnsureMs": 3186.268,
+      "outcome": "carrier_unavailable",
+      "compensation": "started; exact carrier stop confirmed; target absent",
+      "lateSessionBound": false,
+      "exactRetry": {
+        "acceptedToExactSessionBoundMs": 508.206,
+        "fullEnsureMs": 818.93,
+        "sameMembership": true,
+        "newRuntimeGeneration": true
+      }
+    }
+  ],
+  "finalCleanup": {
+    "teamShutdown": "one Worker stopped; zero unfinished Tasks retained",
+    "workerPane": "absent",
+    "runtimeRecord": "absent",
+    "membership": "inactive"
+  },
+  "finding": "The prior 3000 ms accepted-mode exact-binding observation boundary safely rejects controlled pauses near or beyond the boundary. It is a failure-detector policy, not interactive readiness or a model-response measure. Every tested timeout compensated and an exact same-Membership retry bound with a new generation.",
+  "nextAction": "Run the integrated 019eb844 repair canary: 3.2-second bind under its 6-second default, over-6-second compensation, retry, 30-second override, cancellation and generation fences, and final cleanup.",
+  "limits": [
+    "The intervention pauses a real child process before exact binding; it does not measure TUI readiness or first model response.",
+    "This baseline does not prove a natural-load latency distribution.",
+    "No production source changed during this verification."
+  ]
+}

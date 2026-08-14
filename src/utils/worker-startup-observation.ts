@@ -2,7 +2,27 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { TeamEventWaitResult } from "../coordination/event-journal";
 import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "../coordination/contracts";
 
+/** Default bounded observation after an ordinary or legacy-ready carrier start. */
 export const WORKER_STARTUP_OBSERVATION_MS = 3_000;
+
+/**
+ * Accepted start deliberately uses a bounded six-second failure detector,
+ * rather than legacy Herdr's up-to-30-second interactive-ready wait. The
+ * measured exact-binding p95 is 892 ms, so this retains substantial tail
+ * headroom while returning a missing-binding failure promptly.
+ */
+export const HERDR_ACCEPTED_START_OBSERVATION_MS = 6_000;
+
+export function resolveWorkerStartupObservationTimeoutMs(
+  configuredWait?: string,
+  defaultTimeoutMs = WORKER_STARTUP_OBSERVATION_MS,
+): number {
+  const timeoutMs = configuredWait === undefined ? defaultTimeoutMs : Number(configuredWait);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
+    throw new Error("Worker startup observation timeout must be a nonnegative finite number.");
+  }
+  return timeoutMs;
+}
 
 export type WorkerStartupObservation =
   | { observed: true; carrier: "session_bound"; runtime: "observed"; cursor: string }

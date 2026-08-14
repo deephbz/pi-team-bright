@@ -1,0 +1,80 @@
+{
+  "schema": "pi-team-bright/ensure-worker-tool-benchmark/1",
+  "recorded_at": "2026-08-14T09:36:06.253Z",
+  "environment": {
+    "node_version": "v25.6.0",
+    "platform": "darwin"
+  },
+  "workload": {
+    "samples_per_case": 5,
+    "setup": "One isolated Team, one synthetic direct terminal carrier, and one exact Session binding before each reuse.",
+    "measured_boundary": "Pi ensure_worker tool execute through model-tool registration, exact leader binding, logical Worker topology, Worker launch bridge, and result projection."
+  },
+  "measurements": {
+    "created_tool_execute_wall_clock": {
+      "samples": 5,
+      "min_ms": 65.0048,
+      "p50_ms": 71.0435,
+      "p95_ms": 73.0265,
+      "max_ms": 73.0265,
+      "samples_ms": [
+        71.0435,
+        72.406,
+        68.8743,
+        65.0048,
+        73.0265
+      ]
+    },
+    "created_tool_semantic_trace": {
+      "samples": 5,
+      "min_ms": 65,
+      "p50_ms": 70,
+      "p95_ms": 73,
+      "max_ms": 73,
+      "samples_ms": [
+        70,
+        72,
+        68,
+        65,
+        73
+      ]
+    },
+    "reused_tool_execute_wall_clock": {
+      "samples": 5,
+      "min_ms": 0.9169,
+      "p50_ms": 0.9264,
+      "p95_ms": 1.3069,
+      "max_ms": 1.3069,
+      "samples_ms": [
+        1.3069,
+        1.2455,
+        0.926,
+        0.9264,
+        0.9169
+      ]
+    },
+    "reused_tool_semantic_trace": {
+      "samples": 5,
+      "min_ms": 0,
+      "p50_ms": 0,
+      "p95_ms": 1,
+      "max_ms": 1,
+      "samples_ms": [
+        1,
+        1,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "trace_evidence": {
+    "ensure_worker_records": 10,
+    "task_authority_operations": []
+  },
+  "limits": [
+    "The terminal carrier is synthetic and the Worker Session binding is simulated; this does not measure Pi child-process startup or model/message time.",
+    "team_create is excluded. The trace records only model-tool execution time, unlike Pi Session assistant-to-toolResult timestamps.",
+    "The benchmark proves the post-change tool path emits no Task-authority semantic operation. The production pre-change task_list cost must be measured from a matching live Task authority."
+  ]
+}

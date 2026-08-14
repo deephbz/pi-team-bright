@@ -1,0 +1,33 @@
+{
+  "schema": "pi-team-bright-pi-compile-cache-probe-plan/1",
+  "stage": "exploration",
+  "question": "For a fresh Pi RPC process that loads only the exact Pi Team Bright extension, how does Node compile-cache enablement change process-to-exact-session admission time?",
+  "production_changes": false,
+  "boundary": {
+    "process_start": "Parent monotonic clock immediately before spawn.",
+    "process_ready": "The child returns a valid RPC get_state response.",
+    "session_admitted": "That response names the generated Session ID and a Session-file coordinate under the child-owned session directory. Pi removes an empty Session file at shutdown, so this proves live exact Session projection without a provider turn.",
+    "excluded": ["provider request", "agent turn", "Team creation", "Worker launch", "Herdr actuation", "Task authority"]
+  },
+  "conditions": [
+    {"phase": "cold", "enabled": false, "definition": "NODE_COMPILE_CACHE is absent."},
+    {"phase": "cold", "enabled": true, "definition": "A unique empty cache directory is supplied for the measured launch."},
+    {"phase": "warm", "enabled": false, "definition": "NODE_COMPILE_CACHE is absent."},
+    {"phase": "warm", "enabled": true, "definition": "A unique cache is primed by one unmeasured exact launch, then used by the measured launch."}
+  ],
+  "design": {
+    "pairs_per_phase": 15,
+    "pairing": "Each pair has one enabled and one disabled launch. The order is seed-shuffled. Cold and warm pairs are also seed-shuffled.",
+    "comparison": "For each phase, bootstrap 10,000 resamples of paired enabled-minus-disabled exact-session admission differences. The artifact records percentile 95% confidence intervals and a sign count.",
+    "source_fence": ["Git revision", "exact extension SHA-256", "package-local Pi CLI SHA-256", "Node version", "Node compile-cache API availability"],
+    "cache_evidence": "File count and byte count are recorded before priming, after priming, after measurement, and after cleanup. Cache paths and Session IDs remain in the private raw bundle.",
+    "stale_cache_probe": "A cache fence with a deliberately mismatched source identity must be deleted before a cache is primed.",
+    "failure_probe": "A nonexistent CLI must return a classified failed startup and leave no child process or temporary directory."
+  },
+  "limits": [
+    "Compile cache effects are not causally identified while an active Team changes machine load.",
+    "The lead must run the final command after Team shutdown and must explicitly pass --confirm-team-shutdown.",
+    "The harness measures startup through session admission, not model readiness or Worker admission.",
+    "A positive difference does not justify production cache policy."
+  ]
+}

@@ -21,7 +21,7 @@ import {
   AlertSendParametersSchema,
   AlertSendResultSchema,
 } from "./catalog";
-import type { AlertTarget, ExactLeaderSessionId, ReadTaskContractGap } from "./model-tool-contracts";
+import type { AlertTarget, EnsureWorkerExecutionContext, ExactLeaderSessionId, ReadTaskContractGap } from "./model-tool-contracts";
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
@@ -54,7 +54,7 @@ function isReadTaskContractGap(value: CanonicalTaskCard | ReadTaskContractGap): 
 
 export interface ModelToolJourneyExecutors {
   teamCreate(leaderSessionId: ExactLeaderSessionId, parameters: TeamCreateParameters): Promise<TeamCreateResult>;
-  ensureWorker(leaderSessionId: ExactLeaderSessionId, parameters: EnsureWorkerParameters): Promise<EnsureWorkerResult>;
+  ensureWorker(leaderSessionId: ExactLeaderSessionId, parameters: EnsureWorkerParameters, context?: EnsureWorkerExecutionContext): Promise<EnsureWorkerResult>;
   taskCreate(leaderSessionId: ExactLeaderSessionId, parameters: TaskCreateParameters): Promise<TaskCreateResult>;
   taskRead(leaderSessionId: ExactLeaderSessionId, parameters: TaskReadParameters): Promise<TaskReadResult>;
   taskUpdate(leaderSessionId: ExactLeaderSessionId, parameters: TaskUpdateParameters): Promise<TaskUpdateResult>;
@@ -83,8 +83,8 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
       };
     },
 
-    async ensureWorker(leaderSessionId, parameters) {
-      const outcome = await port.team.ensureWorker(leaderSessionId, parameters);
+    async ensureWorker(leaderSessionId, parameters, context) {
+      const outcome = await port.team.ensureWorker(leaderSessionId, parameters, context);
       if (outcome.kind === "no_active_team") {
         return {
           kind: "unavailable",

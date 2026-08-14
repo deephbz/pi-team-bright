@@ -3,7 +3,7 @@ import * as teamEvents from "../coordination/event-journal";
 import * as teams from "../utils/teams";
 import {
   observeWorkerStartup,
-  WORKER_STARTUP_OBSERVATION_MS,
+  resolveWorkerStartupObservationTimeoutMs,
 } from "../utils/worker-startup-observation";
 import type {
   TeamLifecyclePublication,
@@ -47,10 +47,13 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
     workerName: string;
     membershipId: string;
     afterCursor: string;
+    defaultTimeoutMs?: number;
     signal?: AbortSignal;
   }): Promise<WorkerStartupObservation> {
-    const configuredWait = process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS;
-    const timeoutMs = configuredWait === undefined ? WORKER_STARTUP_OBSERVATION_MS : Number(configuredWait);
+    const timeoutMs = resolveWorkerStartupObservationTimeoutMs(
+      process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS,
+      input.defaultTimeoutMs,
+    );
     return observeWorkerStartup({
       ...input,
       timeoutMs,

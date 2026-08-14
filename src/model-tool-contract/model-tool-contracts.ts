@@ -42,6 +42,11 @@ export type EnsureWorkerPortResult =
   | { kind: "unavailable"; reason: "carrier_unavailable" | "team_authority_unavailable"; message: string }
   | { kind: "no_active_team" };
 
+/** Ephemeral execution data. It is neither tool input nor durable Team state. */
+export interface EnsureWorkerExecutionContext {
+  availableModelKeys?: ReadonlySet<string>;
+}
+
 export type TeamSnapshotPortResult = CoordinationSnapshotResult;
 
 export interface ModelToolTaskGraphInput {
@@ -163,7 +168,7 @@ export interface ModelToolLeaderLaunchContext {
 /** Flat compatibility contract. Compatibility wrappers depend inward on this contract. */
 export interface ModelToolTeamPort {
   createTeam(leaderSessionId: ExactLeaderSessionId, input: { name: string; purpose: string; pane_layout?: TeamPaneLayout }): Promise<CreateTeamPortResult>;
-  ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string }): Promise<EnsureWorkerPortResult>;
+  ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string }, context?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult>;
   readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult>;
   createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
   createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;

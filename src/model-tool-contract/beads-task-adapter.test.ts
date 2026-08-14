@@ -690,6 +690,32 @@ describe("durable Task adapter", () => {
     expect(update).toHaveBeenCalledTimes(1);
   });
 
+  it("reconciles ready legacy Task delivery after a committed update", async () => {
+    const update = vi.fn(async () => ({
+      task: task({ version: "beads_authority_version_next", status: "in_progress" }),
+      before: task(),
+      appliedOperations: ["set:status"],
+      deliveryDegraded: false,
+      deliveryWarnings: ["authority delivery warning"],
+    }));
+    const readyReconciliation = { reconcileReady: vi.fn(async () => ["ready frontier warning"]) };
+    const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({ update }), readyReconciliation);
+
+    await expect(adapter.update({
+      taskId: "candidate-task-1",
+      operationId: "legacy-ready-reconciliation",
+      expectedVersion: taskVersionRef("beads_authority_version"),
+      currentContext: "Worker started.",
+      status: "in_progress",
+    })).resolves.toMatchObject({
+      kind: "updated",
+      operationId: "legacy-ready-reconciliation",
+      deliveryWarnings: ["authority delivery warning", "ready frontier warning"],
+    });
+    expect(update).toHaveBeenCalledOnce();
+    expect(readyReconciliation.reconcileReady).toHaveBeenCalledWith("candidate-team");
+  });
+
   it("preserves replay metadata across a Worker context refresh", async () => {
     let storedTask = task({ version: "beads_v1" });
     let storedMetadata: TaskMetadata = metadata("Before update.");

@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-12
+Updated: 2026-08-14
 
 Current published release: `0.17.0-rc.14` remains on npm `next` from annotated
 tag `v0.17.0-rc.14`. The durable publication evidence is in
@@ -367,8 +367,26 @@ Next steps:
    performance epoch.
 8. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-9. Define observation and cleanup for a reserved recovery carrier that never
-   publishes runtime evidence. Keep it pending; do not infer readiness or work.
+9. Do not add a reserved recovery carrier to production. The [warm activation
+   experiment](../journal/2026-08-14-warm-activation-prototype-result.md)
+   proved observation and cleanup for an unbound carrier, but not Worker
+   admission. Never infer readiness or work from that carrier. Any future
+   proposal must prove exact admission, fresh Worker resources, Worker-only
+   post-bind tools, and failure destruction.
+10. The [pre-actuation ensure decomposition](../journal/2026-08-14-pre-actuation-ensure-latency-result.md)
+    measured the clean source-coupled path at 10.552 ms p50 and 22.221 ms p95;
+    four-way same-Team contention reached 44.713 ms p95. The active-profile
+    model catalog helper measured 771.512 ms p50 and 863.020 ms p95, but it
+    does not prove the reported 5.012-second canary used that branch. Add a
+    real outer trace before adding a cache or changing Worker behavior.
+11. Do not replace synchronous Worker observation with an accepted-launch
+    return. The [nonblocking accepted-launch prototype](../journal/2026-08-14-nonblocking-accepted-launch-supervision-result.md)
+    exercised durable operation fencing and cleanup only with a synthetic
+    accepted response. Installed Herdr 0.7.5 has no accepted-start option. The
+    current planner also treats a live prepared carrier as reusable, while the
+    prototype must refuse it. A production proposal needs an operation
+    authority, exact positive Herdr evidence, real-carrier recovery proof, and
+    a new scope decision.
 
 
 ## Test lanes

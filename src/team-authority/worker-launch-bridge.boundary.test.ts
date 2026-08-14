@@ -25,7 +25,7 @@ function publication(): TeamLifecyclePublication {
 }
 
 describe("Team Worker carrier publication boundary", () => {
-  it("delegates bounded startup observation through the injected publication port", async () => {
+  it("delegates a launch-specific bounded startup observation through the injected publication port", async () => {
     const lifecyclePublication = publication();
     const dependencies = {
       buildWorkerArgv: () => [],
@@ -36,7 +36,7 @@ describe("Team Worker carrier publication boundary", () => {
     } satisfies WorkerLaunchBridgeDependencies;
     const bridge = createWorkerLaunchBridge(dependencies);
 
-    await expect(bridge.observeLaunchedWorker("team", "worker", "membership", "0")).resolves.toMatchObject({
+    await expect(bridge.observeLaunchedWorker("team", "worker", "membership", "0", undefined, 6_000)).resolves.toMatchObject({
       observed: false,
       reason: "timeout",
     });
@@ -45,6 +45,7 @@ describe("Team Worker carrier publication boundary", () => {
       workerName: "worker",
       membershipId: "membership",
       afterCursor: "0",
+      defaultTimeoutMs: 6_000,
     });
   });
 

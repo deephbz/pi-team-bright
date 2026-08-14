@@ -1,0 +1,86 @@
+{
+  "schema": "pi-team-bright-warm-activation-plan/1",
+  "status": "complete",
+  "stage": "exploration",
+  "scope": "Disposable prototypes only. No production authority, schema, or terminal adapter changes.",
+  "nodes": [
+    {
+      "id": "question",
+      "kind": "question",
+      "text": "Can warm activation reduce carrier latency without weakening Worker identity, resource, or Task boundaries?"
+    },
+    {
+      "id": "rpc-cold",
+      "kind": "experiment",
+      "text": "Start isolated local Pi RPC and record first Session projection."
+    },
+    {
+      "id": "rpc-warm",
+      "kind": "experiment",
+      "text": "Replace the RPC Session with new_session and record reset limits."
+    },
+    {
+      "id": "sdk-cold",
+      "kind": "experiment",
+      "text": "Create an isolated in-process AgentSessionRuntime."
+    },
+    {
+      "id": "sdk-warm",
+      "kind": "experiment",
+      "text": "Replace the SDK Session and observe closure and module state."
+    },
+    {
+      "id": "pane-cold",
+      "kind": "experiment",
+      "text": "Split a disposable Herdr pane and start an unbound probe Pi carrier."
+    },
+    {
+      "id": "pane-warm",
+      "kind": "experiment",
+      "text": "Run a local probe command and graceful shutdown in the reserved unbound carrier."
+    },
+    {
+      "id": "preloaded-main",
+      "kind": "experiment",
+      "text": "Import Pi main in a fresh single-use Node process before activation, then apply env, cwd, and profile once."
+    },
+    {
+      "id": "preloaded-inline-ptb",
+      "kind": "experiment",
+      "text": "Bundle and import the exact Pi Team Bright factory before single-use activation, then inspect its unbound tool surface."
+    },
+    {
+      "id": "invariants",
+      "kind": "assessment",
+      "text": "Check extension/resource/cwd/model, Session and process identity, tool isolation, reset leakage, cancellation, shutdown, and retention."
+    },
+    {
+      "id": "decision",
+      "kind": "decision",
+      "text": "Rank mechanisms and select no production change unless every required invariant holds."
+    }
+  ],
+  "edges": [
+    { "from": "question", "to": "rpc-cold", "relation": "tests" },
+    { "from": "rpc-cold", "to": "rpc-warm", "relation": "enables" },
+    { "from": "question", "to": "sdk-cold", "relation": "tests" },
+    { "from": "sdk-cold", "to": "sdk-warm", "relation": "enables" },
+    { "from": "question", "to": "pane-cold", "relation": "tests" },
+    { "from": "pane-cold", "to": "pane-warm", "relation": "enables" },
+    { "from": "question", "to": "preloaded-main", "relation": "tests" },
+    { "from": "question", "to": "preloaded-inline-ptb", "relation": "tests" },
+    { "from": "rpc-warm", "to": "invariants", "relation": "supplies" },
+    { "from": "sdk-warm", "to": "invariants", "relation": "supplies" },
+    { "from": "pane-warm", "to": "invariants", "relation": "supplies" },
+    { "from": "preloaded-main", "to": "invariants", "relation": "supplies" },
+    { "from": "preloaded-inline-ptb", "to": "invariants", "relation": "supplies" },
+    { "from": "invariants", "to": "decision", "relation": "constrains" }
+  ],
+  "predictions": [
+    "RPC Session replacement is faster than process startup but leaves launch-selected role, cwd, and resources fixed.",
+    "SDK Session replacement is faster than process startup but can retain process-scoped extension state.",
+    "Reserved pane activation is fast but cannot become a Worker without a new process and exact startup admission.",
+    "A single-use preloaded main can remove import from activation time, but cannot safely reset or reuse a failed lease.",
+    "An inline preloaded Pi Team Bright factory still has the leader surface until exact Worker admission occurs."
+  ]
+}
