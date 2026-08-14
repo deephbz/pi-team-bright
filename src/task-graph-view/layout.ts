@@ -48,6 +48,12 @@ export interface TaskGraphNodeBox {
   centerY: number;
 }
 
+export interface TaskGraphRoutedEdge {
+  edge: TaskGraphViewEdge;
+  islandIndex: number;
+  points: Point[];
+}
+
 export interface TaskGraphCanvas {
   width: number;
   height: number;
@@ -55,6 +61,16 @@ export interface TaskGraphCanvas {
   visible: VisibleTaskGraph;
   islands: TaskGraphIsland[];
   nodes: TaskGraphNodeBox[];
+  edges: TaskGraphRoutedEdge[];
+}
+
+export interface TaskGraphQualityReport {
+  nonAdjacentSteps: number;
+  repeatedCellsWithinEdge: number;
+  nodeHits: number;
+  detachedArrows: number;
+  wrongArrowDirections: number;
+  outOfIslandCells: number;
 }
 
 export interface TaskGraphLayoutOptions {
@@ -101,12 +117,6 @@ const ISLAND_HEADER_HEIGHT = 2;
 const ISLAND_GAP_X = 4;
 const ISLAND_GAP_Y = 2;
 const FAILURE_LANE_STEP = 2;
-const EDGE_TONES = new Set<TaskGraphCellTone>([
-  "success_edge",
-  "failure_edge",
-  "legacy_edge",
-  "intersection",
-]);
 const NORTH = 1;
 const EAST = 2;
 const SOUTH = 4;
@@ -130,12 +140,6 @@ function setCell(rows: TaskGraphCell[][], x: number, y: number, char: string, to
 
 function edgeTone(kind: TaskGraphEdgeKind): TaskGraphCellTone {
   return kind === "goal_achieved" ? "success_edge" : kind === "goal_failed" ? "failure_edge" : "legacy_edge";
-}
-
-function edgeLabel(edge: TaskGraphViewEdge): string {
-  if (edge.kind === "goal_achieved") return "✓";
-  if (edge.kind === "goal_failed") return `×${edge.traversals}/${edge.max_traversals}`;
-  return "·";
 }
 
 function arrow(from: Point, to: Point): string {
@@ -181,6 +185,34 @@ function appendStraight(result: Point[], target: Point): void {
     };
     result.push(current);
   }
+}
+
+function nodeBounds(center: Point, width: number): { left: number; right: number; top: number; bottom: number } {
+  const left = Math.round(center.x - width / 2);
+  const top = Math.round(center.y - NODE_HEIGHT / 2);
+  return { left, right: left + width - 1, top, bottom: top + NODE_HEIGHT - 1 };
+}
+
+/** Keep Dagre's channel hints, but force edges onto stable ports outside node borders. */
+function forwardRoute(
+  rawPoints: readonly Point[],
+  source: Point,
+  target: Point,
+  direction: TaskGraphDirection,
+  nodeWidth: number,
+): Point[] {
+  const sourceBounds = nodeBounds(source, nodeWidth);
+  const targetBounds = nodeBounds(target, nodeWidth);
+  const start = direction === "TB"
+    ? { x: source.x, y: sourceBounds.bottom + 1 }
+    : { x: sourceBounds.right + 1, y: source.y };
+  const end = direction === "TB"
+    ? { x: target.x, y: targetBounds.top - 1 }
+    : { x: targetBounds.left - 1, y: target.y };
+  const inner = rawPoints.slice(1, -1).filter((point) => direction === "TB"
+    ? point.y > start.y && point.y < end.y
+    : point.x > start.x && point.x < end.x);
+  return [start, ...inner, end];
 }
 
 /** Convert Dagre splines into stable orthogonal terminal cells. */
@@ -237,40 +269,6 @@ function drawArrow(rows: TaskGraphCell[][], points: readonly Point[], edge: Task
   if (points.length < 2) return;
   const end = points.at(-1)!;
   setCell(rows, end.x, end.y, arrow(points.at(-2)!, end), edgeTone(edge.kind));
-}
-
-function drawEdgeLabel(
-  rows: TaskGraphCell[][],
-  layout: IslandEdgeLayout,
-  offsetX: number,
-  offsetY: number,
-): void {
-  const label = [...edgeLabel(layout.edge)];
-  const points = layout.rasterPoints ?? layout.points;
-  if (!points.length) return;
-  const anchorIndexes = [
-    Math.floor(points.length / 2),
-    Math.floor(points.length / 3),
-    Math.floor(points.length * 2 / 3),
-    ...points.map((_point, index) => index),
-  ];
-  const candidates = [...new Set(anchorIndexes)].flatMap((index) => {
-    const anchor = points[index];
-    if (!anchor) return [];
-    const centerX = Math.round(anchor.x) + (layout.rasterPoints ? 0 : offsetX);
-    const centerY = Math.round(anchor.y) + (layout.rasterPoints ? 0 : offsetY);
-    return [-1, 0, 1, -2, 2].flatMap((dy) => [
-      { x: centerX + 1, y: centerY + dy },
-      { x: centerX - label.length - 1, y: centerY + dy },
-    ]);
-  });
-  const location = candidates.find(({ x, y }) => label.every((_char, index) => {
-    const cell = rows[y]?.[x + index];
-    return cell && (cell.char === " " || EDGE_TONES.has(cell.tone));
-  }));
-  if (!location) return;
-  const tone = edgeTone(layout.edge.kind);
-  for (const [index, char] of label.entries()) setCell(rows, location.x + index, location.y, char, tone);
 }
 
 function plainTruncate(text: string, width: number): string {
@@ -445,49 +443,67 @@ function layoutIsland(
 
   const edges: IslandEdgeLayout[] = forwardEdges.map((edge, index) => {
     const graphEdge = graph.edge({ v: edge.from_task_id, w: edge.to_task_id, name: `${edge.kind}-${index}` }) as { points?: Point[] } | undefined;
+    const rawPoints = (graphEdge?.points ?? []).map((point) => ({
+      x: point.x + contentOffsetX,
+      y: point.y + contentOffsetY,
+    }));
     return {
       edge,
-      points: (graphEdge?.points ?? []).map((point) => ({
-        x: point.x + contentOffsetX,
-        y: point.y + contentOffsetY,
-      })),
+      points: forwardRoute(
+        rawPoints,
+        positions.get(edge.from_task_id)!,
+        positions.get(edge.to_task_id)!,
+        direction,
+        nodeWidth,
+      ),
     };
   });
   const failureEdges = component.edges.filter((edge) => edge.kind === "goal_failed")
     .sort((left, right) => left.from_task_id.localeCompare(right.from_task_id) || left.to_task_id.localeCompare(right.to_task_id));
-  const laneStart = graphWidth + contentOffsetX + CONTENT_MARGIN;
+  const failureLaneSize = failureEdges.length ? CONTENT_MARGIN + failureEdges.length * FAILURE_LANE_STEP : 0;
   for (const [index, edge] of failureEdges.entries()) {
     const source = positions.get(edge.from_task_id)!;
     const target = positions.get(edge.to_task_id)!;
-    const laneX = laneStart + index * FAILURE_LANE_STEP;
-    const sourceX = source.x + nodeWidth / 2;
-    const targetX = target.x + nodeWidth / 2;
-    const verticalOffset = edge.from_task_id === edge.to_task_id ? Math.max(2, Math.floor(NODE_HEIGHT / 2)) : 0;
-    edges.push({
-      edge,
-      points: edge.from_task_id === edge.to_task_id
-        ? [
-          { x: sourceX, y: source.y - verticalOffset },
-          { x: laneX, y: source.y - verticalOffset },
-          { x: laneX, y: source.y + verticalOffset },
-          { x: targetX, y: target.y + verticalOffset },
-        ]
-        : [
-          { x: sourceX, y: source.y },
-          { x: laneX, y: source.y },
-          { x: laneX, y: target.y },
-          { x: targetX, y: target.y },
+    const sameNode = edge.from_task_id === edge.to_task_id;
+    if (direction === "TB") {
+      const sourceBounds = nodeBounds(source, nodeWidth);
+      const targetBounds = nodeBounds(target, nodeWidth);
+      const laneX = graphWidth + contentOffsetX + CONTENT_MARGIN + index * FAILURE_LANE_STEP;
+      const startY = source.y + (sameNode ? 1 : 0);
+      const endY = target.y - (sameNode ? 1 : 0);
+      edges.push({
+        edge,
+        points: [
+          { x: sourceBounds.right + 1, y: startY },
+          { x: laneX, y: startY },
+          { x: laneX, y: endY },
+          { x: targetBounds.right + 1, y: endY },
         ],
-    });
+      });
+    } else {
+      const sourceBounds = nodeBounds(source, nodeWidth);
+      const targetBounds = nodeBounds(target, nodeWidth);
+      const laneY = graphHeight + contentOffsetY + CONTENT_MARGIN + index * FAILURE_LANE_STEP;
+      const startX = source.x - (sameNode ? 1 : 0);
+      const endX = target.x + (sameNode ? 1 : 0);
+      edges.push({
+        edge,
+        points: [
+          { x: startX, y: sourceBounds.bottom + 1 },
+          { x: startX, y: laneY },
+          { x: endX, y: laneY },
+          { x: endX, y: targetBounds.bottom + 1 },
+        ],
+      });
+    }
   }
-  const failureLaneWidth = failureEdges.length ? CONTENT_MARGIN + failureEdges.length * FAILURE_LANE_STEP : 0;
   return {
     id: component.nodes[0].id,
     nodeIds: component.nodes.map((node) => node.id),
     nodes,
     edges,
-    width: graphWidth + CONTENT_MARGIN * 2 + failureLaneWidth + 1,
-    height: graphHeight + CONTENT_MARGIN * 2 + ISLAND_HEADER_HEIGHT + 1,
+    width: graphWidth + CONTENT_MARGIN * 2 + (direction === "TB" ? failureLaneSize : 0) + 1,
+    height: graphHeight + CONTENT_MARGIN * 2 + ISLAND_HEADER_HEIGHT + (direction === "LR" ? failureLaneSize : 0) + 1,
   };
 }
 
@@ -521,7 +537,7 @@ export function layoutTaskGraph(
   const direction = options.direction ?? "TB";
   const nodeWidth = Math.max(MIN_NODE_WIDTH, Math.min(60, Math.round(options.nodeWidth ?? DEFAULT_NODE_WIDTH)));
   if (visible.nodes.length === 0) {
-    return { width: 1, height: 1, rows: [[{ ...EMPTY_CELL }]], visible, islands: [], nodes: [] };
+    return { width: 1, height: 1, rows: [[{ ...EMPTY_CELL }]], visible, islands: [], nodes: [], edges: [] };
   }
 
   const layouts = weakComponents(visible).map((component) => layoutIsland(component, direction, nodeWidth));
@@ -572,9 +588,6 @@ export function layoutTaskGraph(
   for (const island of packed) {
     for (const edge of island.edges) drawArrow(rows, edge.rasterPoints ?? [], edge.edge);
   }
-  for (const island of packed) {
-    for (const edge of island.edges) drawEdgeLabel(rows, edge, island.x, island.y);
-  }
   return {
     width,
     height,
@@ -589,7 +602,66 @@ export function layoutTaskGraph(
       height: island.height,
     })),
     nodes: nodeBoxes,
+    edges: packed.flatMap((island, islandIndex) => island.edges.map((edge) => ({
+      edge: edge.edge,
+      islandIndex,
+      points: edge.rasterPoints ?? [],
+    }))),
   };
+}
+
+function pointInsideNode(point: Point, node: TaskGraphNodeBox): boolean {
+  return point.x >= node.x && point.x < node.x + node.width
+    && point.y >= node.y && point.y < node.y + node.height;
+}
+
+function directionFromPointToNode(point: Point, node: TaskGraphNodeBox): number {
+  if (point.y === node.y - 1 && point.x >= node.x && point.x < node.x + node.width) return SOUTH;
+  if (point.y === node.y + node.height && point.x >= node.x && point.x < node.x + node.width) return NORTH;
+  if (point.x === node.x - 1 && point.y >= node.y && point.y < node.y + node.height) return EAST;
+  if (point.x === node.x + node.width && point.y >= node.y && point.y < node.y + node.height) return WEST;
+  return 0;
+}
+
+/** Inspect routed terminal geometry without parsing a rendered screenshot. */
+export function inspectTaskGraphCanvas(canvas: TaskGraphCanvas): TaskGraphQualityReport {
+  const report: TaskGraphQualityReport = {
+    nonAdjacentSteps: 0,
+    repeatedCellsWithinEdge: 0,
+    nodeHits: 0,
+    detachedArrows: 0,
+    wrongArrowDirections: 0,
+    outOfIslandCells: 0,
+  };
+  const nodeById = new Map(canvas.nodes.map((node) => [node.node.id, node]));
+  for (const routed of canvas.edges) {
+    const seen = new Set<string>();
+    const island = canvas.islands[routed.islandIndex];
+    for (const [index, point] of routed.points.entries()) {
+      const key = routeKey(point);
+      if (seen.has(key)) report.repeatedCellsWithinEdge++;
+      seen.add(key);
+      if (index > 0) {
+        const previous = routed.points[index - 1];
+        if (Math.abs(point.x - previous.x) + Math.abs(point.y - previous.y) !== 1) report.nonAdjacentSteps++;
+      }
+      report.nodeHits += canvas.nodes.filter((node) => pointInsideNode(point, node)).length;
+      if (!island || point.x < island.x || point.x >= island.x + island.width || point.y < island.y || point.y >= island.y + island.height) {
+        report.outOfIslandCells++;
+      }
+    }
+    const arrowPoint = routed.points.at(-1);
+    const beforeArrow = routed.points.at(-2);
+    const target = nodeById.get(routed.edge.to_task_id);
+    if (!arrowPoint || !beforeArrow || !target) {
+      report.detachedArrows++;
+      continue;
+    }
+    const expectedDirection = directionFromPointToNode(arrowPoint, target);
+    if (!expectedDirection) report.detachedArrows++;
+    else if (directionBit(beforeArrow, arrowPoint) !== expectedDirection) report.wrongArrowDirections++;
+  }
+  return report;
 }
 
 /** Select the nearest node in one visual direction with stable tie-breaking. */

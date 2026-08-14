@@ -39,6 +39,7 @@ function createComponent(
   const graph = new TaskGraphPaneComponent({
     source: config.source,
     initialLimit: config.initial_limit,
+    initialDirection: config.initial_direction,
     terminalRows: () => Math.max(6, options.rows() - 1),
     requestRender: options.requestRender,
     now: () => Date.parse(config.review_now),

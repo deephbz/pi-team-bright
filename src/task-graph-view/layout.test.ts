@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GraphTaskController, type GraphTaskDefinitionInput } from "../task-authority/graph-control";
-import { findDirectionalTaskGraphNode, layoutTaskGraph, renderTaskGraphViewport } from "./layout";
+import { findDirectionalTaskGraphNode, inspectTaskGraphCanvas, layoutTaskGraph, renderTaskGraphViewport } from "./layout";
 import { projectGraphControlTaskGraphViewSource } from "./source";
 
 function source() {
@@ -46,8 +46,8 @@ function islands(count: number, islandSize = 5) {
 
 describe("Task graph terminal layout", () => {
   it("is deterministic and renders graph-control state, typed routes, joins, Attempts, and model detail", () => {
-    const first = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32 });
-    const second = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32 });
+    const first = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32, now: 0 });
+    const second = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32, now: 0 });
     expect(first).toEqual(second);
     expect(first.islands).toHaveLength(1);
     const plain = renderTaskGraphViewport({ canvas: first, x: 0, y: 0, width: first.width, height: first.height, color: false }).join("\n");
@@ -64,6 +64,14 @@ describe("Task graph terminal layout", () => {
     expect(plain).toMatch(/[━┃┏┓┗┛]/u);
     expect(plain).toMatch(/[╌╎]/u);
     expect(plain).toContain("↺0/2");
+    expect(inspectTaskGraphCanvas(first)).toEqual({
+      nonAdjacentSteps: 0,
+      repeatedCellsWithinEdge: 0,
+      nodeHits: 0,
+      detachedArrows: 0,
+      wrongArrowDirections: 0,
+      outOfIslandCells: 0,
+    });
     expect(plain).not.toContain("╳");
     expect(plain).not.toContain("\u001b");
   });
@@ -135,10 +143,18 @@ describe("Task graph terminal layout", () => {
     );
     const plain = renderTaskGraphViewport({ canvas, x: 0, y: 0, width: canvas.width, height: canvas.height, color: false }).join("\n");
     expect(canvas.islands).toHaveLength(2);
-    expect(plain).toContain("×0/2");
-    expect(plain).toContain("×0/3");
+    expect(plain).not.toContain("×0/2");
+    expect(plain).not.toContain("×0/3");
     expect(plain).toMatch(/[╌╎]/u);
     expect(plain).toContain("↺0/2");
+    expect(inspectTaskGraphCanvas(canvas)).toEqual({
+      nonAdjacentSteps: 0,
+      repeatedCellsWithinEdge: 0,
+      nodeHits: 0,
+      detachedArrows: 0,
+      wrongArrowDirections: 0,
+      outOfIslandCells: 0,
+    });
     expect(canvas.visible.edges).toContainEqual({
       from_task_id: "repair",
       to_task_id: "root",
@@ -163,6 +179,25 @@ describe("Task graph terminal layout", () => {
       layoutTaskGraph(graph, "all", { packWidth: 100, nodeWidth: 24 }).islands.map(({ x, y }) => `${x},${y}`),
     );
     expect(new Set(first.islands.map(({ x, y }) => `${x},${y}`))).toHaveLength(12);
+  });
+
+  it("keeps LR success arrows outside intact borders and repair routes below nodes", () => {
+    const canvas = layoutTaskGraph(source(), "all", { direction: "LR", nodeWidth: 32, now: 0 });
+    const build = canvas.nodes.find((node) => node.node.id === "build")!;
+    expect(canvas.rows[build.centerY][build.x - 1].char).toBe("▶");
+    expect(canvas.rows[build.centerY][build.x].char).toBe("│");
+    const repair = canvas.edges.find((edge) => edge.edge.kind === "goal_failed")!;
+    expect(Math.max(...repair.points.map((point) => point.y))).toBeGreaterThan(
+      Math.max(...canvas.nodes.filter((node) => node.islandIndex === repair.islandIndex).map((node) => node.y + node.height - 1)),
+    );
+    expect(inspectTaskGraphCanvas(canvas)).toEqual({
+      nonAdjacentSteps: 0,
+      repeatedCellsWithinEdge: 0,
+      nodeHits: 0,
+      detachedArrows: 0,
+      wrongArrowDirections: 0,
+      outOfIslandCells: 0,
+    });
   });
 
   it("selects stable spatial neighbors without changing the graph", () => {

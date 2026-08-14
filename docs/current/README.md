@@ -197,13 +197,17 @@ restating executable definitions.
   slots, so Colorstack and other terminal themes control light and dark color.
   The configurable [DAG gallery](../../src/task-graph-view/gallery/default.json)
   covers all seven graph states across disconnected islands without changing
-  Task authority. Exact executable source `3ee1d4c5` passed the one allowed
-  1,004-test aggregate, all release-specific gates, a 197-file package dry run,
-  candidate-range privacy, and a proxy-backed real Team canary. The canary
-  mechanically advanced `A -> B`, recorded Worker-authored accepted Attempts,
-  reused the same stable Worker, and shut down cleanly. The final change is a
-  documentation-only receipt amendment before the side-branch push. The branch
-  is a review candidate only. It does not change npm, a tag, or `main`.
+  Task authority. TB routes now use an outside right repair lane, while LR
+  routes use an outside lower repair lane. Arrows remain outside intact node
+  borders, and the legend plus retry badge carry edge meaning without inline
+  labels overwriting topology. Exact executable source `3ee1d4c5` passed the one
+  allowed 1,004-test aggregate, all release-specific gates, a 197-file package
+  dry run, candidate-range privacy, and a proxy-backed real Team canary. The
+  canary mechanically advanced `A -> B`, recorded Worker-authored accepted
+  Attempts, reused the same stable Worker, and shut down cleanly. The rebased
+  routing follow-up passed exact graph-path comparison, typecheck, 35 focused
+  tests, both sentinels, gallery/export, and package verification. The branch is
+  a review candidate only. It does not change npm, a tag, or `main`.
 - Worker startup hardening removes two avoidable serial costs without weakening
   admission. Herdr may return after exact accepted actuation, but exact current
   Membership, Session, and runtime-generation binding remains the commit point.

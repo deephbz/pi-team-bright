@@ -21,6 +21,7 @@ describe("Task DAG islands gallery config", () => {
   it("loads one clear sentinel fixture with every graph-control Task state", () => {
     const config = loadTaskDagIslandsGalleryConfig();
     expect(config.source.team_name).toBe("task-dag-islands-gallery");
+    expect(config.initial_direction).toBe("TB");
     expect([...new Set(config.source.nodes.map((node) => node.state))].sort()).toEqual(GRAPH_CONTROL_STATES);
     expect(config.source.nodes.map((node) => node.id).sort()).toEqual([
       "dag1-task1", "dag1-task2", "dag1-task3", "dag1-task4",
@@ -40,13 +41,16 @@ describe("Task DAG islands gallery config", () => {
     raw.name = "alternate review";
     raw.source.team_name = "alternate-dag-gallery";
     raw.source.source_revision = "alternate-revision";
+    raw.initial_direction = "LR";
     const parsed = parseTaskDagIslandsGalleryConfig(raw);
     expect(parsed.name).toBe("alternate review");
+    expect(parsed.initial_direction).toBe("LR");
     expect(parsed.source.team_name).toBe("alternate-dag-gallery");
   });
 
   it("rejects unsupported gallery fields before rendering", () => {
     const raw = JSON.parse(fs.readFileSync(DEFAULT_TASK_DAG_ISLANDS_GALLERY_CONFIG, "utf8"));
     expect(() => parseTaskDagIslandsGalleryConfig({ ...raw, hidden_override: true })).toThrow(/unsupported field/);
+    expect(() => parseTaskDagIslandsGalleryConfig({ ...raw, initial_direction: "diagonal" })).toThrow(/initial_direction/);
   });
 });

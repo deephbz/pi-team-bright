@@ -3,6 +3,7 @@
   "name": "default sentinel DAG islands",
   "review_now": "2026-08-14T12:00:00.000Z",
   "initial_limit": "all",
+  "initial_direction": "TB",
   "start_mode": "select",
   "expand_selected": true,
   "source": {
