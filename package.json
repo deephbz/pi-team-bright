@@ -49,6 +49,7 @@
     "smoke:task-graph": "ts-node --transpile-only scripts/task-graph-renderer-smoke.ts",
     "render:task-graph:sentinel": "ts-node --transpile-only scripts/task-graph-renderer-sentinel.ts",
     "check:task-graph:sentinel": "ts-node --transpile-only scripts/task-graph-renderer-sentinel.ts --check",
+    "task-dag-islands:gallery": "ts-node --transpile-only src/cli/task-dag-islands-gallery.ts",
     "qa:tui-messages:export": "ts-node --transpile-only src/cli/tui-message-gallery.ts --format plain",
     "qa:tui-messages:export-expanded": "ts-node --transpile-only src/cli/tui-message-gallery.ts --format plain --expanded",
     "qa:tui-messages:gallery": "ts-node --transpile-only src/cli/tui-message-gallery.ts",

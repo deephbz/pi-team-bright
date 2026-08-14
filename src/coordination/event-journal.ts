@@ -52,7 +52,10 @@ export interface ProjectedTaskEventEvidence extends TaskEventEvidenceInput {
 export interface TaskActivityCoordinate {
   taskId: string;
   cursor: string;
-  at: string;
+  /** First committed Task event observed in this Team journal. */
+  firstActivityAt: string;
+  /** Latest committed Task event observed in this Team journal. */
+  lastActivityAt: string;
 }
 
 export interface TaskActivityProjection {
@@ -374,14 +377,20 @@ export function readTeamEventCursor(teamName: string): string {
  */
 export function readTaskActivity(teamName: string): TaskActivityProjection {
   const events = readJournal(teamName);
-  const latest = new Map<string, TaskActivityCoordinate>();
+  const activity = new Map<string, TaskActivityCoordinate>();
   for (const event of events) {
     if (event.type !== "task") continue;
-    latest.set(event.ref.taskId, { taskId: event.ref.taskId, cursor: event.cursor, at: event.at });
+    const prior = activity.get(event.ref.taskId);
+    activity.set(event.ref.taskId, {
+      taskId: event.ref.taskId,
+      cursor: event.cursor,
+      firstActivityAt: prior?.firstActivityAt ?? event.at,
+      lastActivityAt: event.at,
+    });
   }
   return {
     headCursor: events.at(-1)?.cursor ?? ZERO_CURSOR,
-    tasks: [...latest.values()].sort((a, b) => {
+    tasks: [...activity.values()].sort((a, b) => {
       const left = parseCursor(a.cursor);
       const right = parseCursor(b.cursor);
       return right > left ? 1 : right < left ? -1 : a.taskId.localeCompare(b.taskId);

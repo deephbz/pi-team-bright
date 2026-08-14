@@ -31,11 +31,14 @@ origin pane + exact tab ──Herdr --no-focus split──> graph pane
 same Pi command ──verified owned-pane close──> no graph pane
 ```
 
-`TaskGraphViewSource` is a derived, machine-readable transport. It contains only
-fields needed to draw the graph: Task identity, title, assignee, status,
-dependency state, typed edges, explicit graph roles, activity order, and source
-revision. It contains no goals, current context, filesystem coordinates,
-Membership coordinates, scheduling decisions, or mutation capability.
+`TaskGraphViewSource` is a derived, machine-readable transport. Version 3
+contains only fields needed to draw and inspect the graph: Task identity, title,
+assignee, status, dependency state, typed edges, activity order, goal, current
+context, Attempt/model summary, first and last committed Task-event times, and
+source revision. It contains no filesystem coordinates, Membership coordinates,
+scheduling decisions, evidence bodies, or mutation capability. Goal and context
+remain bounded by the canonical Task contract and enter the transport only so a
+selected node can show its Task details.
 
 The renderer derives these presentation states and no others:
 
@@ -67,8 +70,9 @@ Use the existing `@earendil-works/pi-tui` peer for the pane process. It already
 provides terminal input, resize handling, ANSI-safe width helpers, synchronized
 output, and differential rendering
 ([Pi TUI README](https://github.com/earendil-works/pi-mono/tree/main/packages/tui)).
-The graph component owns only graph-to-cell projection, panning, filtering, and
-status styling.
+The graph component owns graph-to-cell projection, orthogonal route
+rasterization, panning, spatial node selection, bounded detail expansion,
+filtering, legends, and status styling.
 
 Do not use Graphviz in the first canary. Graphviz is mature and its `plain`
 format is a good layout boundary
@@ -151,10 +155,13 @@ visible and reports omitted nodes and boundary edges. It does not relabel an
 omitted prerequisite as complete or ready.
 
 The pane can switch among bounded recent limits and an explicit all view.
-Layout and the rendered canvas are cached by source revision, filter, direction,
-and terminal size. Panning changes only the viewport. Input caps protect the
-pane from malformed or unexpectedly large source documents, and every
-truncation is visible in the header or footer.
+`Tab` switches between canvas-pan and node-selection modes. `hjkl` and arrows
+pan the canvas in pan mode, but choose a stable spatial neighbor in selection
+mode. Enter expands only the selected node. Layout and the rendered canvas are
+cached by source revision, filter, direction, terminal size, and a bounded time
+bucket. Panning and selection do not rerun Dagre. Input caps protect the pane
+from malformed or unexpectedly large source documents, and each omission is
+visible in the HUD.
 
 The initial activity projection reads the append-only event journal once. This
 is linear in journal history. Incremental tail indexing is a known limit, not a
@@ -170,7 +177,10 @@ a shell command or ANSI control sequence.
 The graph process reads one projection file. It has no Task mutation adapter,
 model tool, Team lifecycle operation, alert operation, or terminal focus
 operation. Rich colors and badges are presentation only. The source revision
-and activity cursor remain visible so freshness is inspectable.
+and last Task-event time remain visible so freshness is inspectable. Node
+elapsed time uses the first and last committed Task events: terminal states
+freeze at the last event, nonterminal states advance to render time, and absent
+history stays visibly unknown.
 
 ## Predicted checks
 
@@ -187,7 +197,7 @@ Deterministic tests must cover:
 - malformed, duplicate, dangling, and terminal-control input;
 - exact-tab open, `--no-focus`, toggle close, moved-pane refusal, partial-open
   compensation, and shutdown cleanup;
-- fixed representative output and focused layout benchmarks.
+- a fixed 120×42 full-component sentinel artifact plus focused layout benchmarks.
 
 A bounded live canary may create one pane from the current exact Herdr pane,
 verify its tab and output through Herdr queries, toggle it off, and prove the

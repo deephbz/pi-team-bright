@@ -188,8 +188,16 @@ restating executable definitions.
   ready-front dispatch, graph control, and the read-only Task graph pane. Its
   earlier eight-Worker stress closed 117/117 Tasks and stopped all Workers;
   focused post-rebase integration and aggregate evidence is recorded in the
-  maintained [DAG-native context](../projects/dag-native/context.md). The side
-  branch is a review candidate only. It does not change npm, a tag, or `main`.
+  maintained [DAG-native context](../projects/dag-native/context.md). The pane
+  now has a fixed full-component sentinel artifact, connectivity-based
+  orthogonal routes, three nonduplicative HUD lines, a legend, pan/select modes,
+  spatial `hjkl` node navigation, bounded selected-Task details, and Task-event
+  timing with explicit unknown-history behavior. The checked-in
+  [`task-dag-islands gallery config`](../../src/task-graph-view/gallery/default.json)
+  is the single sentinel input for the golden render and interactive
+  `npm run task-dag-islands:gallery` review surface. Run
+  `npm run task-dag-islands:gallery -- --config <path>` to review another
+  validated gallery config. The side branch is a review candidate only. It does not change npm, a tag, or `main`.
 - `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
   points to it. It removes package version as a Team compatibility gate and
   removes the obsolete fixture constant. The durable [rc.10 release

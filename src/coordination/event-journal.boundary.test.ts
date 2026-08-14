@@ -56,8 +56,18 @@ describe("Coordination event-journal ownership boundary", () => {
     expect(journal.readTaskActivity(teamName)).toMatchObject({
       headCursor: "3",
       tasks: [
-        { taskId: "task-a", cursor: "3" },
-        { taskId: "task-b", cursor: "2" },
+        {
+          taskId: "task-a",
+          cursor: "3",
+          firstActivityAt: expect.any(String),
+          lastActivityAt: expect.any(String),
+        },
+        {
+          taskId: "task-b",
+          cursor: "2",
+          firstActivityAt: expect.any(String),
+          lastActivityAt: expect.any(String),
+        },
       ],
     });
   });

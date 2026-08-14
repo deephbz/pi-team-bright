@@ -1,6 +1,6 @@
 # Pi Team Bright DAG-native prototype context
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 Stage: release-candidate hardening on the published RC14 semantic base
 Status: `release/v0.17.0-rc.15-dag-native` is a side-branch review candidate based on RC14 publication record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`, whose release code is tagged at `8bb517bd32d8687e97b96a531db15833fd64420a`; the DAG range is four semantic commits; focused DAG/liveness integration, real-Team acceptance, package, agent-surface, lane, diff, and privacy-range checks pass; the side branch does not update `main`, create a tag, publish npm, or create a GitHub Release
 
@@ -30,6 +30,35 @@ request-local `needs` keys, flattens Alert targets, and removes repeated schema
 prose. The complete nine-tool definition fell from 1,716 to 1,191 estimated
 tokens. Existing-Task graph expansion stays outside the frequent model verb
 because no canary or stress trace required it.
+
+## Task graph pane interaction hardening
+
+The read-only Task graph pane now has one pure, fixed full-component evaluator:
+[`sentinel.ts`](../../../src/task-graph-view/sentinel.ts) generates a representative
+fork/join and failure-route DAG, while
+[`sentinel-120x42.txt`](../../../src/task-graph-view/fixtures/sentinel-120x42.txt)
+is the human-reviewable render artifact. `npm run check:task-graph:sentinel`
+compares the current renderer with that artifact. This tests the three-line HUD,
+legend, node content, routes, detail panel, and shortcut HUD together; focused
+layout tests still own individual geometry properties.
+
+The renderer now rasterizes each orthogonal route as directional connectivity,
+then chooses correct corner, junction, and crossing glyphs. It draws node boxes,
+route arrows, and labels in explicit layers. Each node starts with
+`[task_state] task_id@worker`; width allocation preserves the state before it
+truncates identity. The second line holds title and structural badges. The third
+line shows last observed update age and observed elapsed duration.
+
+`Tab` switches between canvas pan and node selection. In selection mode,
+`hjkl` and arrows choose a stable spatial neighbor, and Enter expands only the
+selected Task. The detail panel shows goal, current context, Attempt/model,
+waiting Tasks, exact first/last committed activity times, and elapsed duration.
+The timing source is the append-only Team Task-event journal: `first_activity_at`
+is the first event still present in that journal, and `last_activity_at` is its
+latest event. For terminal Tasks, elapsed freezes at the last event; for
+nonterminal Tasks, it advances from the first event to the current render time.
+Missing journal history displays `unknown`; the view never invents creation or
+completion times.
 
 ## Contention-rebase diagnosis and repair
 

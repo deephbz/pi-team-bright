@@ -118,6 +118,8 @@ describe("Task graph view source", () => {
       cancelled: "cancelled",
     });
     expect(source.nodes.find((node) => node.id === "implement")).toMatchObject({
+      goal: "Implement.",
+      current_context: "Work has not started.",
       model_alias: "capable",
       attempts_started: 1,
       display_attempt: {
@@ -145,7 +147,7 @@ describe("Task graph view source", () => {
     expect(selectVisibleTaskGraph(source, "all").joinTaskIds.has("join")).toBe(true);
     const raw = JSON.stringify(source);
     expect(raw).not.toContain("Review criterion failed");
-    expect(raw).not.toContain('"goal":');
+    expect(raw).toContain('"goal":"Review."');
   });
 
   it("includes graph authority sequence in freshness even when activity does not change", () => {
@@ -153,10 +155,22 @@ describe("Task graph view source", () => {
     controller.applyGraph({ operationId: "graph", tasks: [
       { key: "task", title: "Task", goal: "Pass.", assignee: "worker" },
     ] });
-    const activity = { headCursor: "7", tasks: [{ taskId: "task", cursor: "7" }] };
+    const activity = {
+      headCursor: "7",
+      tasks: [{
+        taskId: "task",
+        cursor: "7",
+        firstActivityAt: "2026-08-14T08:00:00.000Z",
+        lastActivityAt: "2026-08-14T08:05:00.000Z",
+      }],
+    };
     const before = projectGraphControlTaskGraphViewSource({ teamName: "graph-team", trace: controller.trace(), activity });
     transition(controller, "task", "claim", "task-claim");
     const after = projectGraphControlTaskGraphViewSource({ teamName: "graph-team", trace: controller.trace(), activity });
+    expect(before.nodes[0]).toMatchObject({
+      first_activity_at: "2026-08-14T08:00:00.000Z",
+      last_activity_at: "2026-08-14T08:05:00.000Z",
+    });
     expect(BigInt(after.authority_sequence!)).toBeGreaterThan(BigInt(before.authority_sequence!));
     expect(after.source_revision).not.toBe(before.source_revision);
     expect(after.nodes[0].state).toBe("in_progress");

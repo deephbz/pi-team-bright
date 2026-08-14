@@ -28,6 +28,8 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
   });
   tui.addChild(component);
   tui.setFocus(component);
+  const elapsedTicker = setInterval(() => tui.requestRender(), 30_000);
+  elapsedTicker.unref?.();
 
   let debounce: ReturnType<typeof setTimeout> | undefined;
   const refresh = () => {
@@ -54,6 +56,7 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
     if (stopping) return;
     stopping = true;
     if (debounce) clearTimeout(debounce);
+    clearInterval(elapsedTicker);
     watcher.close();
     tui.stop();
     await terminal.drainInput(100, 20).catch(() => undefined);
