@@ -2,8 +2,8 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
-import { spawnSync } from "node:child_process";
-import { ProjectTrustStore } from "@earendil-works/pi-coding-agent";
+import * as childProcess from "node:child_process";
+import { ProjectTrustStore, type ModelRegistry } from "@earendil-works/pi-coding-agent";
 
 export type WorkerDefaultModelOverride = {
   scope: "global" | "project";
@@ -63,10 +63,36 @@ function activeAgentDir(): string {
   return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
 }
 
-/** Confirm an exact provider/model setting from Pi's current available-model list. */
-export function resolveQualifiedWorkerDefaultModel(modelName: string): string | null {
+export type QualifiedAvailableModelKeys = ReadonlySet<string>;
+
+/** Capture only exact qualified keys from the current tool's available-model snapshot. */
+export function captureQualifiedAvailableModelKeys(
+  registry: Pick<ModelRegistry, "getAvailable"> | undefined,
+): QualifiedAvailableModelKeys | undefined {
   try {
-    const result = spawnSync("pi", ["--list-models"], { encoding: "utf8", timeout: 10_000 });
+    if (!registry) return undefined;
+    const models = registry.getAvailable();
+    if (!Array.isArray(models)) return undefined;
+    const keys = new Set<string>();
+    for (const model of models) {
+      if (typeof model?.provider === "string" && model.provider && typeof model.id === "string" && model.id) {
+        keys.add(`${model.provider}/${model.id}`);
+      }
+    }
+    return keys;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Confirm an exact provider/model setting from a current snapshot or Pi's CLI fallback. */
+export function resolveQualifiedWorkerDefaultModel(
+  modelName: string,
+  availableModelKeys?: QualifiedAvailableModelKeys,
+): string | null {
+  if (availableModelKeys !== undefined) return availableModelKeys.has(modelName) ? modelName : null;
+  try {
+    const result = childProcess.spawnSync("pi", ["--list-models"], { encoding: "utf8", timeout: 10_000 });
     if (result.status !== 0 || !result.stdout) return null;
     return result.stdout.split("\n").some((line) => {
       const [provider, model] = line.trim().split(/\s+/, 3);

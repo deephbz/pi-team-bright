@@ -1,0 +1,3346 @@
+{
+  "schema": "pi-team-bright-worker-bootstrap-discovery/1",
+  "status": "complete",
+  "source": {
+    "integrated_startup_commit": "bcf57707b9bc546e5e754681db7d29e6bd094fea",
+    "harness_commit": "77bad7a61459e337e38b9c1d3f2b09fe24da1ce8",
+    "node": "v25.6.0",
+    "pi": "0.83.0"
+  },
+  "parameters": {
+    "samples_per_case": 10,
+    "order": "round-robin by ordinal",
+    "mode": "fresh child process Pi RPC; offline"
+  },
+  "cases": {
+    "current_exact_discovery": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 433.178,
+        "p50_ms": 447.806,
+        "p95_ms": 460.567,
+        "max_ms": 460.567,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 409.604,
+          "p50_ms": 420.726,
+          "p95_ms": 429.735,
+          "max_ms": 429.735,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 409.991,
+          "p50_ms": 420.855,
+          "p95_ms": 430.217,
+          "max_ms": 430.217,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 423.203,
+          "p50_ms": 435.49,
+          "p95_ms": 446.358,
+          "max_ms": 446.358,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 423.328,
+          "p50_ms": 437.794,
+          "p95_ms": 446.5,
+          "max_ms": 446.5,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "no_extensions": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 435.843,
+        "p50_ms": 442.46,
+        "p95_ms": 454.352,
+        "max_ms": 454.352,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 413.873,
+          "p50_ms": 419.771,
+          "p95_ms": 430.955,
+          "max_ms": 430.955,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 414.011,
+          "p50_ms": 419.942,
+          "p95_ms": 431.09,
+          "max_ms": 431.09,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 425.86,
+          "p50_ms": 430.807,
+          "p95_ms": 440.228,
+          "max_ms": 440.228,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 425.988,
+          "p50_ms": 432.195,
+          "p95_ms": 443.775,
+          "max_ms": 443.775,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "no_skills": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 434.363,
+        "p50_ms": 447.285,
+        "p95_ms": 462.656,
+        "max_ms": 462.656,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 412.465,
+          "p50_ms": 421.482,
+          "p95_ms": 434.044,
+          "max_ms": 434.044,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 412.604,
+          "p50_ms": 421.605,
+          "p95_ms": 434.821,
+          "max_ms": 434.821,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 424.272,
+          "p50_ms": 437.004,
+          "p95_ms": 448.981,
+          "max_ms": 448.981,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 424.425,
+          "p50_ms": 437.132,
+          "p95_ms": 452.192,
+          "max_ms": 452.192,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "no_prompt_templates": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 435.619,
+        "p50_ms": 442.41,
+        "p95_ms": 646.405,
+        "max_ms": 646.405,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 411.741,
+          "p50_ms": 416.164,
+          "p95_ms": 446.954,
+          "max_ms": 446.954,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 411.864,
+          "p50_ms": 416.46,
+          "p95_ms": 447.098,
+          "max_ms": 447.098,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 425.695,
+          "p50_ms": 432.588,
+          "p95_ms": 567.385,
+          "max_ms": 567.385,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 425.835,
+          "p50_ms": 432.72,
+          "p95_ms": 567.564,
+          "max_ms": 567.564,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "no_themes": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 436.934,
+        "p50_ms": 457.374,
+        "p95_ms": 484.988,
+        "max_ms": 484.988,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 411.853,
+          "p50_ms": 427.405,
+          "p95_ms": 458.167,
+          "max_ms": 458.167,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 411.982,
+          "p50_ms": 429.237,
+          "p95_ms": 458.29,
+          "max_ms": 458.29,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 426.063,
+          "p50_ms": 445.3,
+          "p95_ms": 471.108,
+          "max_ms": 471.108,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 426.209,
+          "p50_ms": 447.123,
+          "p95_ms": 474.731,
+          "max_ms": 474.731,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "no_context_files": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 437.433,
+        "p50_ms": 445.154,
+        "p95_ms": 484.038,
+        "max_ms": 484.038,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 408.863,
+          "p50_ms": 419.933,
+          "p95_ms": 456.902,
+          "max_ms": 456.902,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 408.979,
+          "p50_ms": 420.067,
+          "p95_ms": 457.313,
+          "max_ms": 457.313,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 424.363,
+          "p50_ms": 434.584,
+          "p95_ms": 471.211,
+          "max_ms": 471.211,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 427.508,
+          "p50_ms": 434.72,
+          "p95_ms": 474.151,
+          "max_ms": 474.151,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "all_discovery_disabled": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 431.253,
+        "p50_ms": 444.647,
+        "p95_ms": 467.419,
+        "max_ms": 467.419,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 414.777,
+          "p50_ms": 422.405,
+          "p95_ms": 451.247,
+          "max_ms": 451.247,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 414.906,
+          "p50_ms": 422.705,
+          "p95_ms": 451.6,
+          "max_ms": 451.6,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 421.301,
+          "p50_ms": 427.696,
+          "p95_ms": 456.71,
+          "max_ms": 456.71,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 421.426,
+          "p50_ms": 429.581,
+          "p95_ms": 456.861,
+          "max_ms": 456.861,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    },
+    "bundled_exact_extension": {
+      "rpc_ready": {
+        "requested_samples": 10,
+        "successes": 10,
+        "failures": 0,
+        "min_ms": 407.476,
+        "p50_ms": 420.081,
+        "p95_ms": 1367.364,
+        "max_ms": 1367.364,
+        "percentile_method": "nearest-rank successful samples only"
+      },
+      "process_uptime_phase_ends": {
+        "probe_module_evaluated": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 385.497,
+          "p50_ms": 393.56,
+          "p95_ms": 1340.765,
+          "max_ms": 1340.765,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "probe_factory": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 385.629,
+          "p50_ms": 394.684,
+          "p95_ms": 1340.941,
+          "max_ms": 1340.941,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "session_start": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 397.464,
+          "p50_ms": 410.014,
+          "p95_ms": 1357.029,
+          "max_ms": 1357.029,
+          "percentile_method": "nearest-rank successful samples only"
+        },
+        "resources_discover": {
+          "requested_samples": 10,
+          "successes": 10,
+          "failures": 0,
+          "min_ms": 397.605,
+          "p50_ms": 410.158,
+          "p95_ms": 1357.181,
+          "max_ms": 1357.181,
+          "percentile_method": "nearest-rank successful samples only"
+        }
+      }
+    }
+  },
+  "raw_samples": [
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 455.317,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 426.066,
+        "probe_factory": 426.206,
+        "session_start": 441.151,
+        "resources_discover": 444.28
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.227,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 448.3,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 421.658,
+        "probe_factory": 421.799,
+        "session_start": 431.721,
+        "resources_discover": 435.753
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.984,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 446.259,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 415.398,
+        "probe_factory": 419.681,
+        "session_start": 436.13,
+        "resources_discover": 436.261
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.424,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 646.405,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 427.215,
+        "probe_factory": 427.689,
+        "session_start": 567.385,
+        "resources_discover": 567.564
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.998,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 460.518,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 427.405,
+        "probe_factory": 427.548,
+        "session_start": 442.766,
+        "resources_discover": 447.265
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.565,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 439.804,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 414.946,
+        "probe_factory": 415.107,
+        "session_start": 429.17,
+        "resources_discover": 429.487
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.229,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 444.647,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 424.354,
+        "probe_factory": 424.506,
+        "session_start": 431.144,
+        "resources_discover": 434.612
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.635,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 1,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 1367.364,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 1340.765,
+        "probe_factory": 1340.941,
+        "session_start": 1357.029,
+        "resources_discover": 1357.181
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 46.047,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 447.628,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 421.312,
+        "probe_factory": 421.447,
+        "session_start": 433.025,
+        "resources_discover": 436.545
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.639,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 448.163,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 422.169,
+        "probe_factory": 422.335,
+        "session_start": 438.225,
+        "resources_discover": 438.357
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.211,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 455.14,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 429.014,
+        "probe_factory": 429.255,
+        "session_start": 445.043,
+        "resources_discover": 445.171
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.626,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 484.988,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 458.167,
+        "probe_factory": 458.29,
+        "session_start": 471.108,
+        "resources_discover": 474.731
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.579,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 446.084,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 419.933,
+        "probe_factory": 420.067,
+        "session_start": 436.039,
+        "resources_discover": 436.165
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.689,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 431.253,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 416.345,
+        "probe_factory": 416.479,
+        "session_start": 421.301,
+        "resources_discover": 421.426
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.061,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 407.476,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 385.497,
+        "probe_factory": 385.629,
+        "session_start": 397.464,
+        "resources_discover": 397.605
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 3.895,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 2,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 444.927,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 418.799,
+        "probe_factory": 418.941,
+        "session_start": 434.542,
+        "resources_discover": 434.666
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.392,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 442.007,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 419.047,
+        "probe_factory": 419.631,
+        "session_start": 432.057,
+        "resources_discover": 432.186
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.675,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 437.727,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 414.599,
+        "probe_factory": 415.029,
+        "session_start": 427.596,
+        "resources_discover": 427.716
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.335,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 454.927,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 419.389,
+        "probe_factory": 423.493,
+        "session_start": 444.983,
+        "resources_discover": 445.11
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.665,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 438.331,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 408.863,
+        "probe_factory": 408.979,
+        "session_start": 424.363,
+        "resources_discover": 427.981
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.206,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 439.746,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 420.408,
+        "probe_factory": 420.715,
+        "session_start": 426.207,
+        "resources_discover": 429.581
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.795,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 419.108,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 388.098,
+        "probe_factory": 392.153,
+        "session_start": 408.792,
+        "resources_discover": 408.921
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 3.965,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 447.806,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 425.107,
+        "probe_factory": 425.246,
+        "session_start": 437.851,
+        "resources_discover": 437.99
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.15,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 3,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 445.527,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 419.771,
+        "probe_factory": 419.942,
+        "session_start": 431.674,
+        "resources_discover": 435.522
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.763,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 437.035,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 411.741,
+        "probe_factory": 411.864,
+        "session_start": 427.04,
+        "resources_discover": 427.183
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.091,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 443.829,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 413.424,
+        "probe_factory": 417.156,
+        "session_start": 430.5,
+        "resources_discover": 433.988
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.642,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 445.154,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 418.46,
+        "probe_factory": 418.649,
+        "session_start": 434.584,
+        "resources_discover": 434.72
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.511,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 446.964,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 430.892,
+        "probe_factory": 431.015,
+        "session_start": 436.112,
+        "resources_discover": 436.246
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.045,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 420.987,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 397.086,
+        "probe_factory": 397.234,
+        "session_start": 410.407,
+        "resources_discover": 410.549
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.468,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 436.856,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 410.381,
+        "probe_factory": 410.646,
+        "session_start": 427.535,
+        "resources_discover": 427.659
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.674,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 441.007,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 419.325,
+        "probe_factory": 419.445,
+        "session_start": 430.807,
+        "resources_discover": 430.937
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.037,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 4,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 462.656,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 434.044,
+        "probe_factory": 434.821,
+        "session_start": 448.41,
+        "resources_discover": 452.192
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.913,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 436.934,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 411.853,
+        "probe_factory": 411.982,
+        "session_start": 426.063,
+        "resources_discover": 426.209
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.143,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 437.433,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 415.022,
+        "probe_factory": 415.164,
+        "session_start": 427.37,
+        "resources_discover": 427.508
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.573,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 435.21,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 419.465,
+        "probe_factory": 419.96,
+        "session_start": 425.04,
+        "resources_discover": 425.173
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.168,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 414.817,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 389.429,
+        "probe_factory": 389.584,
+        "session_start": 404.59,
+        "resources_discover": 404.724
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.42,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 460.567,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 429.735,
+        "probe_factory": 430.217,
+        "session_start": 446.358,
+        "resources_discover": 446.5
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.281,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 442.46,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 417.699,
+        "probe_factory": 418.18,
+        "session_start": 428.72,
+        "resources_discover": 432.195
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.379,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 434.363,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 412.465,
+        "probe_factory": 412.604,
+        "session_start": 424.272,
+        "resources_discover": 424.425
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.549,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 5,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 442.41,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 416.164,
+        "probe_factory": 416.46,
+        "session_start": 432.588,
+        "resources_discover": 432.72
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.884,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 444.181,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 421.915,
+        "probe_factory": 422.054,
+        "session_start": 433.733,
+        "resources_discover": 433.876
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.775,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 437.797,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 422.405,
+        "probe_factory": 422.705,
+        "session_start": 427.696,
+        "resources_discover": 427.812
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.496,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 425.818,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 393.56,
+        "probe_factory": 397.468,
+        "session_start": 414.989,
+        "resources_discover": 415.115
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.043,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 433.178,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 409.604,
+        "probe_factory": 409.991,
+        "session_start": 423.203,
+        "resources_discover": 423.328
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.186,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 448.286,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 427.579,
+        "probe_factory": 427.714,
+        "session_start": 438.448,
+        "resources_discover": 438.569
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.251,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 447.285,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 421.482,
+        "probe_factory": 421.605,
+        "session_start": 437.004,
+        "resources_discover": 437.132
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.691,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 443.717,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 417.209,
+        "probe_factory": 417.337,
+        "session_start": 433.569,
+        "resources_discover": 433.72
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.433,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 6,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 455.629,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 425.177,
+        "probe_factory": 429.237,
+        "session_start": 445.3,
+        "resources_discover": 445.435
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.658,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 446.394,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 414.777,
+        "probe_factory": 414.906,
+        "session_start": 425.871,
+        "resources_discover": 425.985
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.644,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 416.35,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 390.489,
+        "probe_factory": 391.271,
+        "session_start": 406.382,
+        "resources_discover": 406.519
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.097,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 449.519,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 417.592,
+        "probe_factory": 417.872,
+        "session_start": 435.49,
+        "resources_discover": 439.27
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.804,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 435.843,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 413.873,
+        "probe_factory": 414.011,
+        "session_start": 425.86,
+        "resources_discover": 425.988
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.344,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 453.489,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 427.781,
+        "probe_factory": 427.978,
+        "session_start": 444.202,
+        "resources_discover": 444.36
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.568,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 435.619,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 413.747,
+        "probe_factory": 413.886,
+        "session_start": 425.695,
+        "resources_discover": 425.835
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.568,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 464.703,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 435.016,
+        "probe_factory": 438.748,
+        "session_start": 453.817,
+        "resources_discover": 453.963
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.816,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 7,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 481.575,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 456.902,
+        "probe_factory": 457.313,
+        "session_start": 471.211,
+        "resources_discover": 471.338
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.292,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 423.473,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 397.207,
+        "probe_factory": 397.356,
+        "session_start": 413.319,
+        "resources_discover": 413.449
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.968,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 443.127,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 420.726,
+        "probe_factory": 420.855,
+        "session_start": 432.897,
+        "resources_discover": 433.041
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.074,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 442.216,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 415.3,
+        "probe_factory": 415.514,
+        "session_start": 428.146,
+        "resources_discover": 431.79
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.268,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 442.085,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 415.838,
+        "probe_factory": 415.966,
+        "session_start": 428.12,
+        "resources_discover": 431.691
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.292,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 473.654,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 446.954,
+        "probe_factory": 447.098,
+        "session_start": 463.132,
+        "resources_discover": 463.26
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.597,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 460.573,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 436.179,
+        "probe_factory": 436.338,
+        "session_start": 450.13,
+        "resources_discover": 450.252
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.238,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 458.686,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 431.293,
+        "probe_factory": 431.641,
+        "session_start": 448.319,
+        "resources_discover": 448.446
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.284,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 8,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 446.925,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 431.222,
+        "probe_factory": 431.493,
+        "session_start": 436.537,
+        "resources_discover": 436.668
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.275,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 448.106,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 424.176,
+        "probe_factory": 424.301,
+        "session_start": 437.641,
+        "resources_discover": 437.794
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.721,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 454.352,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 430.955,
+        "probe_factory": 431.09,
+        "session_start": 440.228,
+        "resources_discover": 443.775
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.966,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 452.76,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 430.828,
+        "probe_factory": 430.976,
+        "session_start": 442.791,
+        "resources_discover": 442.943
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.722,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 462.011,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 438.039,
+        "probe_factory": 438.514,
+        "session_start": 451.877,
+        "resources_discover": 452.026
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.397,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 466.827,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 437.062,
+        "probe_factory": 437.238,
+        "session_start": 453.328,
+        "resources_discover": 456.721
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.671,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 456.23,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 430.018,
+        "probe_factory": 430.14,
+        "session_start": 446.311,
+        "resources_discover": 446.491
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.529,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 446.685,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 426.045,
+        "probe_factory": 426.18,
+        "session_start": 432.891,
+        "resources_discover": 436.709
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.66,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 9,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 420.081,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 393.913,
+        "probe_factory": 394.684,
+        "session_start": 410.014,
+        "resources_discover": 410.158
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.386,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_extensions",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 440.909,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 421.181,
+        "probe_factory": 421.312,
+        "session_start": 430.266,
+        "resources_discover": 430.403
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.916,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_skills",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 459.644,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 431.06,
+        "probe_factory": 431.2,
+        "session_start": 448.981,
+        "resources_discover": 449.122
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.608,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_prompt_templates",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 440.059,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 413.643,
+        "probe_factory": 413.773,
+        "session_start": 429.74,
+        "resources_discover": 429.894
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.321,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_themes",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 457.374,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 431.727,
+        "probe_factory": 431.862,
+        "session_start": 446.989,
+        "resources_discover": 447.123
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.47,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "no_context_files",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 484.038,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 456.574,
+        "probe_factory": 456.841,
+        "session_start": 470.679,
+        "resources_discover": 474.151
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.034,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "all_discovery_disabled",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 467.419,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": false,
+        "skill_fixture_in_prompt": false,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": false,
+        "unrelated_tool_active": false,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 451.247,
+        "probe_factory": 451.6,
+        "session_start": 456.71,
+        "resources_discover": 456.861
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 5.059,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "bundled_exact_extension",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 424.587,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 398.598,
+        "probe_factory": 398.738,
+        "session_start": 414.191,
+        "resources_discover": 414.324
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.209,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    },
+    {
+      "case": "current_exact_discovery",
+      "ordinal": 10,
+      "outcome": "ok",
+      "spawn_to_rpc_ready_ms": 450.758,
+      "phases_observed": {
+        "pi_import_and_exact_extension_load": true,
+        "session_start": true,
+        "resources_discover": true,
+        "exact_binding": "not_attempted_no_durable_membership",
+        "interactive_ready": "not_observable_rpc_mode",
+        "first_no_model_task_delivery": "not_attempted_no_durable_membership"
+      },
+      "resource_semantics": {
+        "context_fixture_in_prompt": true,
+        "skill_fixture_in_prompt": true,
+        "prompt_template_fixture": "unmeasured",
+        "theme_fixture": "unmeasured",
+        "unrelated_extension_loaded": true,
+        "unrelated_tool_active": true,
+        "exact_team_environment_present": false
+      },
+      "probe_uptime_ms": {
+        "probe_module_evaluated": 423.191,
+        "probe_factory": 423.343,
+        "session_start": 440.493,
+        "resources_discover": 440.629
+      },
+      "cleanup": {
+        "child_exited": true,
+        "shutdown_after_rpc_ms": 4.388,
+        "exit_code": 143,
+        "exit_signal": null,
+        "fixture_removed": true
+      }
+    }
+  ],
+  "resource_policy": {
+    "unrelated_extension_retention": "The fixture extension factory and its active custom tool are observed inside Pi after session_start.",
+    "current_exact_skill_retained": true,
+    "current_exact_unrelated_tool_retained": true,
+    "duplicate_exact_extension": {
+      "outcome": "failed",
+      "exit_code": 1,
+      "duplicate_registration_detected": true
+    }
+  },
+  "limits": {
+    "exact_binding": "not attempted: this harness creates no durable Team Membership",
+    "interactive_ready": "not observable in RPC mode",
+    "first_no_model_task_delivery": "not attempted: delivery requires exact Worker binding"
+  }
+}

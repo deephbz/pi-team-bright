@@ -1,0 +1,124 @@
+{
+  "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-plan/2",
+  "stage": "exploration",
+  "question": "Can ensure_worker safely return after a durable prepared Membership, an exact accepted Herdr carrier, and target persistence while exact Session binding stays the only admission gate?",
+  "scope": {
+    "production_changes": false,
+    "worktree": "isolated warm-experiment worktree",
+    "implementation": "benchmark-only source-coupled prototype"
+  },
+  "external_anchor": {
+    "installed_herdr": "0.7.5",
+    "accepted_start_contract": "not available in installed CLI help; agent start exposes only interactive-ready wait",
+    "consequence": "The prototype may measure a synthetic exact accepted-actuation seam, but it cannot claim a live accepted-actuation latency or production safety."
+  },
+  "ontology": {
+    "launch_operation": "One durable, one-shot supervision record for one Membership and one launch capability. It is not a Worker or Session.",
+    "prepared": "A current Membership with its matching pending launch capability, before accepted actuation.",
+    "accepted": "The exact named Herdr carrier accepted actuation and the exact terminal target are durable. It is not admission, capacity, readiness, or delivery permission.",
+    "bound": "The child completed exact runtime admission, durable Session binding, and session-bound event publication for the same Membership.",
+    "failed": "A non-terminal carrier or actuation fault ended the operation. Exact owned cleanup remains recorded until complete.",
+    "expired": "The accepted operation missed its deadline while unbound. It is terminal only after exact owned cleanup is confirmed.",
+    "cancelled": "Stop or shutdown fenced the operation before binding. It is terminal only after exact owned cleanup is confirmed.",
+    "fence": "The tuple of Team, Worker, Membership, launch capability, and exact target. Runtime generation extends it after binding.",
+    "cleanup_receipt": "Durable proof that only the owned target was stopped or already absent and that the exact current Membership was deactivated when still unbound."
+  },
+  "state_machine": {
+    "states": ["prepared", "accepted", "bound", "failed", "expired", "cancelled"],
+    "transitions": [
+      "prepared -> accepted after exact actuation acceptance, target persistence, and accepted-operation persistence",
+      "prepared -> failed after pre-acceptance restart or actuation failure",
+      "accepted -> bound only after current Membership, durable Session, and runtime generation match",
+      "accepted -> failed after early exit or pane loss before binding",
+      "accepted -> expired after deadline and fenced cleanup",
+      "prepared|accepted -> cancelled after stop or shutdown and fenced cleanup"
+    ],
+    "race_rule": "Binding wins only when the durable Membership and runtime-generation evidence match before cleanup deactivation. A live unbound carrier is never reusable capacity.",
+    "delivery_rule": "No Task or alert delivery starts from prepared or accepted. Delivery starts only in the child after exact Session admission."
+  },
+  "idea_dag": {
+    "nodes": [
+      "current synchronous bridge waits for exact Session observation",
+      "accepted actuation can reduce caller wait but is not admission",
+      "durable operation with fences and reconciliation",
+      "adversarial state-transition cases",
+      "response and later-binding distributions",
+      "safety recommendation"
+    ],
+    "edges": [
+      ["current synchronous bridge waits for exact Session observation", "motivates", "accepted actuation can reduce caller wait but is not admission"],
+      ["accepted actuation can reduce caller wait but is not admission", "requires", "durable operation with fences and reconciliation"],
+      ["durable operation with fences and reconciliation", "tested_by", "adversarial state-transition cases"],
+      ["adversarial state-transition cases", "produces", "response and later-binding distributions"],
+      ["response and later-binding distributions", "constrains", "safety recommendation"]
+    ]
+  },
+  "data_dag": {
+    "nodes": [
+      "source hashes and current contracts",
+      "fresh isolated Team and fake owned Herdr carrier registry",
+      "durable operation records and Team/runtime/event records",
+      "per-case observations and safety assertions",
+      "redacted raw result artifact",
+      "human result interpretation"
+    ],
+    "edges": [
+      ["source hashes and current contracts", "configure", "fresh isolated Team and fake owned Herdr carrier registry"],
+      ["fresh isolated Team and fake owned Herdr carrier registry", "produces", "durable operation records and Team/runtime/event records"],
+      ["durable operation records and Team/runtime/event records", "validated_as", "per-case observations and safety assertions"],
+      ["per-case observations and safety assertions", "serialized_as", "redacted raw result artifact"],
+      ["redacted raw result artifact", "supports", "human result interpretation"]
+    ]
+  },
+  "source_coupling": {
+    "uses": [
+      "src/utils/teams.ts for Membership persistence and exact Membership leases",
+      "src/utils/runtime.ts for runtime generation evidence",
+      "src/team-authority/team-session-lifecycle-service.ts for exact child admission",
+      "src/adapters/durable-team-lifecycle-publication.ts for prepared and session-bound evidence",
+      "src/team-authority/worker-launch-bridge.ts for source-order and target-persistence fences",
+      "src/team-authority/team-lifecycle-service.ts for stop and shutdown semantics",
+      "src/utils/worker-ensure-lifecycle.ts for live prepared-carrier refusal"
+    ],
+    "does_not_change": ["src", "extensions", "public schemas", "production terminal adapter behavior"]
+  },
+  "measurement": {
+    "response_boundary": "ensure start through durable accepted operation record after target persistence",
+    "later_binding_boundary": "accepted operation record through exact Session/runtime binding and durable bound operation record",
+    "quantiles": "nearest-rank p50 and p95 over repeated fresh isolated children",
+    "conditions": ["isolated accepted then bound", "stable bound Worker reuse", "adversarial single-case probes"]
+  },
+  "adversarial_cases": [
+    "early_exit",
+    "live_unbound_timeout",
+    "pane_loss",
+    "late_binding_at_timeout",
+    "concurrent_ensure",
+    "leader_restart",
+    "stop",
+    "shutdown",
+    "task_delivery_before_binding",
+    "stable_worker_reuse"
+  ],
+  "predictions": [
+    "The synthetic accepted response will finish before the exact binding path because it excludes Pi Session construction and event observation.",
+    "A durable accepted record will make restart reconciliation possible, but it will add a new long-lived failure and cleanup owner.",
+    "The live unbound case will require a timeout and exact cleanup fence; treating it as reuse would violate the one-live-generation invariant.",
+    "The installed Herdr contract will prevent a positive live accepted-actuation conclusion.",
+    "The prototype will remain rejected as a replacement for synchronous observation unless a production-owned operation authority, compatible Herdr acceptance contract, and full real-carrier evidence are added."
+  ],
+  "acceptance_checks": [
+    "Every successful accepted response has a current exact prepared Membership, matching launch capability, exact persisted target, and durable operation record.",
+    "Only exact Session/runtime evidence produces bound.",
+    "Every terminal unbound outcome records exact cleanup or fails closed with retained evidence.",
+    "Concurrent ensure creates one operation and one target; the second result is an operation receipt, not reusable capacity.",
+    "Task delivery is absent before binding and source ordering keeps it after admission.",
+    "The integrated-source recheck records source and prototype observations separately from boolean safety assertions.",
+    "The integrated-source recheck requires a live prepared carrier to produce the planner action refuse with reason unbound_live.",
+    "Raw artifacts contain source hashes, environment facts, samples, observations, safety assertions, and limits without local paths or session identities."
+  ],
+  "historical_raw_record": "docs/journal/artifacts/2026-08-14-nonblocking-accepted-launch-supervision-results.json",
+  "raw_record": "docs/journal/artifacts/2026-08-14-nonblocking-accepted-launch-supervision-integrated-source-recheck.json",
+  "historical_result": "docs/journal/2026-08-14-nonblocking-accepted-launch-supervision-result.md",
+  "result": "docs/journal/2026-08-14-nonblocking-accepted-launch-supervision-integrated-source-recheck.md"
+}

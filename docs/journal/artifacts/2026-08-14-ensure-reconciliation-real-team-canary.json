@@ -1,0 +1,78 @@
+{
+  "schema": "pi-team-bright/ensure-reconciliation-real-team-canary/1",
+  "recorded_at": "2026-08-14T09:55:00Z",
+  "source": {
+    "revision_at_run": "7c4d60fd327abdae466d37ceac3b6466b584a0a9",
+    "tree_at_run": "5bb94903b29dd1ea080c74253b321119e8926753",
+    "worktree_dirty_at_run": false,
+    "production_change": "ensure_worker returns after exact Worker launch admission and does not invoke Task-authority reconciliation"
+  },
+  "environment": {
+    "pi_version": "0.83.0",
+    "herdr_version": "0.7.5",
+    "model_alias": "openai-codex/gpt-5.6-terra:medium",
+    "isolated_extension_discovery": true,
+    "exact_source_extension": true
+  },
+  "scenarios": {
+    "graph_preexisting_ready_after_carrier_loss": {
+      "passed": true,
+      "initial_ensure_ms": 3097,
+      "recovery_ensure_ms": 3189,
+      "task_committed_before_recovery_ensure": true,
+      "same_logical_worker_recovered": true,
+      "worker_claim_observed": true,
+      "worker_result_evidence": "GRAPH_PREEXISTING_READY_PASS",
+      "goal_achieved": true,
+      "leader_task_transition_used": false,
+      "cleanup_passed": true
+    },
+    "legacy_preexisting_ready_after_carrier_loss": {
+      "passed": true,
+      "initial_ensure_ms": 3145,
+      "recovery_ensure_ms": 3123,
+      "task_committed_before_recovery_ensure": true,
+      "initial_delivery_publication_used": false,
+      "same_logical_worker_recovered": true,
+      "worker_claim_observed": true,
+      "worker_result_evidence": "LEGACY_PREEXISTING_READY_PASS",
+      "legacy_task_closed": true,
+      "leader_task_transition_used": false,
+      "cleanup_passed": true
+    },
+    "stable_bound_worker_reuse": {
+      "passed": true,
+      "initial_ensure_ms": 3192,
+      "reuse_count": 5,
+      "ensure_ms": [31, 30, 22, 31, 33],
+      "ensure_p50_ms": 31,
+      "ensure_p95_ms": 33,
+      "launch_bridge_ms": [15, 12, 10, 13, 16],
+      "launch_bridge_p50_ms": 13,
+      "launch_bridge_p95_ms": 16,
+      "refusals": 0,
+      "task_authority_records_between_reuse_calls": 0,
+      "cleanup_passed": true
+    }
+  },
+  "authority_evidence": {
+    "graph_result_event_actor": "assigned_worker",
+    "legacy_result_event_actor": "assigned_worker",
+    "exact_session_admission_preserved": true,
+    "worker_session_ready_reconciliation_observed": true,
+    "periodic_recovery_observed": true,
+    "matching_disposable_worker_agents_after_cleanup": 0
+  },
+  "raw_evidence_sha256": {
+    "semantic_trace_jsonl": "881549417326796fb4e4ad3d2b004a4c29dd395f230f4bd0877f7c29d185b276",
+    "graph_team_events_jsonl": "94b990648017855faaf70488c88c0acc1ccbfa4970db138da37c26bb6d7c8696",
+    "legacy_team_events_jsonl": "1b343787d25ec8bfd0612c155bc56c6bfc04c98d8a06d433352d1a31b7fd3777",
+    "private_session_bundle": "0a80e9d301f964d73ef9fec2a6631442df363215f06cebf7e3cad41b2cfd8299"
+  },
+  "limits": [
+    "Fresh Worker time still includes a real Pi process and exact Session binding; this change does not make cold startup near 100 ms.",
+    "The semantic trace has no process ID or parent operation ID. Unscoped task_list records cannot be assigned to the leader, Worker, or team_sync from the trace alone.",
+    "The stable-reuse sample is local and small. It verifies this change, not a population capacity SLO.",
+    "The legacy Task was inserted through the bound Beads authority while the carrier was absent. This intentionally bypassed initial delivery publication to test session-start repair."
+  ]
+}

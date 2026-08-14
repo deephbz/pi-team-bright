@@ -411,7 +411,7 @@ export default function (pi: ExtensionAPI) {
     };
     const modelToolBindings = new DurableModelToolBindings();
     const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning();
-    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration);
+    const modelToolTeam = new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning);
     const modelToolTask = new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration);
     const modelToolAlert = new DurableModelToolAlertApplication(modelToolBindings, alertSender);
     const modelToolCoordination = new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService);

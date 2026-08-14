@@ -1,0 +1,1649 @@
+{
+  "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-results/2",
+  "recorded_at": "2026-08-14T09:29:14.607Z",
+  "source": {
+    "revision": "17e5c471da53fd1a70e4ad6b87e8d33b34df9402",
+    "source_bundle_sha256": "5d5f05b0544e5d061aae094a2682e6bb5cc81cfed78632975c4234deeb927437",
+    "worktree_dirty_at_measurement": false,
+    "files": [
+      "benchmarks/nonblocking-accepted-launch-supervision/README.md",
+      "benchmarks/nonblocking-accepted-launch-supervision/plan.json",
+      "benchmarks/nonblocking-accepted-launch-supervision/child.ts",
+      "benchmarks/nonblocking-accepted-launch-supervision/run.ts",
+      "src/utils/teams.ts",
+      "src/utils/runtime.ts",
+      "src/team-authority/worker-launch-bridge.ts",
+      "src/team-authority/team-session-lifecycle-service.ts",
+      "src/team-authority/team-lifecycle-service.ts"
+    ],
+    "source_fence": {
+      "sha256": {
+        "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+        "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+        "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+        "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+        "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+        "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+      },
+      "bridge_prepared_before_target_and_observation": true,
+      "exact_session_runtime_bind_event_order": true,
+      "delivery_requires_exact_session_recipient": true,
+      "stop_shutdown_use_topology_and_membership_fences": true,
+      "prepared_live_planner_text_classification": "refuse",
+      "stable_across_children": true
+    }
+  },
+  "environment": {
+    "node_version": "24.3.0",
+    "bun_version": "1.3.8",
+    "pi_version": "0.83.0",
+    "platform": "darwin-arm64",
+    "child_runtime": "fresh Bun process",
+    "resource_profile": "fresh temporary home, agent directory, project, Team, operation store, and synthetic carrier registry"
+  },
+  "herdr_contract": {
+    "command_available": true,
+    "version": "herdr 0.7.5",
+    "accepted_wait_option_present": false,
+    "interactive_ready_contract_present": true,
+    "help_exit_code": 0,
+    "interpretation": "No accepted-start option is exposed by installed help; live accepted-actuation timing is unavailable."
+  },
+  "design": {
+    "response_boundary": "ensure start through durable accepted operation record after exact target persistence",
+    "later_binding_boundary": "accepted result through exact Session, runtime-generation, and session-bound event match",
+    "accepted_actuation": "synthetic exact response only; installed Herdr help did not expose an accepted-start option",
+    "capacity_rule": "prepared and accepted operations are not reusable capacity; only exact bound Memberships are reused",
+    "cleanup_rule": "terminal unbound operations persist their terminal state before fenced exact target cleanup and Membership deactivation",
+    "task_delivery_rule": "the durable delivery membership adapter returns no recipient before an exact Session binding"
+  },
+  "raw_samples": [
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 0,
+      "child_wall_ms": 907.062,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 9.451,
+          "later_binding_ms": 7.292
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 858.745
+      }
+    },
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 1,
+      "child_wall_ms": 593.268,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 9.588,
+          "later_binding_ms": 7.193
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 553.603
+      }
+    },
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 2,
+      "child_wall_ms": 684.254,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 12.13,
+          "later_binding_ms": 8.728
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 645.378
+      }
+    },
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 3,
+      "child_wall_ms": 782.884,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 34.151,
+          "later_binding_ms": 29.159
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 737.102
+      }
+    },
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 4,
+      "child_wall_ms": 816.69,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 36.362,
+          "later_binding_ms": 22.12
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 771.272
+      }
+    },
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 5,
+      "child_wall_ms": 715.902,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 13.778,
+          "later_binding_ms": 9.782
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 670.157
+      }
+    },
+    {
+      "scenario": "accepted_bound",
+      "sample_index": 6,
+      "child_wall_ms": 703.561,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "accepted_bound",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 11.858,
+          "later_binding_ms": 8.017
+        },
+        "observations": {
+          "response_action": "accepted"
+        },
+        "safety_assertions": {
+          "response_is_accepted": true,
+          "prebind_phase_accepted": true,
+          "target_persisted": true,
+          "carrier_live_before_bind": true,
+          "session_absent_before_bind": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 657.978
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 0,
+      "child_wall_ms": 702.749,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 14.748,
+          "later_binding_ms": 10.911,
+          "stable_reuse_response_ms": 2.916
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 658.332
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 1,
+      "child_wall_ms": 718.674,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 11.298,
+          "later_binding_ms": 18.633,
+          "stable_reuse_response_ms": 5.82
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 672.094
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 2,
+      "child_wall_ms": 742.799,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 35.818,
+          "later_binding_ms": 25.378,
+          "stable_reuse_response_ms": 9.124
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 698.895
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 3,
+      "child_wall_ms": 739.161,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 28.294,
+          "later_binding_ms": 9.286,
+          "stable_reuse_response_ms": 5.99
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 698.488
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 4,
+      "child_wall_ms": 723.196,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 12.351,
+          "later_binding_ms": 8.983,
+          "stable_reuse_response_ms": 2.074
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 681.578
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 5,
+      "child_wall_ms": 748.248,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 11.203,
+          "later_binding_ms": 22.88,
+          "stable_reuse_response_ms": 14.387
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 703.866
+      }
+    },
+    {
+      "scenario": "stable_reuse",
+      "sample_index": 6,
+      "child_wall_ms": 756.278,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stable_reuse",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 43.89,
+          "later_binding_ms": 25.541,
+          "stable_reuse_response_ms": 6.53
+        },
+        "observations": {
+          "reuse_action": "reused"
+        },
+        "safety_assertions": {
+          "reused_exact_bound_carrier": true,
+          "one_carrier_for_reuse": true,
+          "source_bound_plan_is_reuse": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 711.67
+      }
+    },
+    {
+      "scenario": "early_exit",
+      "sample_index": 0,
+      "child_wall_ms": 835.6,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "early_exit",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 87.053
+        },
+        "observations": {},
+        "safety_assertions": {
+          "failed": true,
+          "cleanup_complete": true,
+          "exact_target_absent": true,
+          "membership_deactivated": true
+        },
+        "operation": {
+          "phase": "failed",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "failed",
+              "reason": "carrier_missing_before_session_binding"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": false,
+          "cleanup": {
+            "complete": true,
+            "target": "already_absent",
+            "membership": "deactivated"
+          }
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 789.445
+      }
+    },
+    {
+      "scenario": "live_unbound_timeout",
+      "sample_index": 0,
+      "child_wall_ms": 820.576,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "live_unbound_timeout",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 26.55
+        },
+        "observations": {
+          "integrated_source_prepared_live_plan_action": "refuse",
+          "integrated_source_prepared_live_plan_reason": "unbound_live"
+        },
+        "safety_assertions": {
+          "expired": true,
+          "cleanup_complete": true,
+          "prototype_never_reused_unbound": true,
+          "integrated_source_refuses_live_prepared_carrier": true,
+          "target_absent_after_timeout": true
+        },
+        "operation": {
+          "phase": "expired",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "expired",
+              "reason": "accepted_deadline_elapsed"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": false,
+          "cleanup": {
+            "complete": true,
+            "target": "stopped",
+            "membership": "deactivated"
+          }
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 772.954
+      }
+    },
+    {
+      "scenario": "pane_loss",
+      "sample_index": 0,
+      "child_wall_ms": 909.02,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "pane_loss",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 96.398
+        },
+        "observations": {},
+        "safety_assertions": {
+          "failed": true,
+          "cleanup_complete": true,
+          "target_absent": true
+        },
+        "operation": {
+          "phase": "failed",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "failed",
+              "reason": "carrier_missing_before_session_binding"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": false,
+          "cleanup": {
+            "complete": true,
+            "target": "already_absent",
+            "membership": "deactivated"
+          }
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 859.537
+      }
+    },
+    {
+      "scenario": "late_binding_at_timeout",
+      "sample_index": 0,
+      "child_wall_ms": 930.591,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "late_binding_at_timeout",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 69.141,
+          "later_binding_ms": 39.446
+        },
+        "observations": {},
+        "safety_assertions": {
+          "bound_won_expiry_fence": true,
+          "target_retained_after_bound": true,
+          "cleanup_not_run": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "binding_won_at_expiry_fence"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 883.378
+      }
+    },
+    {
+      "scenario": "concurrent_ensure",
+      "sample_index": 0,
+      "child_wall_ms": 826.692,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "concurrent_ensure",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "first_response_ms": 14.201,
+          "second_response_ms": 23.272
+        },
+        "observations": {},
+        "safety_assertions": {
+          "one_carrier": true,
+          "same_operation": true,
+          "one_new_acceptance": true,
+          "other_is_operation_receipt": true,
+          "unbound_not_reused": true
+        },
+        "operation": {
+          "phase": "accepted",
+          "revision": 1,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": false,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 769.491
+      }
+    },
+    {
+      "scenario": "leader_restart",
+      "sample_index": 0,
+      "child_wall_ms": 766.953,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "leader_restart",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "later_binding_ms": 23.46
+        },
+        "observations": {},
+        "safety_assertions": {
+          "simulated_crash_after_target_persistence": true,
+          "pre_restart_phase_prepared": true,
+          "accepted_reconstructed_from_target": true,
+          "same_carrier_after_restart": true,
+          "bound_after_restart": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "reconstructed_after_leader_restart"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 720.81
+      }
+    },
+    {
+      "scenario": "stop",
+      "sample_index": 0,
+      "child_wall_ms": 738.598,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "stop",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 13.403
+        },
+        "observations": {},
+        "safety_assertions": {
+          "cancelled_before_stop": true,
+          "source_stop_confirmed": true,
+          "cancelled_after_stop": true,
+          "cleanup_complete": true
+        },
+        "operation": {
+          "phase": "cancelled",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "cancelled",
+              "reason": "stop_requested"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": false,
+          "cleanup": {
+            "complete": true,
+            "target": "already_absent",
+            "membership": "already_inactive"
+          }
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 692.742
+      }
+    },
+    {
+      "scenario": "shutdown",
+      "sample_index": 0,
+      "child_wall_ms": 772.086,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "shutdown",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 13.761
+        },
+        "observations": {},
+        "safety_assertions": {
+          "cancelled_before_shutdown": true,
+          "source_shutdown_confirmed": true,
+          "cancelled_after_shutdown": true,
+          "cleanup_complete": true
+        },
+        "operation": {
+          "phase": "cancelled",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "cancelled",
+              "reason": "shutdown_requested"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": false,
+          "cleanup": {
+            "complete": true,
+            "target": "already_absent",
+            "membership": "already_inactive"
+          }
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 726.369
+      }
+    },
+    {
+      "scenario": "task_delivery_before_binding",
+      "sample_index": 0,
+      "child_wall_ms": 885.043,
+      "child_exit_code": 0,
+      "result": {
+        "schema": "pi-team-bright/nonblocking-accepted-launch-supervision-child/2",
+        "status": "complete",
+        "scenario": "task_delivery_before_binding",
+        "source_fence": {
+          "sha256": {
+            "bridge": "f3998364d1b1f8409c36a441342fa0cac04d162bb46f5bf56ab4021243ff9288",
+            "session": "ce81d2fbc052c52e749a4fdaba732f44cd7419a94e658fbe1fa021b7c61409eb",
+            "lifecycle": "2236468765d8e7f46b3dfbfcfb892492cbe0fa20196364d851c5a1a12d7c285d",
+            "delivery": "5e78730129ec7d48a912596bbda00953d4349ae970a25d6589472c5a230aa121",
+            "planner": "5a755406a5a1c67f6bedbce97fd61461012a2a4ac9aed18585d3fc0ff2f33652",
+            "publication": "f74697a15e0476e00aaa7df55df50182bf17c1f0cb423dfe08a93981af52efdc"
+          },
+          "bridge_prepared_before_target_and_observation": true,
+          "exact_session_runtime_bind_event_order": true,
+          "delivery_requires_exact_session_recipient": true,
+          "stop_shutdown_use_topology_and_membership_fences": true,
+          "prepared_live_planner_text_classification": "refuse"
+        },
+        "timing_ms": {
+          "response_ms": 60.912,
+          "later_binding_ms": 38.399
+        },
+        "observations": {},
+        "safety_assertions": {
+          "delivery_refused_before_exact_binding": true,
+          "delivery_allows_exact_bound_membership": true,
+          "bound_exactly": true
+        },
+        "operation": {
+          "phase": "bound",
+          "revision": 2,
+          "history": [
+            {
+              "phase": "prepared",
+              "reason": "membership_prepared"
+            },
+            {
+              "phase": "accepted",
+              "reason": "exact_target_persisted_after_accepted_actuation"
+            },
+            {
+              "phase": "bound",
+              "reason": "exact_session_runtime_event_match"
+            }
+          ],
+          "target_persisted": true,
+          "bound_generation_persisted": true,
+          "cleanup": null
+        },
+        "carrier_count": 1,
+        "child_elapsed_ms": 837.333
+      }
+    }
+  ],
+  "summaries": {
+    "accepted_bound": {
+      "samples": 7,
+      "complete": 7,
+      "failed": 0,
+      "timings_ms": {
+        "response_ms": {
+          "n": 7,
+          "min_ms": 9.451,
+          "p50_ms": 12.13,
+          "p95_ms": 36.362,
+          "max_ms": 36.362
+        },
+        "later_binding_ms": {
+          "n": 7,
+          "min_ms": 7.193,
+          "p50_ms": 8.728,
+          "p95_ms": 29.159,
+          "max_ms": 29.159
+        }
+      },
+      "all_safety_assertions_pass": true,
+      "observation_count": 7
+    },
+    "stable_reuse": {
+      "samples": 7,
+      "complete": 7,
+      "failed": 0,
+      "timings_ms": {
+        "first_response_ms": {
+          "n": 7,
+          "min_ms": 11.203,
+          "p50_ms": 14.748,
+          "p95_ms": 43.89,
+          "max_ms": 43.89
+        },
+        "later_binding_ms": {
+          "n": 7,
+          "min_ms": 8.983,
+          "p50_ms": 18.633,
+          "p95_ms": 25.541,
+          "max_ms": 25.541
+        },
+        "stable_reuse_response_ms": {
+          "n": 7,
+          "min_ms": 2.074,
+          "p50_ms": 5.99,
+          "p95_ms": 14.387,
+          "max_ms": 14.387
+        }
+      },
+      "all_safety_assertions_pass": true,
+      "observation_count": 7
+    },
+    "adversarial": {
+      "early_exit": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "live_unbound_timeout": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 2
+      },
+      "pane_loss": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "late_binding_at_timeout": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "concurrent_ensure": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "leader_restart": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "stop": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "shutdown": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      },
+      "task_delivery_before_binding": {
+        "samples": 1,
+        "complete": 1,
+        "failed": 0,
+        "timings_ms": {},
+        "all_safety_assertions_pass": true,
+        "observation_count": 0
+      }
+    }
+  },
+  "verification": {
+    "all_samples_complete": true,
+    "all_safety_assertions_pass": true,
+    "observation_rule": "Observations record what the source and prototype returned. Only named safety assertions determine pass or fail.",
+    "quantile_method": "nearest-rank: ceil(p * n) - 1 after ascending sort",
+    "independent_anchor": "Each child reads current source and exercises durable Membership, runtime, Session-admission, event, terminal-lifecycle, and delivery-membership contracts in a fresh isolated state directory.",
+    "contract_limit": "The installed Herdr CLI did not expose accepted start. Synthetic accepted actuation validates the operation supervisor seam but not a real Herdr protocol, pane, or Pi process."
+  },
+  "limits": [
+    "This is a disposable prototype. It adds no production operation authority, Membership schema field, terminal adapter behavior, or model-tool result contract.",
+    "A synthetic carrier registry cannot prove real Herdr acceptance, crash behavior, pane loss semantics, or process cleanup.",
+    "The bound simulation invokes current Session admission in the benchmark process. It proves the durable admission order and fences, not real Pi startup latency.",
+    "The historical 2026-08-14 raw record captured a source planner that reused a live prepared carrier. This recheck separately records the integrated planner observation and requires its safe refusal.",
+    "No full ensure p95 or 100 ms product claim follows from these measurements."
+  ]
+}

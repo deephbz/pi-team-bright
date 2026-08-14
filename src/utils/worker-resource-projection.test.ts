@@ -1,13 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const { spawnSync } = vi.hoisted(() => ({ spawnSync: vi.fn() }));
+vi.mock("node:child_process", async (importOriginal) => ({
+  ...await importOriginal<typeof import("node:child_process")>(),
+  spawnSync,
+}));
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ProjectTrustStore } from "@earendil-works/pi-coding-agent";
 import {
+  captureQualifiedAvailableModelKeys,
   loadWorkerResourcePolicy,
   materializeWorkerAggregate,
   projectWorkerTools,
   removeWorkerAggregate,
+  resolveQualifiedWorkerDefaultModel,
   resolveWorkerLaunchResources,
 } from "./worker-resource-projection";
 
@@ -82,6 +91,43 @@ describe("Worker resource projection", () => {
 
     expect(loadWorkerResourcePolicy({ cwd: root, projectTrusted: false, agentDir: agent }).defaultModel)
       .toEqual({ scope: "global", error: "must be a nonempty qualified provider/model string" });
+  });
+
+  it("uses an exact available-model snapshot without a catalog subprocess", () => {
+    spawnSync.mockImplementation(() => {
+      throw new Error("snapshot validation must not start pi");
+    });
+    try {
+      const snapshot = captureQualifiedAvailableModelKeys({
+        getAvailable: () => [
+          { provider: "openrouter", id: "openai/gpt-5.1" },
+          { provider: "openai", id: "gpt-5.1" },
+        ],
+      } as never);
+
+      expect(snapshot).toEqual(new Set(["openrouter/openai/gpt-5.1", "openai/gpt-5.1"]));
+      expect(resolveQualifiedWorkerDefaultModel("openrouter/openai/gpt-5.1", snapshot)).toBe("openrouter/openai/gpt-5.1");
+      expect(resolveQualifiedWorkerDefaultModel("missing/model", snapshot)).toBeNull();
+      const emptySnapshot = captureQualifiedAvailableModelKeys({ getAvailable: () => [] } as never);
+      expect(resolveQualifiedWorkerDefaultModel("missing/model", emptySnapshot)).toBeNull();
+      expect(spawnSync).not.toHaveBeenCalled();
+    } finally {
+      spawnSync.mockReset();
+    }
+  });
+
+  it("falls back to Pi's catalog only when the exact model snapshot is unavailable", () => {
+    spawnSync.mockReturnValue({
+      status: 0,
+      stdout: "provider model\nlisted model\n",
+    } as never);
+    try {
+      expect(captureQualifiedAvailableModelKeys(undefined)).toBeUndefined();
+      expect(resolveQualifiedWorkerDefaultModel("listed/model")).toBe("listed/model");
+      expect(spawnSync).toHaveBeenCalledWith("pi", ["--list-models"], { encoding: "utf8", timeout: 10_000 });
+    } finally {
+      spawnSync.mockReset();
+    }
   });
 
   it("aggregates replacement, ancestor context, then append in a private file", () => {

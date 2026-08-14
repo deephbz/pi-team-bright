@@ -39,7 +39,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
     taskOrchestration?: TaskOrchestrationPort,
   ) {
     const bindings = new DurableModelToolBindings();
-    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, taskAuthority, taskOrchestration);
+    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, taskAuthority);
     this.task = new DurableModelToolTaskApplication(bindings, taskAdapterFactory, taskOrchestration);
     this.alert = new DurableModelToolAlertApplication(bindings, alertSender);
     this.coordination = new DurableModelToolCoordinationApplication(bindings, observationService);

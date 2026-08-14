@@ -1,0 +1,3127 @@
+{
+  "schema": "pi-team-bright/warm-activation-machine-results/1",
+  "status": "complete",
+  "generated_at": "2026-08-14T06:48:57.921Z",
+  "source": {
+    "commit": "8324307dadf7107494d0485a6974bd192454fbac",
+    "pi_version": "0.83.0",
+    "node_version": "v25.6.0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "kernel": "25.5.0"
+  },
+  "parameters": {
+    "requested_samples_per_mechanism": 7,
+    "launch_profile": {
+      "model": "openai-codex/gpt-5.6-terra",
+      "thinking": "medium",
+      "projection": "explicit CLI profile; observed again from each Session"
+    },
+    "model_prompts_sent": false,
+    "network_mode": "offline",
+    "raw_probe_identity_records": "Temporary only; this durable artifact retains every individual timing and derived invariant without Session IDs, process IDs, paths, prompts, or credentials."
+  },
+  "rpc": {
+    "mechanism": "persistent_rpc_session_replacement",
+    "cold": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 2877.213,
+      "p95_ms": 6634.275,
+      "min_ms": 1474.712,
+      "max_ms": 6634.275,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "warm": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 34.672,
+      "p95_ms": 81.229,
+      "min_ms": 19.841,
+      "max_ms": 81.229,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "samples": [
+      {
+        "sample": "rpc-1",
+        "cold": {
+          "latency_ms": 6634.275,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 190.766
+          }
+        },
+        "warm": {
+          "latency_ms": 23.741,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 190.938
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 190.938
+          }
+        }
+      },
+      {
+        "sample": "rpc-2",
+        "cold": {
+          "latency_ms": 4513.31,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.984
+          }
+        },
+        "warm": {
+          "latency_ms": 81.229,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179
+          }
+        }
+      },
+      {
+        "sample": "rpc-3",
+        "cold": {
+          "latency_ms": 3440.948,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.734
+          }
+        },
+        "warm": {
+          "latency_ms": 37.779,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.75
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.75
+          }
+        }
+      },
+      {
+        "sample": "rpc-4",
+        "cold": {
+          "latency_ms": 2877.213,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.547
+          }
+        },
+        "warm": {
+          "latency_ms": 49.12,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.578
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.578
+          }
+        }
+      },
+      {
+        "sample": "rpc-5",
+        "cold": {
+          "latency_ms": 1894.583,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.797
+          }
+        },
+        "warm": {
+          "latency_ms": 22.888,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.813
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.813
+          }
+        }
+      },
+      {
+        "sample": "rpc-6",
+        "cold": {
+          "latency_ms": 1480.396,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 181.469
+          }
+        },
+        "warm": {
+          "latency_ms": 19.841,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 181.531
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 181.531
+          }
+        }
+      },
+      {
+        "sample": "rpc-7",
+        "cold": {
+          "latency_ms": 1474.712,
+          "outcome": "ok",
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.656
+          }
+        },
+        "warm": {
+          "latency_ms": 34.672,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.672
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          },
+          "process_retained": true
+        },
+        "shutdown": {
+          "exit": {
+            "code": 0,
+            "signal": null
+          },
+          "shutdown": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.672
+          }
+        }
+      }
+    ],
+    "cancellation": {
+      "abort_request_acknowledged": true,
+      "completed_after_ms": 174.108,
+      "bash_result_returned": true,
+      "bash_cancelled": true
+    },
+    "crash_recovery": {
+      "outcome": "ok",
+      "killed_exit": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "recovery_new_process": true,
+      "recovery_new_session": true,
+      "recovery_shutdown": {
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "shutdown": {
+          "event": "session_shutdown",
+          "reason": "quit",
+          "cwd_matches_expected": true,
+          "context_cwd_matches_expected": true,
+          "process_cwd_matches_expected": true,
+          "cwd_comparison": "canonical_realpath",
+          "context_marker": "A",
+          "model": "openai-codex/gpt-5.6-terra",
+          "model_matches_expected": true,
+          "session_present": true,
+          "team_environment_clear": true,
+          "active_tool_count": 4,
+          "has_leader_only_tools": false,
+          "active_common_task_tools": 0,
+          "factory_generation": 1,
+          "module_command_count": 0,
+          "closure_command_count": 0,
+          "rss_mb": 188.297
+        }
+      }
+    },
+    "prebinding_tool_isolation": {
+      "outcome": "ok",
+      "unbound_team_environment_clear": true,
+      "leader_surface_present": true,
+      "active_common_task_tools": 3,
+      "interpretation": "The exact Pi Team Bright extension selected the leader surface before any Worker admission. This is not a Worker binding.",
+      "shutdown": {
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "shutdown": {
+          "event": "session_shutdown",
+          "reason": "quit",
+          "cwd_matches_expected": true,
+          "context_cwd_matches_expected": true,
+          "process_cwd_matches_expected": true,
+          "cwd_comparison": "canonical_realpath",
+          "context_marker": "A",
+          "model": "openai-codex/gpt-5.6-terra",
+          "model_matches_expected": true,
+          "session_present": true,
+          "team_environment_clear": true,
+          "active_tool_count": 13,
+          "has_leader_only_tools": true,
+          "active_common_task_tools": 3,
+          "factory_generation": 1,
+          "module_command_count": 0,
+          "closure_command_count": 0,
+          "rss_mb": 189.547
+        }
+      }
+    }
+  },
+  "sdk": {
+    "mechanism": "in_process_sdk_session_reuse",
+    "cold_label": "process_warm_initial_session_construction",
+    "cold_scope": "Pi was imported once in the benchmark runner before each sandbox set its isolated environment. This measure excludes process startup and module import/cache cost.",
+    "cold": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 8.09,
+      "p95_ms": 35.98,
+      "min_ms": 7.299,
+      "max_ms": 35.98,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "warm_label": "same_process_session_replacement",
+    "warm": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 8.082,
+      "p95_ms": 15.142,
+      "min_ms": 5.726,
+      "max_ms": 15.142,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "samples": [
+      {
+        "sample": "sdk-1",
+        "cold": {
+          "latency_ms": 35.98,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 224.109
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 15.142,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 232.094
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 232.094
+          }
+        }
+      },
+      {
+        "sample": "sdk-2",
+        "cold": {
+          "latency_ms": 10.275,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 232.25
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 8.082,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 232.281
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 232.281
+          }
+        }
+      },
+      {
+        "sample": "sdk-3",
+        "cold": {
+          "latency_ms": 8.699,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 232.453
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 8.144,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 234.438
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 234.531
+          }
+        }
+      },
+      {
+        "sample": "sdk-4",
+        "cold": {
+          "latency_ms": 7.788,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 237.094
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 7.548,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 239.656
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 239.719
+          }
+        }
+      },
+      {
+        "sample": "sdk-5",
+        "cold": {
+          "latency_ms": 8.09,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 242.484
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 10.89,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.516
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.516
+          }
+        }
+      },
+      {
+        "sample": "sdk-6",
+        "cold": {
+          "latency_ms": 8.015,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.516
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 5.763,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.547
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.547
+          }
+        }
+      },
+      {
+        "sample": "sdk-7",
+        "cold": {
+          "latency_ms": 7.299,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.578
+          },
+          "persisted_session_file": true
+        },
+        "warm": {
+          "latency_ms": 5.726,
+          "outcome": "ok",
+          "replacement": {
+            "session_id_changed": true,
+            "session_file_changed": true
+          },
+          "projection": {
+            "event": "session_start",
+            "reason": "new",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.594
+          },
+          "extension_retention": {
+            "module_instance_retained": true,
+            "factory_generation_before": 1,
+            "factory_generation_after": 2
+          }
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "B",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 2,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 249.594
+          }
+        }
+      }
+    ]
+  },
+  "preloaded_main": {
+    "mechanism": "single_use_preloaded_pi_main",
+    "import": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 990.829,
+      "p95_ms": 1540.849,
+      "min_ms": 769.964,
+      "max_ms": 1540.849,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "activation": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 75.613,
+      "p95_ms": 81.719,
+      "min_ms": 70.851,
+      "max_ms": 81.719,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "samples": [
+      {
+        "sample": "preloaded-main-1",
+        "import": {
+          "latency_ms": 769.964,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 171.328
+        },
+        "activation": {
+          "latency_ms": 70.851,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 171.438,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.141
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 178.141,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.203
+          }
+        }
+      },
+      {
+        "sample": "preloaded-main-2",
+        "import": {
+          "latency_ms": 856.514,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 173.125
+        },
+        "activation": {
+          "latency_ms": 75.613,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 173.281,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.422
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 177.422,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.453
+          }
+        }
+      },
+      {
+        "sample": "preloaded-main-3",
+        "import": {
+          "latency_ms": 1188.997,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 172.219
+        },
+        "activation": {
+          "latency_ms": 76.606,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 172.328,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.141
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 178.141,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.281
+          }
+        }
+      },
+      {
+        "sample": "preloaded-main-4",
+        "import": {
+          "latency_ms": 1540.849,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 175.516
+        },
+        "activation": {
+          "latency_ms": 81.719,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 175.641,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 180.078
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 180.078,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 180.109
+          }
+        }
+      },
+      {
+        "sample": "preloaded-main-5",
+        "import": {
+          "latency_ms": 990.829,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 171.625
+        },
+        "activation": {
+          "latency_ms": 71.456,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 171.734,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.484
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 177.484,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.625
+          }
+        }
+      },
+      {
+        "sample": "preloaded-main-6",
+        "import": {
+          "latency_ms": 1014.852,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 173.375
+        },
+        "activation": {
+          "latency_ms": 74.423,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 173.484,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.453
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 177.453,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 177.5
+          }
+        }
+      },
+      {
+        "sample": "preloaded-main-7",
+        "import": {
+          "latency_ms": 962.104,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "cwd_changed_only_at_activation": true,
+          "rss_mb": 173.484
+        },
+        "activation": {
+          "latency_ms": 76.472,
+          "outcome": "ok",
+          "main_exported": true,
+          "preloaded_extension_factory_count": 0,
+          "no_session_artifacts_before_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 173.609,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.422
+          },
+          "state": {
+            "session_present": true,
+            "session_file_present": true,
+            "model": "openai-codex/gpt-5.6-terra",
+            "thinking_level": "medium"
+          },
+          "session_rss_mb": 179.422,
+          "single_use_lease_consumed": true,
+          "reentry_not_attempted": "The launcher is deliberately destroyed after its first main invocation."
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.547
+          }
+        }
+      }
+    ],
+    "one_shot_failure_disposal": {
+      "outcome": "ok",
+      "process_destroyed_after_failed_activation": true,
+      "second_lease_not_attempted": true,
+      "reset_or_reuse_performed": false
+    },
+    "herdr_later_naming": "A preloaded child has no safe after-the-fact Herdr name. The separate pane experiment tests Herdr-owned naming at process spawn."
+  },
+  "preloaded_inline_ptb": {
+    "mechanism": "single_use_preloaded_inline_pi_team_bright",
+    "status": "run",
+    "import": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 1402.038,
+      "p95_ms": 4252.216,
+      "min_ms": 683.699,
+      "max_ms": 4252.216,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "activation": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 95.336,
+      "p95_ms": 161.202,
+      "min_ms": 68.401,
+      "max_ms": 161.202,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "samples": [
+      {
+        "sample": "preloaded-inline-ptb-1",
+        "import": {
+          "latency_ms": 4252.216,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 228.391
+        },
+        "activation": {
+          "latency_ms": 161.202,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 228.484,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 230.281
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 230.344
+          }
+        }
+      },
+      {
+        "sample": "preloaded-inline-ptb-2",
+        "import": {
+          "latency_ms": 2066.18,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 225.5
+        },
+        "activation": {
+          "latency_ms": 97.601,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 225.578,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 227.516
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 227.563
+          }
+        }
+      },
+      {
+        "sample": "preloaded-inline-ptb-3",
+        "import": {
+          "latency_ms": 1653.97,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 228.813
+        },
+        "activation": {
+          "latency_ms": 95.336,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 228.906,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 230.75
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 230.922
+          }
+        }
+      },
+      {
+        "sample": "preloaded-inline-ptb-4",
+        "import": {
+          "latency_ms": 1402.038,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 226.828
+        },
+        "activation": {
+          "latency_ms": 116.105,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 226.906,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 228.984
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 229.047
+          }
+        }
+      },
+      {
+        "sample": "preloaded-inline-ptb-5",
+        "import": {
+          "latency_ms": 1045.445,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 229.422
+        },
+        "activation": {
+          "latency_ms": 71.426,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 229.484,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 231.328
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 231.438
+          }
+        }
+      },
+      {
+        "sample": "preloaded-inline-ptb-6",
+        "import": {
+          "latency_ms": 830.004,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 228.406
+        },
+        "activation": {
+          "latency_ms": 70.129,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 228.484,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 230.25
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 230.281
+          }
+        }
+      },
+      {
+        "sample": "preloaded-inline-ptb-7",
+        "import": {
+          "latency_ms": 683.699,
+          "outcome": "ok",
+          "team_environment_clear_at_import": true,
+          "preloaded_extension_factory_count": 1,
+          "rss_mb": 226.891
+        },
+        "activation": {
+          "latency_ms": 68.401,
+          "outcome": "ok",
+          "no_session_artifacts_before_activation": true,
+          "cwd_changed_only_at_activation": true,
+          "no_tty_required_for_rpc": true,
+          "pre_activation_rss_mb": 226.969,
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 228.625
+          },
+          "leader_surface_selected_before_worker_admission": true,
+          "common_task_tools_on_leader_surface": 3,
+          "exact_worker_admission": "not attempted: no prepared Membership exists in this isolated carrier experiment.",
+          "single_use_lease_consumed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 13,
+            "has_leader_only_tools": true,
+            "active_common_task_tools": 3,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 228.766
+          }
+        }
+      }
+    ],
+    "one_shot_failure_disposal": {
+      "outcome": "ok",
+      "process_destroyed_after_failed_activation": true,
+      "second_lease_not_attempted": true,
+      "reset_or_reuse_performed": false
+    },
+    "interpretation": "Preloading the exact extension module does not create a Pi Session before activation, but the unbound process still selects the leader surface. It does not establish a Worker Membership or Task authority."
+  },
+  "pane": {
+    "mechanism": "reserved_unbound_herdr_carrier",
+    "status": "run",
+    "query_before_control": {
+      "herdr_agent_list_ok": true
+    },
+    "cold": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 3068.064,
+      "p95_ms": 3563.553,
+      "min_ms": 3061.268,
+      "max_ms": 3563.553,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "warm": {
+      "requested_samples": 7,
+      "successes": 7,
+      "failures": 0,
+      "p50_ms": 23.158,
+      "p95_ms": 191.846,
+      "min_ms": 11.774,
+      "max_ms": 191.846,
+      "percentile_method": "nearest-rank successful samples only"
+    },
+    "samples": [
+      {
+        "sample": "pane-1",
+        "cold": {
+          "latency_ms": 3061.268,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 178.031
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 24.106,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 178.422
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 178.438
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      },
+      {
+        "sample": "pane-2",
+        "cold": {
+          "latency_ms": 3068.064,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 181.875
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 20.176,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 182.344
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 182.344
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      },
+      {
+        "sample": "pane-3",
+        "cold": {
+          "latency_ms": 3065.297,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 179.953
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 11.774,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 180.313
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 180.313
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      },
+      {
+        "sample": "pane-4",
+        "cold": {
+          "latency_ms": 3062.34,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 181.813
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 23.158,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 182.453
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 182.5
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      },
+      {
+        "sample": "pane-5",
+        "cold": {
+          "latency_ms": 3118.363,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 180.797
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 31.586,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 181.328
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 181.375
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      },
+      {
+        "sample": "pane-6",
+        "cold": {
+          "latency_ms": 3205.972,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 180.016
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 23.121,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 180.5
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 180.547
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      },
+      {
+        "sample": "pane-7",
+        "cold": {
+          "latency_ms": 3563.553,
+          "outcome": "ok",
+          "projection": {
+            "event": "session_start",
+            "reason": "startup",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 0,
+            "closure_command_count": 0,
+            "rss_mb": 182.641
+          },
+          "named_by_herdr_at_spawn": true,
+          "agent_start_attempts": 1
+        },
+        "warm": {
+          "latency_ms": 191.846,
+          "outcome": "ok",
+          "projection": {
+            "event": "activation_command",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 182.969
+          },
+          "interpretation": "This is a local command in an unbound carrier. It is not Membership, readiness, or Task authority evidence."
+        },
+        "observation": {
+          "named_agent_observed": true,
+          "agent_output_read": true,
+          "exact_pane_observed": true,
+          "pane_process_observed": true
+        },
+        "shutdown": {
+          "outcome": "ok",
+          "projection": {
+            "event": "session_shutdown",
+            "reason": "quit",
+            "cwd_matches_expected": true,
+            "context_cwd_matches_expected": true,
+            "process_cwd_matches_expected": true,
+            "cwd_comparison": "canonical_realpath",
+            "context_marker": "A",
+            "model": "openai-codex/gpt-5.6-terra",
+            "model_matches_expected": true,
+            "session_present": true,
+            "team_environment_clear": true,
+            "active_tool_count": 4,
+            "has_leader_only_tools": false,
+            "active_common_task_tools": 0,
+            "factory_generation": 1,
+            "module_command_count": 1,
+            "closure_command_count": 1,
+            "rss_mb": 182.984
+          }
+        },
+        "cleanup": {
+          "created_pane_closed": true,
+          "named_agent_absent_after_close": true,
+          "pane_absent_after_close": true
+        }
+      }
+    ]
+  },
+  "decision": {
+    "architecture_impact": "none",
+    "ranked_mechanisms": [
+      {
+        "rank": 1,
+        "mechanism": "No production warm carrier",
+        "decision": "Keep the current one-process-per-Membership startup and exact Session admission contract."
+      },
+      {
+        "rank": 2,
+        "mechanism": "Persistent RPC Session replacement",
+        "decision": "Useful only as a controlled Session-replacement benchmark. Its process role, cwd, environment, and resource projection remain launch-fixed."
+      },
+      {
+        "rank": 3,
+        "mechanism": "In-process SDK Session reuse",
+        "decision": "Useful only as a controlled Session-replacement benchmark. Module-level extension state can survive within the process."
+      },
+      {
+        "rank": 4,
+        "mechanism": "Single-use preloaded Pi main",
+        "decision": "Can lower single-use activation time, but remains a fresh process with no after-the-fact Worker admission or Herdr naming path."
+      },
+      {
+        "rank": 5,
+        "mechanism": "Single-use preloaded inline Pi Team Bright factory",
+        "decision": "The unbound process still selects leader tools. It is not an exact Worker admission path."
+      },
+      {
+        "rank": 6,
+        "mechanism": "Reserved unbound Herdr carrier",
+        "decision": "Can run a fast local command, but must never imply Worker Membership, readiness, progress, or Task authority."
+      }
+    ],
+    "reversal_evidence": "A proposed production seam must prove exact Worker admission, one process generation per Membership, fresh Worker resource projection, post-bind Worker-only tool projection, and terminal observation without unchecked carrier reuse."
+  },
+  "cleanup": {
+    "temporary_root_removed": true,
+    "panes_created_by_runner_closed_and_absent": true
+  }
+}

@@ -6,6 +6,7 @@ import type {
   ModelToolGraphTaskUpdateInput,
   CreateTeamPortResult,
   EnsureWorkerPortResult,
+  EnsureWorkerExecutionContext,
   ExactLeaderSessionId,
   ModelToolLeaderLaunchContext,
   PendingObservation,
@@ -26,7 +27,7 @@ import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
 
 export interface ModelToolTeamApplicationPort {
   createTeam(leaderSessionId: ExactLeaderSessionId, input: { name: string; purpose: string; pane_layout?: TeamPaneLayout }): Promise<CreateTeamPortResult>;
-  ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string }): Promise<EnsureWorkerPortResult>;
+  ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string }, context?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult>;
   stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult>;
   shutdownTeam(leaderSessionId: ExactLeaderSessionId): Promise<TeamShutdownPortResult>;
   setLeaderSessionFile?(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void;

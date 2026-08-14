@@ -13,6 +13,7 @@ import * as taskAuthority from "./tasks";
 import * as runtime from "./runtime";
 import * as workerResources from "./worker-resource-projection";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { DurableTaskOrchestration } from "../adapters/durable-task-orchestration";
 
 type RegisteredTool = {
   name: string;
@@ -292,14 +293,26 @@ describe("ergonomic agent-facing Team contracts", () => {
       .not.toBe(firstSnapshotPage.details.postState.projection.tasks[0].id);
   }, 60_000);
 
-  it("creates or reuses one stable Worker without claiming runtime readiness", async () => {
+  it("creates or reuses one stable Worker without a Task-authority scan", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const livePrepared = terminal();
-    livePrepared.isAlive = (paneId) => paneId === "pane-worker";
-    setAdapter(livePrepared);
+    const traceDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-ensure-trace-"));
+    const traceFile = path.join(traceDirectory, "trace.jsonl");
+    vi.stubEnv("PI_TEAMS_TRACE_JSONL", traceFile);
     const team = uniqueTeam("worker-reuse");
     const leadSession = `/tmp/${team}-lead.jsonl`;
+    const workerSession = `/tmp/${team}-worker.jsonl`;
+    let sessionBinding: Promise<unknown> | undefined;
+    const livePrepared = terminal();
+    livePrepared.spawn = () => {
+      sessionBinding = (async () => {
+        const prepared = await teams.currentMembership(team, "worker");
+        await teams.bindMemberSession(team, "worker", workerSession, prepared.pendingLaunchId, {}, prepared.membershipId);
+      })();
+      return "pane-worker";
+    };
+    livePrepared.isAlive = (paneId) => paneId === "pane-worker";
+    setAdapter(livePrepared);
     await createBoundTeam(team, leadSession);
     const tools = registerTools();
     const params = {
@@ -308,31 +321,57 @@ describe("ergonomic agent-facing Team contracts", () => {
       scope: "Review interfaces and verify contract tests.",
       cwd: process.cwd(),
     };
-
     const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("ensure_worker must not read Task authority"));
-    const created = await tools.get("ensure_worker")!.execute(
-      "ensure-created", params, undefined, undefined, context(leadSession),
-    );
-    expect(created.details).toMatchObject({
-      kind: "worker_ensured",
-      effect: "created",
-      worker: { name: "worker", scope: params.scope, carrier: expect.any(String) },
-    });
-    expect(created.content[0].text).not.toContain("pane-worker");
+    const readyReconciliation = vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady")
+      .mockRejectedValue(new Error("ensure_worker must not schedule ready Task reconciliation"));
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on("unhandledRejection", onUnhandled);
 
-    const reused = await tools.get("ensure_worker")!.execute(
-      "ensure-reused", params, undefined, undefined, context(leadSession),
-    );
-    expect(reused.details).toMatchObject({
-      kind: "worker_ensured",
-      effect: "reused",
-      worker: { name: "worker", scope: params.scope },
-    });
-    const currentWorkers = (await teams.readConfig(team)).members.filter(
-      candidate => candidate.name === "worker" && candidate.isActive !== false,
-    );
-    expect(currentWorkers).toHaveLength(1);
-    expect(taskReads).toHaveBeenCalledTimes(0);
+    try {
+      const created = await tools.get("ensure_worker")!.execute(
+        "ensure-created", params, undefined, undefined, context(leadSession),
+      );
+      expect(created.details).toMatchObject({
+        kind: "worker_ensured",
+        effect: "created",
+        worker: { name: "worker", scope: params.scope, carrier: expect.any(String) },
+      });
+      expect(created.content[0].text).not.toContain("pane-worker");
+      if (!sessionBinding) throw new Error("Worker carrier was not spawned.");
+      await sessionBinding;
+
+      const reused = await tools.get("ensure_worker")!.execute(
+        "ensure-reused", params, undefined, undefined, context(leadSession),
+      );
+      expect(reused.details).toMatchObject({
+        kind: "worker_ensured",
+        effect: "reused",
+        worker: { name: "worker", scope: params.scope },
+      });
+      const currentWorkers = (await teams.readConfig(team)).members.filter(
+        candidate => candidate.name === "worker" && candidate.isActive !== false,
+      );
+      expect(currentWorkers).toHaveLength(1);
+      expect(taskReads).toHaveBeenCalledTimes(0);
+      expect(readyReconciliation).not.toHaveBeenCalled();
+
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(unhandled).toEqual([]);
+      const traces = fs.readFileSync(traceFile, "utf8").trim().split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      const toolTraces = traces.filter((record) => record.operation === "ensure_worker");
+      expect(toolTraces).toHaveLength(2);
+      for (const trace of toolTraces) {
+        expect(trace).toMatchObject({ workerName: "worker", outcome: "ok", bdCallCount: 0, bdTotalMs: 0 });
+        expect(typeof trace.durationMs).toBe("number");
+      }
+      expect(traces.filter((record) => typeof record.operation === "string" && record.operation.startsWith("task_"))).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      fs.rmSync(traceDirectory, { recursive: true, force: true });
+    }
   });
 
   it("observes the exact Worker binding and runtime during the bounded launch wait", async () => {

@@ -1,0 +1,71 @@
+{
+  "schema": "pi-team-bright-pre-actuation-ensure-latency-plan/1",
+  "stage": "exploration",
+  "question": "Which current integrated ensure_worker operations occupy the interval from model-tool ensure entry to prepared Membership publication, before terminal actuation?",
+  "external_anchor": {
+    "kind": "reported_exact_source_canary",
+    "ensure_started_to_membership_prepared_ms": 5012,
+    "status": "comparison anchor only; this experiment does not reproduce its ambient workload"
+  },
+  "boundary": {
+    "entry": "DurableModelToolTeamApplication.ensureWorker",
+    "exit": "WorkerLaunchBridge.launchPreparedMembership entry",
+    "excluded": [
+      "terminal or Herdr actuation",
+      "Pi process creation",
+      "Session binding and startup observation",
+      "post-launch task reconciliation"
+    ],
+    "proof": [
+      "The bridge subclass stops at launchPreparedMembership before its spawn callback.",
+      "Each successful trace verifies one current prepared Membership and one matching prepared event.",
+      "Each successful trace verifies zero spawn and zero task-reconciliation calls before the stop boundary."
+    ]
+  },
+  "phases": [
+    "leader_binding_and_config",
+    "logical_worker_persistence",
+    "bridge_team_config_and_terminal_detection",
+    "worker_resource_aggregate_projection",
+    "model_resolution",
+    "membership_persistence",
+    "prepared_event_publication",
+    "unattributed_bridge_overhead"
+  ],
+  "conditions": [
+    {
+      "name": "isolated",
+      "definition": "One ensure in one fresh child process with a fresh temporary home, Pi agent directory, project, Team, and event journal.",
+      "samples": 7
+    },
+    {
+      "name": "loaded",
+      "definition": "Four concurrent ensures for distinct logical Workers in one fresh isolated Team; every request stops at the same pre-actuation boundary.",
+      "groups": 7,
+      "workers_per_group": 4
+    },
+    {
+      "name": "directory_loaded",
+      "definition": "One ensure in a fresh isolated home that also contains 32 unrelated valid Team records. It measures exact leader-binding scan sensitivity without reading an ambient Team directory.",
+      "samples": 7,
+      "foreign_teams": 32
+    }
+  ],
+  "model_resolution": {
+    "path": "A temporary Worker default_model uses WorkerLaunchBridge.resolveNewWorkerModel and its resolveSettingsModel dependency.",
+    "limit": "The integrated lanes validate a prepared qualified model locally. Sample the current pi --list-models helper separately with only its candidate identity redacted because its model catalog depends on the active profile and project."
+  },
+  "task_reconciliation": {
+    "expected_before_boundary": "zero calls",
+    "reason": "Current DurableModelToolTeamApplication calls reconcileReady only after WorkerLaunchBridge.ensureWorker resolves, while this experiment stops inside that bridge before actuation."
+  },
+  "predictions": [
+    "A clean isolated source-coupled pre-actuation path will be materially shorter than the reported 5.012 s canary span.",
+    "The dominant measured serial writes will be logical Worker and Membership configuration persistence plus prepared-event publication, not task reconciliation.",
+    "Loaded samples will show lock-sensitive tail growth in configuration persistence.",
+    "The controlled Team-directory condition will increase leader-binding scan time, but it cannot identify the ambient canary's directory cardinality.",
+    "The current-profile model catalog resolver may be a material serial cost when a Worker default_model needs validation."
+  ],
+  "raw_record": "docs/journal/artifacts/2026-08-14-pre-actuation-ensure-latency-results.json",
+  "result": "docs/journal/2026-08-14-pre-actuation-ensure-latency-result.md"
+}

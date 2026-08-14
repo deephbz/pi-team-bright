@@ -1,0 +1,3630 @@
+{
+  "schema": "pi-team-bright/pre-actuation-ensure-latency-results/1",
+  "recorded_at": "2026-08-14T07:52:45.424Z",
+  "source": {
+    "revision": "e92de5686c38cb3d373a4092ec7fb30a69dd0ae0",
+    "source_bundle_sha256": "131b0e1616da9863f8348261e8042ee055f230754e8e2afb5d1c94e5efa18921",
+    "worktree_dirty_at_measurement": false,
+    "files": [
+      "benchmarks/pre-actuation-ensure-latency/README.md",
+      "benchmarks/pre-actuation-ensure-latency/plan.json",
+      "benchmarks/pre-actuation-ensure-latency/child.ts",
+      "benchmarks/pre-actuation-ensure-latency/run.ts",
+      "src/model-tool-contract/durable-model-tool-team-application.ts",
+      "src/team-authority/worker-launch-bridge.ts"
+    ],
+    "source_fence": {
+      "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+      "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+      "ordering_verified": true,
+      "stable_across_children": true
+    }
+  },
+  "environment": {
+    "node_version": "24.3.0",
+    "bun_version": "1.3.8",
+    "pi_version": "0.83.0",
+    "platform": "darwin-arm64",
+    "child_runtime": "fresh Bun process",
+    "resource_profile": "fresh temporary home, agent directory, and project"
+  },
+  "design": {
+    "target_interval": "model-tool ensure entry to durable prepared-event completion",
+    "post_target_boundary": "launchPreparedMembership entry before its spawn callback",
+    "external_comparison_anchor": {
+      "reported_exact_source_canary_ensure_started_to_membership_prepared_ms": 5012,
+      "status": "not reproduced; ambient workload and state are unknown"
+    },
+    "conditions": {
+      "isolated": "one ensure in one fresh isolated process and Team",
+      "loaded": "4 concurrent ensures for distinct Workers in one fresh isolated Team",
+      "directory_loaded": "one ensure with 32 unrelated valid Team records in its fresh isolated home"
+    },
+    "model_resolution": "The integrated lanes execute a local qualified-model validator. The current-profile production pi --list-models helper is sampled separately with its candidate identity redacted.",
+    "task_reconciliation": "The boundary makes WorkerLaunchBridge.ensureWorker return unavailable before DurableModelToolTeamApplication can call reconcileReady. No Beads operation is reachable before the target endpoint."
+  },
+  "raw_samples": [
+    {
+      "condition": "isolated",
+      "sample_index": 0,
+      "child_wall_ms": 328.493,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 299.027,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 2.336,
+              "logical_worker_persistence": 1.256,
+              "bridge_team_exists": 0.029,
+              "bridge_team_config_read": 0.36,
+              "terminal_detection": 0.157,
+              "worker_resource_aggregate_projection": 1.565,
+              "model_resolution": 0.015,
+              "membership_persistence": 1.28,
+              "prepared_event_publication": 1.235,
+              "bridge_team_config_and_terminal_detection": 0.546,
+              "unattributed_bridge_overhead": 0.958,
+              "unattributed_application_overhead": 0.431
+            },
+            "aggregate_paths": [],
+            "app_started_at": 306.127625,
+            "bridge_started_at": 310.150709,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 315.750084,
+            "launch_boundary_at": 315.832792,
+            "lock_wait_total_ms": 0,
+            "ensure_to_membership_prepared_ms": 9.622,
+            "bridge_to_membership_prepared_ms": 5.599,
+            "post_prepared_to_launch_boundary_ms": 0.083,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "isolated",
+      "sample_index": 1,
+      "child_wall_ms": 376.79,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 353.112,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 5.477,
+              "logical_worker_persistence": 5.413,
+              "bridge_team_exists": 0.029,
+              "bridge_team_config_read": 0.21,
+              "terminal_detection": 0.086,
+              "worker_resource_aggregate_projection": 0.767,
+              "model_resolution": 0.009,
+              "membership_persistence": 4.253,
+              "prepared_event_publication": 5.13,
+              "bridge_team_config_and_terminal_detection": 0.325,
+              "unattributed_bridge_overhead": 0.561,
+              "unattributed_application_overhead": 0.286
+            },
+            "aggregate_paths": [],
+            "app_started_at": 340.414916,
+            "bridge_started_at": 351.591666,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 362.636166,
+            "launch_boundary_at": 362.688625,
+            "lock_wait_total_ms": 14,
+            "ensure_to_membership_prepared_ms": 22.221,
+            "bridge_to_membership_prepared_ms": 11.045,
+            "post_prepared_to_launch_boundary_ms": 0.052,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "isolated",
+      "sample_index": 2,
+      "child_wall_ms": 353.759,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 334.839,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 6.546,
+              "logical_worker_persistence": 0.615,
+              "bridge_team_exists": 0.018,
+              "bridge_team_config_read": 0.173,
+              "terminal_detection": 0.079,
+              "worker_resource_aggregate_projection": 0.767,
+              "model_resolution": 0.009,
+              "membership_persistence": 0.516,
+              "prepared_event_publication": 0.962,
+              "bridge_team_config_and_terminal_detection": 0.27,
+              "unattributed_bridge_overhead": 0.563,
+              "unattributed_application_overhead": 0.304
+            },
+            "aggregate_paths": [],
+            "app_started_at": 327.325791,
+            "bridge_started_at": 334.791166,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 337.878166,
+            "launch_boundary_at": 337.940708,
+            "lock_wait_total_ms": 3,
+            "ensure_to_membership_prepared_ms": 10.552,
+            "bridge_to_membership_prepared_ms": 3.087,
+            "post_prepared_to_launch_boundary_ms": 0.063,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "isolated",
+      "sample_index": 3,
+      "child_wall_ms": 309.198,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 290.74,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 4.7,
+              "logical_worker_persistence": 0.867,
+              "bridge_team_exists": 0.021,
+              "bridge_team_config_read": 3.627,
+              "terminal_detection": 0.11,
+              "worker_resource_aggregate_projection": 0.852,
+              "model_resolution": 0.01,
+              "membership_persistence": 0.501,
+              "prepared_event_publication": 4.408,
+              "bridge_team_config_and_terminal_detection": 3.758,
+              "unattributed_bridge_overhead": 0.584,
+              "unattributed_application_overhead": 0.258
+            },
+            "aggregate_paths": [],
+            "app_started_at": 280.916667,
+            "bridge_started_at": 286.741458,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 296.854708,
+            "launch_boundary_at": 296.951542,
+            "lock_wait_total_ms": 4,
+            "ensure_to_membership_prepared_ms": 15.938,
+            "bridge_to_membership_prepared_ms": 10.113,
+            "post_prepared_to_launch_boundary_ms": 0.097,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "isolated",
+      "sample_index": 4,
+      "child_wall_ms": 300.785,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 280.931,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.885,
+              "logical_worker_persistence": 0.537,
+              "bridge_team_exists": 0.017,
+              "bridge_team_config_read": 0.185,
+              "terminal_detection": 0.101,
+              "worker_resource_aggregate_projection": 0.757,
+              "model_resolution": 0.009,
+              "membership_persistence": 4.573,
+              "prepared_event_publication": 4.832,
+              "bridge_team_config_and_terminal_detection": 0.303,
+              "unattributed_bridge_overhead": 0.602,
+              "unattributed_application_overhead": 0.289
+            },
+            "aggregate_paths": [],
+            "app_started_at": 274.092833,
+            "bridge_started_at": 276.803916,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 287.879666,
+            "launch_boundary_at": 287.975125,
+            "lock_wait_total_ms": 1,
+            "ensure_to_membership_prepared_ms": 13.787,
+            "bridge_to_membership_prepared_ms": 11.076,
+            "post_prepared_to_launch_boundary_ms": 0.095,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "isolated",
+      "sample_index": 5,
+      "child_wall_ms": 403.687,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 364.401,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.51,
+              "logical_worker_persistence": 0.577,
+              "bridge_team_exists": 0.018,
+              "bridge_team_config_read": 0.181,
+              "terminal_detection": 0.105,
+              "worker_resource_aggregate_projection": 0.876,
+              "model_resolution": 0.015,
+              "membership_persistence": 0.51,
+              "prepared_event_publication": 0.777,
+              "bridge_team_config_and_terminal_detection": 0.304,
+              "unattributed_bridge_overhead": 0.624,
+              "unattributed_application_overhead": 0.304
+            },
+            "aggregate_paths": [],
+            "app_started_at": 382.726166,
+            "bridge_started_at": 385.116583,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 388.222916,
+            "launch_boundary_at": 388.289208,
+            "lock_wait_total_ms": 1,
+            "ensure_to_membership_prepared_ms": 5.497,
+            "bridge_to_membership_prepared_ms": 3.106,
+            "post_prepared_to_launch_boundary_ms": 0.066,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "isolated",
+      "sample_index": 6,
+      "child_wall_ms": 342.654,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "isolated",
+        "worker_count": 1,
+        "foreign_team_count": 0,
+        "setup_ms": 320.234,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.212,
+              "logical_worker_persistence": 0.743,
+              "bridge_team_exists": 0.021,
+              "bridge_team_config_read": 0.223,
+              "terminal_detection": 0.101,
+              "worker_resource_aggregate_projection": 0.836,
+              "model_resolution": 0.011,
+              "membership_persistence": 0.54,
+              "prepared_event_publication": 0.753,
+              "bridge_team_config_and_terminal_detection": 0.345,
+              "unattributed_bridge_overhead": 0.663,
+              "unattributed_application_overhead": 0.308
+            },
+            "aggregate_paths": [],
+            "app_started_at": 328.14925,
+            "bridge_started_at": 330.411333,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 333.559791,
+            "launch_boundary_at": 333.638708,
+            "lock_wait_total_ms": 1,
+            "ensure_to_membership_prepared_ms": 5.411,
+            "bridge_to_membership_prepared_ms": 3.148,
+            "post_prepared_to_launch_boundary_ms": 0.079,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 0,
+      "child_wall_ms": 333.774,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 312.595,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.594,
+              "logical_worker_persistence": 0.506,
+              "bridge_team_exists": 0.022,
+              "bridge_team_config_read": 0.186,
+              "terminal_detection": 0.084,
+              "worker_resource_aggregate_projection": 0.842,
+              "model_resolution": 0.011,
+              "membership_persistence": 0.492,
+              "prepared_event_publication": 0.764,
+              "bridge_team_config_and_terminal_detection": 0.292,
+              "unattributed_bridge_overhead": 0.594,
+              "unattributed_application_overhead": 0.299
+            },
+            "aggregate_paths": [],
+            "app_started_at": 307.290792,
+            "bridge_started_at": 309.689208,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 312.684458,
+            "launch_boundary_at": 312.74725,
+            "lock_wait_total_ms": 0,
+            "ensure_to_membership_prepared_ms": 5.394,
+            "bridge_to_membership_prepared_ms": 2.995,
+            "post_prepared_to_launch_boundary_ms": 0.063,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 11.698,
+              "logical_worker_persistence": 0.441,
+              "bridge_team_exists": 0.006,
+              "bridge_team_config_read": 0.177,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.419,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.404,
+              "prepared_event_publication": 0.417,
+              "bridge_team_config_and_terminal_detection": 0.186,
+              "unattributed_bridge_overhead": 0.028,
+              "unattributed_application_overhead": 0.013
+            },
+            "aggregate_paths": [],
+            "app_started_at": 308.366375,
+            "bridge_started_at": 320.518792,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 321.973417,
+            "launch_boundary_at": 321.99475,
+            "lock_wait_total_ms": 12,
+            "ensure_to_membership_prepared_ms": 13.607,
+            "bridge_to_membership_prepared_ms": 1.455,
+            "post_prepared_to_launch_boundary_ms": 0.021,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 13.791,
+              "logical_worker_persistence": 0.367,
+              "bridge_team_exists": 0.005,
+              "bridge_team_config_read": 0.163,
+              "terminal_detection": 0.002,
+              "worker_resource_aggregate_projection": 0.348,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.377,
+              "prepared_event_publication": 0.385,
+              "bridge_team_config_and_terminal_detection": 0.17,
+              "unattributed_bridge_overhead": 0.023,
+              "unattributed_application_overhead": 0.009
+            },
+            "aggregate_paths": [],
+            "app_started_at": 308.562167,
+            "bridge_started_at": 322.729542,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 324.033667,
+            "launch_boundary_at": 324.044208,
+            "lock_wait_total_ms": 15,
+            "ensure_to_membership_prepared_ms": 15.471,
+            "bridge_to_membership_prepared_ms": 1.304,
+            "post_prepared_to_launch_boundary_ms": 0.011,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 7.898,
+              "logical_worker_persistence": 0.433,
+              "bridge_team_exists": 0.013,
+              "bridge_team_config_read": 0.163,
+              "terminal_detection": 0.005,
+              "worker_resource_aggregate_projection": 0.419,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.396,
+              "prepared_event_publication": 0.434,
+              "bridge_team_config_and_terminal_detection": 0.181,
+              "unattributed_bridge_overhead": 0.032,
+              "unattributed_application_overhead": 0.019
+            },
+            "aggregate_paths": [],
+            "app_started_at": 308.661042,
+            "bridge_started_at": 317.010458,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 318.473583,
+            "launch_boundary_at": 318.485625,
+            "lock_wait_total_ms": 8,
+            "ensure_to_membership_prepared_ms": 9.813,
+            "bridge_to_membership_prepared_ms": 1.463,
+            "post_prepared_to_launch_boundary_ms": 0.012,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 1,
+      "child_wall_ms": 373.813,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 351.754,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 2.88,
+              "logical_worker_persistence": 1.12,
+              "bridge_team_exists": 0.037,
+              "bridge_team_config_read": 0.323,
+              "terminal_detection": 0.125,
+              "worker_resource_aggregate_projection": 1.18,
+              "model_resolution": 0.015,
+              "membership_persistence": 0.716,
+              "prepared_event_publication": 1.42,
+              "bridge_team_config_and_terminal_detection": 0.485,
+              "unattributed_bridge_overhead": 0.815,
+              "unattributed_application_overhead": 0.738
+            },
+            "aggregate_paths": [],
+            "app_started_at": 330.956166,
+            "bridge_started_at": 335.694416,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 340.325041,
+            "launch_boundary_at": 340.418041,
+            "lock_wait_total_ms": 0,
+            "ensure_to_membership_prepared_ms": 9.369,
+            "bridge_to_membership_prepared_ms": 4.631,
+            "post_prepared_to_launch_boundary_ms": 0.093,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 25,
+              "logical_worker_persistence": 0.937,
+              "bridge_team_exists": 0.008,
+              "bridge_team_config_read": 0.268,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.54,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.755,
+              "prepared_event_publication": 0.695,
+              "bridge_team_config_and_terminal_detection": 0.279,
+              "unattributed_bridge_overhead": 0.042,
+              "unattributed_application_overhead": 0.038
+            },
+            "aggregate_paths": [],
+            "app_started_at": 333.018166,
+            "bridge_started_at": 358.993666,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 361.305208,
+            "launch_boundary_at": 361.3205,
+            "lock_wait_total_ms": 26,
+            "ensure_to_membership_prepared_ms": 28.287,
+            "bridge_to_membership_prepared_ms": 2.312,
+            "post_prepared_to_launch_boundary_ms": 0.015,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 15.753,
+              "logical_worker_persistence": 1.251,
+              "bridge_team_exists": 0.029,
+              "bridge_team_config_read": 0.608,
+              "terminal_detection": 0.006,
+              "worker_resource_aggregate_projection": 1.059,
+              "model_resolution": 0.019,
+              "membership_persistence": 0.973,
+              "prepared_event_publication": 0.728,
+              "bridge_team_config_and_terminal_detection": 0.643,
+              "unattributed_bridge_overhead": 0.107,
+              "unattributed_application_overhead": 0.056
+            },
+            "aggregate_paths": [],
+            "app_started_at": 333.41,
+            "bridge_started_at": 350.46975,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 353.998833,
+            "launch_boundary_at": 354.0305,
+            "lock_wait_total_ms": 15,
+            "ensure_to_membership_prepared_ms": 20.589,
+            "bridge_to_membership_prepared_ms": 3.529,
+            "post_prepared_to_launch_boundary_ms": 0.032,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 21.026,
+              "logical_worker_persistence": 0.537,
+              "bridge_team_exists": 0.012,
+              "bridge_team_config_read": 0.236,
+              "terminal_detection": 0.006,
+              "worker_resource_aggregate_projection": 0.636,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.657,
+              "prepared_event_publication": 0.658,
+              "bridge_team_config_and_terminal_detection": 0.254,
+              "unattributed_bridge_overhead": 0.042,
+              "unattributed_application_overhead": 0.016
+            },
+            "aggregate_paths": [],
+            "app_started_at": 333.632958,
+            "bridge_started_at": 355.211416,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 357.45975,
+            "launch_boundary_at": 357.472875,
+            "lock_wait_total_ms": 21,
+            "ensure_to_membership_prepared_ms": 23.827,
+            "bridge_to_membership_prepared_ms": 2.248,
+            "post_prepared_to_launch_boundary_ms": 0.013,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 2,
+      "child_wall_ms": 419.664,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 390.875,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.803,
+              "logical_worker_persistence": 0.683,
+              "bridge_team_exists": 0.029,
+              "bridge_team_config_read": 0.28,
+              "terminal_detection": 0.106,
+              "worker_resource_aggregate_projection": 1.028,
+              "model_resolution": 0.017,
+              "membership_persistence": 0.649,
+              "prepared_event_publication": 0.907,
+              "bridge_team_config_and_terminal_detection": 0.415,
+              "unattributed_bridge_overhead": 0.754,
+              "unattributed_application_overhead": 0.348
+            },
+            "aggregate_paths": [],
+            "app_started_at": 387.585334,
+            "bridge_started_at": 390.418709,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 394.189042,
+            "launch_boundary_at": 394.284834,
+            "lock_wait_total_ms": 2,
+            "ensure_to_membership_prepared_ms": 6.604,
+            "bridge_to_membership_prepared_ms": 3.77,
+            "post_prepared_to_launch_boundary_ms": 0.096,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 17.286,
+              "logical_worker_persistence": 0.432,
+              "bridge_team_exists": 0.006,
+              "bridge_team_config_read": 0.192,
+              "terminal_detection": 0.004,
+              "worker_resource_aggregate_projection": 0.424,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.445,
+              "prepared_event_publication": 0.439,
+              "bridge_team_config_and_terminal_detection": 0.202,
+              "unattributed_bridge_overhead": 0.025,
+              "unattributed_application_overhead": 0.013
+            },
+            "aggregate_paths": [],
+            "app_started_at": 388.778375,
+            "bridge_started_at": 406.510084,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 408.045667,
+            "launch_boundary_at": 408.059125,
+            "lock_wait_total_ms": 17,
+            "ensure_to_membership_prepared_ms": 19.267,
+            "bridge_to_membership_prepared_ms": 1.536,
+            "post_prepared_to_launch_boundary_ms": 0.013,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 14.639,
+              "logical_worker_persistence": 0.456,
+              "bridge_team_exists": 0.008,
+              "bridge_team_config_read": 0.198,
+              "terminal_detection": 0.004,
+              "worker_resource_aggregate_projection": 0.424,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.433,
+              "prepared_event_publication": 0.444,
+              "bridge_team_config_and_terminal_detection": 0.21,
+              "unattributed_bridge_overhead": 0.026,
+              "unattributed_application_overhead": 0.01
+            },
+            "aggregate_paths": [],
+            "app_started_at": 388.993667,
+            "bridge_started_at": 404.098459,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 405.636959,
+            "launch_boundary_at": 405.647167,
+            "lock_wait_total_ms": 14,
+            "ensure_to_membership_prepared_ms": 16.643,
+            "bridge_to_membership_prepared_ms": 1.538,
+            "post_prepared_to_launch_boundary_ms": 0.01,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 11.828,
+              "logical_worker_persistence": 0.512,
+              "bridge_team_exists": 0.013,
+              "bridge_team_config_read": 0.213,
+              "terminal_detection": 0.004,
+              "worker_resource_aggregate_projection": 0.468,
+              "model_resolution": 0.002,
+              "membership_persistence": 0.464,
+              "prepared_event_publication": 0.509,
+              "bridge_team_config_and_terminal_detection": 0.23,
+              "unattributed_bridge_overhead": 0.037,
+              "unattributed_application_overhead": 0.019
+            },
+            "aggregate_paths": [],
+            "app_started_at": 389.10975,
+            "bridge_started_at": 401.468917,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 403.178542,
+            "launch_boundary_at": 403.201834,
+            "lock_wait_total_ms": 13,
+            "ensure_to_membership_prepared_ms": 14.069,
+            "bridge_to_membership_prepared_ms": 1.71,
+            "post_prepared_to_launch_boundary_ms": 0.023,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 3,
+      "child_wall_ms": 379.571,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 355,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.71,
+              "logical_worker_persistence": 0.656,
+              "bridge_team_exists": 0.039,
+              "bridge_team_config_read": 0.275,
+              "terminal_detection": 0.106,
+              "worker_resource_aggregate_projection": 1.005,
+              "model_resolution": 0.013,
+              "membership_persistence": 0.637,
+              "prepared_event_publication": 1.007,
+              "bridge_team_config_and_terminal_detection": 0.42,
+              "unattributed_bridge_overhead": 0.712,
+              "unattributed_application_overhead": 0.344
+            },
+            "aggregate_paths": [],
+            "app_started_at": 348.3425,
+            "bridge_started_at": 351.052084,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 354.846334,
+            "launch_boundary_at": 354.921709,
+            "lock_wait_total_ms": 1,
+            "ensure_to_membership_prepared_ms": 6.504,
+            "bridge_to_membership_prepared_ms": 3.794,
+            "post_prepared_to_launch_boundary_ms": 0.075,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 7.724,
+              "logical_worker_persistence": 0.466,
+              "bridge_team_exists": 0.014,
+              "bridge_team_config_read": 0.188,
+              "terminal_detection": 0.007,
+              "worker_resource_aggregate_projection": 0.442,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.443,
+              "prepared_event_publication": 0.49,
+              "bridge_team_config_and_terminal_detection": 0.209,
+              "unattributed_bridge_overhead": 0.038,
+              "unattributed_application_overhead": 0.02
+            },
+            "aggregate_paths": [],
+            "app_started_at": 349.458,
+            "bridge_started_at": 357.668125,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 359.290709,
+            "launch_boundary_at": 359.308167,
+            "lock_wait_total_ms": 8,
+            "ensure_to_membership_prepared_ms": 9.833,
+            "bridge_to_membership_prepared_ms": 1.623,
+            "post_prepared_to_launch_boundary_ms": 0.017,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 16.873,
+              "logical_worker_persistence": 0.507,
+              "bridge_team_exists": 0.009,
+              "bridge_team_config_read": 0.208,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.509,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.495,
+              "prepared_event_publication": 0.485,
+              "bridge_team_config_and_terminal_detection": 0.22,
+              "unattributed_bridge_overhead": 0.027,
+              "unattributed_application_overhead": 0.011
+            },
+            "aggregate_paths": [],
+            "app_started_at": 349.665417,
+            "bridge_started_at": 367.056167,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 368.793084,
+            "launch_boundary_at": 368.805459,
+            "lock_wait_total_ms": 16,
+            "ensure_to_membership_prepared_ms": 19.128,
+            "bridge_to_membership_prepared_ms": 1.737,
+            "post_prepared_to_launch_boundary_ms": 0.012,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 13.969,
+              "logical_worker_persistence": 0.521,
+              "bridge_team_exists": 0.008,
+              "bridge_team_config_read": 0.201,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.499,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.48,
+              "prepared_event_publication": 0.517,
+              "bridge_team_config_and_terminal_detection": 0.212,
+              "unattributed_bridge_overhead": 0.032,
+              "unattributed_application_overhead": 0.012
+            },
+            "aggregate_paths": [],
+            "app_started_at": 349.778042,
+            "bridge_started_at": 364.28075,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 366.021417,
+            "launch_boundary_at": 366.044167,
+            "lock_wait_total_ms": 13,
+            "ensure_to_membership_prepared_ms": 16.243,
+            "bridge_to_membership_prepared_ms": 1.741,
+            "post_prepared_to_launch_boundary_ms": 0.023,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 4,
+      "child_wall_ms": 368.383,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 345.282,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.73,
+              "logical_worker_persistence": 0.588,
+              "bridge_team_exists": 0.021,
+              "bridge_team_config_read": 0.204,
+              "terminal_detection": 0.102,
+              "worker_resource_aggregate_projection": 0.948,
+              "model_resolution": 0.013,
+              "membership_persistence": 0.603,
+              "prepared_event_publication": 0.899,
+              "bridge_team_config_and_terminal_detection": 0.327,
+              "unattributed_bridge_overhead": 0.691,
+              "unattributed_application_overhead": 0.35
+            },
+            "aggregate_paths": [],
+            "app_started_at": 338.019083,
+            "bridge_started_at": 340.687375,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 344.168416,
+            "launch_boundary_at": 344.242,
+            "lock_wait_total_ms": 0,
+            "ensure_to_membership_prepared_ms": 6.149,
+            "bridge_to_membership_prepared_ms": 3.481,
+            "post_prepared_to_launch_boundary_ms": 0.074,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 16.612,
+              "logical_worker_persistence": 0.4,
+              "bridge_team_exists": 0.006,
+              "bridge_team_config_read": 0.179,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.401,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.409,
+              "prepared_event_publication": 0.666,
+              "bridge_team_config_and_terminal_detection": 0.188,
+              "unattributed_bridge_overhead": 0.025,
+              "unattributed_application_overhead": 0.016
+            },
+            "aggregate_paths": [],
+            "app_started_at": 339.18075,
+            "bridge_started_at": 356.20825,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 357.898708,
+            "launch_boundary_at": 357.930125,
+            "lock_wait_total_ms": 17,
+            "ensure_to_membership_prepared_ms": 18.718,
+            "bridge_to_membership_prepared_ms": 1.69,
+            "post_prepared_to_launch_boundary_ms": 0.031,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 10.703,
+              "logical_worker_persistence": 0.45,
+              "bridge_team_exists": 0.012,
+              "bridge_team_config_read": 0.182,
+              "terminal_detection": 0.004,
+              "worker_resource_aggregate_projection": 0.413,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.425,
+              "prepared_event_publication": 0.436,
+              "bridge_team_config_and_terminal_detection": 0.198,
+              "unattributed_bridge_overhead": 0.035,
+              "unattributed_application_overhead": 0.016
+            },
+            "aggregate_paths": [],
+            "app_started_at": 339.394041,
+            "bridge_started_at": 350.563,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 352.070625,
+            "launch_boundary_at": 352.081791,
+            "lock_wait_total_ms": 10,
+            "ensure_to_membership_prepared_ms": 12.677,
+            "bridge_to_membership_prepared_ms": 1.508,
+            "post_prepared_to_launch_boundary_ms": 0.011,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 12.968,
+              "logical_worker_persistence": 0.382,
+              "bridge_team_exists": 0.007,
+              "bridge_team_config_read": 0.181,
+              "terminal_detection": 0.002,
+              "worker_resource_aggregate_projection": 0.389,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.397,
+              "prepared_event_publication": 0.428,
+              "bridge_team_config_and_terminal_detection": 0.19,
+              "unattributed_bridge_overhead": 0.021,
+              "unattributed_application_overhead": 0.008
+            },
+            "aggregate_paths": [],
+            "app_started_at": 339.509,
+            "bridge_started_at": 352.86675,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 354.2925,
+            "launch_boundary_at": 354.302458,
+            "lock_wait_total_ms": 13,
+            "ensure_to_membership_prepared_ms": 14.784,
+            "bridge_to_membership_prepared_ms": 1.426,
+            "post_prepared_to_launch_boundary_ms": 0.01,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 5,
+      "child_wall_ms": 362.483,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 339.601,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.616,
+              "logical_worker_persistence": 0.538,
+              "bridge_team_exists": 0.017,
+              "bridge_team_config_read": 0.199,
+              "terminal_detection": 0.091,
+              "worker_resource_aggregate_projection": 0.831,
+              "model_resolution": 0.014,
+              "membership_persistence": 0.522,
+              "prepared_event_publication": 0.82,
+              "bridge_team_config_and_terminal_detection": 0.307,
+              "unattributed_bridge_overhead": 0.617,
+              "unattributed_application_overhead": 0.326
+            },
+            "aggregate_paths": [],
+            "app_started_at": 337.169708,
+            "bridge_started_at": 339.648916,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 342.760333,
+            "launch_boundary_at": 342.84375,
+            "lock_wait_total_ms": 1,
+            "ensure_to_membership_prepared_ms": 5.591,
+            "bridge_to_membership_prepared_ms": 3.111,
+            "post_prepared_to_launch_boundary_ms": 0.083,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 11.616,
+              "logical_worker_persistence": 0.381,
+              "bridge_team_exists": 0.007,
+              "bridge_team_config_read": 0.172,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.407,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.389,
+              "prepared_event_publication": 0.419,
+              "bridge_team_config_and_terminal_detection": 0.182,
+              "unattributed_bridge_overhead": 0.031,
+              "unattributed_application_overhead": 0.013
+            },
+            "aggregate_paths": [],
+            "app_started_at": 338.25475,
+            "bridge_started_at": 350.264666,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 351.693458,
+            "launch_boundary_at": 351.710291,
+            "lock_wait_total_ms": 12,
+            "ensure_to_membership_prepared_ms": 13.439,
+            "bridge_to_membership_prepared_ms": 1.429,
+            "post_prepared_to_launch_boundary_ms": 0.017,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 6.668,
+              "logical_worker_persistence": 0.424,
+              "bridge_team_exists": 0.01,
+              "bridge_team_config_read": 0.169,
+              "terminal_detection": 0.005,
+              "worker_resource_aggregate_projection": 0.4,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.406,
+              "prepared_event_publication": 0.446,
+              "bridge_team_config_and_terminal_detection": 0.184,
+              "unattributed_bridge_overhead": 0.03,
+              "unattributed_application_overhead": 0.017
+            },
+            "aggregate_paths": [],
+            "app_started_at": 338.457416,
+            "bridge_started_at": 345.566166,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 347.033083,
+            "launch_boundary_at": 347.04425,
+            "lock_wait_total_ms": 6,
+            "ensure_to_membership_prepared_ms": 8.576,
+            "bridge_to_membership_prepared_ms": 1.467,
+            "post_prepared_to_launch_boundary_ms": 0.011,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 8.888,
+              "logical_worker_persistence": 0.392,
+              "bridge_team_exists": 0.006,
+              "bridge_team_config_read": 0.17,
+              "terminal_detection": 0.003,
+              "worker_resource_aggregate_projection": 0.377,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.389,
+              "prepared_event_publication": 0.527,
+              "bridge_team_config_and_terminal_detection": 0.179,
+              "unattributed_bridge_overhead": 0.018,
+              "unattributed_application_overhead": 0.007
+            },
+            "aggregate_paths": [],
+            "app_started_at": 338.560375,
+            "bridge_started_at": 347.847333,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 349.338541,
+            "launch_boundary_at": 349.355375,
+            "lock_wait_total_ms": 10,
+            "ensure_to_membership_prepared_ms": 10.778,
+            "bridge_to_membership_prepared_ms": 1.491,
+            "post_prepared_to_launch_boundary_ms": 0.017,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "loaded",
+      "sample_index": 6,
+      "child_wall_ms": 411.394,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "loaded",
+        "worker_count": 4,
+        "foreign_team_count": 0,
+        "setup_ms": 388.341,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.893,
+              "logical_worker_persistence": 6.057,
+              "bridge_team_exists": 0.029,
+              "bridge_team_config_read": 3.54,
+              "terminal_detection": 0.141,
+              "worker_resource_aggregate_projection": 3.973,
+              "model_resolution": 0.018,
+              "membership_persistence": 1.008,
+              "prepared_event_publication": 1.057,
+              "bridge_team_config_and_terminal_detection": 3.71,
+              "unattributed_bridge_overhead": 0.869,
+              "unattributed_application_overhead": 0.358
+            },
+            "aggregate_paths": [],
+            "app_started_at": 342.383958,
+            "bridge_started_at": 350.691958,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 361.326708,
+            "launch_boundary_at": 361.425958,
+            "lock_wait_total_ms": 8,
+            "ensure_to_membership_prepared_ms": 18.943,
+            "bridge_to_membership_prepared_ms": 10.635,
+            "post_prepared_to_launch_boundary_ms": 0.099,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 1,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 18.592,
+              "logical_worker_persistence": 1.171,
+              "bridge_team_exists": 0.016,
+              "bridge_team_config_read": 3.746,
+              "terminal_detection": 0.009,
+              "worker_resource_aggregate_projection": 0.552,
+              "model_resolution": 0.001,
+              "membership_persistence": 5.167,
+              "prepared_event_publication": 3.688,
+              "bridge_team_config_and_terminal_detection": 3.771,
+              "unattributed_bridge_overhead": 0.057,
+              "unattributed_application_overhead": 0.024
+            },
+            "aggregate_paths": [],
+            "app_started_at": 343.586875,
+            "bridge_started_at": 363.373375,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 376.609666,
+            "launch_boundary_at": 376.634083,
+            "lock_wait_total_ms": 25,
+            "ensure_to_membership_prepared_ms": 33.023,
+            "bridge_to_membership_prepared_ms": 13.236,
+            "post_prepared_to_launch_boundary_ms": 0.024,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 2,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 49.659,
+              "logical_worker_persistence": 0.497,
+              "bridge_team_exists": 0.009,
+              "bridge_team_config_read": 0.22,
+              "terminal_detection": 0.004,
+              "worker_resource_aggregate_projection": 0.48,
+              "model_resolution": 0.001,
+              "membership_persistence": 0.611,
+              "prepared_event_publication": 0.531,
+              "bridge_team_config_and_terminal_detection": 0.233,
+              "unattributed_bridge_overhead": 0.039,
+              "unattributed_application_overhead": 0.016
+            },
+            "aggregate_paths": [],
+            "app_started_at": 343.80525,
+            "bridge_started_at": 393.976666,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 395.871833,
+            "launch_boundary_at": 395.895333,
+            "lock_wait_total_ms": 50,
+            "ensure_to_membership_prepared_ms": 52.067,
+            "bridge_to_membership_prepared_ms": 1.895,
+            "post_prepared_to_launch_boundary_ms": 0.024,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          },
+          {
+            "worker_index": 3,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 33.29,
+              "logical_worker_persistence": 0.542,
+              "bridge_team_exists": 0.01,
+              "bridge_team_config_read": 0.253,
+              "terminal_detection": 0.004,
+              "worker_resource_aggregate_projection": 0.584,
+              "model_resolution": 0.001,
+              "membership_persistence": 4.915,
+              "prepared_event_publication": 5.063,
+              "bridge_team_config_and_terminal_detection": 0.267,
+              "unattributed_bridge_overhead": 0.035,
+              "unattributed_application_overhead": 0.016
+            },
+            "aggregate_paths": [],
+            "app_started_at": 343.920625,
+            "bridge_started_at": 377.768,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 388.633125,
+            "launch_boundary_at": 388.64975,
+            "lock_wait_total_ms": 34,
+            "ensure_to_membership_prepared_ms": 44.713,
+            "bridge_to_membership_prepared_ms": 10.865,
+            "post_prepared_to_launch_boundary_ms": 0.017,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 0,
+      "child_wall_ms": 512.567,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 487.886,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 10.986,
+              "logical_worker_persistence": 0.852,
+              "bridge_team_exists": 0.03,
+              "bridge_team_config_read": 0.273,
+              "terminal_detection": 0.144,
+              "worker_resource_aggregate_projection": 1.102,
+              "model_resolution": 0.015,
+              "membership_persistence": 0.864,
+              "prepared_event_publication": 1.309,
+              "bridge_team_config_and_terminal_detection": 0.447,
+              "unattributed_bridge_overhead": 0.849,
+              "unattributed_application_overhead": 0.445
+            },
+            "aggregate_paths": [],
+            "app_started_at": 484.144583,
+            "bridge_started_at": 496.428333,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 501.014041,
+            "launch_boundary_at": 501.109375,
+            "lock_wait_total_ms": 10,
+            "ensure_to_membership_prepared_ms": 16.869,
+            "bridge_to_membership_prepared_ms": 4.586,
+            "post_prepared_to_launch_boundary_ms": 0.095,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 1,
+      "child_wall_ms": 594.201,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 556.247,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 6.632,
+              "logical_worker_persistence": 0.808,
+              "bridge_team_exists": 0.028,
+              "bridge_team_config_read": 0.269,
+              "terminal_detection": 0.141,
+              "worker_resource_aggregate_projection": 5.164,
+              "model_resolution": 0.017,
+              "membership_persistence": 8.856,
+              "prepared_event_publication": 1.338,
+              "bridge_team_config_and_terminal_detection": 0.438,
+              "unattributed_bridge_overhead": 0.99,
+              "unattributed_application_overhead": 0.429
+            },
+            "aggregate_paths": [],
+            "app_started_at": 553.370334,
+            "bridge_started_at": 561.239917,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 578.042542,
+            "launch_boundary_at": 578.133917,
+            "lock_wait_total_ms": 8,
+            "ensure_to_membership_prepared_ms": 24.672,
+            "bridge_to_membership_prepared_ms": 16.803,
+            "post_prepared_to_launch_boundary_ms": 0.091,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 2,
+      "child_wall_ms": 484.143,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 455.058,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 2.774,
+              "logical_worker_persistence": 0.699,
+              "bridge_team_exists": 0.022,
+              "bridge_team_config_read": 0.225,
+              "terminal_detection": 0.116,
+              "worker_resource_aggregate_projection": 1.773,
+              "model_resolution": 0.027,
+              "membership_persistence": 1.397,
+              "prepared_event_publication": 2.075,
+              "bridge_team_config_and_terminal_detection": 0.363,
+              "unattributed_bridge_overhead": 0.968,
+              "unattributed_application_overhead": 0.396
+            },
+            "aggregate_paths": [],
+            "app_started_at": 460.964791,
+            "bridge_started_at": 464.834083,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 471.436833,
+            "launch_boundary_at": 471.554375,
+            "lock_wait_total_ms": 1,
+            "ensure_to_membership_prepared_ms": 10.472,
+            "bridge_to_membership_prepared_ms": 6.603,
+            "post_prepared_to_launch_boundary_ms": 0.118,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 3,
+      "child_wall_ms": 609.543,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 578.079,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 2.926,
+              "logical_worker_persistence": 0.758,
+              "bridge_team_exists": 0.028,
+              "bridge_team_config_read": 4.9,
+              "terminal_detection": 0.145,
+              "worker_resource_aggregate_projection": 4.532,
+              "model_resolution": 0.015,
+              "membership_persistence": 3.959,
+              "prepared_event_publication": 1.417,
+              "bridge_team_config_and_terminal_detection": 5.073,
+              "unattributed_bridge_overhead": 0.846,
+              "unattributed_application_overhead": 0.402
+            },
+            "aggregate_paths": [],
+            "app_started_at": 576.085583,
+            "bridge_started_at": 580.17075,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 596.013208,
+            "launch_boundary_at": 596.226083,
+            "lock_wait_total_ms": 0,
+            "ensure_to_membership_prepared_ms": 19.928,
+            "bridge_to_membership_prepared_ms": 15.842,
+            "post_prepared_to_launch_boundary_ms": 0.213,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 4,
+      "child_wall_ms": 541.309,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 513.259,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 5.191,
+              "logical_worker_persistence": 0.614,
+              "bridge_team_exists": 0.021,
+              "bridge_team_config_read": 0.209,
+              "terminal_detection": 0.111,
+              "worker_resource_aggregate_projection": 0.994,
+              "model_resolution": 0.012,
+              "membership_persistence": 7.937,
+              "prepared_event_publication": 5.472,
+              "bridge_team_config_and_terminal_detection": 0.341,
+              "unattributed_bridge_overhead": 0.777,
+              "unattributed_application_overhead": 0.353
+            },
+            "aggregate_paths": [],
+            "app_started_at": 507.858209,
+            "bridge_started_at": 514.016375,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 529.549417,
+            "launch_boundary_at": 529.629167,
+            "lock_wait_total_ms": 5,
+            "ensure_to_membership_prepared_ms": 21.691,
+            "bridge_to_membership_prepared_ms": 15.533,
+            "post_prepared_to_launch_boundary_ms": 0.08,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 5,
+      "child_wall_ms": 501.454,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 475.115,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 5.178,
+              "logical_worker_persistence": 0.613,
+              "bridge_team_exists": 0.02,
+              "bridge_team_config_read": 0.237,
+              "terminal_detection": 0.095,
+              "worker_resource_aggregate_projection": 3.211,
+              "model_resolution": 0.012,
+              "membership_persistence": 4.764,
+              "prepared_event_publication": 4.705,
+              "bridge_team_config_and_terminal_detection": 0.352,
+              "unattributed_bridge_overhead": 0.684,
+              "unattributed_application_overhead": 0.323
+            },
+            "aggregate_paths": [],
+            "app_started_at": 469.875125,
+            "bridge_started_at": 475.989958,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 489.717458,
+            "launch_boundary_at": 489.828833,
+            "lock_wait_total_ms": 5,
+            "ensure_to_membership_prepared_ms": 19.842,
+            "bridge_to_membership_prepared_ms": 13.728,
+            "post_prepared_to_launch_boundary_ms": 0.111,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    },
+    {
+      "condition": "directory_loaded",
+      "sample_index": 6,
+      "child_wall_ms": 359.733,
+      "child_exit_code": 0,
+      "child_status": "complete",
+      "result": {
+        "schema": "pi-team-bright/pre-actuation-ensure-child/1",
+        "status": "complete",
+        "condition": "directory_loaded",
+        "worker_count": 1,
+        "foreign_team_count": 32,
+        "setup_ms": 337.876,
+        "source_fence": {
+          "bridge_sha256": "fba1af6de2aa3b55eb28d1378780a4ffc8d4f7ff7209987024f5e031b719b51f",
+          "application_sha256": "e6002a882ae48b30f8f9f8c17aeb34d73796ace042737fa7385642aeecd9f1d6",
+          "ordering_verified": true
+        },
+        "traces": [
+          {
+            "worker_index": 0,
+            "status": "complete",
+            "phase_order": [
+              "ensure_started",
+              "leader_binding_and_config",
+              "logical_worker_persistence",
+              "bridge_entered",
+              "bridge_team_exists",
+              "bridge_team_config_read",
+              "terminal_detection",
+              "worker_resource_aggregate_projection",
+              "model_resolution",
+              "membership_persistence",
+              "prepared_event_publication",
+              "launch_prepared_membership_boundary"
+            ],
+            "phases_ms": {
+              "leader_binding_and_config": 1.988,
+              "logical_worker_persistence": 0.512,
+              "bridge_team_exists": 0.02,
+              "bridge_team_config_read": 0.188,
+              "terminal_detection": 0.098,
+              "worker_resource_aggregate_projection": 0.849,
+              "model_resolution": 0.012,
+              "membership_persistence": 0.524,
+              "prepared_event_publication": 0.812,
+              "bridge_team_config_and_terminal_detection": 0.306,
+              "unattributed_bridge_overhead": 0.585,
+              "unattributed_application_overhead": 0.299
+            },
+            "aggregate_paths": [],
+            "app_started_at": 344.422416,
+            "bridge_started_at": 347.221333,
+            "bridge_active": false,
+            "resource_projection_trusted": true,
+            "model_resolution_succeeded": true,
+            "membership_prepared_at": 350.308958,
+            "launch_boundary_at": 350.367958,
+            "lock_wait_total_ms": 0,
+            "ensure_to_membership_prepared_ms": 5.887,
+            "bridge_to_membership_prepared_ms": 3.088,
+            "post_prepared_to_launch_boundary_ms": 0.059,
+            "boundary": {
+              "prepared_membership_current": true,
+              "pending_launch_present": true,
+              "session_absent": true,
+              "prepared_event_matches": true,
+              "spawn_calls_total": 0,
+              "task_reconciliation_calls_before_boundary": 0,
+              "agent_session_files": 0,
+              "resource_aggregate_materialized": true,
+              "resource_aggregate_removed": true,
+              "cwd_matches_request": true,
+              "model_matches_resolved_setting": true,
+              "trusted_project_matches_request": true
+            }
+          }
+        ],
+        "reconciliation": {
+          "calls_total": 0,
+          "calls_before_boundary": 0,
+          "beads_calls_before_boundary": 0,
+          "conclusion": "not_reached_before_pre_actuation_boundary"
+        }
+      }
+    }
+  ],
+  "summaries": {
+    "isolated": {
+      "sample_groups": 7,
+      "complete_trace_count": 7,
+      "validation_failure_count": 0,
+      "ensure_to_membership_prepared_ms": {
+        "n": 7,
+        "min_ms": 5.411,
+        "p50_ms": 10.552,
+        "p95_ms": 22.221,
+        "max_ms": 22.221
+      },
+      "bridge_to_membership_prepared_ms": {
+        "n": 7,
+        "min_ms": 3.087,
+        "p50_ms": 5.599,
+        "p95_ms": 11.076,
+        "max_ms": 11.076
+      },
+      "lock_wait_total_ms": {
+        "n": 7,
+        "min_ms": 0,
+        "p50_ms": 1,
+        "p95_ms": 14,
+        "max_ms": 14
+      },
+      "post_prepared_to_launch_boundary_ms": {
+        "n": 7,
+        "min_ms": 0.052,
+        "p50_ms": 0.079,
+        "p95_ms": 0.097,
+        "max_ms": 0.097
+      },
+      "phases_ms": {
+        "leader_binding_and_config": {
+          "n": 7,
+          "min_ms": 1.212,
+          "p50_ms": 2.336,
+          "p95_ms": 6.546,
+          "max_ms": 6.546
+        },
+        "logical_worker_persistence": {
+          "n": 7,
+          "min_ms": 0.537,
+          "p50_ms": 0.743,
+          "p95_ms": 5.413,
+          "max_ms": 5.413
+        },
+        "bridge_team_exists": {
+          "n": 7,
+          "min_ms": 0.017,
+          "p50_ms": 0.021,
+          "p95_ms": 0.029,
+          "max_ms": 0.029
+        },
+        "bridge_team_config_read": {
+          "n": 7,
+          "min_ms": 0.173,
+          "p50_ms": 0.21,
+          "p95_ms": 3.627,
+          "max_ms": 3.627
+        },
+        "terminal_detection": {
+          "n": 7,
+          "min_ms": 0.079,
+          "p50_ms": 0.101,
+          "p95_ms": 0.157,
+          "max_ms": 0.157
+        },
+        "bridge_team_config_and_terminal_detection": {
+          "n": 7,
+          "min_ms": 0.27,
+          "p50_ms": 0.325,
+          "p95_ms": 3.758,
+          "max_ms": 3.758
+        },
+        "worker_resource_aggregate_projection": {
+          "n": 7,
+          "min_ms": 0.757,
+          "p50_ms": 0.836,
+          "p95_ms": 1.565,
+          "max_ms": 1.565
+        },
+        "model_resolution": {
+          "n": 7,
+          "min_ms": 0.009,
+          "p50_ms": 0.01,
+          "p95_ms": 0.015,
+          "max_ms": 0.015
+        },
+        "membership_persistence": {
+          "n": 7,
+          "min_ms": 0.501,
+          "p50_ms": 0.54,
+          "p95_ms": 4.573,
+          "max_ms": 4.573
+        },
+        "prepared_event_publication": {
+          "n": 7,
+          "min_ms": 0.753,
+          "p50_ms": 1.235,
+          "p95_ms": 5.13,
+          "max_ms": 5.13
+        },
+        "unattributed_bridge_overhead": {
+          "n": 7,
+          "min_ms": 0.561,
+          "p50_ms": 0.602,
+          "p95_ms": 0.958,
+          "max_ms": 0.958
+        },
+        "unattributed_application_overhead": {
+          "n": 7,
+          "min_ms": 0.258,
+          "p50_ms": 0.304,
+          "p95_ms": 0.431,
+          "max_ms": 0.431
+        }
+      },
+      "child_process_wall_ms_outside_target": {
+        "n": 7,
+        "min_ms": 300.785,
+        "p50_ms": 342.654,
+        "p95_ms": 403.687,
+        "max_ms": 403.687
+      },
+      "child_setup_ms_outside_target": {
+        "n": 7,
+        "min_ms": 280.931,
+        "p50_ms": 320.234,
+        "p95_ms": 364.401,
+        "max_ms": 364.401
+      }
+    },
+    "loaded": {
+      "sample_groups": 7,
+      "complete_trace_count": 28,
+      "validation_failure_count": 0,
+      "ensure_to_membership_prepared_ms": {
+        "n": 28,
+        "min_ms": 5.394,
+        "p50_ms": 14.069,
+        "p95_ms": 44.713,
+        "max_ms": 52.067
+      },
+      "bridge_to_membership_prepared_ms": {
+        "n": 28,
+        "min_ms": 1.304,
+        "p50_ms": 1.737,
+        "p95_ms": 10.865,
+        "max_ms": 13.236
+      },
+      "lock_wait_total_ms": {
+        "n": 28,
+        "min_ms": 0,
+        "p50_ms": 12,
+        "p95_ms": 34,
+        "max_ms": 50
+      },
+      "post_prepared_to_launch_boundary_ms": {
+        "n": 28,
+        "min_ms": 0.01,
+        "p50_ms": 0.017,
+        "p95_ms": 0.096,
+        "max_ms": 0.099
+      },
+      "phases_ms": {
+        "leader_binding_and_config": {
+          "n": 28,
+          "min_ms": 1.594,
+          "p50_ms": 11.698,
+          "p95_ms": 33.29,
+          "max_ms": 49.659
+        },
+        "logical_worker_persistence": {
+          "n": 28,
+          "min_ms": 0.367,
+          "p50_ms": 0.506,
+          "p95_ms": 1.251,
+          "max_ms": 6.057
+        },
+        "bridge_team_exists": {
+          "n": 28,
+          "min_ms": 0.005,
+          "p50_ms": 0.01,
+          "p95_ms": 0.037,
+          "max_ms": 0.039
+        },
+        "bridge_team_config_read": {
+          "n": 28,
+          "min_ms": 0.163,
+          "p50_ms": 0.199,
+          "p95_ms": 3.54,
+          "max_ms": 3.746
+        },
+        "terminal_detection": {
+          "n": 28,
+          "min_ms": 0.002,
+          "p50_ms": 0.004,
+          "p95_ms": 0.125,
+          "max_ms": 0.141
+        },
+        "bridge_team_config_and_terminal_detection": {
+          "n": 28,
+          "min_ms": 0.17,
+          "p50_ms": 0.22,
+          "p95_ms": 3.71,
+          "max_ms": 3.771
+        },
+        "worker_resource_aggregate_projection": {
+          "n": 28,
+          "min_ms": 0.348,
+          "p50_ms": 0.48,
+          "p95_ms": 1.18,
+          "max_ms": 3.973
+        },
+        "model_resolution": {
+          "n": 28,
+          "min_ms": 0.001,
+          "p50_ms": 0.001,
+          "p95_ms": 0.018,
+          "max_ms": 0.019
+        },
+        "membership_persistence": {
+          "n": 28,
+          "min_ms": 0.377,
+          "p50_ms": 0.48,
+          "p95_ms": 4.915,
+          "max_ms": 5.167
+        },
+        "prepared_event_publication": {
+          "n": 28,
+          "min_ms": 0.385,
+          "p50_ms": 0.527,
+          "p95_ms": 3.688,
+          "max_ms": 5.063
+        },
+        "unattributed_bridge_overhead": {
+          "n": 28,
+          "min_ms": 0.018,
+          "p50_ms": 0.035,
+          "p95_ms": 0.815,
+          "max_ms": 0.869
+        },
+        "unattributed_application_overhead": {
+          "n": 28,
+          "min_ms": 0.007,
+          "p50_ms": 0.016,
+          "p95_ms": 0.358,
+          "max_ms": 0.738
+        }
+      },
+      "child_process_wall_ms_outside_target": {
+        "n": 7,
+        "min_ms": 333.774,
+        "p50_ms": 373.813,
+        "p95_ms": 419.664,
+        "max_ms": 419.664
+      },
+      "child_setup_ms_outside_target": {
+        "n": 7,
+        "min_ms": 312.595,
+        "p50_ms": 351.754,
+        "p95_ms": 390.875,
+        "max_ms": 390.875
+      }
+    },
+    "directory_loaded": {
+      "sample_groups": 7,
+      "complete_trace_count": 7,
+      "validation_failure_count": 0,
+      "ensure_to_membership_prepared_ms": {
+        "n": 7,
+        "min_ms": 5.887,
+        "p50_ms": 19.842,
+        "p95_ms": 24.672,
+        "max_ms": 24.672
+      },
+      "bridge_to_membership_prepared_ms": {
+        "n": 7,
+        "min_ms": 3.088,
+        "p50_ms": 13.728,
+        "p95_ms": 16.803,
+        "max_ms": 16.803
+      },
+      "lock_wait_total_ms": {
+        "n": 7,
+        "min_ms": 0,
+        "p50_ms": 5,
+        "p95_ms": 10,
+        "max_ms": 10
+      },
+      "post_prepared_to_launch_boundary_ms": {
+        "n": 7,
+        "min_ms": 0.059,
+        "p50_ms": 0.095,
+        "p95_ms": 0.213,
+        "max_ms": 0.213
+      },
+      "phases_ms": {
+        "leader_binding_and_config": {
+          "n": 7,
+          "min_ms": 1.988,
+          "p50_ms": 5.178,
+          "p95_ms": 10.986,
+          "max_ms": 10.986
+        },
+        "logical_worker_persistence": {
+          "n": 7,
+          "min_ms": 0.512,
+          "p50_ms": 0.699,
+          "p95_ms": 0.852,
+          "max_ms": 0.852
+        },
+        "bridge_team_exists": {
+          "n": 7,
+          "min_ms": 0.02,
+          "p50_ms": 0.022,
+          "p95_ms": 0.03,
+          "max_ms": 0.03
+        },
+        "bridge_team_config_read": {
+          "n": 7,
+          "min_ms": 0.188,
+          "p50_ms": 0.237,
+          "p95_ms": 4.9,
+          "max_ms": 4.9
+        },
+        "terminal_detection": {
+          "n": 7,
+          "min_ms": 0.095,
+          "p50_ms": 0.116,
+          "p95_ms": 0.145,
+          "max_ms": 0.145
+        },
+        "bridge_team_config_and_terminal_detection": {
+          "n": 7,
+          "min_ms": 0.306,
+          "p50_ms": 0.363,
+          "p95_ms": 5.073,
+          "max_ms": 5.073
+        },
+        "worker_resource_aggregate_projection": {
+          "n": 7,
+          "min_ms": 0.849,
+          "p50_ms": 1.773,
+          "p95_ms": 5.164,
+          "max_ms": 5.164
+        },
+        "model_resolution": {
+          "n": 7,
+          "min_ms": 0.012,
+          "p50_ms": 0.015,
+          "p95_ms": 0.027,
+          "max_ms": 0.027
+        },
+        "membership_persistence": {
+          "n": 7,
+          "min_ms": 0.524,
+          "p50_ms": 3.959,
+          "p95_ms": 8.856,
+          "max_ms": 8.856
+        },
+        "prepared_event_publication": {
+          "n": 7,
+          "min_ms": 0.812,
+          "p50_ms": 1.417,
+          "p95_ms": 5.472,
+          "max_ms": 5.472
+        },
+        "unattributed_bridge_overhead": {
+          "n": 7,
+          "min_ms": 0.585,
+          "p50_ms": 0.846,
+          "p95_ms": 0.99,
+          "max_ms": 0.99
+        },
+        "unattributed_application_overhead": {
+          "n": 7,
+          "min_ms": 0.299,
+          "p50_ms": 0.396,
+          "p95_ms": 0.445,
+          "max_ms": 0.445
+        }
+      },
+      "child_process_wall_ms_outside_target": {
+        "n": 7,
+        "min_ms": 359.733,
+        "p50_ms": 512.567,
+        "p95_ms": 609.543,
+        "max_ms": 609.543
+      },
+      "child_setup_ms_outside_target": {
+        "n": 7,
+        "min_ms": 337.876,
+        "p50_ms": 487.886,
+        "p95_ms": 578.079,
+        "max_ms": 578.079
+      }
+    }
+  },
+  "external_model_catalog_resolver": {
+    "scope": "active_profile_external_microprobe",
+    "status": "complete",
+    "candidate_identity_redacted": true,
+    "samples_ms": [
+      863.02,
+      759.409,
+      714.518,
+      771.512,
+      850.809,
+      788.293,
+      739.281
+    ],
+    "successful_matches": 7,
+    "errors": 0,
+    "summary": {
+      "n": 7,
+      "min_ms": 714.518,
+      "p50_ms": 771.512,
+      "p95_ms": 863.02,
+      "max_ms": 863.02
+    }
+  },
+  "verification": {
+    "all_boundary_checks_pass": true,
+    "prepared_event_and_membership_checks": "Each complete trace verifies a current pending-launch Membership, matching prepared event, zero Session files, zero spawn calls, and aggregate cleanup.",
+    "task_reconciliation_records": [
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      },
+      {
+        "calls_total": 0,
+        "calls_before_boundary": 0,
+        "beads_calls_before_boundary": 0,
+        "conclusion": "not_reached_before_pre_actuation_boundary"
+      }
+    ],
+    "quantile_method": "nearest-rank: ceil(p * n) - 1 after ascending sort",
+    "scope_limit": "No terminal actuation, Pi process creation, Pi Session binding, startup observation, Beads reconciliation, or full ensure latency is measured by the target interval."
+  }
+}

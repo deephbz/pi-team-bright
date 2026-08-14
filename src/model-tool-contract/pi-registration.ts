@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { captureQualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
 import {
   EnsureWorkerParametersSchema,
   TaskCreateParametersSchema,
@@ -29,6 +30,7 @@ import { exactLeaderSessionId, type ModelToolTeamPort } from "./model-tool-contr
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import { assembleToolResult } from "./result-projection";
 import { createToolResultRenderer } from "./tui-projection";
+import { withSemanticTrace } from "../utils/trace";
 
 function catalogEntry(name: "team_create" | "team_sync" | "ensure_worker" | "task_graph_apply" | "task_read" | "task_update" | "worker_stop" | "team_shutdown" | "alert_send") {
   const entry = modelToolCatalog.tools.find((tool) => tool.name === name);
@@ -152,11 +154,15 @@ export function registerModelToolJourney(
     parameters: EnsureWorkerParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
-      const result = await executors.ensureWorker(
-        leaderSessionId(ctx),
-        parameters,
-      );
-      return assembleToolResult("ensure_worker", result);
+      return withSemanticTrace("ensure_worker", { workerName: parameters.name }, async () => {
+        const availableModelKeys = captureQualifiedAvailableModelKeys(ctx.modelRegistry);
+        const result = await executors.ensureWorker(
+          leaderSessionId(ctx),
+          parameters,
+          availableModelKeys ? { availableModelKeys } : undefined,
+        );
+        return assembleToolResult("ensure_worker", result);
+      });
     },
   };
   pi.registerTool(ensureWorkerTool);

@@ -1,9 +1,11 @@
 import fs from "node:fs";
+import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
 import { DurableTaskOrchestration } from "../adapters/durable-task-orchestration";
+import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
 import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
@@ -165,6 +167,69 @@ describe("registered Pi Session adapter characterization", () => {
     expect(claim).not.toHaveBeenCalled();
     expect(bind).not.toHaveBeenCalled();
     expect(event).not.toHaveBeenCalled();
+  });
+
+  it.each(["legacy", "graph"] as const)("reconciles a ready Task that predates first Worker Session binding through the %s authority", async (authorityKind) => {
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const name = teamName(`worker-first-binding-${authorityKind}`);
+    vi.stubEnv("PI_TEAM_NAME", name);
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    const membershipId = teams.newMembershipId();
+    const launchId = teams.newLaunchId();
+    vi.stubEnv("PI_TEAM_MEMBERSHIP_ID", membershipId);
+    vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
+    const traceDirectory = fs.mkdtempSync(path.join("/tmp", "pi-team-session-ready-trace-"));
+    const traceFile = path.join(traceDirectory, "trace.jsonl");
+    vi.stubEnv("PI_TEAMS_TRACE_JSONL", traceFile);
+    setAdapter(terminal());
+    await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    await teams.addMember(name, {
+      membershipId,
+      pendingLaunchId: launchId,
+      agentId: `worker@${name}`,
+      name: "worker",
+      agentType: "teammate",
+      joinedAt: Date.now(),
+      tmuxPaneId: "",
+      cwd: process.cwd(),
+      subscriptions: [],
+    });
+
+    const readyTaskId = `${authorityKind}-ready-before-binding`;
+    const queuedTaskIds: string[] = [];
+    const reconcile = vi.fn(async (teamName: string, worker?: string) => {
+      if (teamName !== name) return [];
+      const current = await teams.currentMembership(name, "worker");
+      expect(current).toMatchObject({ membershipId, sessionFile });
+      expect(worker).toBe("worker");
+      queuedTaskIds.push(readyTaskId);
+      return [];
+    });
+    const legacyReconciliation = vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady").mockImplementation(reconcile);
+    const graphReconciliation = vi.spyOn(DurableGraphTaskOrchestration.prototype, "reconcileReady").mockImplementation(reconcile);
+    vi.spyOn(DurableGraphTaskOrchestration.prototype, "hasGraph").mockImplementation((teamName) => authorityKind === "graph" && teamName === name);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const bind = vi.spyOn(teams, "bindMemberSession");
+
+    await extension().get("session_start")!({ reason: "resume" }, context(sessionFile));
+
+    expect(bind).toHaveBeenCalledWith(name, "worker", sessionFile, launchId, {}, membershipId);
+    expect(queuedTaskIds).toEqual([readyTaskId]);
+    if (authorityKind === "legacy") {
+      expect(legacyReconciliation).toHaveBeenCalledWith(name, "worker");
+      expect(graphReconciliation).not.toHaveBeenCalled();
+    } else {
+      expect(graphReconciliation).toHaveBeenCalledWith(name, "worker");
+      expect(legacyReconciliation).not.toHaveBeenCalled();
+    }
+    const traces = fs.readFileSync(traceFile, "utf8").trim().split("\n").filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(traces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ operation: "worker_session_admission", teamName: name, workerName: "worker", outcome: "ok" }),
+      expect.objectContaining({ operation: "worker_session_ready_reconciliation", teamName: name, workerName: "worker", outcome: "ok" }),
+    ]));
+    fs.rmSync(traceDirectory, { recursive: true, force: true });
   });
 
   it("admits a resumed lead before ordered deliveries and footer completion", async () => {

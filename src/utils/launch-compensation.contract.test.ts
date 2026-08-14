@@ -1,9 +1,11 @@
 import fs from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as paths from "./paths";
+import * as runtime from "./runtime";
 import * as teams from "./teams";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
@@ -24,9 +26,10 @@ function unique(suffix: string): string {
   return name;
 }
 
-function context(sessionFile: string) {
+function context(sessionFile: string, modelRegistry?: { getAvailable(): readonly { provider: string; id: string }[] }) {
   return {
     cwd: process.cwd(),
+    ...(modelRegistry ? { modelRegistry } : {}),
     sessionManager: {
       getSessionFile: () => sessionFile,
       buildContextEntries: () => [],
@@ -35,11 +38,11 @@ function context(sessionFile: string) {
   };
 }
 
-function adapter(options: { alive?: boolean } = {}) {
+function adapter(options: { alive?: boolean; name?: string } = {}) {
   const spawn = vi.fn(() => "pane-worker");
   const kill = vi.fn();
   const terminal: TerminalAdapter = {
-    name: "launch-contract-terminal",
+    name: options.name ?? "launch-contract-terminal",
     isDirectCarrier: () => true,
     detect: () => true,
     spawn,
@@ -66,7 +69,7 @@ function register(terminal: TerminalAdapter): Map<string, RegisteredTool> {
   return tools;
 }
 
-async function team(suffix: string, defaultModel?: string) {
+async function team(suffix: string, defaultModel?: string, terminalBackend = "launch-contract-terminal") {
   const name = unique(suffix);
   const leadSession = `/tmp/${name}-lead.jsonl`;
   const taskWorkspace = paths.teamDir(name);
@@ -95,7 +98,7 @@ async function team(suffix: string, defaultModel?: string) {
       projectId: `launch-compensation-${name}`,
     },
     undefined,
-    { backend: "launch-contract-terminal", leadTarget: { backend: "launch-contract-terminal", kind: "pane", targetId: "pane-leader" } },
+    { backend: terminalBackend, leadTarget: { backend: terminalBackend, kind: "pane", targetId: "pane-leader" } },
     undefined,
   );
   return { name, leadSession };
@@ -191,7 +194,204 @@ describe("compensated Worker launch", () => {
     });
   });
 
-  it("serializes concurrent recovery ensures after one exact target becomes live", async () => {
+  it("compensates a cancelled Herdr accepted start after spawn", async () => {
+    const f = await team("herdr-cancelled-start", undefined, "herdr");
+    const a = adapter({ name: "herdr" });
+    let live = false;
+    a.spawn.mockImplementation(() => { live = true; return "pane-worker"; });
+    a.kill.mockImplementation(() => { live = false; });
+    a.terminal.isAlive = vi.fn(() => live);
+    setAdapter(a.terminal);
+    const cancelled = Object.assign(new Error("caller cancelled"), { name: "AbortError" });
+    const lifecycle = new DurableTeamLifecyclePublication();
+    vi.spyOn(lifecycle, "observeWorkerStartup").mockRejectedValue(cancelled);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: lifecycle,
+    });
+    const controller = new AbortController();
+    controller.abort(cancelled);
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd(), signal: controller.signal }))
+      .rejects.toBe(cancelled);
+    expect(a.kill).toHaveBeenCalledWith("pane-worker");
+    expect((await teams.readConfig(f.name)).members.find((candidate) => candidate.name === "worker"))
+      .toMatchObject({ isActive: false, deactivationReason: "replaced" });
+  });
+
+  it("does not stop a cancelled Herdr accepted start after exact Session binding wins", async () => {
+    const f = await team("herdr-cancelled-binding-race", undefined, "herdr");
+    const a = adapter({ name: "herdr" });
+    let live = false;
+    a.spawn.mockImplementation(() => { live = true; return "pane-worker"; });
+    a.terminal.isAlive = vi.fn(() => live);
+    setAdapter(a.terminal);
+    const cancelled = Object.assign(new Error("caller cancelled"), { name: "AbortError" });
+    const lifecycle = new DurableTeamLifecyclePublication();
+    vi.spyOn(lifecycle, "observeWorkerStartup").mockImplementation(async () => {
+      const current = await teams.currentMembership(f.name, "worker");
+      const startedAt = Date.now();
+      await runtime.writeRuntimeStatus(f.name, "worker", {
+        pid: process.pid,
+        startedAt,
+        lastHeartbeatAt: startedAt,
+        ready: false,
+      }, current.membershipId);
+      await teams.bindMemberSession(f.name, "worker", "/tmp/herdr-cancelled-binding-race.jsonl", current.pendingLaunchId, {}, current.membershipId);
+      throw cancelled;
+    });
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: lifecycle,
+    });
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .rejects.toBe(cancelled);
+    expect(a.kill).not.toHaveBeenCalled();
+    expect(await teams.currentMembership(f.name, "worker")).toMatchObject({
+      sessionFile: "/tmp/herdr-cancelled-binding-race.jsonl",
+    });
+  });
+
+  it("cleans and deactivates an unbound Herdr carrier after its bounded exact-binding observation", async () => {
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const f = await team("herdr-unbound-timeout", undefined, "herdr");
+    const a = adapter({ name: "herdr" });
+    let live = false;
+    a.spawn.mockImplementation(() => { live = true; return "pane-worker"; });
+    a.kill.mockImplementation(() => { live = false; });
+    a.terminal.isAlive = vi.fn(() => live);
+    setAdapter(a.terminal);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
+    });
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .rejects.toThrow(/Herdr accepted start.*exact prepared Membership was deactivated/i);
+    expect(a.kill).toHaveBeenCalledWith("pane-worker");
+    const historical = (await teams.readConfig(f.name)).members.find((candidate) => candidate.name === "worker");
+    expect(historical).toMatchObject({ isActive: false, deactivationReason: "replaced" });
+  });
+
+  it("cleans an unbound accepted carrier before an exact retry creates a new carrier", async () => {
+    const f = await team("herdr-unbound-retry", undefined, "herdr");
+    const a = adapter({ name: "herdr" });
+    const live = new Set<string>();
+    a.spawn
+      .mockImplementationOnce(() => { live.add("pane-first"); return "pane-first"; })
+      .mockImplementationOnce(() => { live.add("pane-retry"); return "pane-retry"; });
+    a.kill.mockImplementation((paneId: string) => { live.delete(paneId); });
+    a.terminal.isAlive = vi.fn((paneId: string) => live.has(paneId));
+    setAdapter(a.terminal);
+    const lifecycle = new DurableTeamLifecyclePublication();
+    vi.spyOn(lifecycle, "observeWorkerStartup")
+      .mockResolvedValueOnce({ observed: false, carrier: "prepared", runtime: "not_observed", cursor: "1", reason: "timeout" })
+      .mockResolvedValueOnce({ observed: true, carrier: "session_bound", runtime: "observed", cursor: "2" });
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: lifecycle,
+    });
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .rejects.toThrow(/exact prepared Membership was deactivated/i);
+    expect(live).toEqual(new Set());
+    expect((await teams.readConfig(f.name)).members.filter((member) => member.agentType === "teammate")).toEqual([
+      expect.objectContaining({ terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane-first" }, isActive: false }),
+    ]);
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .resolves.toMatchObject({ action: "created", target: { terminalId: "pane-retry", backend: "herdr" } });
+    expect(a.spawn).toHaveBeenCalledTimes(2);
+    expect((await teams.readConfig(f.name)).members.filter((member) => member.agentType === "teammate" && member.isActive !== false)).toEqual([
+      expect.objectContaining({ terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane-retry" } }),
+    ]);
+  });
+
+  it("refuses a live unbound Herdr carrier after cleanup cannot be confirmed", async () => {
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const f = await team("herdr-unbound-stop-unconfirmed", undefined, "herdr");
+    const a = adapter({ name: "herdr", alive: true });
+    setAdapter(a.terminal);
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: new DurableTeamLifecyclePublication(),
+    });
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .rejects.toThrow(/process shutdown could not be confirmed/i);
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .rejects.toThrow(/live terminal carrier before exact Session binding/i);
+    expect(a.spawn).toHaveBeenCalledOnce();
+    expect(a.kill).toHaveBeenCalledOnce();
+  });
+
+  it("does not stop a recovered Herdr target after exact Session binding wins the observation race", async () => {
+    const f = await team("herdr-recovery-binding-race", undefined, "herdr");
+    const a = adapter({ name: "herdr" });
+    let live = false;
+    a.spawn.mockImplementation(() => { live = true; return "pane-recovered"; });
+    a.terminal.isAlive = vi.fn(() => live);
+    setAdapter(a.terminal);
+    const member = {
+      membershipId: teams.newMembershipId(),
+      pendingLaunchId: teams.newLaunchId(),
+      agentId: `worker@${f.name}`,
+      name: "worker",
+      agentType: "teammate" as const,
+      joinedAt: Date.now(),
+      cwd: process.cwd(),
+      subscriptions: [],
+      isActive: true,
+      terminalTarget: { backend: "herdr", kind: "pane" as const, targetId: "dead-pane" },
+    };
+    await teams.addMember(f.name, member);
+    const lifecycle = new DurableTeamLifecyclePublication();
+    vi.spyOn(lifecycle, "observeWorkerStartup").mockImplementation(async () => {
+      const current = await teams.currentMembership(f.name, "worker");
+      const startedAt = Date.now();
+      await runtime.writeRuntimeStatus(f.name, "worker", {
+        pid: process.pid,
+        startedAt,
+        lastHeartbeatAt: startedAt,
+        ready: false,
+      }, current.membershipId);
+      await teams.bindMemberSession(f.name, "worker", "/tmp/herdr-recovery-race.jsonl", current.pendingLaunchId, {}, current.membershipId);
+      return { observed: false, carrier: "prepared", runtime: "not_observed", cursor: "0", reason: "timeout" };
+    });
+    const bridge = createWorkerLaunchBridge({
+      buildWorkerArgv: () => ["pi"],
+      resolveModel: () => null,
+      resolveSettingsModel: () => null,
+      workerAggregate: () => ({ projectTrusted: false }),
+      lifecyclePublication: lifecycle,
+    });
+
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
+      .resolves.toMatchObject({ action: "recovered", startup: { observed: false } });
+    expect(a.kill).not.toHaveBeenCalled();
+    expect(await teams.currentMembership(f.name, "worker")).toMatchObject({
+      membershipId: member.membershipId,
+      sessionFile: "/tmp/herdr-recovery-race.jsonl",
+    });
+  });
+
+  it("refuses concurrent reuse of a live prepared recovery carrier", async () => {
     const f = await team("concurrent-recovery");
     const a = adapter();
     let recoveredTargetLive = false;
@@ -243,13 +443,14 @@ describe("compensated Worker launch", () => {
       return withCurrentMembershipLease(teamName, membershipId, action);
     });
 
-    const outcomes = await Promise.all([
+    const outcomes = await Promise.allSettled([
       bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }),
       bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }),
     ]);
 
     expect(a.spawn).toHaveBeenCalledOnce();
-    expect(outcomes.map((outcome) => outcome.action).sort()).toEqual(["recovered", "reused"]);
+    expect(outcomes.filter((outcome) => outcome.status === "fulfilled").map((outcome) => (outcome as PromiseFulfilledResult<{ action: string }>).value.action)).toEqual(["recovered"]);
+    expect(outcomes.find((outcome) => outcome.status === "rejected")).toMatchObject({ reason: expect.objectContaining({ message: expect.stringMatching(/live but not Session-bound/i) }) });
     const activeAggregate = (a.spawn.mock.calls as Array<Array<any>>)[0]?.[0]?.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
     const unusedAggregate = [firstAggregate, staleEnsureAggregate].find((candidate) => candidate !== activeAggregate)!;
     expect(activeAggregate).toBeOneOf([firstAggregate, staleEnsureAggregate]);
@@ -290,6 +491,8 @@ describe("compensated Worker launch", () => {
 
   it("captures a qualified Worker settings model before carrier creation and preserves explicit and Team defaults", async () => {
     const captured: Array<string | undefined> = [];
+    const availableModelKeys = new Set(["setting/provider"]);
+    const resolveSettingsModel = vi.fn((model: string, keys?: ReadonlySet<string>) => keys?.has(model) ? model : null);
     const a = adapter();
     a.spawn.mockReturnValueOnce("pane-settings").mockReturnValueOnce("pane-settings-retry").mockReturnValueOnce("pane-explicit").mockReturnValueOnce("pane-team").mockReturnValueOnce("pane-template");
     setAdapter(a.terminal);
@@ -300,7 +503,7 @@ describe("compensated Worker launch", () => {
         return ["pi", ...(model ? ["--model", model] : [])];
       },
       resolveModel: (model) => `resolved/${model}`,
-      resolveSettingsModel: (model) => model === "setting/provider" ? model : null,
+      resolveSettingsModel,
       workerAggregate: () => ({
         projectTrusted: false,
         defaultModel: { scope: "global", value: "setting/provider" },
@@ -310,14 +513,16 @@ describe("compensated Worker launch", () => {
 
     const settingsTeam = await team("settings-model");
     const settingsWorker = await bridge.ensureWorker({
-      teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(),
+      teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(), availableModelKeys,
     });
     expect(settingsWorker.member.model).toBe("setting/provider");
+    expect(resolveSettingsModel).toHaveBeenCalledWith("setting/provider", availableModelKeys);
     const recoveredSettings = await bridge.ensureWorker({
       teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(),
     });
     expect(recoveredSettings.action).toBe("recovered");
     expect(recoveredSettings.member.model).toBe("setting/provider");
+    expect(resolveSettingsModel).toHaveBeenCalledOnce();
 
     const explicitWorker = await bridge.ensureWorker({
       teamName: settingsTeam.name, workerName: "explicit", scope: "Explicit model", cwd: process.cwd(), model: "explicit",
@@ -329,17 +534,43 @@ describe("compensated Worker launch", () => {
       teamName: teamDefault.name, workerName: "team", scope: "Team model", cwd: process.cwd(),
     });
     expect(teamWorker.member.model).toBe("team/default");
+    expect(resolveSettingsModel).toHaveBeenCalledOnce();
 
     const templateWorker = await bridge.ensureWorker({
       teamName: settingsTeam.name,
       workerName: "template",
       scope: "Template model",
       cwd: process.cwd(),
+      availableModelKeys,
       initialMessage: async () => ({ id: "template-message", from: "lead", to: "template", text: "Template prompt", timestamp: new Date().toISOString(), read: false }),
     });
     expect(templateWorker.member.model).toBe("setting/provider");
     expect(captured).toEqual(expect.arrayContaining(["setting/provider", "resolved/explicit", "team/default"]));
     expect(captured.filter((model) => model === "setting/provider")).toHaveLength(3);
+  });
+
+  it("validates a first model-tool Worker default from its exact registry snapshot", async () => {
+    const f = await team("model-registry-default");
+    const a = adapter();
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const tools = register(a.terminal);
+    const agentDir = `${paths.teamDir(f.name)}/agent`;
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({
+      pi_team_bright: { worker: { default_model: "fixture/selected" } },
+    }));
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
+    const result = await tools.get("ensure_worker")!.execute(
+      "ensure-model-registry-default",
+      { name: "worker", scope: "Use the configured model." },
+      undefined,
+      undefined,
+      context(f.leadSession, { getAvailable: () => [{ provider: "fixture", id: "selected" }] }),
+    );
+
+    expect(result.details).toMatchObject({ kind: "worker_ensured", effect: "created" });
+    expect((await teams.currentMembership(f.name, "worker")).model).toBe("fixture/selected");
   });
 
   it("accepts a canonical nested Worker settings model and persists its exact ID", async () => {
@@ -413,7 +644,7 @@ describe("compensated Worker launch", () => {
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
       resolveModel: () => null,
-      resolveSettingsModel: () => null,
+      resolveSettingsModel: (model, keys) => keys?.has(model) ? model : null,
       workerAggregate: () => ({
         projectTrusted: false,
         defaultModel: { scope: "global", value: "missing/model" },
@@ -422,7 +653,7 @@ describe("compensated Worker launch", () => {
     });
 
     await expect(bridge.ensureWorker({
-      teamName: f.name, workerName: "missing", scope: "Unavailable settings", cwd: process.cwd(),
+      teamName: f.name, workerName: "missing", scope: "Unavailable settings", cwd: process.cwd(), availableModelKeys: new Set(["known/model"]),
     })).rejects.toThrow(/global Pi settings.*missing\/model.*unavailable.*Edit.*retry/i);
     expect(a.spawn).not.toHaveBeenCalled();
     expect((await teams.readConfig(f.name)).members.find((member) => member.name === "missing")).toBeUndefined();

@@ -19,14 +19,19 @@ export type WorkerEnsureAction = "create" | "reuse" | "recover" | "refuse";
 export type WorkerRecoveryMode = "first_binding_retry" | "exact_session_resume";
 export type PreparedWorkerCarrier = Extract<WorkerCarrierState, { kind: "prepared" }>;
 export type BoundWorkerCarrier = Extract<WorkerCarrierState, { kind: "bound" }>;
-export type WorkerUsableCarrier = PreparedWorkerCarrier | BoundWorkerCarrier;
+/** Only an exact Session-bound carrier is reusable work capacity. */
+export type WorkerUsableCarrier = BoundWorkerCarrier;
 
 export type WorkerEnsurePlan =
   | { action: "create" }
   | { action: "reuse"; carrier: WorkerUsableCarrier }
   | { action: "recover"; carrier: PreparedWorkerCarrier; recoveryMode: "first_binding_retry" }
   | { action: "recover"; carrier: BoundWorkerCarrier; recoveryMode: "exact_session_resume" }
-  | { action: "refuse"; carrier: Extract<WorkerCarrierState, { kind: "invalid" }> };
+  | {
+    action: "refuse";
+    carrier: Extract<WorkerCarrierState, { kind: "invalid" }> | PreparedWorkerCarrier;
+    reason: WorkerCarrierInvalidReason | "unbound_live";
+  };
 
 /**
  * Converts persistence optionals into the lifecycle state machine without
@@ -54,9 +59,11 @@ export function planWorkerEnsure(carrier: WorkerCarrierState, observation: Worke
     case "absent":
       return { action: "create" };
     case "invalid":
-      return { action: "refuse", carrier };
+      return { action: "refuse", carrier, reason: carrier.reason };
     case "prepared":
-      if (observation === "live") return { action: "reuse", carrier };
+      // A pane or shell proves only terminal presence. Until exact Session
+      // binding, reusing it would turn a hung launch into durable capacity.
+      if (observation === "live") return { action: "refuse", carrier, reason: "unbound_live" };
       return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
     case "bound":
       if (observation === "live") return { action: "reuse", carrier };

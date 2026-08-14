@@ -4,6 +4,34 @@ import path from "node:path";
 
 export const PI_TEAMS_TRACE_JSONL_ENV = "PI_TEAMS_TRACE_JSONL";
 
+/** Payload-free stages from parent launch through child Session admission. */
+export type WorkerLaunchStage =
+  | "ensure_started"
+  | "carrier_reused"
+  | "membership_prepared"
+  | "carrier_start_accepted"
+  | "carrier_target_persisted"
+  | "session_bound_observed"
+  | "session_bound_not_observed"
+  | "compensation_started"
+  | "carrier_stop_confirmed"
+  | "recovery_authority_won"
+  | "session_binding_won"
+  | "membership_deactivated"
+  | "compensation_unconfirmed"
+  | "worker_session_started"
+  | "membership_validated"
+  | "runtime_admission_refused"
+  | "runtime_generation_claimed"
+  | "session_bound_persisted"
+  | "session_bound_published";
+
+interface WorkerLaunchStageTrace {
+  stage: WorkerLaunchStage;
+  elapsedMs: number;
+  membershipId?: string;
+}
+
 interface BdCallTrace {
   command: string;
   durationMs: number;
@@ -20,9 +48,12 @@ interface TraceContext {
   operation: string;
   teamName?: string;
   taskId?: string;
+  workerName?: string;
   startedAt: number;
+  startedAtMonotonic: number;
   bdCalls: BdCallTrace[];
   bdRunnerLifecycle: BdRunnerLifecycleTrace[];
+  workerLaunchStages: WorkerLaunchStageTrace[];
   lockWaitMs: number;
 }
 
@@ -56,14 +87,34 @@ export function recordLockWait(durationMs: number): void {
   if (context) context.lockWaitMs += durationMs;
 }
 
+/** Record one monotonic, payload-free Worker launch stage in the active trace. */
+export function recordWorkerLaunchStage(stage: WorkerLaunchStage, details: { membershipId?: string } = {}): void {
+  const context = storage.getStore();
+  if (!context) return;
+  context.workerLaunchStages.push({
+    stage,
+    elapsedMs: Math.max(0, performance.now() - context.startedAtMonotonic),
+    ...(details.membershipId ? { membershipId: details.membershipId } : {}),
+  });
+}
+
 /** Emit one payload-free canonical JSONL record for a semantic operation. */
 export async function withSemanticTrace<T>(
   operation: string,
-  identity: { teamName?: string; taskId?: string },
+  identity: { teamName?: string; taskId?: string; workerName?: string },
   action: () => Promise<T>,
 ): Promise<T> {
   if (!process.env[PI_TEAMS_TRACE_JSONL_ENV]) return action();
-  const context: TraceContext = { operation, ...identity, startedAt: Date.now(), bdCalls: [], bdRunnerLifecycle: [], lockWaitMs: 0 };
+  const context: TraceContext = {
+    operation,
+    ...identity,
+    startedAt: Date.now(),
+    startedAtMonotonic: performance.now(),
+    bdCalls: [],
+    bdRunnerLifecycle: [],
+    workerLaunchStages: [],
+    lockWaitMs: 0,
+  };
   return storage.run(context, async () => {
     let outcome: "ok" | "error" = "ok";
     let caught: unknown;
@@ -85,6 +136,10 @@ export async function withSemanticTrace<T>(
           bdTotalMs: context.bdCalls.reduce((sum, call) => sum + call.durationMs, 0),
           bdCalls: context.bdCalls,
           bdRunnerLifecycle: context.bdRunnerLifecycle,
+          ...(context.workerLaunchStages.length > 0 ? {
+            monotonicDurationMs: Math.max(0, performance.now() - context.startedAtMonotonic),
+            workerLaunchStages: context.workerLaunchStages,
+          } : {}),
           lockWaitMs: context.lockWaitMs,
           outcome,
           ...(caught ? { error: {

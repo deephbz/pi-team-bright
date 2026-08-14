@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { TeamEventWaitResult } from "./team-events";
 import type { TeamEvent } from "./models";
-import { observeWorkerStartup } from "./worker-startup-observation";
+import {
+  observeWorkerStartup,
+  HERDR_ACCEPTED_START_OBSERVATION_MS,
+  resolveWorkerStartupObservationTimeoutMs,
+  WORKER_STARTUP_OBSERVATION_MS,
+} from "./worker-startup-observation";
 
 function batch(cursor: string, events: TeamEvent[], timedOut = false): TeamEventWaitResult {
   return { cursor, headCursor: cursor, events, truncated: false, remaining: 0, timedOut };
@@ -76,6 +81,7 @@ describe("bounded Worker startup observation", () => {
   it("refuses to infer runtime observation from an event when exact authority mismatches", async () => {
     const result = await observeWorkerStartup({
       ...base,
+      timeoutMs: 0,
       waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
       verifyAuthority: async () => ({ sessionBound: true }),
     });
@@ -120,6 +126,48 @@ describe("bounded Worker startup observation", () => {
     const verifyAuthority = vi.fn(async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 99, startedAt: 100 } }));
     const result = await observeWorkerStartup({ ...base, timeoutMs: 0, waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]), verifyAuthority });
     expect(result).toMatchObject({ observed: false, reason: "timeout" }); expect(verifyAuthority).toHaveBeenCalledOnce();
+  });
+
+  it("uses a bounded accepted-start binding failure detector", async () => {
+    async function observeBindingAt(delayMs: number, timeoutMs = HERDR_ACCEPTED_START_OBSERVATION_MS) {
+      let now = 0;
+      return observeWorkerStartup({
+        ...base,
+        timeoutMs,
+        now: () => now,
+        waitForEvents: async ({ waitMs }) => {
+          if (delayMs > waitMs) {
+            now += waitMs;
+            return batch("1", [], true);
+          }
+          now += delayMs;
+          return batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]);
+        },
+        verifyAuthority: async () => ({
+          sessionBound: true,
+          generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 },
+        }),
+      });
+    }
+
+    for (const delayMs of [2_800, 3_000, 3_200]) {
+      await expect(observeBindingAt(delayMs)).resolves.toMatchObject({ observed: true });
+    }
+    await expect(observeBindingAt(6_200)).resolves.toMatchObject({ observed: false, reason: "timeout" });
+    await expect(observeBindingAt(3_201, resolveWorkerStartupObservationTimeoutMs("3200")))
+      .resolves.toMatchObject({ observed: false, reason: "timeout" });
+    const legacyMaximumOverride = resolveWorkerStartupObservationTimeoutMs("30000");
+    await expect(observeBindingAt(29_999, legacyMaximumOverride)).resolves.toMatchObject({ observed: true });
+    await expect(observeBindingAt(30_001, legacyMaximumOverride)).resolves.toMatchObject({ observed: false, reason: "timeout" });
+  });
+
+  it("keeps an explicit bounded observation override", async () => {
+    expect(resolveWorkerStartupObservationTimeoutMs()).toBe(WORKER_STARTUP_OBSERVATION_MS);
+    expect(resolveWorkerStartupObservationTimeoutMs(undefined, HERDR_ACCEPTED_START_OBSERVATION_MS)).toBe(6_000);
+    expect(resolveWorkerStartupObservationTimeoutMs("3200", HERDR_ACCEPTED_START_OBSERVATION_MS)).toBe(3_200);
+    expect(resolveWorkerStartupObservationTimeoutMs("30000", HERDR_ACCEPTED_START_OBSERVATION_MS)).toBe(30_000);
+    expect(() => resolveWorkerStartupObservationTimeoutMs("-1")).toThrow(/nonnegative finite/i);
+    expect(() => resolveWorkerStartupObservationTimeoutMs("not-a-number")).toThrow(/nonnegative finite/i);
   });
 
   it("propagates cancellation instead of converting it to a timeout", async () => {

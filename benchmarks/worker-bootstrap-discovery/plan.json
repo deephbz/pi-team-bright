@@ -1,0 +1,40 @@
+{
+  "schema": "pi-team-bright-worker-bootstrap-discovery-plan/1",
+  "stage": "exploration-measurement",
+  "source_revision_required": "bcf57707b9bc546e5e754681db7d29e6bd094fea",
+  "question": "Which Pi resource-discovery exclusions reduce fresh exact-extension Worker bootstrap time without removing unrelated configured resources or weakening exact extension selection?",
+  "prediction": "Disabling individual resource classes can reduce RPC-ready time, but a Worker launch must retain unrelated configured extensions and Skills. Bundling the exact extension can reduce TypeScript loader work, but it cannot prove Worker Session binding or Task delivery by itself.",
+  "invariants": [
+    "Every case loads exactly one Pi Team Bright extension from its explicit source.",
+    "The current exact-launch case retains a separately configured unrelated extension and Skill.",
+    "A globally discovered duplicate Pi Team Bright extension causes registration failure; suppressing all discovery is not an acceptable production remedy.",
+    "RPC readiness, Session binding, interactive readiness, and Task delivery are separate outcomes."
+  ],
+  "data_dag": [
+    "isolated fixture profile -> child Pi process -> probe lifecycle records -> redacted raw sample",
+    "raw samples -> successful-only nearest-rank summaries -> invariant assessment -> candidate ranking"
+  ],
+  "cases": [
+    "current_exact_discovery",
+    "no_extensions",
+    "no_skills",
+    "no_prompt_templates",
+    "no_themes",
+    "no_context_files",
+    "all_discovery_disabled",
+    "bundled_exact_extension"
+  ],
+  "required_samples_per_finalist": 10,
+  "verification": [
+    "Fresh isolated PI_CODING_AGENT_DIR and session directory per sample.",
+    "Balanced round-robin case order.",
+    "Probe records extension factory, session_start, and resources_discover lifecycle events.",
+    "The runner fails if an expected unrelated extension or Skill is absent from the current exact-discovery case.",
+    "The runner proves the duplicate exact-extension case fails rather than masking it."
+  ],
+  "limits": [
+    "This harness uses Pi RPC mode, not a terminal carrier, so it cannot observe Herdr interactive_ready.",
+    "It does not construct a durable Team Membership. Exact Worker binding and first Task delivery are recorded as not attempted rather than inferred."
+  ],
+  "cleanup": "The runner removes every temporary fixture and kills every child it starts. The committed result contains only redacted records."
+}

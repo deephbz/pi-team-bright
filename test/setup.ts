@@ -19,6 +19,19 @@ fs.mkdirSync(home, { recursive: true });
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 process.env.PI_TEAMS_VITEST_HOME = home;
-for (const key of ["PI_TEAM_NAME", "PI_AGENT_NAME", "PI_AGENT_LAUNCH_ID", "PI_TEAMS_SESSION_ROOT", "PI_TEAMS_TRACE_JSONL", "PI_TEAMS_WORKER_STARTUP_WAIT_MS"]) delete process.env[key];
+// A test runner can itself be a live Worker process. Do not let that outer
+// Membership, launch capability, exact extension, or disposable aggregate
+// become authority or mutable state inside an isolated fixture.
+for (const key of [
+  "PI_TEAM_NAME",
+  "PI_AGENT_NAME",
+  "PI_AGENT_LAUNCH_ID",
+  "PI_TEAM_MEMBERSHIP_ID",
+  "PI_TEAM_BRIGHT_SHIPPED_EXTENSION",
+  "PI_TEAM_BRIGHT_WORKER_AGGREGATE",
+  "PI_TEAMS_SESSION_ROOT",
+  "PI_TEAMS_TRACE_JSONL",
+  "PI_TEAMS_WORKER_STARTUP_WAIT_MS",
+]) delete process.env[key];
 // Synthetic extension lifecycle fixtures must never inherit production's 3s wait.
 process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS = "0";

@@ -397,8 +397,9 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source).toContain('import type { TaskAuthorityProvisioningPort } from "../task-authority/contracts"');
   });
 
-  it("keeps one composition-root launch bridge and injects it into the durable port", () => {
+  it("keeps Task ready reconciliation outside the model-tool Worker topology path", () => {
     const source = fs.readFileSync(path.join(__dirname, "../../extensions/index.ts"), "utf8");
+    const teamApplication = fs.readFileSync(path.join(__dirname, "durable-model-tool-team-application.ts"), "utf8");
 
     expect(source.match(/const workerLaunchBridge = createWorkerLaunchBridge\(/g)).toHaveLength(1);
     expect(source.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);
@@ -407,7 +408,10 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory, graphTaskOrchestration\)/g)).toHaveLength(1);
     expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
     expect(source).toContain("const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning()");
-    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
+    expect(source).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning)");
+    expect(source).not.toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
+    expect(teamApplication).not.toContain("taskOrchestration");
+    expect(teamApplication).not.toContain("reconcileReady(");
     expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration)");
     expect(source).toContain("new DurableModelToolAlertApplication(modelToolBindings, alertSender)");
     expect(source).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
@@ -430,7 +434,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const tools = new Map<string, any>();
     registerModelToolJourney({ registerTool: (tool) => tools.set(tool.name, tool) }, port);
 
-    await tools.get("ensure_worker").execute(
+    const result = await tools.get("ensure_worker").execute(
       "ensure-model-tool-worker",
       { name: "worker", scope: "fixture scope" },
       undefined,
@@ -438,6 +442,12 @@ describe("DurableModelToolTeamPort durable authority", () => {
       {
         cwd,
         isProjectTrusted: () => projectTrusted,
+        modelRegistry: {
+          getAvailable: () => [
+            { provider: "fixture", id: "selected" },
+            { provider: "fixture", id: "not-in-result" },
+          ],
+        },
         sessionManager: {
           getSessionId: () => leaderSessionId,
           getSessionFile: () => `/tmp/${name}-lead.jsonl`,
@@ -447,7 +457,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
 
     expect(launchBridge.ensureWorker).toHaveBeenCalledOnce();
     const request = launchBridge.ensureWorker.mock.calls[0][0];
-    expect(request).toEqual({
+    expect(request).toMatchObject({
       teamName: name,
       workerName: "worker",
       scope: "fixture scope",
@@ -455,6 +465,9 @@ describe("DurableModelToolTeamPort durable authority", () => {
       workerAggregate: expect.any(Function),
       launchEnvironment: { PI_TEAM_BRIGHT_MODEL_TOOL: "1" },
     });
+    expect(request.availableModelKeys).toEqual(new Set(["fixture/selected", "fixture/not-in-result"]));
+    expect(JSON.stringify(result.details)).not.toContain("fixture/not-in-result");
+    expect(JSON.stringify(result.content)).not.toContain("fixture/not-in-result");
     expect(request.workerAggregate(cwd)).toMatchObject({
       projectTrusted,
       defaultModel: projectTrusted ? { scope: "project", value: "project/model" } : undefined,

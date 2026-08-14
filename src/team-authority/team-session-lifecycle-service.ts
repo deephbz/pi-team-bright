@@ -4,6 +4,7 @@ import * as paths from "../utils/paths";
 import * as runtime from "../utils/runtime";
 import * as teams from "../utils/teams";
 import { admitTeamSession, type SessionTerminalPlacement, type TeamIdentitySource, type TeamSessionAdmission } from "../utils/session-terminal";
+import { recordWorkerLaunchStage, withSemanticTrace } from "../utils/trace";
 import type { Member } from "./contracts";
 import type { TeamLifecyclePublication } from "./team-lifecycle-publication";
 
@@ -15,10 +16,20 @@ export class TeamSessionLifecycleService {
   constructor(private readonly lifecyclePublication: TeamLifecyclePublication) {}
 
   async admitWorker(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string; expectedMembershipId?: string }): Promise<SessionStartup> {
+    return withSemanticTrace(
+      "worker_session_admission",
+      { teamName: input.teamName, workerName: input.workerName },
+      () => this.admitWorkerWithTrace(input),
+    );
+  }
+
+  private async admitWorkerWithTrace(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string; expectedMembershipId?: string }): Promise<SessionStartup> {
+    recordWorkerLaunchStage("worker_session_started");
     const config = await teams.readConfig(input.teamName);
     const admission = admitTeamSession(config, input.workerName, input.placement, input.identitySource);
     if (admission.kind === "refused") return admission;
     const candidate = await teams.currentMembership(input.teamName, input.workerName);
+    recordWorkerLaunchStage("membership_validated", { membershipId: candidate.membershipId });
     if (input.expectedMembershipId && candidate.membershipId !== input.expectedMembershipId) {
       return { kind: "refused", reason: `Worker ${input.workerName} started for stale Membership ${input.expectedMembershipId}.`, exitProcess: true };
     }
@@ -30,12 +41,18 @@ export class TeamSessionLifecycleService {
         }
       }
       const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), process.pid, runtime.probePidPresence, input.launchId);
-      if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
+      if (runtimeAdmission.kind === "refused") {
+        recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
+        return { ...runtimeAdmission, exitProcess: true };
+      }
       if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: current };
       const startedAt = Date.now();
       await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
+      recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });
       const bound = await teams.bindMemberSession(input.teamName, input.workerName, input.sessionFile, input.launchId, admission.update ?? {}, current.membershipId);
+      recordWorkerLaunchStage("session_bound_persisted", { membershipId: bound.membershipId! });
       await this.lifecyclePublication.recordWorkerSessionBound({ teamName: input.teamName, workerName: input.workerName, membershipId: bound.membershipId!, generation: { membershipId: bound.membershipId!, pid: process.pid, startedAt } });
+      recordWorkerLaunchStage("session_bound_published", { membershipId: bound.membershipId! });
       return { kind: "admitted", action: "claim", member: bound };
     });
   }

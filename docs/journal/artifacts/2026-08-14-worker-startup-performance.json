@@ -1,0 +1,82 @@
+{
+  "schema": "pi-team-bright-worker-startup-performance/1",
+  "recorded_at": "2026-08-14T05:43:36Z",
+  "source_revision": "a8e3cb48a6ce3405f86df08114e0a4b73dccdf98",
+  "environment": {
+    "pi_version": "0.83.0",
+    "node_version": "25.6.0",
+    "herdr_version": "0.7.5",
+    "platform": "macos-arm64",
+    "startup_network_mode": "offline except configured baseline"
+  },
+  "measurements": {
+    "pi_rpc_process_to_get_state": {
+      "unit": "ms",
+      "samples_per_case": 7,
+      "configured": { "min": 744.9, "p50": 764.2, "p95": 978.5, "max": 978.5 },
+      "configured_offline": { "min": 734.4, "p50": 751.9, "p95": 797.1, "max": 797.1 },
+      "minimal_offline": { "min": 380.7, "p50": 403.8, "p95": 424.6, "max": 424.6 },
+      "exact_extension_offline": { "min": 463.3, "p50": 468.9, "p95": 567.9, "max": 567.9 },
+      "exact_extension_with_normal_non_extension_resources_offline": { "min": 468.3, "p50": 484.4, "p95": 511.7, "max": 511.7 }
+    },
+    "pi_internal_timing_representative": {
+      "unit": "ms",
+      "minimal_runtime_after_main_entry": 37,
+      "exact_extension_runtime_after_main_entry": 108,
+      "exact_extension_module_import": 58,
+      "exact_extension_factory": 17,
+      "note": "External wall time includes roughly 350 ms before Pi main timing starts."
+    },
+    "pi_interactive_process_to_benchmark_exit": {
+      "unit": "ms",
+      "samples_per_case": 7,
+      "minimal_wall": { "min": 569.5, "p50": 574.6, "p95": 616.2 },
+      "exact_extension_wall": { "min": 656.6, "p50": 665.1, "p95": 700.7 },
+      "deliberate_terminal_drain_ms": 150,
+      "adjusted_p50_estimate": { "minimal": 424.6, "exact_extension": 515.1 },
+      "exact_extension_interactive_init_p50": 31
+    },
+    "herdr_owned_pane": {
+      "unit": "ms",
+      "pane_split": { "samples": 10, "min": 7.82, "p50": 9.47, "p95": 14.06, "max": 14.06 },
+      "managed_pi_start_minimal": { "samples": 5, "min": 3022.4, "p50": 3039.4, "p95": 3057.1, "max": 3057.1 },
+      "managed_pi_start_exact_extension": { "samples": 5, "min": 3038.2, "p50": 3047.4, "p95": 3059.3, "max": 3059.3 },
+      "note": "Herdr agent start has an intentional 3000 ms settle delay before interactive_ready."
+    },
+    "durable_prepared_to_session_bound": {
+      "unit": "ms",
+      "latest_day": "2026-08-13",
+      "latest_day_samples": 40,
+      "latest_day_result": { "min": 645, "p50": 828, "p95": 892, "max": 1273 },
+      "mixed_history": { "samples": 938, "min": 549, "p50": 1144, "p95": 4485, "max": 1751134 },
+      "warning": "Mixed history spans implementations and failures. Use the latest-day lane for the current cold-start assessment."
+    },
+    "warm_runtime": {
+      "unit": "ms",
+      "sdk_static_import_single_sample": 334.99,
+      "sdk_shared_model_runtime_single_sample": 14.21,
+      "sdk_first_exact_extension_session": 81.93,
+      "sdk_later_exact_extension_sessions": { "samples": 10, "min": 17.01, "p50": 17.44, "p95": 18.76, "max": 18.76 },
+      "rpc_initial_ready_single_sample": 473.76,
+      "rpc_session_replacement": { "samples": 10, "min": 42.77, "p50": 44.98, "p95": 50.31, "max": 50.31 }
+    }
+  },
+  "assessment": {
+    "cold_start_under_100ms": "not_supported",
+    "warm_activation_near_100ms": "supported_as_a_design_hypothesis",
+    "largest_current_synchronous_floor": "Herdr managed-agent 3000 ms settle delay",
+    "cold_pi_floor_p50_ms": 515.1,
+    "current_session_binding_p50_ms": 828,
+    "warm_session_replacement_p50_ms": 44.98
+  },
+  "verification": {
+    "benchmark_source": "scripts/worker-startup-benchmark.mjs",
+    "runtime_anchors": [
+      "Pi PI_TIMING output",
+      "Pi PI_STARTUP_BENCHMARK pseudo-terminal runs",
+      "Herdr owned-pane start and cleanup runs",
+      "durable Team worker prepared/session_bound events",
+      "Pi SDK and RPC warm-session runs"
+    ]
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "schema": "pi-team-bright-preloaded-main-lower-bound/1",
+  "recorded_at": "2026-08-14T06:12:00Z",
+  "source_revision": "a8e3cb48a6ce3405f86df08114e0a4b73dccdf98",
+  "environment": {
+    "pi_version": "0.83.0",
+    "node_version": "25.6.0",
+    "bun_version": "1.3.8",
+    "platform": "macos-arm64",
+    "samples_per_case": 10,
+    "mode": "offline RPC with no persisted session",
+    "classification": "activation lower bound, not Worker readiness"
+  },
+  "method": {
+    "preload": "A fresh Node process imports Pi main, then waits on a private parent-child IPC channel without invoking main or creating a Pi Session.",
+    "activation": "The parent sends one activation message and immediately submits RPC get_state. Elapsed time ends at the matching successful response.",
+    "exact_typescript": "Pi loads the exact TypeScript extension after activation through its normal -e loader.",
+    "minimal": "Pi activates without extensions or other resources.",
+    "bundled_inline": "Bun 1.3.8 bundles 168 local extension modules. The launcher imports the bundle before activation and passes its factory to Pi main as an inline extension.",
+    "bundle_command": "bun build extensions/index.ts --target=node --format=esm --outfile=<temporary>/index.mjs with each bundle_external_packages entry passed through --external",
+    "bundle_external_packages": [
+      "@beads/bd",
+      "@dagrejs/dagre",
+      "@earendil-works/pi-ai",
+      "@earendil-works/pi-coding-agent",
+      "@earendil-works/pi-tui",
+      "typebox"
+    ]
+  },
+  "cases": {
+    "exact_typescript": {
+      "preload_ms": { "min": 340.04, "p50": 343.16, "p95": 355.77, "max": 355.77 },
+      "activation_ms": { "min": 116.94, "p50": 121.22, "p95": 168.77, "max": 168.77 },
+      "raw": [
+        { "preload_ms": 348.81, "activation_ms": 168.77 },
+        { "preload_ms": 342.27, "activation_ms": 121.26 },
+        { "preload_ms": 344.46, "activation_ms": 145.80 },
+        { "preload_ms": 355.77, "activation_ms": 142.38 },
+        { "preload_ms": 343.16, "activation_ms": 116.94 },
+        { "preload_ms": 340.25, "activation_ms": 119.10 },
+        { "preload_ms": 340.47, "activation_ms": 120.98 },
+        { "preload_ms": 345.12, "activation_ms": 121.22 },
+        { "preload_ms": 340.04, "activation_ms": 118.70 },
+        { "preload_ms": 351.13, "activation_ms": 123.29 }
+      ]
+    },
+    "minimal": {
+      "preload_ms": { "min": 312.20, "p50": 314.49, "p95": 317.94, "max": 317.94 },
+      "activation_ms": { "min": 35.37, "p50": 36.18, "p95": 37.67, "max": 37.67 },
+      "raw": [
+        { "preload_ms": 314.49, "activation_ms": 35.46 },
+        { "preload_ms": 312.20, "activation_ms": 35.72 },
+        { "preload_ms": 316.22, "activation_ms": 37.23 },
+        { "preload_ms": 317.94, "activation_ms": 36.05 },
+        { "preload_ms": 313.08, "activation_ms": 36.18 },
+        { "preload_ms": 313.75, "activation_ms": 37.07 },
+        { "preload_ms": 314.53, "activation_ms": 37.67 },
+        { "preload_ms": 316.04, "activation_ms": 36.29 },
+        { "preload_ms": 312.35, "activation_ms": 36.62 },
+        { "preload_ms": 315.54, "activation_ms": 35.37 }
+      ]
+    },
+    "bundled_inline": {
+      "preload_ms": { "min": 377.33, "p50": 382.25, "p95": 390.90, "max": 390.90 },
+      "activation_ms": { "min": 58.65, "p50": 59.09, "p95": 83.05, "max": 83.05 },
+      "raw": [
+        { "preload_ms": 380.24, "activation_ms": 59.22 },
+        { "preload_ms": 382.33, "activation_ms": 58.65 },
+        { "preload_ms": 377.33, "activation_ms": 59.65 },
+        { "preload_ms": 382.89, "activation_ms": 59.38 },
+        { "preload_ms": 390.90, "activation_ms": 83.05 },
+        { "preload_ms": 385.95, "activation_ms": 58.68 },
+        { "preload_ms": 382.25, "activation_ms": 59.09 },
+        { "preload_ms": 379.22, "activation_ms": 59.27 },
+        { "preload_ms": 379.84, "activation_ms": 59.08 },
+        { "preload_ms": 383.50, "activation_ms": 58.68 }
+      ]
+    }
+  },
+  "exact_admission_probe": {
+    "samples": 10,
+    "activation_to_rpc_ms": { "min": 44.84, "p50": 49.87, "p95": 99.57, "max": 99.57 },
+    "all_pre_activation_membership_sessions_absent": true,
+    "all_pre_activation_isolated_agent_directories_empty": true,
+    "all_post_activation_memberships_session_bound": true,
+    "all_session_bound_event_membership_and_pid_exact": true,
+    "all_runtime_membership_and_pid_exact": true,
+    "raw_activation_ms": [49.06, 49.87, 44.84, 66.18, 80.56, 99.57, 53.59, 61.44, 48.88, 49.72],
+    "cleanup": "Every uniquely named synthetic Team, legacy Task directory, isolated Pi agent directory, and child process was removed after its sample.",
+    "warning": "This proves an RPC-mode exact-admission distribution. It does not establish interactive TTY parity, terminal reservation, resource-profile parity, or adversarial failure cleanup."
+  },
+  "interactive_tui_probe": {
+    "samples": 5,
+    "preload_ms": { "min": 590.41, "p50": 594.75, "p95": 630.79, "max": 630.79 },
+    "activation_to_exact_session_bound_ms": { "min": 163.21, "p50": 164.42, "p95": 174.14, "max": 174.14 },
+    "activation_to_herdr_idle_observation_ms": { "min": 268.77, "p50": 273.12, "p95": 283.44, "max": 283.44 },
+    "all_pre_activation_membership_sessions_absent": true,
+    "all_pre_activation_isolated_agent_directories_empty": true,
+    "all_post_activation_memberships_session_bound": true,
+    "all_session_bound_event_membership_and_pid_exact": true,
+    "all_runtime_membership_exact": true,
+    "all_herdr_agents_detected_as_pi_and_named": true,
+    "raw": [
+      { "preload_ms": 630.79, "exact_bound_ms": 166.64, "herdr_idle_ms": 272.47 },
+      { "preload_ms": 593.01, "exact_bound_ms": 174.14, "herdr_idle_ms": 283.44 },
+      { "preload_ms": 590.41, "exact_bound_ms": 163.21, "herdr_idle_ms": 276.02 },
+      { "preload_ms": 605.64, "exact_bound_ms": 164.42, "herdr_idle_ms": 268.77 },
+      { "preload_ms": 594.75, "exact_bound_ms": 164.30, "herdr_idle_ms": 273.12 }
+    ],
+    "cleanup": "Each sample used an exact no-focus Herdr tab and uniquely named synthetic Team. The controller closed only its created tab and removed every owned Team, Task, agent, activation, and marker directory.",
+    "warning": "The Herdr idle interval includes bounded CLI observation overhead. Exact Session binding is the Pi Team Bright readiness signal."
+  },
+  "preinitialized_tui_reservation_probe": {
+    "samples_per_case": 5,
+    "herdr_prompt_command_with_new_session_ms": { "min": 114.97, "p50": 123.36, "p95": 126.27, "max": 126.27, "raw": [126.27, 124.65, 122.86, 114.97, 123.36] },
+    "herdr_prompt_command_with_existing_empty_session_ms": { "min": 8.55, "p50": 8.92, "p95": 9.43, "max": 9.43, "raw": [9.43, 8.92, 9.16, 8.55, 8.62] },
+    "observation": "Creating a replacement Session exceeds the strict target before exact PTB binding. A command that keeps the preinitialized empty Session leaves enough latency budget, but changes the admission ontology.",
+    "safety_gate": "Do not adopt direct reservation-Session binding until executable evidence proves all input, tool, provider, foreign-extension, queued-message, reload, and shell paths are blocked before a one-shot fenced activation. Any failure must destroy the reservation."
+  },
+  "rejected_or_weakened_paths": {
+    "typescript_preload_through_extension_loader": "Pre-instantiating the extension through Pi's loader did not improve activation and introduced high variance.",
+    "compiled_commonjs_extension": "Plain tsc output was slower than the TypeScript loader in this experiment.",
+    "bundle_loaded_after_activation": "A bundle alone did not help. Moving bundle import off the activation path was necessary."
+  },
+  "assessment": {
+    "strongest_supported_claim": "A single-use process can move Pi core and exact extension module loading off the activation path. Ten synthetic Team activations reached RPC readiness plus exact Membership, event, and runtime-generation binding at 49.87 ms p50 and 99.57 ms p95.",
+    "not_proven": [
+      "interactive TUI readiness",
+      "interactive-TTY activation at p95 near 100 ms",
+      "normal resource and trust parity",
+      "model and thinking projection",
+      "Herdr reserved-pane activation and naming",
+      "no import-time environment or cwd capture",
+      "crash and shutdown cleanup",
+      "first provider response"
+    ]
+  }
+}

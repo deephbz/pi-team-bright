@@ -1,0 +1,2257 @@
+{
+  "schema": "pi-team-bright-pi-compile-cache-paired-results/1",
+  "recorded_at": "2026-08-14T11:25:08.744Z",
+  "source": {
+    "revision": "5b0e21ea8749db870699028a3ac47539e974f728",
+    "worktree_dirty": false,
+    "node_version": "25.6.0",
+    "node_compile_cache_api": true,
+    "pi_cli_sha256": "af302f231437eaf6f37691bce4b34234fcb626bcb5eb3910d4fc3f6519bf78ca",
+    "exact_extension_sha256": "18d28a44ab499ca2d91044724efc9c43e2f602171ecfd6350c0b9522de1a0985"
+  },
+  "design": {
+    "pairs_per_phase": 15,
+    "seed": 20260814,
+    "interleaving": "seed-shuffled pair order; each pair has one enabled and one disabled launch in independently shuffled order",
+    "cold": "unique empty enabled cache per measured launch",
+    "warm": "one unmeasured exact enabled launch primes each unique cache",
+    "boundary": "process start through exact RPC Session admission",
+    "bootstrap_resamples": 10000
+  },
+  "summaries": {
+    "cold": {
+      "pairs": 15,
+      "enabled": {
+        "n": 15,
+        "min_ms": 1167.269,
+        "p50_ms": 1231.349,
+        "p95_ms": 1264.823,
+        "max_ms": 1264.823
+      },
+      "disabled": {
+        "n": 15,
+        "min_ms": 1193.051,
+        "p50_ms": 1205.891,
+        "p95_ms": 1378.32,
+        "max_ms": 1378.32
+      },
+      "paired": {
+        "statistic": "mean paired enabled-minus-disabled session_admitted_ms",
+        "resamples": 10000,
+        "point_estimate_ms": 12.38,
+        "confidence_interval_95_ms": [
+          -15.792,
+          31.3
+        ],
+        "signs": {
+          "negative": 2,
+          "zero": 0,
+          "positive": 13
+        }
+      }
+    },
+    "warm": {
+      "pairs": 15,
+      "enabled": {
+        "n": 15,
+        "min_ms": 1136.449,
+        "p50_ms": 1182.087,
+        "p95_ms": 1232.728,
+        "max_ms": 1232.728
+      },
+      "disabled": {
+        "n": 15,
+        "min_ms": 1158.85,
+        "p50_ms": 1198.193,
+        "p95_ms": 1233.874,
+        "max_ms": 1233.874
+      },
+      "paired": {
+        "statistic": "mean paired enabled-minus-disabled session_admitted_ms",
+        "resamples": 10000,
+        "point_estimate_ms": -15.137,
+        "confidence_interval_95_ms": [
+          -26.568,
+          -4.025
+        ],
+        "signs": {
+          "negative": 12,
+          "zero": 0,
+          "positive": 3
+        }
+      }
+    }
+  },
+  "raw_samples": [
+    {
+      "phase": "cold",
+      "pair_index": 1,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1378.32,
+          "session_admitted_ms": 1378.32,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1228.082,
+          "session_admitted_ms": 1228.082,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851746
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851746
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 12,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1225.843,
+          "session_admitted_ms": 1225.843,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1232.728,
+          "session_admitted_ms": 1232.728,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851698
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851698
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851698
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 3,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1186.48,
+          "session_admitted_ms": 1186.48,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851738
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851738
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851738
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1206.752,
+          "session_admitted_ms": 1206.752,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 7,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1173.965,
+          "session_admitted_ms": 1173.965,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851706
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851706
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851706
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1187.056,
+          "session_admitted_ms": 1187.056,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 5,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1247.496,
+          "session_admitted_ms": 1247.496,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851754
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851754
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1215.578,
+          "session_admitted_ms": 1215.578,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 1,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1182.087,
+          "session_admitted_ms": 1182.087,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851682
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851682
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851682
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1207.335,
+          "session_admitted_ms": 1207.335,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 10,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1179.956,
+          "session_admitted_ms": 1179.956,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851698
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851698
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851698
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1193.227,
+          "session_admitted_ms": 1193.227,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 14,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1194.975,
+          "session_admitted_ms": 1194.975,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1239.59,
+          "session_admitted_ms": 1239.59,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851666
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851666
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 5,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1194.02,
+          "session_admitted_ms": 1194.02,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1177.9,
+          "session_admitted_ms": 1177.9,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851682
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851682
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851682
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 3,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1222.31,
+          "session_admitted_ms": 1222.31,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851706
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851706
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1196.261,
+          "session_admitted_ms": 1196.261,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 0,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1193.051,
+          "session_admitted_ms": 1193.051,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1223.209,
+          "session_admitted_ms": 1223.209,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851578
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851578
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 4,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1198.193,
+          "session_admitted_ms": 1198.193,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1195.787,
+          "session_admitted_ms": 1195.787,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851658
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851658
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851658
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 12,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1210.791,
+          "session_admitted_ms": 1210.791,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1224.808,
+          "session_admitted_ms": 1224.808,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851650
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851650
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 9,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1193.387,
+          "session_admitted_ms": 1193.387,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851626
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851626
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851626
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1158.85,
+          "session_admitted_ms": 1158.85,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 2,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1197.214,
+          "session_admitted_ms": 1197.214,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1236.142,
+          "session_admitted_ms": 1236.142,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851562
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851562
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 6,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1167.269,
+          "session_admitted_ms": 1167.269,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851594
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851594
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1216.243,
+          "session_admitted_ms": 1216.243,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 8,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1197.373,
+          "session_admitted_ms": 1197.373,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1183.961,
+          "session_admitted_ms": 1183.961,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851650
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851650
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851650
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 8,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1227.528,
+          "session_admitted_ms": 1227.528,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851634
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851634
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1197.941,
+          "session_admitted_ms": 1197.941,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 13,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1231.349,
+          "session_admitted_ms": 1231.349,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851514
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851514
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1208.822,
+          "session_admitted_ms": 1208.822,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 0,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1176.582,
+          "session_admitted_ms": 1176.582,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851674
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851674
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851674
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1207.681,
+          "session_admitted_ms": 1207.681,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 2,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1198.603,
+          "session_admitted_ms": 1198.603,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1174.691,
+          "session_admitted_ms": 1174.691,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851594
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851594
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851594
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 4,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1214.758,
+          "session_admitted_ms": 1214.758,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1232.856,
+          "session_admitted_ms": 1232.856,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851570
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851570
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 9,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1193.735,
+          "session_admitted_ms": 1193.735,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1233.063,
+          "session_admitted_ms": 1233.063,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851698
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851698
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 13,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1196.544,
+          "session_admitted_ms": 1196.544,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1205.315,
+          "session_admitted_ms": 1205.315,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851642
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851642
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851642
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 11,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1196.979,
+          "session_admitted_ms": 1196.979,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1171.113,
+          "session_admitted_ms": 1171.113,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851738
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851738
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851738
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 7,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1205.891,
+          "session_admitted_ms": 1205.891,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1237.88,
+          "session_admitted_ms": 1237.88,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851666
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851666
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 14,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1136.449,
+          "session_admitted_ms": 1136.449,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851658
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851658
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851658
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1208.442,
+          "session_admitted_ms": 1208.442,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "warm",
+      "pair_index": 6,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "warm-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1213.313,
+          "session_admitted_ms": 1213.313,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851682
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_prime": {
+              "files": 1506,
+              "bytes": 3851682
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851682
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "warm-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1233.874,
+          "session_admitted_ms": 1233.874,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 11,
+      "order": [
+        "enabled",
+        "disabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1226.481,
+          "session_admitted_ms": 1226.481,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851714
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851714
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1199.484,
+          "session_admitted_ms": 1199.484,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    },
+    {
+      "phase": "cold",
+      "pair_index": 10,
+      "order": [
+        "disabled",
+        "enabled"
+      ],
+      "outcomes": [
+        {
+          "enabled": false,
+          "label": "cold-disabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1234.117,
+          "session_admitted_ms": 1234.117,
+          "cache": {
+            "files": 0,
+            "bytes": 0
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_measurement": {
+              "files": 0,
+              "bytes": 0
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        },
+        {
+          "enabled": true,
+          "label": "cold-enabled",
+          "outcome": "admitted",
+          "process_ready_ms": 1264.823,
+          "session_admitted_ms": 1264.823,
+          "cache": {
+            "files": 1506,
+            "bytes": 3851634
+          },
+          "cache_evidence": {
+            "invalidated": false,
+            "before": {
+              "files": 1,
+              "bytes": 214
+            },
+            "after_measurement": {
+              "files": 1506,
+              "bytes": 3851634
+            },
+            "after_cleanup": {
+              "files": 0,
+              "bytes": 0
+            }
+          },
+          "cleanup": {
+            "sample_root_removed": true,
+            "cache_root_removed": true
+          }
+        }
+      ]
+    }
+  ],
+  "cleanup": {
+    "child_roots_removed": true,
+    "cache_roots_removed": true,
+    "private_raw_bundle": "retained outside repository by explicit operator choice"
+  },
+  "limits": [
+    "Run only after Team shutdown; this artifact cannot remove machine-load confounding.",
+    "No provider request, agent turn, Team creation, Worker launch, or Worker admission is measured.",
+    "Bootstrap intervals describe this sampled machine state and do not prove production causality."
+  ]
+}
