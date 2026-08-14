@@ -1,8 +1,8 @@
 # Pi Team Bright DAG-native prototype context
 
 Updated: 2026-08-14
-Stage: release-candidate hardening on the published RC14 semantic base
-Status: `release/v0.17.0-rc.15-dag-native` is a side-branch review candidate based on RC14 publication record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`, whose release code is tagged at `8bb517bd32d8687e97b96a531db15833fd64420a`; the DAG range is four semantic commits; focused DAG/liveness integration, real-Team acceptance, package, agent-surface, lane, diff, and privacy-range checks pass; the side branch does not update `main`, create a tag, publish npm, or create a GitHub Release
+Stage: release-candidate hardening on the immutable RC15 DAG side-branch base
+Status: `release/v0.17.0-rc.16-dag-native` is a review candidate extending `a8e3cb48a6ce3405f86df08114e0a4b73dccdf98`; that base and its ancestors remain unchanged; the five-commit unpublished range integrates Worker-startup hardening, unified TUI projection, interactive graph refinement, and the configurable DAG gallery; exact executable source `3ee1d4c5d5606bd6b0014695f29a4e9288902a42` passed the one allowed 1,004-test aggregate, all release-specific gates, a sequential 197-file package dry run, candidate-range privacy, and a proxy-backed real Team canary with stable Worker reuse and mechanical `A -> B` success progression; only the documentation-only receipt amendment, minimal exact-tip checks, and side-branch push remain; the side branch does not update `main`, create a tag, publish npm, or create a GitHub Release
 
 ## RC14 liveness-hotfix rebase
 

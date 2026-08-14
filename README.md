@@ -114,7 +114,7 @@ based substitute for Tasks.
 
 ## Install and upgrade
 
-After npm lists this release candidate, pin the exact version:
+Install the current published release candidate by exact version:
 
 ```sh
 pi install npm:@hypercarrier/pi-team-bright@0.17.0-rc.15

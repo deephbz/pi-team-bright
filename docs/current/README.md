@@ -5,9 +5,10 @@ Updated: 2026-08-14
 Current published release: `0.17.0-rc.14` remains on npm `next` from annotated
 tag `v0.17.0-rc.14`. The durable publication evidence is in
 [`2026-08-12-v0.17.0-rc.14-release-receipt.md`](../journal/2026-08-12-v0.17.0-rc.14-release-receipt.md).
-The `release/v0.17.0-rc.15-dag-native` side branch prepares the DAG-native
-candidate from publication record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`.
-It is not an npm publication, Git tag, GitHub Release, or `main` update.
+The `release/v0.17.0-rc.16-dag-native` side branch extends immutable DAG base
+`a8e3cb48a6ce3405f86df08114e0a4b73dccdf98`, which descends from publication
+record `325fe3b69fe6127808b1fdb0dcf3e3d707635a1a`. It is not an npm publication,
+Git tag, GitHub Release, or `main` update.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -183,36 +184,40 @@ restating executable definitions.
   contract](../projects/model-invoked-tool-contract.md) and [parity
   checklist](../release/model-tool-parity-checklist.md).
 - `0.17.0-rc.14` is the published liveness and Worker-recovery base at exact
-  release code `8bb517bd32d8687e97b96a531db15833fd64420a`. The side branch
-  `release/v0.17.0-rc.15-dag-native` prepares atomic graph creation, mechanical
-  ready-front dispatch, graph control, and the read-only Task graph pane. Its
-  earlier eight-Worker stress closed 117/117 Tasks and stopped all Workers;
-  focused post-rebase integration and aggregate evidence is recorded in the
-  maintained [DAG-native context](../projects/dag-native/context.md). The pane
-  now has a fixed full-component sentinel artifact, connectivity-based
-  orthogonal routes, three nonduplicative HUD lines, a legend, pan/select modes,
-  spatial `hjkl` node navigation, bounded selected-Task details, and Task-event
-  timing with explicit unknown-history behavior. The checked-in
-  [`task-dag-islands gallery config`](../../src/task-graph-view/gallery/default.json)
-  is the single sentinel input for the golden render and interactive
-  `npm run task-dag-islands:gallery` review surface. Run
-  `npm run task-dag-islands:gallery -- --config <path>` to review another
-  validated gallery config. The side branch is a review candidate only. It does not change npm, a tag, or `main`.
-- `0.17.0-rc.10` remains published from exact tagged source `1214303`; npm `next`
-  points to it. It removes package version as a Team compatibility gate and
-  removes the obsolete fixture constant. The durable [rc.10 release
-  receipt](../journal/2026-08-08-v0.17.0-rc.10-release-receipt.md) records exact
-  CI, historical-config integration E2E, package, registry, and provenance
-  evidence. The [rc.9 release
-  receipt](../journal/2026-08-07-v0.17.0-rc.9-release-receipt.md), [aborted rc.6
-  receipt](../journal/2026-08-05-v0.17.0-rc.6-release-receipt.md), [published
-  rc.7 receipt](../journal/2026-08-05-v0.17.0-rc.7-release-receipt.md), and
-  [published rc.8
-  receipt](../journal/2026-08-05-v0.17.0-rc.8-release-receipt.md) remain
-  historical evidence. The current release accepts `0.1 < leader_share < 1.0`
-  while keeping the default at `0.6`. The README shows one complete Team and
-  Worker settings example and makes tool precedence explicit: `enable` adds to
-  the inherited Worker list, then `disable` removes from it.
+  release code `8bb517bd32d8687e97b96a531db15833fd64420a`. The
+  `release/v0.17.0-rc.16-dag-native` branch prepares atomic graph creation,
+  mechanical ready-front dispatch, graph control, the read-only Task graph
+  pane, and Worker-startup hardening. Its earlier eight-Worker stress closed
+  117/117 Tasks and stopped all Workers. The maintained
+  [DAG-native context](../projects/dag-native/context.md) owns graph evidence.
+  The pane has a fixed full-component sentinel, orthogonal routes, a concise
+  HUD, pan and selection modes, spatial navigation, bounded Task details, and
+  explicit unknown-history timing. It pins its TypeScript project when Herdr
+  launches from another cwd. Status colors use terminal-owned semantic ANSI
+  slots, so Colorstack and other terminal themes control light and dark color.
+  The configurable [DAG gallery](../../src/task-graph-view/gallery/default.json)
+  covers all seven graph states across disconnected islands without changing
+  Task authority. Exact executable source `3ee1d4c5` passed the one allowed
+  1,004-test aggregate, all release-specific gates, a 197-file package dry run,
+  candidate-range privacy, and a proxy-backed real Team canary. The canary
+  mechanically advanced `A -> B`, recorded Worker-authored accepted Attempts,
+  reused the same stable Worker, and shut down cleanly. The final change is a
+  documentation-only receipt amendment before the side-branch push. The branch
+  is a review candidate only. It does not change npm, a tag, or `main`.
+- Worker startup hardening removes two avoidable serial costs without weakening
+  admission. Herdr may return after exact accepted actuation, but exact current
+  Membership, Session, and runtime-generation binding remains the commit point.
+  Configured Worker defaults use the invocation-local model registry. A
+  successful accepted start gets one 6,000 ms binding failure-detector budget;
+  ordinary and legacy-ready paths keep 3,000 ms. `ensure_worker` no longer runs
+  a leader Task scan; Session start, Task transitions, and periodic recovery
+  own ready delivery. Real stable-Worker reuse measured 31/33 ms p50/p95, while
+  normal fresh Pi RPC bootstrap measured 448/461 ms. Keep stable Workers bound.
+  Do not add a generic warm pool or Node compile cache. The maintained
+  [performance project](../projects/worker-startup-performance.md), [accepted
+  decision](../decisions/0012-worker-startup-latency.md), and [final
+  assessment](../journal/2026-08-14-worker-startup-final-assessment.md) own the
+  evidence and limits.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -275,6 +280,14 @@ restating executable definitions.
   never changes native Pi settings, Task, Session, or observation records. This is
   a Worker launch contract change with no topology change. Intent and reversal criteria are in
   [decision 0008](../decisions/0008-worker-resource-projection.md).
+- Worker admission remains a two-phase external-actuation protocol. Herdr
+  acceptance is positive actuation evidence, not Worker authority. Exact
+  Membership, Session, and runtime-generation binding is the linearization
+  point. A timeout is suspicion, not proof of death; exact-target compensation
+  and generation fencing handle late or lost outcomes. Installed Herdr 0.7.5
+  lacks the accepted flag, so its exact parser rejection selects the safe legacy
+  ready wait. Do not reinterpret the fallback, timeout, pane, or process as
+  readiness.
 - One current Membership admits one live Pi process generation. The executable
   rule is [`src/utils/runtime.ts`](../../src/utils/runtime.ts), lifecycle wiring
   is [`extensions/index.ts`](../../extensions/index.ts), and focused evidence is
@@ -286,7 +299,7 @@ restating executable definitions.
 
 ## Active Projects
 
-Three audit-driven Projects are active. Each routes through maintained Project
+Four audit-driven Projects are active. Each routes through maintained Project
 artifacts; dated evidence remains in the journal. They do not replace this repository-level
 context or the executable contract sources.
 
@@ -340,6 +353,12 @@ context or the executable contract sources.
 - [Task-engine performance](../projects/task-engine-performance.md) is in
   hardening measurement. It owns trace repair, benchmark design, current
   performance assessment, and optimization selection.
+- [Worker startup performance](../projects/worker-startup-performance.md) has a
+  hardening result. Stable bound-Worker reuse is the supported sub-100 ms path.
+  Fresh Pi remains about 450 ms before exact Worker binding. Accepted actuation,
+  in-process model validation, and removal of leader Task reconciliation are
+  selected. Generic pooling, resource exclusions, bundling, and compile caching
+  remain rejected.
 
 ## Constraints and open work
 
@@ -366,8 +385,9 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Review and integrate the graph-native production branch, or reverse it with
-   evidence from the recorded integration gaps.
+1. Push only the reviewed `release/v0.17.0-rc.16-dag-native` side branch after
+   the documentation-only amendment and minimal exact-tip checks. Keep RC15,
+   `main`, tags, npm, GitHub Releases, and Herdr unchanged.
 2. Define carrier actuation for Attempt model aliases before claiming that
    `capable` changes an existing Worker's active model.
 3. Decide whether graph persistence needs an append-only transaction store and
@@ -382,26 +402,16 @@ Next steps:
    performance epoch.
 8. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-9. Do not add a reserved recovery carrier to production. The [warm activation
-   experiment](../journal/2026-08-14-warm-activation-prototype-result.md)
-   proved observation and cleanup for an unbound carrier, but not Worker
-   admission. Never infer readiness or work from that carrier. Any future
-   proposal must prove exact admission, fresh Worker resources, Worker-only
-   post-bind tools, and failure destruction.
-10. The [pre-actuation ensure decomposition](../journal/2026-08-14-pre-actuation-ensure-latency-result.md)
-    measured the clean source-coupled path at 10.552 ms p50 and 22.221 ms p95;
-    four-way same-Team contention reached 44.713 ms p95. The active-profile
-    model catalog helper measured 771.512 ms p50 and 863.020 ms p95, but it
-    does not prove the reported 5.012-second canary used that branch. Add a
-    real outer trace before adding a cache or changing Worker behavior.
-11. Do not replace synchronous Worker observation with an accepted-launch
-    return. The [nonblocking accepted-launch prototype](../journal/2026-08-14-nonblocking-accepted-launch-supervision-result.md)
-    exercised durable operation fencing and cleanup only with a synthetic
-    accepted response. Installed Herdr 0.7.5 has no accepted-start option. The
-    current planner also treats a live prepared carrier as reusable, while the
-    prototype must refuse it. A production proposal needs an operation
-    authority, exact positive Herdr evidence, real-carrier recovery proof, and
-    a new scope decision.
+9. Keep stable Workers bound when low-latency repeated work matters. Upstream
+   Herdr's explicit accepted-start contract, but keep exact Session binding as
+   Worker admission. Add public Pi phase tracing before another cold-start
+   optimization.
+10. Do not add generic warm capacity, a reusable Pi Session, a Node compile
+    cache, a Bun bundle, or Worker resource exclusions. A future strict 100 ms
+    new-Worker SLO needs a separately shaped one-use sealed launcher with a
+    profile digest, CAS reservation, activation identity, exact fences,
+    destroy-on-outcome behavior, lost-actuation reconciliation, and measured
+    stockout and replenishment distributions.
 
 
 ## Test lanes
