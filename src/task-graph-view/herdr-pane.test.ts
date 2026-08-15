@@ -1,8 +1,8 @@
 import fs from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TaskCard } from "../task-authority/task-domain";
 import { taskVersionRef } from "../task-authority/task-version-ref";
-import { HerdrCliTaskGraphPaneHost, TaskGraphPaneController, type HerdrPaneCoordinate, type TaskGraphPaneHost, type TaskGraphPaneOrigin } from "./herdr-pane";
+import { HerdrCliTaskGraphPaneHost, TaskGraphPaneController, taskGraphPaneOriginFromEnvironment, type HerdrPaneCoordinate, type TaskGraphPaneHost, type TaskGraphPaneOrigin } from "./herdr-pane";
 import { projectTaskGraphViewSource } from "./source";
 
 class Host implements TaskGraphPaneHost {
@@ -35,11 +35,13 @@ function graph() {
 
 function setup() {
   const host = new Host();
-  const origin: TaskGraphPaneOrigin = { paneId: "pane-origin", tabId: "tab-a", workspaceId: "workspace-a", cwd: "/repo" };
-  host.panes.set(origin.paneId, origin);
+  const origin: TaskGraphPaneOrigin = { paneId: "pane-origin", cwd: "/repo" };
+  host.panes.set(origin.paneId, { paneId: origin.paneId, tabId: "tab-a", workspaceId: "workspace-a" });
   const controller = new TaskGraphPaneController(host, "/package/src/cli/task-graph-pane.ts", "/runtime/node");
   return { host, origin, controller };
 }
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("Task graph Herdr pane lifecycle", () => {
   it("accepts Herdr pane run's successful empty stdout", () => {
@@ -68,6 +70,45 @@ describe("Task graph Herdr pane lifecycle", () => {
     expect(command).not.toContain("Task A");
     expect(controller.toggle({ origin, source: graph() })).toEqual({ kind: "closed", paneId: "pane-graph" });
     expect(host.calls.filter((call) => call.name === "close").map((call) => call.args[0])).toEqual(["pane-graph"]);
+  });
+
+  it("resolves a moved exact origin pane's live tab and workspace instead of inherited coordinates", () => {
+    vi.stubEnv("HERDR_ENV", "1");
+    vi.stubEnv("HERDR_PANE_ID", "pane-origin");
+    vi.stubEnv("HERDR_TAB_ID", "tab-stale");
+    vi.stubEnv("HERDR_WORKSPACE_ID", "workspace-stale");
+    const origin = taskGraphPaneOriginFromEnvironment("/repo");
+    const host = new Host();
+    host.panes.set(origin.paneId, { paneId: origin.paneId, tabId: "tab-live", workspaceId: "workspace-live" });
+    const controller = new TaskGraphPaneController(host, "/package/src/cli/task-graph-pane.ts", "/runtime/node");
+
+    expect(origin).toEqual({ paneId: "pane-origin", cwd: "/repo" });
+    expect(controller.toggle({ origin, source: graph() })).toEqual({ kind: "opened", paneId: "pane-graph" });
+    expect(host.panes.get("pane-graph")).toEqual({ paneId: "pane-graph", tabId: "tab-live", workspaceId: "workspace-live" });
+    controller.close();
+  });
+
+  it("refuses a missing or non-exact origin pane before it splits", () => {
+    const { host, origin, controller } = setup();
+    host.panes.delete(origin.paneId);
+    expect(() => controller.toggle({ origin, source: graph() })).toThrow(/no longer identifies one exact live location/i);
+    host.panes.set(origin.paneId, { paneId: "pane-reused", tabId: "tab-a", workspaceId: "workspace-a" });
+    expect(() => controller.toggle({ origin, source: graph() })).toThrow(/no longer identifies one exact live location/i);
+    expect(host.calls.filter((call) => call.name === "split")).toHaveLength(0);
+  });
+
+  it("refuses a child pane outside the resolved live origin location", () => {
+    const { host, origin, controller } = setup();
+    const splitRight = host.splitRight.bind(host);
+    host.splitRight = (originPaneId, cwd) => {
+      const paneId = splitRight(originPaneId, cwd);
+      host.panes.set(paneId, { paneId, tabId: "tab-other", workspaceId: "workspace-a" });
+      return paneId;
+    };
+
+    expect(() => controller.toggle({ origin, source: graph() })).toThrow(/did not stay/i);
+    expect(host.calls.filter((call) => call.name === "close")).toHaveLength(0);
+    expect(controller.isOpen).toBe(false);
   });
 
   it("refuses to close a moved pane and keeps ownership for a later safe action", () => {
