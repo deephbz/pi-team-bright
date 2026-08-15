@@ -18,7 +18,9 @@ export interface TaskGraphPaneHost {
   close(paneId: string): void;
 }
 
-export interface TaskGraphPaneOrigin extends HerdrPaneCoordinate {
+/** A caller proves an exact pane ID; Herdr resolves its live location at use time. */
+export interface TaskGraphPaneOrigin {
+  paneId: string;
   cwd: string;
 }
 
@@ -29,7 +31,7 @@ export interface TaskGraphPaneToggleResult {
 
 interface OwnedPane {
   paneId: string;
-  origin: TaskGraphPaneOrigin;
+  originLocation: HerdrPaneCoordinate;
   directory: string;
   sourcePath: string;
 }
@@ -38,14 +40,15 @@ function sameLocation(left: HerdrPaneCoordinate, right: HerdrPaneCoordinate): bo
   return left.tabId === right.tabId && left.workspaceId === right.workspaceId;
 }
 
-function validateOrigin(origin: TaskGraphPaneOrigin, host: TaskGraphPaneHost): void {
-  if (!origin.paneId || !origin.tabId || !origin.workspaceId || !path.isAbsolute(origin.cwd)) {
-    throw new Error("Task graph pane requires exact Herdr pane, tab, workspace, and absolute working directory coordinates.");
+function validateOrigin(origin: TaskGraphPaneOrigin, host: TaskGraphPaneHost): HerdrPaneCoordinate {
+  if (!origin.paneId || !path.isAbsolute(origin.cwd)) {
+    throw new Error("Task graph pane requires an exact Herdr pane and absolute working directory.");
   }
   const current = host.getPane(origin.paneId);
-  if (!current || current.paneId !== origin.paneId || !sameLocation(current, origin)) {
-    throw new Error("The originating Herdr pane no longer matches this exact tab and workspace.");
+  if (!current || current.paneId !== origin.paneId || !current.tabId || !current.workspaceId) {
+    throw new Error("The originating Herdr pane no longer identifies one exact live location.");
   }
+  return current;
 }
 
 function atomicWrite(target: string, source: TaskGraphViewSource): void {
@@ -86,7 +89,7 @@ export class TaskGraphPaneController {
       this.close();
       return { kind: "closed", paneId };
     }
-    validateOrigin(input.origin, this.host);
+    const originLocation = validateOrigin(input.origin, this.host);
     const source = parseTaskGraphViewSource(input.source);
     const limit = parseTaskGraphLimit(String(input.limit ?? ""));
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-graph-"));
@@ -97,7 +100,7 @@ export class TaskGraphPaneController {
     try {
       paneId = this.host.splitRight(input.origin.paneId, input.origin.cwd);
       const pane = this.host.getPane(paneId);
-      if (!pane || pane.paneId !== paneId || !sameLocation(pane, input.origin)) {
+      if (!pane || pane.paneId !== paneId || !sameLocation(pane, originLocation)) {
         throw new Error("The new Task graph pane did not stay in the originating Herdr tab and workspace.");
       }
       // The pane inherits the operator's cwd, which can be outside this package.
@@ -113,12 +116,12 @@ export class TaskGraphPaneController {
       ].join(" ");
       this.host.run(paneId, command);
       this.host.rename(paneId, `Task graph · ${source.team_name}`);
-      this.owned = { paneId, origin: input.origin, directory, sourcePath };
+      this.owned = { paneId, originLocation, directory, sourcePath };
       return { kind: "opened", paneId };
     } catch (error) {
       if (paneId) {
         const pane = this.host.getPane(paneId);
-        if (pane && sameLocation(pane, input.origin)) {
+        if (pane && sameLocation(pane, originLocation)) {
           try { this.host.close(paneId); } catch { /* Keep the primary failure. */ }
         }
       }
@@ -136,7 +139,7 @@ export class TaskGraphPaneController {
     const owned = this.owned;
     if (!owned) return;
     const pane = this.host.getPane(owned.paneId);
-    if (pane && !sameLocation(pane, owned.origin)) {
+    if (pane && !sameLocation(pane, owned.originLocation)) {
       throw new Error(`Refusing to close Task graph pane ${owned.paneId}: it moved outside the originating tab or workspace.`);
     }
     if (pane) this.host.close(owned.paneId);
@@ -159,7 +162,7 @@ export class TaskGraphPaneController {
     if (!owned) return;
     try {
       const pane = this.host.getPane(owned.paneId);
-      if (pane && sameLocation(pane, owned.origin)) this.host.close(owned.paneId);
+      if (pane && sameLocation(pane, owned.originLocation)) this.host.close(owned.paneId);
     } finally {
       removeDirectory(owned.directory);
       this.owned = undefined;
@@ -258,8 +261,6 @@ export class HerdrCliTaskGraphPaneHost implements TaskGraphPaneHost {
 export function taskGraphPaneOriginFromEnvironment(cwd: string): TaskGraphPaneOrigin {
   if (process.env.HERDR_ENV !== "1") throw new Error("Task graph side panes require HERDR_ENV=1.");
   const paneId = process.env.HERDR_PANE_ID?.trim();
-  const tabId = process.env.HERDR_TAB_ID?.trim();
-  const workspaceId = process.env.HERDR_WORKSPACE_ID?.trim();
-  if (!paneId || !tabId || !workspaceId) throw new Error("Task graph side panes require exact HERDR_PANE_ID, HERDR_TAB_ID, and HERDR_WORKSPACE_ID coordinates.");
-  return { paneId, tabId, workspaceId, cwd: path.resolve(cwd) };
+  if (!paneId) throw new Error("Task graph side panes require an exact HERDR_PANE_ID coordinate.");
+  return { paneId, cwd: path.resolve(cwd) };
 }
