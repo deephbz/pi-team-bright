@@ -7,6 +7,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const manifest = require(path.join(root, "package.json"));
 const packageName = manifest.name;
+if (manifest.author !== "deephbz") throw new Error("package author must be deephbz");
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-package-"));
 let tarball;
 try {

@@ -1,6 +1,6 @@
 {
   "name": "@hypercarrier/pi-team-bright",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Task-first Pi teams, visible in terminal panes.",
   "repository": {
     "type": "git",
@@ -10,7 +10,7 @@
   "bugs": {
     "url": "https://github.com/deephbz/pi-team-bright/issues"
   },
-  "author": "Mark Burggraf",
+  "author": "deephbz",
   "license": "MIT",
   "keywords": [
     "pi-package",

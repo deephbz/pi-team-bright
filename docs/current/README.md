@@ -1,12 +1,19 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 Current published release: stable `0.17.0` is on npm `latest` from annotated
 tag `v0.17.0`. The durable source, CI, package-integrity, provenance, registry,
 and GitHub Release evidence is in
 [`2026-08-14-v0.17.0-release-receipt.md`](../journal/2026-08-14-v0.17.0-release-receipt.md).
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
+
+Local patch candidate `0.17.1` resolves the live Herdr graph-pane origin after
+the origin pane moves. It also retries a departed stale-lock recovery claim
+without weakening the present stale-malformed fail-closed rule. It is backward
+compatible with `0.17.0` Team state and does not change Team storage, Task
+graph, model-tool, or Worker protocol contracts. It is not pushed, tagged,
+published, or a GitHub Release.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -208,6 +215,16 @@ restating executable definitions.
   then passed 142 aggregate files and 1,007 tests, package and lane gates, and a
   fresh all-tool Team E2E. Main CI, immutable package integrity, registry,
   provenance, tag, and GitHub Release evidence remain pending.
+- Patch candidate `0.17.1` resolves the graph-pane origin from the exact live
+  Herdr pane rather than inherited tab and workspace coordinates. It keeps the
+  resolved live location for split and close fencing. Missing, non-exact, or
+  moved child panes still refuse. This is an internal terminal-adapter fix with
+  architecture impact: **none**. The accepted evidence is
+  [`graph-pane-origin-fix.md`](../journal/artifacts/2026-08-15-pi0842/graph-pane-origin-fix.md).
+- Candidate `0.17.1` also repairs a stale-lock recovery TOCTOU: after a losing
+  exclusive claim create, a missing fixed claim is ordinary contention and
+  retries. A present stale malformed claim still fails closed. This changes an
+  internal lock guard only; architecture impact: **none**.
 - Worker startup hardening removes two avoidable serial costs without weakening
   admission. Herdr may return after exact accepted actuation, but exact current
   Membership, Session, and runtime-generation binding remains the commit point.
@@ -389,27 +406,28 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Keep stable `v0.17.0` and its package bytes immutable. Record downstream
+1. Complete the local [`v0.17.1 patch release checklist`](../release/v0.17.1-release-checklist.md). Do not push, tag, publish, change a dist-tag, or create a GitHub Release before its remaining gates pass.
+2. Keep stable `v0.17.0` and its package bytes immutable. Record downstream
    HyperCarrier gitlink adoption as separate composition evidence.
-2. Define carrier actuation for Attempt model aliases before claiming that
+3. Define carrier actuation for Attempt model aliases before claiming that
    `capable` changes an existing Worker's active model.
-3. Decide whether graph persistence needs an append-only transaction store and
+4. Decide whether graph persistence needs an append-only transaction store and
    exact Coordination publication outbox.
-4. Design immutable legacy Task-create operation identity before changing Beads
+5. Design immutable legacy Task-create operation identity before changing Beads
    replay code.
-5. Measure and repair Beads contention before making a Worker-capacity claim.
-6. Keep malformed-event diagnostics distinct from normal structural Task
+6. Measure and repair Beads contention before making a Worker-capacity claim.
+7. Keep malformed-event diagnostics distinct from normal structural Task
    events; structural creation, assignment, status, and relation events now
    sync without narrative evidence.
-7. Add payload-free outer-operation trace correlation before the representative
+8. Add payload-free outer-operation trace correlation before the representative
    performance epoch.
-8. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
+9. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-9. Keep stable Workers bound when low-latency repeated work matters. Upstream
-   Herdr's explicit accepted-start contract, but keep exact Session binding as
-   Worker admission. Add public Pi phase tracing before another cold-start
-   optimization.
-10. Do not add generic warm capacity, a reusable Pi Session, a Node compile
+10. Keep stable Workers bound when low-latency repeated work matters. Upstream
+    Herdr's explicit accepted-start contract, but keep exact Session binding as
+    Worker admission. Add public Pi phase tracing before another cold-start
+    optimization.
+11. Do not add generic warm capacity, a reusable Pi Session, a Node compile
     cache, a Bun bundle, or Worker resource exclusions. A future strict 100 ms
     new-Worker SLO needs a separately shaped one-use sealed launcher with a
     profile digest, CAS reservation, activation identity, exact fences,
