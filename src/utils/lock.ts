@@ -109,11 +109,13 @@ function recoverStaleVisibleLock(lockFile: string, observedOwner: LockOwner, con
 
   if (!createOwnerFile(claimFile, claimOwner)) {
     const claimAge = lockAgeMs(claimFile);
+    // A losing exclusive create proves a competing claimer existed, but that
+    // claimer can finish and remove the fixed claim before this contender reads
+    // it. A missing pathname is ordinary contention and must retry. `wx` also
+    // makes a young unreadable claim an in-progress acquisition, not abandoned
+    // evidence. Only a present stale claim with no live owner fails closed.
+    if (claimAge === null || claimAge <= STALE_LOCK_TIMEOUT) return false;
     const currentClaim = readOwner(claimFile);
-    // `wx` makes the pathname visible before another process is guaranteed to
-    // observe the complete tiny JSON payload. A young unreadable claim is an
-    // in-progress acquisition, not abandoned evidence.
-    if (claimAge !== null && claimAge <= STALE_LOCK_TIMEOUT) return false;
     if (currentClaim && processIsAlive(currentClaim.pid)) return false;
     throw abandonedRecoveryError(claimFile);
   }

@@ -57,6 +57,35 @@ describe("withLock race conditions", () => {
     expect(fs.existsSync(lockFile)).toBe(false);
   });
 
+  it("retries when a competing recovery claim disappears before inspection", async () => {
+    fs.writeFileSync(lockFile, "2147483647");
+    const staleTime = new Date(Date.now() - 31_000);
+    fs.utimesSync(lockFile, staleTime, staleTime);
+
+    const originalWriteFileSync = fs.writeFileSync.bind(fs);
+    const claimFile = `${lockFile}.recovery`;
+    let injectedDeparture = false;
+    vi.spyOn(fs, "writeFileSync").mockImplementation(((file: any, data: any, ...args: any[]) => {
+      if (!injectedDeparture && path.resolve(String(file)) === path.resolve(claimFile)) {
+        injectedDeparture = true;
+        // A failed exclusive create proves another claimer existed, but that
+        // claimer can finish and remove its fixed claim before this contender
+        // observes the pathname. That is ordinary contention, not abandonment.
+        originalWriteFileSync(file, data, ...args);
+        fs.unlinkSync(claimFile);
+        throw Object.assign(new Error("simulated competing recovery claim"), { code: "EEXIST" });
+      }
+      return originalWriteFileSync(file, data, ...args);
+    }) as typeof fs.writeFileSync);
+
+    const criticalSection = vi.fn().mockResolvedValue("acquired-after-retry");
+    await expect(withLock(lockPath, criticalSection, 2)).resolves.toBe("acquired-after-retry");
+    expect(injectedDeparture).toBe(true);
+    expect(criticalSection).toHaveBeenCalledOnce();
+    expect(fs.existsSync(claimFile)).toBe(false);
+    expect(fs.existsSync(lockFile)).toBe(false);
+  });
+
   it("still fails closed when malformed owner evidence remains stale", async () => {
     fs.writeFileSync(lockFile, "malformed-owner");
     const staleTime = new Date(Date.now() - 31_000);
