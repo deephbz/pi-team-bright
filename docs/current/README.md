@@ -1,19 +1,18 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-15
+Updated: 2026-08-16
 
-Current published release: stable `0.17.0` is on npm `latest` from annotated
-tag `v0.17.0`. The durable source, CI, package-integrity, provenance, registry,
+Current published release: stable `0.17.1` is on npm `latest` from annotated
+tag `v0.17.1`. The durable source, CI, package-integrity, provenance, registry,
 and GitHub Release evidence is in
-[`2026-08-14-v0.17.0-release-receipt.md`](../journal/2026-08-14-v0.17.0-release-receipt.md).
+[`2026-08-16-v0.17.1-release-receipt.md`](../journal/2026-08-16-v0.17.1-release-receipt.md).
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
 
-Local patch candidate `0.17.1` resolves the live Herdr graph-pane origin after
-the origin pane moves. It also retries a departed stale-lock recovery claim
-without weakening the present stale-malformed fail-closed rule. It is backward
-compatible with `0.17.0` Team state and does not change Team storage, Task
-graph, model-tool, or Worker protocol contracts. It is not pushed, tagged,
-published, or a GitHub Release.
+Patch `0.17.1` resolves the live Herdr graph-pane origin after the origin pane
+moves. It also retries a departed stale-lock recovery claim without weakening
+the present stale-malformed fail-closed rule. It is backward compatible with
+`0.17.0` Team state and does not change Team storage, Task graph, model-tool,
+or Worker protocol contracts.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -214,14 +213,15 @@ restating executable definitions.
   tests, both sentinels, gallery/export, and package verification. Stable source
   then passed 142 aggregate files and 1,007 tests, package and lane gates, and a
   fresh all-tool Team E2E. Main CI, immutable package integrity, registry,
-  provenance, tag, and GitHub Release evidence remain pending.
-- Patch candidate `0.17.1` resolves the graph-pane origin from the exact live
+  provenance, tag, and GitHub Release evidence are complete in the stable
+  `v0.17.0` release receipt.
+- Patch `0.17.1` resolves the graph-pane origin from the exact live
   Herdr pane rather than inherited tab and workspace coordinates. It keeps the
   resolved live location for split and close fencing. Missing, non-exact, or
   moved child panes still refuse. This is an internal terminal-adapter fix with
   architecture impact: **none**. The accepted evidence is
   [`graph-pane-origin-fix.md`](../journal/artifacts/2026-08-15-pi0842/graph-pane-origin-fix.md).
-- Candidate `0.17.1` also repairs a stale-lock recovery TOCTOU: after a losing
+- Patch `0.17.1` also repairs a stale-lock recovery TOCTOU: after a losing
   exclusive claim create, a missing fixed claim is ordinary contention and
   retries. A present stale malformed claim still fails closed. This changes an
   internal lock guard only; architecture impact: **none**.
@@ -406,9 +406,9 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Complete the local [`v0.17.1 patch release checklist`](../release/v0.17.1-release-checklist.md). Do not push, tag, publish, change a dist-tag, or create a GitHub Release before its remaining gates pass.
-2. Keep stable `v0.17.0` and its package bytes immutable. Record downstream
+1. Keep stable `v0.17.1` and its package bytes immutable. Record downstream
    HyperCarrier gitlink adoption as separate composition evidence.
+2. Preserve stable `v0.17.0` and all earlier release artifacts.
 3. Define carrier actuation for Attempt model aliases before claiming that
    `capable` changes an existing Worker's active model.
 4. Decide whether graph persistence needs an append-only transaction store and
