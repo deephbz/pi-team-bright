@@ -9,15 +9,17 @@ excludes: LLM first-token latency, Task execution time, and weaker Membership or
 
 # Worker startup performance
 
-Updated: 2026-08-14
+Updated: 2026-08-19
 
 Stage: **hardening result** inside the hardened Worker lifecycle.
 
 Architecture impact: none for accepted changes. A persistent Pi runtime or a
 carrier pool would change process and lifecycle boundaries.
 
-The accepted optimization boundary is [decision
-0012](../decisions/0012-worker-startup-latency.md). The final human assessment is
+The startup optimization boundary is [decision
+0012](../decisions/0012-worker-startup-latency.md), with its prototype Herdr
+rules superseded by the official ready-start boundary in [decision
+0013](../decisions/0013-official-herdr-ready-start.md). The final 2026-08-14 human assessment is
 [`2026-08-14-worker-startup-final-assessment.md`](../journal/2026-08-14-worker-startup-final-assessment.md).
 Its machine projection is
 [`2026-08-14-worker-startup-final-assessment.json`](../journal/artifacts/2026-08-14-worker-startup-final-assessment.json).
@@ -40,10 +42,14 @@ The original seconds-scale delay had three important parts:
   catalog subprocess;
 - fresh Pi then supplied an approximately 450 ms serial process floor.
 
-The accepted implementation removes the model subprocess from normal use and
-requests positive Herdr actuation acceptance. Exact Session binding remains the
-admission point. Installed Herdr 0.7.5 lacks the public accepted option, so its
-safe legacy fallback still waits for interactive readiness.
+The implementation removes the model subprocess from normal use. It now uses
+Herdr's official interactive-ready start command with an explicit 6,000 ms
+readiness timeout. Exact Session binding remains the admission point and keeps
+its separate ordinary 3,000 ms observation budget.
+
+The earlier accepted-start result came from an uncommitted protocol-17 Herdr
+prototype. Released Herdr 0.7.5 and 0.8.0 never supplied that option. The result
+remains experiment history, not a supported production capability.
 
 ## Startup ontology
 
@@ -81,16 +87,17 @@ if it weakens exact admission, recovery fencing, or Worker resource semantics.
 
 ## Decisions in force
 
-1. Request Herdr `--wait accepted`. Use the old ready wait only after an exact
-   local parser rejection. Validate exact target and canonical Pi command.
+1. Use Herdr's official `agent start` with exact pane targeting and
+   `--timeout 6000`. Validate interactive readiness, exact target, and canonical
+   Pi command. Do not probe an actuation command for unpublished options.
 2. Use the invocation-local Pi `ModelRegistry` for configured Worker-default
    validation. Keep the snapshot ephemeral. Use the bounded CLI fallback only
    when no usable snapshot exists.
 3. Do not run leader Task reconciliation inside `ensure_worker`. Worker Session
    start, Task transitions, and periodic recovery own ready delivery.
-4. Give an accepted start one 6,000 ms exact-binding failure-detector budget.
-   Keep 3,000 ms for ordinary and legacy-ready starts. Let the explicit
-   environment override win.
+4. Keep Herdr's 6,000 ms interactive-readiness timeout distinct from the
+   ordinary 3,000 ms exact-binding observation. Let the explicit binding
+   observation environment override win.
 5. Keep normal Worker resource discovery. Do not use discovery exclusions as a
    duplicate-extension remedy.
 6. Do not add a production Node compile cache. Its cold effect was unsupported,
@@ -130,11 +137,11 @@ does not lose ready work. Session-start repair delivered Tasks that existed
 before recovery. Workers claimed and completed them without a leader Task
 transition.
 
-The accepted-start adversary proved exact compensation and same-Membership
-recovery with a new generation. Deterministic tests cover cancellation,
-binding-versus-cleanup races, and exact fences. A synchronous module block
-prevented the real Escape probe from proving prompt cancellation, so that case
-remains unknown.
+The accepted-start adversary remains historical prototype evidence for exact
+compensation and same-Membership recovery with a new generation. Deterministic
+tests still cover cancellation, binding-versus-cleanup races, and exact fences.
+A synchronous module block prevented the real Escape probe from proving prompt
+cancellation, so that case remains unknown.
 
 ## Interpretation
 
@@ -177,7 +184,8 @@ The corrected warm experiment receipt owns these negative results
 
 For the current product:
 
-1. Upstream and ship Herdr's public accepted-start operation.
+1. Shape independent Worker launch concurrency from the deferred
+   [`worker-ensure-concurrency.md`](worker-ensure-concurrency.md) context.
 2. Add Pi startup phase tracing before another cold optimization.
 3. Keep stable Teams and Workers when repeated low-latency work is expected.
 4. Measure first Task delivery separately from exact Session binding.

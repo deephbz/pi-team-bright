@@ -1,0 +1,59 @@
+{
+  "schema": "pi-team-bright-real-herdr-ready-start-canary/1",
+  "date": "2026-08-19",
+  "candidateVersion": "0.17.2",
+  "sourceBase": "6ffd44599891878887544862446faf53e186ef5c",
+  "runtime": {
+    "herdr": "0.7.5",
+    "pi": "0.84.2",
+    "platform": "macOS"
+  },
+  "officialCommandContract": {
+    "operation": "agent start",
+    "arguments": ["--kind", "pi", "--pane", "<exact-pane>", "--timeout", "6000", "--", "<pi-arguments>"],
+    "unsupportedArgumentsAbsent": ["--wait", "accepted"],
+    "successEvidence": ["agent_started", "canonical Pi argv", "exact carrier name", "exact pane", "agent=pi", "interactive_ready=true"]
+  },
+  "behavioralCanary": {
+    "team": "r0172canary",
+    "worker": "verifier",
+    "ensure": {
+      "effect": "created",
+      "carrier": "connected"
+    },
+    "task": {
+      "key": "version_check",
+      "finalStatus": "goal_achieved",
+      "evidence": "Observed package.json version 0.17.2 without edits."
+    },
+    "workerStop": "worker_stopped",
+    "teamShutdown": "team_shutdown",
+    "unfinishedTaskCount": 0,
+    "cleanup": "The disposable Worker, Team, test agent, and Herdr tab were stopped."
+  },
+  "timedLaunchCanary": {
+    "team": "r0172trace",
+    "worker": "probe",
+    "sampleCount": 1,
+    "ensureWorkerMs": 3191,
+    "workerLaunchMs": 3159,
+    "stagesMsFromLaunchStart": {
+      "ensure_started": 0.2,
+      "membership_prepared": 17.3,
+      "carrier_start_completed": 3146.4,
+      "carrier_target_persisted": 3159.1,
+      "session_bound_observed": 3159.6
+    },
+    "outcome": "ok",
+    "carrier": "connected",
+    "workerStop": "worker_stopped",
+    "teamShutdown": "team_shutdown",
+    "cleanup": "The disposable Worker, Team, test agent, and Herdr tab were stopped."
+  },
+  "historicalComparison": {
+    "releasedReadyWaitP95Ms": 3059.3,
+    "source": "2026-08-14-herdr-accepted-start.json",
+    "interpretation": "The candidate real launch completed in the same approximately three-second readiness class. One candidate sample is not a percentile or a strict non-regression bound."
+  },
+  "architectureImpact": "none"
+}
