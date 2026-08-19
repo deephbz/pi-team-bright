@@ -2,18 +2,17 @@
 
 Updated: 2026-08-19
 
-Current published release: stable `0.17.2` is on npm `latest` from annotated
-tag `v0.17.2` and the GitHub Release at
-`https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.2`. npm `next`
+Current published release: stable `0.17.3` is on npm `latest` from annotated
+tag `v0.17.3` and the GitHub Release at
+`https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.3`. npm `next`
 remains on historical prerelease `0.17.0-rc.14`.
 
 Patch `0.17.2` uses Herdr's official interactive-ready command with an explicit
-6,000 ms readiness timeout. Patch candidate `0.17.3` names the exact pane handle
+6,000 ms readiness timeout. Patch `0.17.3` also names the exact pane handle
 returned by split before Agent startup. Label failure is warned and traced but
-cannot block Worker coordination. The candidate is backward compatible with
-`0.17.2` Team state and changes no Team storage, Task graph, model-tool,
-Membership, or Worker protocol contract. It is not pushed, tagged, published,
-or a GitHub Release.
+cannot block Worker coordination. It is backward compatible with `0.17.2` Team
+state and changes no Team storage, Task graph, model-tool, Membership, or Worker
+protocol contract.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
