@@ -194,7 +194,7 @@ describe("compensated Worker launch", () => {
     });
   });
 
-  it("compensates a cancelled Herdr accepted start after spawn", async () => {
+  it("compensates a cancelled Herdr start after spawn", async () => {
     const f = await team("herdr-cancelled-start", undefined, "herdr");
     const a = adapter({ name: "herdr" });
     let live = false;
@@ -222,7 +222,7 @@ describe("compensated Worker launch", () => {
       .toMatchObject({ isActive: false, deactivationReason: "replaced" });
   });
 
-  it("does not stop a cancelled Herdr accepted start after exact Session binding wins", async () => {
+  it("does not stop a cancelled Herdr start after exact Session binding wins", async () => {
     const f = await team("herdr-cancelled-binding-race", undefined, "herdr");
     const a = adapter({ name: "herdr" });
     let live = false;
@@ -277,13 +277,13 @@ describe("compensated Worker launch", () => {
     });
 
     await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own focused work.", cwd: process.cwd() }))
-      .rejects.toThrow(/Herdr accepted start.*exact prepared Membership was deactivated/i);
+      .rejects.toThrow(/Herdr start.*exact prepared Membership was deactivated/i);
     expect(a.kill).toHaveBeenCalledWith("pane-worker");
     const historical = (await teams.readConfig(f.name)).members.find((candidate) => candidate.name === "worker");
     expect(historical).toMatchObject({ isActive: false, deactivationReason: "replaced" });
   });
 
-  it("cleans an unbound accepted carrier before an exact retry creates a new carrier", async () => {
+  it("cleans an unbound Herdr carrier before an exact retry creates a new carrier", async () => {
     const f = await team("herdr-unbound-retry", undefined, "herdr");
     const a = adapter({ name: "herdr" });
     const live = new Set<string>();

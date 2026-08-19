@@ -157,7 +157,7 @@ Task.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.1
+pi install npm:@hypercarrier/pi-team-bright@0.17.2
 ```
 
 Version `0.17.0` replaces the leader tool `task_create` with
@@ -165,10 +165,11 @@ Version `0.17.0` replaces the leader tool `task_create` with
 transitions such as `claim`, `block`, `resume`, `goal_achieved`, and
 `goal_failed`. Update saved prompts or scripts that call the old contract.
 
-Version `0.17.1` is backward compatible with `0.17.0` Team state. It only
-resolves the live Herdr graph-pane origin. It does not change Team storage, Task
-graph, model-tool, or Worker protocol contracts. Do not recreate a Team for this
-update.
+Versions `0.17.1` and `0.17.2` are backward compatible with `0.17.0` Team
+state. Version `0.17.1` resolves the live Herdr graph-pane origin. Version
+`0.17.2` uses Herdr's official interactive-ready Worker command with a six-second
+readiness timeout. Neither patch changes Team storage, Task graph, model-tool,
+or Worker protocol contracts. Do not recreate a Team for these updates.
 
 The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.

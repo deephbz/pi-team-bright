@@ -7,7 +7,6 @@ import {
 } from "../utils/terminal-adapter";
 import { createHash } from "node:crypto";
 import { DEFAULT_TEAM_PANE_LAYOUT, type TeamPaneLayout } from "../utils/team-pane-layout";
-import { HERDR_ACCEPTED_START_OBSERVATION_MS } from "../utils/worker-startup-observation";
 
 type HerdrEnvelope = {
   result?: unknown;
@@ -17,6 +16,8 @@ type HerdrEnvelope = {
 const FORWARDED_ENV = /^(?:PI_[A-Z0-9_]+|HTTP_PROXY|HTTPS_PROXY|WSS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|wss_proxy|all_proxy|no_proxy)$/;
 const SHELL_READY_RETRY_MS = 50;
 const SHELL_READY_TIMEOUT_MS = 5_000;
+/** Official Herdr agent-start readiness bound in milliseconds. */
+const AGENT_READY_TIMEOUT_MS = 6_000;
 /** Herdr applies a right-split ratio to the existing (leader) pane. */
 const retryWait = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 
@@ -66,16 +67,6 @@ function isAgentPaneBusy(error: unknown): boolean {
   return error instanceof Error && /(?:^|\W)agent_pane_busy(?:\W|$)/.test(error.message);
 }
 
-/** Herdr 0.7.5 rejects this option locally before it can reach the server. */
-function isAcceptedStartUnsupported(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  const prefix = "Herdr command failed with status 2:";
-  if (!error.message.startsWith(prefix)) return false;
-  // Clap adds LF on the installed old CLI. Normalize only its surrounding
-  // presentation whitespace; preserve the exact local parser message.
-  return error.message.slice(prefix.length).trim() === "unknown option: --wait";
-}
-
 function managedPiArgv(response: Record<string, unknown>): void {
   const argv = response.argv;
   if (!Array.isArray(argv) || argv.length < 1 || argv[0] !== "pi" || argv.some((value) => typeof value !== "string")) {
@@ -83,37 +74,20 @@ function managedPiArgv(response: Record<string, unknown>): void {
   }
 }
 
-/** Server managed-start evidence is distinct from optional detector output. */
-function startAgentRecord(response: Record<string, unknown>, carrierName: string, paneId: string): Record<string, unknown> {
-  if (response.type !== "agent_started") throw new Error("Herdr accepted start response did not identify agent_started.");
+/** Validate the official managed-start response and its exact ready target. */
+function assertReadyStart(response: Record<string, unknown>, carrierName: string, paneId: string): void {
+  if (response.type !== "agent_started") throw new Error("Herdr start response did not identify agent_started.");
   managedPiArgv(response);
   const agent = response.agent;
   if (!agent || typeof agent !== "object" || Array.isArray(agent)) {
-    throw new Error("Herdr accepted start response did not include an agent record.");
+    throw new Error("Herdr start response did not include an agent record.");
   }
   const record = agent as Record<string, unknown>;
   if (record.name !== carrierName || record.pane_id !== paneId || typeof record.terminal_id !== "string" || !record.terminal_id) {
-    throw new Error(`Herdr accepted start did not prove exact managed target ${carrierName} in pane ${paneId}.`);
+    throw new Error(`Herdr start did not prove exact managed target ${carrierName} in pane ${paneId}.`);
   }
-  return record;
-}
-
-function assertAcceptedStart(response: Record<string, unknown>, carrierName: string, paneId: string): void {
-  const agent = startAgentRecord(response, carrierName, paneId);
-  // A missing kind is normal before screen detection settles. A present kind
-  // must not contradict the Pi managed-start request.
-  if (agent.agent !== undefined && agent.agent !== "pi") {
-    throw new Error(`Herdr accepted start reported contradictory detected agent ${String(agent.agent)} for ${carrierName}.`);
-  }
-  if (agent.launch_pending !== true && agent.interactive_ready !== true) {
-    throw new Error(`Herdr accepted start did not prove pending or interactive agent ${carrierName}.`);
-  }
-}
-
-function assertReadyStart(response: Record<string, unknown>, carrierName: string, paneId: string): void {
-  const agent = startAgentRecord(response, carrierName, paneId);
-  if (agent.agent !== "pi" || agent.interactive_ready !== true) {
-    throw new Error(`Herdr legacy start did not prove interactive recognized Pi agent ${carrierName}.`);
+  if (record.agent !== "pi" || record.interactive_ready !== true) {
+    throw new Error(`Herdr start did not prove interactive recognized Pi agent ${carrierName}.`);
   }
 }
 
@@ -137,10 +111,6 @@ function piAgentArgs(argv: string[]): string[] {
 /** Herdr terminal-surface implementation; it never shells a teammate argv. */
 export class HerdrAdapter implements TerminalAdapter {
   readonly name = "herdr";
-  /** Cache only the exact local capability rejection that precedes actuation. */
-  private acceptedStartCapability: "unknown" | "supported" | "unsupported" = "unknown";
-  /** One consumed budget per accepted carrier; ordinary and legacy starts omit it. */
-  private readonly acceptedStartObservationTimeouts = new Map<string, number>();
 
   currentTargetId(): string | null {
     return currentHerdrPane();
@@ -297,51 +267,29 @@ export class HerdrAdapter implements TerminalAdapter {
       throw new Error("Herdr pane split response did not include pane.pane_id.");
     }
 
-    let acceptedStart = false;
     try {
       // Herdr agent names are live carrier identity, not stable Worker identity.
       // Qualify them by Team so a reused Worker name cannot collide with a
       // stale or concurrent agent in another Team.
       const carrierName = herdrCarrierName(options.env.PI_TEAM_NAME, options.name);
-      const acceptedStartArgs = [
+      const startArgs = [
         "agent", "start", carrierName,
         "--kind", "pi",
         "--pane", paneId,
-        "--wait", "accepted",
+        "--timeout", String(AGENT_READY_TIMEOUT_MS),
         "--",
         ...piAgentArgs(argv),
       ];
-      const legacyStartArgs = [
-        "agent", "start", carrierName,
-        "--kind", "pi",
-        "--pane", paneId,
-        "--",
-        ...piAgentArgs(argv),
-      ];
-      const startLegacy = () => assertReadyStart(this.invoke(legacyStartArgs), carrierName, paneId);
-      if (this.acceptedStartCapability === "unsupported") {
-        startLegacy();
-      } else {
-        const deadline = Date.now() + SHELL_READY_TIMEOUT_MS;
-        while (true) {
-          try {
-            assertAcceptedStart(this.invoke(acceptedStartArgs), carrierName, paneId);
-            this.acceptedStartCapability = "supported";
-            acceptedStart = true;
-            break;
-          } catch (error) {
-            if (isAcceptedStartUnsupported(error)) {
-              // The unsupported flag is rejected before server actuation. Keep
-              // older Herdr versions safe by using their established ready wait.
-              this.acceptedStartCapability = "unsupported";
-              startLegacy();
-              break;
-            }
-            if (!isAgentPaneBusy(error) || Date.now() >= deadline) throw error;
-            // pane split returns before the new interactive shell always reaches
-            // its prompt. Retry only that explicit transient Herdr state.
-            Atomics.wait(retryWait, 0, 0, SHELL_READY_RETRY_MS);
-          }
+      const deadline = Date.now() + SHELL_READY_TIMEOUT_MS;
+      while (true) {
+        try {
+          assertReadyStart(this.invoke(startArgs), carrierName, paneId);
+          break;
+        } catch (error) {
+          if (!isAgentPaneBusy(error) || Date.now() >= deadline) throw error;
+          // Pane split can return before the new shell reaches its prompt.
+          // Retry only Herdr's explicit transient busy state.
+          Atomics.wait(retryWait, 0, 0, SHELL_READY_RETRY_MS);
         }
       }
     } catch (error) {
@@ -352,19 +300,11 @@ export class HerdrAdapter implements TerminalAdapter {
       }
       throw error;
     }
-    if (acceptedStart) this.acceptedStartObservationTimeouts.set(paneId, HERDR_ACCEPTED_START_OBSERVATION_MS);
     return paneId;
-  }
-
-  takeStartupObservationTimeoutMs(paneId: string): number | undefined {
-    const timeoutMs = this.acceptedStartObservationTimeouts.get(paneId);
-    this.acceptedStartObservationTimeouts.delete(paneId);
-    return timeoutMs;
   }
 
   kill(paneId: string): void {
     if (!paneId) return;
-    this.acceptedStartObservationTimeouts.delete(paneId);
     try {
       const target = this.invoke(["pane", "get", paneId]).pane;
       if (!target || typeof target !== "object" || Array.isArray(target)) {

@@ -262,7 +262,6 @@ export class WorkerLaunchBridge {
           recovery.membershipId,
           recoveryCursor,
           signal,
-          teamTerminal.takeStartupObservationTimeoutMs?.(execution.target.terminalId),
         );
       } catch (error) {
         if (execution.target.backend === "herdr") {
@@ -287,7 +286,7 @@ export class WorkerLaunchBridge {
         );
         if (outcome === "stopped") {
           throw new Error(
-            `Herdr accepted recovery for ${workerName} did not produce exact Session binding during the bounded observation. `
+            `Herdr recovery for ${workerName} did not produce exact Session binding during the bounded observation. `
             + "The exact recovery target was stopped; the Membership remains current for an exact child retry.",
           );
         }
@@ -376,7 +375,6 @@ export class WorkerLaunchBridge {
         member.membershipId!,
         preparedEvent.cursor,
         signal,
-        teamTerminal.takeStartupObservationTimeoutMs?.(launch.terminalId),
       );
     } catch (error) {
       if (launch.backend === "herdr") await this.reconcileCancelledHerdrPreparedLaunch(teamName, member, launch, aggregate.path);
@@ -514,7 +512,7 @@ export class WorkerLaunchBridge {
       recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
       if ((error as { carrierStopConfirmed?: boolean }).carrierStopConfirmed) removeWorkerAggregate(aggregatePath);
       throw new Error(
-        `Herdr accepted start for ${member.name} was cancelled during exact Session observation. `
+        `Herdr start for ${member.name} was cancelled during exact Session observation. `
         + `Compensation failed: ${error instanceof Error ? error.message : String(error)}. `
         + "The Membership remains current because process shutdown could not be confirmed.",
       );
@@ -539,13 +537,13 @@ export class WorkerLaunchBridge {
       recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
       if ((error as { carrierStopConfirmed?: boolean }).carrierStopConfirmed) removeWorkerAggregate(aggregatePath);
       throw new Error(
-        `Herdr accepted start for ${member.name} did not produce exact Session binding during the bounded observation. `
+        `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation. `
         + `Compensation failed: ${error instanceof Error ? error.message : String(error)}. `
         + "The Membership remains current because process shutdown could not be confirmed.",
       );
     }
     throw new Error(
-      `Herdr accepted start for ${member.name} did not produce exact Session binding during the bounded observation. `
+      `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation. `
       + "The exact prepared Membership was deactivated after confirmed carrier cleanup.",
     );
   }

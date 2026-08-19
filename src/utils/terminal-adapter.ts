@@ -78,12 +78,6 @@ export interface TerminalAdapter {
   spawn(options: SpawnOptions): string;
 
   /**
-   * Consume a launch-specific default for exact Session observation. This is
-   * not readiness evidence and must be absent for ordinary carrier starts.
-   */
-  takeStartupObservationTimeoutMs?(paneId: string): number | undefined;
-
-  /**
    * Kill/terminate a terminal pane.
    * Should be idempotent - no error if pane doesn't exist.
    * 
