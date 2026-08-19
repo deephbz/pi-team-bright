@@ -7,6 +7,7 @@ import {
 } from "../utils/terminal-adapter";
 import { createHash } from "node:crypto";
 import { DEFAULT_TEAM_PANE_LAYOUT, type TeamPaneLayout } from "../utils/team-pane-layout";
+import { recordWorkerLaunchStage } from "../utils/trace";
 
 type HerdrEnvelope = {
   result?: unknown;
@@ -268,6 +269,18 @@ export class HerdrAdapter implements TerminalAdapter {
     }
 
     try {
+      // The split response is the authority for the new pane. Name that exact
+      // pane before agent startup so display identity never depends on title
+      // inference or mutation inside Herdr's readiness window. Presentation
+      // failure must not prevent the Worker from starting.
+      try {
+        this.invoke(["pane", "rename", paneId, options.name]);
+        recordWorkerLaunchStage("carrier_label_applied");
+      } catch (error) {
+        recordWorkerLaunchStage("carrier_label_not_applied");
+        console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
       // Herdr agent names are live carrier identity, not stable Worker identity.
       // Qualify them by Team so a reused Worker name cannot collide with a
       // stale or concurrent agent in another Team.
