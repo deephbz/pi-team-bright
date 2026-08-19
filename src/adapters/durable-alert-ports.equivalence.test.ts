@@ -130,7 +130,13 @@ describe("durable Alert port equivalence", () => {
     expect(extension).toContain("alertSender.sendAlert({ teamName: binding.teamName");
 
     const sessionAdapter = fs.readFileSync(path.join(root, "extensions/pi-team-session-adapter.ts"), "utf8");
-    expect(sessionAdapter).toContain("membership: alertMembership,");
+    // RecipientDeliveryLifecycle now owns the paired actuator; bound the
+    // source fence to this constructor rather than matching later code.
+    const directStart = sessionAdapter.indexOf("const direct = new DirectMessageDelivery");
+    const directEnd = sessionAdapter.indexOf("  });", directStart);
+    expect(directStart).toBeGreaterThanOrEqual(0);
+    expect(directEnd).toBeGreaterThan(directStart);
+    expect(sessionAdapter.slice(directStart, directEnd)).toContain("membership: alertMembership,");
   });
 
   it("forwards the exact accepted Alert event and its durable cursor", async () => {

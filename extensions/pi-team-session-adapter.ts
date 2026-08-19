@@ -7,6 +7,7 @@ import * as runtime from "../src/utils/runtime";
 import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
 import type { AlertMembershipPort } from "../src/alert-authority/contracts";
 import { TaskChangeDelivery, taskPollMs, type TaskDeliveryMembershipPort } from "../src/utils/task-delivery";
+import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding } from "../src/utils/recipient-delivery-lifecycle";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import type { CoordinationNudgeRecordPort } from "../src/coordination/nudge-record-port";
 import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";
@@ -63,14 +64,14 @@ export function createPiTeamSessionAdapter(options: {
   const envMembershipId = process.env.PI_TEAM_MEMBERSHIP_ID;
   let teamName: string | null = envTeamName || teamQuery.findLeadTeamForSession();
   let currentMembershipId: string | undefined;
-  let directMessageDelivery: DirectMessageDelivery | null = null;
-  let taskChangeDelivery: TaskChangeDelivery | null = null;
   let syncNudgeConductor: SyncNudgeConductor | null = null;
   let stopSyncNudgeMonitor: (() => void) | null = null;
   let leaderRunSettled = false;
   let leaderContext: any;
-  let directMessageSessionEligible = true;
-  let taskChangeSessionEligible = true;
+  let deliveryContext: any;
+  const recipientDeliveries = new RecipientDeliveryLifecycle({
+    makePair: (binding) => createDeliveryPair(binding, deliveryContext),
+  });
   let footerModel: any;
   let workerResourcePolicy: WorkerResourcePolicy | undefined;
   let workerActiveToolBaseline: string[] | undefined;
@@ -270,10 +271,8 @@ async function startSyncNudgeConductor(ctx: any) {
 
 function stopDeliveries() {
   stopSyncNudgeConductor();
-  directMessageDelivery?.stop();
-  directMessageDelivery = null;
-  taskChangeDelivery?.stop();
-  taskChangeDelivery = null;
+  recipientDeliveries.deactivate();
+  deliveryContext = undefined;
 }
 
 /** Resolve the one exact current Team and Worker identity for Worker tools. */
@@ -300,64 +299,67 @@ async function writeCurrentTeammateRuntime(ctx: any, updates: Partial<runtime.Ag
   });
 }
 
-async function startDirectMessageDelivery(ctx: any) {
-  if (!teamName || !directMessageSessionEligible) return;
+function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any) {
+  if (!ctx || ctx.sessionManager?.getSessionFile?.() !== binding.sessionFile) {
+    throw new Error("Recipient delivery activation requires its exact current Pi Session context.");
+  }
+  const entries = () => ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? [];
+  const direct = new DirectMessageDelivery(pi, {
+    teamName: binding.teamName,
+    recipient: binding.recipient,
+    membershipId: binding.membershipId,
+    sessionFile: binding.sessionFile,
+    pollMs: messagePollMs(),
+    membership: alertMembership,
+  });
+  const task = new TaskChangeDelivery(pi, {
+    teamName: binding.teamName, recipient: binding.recipient, membershipId: binding.membershipId, sessionFile: binding.sessionFile,
+    pollMs: taskPollMs(), membership: taskDeliveryMembership,
+    reconciliationQuery: new BeadsTaskReconciliationQuery(binding.teamName, taskReadAdapterFactory),
+    ...(isTeammate && taskReadyReconciliation ? {
+      // One Team lease selects the entire ready frontier, so any bound Worker
+      // can repair delivery for quiet siblings without a per-Worker scan.
+      reconcileReady: () => withSemanticTrace(
+        "worker_periodic_ready_reconciliation",
+        { teamName: binding.teamName, workerName: binding.recipient },
+        () => taskReadyReconciliation.reconcileReady(binding.teamName),
+      ),
+    } : {}),
+  });
+  return {
+    direct: {
+      start: () => direct.start(entries()),
+      stop: () => direct.stop(),
+      observeContext: (messages: readonly unknown[]) => direct.observeContext(messages as any),
+      commitPresentedAfterSuccessfulTurn: (reason: unknown) => direct.commitPresentedAfterSuccessfulTurn(reason),
+    },
+    task: {
+      start: async () => {
+        await task.start(entries());
+        if (!isTeammate || !taskReadyReconciliation) return;
+        try {
+          const warnings = await withSemanticTrace("worker_session_ready_reconciliation", { teamName: binding.teamName, workerName: binding.recipient }, () => taskReadyReconciliation.reconcileReady(binding.teamName, binding.recipient));
+          for (const warning of warnings) ctx.ui?.notify?.(`Pi Team Bright ready delivery: ${warning}`, "warning");
+        } catch (error) {
+          ctx.ui?.notify?.(`Pi Team Bright ready delivery is deferred: ${error instanceof Error ? error.message : String(error)}`, "warning");
+        }
+      },
+      stop: () => task.stop(),
+      observeContext: (messages: readonly unknown[]) => task.observeContext(messages as any),
+      commitPresentedAfterSuccessfulTurn: (reason: unknown) => task.commitPresentedAfterSuccessfulTurn(reason),
+    },
+  };
+}
+
+async function activateRecipientDeliveries(ctx: any): Promise<void> {
+  if (!teamName) return;
   const sessionFile = ctx.sessionManager?.getSessionFile?.();
   if (!sessionFile) return;
   const member = await teamQuery.currentSessionBinding(teamName, agentName, sessionFile);
   if (!member.membershipId) throw new Error(`Current Membership for ${agentName} has no membershipId.`);
   currentMembershipId = member.membershipId;
-  directMessageDelivery?.stop();
-  directMessageDelivery = new DirectMessageDelivery(pi, {
-    teamName,
-    recipient: agentName,
-    membershipId: member.membershipId,
-    sessionFile,
-    pollMs: messagePollMs(),
-    membership: alertMembership,
-  });
-  await directMessageDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
-}
-
-async function startTaskChangeDelivery(ctx: any) {
-  if (!teamName || !taskChangeSessionEligible) return;
-  const sessionFile = ctx.sessionManager?.getSessionFile?.();
-  if (!sessionFile) return;
-  const member = await teamQuery.currentSessionBinding(teamName, agentName, sessionFile);
-  if (!member.membershipId) throw new Error(`Current Membership for ${agentName} has no membershipId.`);
-  taskChangeDelivery?.stop();
-  taskChangeDelivery = new TaskChangeDelivery(pi, {
-    teamName,
-    recipient: agentName,
-    membershipId: member.membershipId,
-    sessionFile,
-    pollMs: taskPollMs(),
-    membership: taskDeliveryMembership,
-    reconciliationQuery: new BeadsTaskReconciliationQuery(teamName, taskReadAdapterFactory),
-    ...(isTeammate && taskReadyReconciliation
-      // All Worker loops race through one Team lease. The winner repairs every
-      // free Worker's ready frontier, so a quiet Worker cannot be starved by a
-      // different Worker winning each periodic scan.
-      ? { reconcileReady: () => withSemanticTrace(
-        "worker_periodic_ready_reconciliation",
-        { teamName: teamName!, workerName: agentName },
-        () => taskReadyReconciliation.reconcileReady(teamName!),
-      ) }
-      : {}),
-  });
-  await taskChangeDelivery.start(ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? []);
-  if (isTeammate && taskReadyReconciliation) {
-    try {
-      const warnings = await withSemanticTrace(
-        "worker_session_ready_reconciliation",
-        { teamName, workerName: agentName },
-        () => taskReadyReconciliation.reconcileReady(teamName!, agentName),
-      );
-      for (const warning of warnings) ctx.ui?.notify?.(`Pi Team Bright ready delivery: ${warning}`, "warning");
-    } catch (error) {
-      ctx.ui?.notify?.(`Pi Team Bright ready delivery is deferred: ${error instanceof Error ? error.message : String(error)}`, "warning");
-    }
-  }
+  deliveryContext = ctx;
+  await recipientDeliveries.activate({ teamName, recipient: agentName, membershipId: member.membershipId, sessionFile });
 }
 
 /**
@@ -399,8 +401,6 @@ function registerSessionHooks() {
   leaderContext = ctx;
   footerModel = ctx.model;
   clearTeamFooter(ctx);
-  directMessageSessionEligible = event.reason !== "fork";
-  taskChangeSessionEligible = event.reason !== "fork";
 
   if (event.reason === "fork") {
     // A fork is a new Session identity, not a continuation of the source
@@ -484,8 +484,7 @@ function registerSessionHooks() {
     }
 
     if (teamName) {
-      await startDirectMessageDelivery(ctx);
-      await startTaskChangeDelivery(ctx);
+      await activateRecipientDeliveries(ctx);
     }
   } else if (teamName) {
     if (!piSessionFile) throw new Error("Lead resume requires a durable Pi Session file.");
@@ -515,8 +514,7 @@ function registerSessionHooks() {
       }
       currentMembershipId = runtimeAdmission.member.membershipId;
     }
-    await startDirectMessageDelivery(ctx);
-    await startTaskChangeDelivery(ctx);
+    await activateRecipientDeliveries(ctx);
   }
   if (!isTeammate) {
     // A resumed/reloaded idle Session has no active agent run. This is
@@ -556,8 +554,7 @@ pi.on("model_select", async (event) => {
 });
 
 pi.on("context", async (event) => {
-  await directMessageDelivery?.observeContext(event.messages);
-  await taskChangeDelivery?.observeContext(event.messages);
+  await recipientDeliveries.observeContext(event.messages);
 });
 
 pi.on("agent_start", async (_event, ctx) => {
@@ -592,10 +589,7 @@ pi.on("turn_end", async (event, ctx) => {
       lastError: undefined,
     });
   }
-  await Promise.all([
-    directMessageDelivery?.commitPresentedAfterSuccessfulTurn(stopReason),
-    taskChangeDelivery?.commitPresentedAfterSuccessfulTurn(stopReason),
-  ]);
+  await recipientDeliveries.commitPresentedAfterSuccessfulTurn(stopReason);
 });
 
 pi.on("turn_start", async (_event, ctx) => {
@@ -638,9 +632,7 @@ pi.on("before_agent_start", async (event, ctx) => {
       }
     }
 
-    const taskInstruction = taskChangeSessionEligible
-      ? "Assigned Tasks are your work contracts. Canonical Task changes are delivered in context, but presentation never changes Task state. Waiting and ready are derived. Claim a ready Task before work. When the goal passes its external criteria, call task_update with goal_achieved and exact evidence. Use goal_failed when criteria fail; Task authority then applies any bounded failure edge. Use block only for an external blocker, and include blocker evidence. Use alert_send only for exceptional clarification or escalation; an alert never changes Task state. Re-read Task authority before a conflicting write."
-      : "This fork is a new Session identity and receives none of the source Agent's pending Task changes.";
+    const taskInstruction = "Assigned Tasks are your work contracts. Canonical Task changes are delivered in context, but presentation never changes Task state. Waiting and ready are derived. Claim a ready Task before work. When the goal passes its external criteria, call task_update with goal_achieved and exact evidence. Use goal_failed when criteria fail; Task authority then applies any bounded failure edge. Use block only for an external blocker, and include blocker evidence. Use alert_send only for exceptional clarification or escalation; an alert never changes Task state. Re-read Task authority before a conflicting write.";
     return {
       systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,
     };
@@ -656,11 +648,29 @@ pi.on("before_agent_start", async (event, ctx) => {
         teamName = targetTeamName;
         currentMembershipId = await teamQuery.activeMembershipId(targetTeamName, "team-lead");
         const admission = await teamSessionLifecycleService.admitLead({ teamName: targetTeamName, sessionFile, placement: { kind: "unlocated" }, identitySource: "resumed_session", allowFirstRuntimeGeneration: true });
-        if (admission.kind === "admitted") currentMembershipId = admission.member.membershipId;
+        if (admission.kind === "refused") {
+          await refuseTeamSession(leaderContext, targetTeamName, "team-lead", admission, true);
+          // team_create has already committed; preserve its established
+          // post-commit callback failure projection rather than reporting a
+          // created Team whose Pi Session admission was refused.
+          throw new Error(admission.reason);
+        }
+        currentMembershipId = admission.member.membershipId;
+        await activateRecipientDeliveries(leaderContext);
         await startSyncNudgeConductor(leaderContext);
+        await refreshTeamFooter(leaderContext);
       },
       stopWorker: (targetTeamName, worker) => teamLifecycleService.stopWorker(targetTeamName, worker),
-      shutdownTeam: (targetTeamName) => teamLifecycleService.shutdownTeam(targetTeamName),
+      shutdownTeam: async (targetTeamName) => {
+        const result = await teamLifecycleService.shutdownTeam(targetTeamName);
+        if (result.kind === "shutdown" && targetTeamName === teamName) {
+          stopDeliveries();
+          teamName = null;
+          currentMembershipId = undefined;
+          clearTeamFooter(leaderContext);
+        }
+        return result;
+      },
     },
     isTeammate: () => isTeammate,
     resolveCurrentWorkerContext,

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import type { TeamConfig } from "./models";
 import type { TaskCard } from "../../src/model-tool-contract/task-domain";
@@ -28,6 +29,14 @@ import { BeadsTaskReconciliationQuery } from "../../src/task-authority/beads-rec
 import { DurableTaskAuthorityRead } from "../../src/adapters/durable-task-authority-read";
 import { createReadOnlyBeadsTaskAdapterFactory } from "../../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskAuthorityReadTeam } from "../adapters/durable-task-authority-read-team";
+
+function terminalCarrier() {
+  return {
+    name: "clean-cut-test-terminal", detect: () => true, isDirectCarrier: () => true,
+    currentTargetId: () => "pane-lead", spawn: () => "pane-worker", kill() {}, isAlive: () => false,
+    setTitle() {}, supportsWindows: () => false, spawnWindow: () => "window-unused", setWindowTitle() {}, killWindow() {}, isWindowAlive: () => false,
+  } as any;
+}
 
 type RegisteredTool = {
   name: string;
@@ -125,6 +134,7 @@ function writeTeam(
 }
 
 function extensionHarness() {
+  setAdapter(terminalCarrier());
   const tools = new Map<string, RegisteredTool>();
   const handlers = new Map<string, Handler>();
   const sendMessage = vi.fn();
@@ -155,6 +165,10 @@ function sessionContext(sessionFile: string) {
   };
 }
 
+async function startHarnessSession(harness: ReturnType<typeof extensionHarness>, ctx: ReturnType<typeof sessionContext>): Promise<void> {
+  await harness.handlers.get("session_start")?.({ reason: "start" }, ctx);
+}
+
 function initBeadsWorkspace(): string {
   const workspace = path.join(tempRoot("beads-workspace"), "workspace");
   fs.mkdirSync(workspace, { recursive: true });
@@ -167,6 +181,7 @@ function initBeadsWorkspace(): string {
 }
 
 afterEach(() => {
+  clearAdapterCache();
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -333,11 +348,10 @@ describe("Beads-only authority and migration boundary", () => {
   it.skipIf(!hasBd)("initializes a Team-owned Beads authority when no override is configured", async () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", "");
     const name = uniqueTeam("team-owned-workspace");
-    const create = extensionHarness().tools.get("team_create")!;
-    const result = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/team-owned-lead.jsonl", buildContextEntries: () => [] },
-      ui: { setStatus: vi.fn() },
-    });
+    const harness = extensionHarness();
+    const ctx = sessionContext("/tmp/team-owned-lead.jsonl");
+    await harness.handlers.get("session_start")?.({ reason: "start" }, ctx);
+    const result = await harness.tools.get("team_create")!.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, ctx);
     expect(result.details).toMatchObject({
       kind: "team_created",
       team: { name, lifecycle: "active", purpose: "clean-cut evaluator fixture" },
@@ -357,11 +371,10 @@ describe("Beads-only authority and migration boundary", () => {
     const unhealthyRoot = tempRoot("unhealthy-workspace");
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", unhealthyRoot);
     const unhealthy = uniqueTeam("unhealthy-workspace");
-    const unhealthyCreate = extensionHarness().tools.get("team_create")!;
-    const unhealthyResult = await unhealthyCreate.execute("create", { name: unhealthy, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/unhealthy-lead.jsonl", buildContextEntries: () => [] },
-      ui: { setStatus: vi.fn() },
-    });
+    const harness = extensionHarness();
+    const ctx = sessionContext("/tmp/unhealthy-lead.jsonl");
+    await startHarnessSession(harness, ctx);
+    const unhealthyResult = await harness.tools.get("team_create")!.execute("create", { name: unhealthy, purpose: "clean-cut evaluator fixture" }, undefined, undefined, ctx);
     expect(unhealthyResult.details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
     expect(unhealthyResult.details.message).toMatch(/initialized Beads|Beads workspace|bd/i);
     expect(fs.existsSync(paths.configPath(unhealthy))).toBe(false);
@@ -371,11 +384,10 @@ describe("Beads-only authority and migration boundary", () => {
     const workspace = initBeadsWorkspace();
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
     const name = uniqueTeam("new-beads-team");
-    const create = extensionHarness().tools.get("team_create")!;
-    const result = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/new-lead.jsonl", buildContextEntries: () => [] },
-      ui: { setStatus: vi.fn() },
-    });
+    const harness = extensionHarness();
+    const ctx = sessionContext("/tmp/new-lead.jsonl");
+    await harness.handlers.get("session_start")?.({ reason: "start" }, ctx);
+    const result = await harness.tools.get("team_create")!.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, ctx);
     expect(result.details).toMatchObject({
       kind: "team_created",
       team: { name, lifecycle: "active", purpose: "clean-cut evaluator fixture" },
@@ -393,12 +405,11 @@ describe("Beads-only authority and migration boundary", () => {
     fs.mkdirSync(childWorkspace);
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", childWorkspace);
     const name = uniqueTeam("nested-wrong-authority");
-    const create = extensionHarness().tools.get("team_create")!;
+    const harness = extensionHarness();
+    const ctx = sessionContext("/tmp/nested-wrong-authority-lead.jsonl");
+    await startHarnessSession(harness, ctx);
 
-    const nestedResult = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/nested-wrong-authority-lead.jsonl", buildContextEntries: () => [] },
-      ui: { setStatus: vi.fn() },
-    });
+    const nestedResult = await harness.tools.get("team_create")!.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, ctx);
     expect(nestedResult.details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
     expect(nestedResult.details.message).toMatch(/not an initialized authority root|exact workspace/i);
     expect(fs.existsSync(paths.configPath(name))).toBe(false);
@@ -411,11 +422,10 @@ describe("Beads-only authority and migration boundary", () => {
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
     const name = uniqueTeam("opaque-authority");
     const sessionFile = `/tmp/${name}.jsonl`;
-    const create = extensionHarness().tools.get("team_create")!;
-    const result = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/opaque-lead.jsonl", buildContextEntries: () => [] },
-      ui: { setStatus: vi.fn() },
-    });
+    const harness = extensionHarness();
+    const ctx = sessionContext("/tmp/opaque-lead.jsonl");
+    await harness.handlers.get("session_start")?.({ reason: "start" }, ctx);
+    const result = await harness.tools.get("team_create")!.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, ctx);
     expect(result.details).toMatchObject({
       kind: "team_created",
       team: { name, lifecycle: "active", purpose: "clean-cut evaluator fixture" },
@@ -463,12 +473,11 @@ describe("Beads-only authority and migration boundary", () => {
     }));
     const workspace = path.join(tempRoot("migration-target"), "workspace");
     vi.stubEnv("PI_TEAMS_BEADS_WORKSPACE", workspace);
-    const create = extensionHarness().tools.get("team_create")!;
+    const harness = extensionHarness();
+    const ctx = sessionContext("/tmp/lead.jsonl");
+    await startHarnessSession(harness, ctx);
 
-    const migrationResult = await create.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, {
-      sessionManager: { getSessionFile: () => "/tmp/lead.jsonl" },
-      ui: { setStatus: vi.fn() },
-    });
+    const migrationResult = await harness.tools.get("team_create")!.execute("create", { name, purpose: "clean-cut evaluator fixture" }, undefined, undefined, ctx);
     expect(migrationResult.details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
     expect(migrationResult.details.message).toMatch(new RegExp(`npm run migrate:tasks -- ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     expect(JSON.parse(fs.readFileSync(path.join(paths.taskDir(name), "1.json"), "utf8"))).toMatchObject({

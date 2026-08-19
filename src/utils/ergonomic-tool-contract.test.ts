@@ -68,14 +68,19 @@ function member(name: string, sessionFile: string, extra: Partial<Member> = {}):
   };
 }
 
-function registerTools(): Map<string, RegisteredTool> {
+function registerTools(): Map<string, RegisteredTool> & { handlers: Map<string, (event: any, ctx: any) => Promise<void>> } {
   const registered = new Map<string, RegisteredTool>();
+  const handlers = new Map<string, (event: any, ctx: any) => Promise<void>>();
   piTeams({
     registerTool(tool: RegisteredTool) { registered.set(tool.name, tool); },
-    on() {},
+    on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
     sendUserMessage() {},
   } as never);
-  return registered;
+  return Object.assign(registered, { handlers });
+}
+
+async function startSession(tools: ReturnType<typeof registerTools>, ctx: ReturnType<typeof context>): Promise<void> {
+  await tools.handlers.get("session_start")?.({ reason: "start" }, ctx);
 }
 
 function terminal(): TerminalAdapter {
@@ -166,8 +171,10 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const team = uniqueTeam("create-sync");
     const leadSession = `/tmp/${team}-lead.jsonl`;
+    setAdapter(terminal());
     const tools = registerTools();
     const leadContext = context(leadSession);
+    await startSession(tools, leadContext);
 
     const created = await tools.get("team_create")!.execute(
       "create",
@@ -922,6 +929,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const leadSession = `/tmp/${team}-lead.jsonl`;
     const tools = registerTools();
     const leadContext = context(leadSession);
+    await startSession(tools, leadContext);
     await tools.get("team_create")!.execute(
       "create", { name: team, purpose: "ergonomic contract Team" }, undefined, undefined, leadContext,
     );
@@ -949,6 +957,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const leadSession = `/tmp/${team}-lead.jsonl`;
     const tools = registerTools();
     const leadContext = context(leadSession);
+    await startSession(tools, leadContext);
     await tools.get("team_create")!.execute(
       "create", { name: team, purpose: "ergonomic contract Team" }, undefined, undefined, leadContext,
     );

@@ -84,8 +84,11 @@ after a change. A Worker reports `goal_achieved` or `goal_failed` with evidence,
 or blocks with a next action. A blocked Task requires an explicit resolution, not an inference
 from terminal output.
 
-Reuse Workers across Tasks. Before `worker_stop`, resolve every nonterminal Task
-assigned to that Worker. Reconcile once more before `team_shutdown`.
+Align a long-lived Team with one project or durable coordination boundary.
+Reuse Workers across Tasks when their standing scope remains useful; ephemeral
+Workers are also valid for bounded work. Before `worker_stop`, resolve every
+nonterminal Task assigned to that Worker. Reconcile once more. Do not create and
+shut down a Team for each Task.
 
 Alerts are only for exceptional clarification, attention, or announcements.
 They never assign, advance, block, or complete work, and they are not a chat-
@@ -159,7 +162,7 @@ Task.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.3
+pi install npm:@hypercarrier/pi-team-bright@0.17.4
 ```
 
 Version `0.17.0` replaces the leader tool `task_create` with
@@ -167,12 +170,14 @@ Version `0.17.0` replaces the leader tool `task_create` with
 transitions such as `claim`, `block`, `resume`, `goal_achieved`, and
 `goal_failed`. Update saved prompts or scripts that call the old contract.
 
-Versions `0.17.1` through `0.17.3` are backward compatible with `0.17.0` Team
+Versions `0.17.1` through `0.17.4` are backward compatible with `0.17.0` Team
 state. Version `0.17.1` resolves the live Herdr graph-pane origin. Version
 `0.17.2` uses Herdr's official interactive-ready Worker command with a six-second
 readiness timeout. Version `0.17.3` names the exact split Worker pane before
-Agent startup. These patches do not change Team storage, Task graph, model-tool,
-or Worker protocol contracts. Do not recreate a Team for these updates.
+Agent startup. Version `0.17.4` starts the leader's recipient-delivery pair on
+initial Team creation and makes full shutdown end the exact lead binding. These
+patches do not change Team storage, Task graph, model-tool, or Worker protocol
+contracts. Do not recreate a Team for these updates.
 
 The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.

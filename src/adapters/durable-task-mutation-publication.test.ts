@@ -264,6 +264,9 @@ describe("Task mutation publication import fence", () => {
     expect(extension).not.toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
     expect(extension).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration)");
     expect(extension).toMatch(/taskAdapterFactory\(binding\.teamName, binding\.member\.name\)\.read/);
-    expect(sessionAdapter).toMatch(/worker_periodic_ready_reconciliation[\s\S]*taskReadyReconciliation\.reconcileReady\(teamName!\)[\s\S]*await taskChangeDelivery\.start[\s\S]*worker_session_ready_reconciliation[\s\S]*taskReadyReconciliation\.reconcileReady\(teamName!, agentName\)/);
+    // The paired recipient actuator retains both Worker ready-reconciliation
+    // paths: periodic reconciliation is injected into Task delivery, while
+    // session reconciliation runs only after that task engine has started.
+    expect(sessionAdapter).toMatch(/worker_periodic_ready_reconciliation[\s\S]*taskReadyReconciliation\.reconcileReady\(binding\.teamName\)[\s\S]*await task\.start\(entries\(\)\)[\s\S]*worker_session_ready_reconciliation[\s\S]*taskReadyReconciliation\.reconcileReady\(binding\.teamName, binding\.recipient\)/);
   });
 });
