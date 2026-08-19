@@ -8,6 +8,9 @@ const fixture = vi.hoisted(() => ({
   events: [] as string[],
   runtime: null as any,
   deleteRuntime: vi.fn(async () => true),
+  restoreRuntime: vi.fn(async () => true),
+  deactivateFailure: undefined as Error | undefined,
+  deactivateNull: false,
   kill: vi.fn(),
   killWindow: vi.fn(),
   paneAlive: false,
@@ -32,7 +35,8 @@ vi.mock("../utils/teams", () => ({
   deactivateMembership: async (_team: string, membershipId: string, reason: string) => {
     fixture.events.push(`deactivate:${membershipId}`);
     const member = fixture.config.members.find((candidate: any) => candidate.membershipId === membershipId && candidate.isActive !== false);
-    if (!member) return null;
+    if (!member || fixture.deactivateNull) return null;
+    if (fixture.deactivateFailure) throw fixture.deactivateFailure;
     member.isActive = false;
     member.deactivationReason = reason;
     fixture.deactivate.push(member.name);
@@ -43,6 +47,7 @@ vi.mock("../utils/runtime", () => ({
   readRuntimeStatus: async () => fixture.runtime,
   runtimeGeneration: (status: any) => status?.generation ?? null,
   deleteRuntimeStatus: fixture.deleteRuntime,
+  restoreRuntimeStatus: fixture.restoreRuntime,
 }));
 vi.mock("../utils/terminal-target", () => ({
   assertTeamTerminalTarget: (_config: unknown, member: any) => member.terminalTarget,
@@ -102,6 +107,9 @@ function reset() {
   fixture.events = [];
   fixture.runtime = null;
   fixture.deleteRuntime.mockReset().mockResolvedValue(true);
+  fixture.restoreRuntime.mockReset().mockResolvedValue(true);
+  fixture.deactivateFailure = undefined;
+  fixture.deactivateNull = false;
   fixture.kill.mockReset();
   fixture.killWindow.mockReset();
   fixture.paneAlive = false;
@@ -212,6 +220,81 @@ describe("Team lifecycle service boundary", () => {
     expect(fixture.stopped).toEqual([]);
   });
 
+  it("fails before any shutdown mutation when the unfinished-Task snapshot is unavailable", async () => {
+    reset();
+    const lead = member("team-lead");
+    const worker = member("worker");
+    fixture.config.members = [lead, worker];
+    const assignedWorkGuard = guard();
+    (assignedWorkGuard.nonterminalTaskIds as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Task authority unavailable"));
+    const service = new TeamLifecycleService({ assignedWorkGuard, lifecyclePublication: publication() });
+
+    await expect(service.shutdownTeam("team")).rejects.toThrow("Task authority unavailable");
+
+    expect(fixture.kill).not.toHaveBeenCalled();
+    expect(fixture.deactivate).toEqual([]);
+    expect(fixture.events).toEqual(["topology"]);
+  });
+
+  it("clears the exact lead runtime only after a successful full shutdown", async () => {
+    reset();
+    const lead = member("team-lead");
+    const worker = member("worker");
+    fixture.config.members = [lead, worker];
+    fixture.runtime = { generation: { membershipId: lead.membershipId, pid: 123, startedAt: 456 } };
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+
+    await expect(service.shutdownTeam("team")).resolves.toEqual({ kind: "shutdown", stoppedWorkers: ["worker"], unfinishedTaskIds: [] });
+
+    expect(lead.isActive).toBe(false);
+    expect(fixture.deleteRuntime).toHaveBeenCalledWith("team", "team-lead", fixture.runtime.generation);
+  });
+
+  it.each([
+    ["malformed", { membershipId: "team-lead-membership", pid: "bad", startedAt: 456 }],
+    ["foreign", { generation: { membershipId: "other-membership", pid: 123, startedAt: 456 } }],
+  ])("retains the lead and runtime evidence when it is %s", async (_kind, status) => {
+    reset();
+    const lead = member("team-lead");
+    fixture.config.members = [lead];
+    fixture.runtime = status;
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+
+    await expect(service.shutdownTeam("team")).resolves.toEqual({ kind: "partial", stoppedWorkers: [], failedWorkers: ["team-lead"], unfinishedTaskIds: [] });
+
+    expect(lead.isActive).toBe(true);
+    expect(fixture.deleteRuntime).not.toHaveBeenCalled();
+  });
+
+  it.each(["throw", "null"])("restores the exact lead runtime when Membership deactivation returns %s", async (outcome) => {
+    reset();
+    const lead = member("team-lead");
+    fixture.config.members = [lead];
+    fixture.runtime = { generation: { membershipId: lead.membershipId, pid: 123, startedAt: 456 } };
+    if (outcome === "throw") fixture.deactivateFailure = new Error("deactivation failed");
+    else fixture.deactivateNull = true;
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+
+    await expect(service.shutdownTeam("team")).resolves.toEqual({ kind: "partial", stoppedWorkers: [], failedWorkers: ["team-lead"], unfinishedTaskIds: [] });
+
+    expect(lead.isActive).toBe(true);
+    expect(fixture.restoreRuntime).toHaveBeenCalledWith("team", "team-lead", fixture.runtime, fixture.runtime.generation);
+  });
+
+  it("keeps the lead current and returns the existing partial result when exact runtime cleanup fails", async () => {
+    reset();
+    const lead = member("team-lead");
+    fixture.config.members = [lead];
+    fixture.runtime = { generation: { membershipId: lead.membershipId, pid: 123, startedAt: 456 } };
+    fixture.deleteRuntime.mockResolvedValue(false);
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+
+    await expect(service.shutdownTeam("team")).resolves.toEqual({ kind: "partial", stoppedWorkers: [], failedWorkers: ["team-lead"], unfinishedTaskIds: [] });
+
+    expect(lead.isActive).toBe(true);
+    expect(fixture.deleteRuntime).toHaveBeenCalledWith("team", "team-lead", fixture.runtime.generation);
+  });
+
   it("sorts parallel shutdown partial results and keeps the lead current until every teammate stops", async () => {
     reset();
     const lead = member("team-lead");
@@ -228,7 +311,7 @@ describe("Team lifecycle service boundary", () => {
     expect(zulu.isActive).toBe(true);
     expect(lead.isActive).toBe(true);
     expect(fixture.deactivate).toEqual(["alpha"]);
-    expect(fixture.events.at(-1)).toBe("guard:all");
+    expect(fixture.events.indexOf("guard:all")).toBeLessThan(fixture.events.indexOf("deactivate:alpha-membership"));
   });
 
   it("does not expose concrete Task or adapter imports from Team authority", () => {

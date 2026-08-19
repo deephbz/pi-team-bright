@@ -5,6 +5,7 @@ import {
   writeRuntimeStatus,
   readRuntimeStatus,
   deleteRuntimeStatus,
+  restoreRuntimeStatus,
   cleanupStaleRuntimeFiles,
   createRuntimeError,
   HEARTBEAT_STALE_MS,
@@ -127,6 +128,31 @@ describe("runtime status", () => {
         membershipId,
         pid: 456,
         startedAt: 2_000,
+      });
+    });
+  });
+
+  describe("restoreRuntimeStatus", () => {
+    it("restores the exact deleted generation when the runtime file remains absent", async () => {
+      const expected = { membershipId: "membership-runtime-test", pid: 123, startedAt: 1_000 };
+      const prior = { teamName, agentName, ...expected, ready: true };
+      await writeRuntimeStatus(teamName, agentName, prior, expected.membershipId);
+      await expect(deleteRuntimeStatus(teamName, agentName, expected)).resolves.toBe(true);
+
+      await expect(restoreRuntimeStatus(teamName, agentName, prior, expected)).resolves.toBe(true);
+      await expect(readRuntimeStatus(teamName, agentName)).resolves.toMatchObject(prior);
+    });
+
+    it("does not clobber a replacement generation between delete and rollback", async () => {
+      const expected = { membershipId: "membership-runtime-test", pid: 123, startedAt: 1_000 };
+      const prior = { teamName, agentName, ...expected, ready: true };
+      await writeRuntimeStatus(teamName, agentName, prior, expected.membershipId);
+      await deleteRuntimeStatus(teamName, agentName, expected);
+      await writeRuntimeStatus(teamName, agentName, { pid: 456, startedAt: 2_000, ready: false }, expected.membershipId);
+
+      await expect(restoreRuntimeStatus(teamName, agentName, prior, expected)).resolves.toBe(false);
+      await expect(readRuntimeStatus(teamName, agentName)).resolves.toMatchObject({
+        membershipId: expected.membershipId, pid: 456, startedAt: 2_000,
       });
     });
   });

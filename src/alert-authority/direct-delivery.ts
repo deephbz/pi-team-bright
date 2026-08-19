@@ -225,6 +225,8 @@ export class DirectMessageDelivery {
   private scanPromise: Promise<void> | null = null;
   private rescanRequested = false;
   private hintTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Fences asynchronous binding/ack recovery against a later stop or start. */
+  private generation = 0;
 
   constructor(sink: DirectMessageDeliverySink, options: DirectMessageDeliveryOptions) {
     this.sink = sink;
@@ -263,14 +265,16 @@ export class DirectMessageDelivery {
 
   async start(sessionEntries: readonly SessionEntry[]): Promise<void> {
     this.stop();
+    const generation = this.generation;
     this.attempted.clear();
     this.acknowledged.clear();
     this.staged.clear();
     this.stopped = false;
     if (!await this.dependencies.isCurrentBinding()) {
-      this.stop();
+      if (this.isCurrent(generation)) this.stop();
       return;
     }
+    if (!this.isCurrent(generation)) return;
     const acknowledged = acknowledgedMessageIdsFromEntries(
       sessionEntries,
       this.teamName,
@@ -283,6 +287,7 @@ export class DirectMessageDelivery {
       this.attempted.add(id);
     }
     if (acknowledged.size > 0) await this.dependencies.markRead(acknowledged);
+    if (!this.isCurrent(generation)) return;
     const presented = pendingPresentedMessageIdsFromEntries(
       sessionEntries,
       this.teamName,
@@ -291,6 +296,7 @@ export class DirectMessageDelivery {
       this.sessionFile,
     );
     for (const id of presented) this.attempted.add(id);
+    if (!this.isCurrent(generation)) return;
     this.stopWatch = this.dependencies.watch(() => this.scheduleHintScan());
     this.interval = setInterval(() => void this.scan().catch(() => undefined), this.pollMs);
     if (presented.size > 0) {
@@ -306,6 +312,7 @@ export class DirectMessageDelivery {
   }
 
   stop(): void {
+    this.generation += 1;
     this.stopped = true;
     if (this.interval) clearInterval(this.interval);
     if (this.hintTimer) clearTimeout(this.hintTimer);
@@ -313,6 +320,7 @@ export class DirectMessageDelivery {
     this.interval = null;
     this.hintTimer = null;
     this.stopWatch = null;
+    this.scanPromise = null;
     this.rescanRequested = false;
     this.staged.clear();
   }
@@ -337,18 +345,25 @@ export class DirectMessageDelivery {
   }
 
   async commitPresentedAfterSuccessfulTurn(stopReason: unknown): Promise<number> {
-    if (this.stopped || stopReason === "error" || stopReason === "aborted") return 0;
+    const generation = this.generation;
+    if (!this.isCurrent(generation) || stopReason === "error" || stopReason === "aborted") return 0;
     if (!await this.dependencies.isCurrentBinding()) {
-      this.stop();
+      if (this.isCurrent(generation)) this.stop();
       return 0;
     }
+    if (!this.isCurrent(generation)) return 0;
     const ids = [...this.staged].filter((id) => !this.acknowledged.has(id));
     if (ids.length === 0) return 0;
     this.sink.appendEntry(DIRECT_MESSAGE_ACK_ENTRY_TYPE, this.observation(ids));
     for (const id of ids) this.acknowledged.add(id);
     const marked = await this.dependencies.markRead(ids);
+    if (!this.isCurrent(generation)) return 0;
     for (const id of ids) this.staged.delete(id);
     return marked;
+  }
+
+  private isCurrent(generation: number): boolean {
+    return !this.stopped && this.generation === generation;
   }
 
   async scan(): Promise<void> {
@@ -357,11 +372,13 @@ export class DirectMessageDelivery {
       this.rescanRequested = true;
       return await this.scanPromise;
     }
-    this.scanPromise = this.scanLoop();
+    const generation = this.generation;
+    const promise = this.scanLoop(generation);
+    this.scanPromise = promise;
     try {
-      await this.scanPromise;
+      await promise;
     } finally {
-      this.scanPromise = null;
+      if (this.scanPromise === promise) this.scanPromise = null;
     }
   }
 
@@ -373,20 +390,23 @@ export class DirectMessageDelivery {
     }, 20);
   }
 
-  private async scanLoop(): Promise<void> {
+  private async scanLoop(generation: number): Promise<void> {
     do {
       this.rescanRequested = false;
-      await this.scanOnce();
-    } while (this.rescanRequested && !this.stopped);
+      await this.scanOnce(generation);
+      if (!this.isCurrent(generation)) return;
+    } while (this.rescanRequested);
   }
 
-  private async scanOnce(): Promise<void> {
-    if (this.stopped) return;
+  private async scanOnce(generation: number): Promise<void> {
+    if (!this.isCurrent(generation)) return;
     if (!await this.dependencies.isCurrentBinding()) {
-      this.stop();
+      if (this.isCurrent(generation)) this.stop();
       return;
     }
+    if (!this.isCurrent(generation)) return;
     const unread = await this.dependencies.readUnread();
+    if (!this.isCurrent(generation)) return;
     // Defend the identity boundary even when a test or alternate storage
     // dependency accidentally returns historical or foreign-generation rows.
     const pending = unread.filter((message) =>
@@ -397,9 +417,10 @@ export class DirectMessageDelivery {
     // Replacement can occur while the inbox read is in flight. Recheck at
     // the effect boundary so the old generation cannot steer afterward.
     if (!await this.dependencies.isCurrentBinding()) {
-      this.stop();
+      if (this.isCurrent(generation)) this.stop();
       return;
     }
+    if (!this.isCurrent(generation)) return;
 
     const messageIds = pending.map((message) => message.id);
     for (const id of messageIds) this.attempted.add(id);

@@ -8,6 +8,8 @@ import { DurableTaskOrchestration } from "../adapters/durable-task-orchestration
 import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
+import { TeamLifecycleService } from "../team-authority/team-lifecycle-service";
+import { DurableTaskAuthorityProvisioning } from "../adapters/durable-task-authority-provisioning";
 import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -70,12 +72,13 @@ function extension(activeTools = ["foreign_extension_tool", "team_create", "team
   const handlers = new Map<string, (event: any, ctx: any) => Promise<void>>();
   const commands = new Map<string, { handler(args: string, ctx: any): Promise<void> }>();
   const registrations: string[] = [];
+  const tools = new Map<string, any>();
   let active = [...activeTools];
   const setActiveTools = vi.fn((names: string[]) => { active = [...names]; });
   piTeams({
     on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
     registerCommand(name: string, command: { handler(args: string, ctx: any): Promise<void> }) { commands.set(name, command); },
-    registerTool(tool: { name: string }) { registrations.push(tool.name); },
+    registerTool(tool: { name: string }) { registrations.push(tool.name); tools.set(tool.name, tool); },
     registerMessageRenderer() {},
     sendMessage() {},
     sendUserMessage() {},
@@ -84,11 +87,18 @@ function extension(activeTools = ["foreign_extension_tool", "team_create", "team
     getAllTools: () => registrations.map((name) => ({ name })),
     setActiveTools,
   } as never);
-  return Object.assign(handlers, { commands, registrations, setActiveTools });
+  return Object.assign(handlers, { commands, registrations, tools, setActiveTools });
 }
 
 async function createTeam(name: string, sessionFile: string) {
   return teams.createTeam(name, sessionFile, "lead-agent", "Session adapter characterization.");
+}
+
+function provisionTeamAuthority() {
+  return vi.spyOn(DurableTaskAuthorityProvisioning.prototype, "resolve").mockImplementation(async (name) => ({
+    workspace: `/tmp/${name}-beads`, authorityId: `authority-${name}`,
+    fingerprint: { schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: "test", projectId: "test" },
+  }));
 }
 
 afterEach(() => {
@@ -319,6 +329,103 @@ describe("registered Pi Session adapter characterization", () => {
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
     expect(ctx.ui.setFooter.mock.calls.some((call: unknown[]) => typeof call[0] === "function")).toBe(false);
     expect(ctx.ui.notify).toHaveBeenLastCalledWith(expect.stringMatching(/No current Team is bound/), "warning");
+  });
+
+  it.each(["start", "fork"])("binds deliveries only after explicit %s Team creation", async (reason) => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName(`explicit-${reason}-create`);
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const directStart = vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    const taskStart = vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    setAdapter(terminal());
+    provisionTeamAuthority();
+    const ctx = context(sessionFile);
+    const harness = extension();
+
+    await harness.get("session_start")!({ reason }, ctx);
+    expect(directStart).not.toHaveBeenCalled();
+    expect(taskStart).not.toHaveBeenCalled();
+
+    const result = await harness.tools.get("team_create").execute("create", { name, purpose: "registered adapter lifecycle proof" }, undefined, undefined, ctx);
+
+    expect(result.details).toMatchObject({ kind: "team_created", team: { name } });
+    expect(directStart).toHaveBeenCalledOnce();
+    expect(taskStart).toHaveBeenCalledOnce();
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
+  });
+
+  it("cleans the registered pair and identity after full shutdown", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("full");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    setAdapter(terminal());
+    provisionTeamAuthority();
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const directStop = vi.spyOn(DirectMessageDelivery.prototype, "stop");
+    const taskStop = vi.spyOn(TaskChangeDelivery.prototype, "stop");
+    vi.spyOn(TeamLifecycleService.prototype, "shutdownTeam").mockResolvedValue({ kind: "shutdown", stoppedWorkers: [], unfinishedTaskIds: [] });
+    const ctx = context(sessionFile);
+    const harness = extension();
+
+    await harness.get("session_start")!({ reason: "start" }, ctx);
+    const created = await harness.tools.get("team_create").execute("create", { name, purpose: "full shutdown proof" }, undefined, undefined, ctx);
+    expect(created.details).toMatchObject({ kind: "team_created", team: { name } });
+    const shutdown = await harness.tools.get("team_shutdown").execute("shutdown", {}, undefined, undefined, ctx);
+
+    expect(shutdown.details).toMatchObject({ kind: "team_shutdown" });
+    expect(directStop).toHaveBeenCalledOnce();
+    expect(taskStop).toHaveBeenCalledOnce();
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("retains the registered pair and footer after partial shutdown", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("partial");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    setAdapter(terminal());
+    provisionTeamAuthority();
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const directStop = vi.spyOn(DirectMessageDelivery.prototype, "stop");
+    const taskStop = vi.spyOn(TaskChangeDelivery.prototype, "stop");
+    vi.spyOn(TeamLifecycleService.prototype, "shutdownTeam").mockResolvedValue({ kind: "partial", stoppedWorkers: [], failedWorkers: ["worker"], unfinishedTaskIds: [] });
+    const ctx = context(sessionFile);
+    const harness = extension();
+
+    await harness.get("session_start")!({ reason: "start" }, ctx);
+    await harness.tools.get("team_create").execute("create", { name, purpose: "partial shutdown proof" }, undefined, undefined, ctx);
+    const shutdown = await harness.tools.get("team_shutdown").execute("shutdown", {}, undefined, undefined, ctx);
+
+    expect(shutdown.details).toMatchObject({ kind: "partial", lifecycle: "active" });
+    expect(directStop).not.toHaveBeenCalled();
+    expect(taskStop).not.toHaveBeenCalled();
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
+  });
+
+  it("cleans refused registered lead admission and preserves post-commit create failure", async () => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("create-admission-refusal");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    vi.spyOn(TeamSessionLifecycleService.prototype, "admitLead").mockResolvedValue({ kind: "refused", reason: "lead admission refused", exitProcess: false });
+    const directStart = vi.spyOn(DirectMessageDelivery.prototype, "start");
+    const taskStart = vi.spyOn(TaskChangeDelivery.prototype, "start");
+    setAdapter(terminal());
+    provisionTeamAuthority();
+    const ctx = context(sessionFile);
+    const harness = extension();
+
+    await harness.get("session_start")!({ reason: "start" }, ctx);
+    const result = await harness.tools.get("team_create").execute("create", { name, purpose: "refused admission proof" }, undefined, undefined, ctx);
+
+    expect(result.details).toMatchObject({ kind: "unavailable", reason: "team_authority_unavailable" });
+    expect(directStart).not.toHaveBeenCalled();
+    expect(taskStart).not.toHaveBeenCalled();
+    expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
   });
 
   it("refuses an explicit missing Team before resumed identity, command, or delivery binding", async () => {

@@ -1,6 +1,6 @@
 ---
 name: pi-team-bright
-description: Operate Pi Team Bright with durable assigned Tasks, stable Workers, and event-driven Team synchronization.
+description: Operate Pi Team Bright with long-lived Teams, durable assigned Tasks, reusable or ephemeral Workers, and event-driven Team synchronization.
 ---
 
 # Pi Team Bright
@@ -11,11 +11,14 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
 
 ## Operating protocol
 
-1. For a new Team, call `team_create` before the first `team_sync`. `team_sync`
-   does not discover or create a Team. In a resumed exact leader Session, use
-   `team_sync({view:"snapshot"})` to restore its current projection.
-2. Use `ensure_worker` only when no suitable current Worker exists. A Worker
-   scope is a standing role, never the current work item.
+1. Align one long-lived Team identity with one project or durable coordination
+   boundary. Reuse that Team for related work; don't create or shut down a Team
+   for each Task. For a new Team, call `team_create` before the first `team_sync`.
+   `team_sync` does not discover or create a Team. In a resumed exact leader
+   Session, use `team_sync({view:"snapshot"})` to restore its current projection.
+2. Use `ensure_worker` only when no suitable current Worker exists. A Worker can
+   be reusable capacity for a standing semantic area or ephemeral capacity for
+   bounded work. Its scope is a role, never the current work item.
 3. Create one atomic Task DAG with request-local keys, explicit goals, success signals,
    and stable Worker assignees. Put prerequisite keys in each Task's `needs` list.
    One Task is the one-node case. If order matters, encode it with `needs`.
@@ -35,8 +38,11 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
 7. Put request-local prerequisite keys in `tasks[].needs`. There is no separate
    model-facing link tool. Use `alert_send` only for clarification, attention, or announcements.
    An Alert never changes a Task.
-8. Reuse current Workers. Stop a Worker only after its nonterminal assigned
-   Tasks are resolved. Reconcile once more, then use `team_shutdown`.
+8. Reuse a current Worker while its scope remains useful. Stop an ephemeral or
+   no-longer-useful Worker only after its nonterminal assigned Tasks are
+   resolved. Reconcile once more. Use `team_shutdown` only when the project or
+   durable coordination boundary ends, or when an explicit lifecycle reset is
+   required.
 
 ## Invariants
 

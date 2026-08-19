@@ -7,12 +7,13 @@ tag `v0.17.3` and the GitHub Release at
 `https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.3`. npm `next`
 remains on historical prerelease `0.17.0-rc.14`.
 
-Patch `0.17.2` uses Herdr's official interactive-ready command with an explicit
-6,000 ms readiness timeout. Patch `0.17.3` also names the exact pane handle
-returned by split before Agent startup. Label failure is warned and traced but
-cannot block Worker coordination. It is backward compatible with `0.17.2` Team
-state and changes no Team storage, Task graph, model-tool, Membership, or Worker
-protocol contract.
+Patch `0.17.3` names the exact pane handle returned by split before Agent
+startup. Local patch candidate `0.17.4` activates one recipient-delivery pair on
+initial leader Team binding and makes full shutdown end the exact lead runtime
+and Session binding. It also generation-fences direct delivery across stop and
+restart. The candidate is backward compatible with `0.17.3` Team state and
+changes no Team storage schema, Task graph, model-tool, Membership, or Worker
+protocol contract. It is not pushed, tagged, published, or a GitHub Release.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -52,6 +53,7 @@ variables do not.
 | Task authority, reads, mutation semantics, and legacy Beads translation | [`src/task-authority/graph-control.ts`](../../src/task-authority/graph-control.ts) owns graph revisions, Attempts, derived state, bounded failure traversal, replay, and recovery. [`durable-graph-task-authority.ts`](../../src/adapters/durable-graph-task-authority.ts) owns the Team snapshot, and [`graph-orchestration.ts`](../../src/task-authority/graph-orchestration.ts) owns publication and ready delivery. [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts), the durable read adapters, and the Beads adapters remain the legacy pre-graph path. [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) is the shared Coordination and delivery bridge. |
 | Semantic-hardening status and dependency evidence | Maintained [`context`](../projects/semantic-hardening/context.md), [`subsystem audit`](../projects/semantic-hardening/subsystem-boundary-audit.md), and machine [`dependency map`](../projects/semantic-hardening/subsystem-dependency-map.json) |
 | Event cursor, wait, filtering, and paging semantics | [`src/utils/team-events.ts`](../../src/utils/team-events.ts) |
+| Exact recipient Session delivery lifecycle | [`src/utils/recipient-delivery-lifecycle.ts`](../../src/utils/recipient-delivery-lifecycle.ts), composed by [`extensions/pi-team-session-adapter.ts`](../../extensions/pi-team-session-adapter.ts); Alert and Task engines retain watch, replay, acknowledgement, and binding fences |
 | Human operating introduction | [Repository README](../../README.md) |
 | Agent operating procedure | [`skills/pi-team-bright/SKILL.md`](../../skills/pi-team-bright/SKILL.md) |
 
@@ -83,13 +85,21 @@ restating executable definitions.
   non-mutating terminal gallery is the human review surface. This is
   [decision 0011](../decisions/0011-unified-tui-message-projection.md).
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
-  exceptional coordination.
+  exceptional coordination. A Team normally aligns with a project or durable
+  coordination boundary and is reused for related work. Workers can be reusable
+  standing capacity or ephemeral bounded capacity. Do not create and shut down
+  a Team for each Task.
 - Task authority, Team/Membership authority, Pi Session identity, event
   evidence, delivery presentation, runtime observation, and terminal surfaces
   remain distinct. `pi-teams-observation/1` is recorded Membership evidence,
   never OS liveness.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
+  Direct-Message and Task-change delivery form one exact recipient Session pair.
+  Initial create and resume activate it; binding replacement, admission refusal,
+  Session shutdown, and successful full Team shutdown stop it. Partial shutdown
+  retains the current leader pair. Full shutdown ends only the exact lead
+  runtime generation and fails closed around malformed or foreign evidence.
 - `team_sync` treats `caught_up` as proven current quiescence, not permanent
   absence of future events. It reports `indeterminate` when run-state or
   actuation evidence is incomplete and does not advance observation. Pi `>=0.83`

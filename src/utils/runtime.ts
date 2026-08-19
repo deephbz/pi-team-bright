@@ -220,8 +220,52 @@ export async function readRuntimeStatus(
 }
 
 /**
- * Delete runtime status for an agent. Called during shutdown.
+ * Restore an exact deleted runtime generation only when the runtime file is
+ * still absent (or already contains that exact generation). A replacement is
+ * never overwritten during shutdown compensation.
  */
+export async function restoreRuntimeStatus(
+  teamName: string,
+  agentName: string,
+  status: AgentRuntimeStatus,
+  expected: RuntimeGeneration,
+): Promise<boolean> {
+  const generation = runtimeGeneration(status);
+  if (
+    status.teamName !== teamName
+    || status.agentName !== agentName
+    || !generation
+    || generation.membershipId !== expected.membershipId
+    || generation.pid !== expected.pid
+    || generation.startedAt !== expected.startedAt
+  ) return false;
+  const p = runtimeStatusPath(teamName, agentName);
+  const dir = path.dirname(p);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return withLock(p, async () => {
+    if (fs.existsSync(p)) {
+      try {
+        const current = runtimeGeneration(JSON.parse(fs.readFileSync(p, "utf8")) as AgentRuntimeStatus);
+        return !!current
+          && current.membershipId === expected.membershipId
+          && current.pid === expected.pid
+          && current.startedAt === expected.startedAt;
+      } catch {
+        return false;
+      }
+    }
+    const temporary = path.join(dir, `.${path.basename(p)}.${process.pid}.${Date.now()}.tmp`);
+    try {
+      fs.writeFileSync(temporary, JSON.stringify(status, null, 2), { mode: 0o600 });
+      fs.renameSync(temporary, p);
+      return true;
+    } finally {
+      try { fs.unlinkSync(temporary); } catch {}
+    }
+  });
+}
+
+/** Delete only the exact runtime generation expected by shutdown/recovery. */
 export async function deleteRuntimeStatus(
   teamName: string,
   agentName: string,

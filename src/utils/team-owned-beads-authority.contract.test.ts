@@ -4,11 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
+import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { readBeadsAuthorityFingerprint } from "./beads";
 import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import { BEADS_WORKSPACE_ENV } from "../model-tool-contract/beads-authority-adapter";
 import * as teams from "./teams";
+import * as runtime from "./runtime";
 
 type RegisteredTool = {
   name: string;
@@ -22,6 +24,14 @@ type RegisteredTool = {
 };
 
 type Handler = (event: any, ctx: any) => Promise<any>;
+
+function terminalCarrier() {
+  return {
+    name: "team-owned-test-terminal", detect: () => true, isDirectCarrier: () => true,
+    currentTargetId: () => "pane-lead", spawn: () => "pane-worker", kill() {}, isAlive: () => false,
+    setTitle() {}, supportsWindows: () => false, spawnWindow: () => "window-unused", setWindowTitle() {}, killWindow() {}, isWindowAlive: () => false,
+  } as any;
+}
 
 const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 const createdTeams: string[] = [];
@@ -49,6 +59,7 @@ function context(sessionFile: string) {
 }
 
 function harness() {
+  setAdapter(terminalCarrier());
   const tools = new Map<string, RegisteredTool>();
   const handlers = new Map<string, Handler>();
   piTeams({
@@ -83,6 +94,7 @@ function readPersistedConfig(teamName: string): TeamConfig {
 async function createWithTools(teamName: string, sessionFile = `/tmp/${teamName}-lead.jsonl`) {
   const { tools, handlers } = harness();
   const ctx = context(sessionFile);
+  await handlers.get("session_start")?.({ reason: "start" }, ctx);
   const result = await tools.get("team_create")!.execute(
     "create",
     { name: teamName, purpose: "Exercise Team-owned Beads authority." },
@@ -99,6 +111,7 @@ async function createWithTools(teamName: string, sessionFile = `/tmp/${teamName}
 }
 
 afterEach(async () => {
+  clearAdapterCache();
   for (const { handlers, ctx } of activeHarnesses.splice(0)) {
     await handlers.get("session_shutdown")?.({ reason: "test-cleanup" }, ctx);
   }
@@ -208,6 +221,9 @@ describe.skipIf(!hasBd)("team-owned Beads Task authority", () => {
     const first = await createWithTools(teamName, `/tmp/${teamName}-first.jsonl`);
     const firstLead = first.config.members.find(member => member.name === "team-lead" && member.isActive !== false)!;
     await teams.deactivateMembership(teamName, firstLead.membershipId!, "team_shutdown");
+    const firstRuntime = await runtime.readRuntimeStatus(teamName, "team-lead");
+    const generation = runtime.runtimeGeneration(firstRuntime);
+    if (generation) await runtime.deleteRuntimeStatus(teamName, "team-lead", generation);
 
     const conflictingOverride = initBeadsWorkspace();
     vi.stubEnv(BEADS_WORKSPACE_ENV, conflictingOverride);

@@ -39,6 +39,7 @@ describe("HerdrAdapter", () => {
     vi.stubEnv("HERDR_TAB_ID", "tab-origin");
     vi.stubEnv("HERDR_PANE_ID", "pane-origin");
     vi.stubEnv("TMUX", "");
+    vi.stubEnv("TMUX_PANE", "");
   });
 
   afterEach(() => {

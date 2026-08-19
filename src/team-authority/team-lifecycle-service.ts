@@ -63,6 +63,9 @@ export class TeamLifecycleService {
     const safeTeamName = paths.sanitizeName(teamName);
     return teams.withTeamTopologyLease(safeTeamName, async () => {
       const config = await teams.readConfig(safeTeamName);
+      // This authoritative snapshot is the shutdown admission preflight. Do
+      // not stop a carrier or deactivate any Membership until it succeeds.
+      const unfinishedTaskIds = await this.dependencies.assignedWorkGuard.nonterminalTaskIds(safeTeamName);
       const current = config.members.filter((member) => member.isActive !== false);
       const teammates = current.filter((member) => member.name !== "team-lead" && member.agentType !== "lead");
       const stoppedWorkers: string[] = [];
@@ -77,9 +80,41 @@ export class TeamLifecycleService {
       }));
       if (failedWorkers.length === 0) {
         const lead = current.find((member) => member.name === "team-lead" || member.agentType === "lead");
-        if (lead) await this.transitionCurrentMembership(safeTeamName, lead, "team_shutdown", false);
+        if (lead) {
+          const leadStatus = await runtime.readRuntimeStatus(safeTeamName, lead.name);
+          const leadRuntime = exactRuntimeGeneration(lead, leadStatus);
+          // A non-null record is evidence that must match this exact lead
+          // Membership. Never deactivate the lead around malformed or foreign
+          // runtime evidence, and never delete evidence we do not own.
+          if (leadStatus && !leadRuntime) {
+            failedWorkers.push(lead.name);
+          } else {
+            let deleted = false;
+            try {
+              // Exact deletion is fenced before Membership deactivation. If the
+              // latter cannot commit, restore this exact generation so the lead
+              // remains wholly current and the established partial result can
+              // be retried without a dangling active Membership.
+              if (leadRuntime) {
+                deleted = await runtime.deleteRuntimeStatus(safeTeamName, lead.name, leadRuntime);
+                if (!deleted) throw new Error("Lead runtime generation changed before exact cleanup.");
+              }
+              const changed = await this.transitionCurrentMembership(safeTeamName, lead, "team_shutdown", false);
+              if (!changed.member) throw new Error("Lead Membership changed before shutdown deactivation.");
+            } catch {
+              if (deleted && leadStatus) {
+                try {
+                  await runtime.restoreRuntimeStatus(safeTeamName, lead.name, leadStatus, leadRuntime!);
+                } catch {
+                  // The shutdown result remains partial; the caller retains the
+                  // Membership and can retry exact runtime reconciliation.
+                }
+              }
+              failedWorkers.push(lead.name);
+            }
+          }
+        }
       }
-      const unfinishedTaskIds = await this.dependencies.assignedWorkGuard.nonterminalTaskIds(safeTeamName);
       if (failedWorkers.length > 0) return { kind: "partial", stoppedWorkers: stoppedWorkers.sort(), failedWorkers: failedWorkers.sort(), unfinishedTaskIds };
       return { kind: "shutdown", stoppedWorkers: stoppedWorkers.sort(), unfinishedTaskIds };
     });

@@ -106,6 +106,93 @@ describe("direct Message delivery configuration", () => {
 });
 
 describe("DirectMessageDelivery", () => {
+  it("does not arm delivery after stop overlaps binding validation", async () => {
+    let release!: (value: boolean) => void;
+    const binding = new Promise<boolean>((resolve) => { release = resolve; });
+    const watch = vi.fn(() => () => undefined);
+    const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      dependencies: { readUnread: async () => [], markRead: async () => 0, isCurrentBinding: () => binding, watch },
+    });
+
+    const start = delivery.start([]);
+    delivery.stop();
+    release(true);
+    await start;
+
+    expect(watch).not.toHaveBeenCalled();
+    expect(sink.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not send after stop overlaps an in-flight inbox read", async () => {
+    let calls = 0;
+    let release!: (messages: IdentifiedInboxMessage[]) => void;
+    let readStarted!: () => void;
+    const began = new Promise<void>((resolve) => { readStarted = resolve; });
+    const unread = new Promise<IdentifiedInboxMessage[]>((resolve) => { release = resolve; });
+    const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      dependencies: { readUnread: () => { readStarted(); return unread; }, markRead: async () => 0, isCurrentBinding: () => Promise.resolve(++calls <= 2), watch: () => () => undefined },
+    });
+
+    const start = delivery.start([]);
+    await began;
+    delivery.stop();
+    release([inboxMessage("message_1", "late")]);
+    await start;
+
+    expect(sink.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("restarts scanning while an old stopped read is still pending", async () => {
+    let reads = 0;
+    let release!: (messages: IdentifiedInboxMessage[]) => void;
+    let firstRead!: () => void;
+    const began = new Promise<void>((resolve) => { firstRead = resolve; });
+    const oldRead = new Promise<IdentifiedInboxMessage[]>((resolve) => { release = resolve; });
+    const watch = vi.fn(() => () => undefined);
+    const delivery = new DirectMessageDelivery({ sendMessage: vi.fn(), appendEntry: vi.fn() }, {
+      teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      dependencies: {
+        readUnread: () => ++reads === 1 ? (firstRead(), oldRead) : Promise.resolve([]),
+        markRead: async () => 0,
+        isCurrentBinding: async () => true,
+        watch,
+      },
+    });
+
+    const first = delivery.start([]);
+    await began;
+    delivery.stop();
+    await delivery.start([]);
+    release([]);
+    await first;
+
+    expect(watch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not acknowledge after stop overlaps binding validation", async () => {
+    let calls = 0;
+    let release!: (value: boolean) => void;
+    const recovery = new Promise<boolean>((resolve) => { release = resolve; });
+    const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      dependencies: { readUnread: async () => [], markRead: async () => 0, isCurrentBinding: () => ++calls <= 2 ? Promise.resolve(true) : recovery, watch: () => () => undefined },
+    });
+    await delivery.start([]);
+    (delivery as any).staged.add("message_1");
+
+    const commit = delivery.commitPresentedAfterSuccessfulTurn("stop");
+    delivery.stop();
+    release(true);
+    await commit;
+
+    expect(sink.appendEntry).not.toHaveBeenCalled();
+  });
+
   it("stages from context and acknowledges only after a successful turn", async () => {
     const messages = [inboxMessage("message_1", "first full body"), inboxMessage("message_2", "second full body")];
     const { delivery, markRead, markedCalls, sink } = harness(messages);
