@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-16
+Updated: 2026-08-19
 
 Current published release: stable `0.17.1` is on npm `latest` from annotated
 tag `v0.17.1`. The durable source, CI, package-integrity, provenance, registry,
@@ -10,9 +10,13 @@ npm `next` remains on historical prerelease `0.17.0-rc.14`.
 
 Patch `0.17.1` resolves the live Herdr graph-pane origin after the origin pane
 moves. It also retries a departed stale-lock recovery claim without weakening
-the present stale-malformed fail-closed rule. It is backward compatible with
-`0.17.0` Team state and does not change Team storage, Task graph, model-tool,
-or Worker protocol contracts.
+the present stale-malformed fail-closed rule.
+
+Local patch candidate `0.17.2` replaces the unreleased accepted-start probe and
+fallback with Herdr's official interactive-ready command and an explicit 6,000
+ms readiness timeout. It is backward compatible with `0.17.1` Team state and
+does not change Team storage, Task graph, model-tool, or Worker protocol
+contracts. It is not pushed, tagged, published, or a GitHub Release.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -226,19 +230,19 @@ restating executable definitions.
   retries. A present stale malformed claim still fails closed. This changes an
   internal lock guard only; architecture impact: **none**.
 - Worker startup hardening removes two avoidable serial costs without weakening
-  admission. Herdr may return after exact accepted actuation, but exact current
-  Membership, Session, and runtime-generation binding remains the commit point.
-  Configured Worker defaults use the invocation-local model registry. A
-  successful accepted start gets one 6,000 ms binding failure-detector budget;
-  ordinary and legacy-ready paths keep 3,000 ms. `ensure_worker` no longer runs
-  a leader Task scan; Session start, Task transitions, and periodic recovery
-  own ready delivery. Real stable-Worker reuse measured 31/33 ms p50/p95, while
-  normal fresh Pi RPC bootstrap measured 448/461 ms. Keep stable Workers bound.
-  Do not add a generic warm pool or Node compile cache. The maintained
-  [performance project](../projects/worker-startup-performance.md), [accepted
-  decision](../decisions/0012-worker-startup-latency.md), and [final
-  assessment](../journal/2026-08-14-worker-startup-final-assessment.md) own the
-  evidence and limits.
+  admission. Herdr uses one official interactive-ready start command with an
+  explicit 6,000 ms readiness timeout. Exact current Membership, Session, and
+  runtime-generation binding remains the commit point and keeps its separate
+  ordinary 3,000 ms observation. Configured Worker defaults use the
+  invocation-local model registry. `ensure_worker` no longer runs a leader Task
+  scan; Session start, Task transitions, and periodic recovery own ready
+  delivery. Real stable-Worker reuse measured 31/33 ms p50/p95, while normal
+  fresh Pi RPC bootstrap measured 448/461 ms. Keep stable Workers bound. Do not
+  add a generic warm pool or Node compile cache. The maintained [performance
+  project](../projects/worker-startup-performance.md), superseding [official
+  Herdr decision](../decisions/0013-official-herdr-ready-start.md), and [final
+  2026-08-14 assessment](../journal/2026-08-14-worker-startup-final-assessment.md)
+  own the evidence and limits.
 - `@beads/bd@1.1.0` is an owned runtime dependency. The Beads adapter resolves
   its package-local CLI, so Pi's parent PATH need not contain `node_modules/.bin`
   or a separately installed `bd`; normal npm/Git installation acquires the
@@ -423,10 +427,10 @@ Next steps:
    performance epoch.
 9. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-10. Keep stable Workers bound when low-latency repeated work matters. Upstream
-    Herdr's explicit accepted-start contract, but keep exact Session binding as
-    Worker admission. Add public Pi phase tracing before another cold-start
-    optimization.
+10. Keep stable Workers bound when low-latency repeated work matters. The
+    separate [`worker-ensure-concurrency.md`](../projects/worker-ensure-concurrency.md)
+    context defers batched sibling-launch optimization for later design. Add
+    public Pi phase tracing before another cold-start optimization.
 11. Do not add generic warm capacity, a reusable Pi Session, a Node compile
     cache, a Bun bundle, or Worker resource exclusions. A future strict 100 ms
     new-Worker SLO needs a separately shaped one-use sealed launcher with a

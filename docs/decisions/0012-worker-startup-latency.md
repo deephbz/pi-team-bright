@@ -1,8 +1,12 @@
 # Decision 0012: Reduce Worker startup without weakening admission
 
 Date: 2026-08-14
-Status: accepted
+Status: superseded in part by [decision 0013](0013-official-herdr-ready-start.md)
 Architecture impact: none
+
+Decision 0013 replaces rules 3, 4, and 8 below. The model-registry, stable
+Worker reuse, delivery, admission, and rejected-capacity decisions remain in
+force. This record preserves the original evidence and rationale.
 
 ## Decision
 
