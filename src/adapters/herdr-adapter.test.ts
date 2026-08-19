@@ -13,6 +13,7 @@ const failure = (code: string, message: string, status = 1) => ({
 const leaderLayout = (paneId: string, width = 82) => success({ type: "pane_layout", layout: {
   panes: [{ pane_id: paneId, rect: { width } }],
 } });
+const renamed = success({ type: "ok" });
 
 // Official Herdr 0.7.5 and 0.8.0 return after interactive readiness.
 const readyStart = (paneId: string, name: string) => success({
@@ -89,6 +90,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(readyStart("pane-worker", "team-a-worker"));
 
     expect(adapter.spawn({
@@ -113,7 +115,8 @@ describe("HerdrAdapter", () => {
       "--env", "HTTPS_PROXY=http://127.0.0.1:6152",
       "--no-focus",
     ]);
-    expect(exec).toHaveBeenNthCalledWith(4, "herdr", [
+    expect(exec).toHaveBeenNthCalledWith(4, "herdr", ["pane", "rename", "pane-worker", "worker"]);
+    expect(exec).toHaveBeenNthCalledWith(5, "herdr", [
       "agent", "start", "team-a-worker",
       "--kind", "pi",
       "--pane", "pane-worker",
@@ -122,6 +125,25 @@ describe("HerdrAdapter", () => {
       "--model", "openai/model;not-a-shell", "--tools", "task_read,task_update",
     ]);
     expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "run"]));
+  });
+
+  it("starts the Worker with a warning when its presentation label cannot be applied", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    exec
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
+      .mockReturnValueOnce(leaderLayout("pane-origin"))
+      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(failure("pane_rename_failed", "label rejected"))
+      .mockReturnValueOnce(readyStart("pane-worker", "researcher"));
+
+    expect(adapter.spawn({
+      name: "researcher", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
+    })).toBe("pane-worker");
+    expect(exec).toHaveBeenNthCalledWith(4, "herdr", ["pane", "rename", "pane-worker", "researcher"]);
+    expect(exec).toHaveBeenNthCalledWith(5, "herdr", expect.arrayContaining(["agent", "start", "researcher"]));
+    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "close"]));
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/pane-worker.*pane_rename_failed.*label rejected/i));
   });
 
   it("splits an exact current Worker downward without changing the leader", () => {
@@ -136,6 +158,7 @@ describe("HerdrAdapter", () => {
         ],
       } }))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(readyStart("pane-worker-2", "worker-2"));
 
     expect(adapter.spawn({
@@ -182,21 +205,25 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader" } }))
       .mockReturnValueOnce(success({ type: "pane_layout", layout: { panes: [{ pane_id: "pane-leader", rect: { width: 100 } }] } }))
       .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-1" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(readyStart("pane-worker-1", "worker-1"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
       .mockReturnValueOnce(layout)
       .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-2" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(readyStart("pane-worker-2", "worker-2"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
       .mockReturnValueOnce(layout)
       .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-3" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(readyStart("pane-worker-3", "worker-3"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2", tab_id: "tab-a", workspace_id: "w4" } }))
       .mockReturnValueOnce(layout)
       .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-4" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(readyStart("pane-worker-4", "worker-4"));
 
     const placement = { leaderPaneId: "pane-leader", paneLayout: { leader_share: 0.6, worker_tiling: "grid" as const } };
@@ -244,6 +271,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin", 100))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(failure("agent_pane_busy", "agent target pane is not an available shell"))
       .mockReturnValueOnce(readyStart("pane-worker", "worker"));
 
@@ -251,8 +279,8 @@ describe("HerdrAdapter", () => {
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
     })).toBe("pane-worker");
-    expect(exec).toHaveBeenCalledTimes(5);
-    expect(exec.mock.calls[3]).toEqual(exec.mock.calls[4]);
+    expect(exec).toHaveBeenCalledTimes(6);
+    expect(exec.mock.calls[4]).toEqual(exec.mock.calls[5]);
   });
 
   it("requires the official interactive-ready response without a compatibility retry", () => {
@@ -260,6 +288,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(success({ type: "agent_started", argv: ["pi"], agent: {
         pane_id: "pane-worker", terminal_id: "terminal-worker", name: "worker", interactive_ready: true,
       } }))
@@ -278,6 +307,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(success({ type: "agent_started", argv: ["pi"], agent: {
         agent: "claude", pane_id: "pane-worker", terminal_id: "terminal-other", name: "worker", interactive_ready: true,
       } }))
@@ -300,6 +330,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(success({ type: "agent_started", argv: ["not-pi"], agent: {
         pane_id: "pane-worker", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
       } }))
@@ -312,6 +343,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(success({ type: "agent_started", argv: ["pi"], agent: {
         pane_id: "wrong-pane", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
       } }))
@@ -345,6 +377,7 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
+      .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(failure("agent_start_failed", "agent unavailable"))
       .mockReturnValueOnce(success({ type: "ok" }));
     expect(() => adapter.spawn({

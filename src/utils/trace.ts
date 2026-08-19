@@ -10,6 +10,8 @@ export type WorkerLaunchStage =
   | "carrier_reused"
   | "membership_prepared"
   | "carrier_start_accepted"
+  | "carrier_label_applied"
+  | "carrier_label_not_applied"
   | "carrier_target_persisted"
   | "session_bound_observed"
   | "session_bound_not_observed"

@@ -133,7 +133,9 @@ Task.
   normal unrelated extension and Skill discovery. A distinct discovered Pi Team
   Bright copy violates the one-version-epoch rule and remains a documented
   installation risk. Herdr forwards the established Pi launch environment
-  allowlist into Worker launches.
+  allowlist into Worker launches. It names the exact pane returned by the split
+  with the stable Worker name before agent startup. A presentation-label failure
+  is warned and traced but does not block Worker coordination.
   Placement remains Team-wide policy, never a per-Worker override; an unsupported
   policy is refused.
 - **Package version is not Team storage compatibility.** Existing Team records
@@ -157,7 +159,7 @@ Task.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.2
+pi install npm:@hypercarrier/pi-team-bright@0.17.3
 ```
 
 Version `0.17.0` replaces the leader tool `task_create` with
@@ -165,10 +167,11 @@ Version `0.17.0` replaces the leader tool `task_create` with
 transitions such as `claim`, `block`, `resume`, `goal_achieved`, and
 `goal_failed`. Update saved prompts or scripts that call the old contract.
 
-Versions `0.17.1` and `0.17.2` are backward compatible with `0.17.0` Team
+Versions `0.17.1` through `0.17.3` are backward compatible with `0.17.0` Team
 state. Version `0.17.1` resolves the live Herdr graph-pane origin. Version
 `0.17.2` uses Herdr's official interactive-ready Worker command with a six-second
-readiness timeout. Neither patch changes Team storage, Task graph, model-tool,
+readiness timeout. Version `0.17.3` names the exact split Worker pane before
+Agent startup. These patches do not change Team storage, Task graph, model-tool,
 or Worker protocol contracts. Do not recreate a Team for these updates.
 
 The package owns its local Task backend through the exact runtime dependency

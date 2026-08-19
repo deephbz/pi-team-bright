@@ -2,21 +2,18 @@
 
 Updated: 2026-08-19
 
-Current published release: stable `0.17.1` is on npm `latest` from annotated
-tag `v0.17.1`. The durable source, CI, package-integrity, provenance, registry,
-and GitHub Release evidence is in
-[`2026-08-16-v0.17.1-release-receipt.md`](../journal/2026-08-16-v0.17.1-release-receipt.md).
-npm `next` remains on historical prerelease `0.17.0-rc.14`.
+Current published release: stable `0.17.2` is on npm `latest` from annotated
+tag `v0.17.2` and the GitHub Release at
+`https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.2`. npm `next`
+remains on historical prerelease `0.17.0-rc.14`.
 
-Patch `0.17.1` resolves the live Herdr graph-pane origin after the origin pane
-moves. It also retries a departed stale-lock recovery claim without weakening
-the present stale-malformed fail-closed rule.
-
-Local patch candidate `0.17.2` replaces the unreleased accepted-start probe and
-fallback with Herdr's official interactive-ready command and an explicit 6,000
-ms readiness timeout. It is backward compatible with `0.17.1` Team state and
-does not change Team storage, Task graph, model-tool, or Worker protocol
-contracts. It is not pushed, tagged, published, or a GitHub Release.
+Patch `0.17.2` uses Herdr's official interactive-ready command with an explicit
+6,000 ms readiness timeout. Patch candidate `0.17.3` names the exact pane handle
+returned by split before Agent startup. Label failure is warned and traced but
+cannot block Worker coordination. The candidate is backward compatible with
+`0.17.2` Team state and changes no Team storage, Task graph, model-tool,
+Membership, or Worker protocol contract. It is not pushed, tagged, published,
+or a GitHub Release.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -114,7 +111,11 @@ restating executable definitions.
   Team Bright copy can still conflict with explicit `-e` through duplicate tool
   registration; it remains an installation risk, not a Team storage-version
   boundary or a reason to suppress normal resources. Herdr preserves its
-  established Pi launch environment allowlist.
+  established Pi launch environment allowlist. After `pane split`, the adapter
+  uses the exact returned pane handle with official `pane rename` before
+  `agent start`. A label failure records a payload-free launch stage and warning
+  but does not block coordination. The extra local CLI call measured 24.72 ms
+  and does not change the separate 6,000 ms readiness bound.
   Other adapters retain existing behavior without this guarantee; the executable contract is
   [`TeamPanePlacement`](../../src/utils/terminal-adapter.ts).
   This changes the Pi Team Bright adapter contract, but no depicted component,
