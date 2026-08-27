@@ -33,9 +33,10 @@ The Task plus its assignee is the only executable work contract.
 
 The normal sequence is:
 
-`team_create` → `ensure_worker` → `task_graph_apply` → snapshot and updates
-through `team_sync` → inspect goal evidence → resolve Tasks → `worker_stop` or
-`team_shutdown`.
+restore or create the Team → reuse or ensure Workers → `task_graph_apply` →
+snapshot and updates through `team_sync` → inspect goal evidence → resolve
+Tasks. Stop Workers or shut down the Team only when their lifecycle boundary
+ends.
 
 A minimal agent-led run looks like this:
 
@@ -84,11 +85,16 @@ after a change. A Worker reports `goal_achieved` or `goal_failed` with evidence,
 or blocks with a next action. A blocked Task requires an explicit resolution, not an inference
 from terminal output.
 
-Align a long-lived Team with one project or durable coordination boundary.
-Reuse Workers across Tasks when their standing scope remains useful; ephemeral
-Workers are also valid for bounded work. Before `worker_stop`, resolve every
-nonterminal Task assigned to that Worker. Reconcile once more. Do not create and
-shut down a Team for each Task.
+Team, Worker, and Task have different lifecycles. Align a long-lived Team with
+one project or durable coordination boundary. A Worker owns a coherent semantic
+role or an intentionally isolated perspective; a Task owns one bounded outcome.
+Reuse current Workers unless another Worker unlocks independent parallel work,
+establishes a distinct reusable scope, or provides deliberate context isolation.
+Keep implementation, execution, diagnosis, and repair with one Worker when that
+causal context matters; use a fresh Worker for independent review when a fresh
+perspective matters. Before `worker_stop`, resolve every nonterminal assigned
+Task and reconcile once more. Never infer Team shutdown from completed Tasks,
+an empty ready front, or idle time.
 
 Alerts are only for exceptional clarification, attention, or announcements.
 They never assign, advance, block, or complete work, and they are not a chat-
@@ -162,7 +168,7 @@ Task.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.4
+pi install npm:@hypercarrier/pi-team-bright@0.17.5
 ```
 
 Version `0.17.0` replaces the leader tool `task_create` with
@@ -170,14 +176,16 @@ Version `0.17.0` replaces the leader tool `task_create` with
 transitions such as `claim`, `block`, `resume`, `goal_achieved`, and
 `goal_failed`. Update saved prompts or scripts that call the old contract.
 
-Versions `0.17.1` through `0.17.4` are backward compatible with `0.17.0` Team
+Versions `0.17.1` through `0.17.5` are backward compatible with `0.17.0` Team
 state. Version `0.17.1` resolves the live Herdr graph-pane origin. Version
 `0.17.2` uses Herdr's official interactive-ready Worker command with a six-second
 readiness timeout. Version `0.17.3` names the exact split Worker pane before
 Agent startup. Version `0.17.4` starts the leader's recipient-delivery pair on
-initial Team creation and makes full shutdown end the exact lead binding. These
-patches do not change Team storage, Task graph, model-tool, or Worker protocol
-contracts. Do not recreate a Team for these updates.
+initial Team creation and makes full shutdown end the exact lead binding. Version
+`0.17.5` makes Team and Worker topology selection explicit in the packaged
+operating skill. These patches do not change Team storage, Task graph,
+model-tool, or Worker protocol contracts. Do not recreate a Team for these
+updates.
 
 The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.
