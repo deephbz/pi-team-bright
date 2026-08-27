@@ -1,19 +1,21 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-19
+Updated: 2026-08-27
 
-Current published release: stable `0.17.3` is on npm `latest` from annotated
-tag `v0.17.3` and the GitHub Release at
-`https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.3`. npm `next`
+Current published release: stable `0.17.4` is on npm `latest` from annotated
+tag `v0.17.4` and the GitHub Release at
+`https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.4`. npm `next`
 remains on historical prerelease `0.17.0-rc.14`.
 
-Patch `0.17.3` names the exact pane handle returned by split before Agent
-startup. Local patch candidate `0.17.4` activates one recipient-delivery pair on
-initial leader Team binding and makes full shutdown end the exact lead runtime
-and Session binding. It also generation-fences direct delivery across stop and
-restart. The candidate is backward compatible with `0.17.3` Team state and
-changes no Team storage schema, Task graph, model-tool, Membership, or Worker
-protocol contract. It is not pushed, tagged, published, or a GitHub Release.
+Patch `0.17.4` activates one recipient-delivery pair on initial leader Team
+binding and makes full shutdown end the exact lead runtime and Session binding.
+Local patch candidate `0.17.5` clarifies packaged Team and Worker topology:
+Team, Worker, and Task use different lifecycles; Team reuse is the project-level
+default; Worker creation must unlock parallelism, establish durable semantic
+scope, or deliberately isolate perspective; dependent execution normally keeps
+causal context. The candidate changes no Team storage schema, Task graph,
+model-tool, Membership, runtime, or Worker protocol contract. It is not pushed,
+tagged, published, or a GitHub Release.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
@@ -85,10 +87,13 @@ restating executable definitions.
   non-mutating terminal gallery is the human review surface. This is
   [decision 0011](../decisions/0011-unified-tui-message-projection.md).
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
-  exceptional coordination. A Team normally aligns with a project or durable
-  coordination boundary and is reused for related work. Workers can be reusable
-  standing capacity or ephemeral bounded capacity. Do not create and shut down
-  a Team for each Task.
+  exceptional coordination. Team, Worker, and Task have distinct lifecycles. A
+  Team aligns with a project or durable coordination boundary and remains alive
+  until the owner or operator explicitly ends or resets it. A Worker aligns with
+  coherent semantic scope or deliberate perspective isolation; a Task aligns
+  with one bounded outcome. New Workers must unlock independent parallel work,
+  establish reusable scope, or isolate perspective. Do not infer Team shutdown
+  from completed Tasks, an empty ready front, or idle time.
 - Task authority, Team/Membership authority, Pi Session identity, event
   evidence, delivery presentation, runtime observation, and terminal surfaces
   remain distinct. `pi-teams-observation/1` is recorded Membership evidence,
