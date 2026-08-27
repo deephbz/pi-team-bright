@@ -9,16 +9,37 @@ Task plus assignee is the only work-delegation contract. Alerts are exceptional
 coordination, and `team_sync` is the event-driven observation surface. Don't
 poll runtime state, sleep, or inspect terminal output for normal progress.
 
+## Topology and lifecycle
+
+Team, Worker, and Task operate at different time scales. A Team follows one
+project or durable coordination boundary. A Worker follows a coherent semantic
+role or an intentionally isolated perspective. A Task follows one bounded
+outcome. Never derive one lifecycle directly from another.
+
+Reuse before creation. At the beginning of related work, restore the current
+Team projection and reconcile current Workers before creating capacity. A new
+request, terminal Task graph, empty ready front, or idle interval does not imply
+a new or finished Team. Keep the Team alive until the owner or operator
+explicitly ends its durable boundary or requests a lifecycle reset.
+
+Use the minimum sufficient Worker frontier. Create a Worker only when it
+unlocks parallel independent work, establishes a distinct reusable semantic
+scope, or deliberately isolates context or perspective. Otherwise reuse a
+suitable current Worker. Do not reuse one Worker so broadly that unrelated
+domains pollute its context or independent work is unnecessarily serialized.
+
+Preserve causal context. Implementation, execution, diagnosis, and repair
+normally stay with one Worker. Independent review, verification, adversarial
+analysis, and alternative experiments can use a fresh Worker even when their
+Tasks depend on earlier work. Idle reusable Workers remain valid capacity.
+
 ## Operating protocol
 
-1. Align one long-lived Team identity with one project or durable coordination
-   boundary. Reuse that Team for related work; don't create or shut down a Team
-   for each Task. For a new Team, call `team_create` before the first `team_sync`.
-   `team_sync` does not discover or create a Team. In a resumed exact leader
-   Session, use `team_sync({view:"snapshot"})` to restore its current projection.
-2. Use `ensure_worker` only when no suitable current Worker exists. A Worker can
-   be reusable capacity for a standing semantic area or ephemeral capacity for
-   bounded work. Its scope is a role, never the current work item.
+1. For a new Team, call `team_create` before the first `team_sync`. `team_sync`
+   does not discover or create a Team. In a resumed exact leader Session, use
+   `team_sync({view:"snapshot"})` to restore its current projection.
+2. Apply the topology policy before `ensure_worker`. A Worker scope is a role,
+   never the current work item.
 3. Create one atomic Task DAG with request-local keys, explicit goals, success signals,
    and stable Worker assignees. Put prerequisite keys in each Task's `needs` list.
    One Task is the one-node case. If order matters, encode it with `needs`.
@@ -38,11 +59,10 @@ poll runtime state, sleep, or inspect terminal output for normal progress.
 7. Put request-local prerequisite keys in `tasks[].needs`. There is no separate
    model-facing link tool. Use `alert_send` only for clarification, attention, or announcements.
    An Alert never changes a Task.
-8. Reuse a current Worker while its scope remains useful. Stop an ephemeral or
-   no-longer-useful Worker only after its nonterminal assigned Tasks are
-   resolved. Reconcile once more. Use `team_shutdown` only when the project or
-   durable coordination boundary ends, or when an explicit lifecycle reset is
-   required.
+8. Stop an ephemeral or no-longer-useful Worker only after its nonterminal
+   assigned Tasks resolve. Reconcile once more. Use `team_shutdown` only after
+   the owner or operator explicitly ends the durable boundary or requests a
+   lifecycle reset.
 
 ## Invariants
 
