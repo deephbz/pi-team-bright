@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>Pi Team Bright · Skill review</title>
+</head>
+<body>
+  <header>
+    <div class="intro">
+      <div><p class="eyebrow">PI TEAM BRIGHT / LEAD RESPONSIBILITIES</p><h1>Own the outcome. Stay in sync.</h1></div>
+      <span class="status">Working copy · Not committed</span>
+    </div>
+    <p class="description">One lead owns project direction and coordination. While Tasks remain in flight, replies must return to team_sync.</p>
+    <div class="metadata"><code id="path"></code><span id="base"></span><span id="stats"></span></div>
+    <details><summary>What changed, and what stayed</summary>
+      <p>Left: the rewrite you approved. Right: the current packaged skill with your two requested refinements.</p>
+      <p>The lead owns project intent, approach, and outcomes as well as Task assignment, Worker resources, and blocker resolution.</p>
+      <p>Interim replies and blocker escalations end with team_sync while assigned nonterminal Tasks remain. A mutation receipt does not replace this call.</p>
+      <p>This is a skill instruction, not runtime enforcement. Owner pauses and explicit blocker handling remain in place.</p>
+    </details>
+  </header>
+  <nav aria-label="Diff controls">
+    <div class="toggle" aria-label="Diff layout"><button id="split" aria-pressed="true">Side by side</button><button id="unified" aria-pressed="false">Unified</button></div>
+    <label><input id="wrap" type="checkbox" checked> Wrap lines</label>
+    <label><input id="context" type="checkbox" checked> Full context</label>
+    <a href="./proposed.patch" download="pi-team-bright-skill.patch">Download patch ↓</a>
+  </nav>
+  <main>
+    <div class="sides" id="sides"><span>Approved rewrite</span><span>Current working copy</span></div>
+    <diffs-container id="diff" aria-label="Skill source diff"></diffs-container>
+    <p id="loading" role="status">Loading the diff…</p>
+  </main>
+  <footer>Rendered locally with @pierre/diffs. Review line numbers here, then send feedback in chat. Nothing is applied from this page.</footer>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

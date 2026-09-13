@@ -29,6 +29,12 @@ A pane, process, launch receipt, or startup observation may show that a carrier
 exists. None of them proves that a Worker is ready, making progress, or done.
 The Task plus its assignee is the only executable work contract.
 
+The one lead is both project lead and coordinator. The project lead preserves user
+intent and constraints, chooses the approach, decomposes work, evaluates outcomes,
+and explains trade-offs. The coordinator assigns Tasks, supplies context, resolves
+blockers, supervises outcomes, and escalates decisions. Delegation does not
+transfer accountability or the user's authority.
+
 ## The normal flow
 
 The normal sequence is:
@@ -96,9 +102,18 @@ perspective matters. Before `worker_stop`, resolve every nonterminal assigned
 Task and reconcile once more. Never infer Team shutdown from completed Tasks,
 an empty ready front, or idle time.
 
-Alerts are only for exceptional clarification, attention, or announcements.
-They never assign, advance, block, or complete work, and they are not a chat-
-based substitute for Tasks.
+While assigned nonterminal Tasks remain, including waiting and blocked Tasks, each
+user-facing reply, progress note, and blocker escalation is an interim message.
+The lead makes `team_sync({view:"updates"})` the last action before yielding,
+unless the owner explicitly pauses or stops the work. A mutation receipt does not
+replace this sync. This is operating guidance, not a runtime enforcement claim.
+If no actor can progress, name the blocker and next actor instead of repeating
+identical empty sync calls.
+
+Task assignment and goal or dependency changes belong in the Task graph, not in
+Alerts or context updates. Alerts are only for exceptional clarification,
+attention, or announcements. They never assign, advance, block, or complete work,
+and they are not a chat-based substitute for Tasks.
 
 ## Mission graph semantics
 
@@ -183,9 +198,12 @@ readiness timeout. Version `0.17.3` names the exact split Worker pane before
 Agent startup. Version `0.17.4` starts the leader's recipient-delivery pair on
 initial Team creation and makes full shutdown end the exact lead binding. Version
 `0.17.5` makes Team and Worker topology selection explicit in the packaged
-operating skill. These patches do not change Team storage, Task graph,
-model-tool, or Worker protocol contracts. Do not recreate a Team for these
-updates.
+operating skill. It also gives the one lead project-lead and coordinator
+responsibilities, and directs interim replies, progress notes, and blocker
+escalations to end with `team_sync({view:"updates"})` while assigned nonterminal
+Tasks remain. This is operating guidance, not runtime enforcement. These patches
+do not change Team storage, Task graph, model-tool, or Worker protocol contracts.
+Do not recreate a Team for these updates.
 
 The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.

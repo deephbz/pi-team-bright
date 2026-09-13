@@ -1,101 +1,104 @@
 ---
 name: pi-team-bright
-description: Operate Pi Team Bright with long-lived Teams, durable assigned Tasks, reusable or ephemeral Workers, and event-driven Team synchronization.
+description: Use when coordinating Workers or executing an assigned Task with Pi Team Bright.
 ---
 
 # Pi Team Bright
 
-Task plus assignee is the only work-delegation contract. Alerts are exceptional
-coordination, and `team_sync` is the event-driven observation surface. Don't
-poll runtime state, sleep, or inspect terminal output for normal progress.
+A Team holds a durable project or coordination boundary. A Worker holds a reusable
+scope and working context. A Task assigns one bounded outcome to a Worker.
+These have separate lifecycles: finishing a Task does not end its Worker or Team.
 
-## Topology and lifecycle
+## Lead: own the project and coordinate execution
 
-Team, Worker, and Task operate at different time scales. A Team follows one
-project or durable coordination boundary. A Worker follows a coherent semantic
-role or an intentionally isolated perspective. A Task follows one bounded
-outcome. Never derive one lifecycle directly from another.
+The one lead carries two responsibilities:
 
-Reuse before creation. At the beginning of related work, restore the current
-Team projection and reconcile current Workers before creating capacity. A new
-request, terminal Task graph, empty ready front, or idle interval does not imply
-a new or finished Team. Keep the Team alive until the owner or operator
-explicitly ends its durable boundary or requests a lifecycle reset.
+- Project lead: communicate with the user, understand and preserve intent and
+  constraints, choose an approach, decompose work, evaluate outcomes, and explain
+  trade-offs. Delegation does not transfer accountability or the user's authority.
+- Coordinator: assign Tasks to suitable Workers, provide context and resources,
+  resolve blockers, supervise outcomes, and escalate decisions to the user.
 
-Use the minimum sufficient Worker frontier. Create a Worker only when it
-unlocks parallel independent work, establishes a distinct reusable semantic
-scope, or deliberately isolates context or perspective. Otherwise reuse a
-suitable current Worker. Do not reuse one Worker so broadly that unrelated
-domains pollute its context or independent work is unnecessarily serialized.
+## Lead: choose the work and its owners
 
-Preserve causal context. Implementation, execution, diagnosis, and repair
-normally stay with one Worker. Independent review, verification, adversarial
-analysis, and alternative experiments can use a fresh Worker even when their
-Tasks depend on earlier work. Idle reusable Workers remain valid capacity.
+Restore an existing Team with `team_sync` snapshot when context is missing.
+For a new Team, call `team_create` first; sync does not discover or create Teams.
+Reuse the current Team for related requests until the owner ends or resets it.
 
-## Operating protocol
+Reuse suitable Workers. Create one when it enables independent parallel work,
+establishes a distinct reusable scope, or isolates a perspective. Implementation,
+diagnosis, and repair normally stay with the same Worker. Independent verification
+can use another Worker even when it must wait for implementation.
 
-1. For a new Team, call `team_create` before the first `team_sync`. `team_sync`
-   does not discover or create a Team. In a resumed exact leader Session, use
-   `team_sync({view:"snapshot"})` to restore its current projection.
-2. Apply the topology policy before `ensure_worker`. A Worker scope is a role,
-   never the current work item.
-3. Create one atomic Task DAG with request-local keys, explicit goals, success signals,
-   and stable Worker assignees. Put prerequisite keys in each Task's `needs` list.
-   One Task is the one-node case. If order matters, encode it with `needs`.
-4. Task authority presents the ready front mechanically, with at most one Task
-   per Worker. A Worker sends `claim` with the exact Task version before work.
-   Use the returned version for the next command. Send `goal_achieved` with
-   external success evidence, or `goal_failed` when criteria fail. Task authority
-   applies any bounded failure edge. Use `block` only for an external blocker,
-   and include blocker evidence.
-5. Use `team_sync({view:"updates"})` for routine supervision. Mutation receipts
-   already contain post-state; don't immediately re-read them.
-6. Treat a Beads timeout as an unknown authority outcome, not an empty Task set
-   or proof of failure. Retry a timed-out read. After a mutation timeout, first
-   read the current Task. If retry is still required, reuse the same operation
-   ID and identical semantics with the current exact version. For Task creation,
-   retry an `unknown_outcome` with the same operation ID and identical input.
-7. Put request-local prerequisite keys in `tasks[].needs`. There is no separate
-   model-facing link tool. Use `alert_send` only for clarification, attention, or announcements.
-   An Alert never changes a Task.
-8. Stop an ephemeral or no-longer-useful Worker only after its nonterminal
-   assigned Tasks resolve. Reconcile once more. Use `team_shutdown` only after
-   the owner or operator explicitly ends the durable boundary or requests a
-   lifecycle reset.
+For example, a builder implements and repairs; a reviewer checks independently.
+Their scopes stay stable while their assigned Tasks change. Reuse the recorded
+Worker name and exact scope with `ensure_worker`; put new work in Tasks, not scope.
+A launch receipt proves carrier setup, not that the Worker has accepted work.
 
-## Invariants
+## Lead: assign or revise the Task graph
 
-- Task and Team authorities own current state. Events wake observers but are
-  not a second authority.
-- Delivery acknowledgement proves presentation to one exact Session only; it
-  never changes Task state. Explicit Worker claim accepts responsibility.
-- Task authority derives readiness from current prerequisite states. It reserves
-  one execution slot per Worker and advances successors without a leader turn.
-- Team topology and lifecycle mutations are lead-only.
-- Expected refusals and partial outcomes are semantic results. Follow their
-  next action instead of treating them as infrastructure crashes.
-- A snapshot establishes the hidden branch position. An updates result advances
-  it only after Pi persists the model-visible result.
-- Task updates require the exact opaque Task version ref and an operation ID.
-  Identical retries replay the durable receipt; stale or conflicting writes refuse.
-- `dependency_waiting` and `ready` are derived. Only `goal_achieved` satisfies a
-  prerequisite. `goal_failed` and `cancelled` never release a success edge.
-- Provide `current_context` only when still-relevant Task meaning changes. Use
-  transition `evidence` for blockers, goal outcomes, and cancellation reasons.
-- Team lifecycle and terminal placement remain durable authorities. The public
-  model surface does not expose carrier placement or backend controls.
+Put the outcome, constraints, needed source pointers, and external success signal
+in Task prose. An assigned Task is the work contract. Alerts carry exceptional
+clarification or attention, not new assignments or Task state changes.
 
-## Recovery
+Use `task_graph_apply` for the complete intended graph. Keep keys stable for the
+same Tasks and use new keys for new outcomes. Each revision replaces the current
+set: include every Task that should remain current. Changes to goals, assignments,
+or dependencies belong here, not in `current_context` or an Alert. Use the graph
+version from the accepted apply receipt for a new revision; exact retry rules are
+below.
 
-Never mutate Team authority during normal operation. If `team_create` reports
-an active Team while both `team_sync` and `team_shutdown` report no active
-Team, stop and use the [last-resort stale Team rescue](references/team-rescue.md)
-only with explicit owner authorization and exact absence evidence.
+Use `needs` when a Task requires another Task's successful result. Use a bounded
+failure route when a failed check should return work for repair. The runtime
+selects and delivers eligible Tasks, limits each Worker to one in-progress Task,
+and advances success or repair paths. The leader does not manually dispatch each
+successor. A failed Attempt can return its Task to waiting while repair runs.
 
-## Contract lookup
+## Lead: supervise and finish the request
 
-Pi presents each tool's executable schema and description directly. Treat
-those schemas—not a duplicated parameter list here—as the source of truth.
-Use the [contract source map](../../docs/reference.md) when implementation,
-authority, event, or projection details are needed.
+Use `team_sync` updates for progress and waiting. Follow its request for a snapshot
+when an observation baseline is needed. Mutation receipts already report post-state;
+read again only when required meaning is missing, stale, or conflicting.
+
+Define in-flight work as assigned nonterminal Tasks, including waiting or blocked
+Tasks. While any remain and the owner has not explicitly paused or stopped work,
+every user-facing reply or progress note is an interim message. Make
+`team_sync({view:"updates"})` the last action before yielding. This includes blocker
+escalations. A mutation receipt does not replace this sync: it reports the lead's
+write, while sync observes other Workers and waits for subsequent changes. Handle
+returned changes and continue synchronization while work can progress.
+
+`caught_up` means no new change is available now, not that every Task succeeded.
+`indeterminate` means observation evidence is incomplete. If work remains, use
+current Task and Worker records to identify a blocker or recovery need rather than
+repeat identical empty sync calls. Read selected Tasks with `task_read` when needed.
+Use terminal evidence for exceptional diagnosis, not as Task progress. State the
+blocker and next actor when no actor can progress. Explicit owner pause or stop
+instructions remain authoritative.
+
+Report the requested outcome with evidence, or identify the blocker and next action.
+Keep reusable Workers and the Team available. Stop a Worker only after its assigned
+nonterminal Tasks resolve and its capacity is no longer needed. Shut down the Team
+only when the owner explicitly ends or resets its durable boundary; reconcile first.
+
+## Worker: execute the assigned Task
+
+Use your runtime-provided Worker tools and claim an assigned ready Task before work.
+Record success or failure with external evidence. Use `block` for an external blocker
+and `resume` when it clears. Follow the returned Task state after every transition.
+Keep still-relevant execution context in `current_context`; use evidence for outcomes
+and blockers. Send an Alert to the lead when exceptional clarification is needed.
+
+## Refusals and recovery
+
+Follow the tool result's recovery action. For an unknown mutation outcome, replay
+with the original operation ID and unchanged input, including the expected version.
+A conflict requires reconciliation, not a blind retry. Treat a changed request as a
+new operation; a delivery warning does not undo an accepted Task mutation.
+
+Use Team tools for normal authority changes. If create reports an active Team while
+both sync and shutdown report none, use [stale Team rescue](references/team-rescue.md)
+only with explicit owner authorization and its required absence evidence.
+
+Tool schemas own exact parameters. Use the [contract source map](../../docs/reference.md)
+when debugging implementation, authority, or projection behavior.

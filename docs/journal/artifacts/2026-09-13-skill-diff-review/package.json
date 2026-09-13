@@ -1,0 +1,14 @@
+{
+  "name": "pi-team-bright-skill-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "python3 generate.py",
+    "build": "npm run generate && vite build",
+    "serve": "python3 -m http.server 4381 --bind 127.0.0.1 --directory dist"
+  },
+  "dependencies": {
+    "@pierre/diffs": "1.4.2",
+    "vite": "8.3.0"
+  }
+}
