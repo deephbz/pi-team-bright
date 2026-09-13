@@ -1,0 +1,66 @@
+{
+  "schema": "pi-team-bright-release-receipt/1",
+  "recorded_at": "2026-09-13",
+  "package": "@hypercarrier/pi-team-bright@0.17.5",
+  "source": {
+    "sha": "f1b9b9932e2e47bc25169ee23f1c941d365825f2",
+    "base": "d5ed077f1ddc1af2b76aa104e3938a6481c2e20d",
+    "tag": "v0.17.5",
+    "tag_target_matches_source": true
+  },
+  "integration": {
+    "pull_request": 16,
+    "pr_ci_run_id": 34765201607,
+    "main_ci_run_id": 34765626006,
+    "ci_result": "success"
+  },
+  "workflows": {
+    "dry_run": {
+      "run_id": 34765909339,
+      "result": "success",
+      "publication": "skipped",
+      "nonce": "v0175-dryrun-20260913-61f874fb-2287-447f-aa60-5f489c01f312"
+    },
+    "publish": {
+      "run_id": 34766319588,
+      "result": "success",
+      "tag": "latest",
+      "nonce": "v0175-publish-20260913-492c4838-a8a8-4459-b2b1-a0c27820a965"
+    }
+  },
+  "artifact": {
+    "files": 198,
+    "bytes": 334063,
+    "sha256": "aec524b900ae300d24e6bc149f1571d38b584284eedf69fac624ce97d0d05b80",
+    "integrity": "sha512-gCEUwQz5paDRo7kdm5tWh9G2w2NNT6/NbbehHk83UEez6NV83cOizXGRidJxw2DhBHr54f49GZOjeV+xxCrMng==",
+    "registry_bytes_equal": true
+  },
+  "registry": {
+    "latest": "0.17.5",
+    "next": "0.17.0-rc.14",
+    "provenance_source_matches": true,
+    "provenance_tag": "refs/tags/v0.17.5",
+    "signature_count": 2,
+    "invalid_signatures": 0,
+    "missing_signatures": 0
+  },
+  "privacy": {
+    "candidate_range": "passed",
+    "inherited_full_history_findings": "unchanged; scanner contents omitted"
+  },
+  "dependency_audit": {
+    "findings": 7,
+    "moderate": 4,
+    "high": 3,
+    "dependencies_changed": false
+  },
+  "github_release": {
+    "status": "published",
+    "url": "https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.5",
+    "tag": "v0.17.5",
+    "published_at": "2026-09-13T15:55:27Z",
+    "is_draft": false,
+    "is_prerelease": false
+  },
+  "architecture_impact": "none"
+}
