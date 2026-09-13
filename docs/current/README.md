@@ -2,27 +2,40 @@
 
 Updated: 2026-09-13
 
-Current published release: stable `0.17.4` is on npm `latest` from annotated
-tag `v0.17.4` and the GitHub Release at
-`https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.4`. npm `next`
-remains on historical prerelease `0.17.0-rc.14`.
+Current published release: stable `0.17.5` is on npm `latest` from annotated
+tag `v0.17.5`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.5)
+was published at `2026-09-13T15:55:27Z`; it is not a draft or prerelease.
 
 Patch `0.17.4` activates one recipient-delivery pair on initial leader Team
 binding and makes full shutdown end the exact lead runtime and Session binding.
-Local patch candidate `0.17.5` clarifies packaged Team and Worker topology:
-Team, Worker, and Task use different lifecycles; Team reuse is the project-level
+Published patch `0.17.5` clarifies packaged Team and Worker topology: Team,
+Worker, and Task use different lifecycles; Team reuse is the project-level
 default; Worker creation must unlock parallelism, establish durable semantic
 scope, or deliberately isolate perspective; dependent execution normally keeps
-causal context. Its packaged skill now uses the owner-approved decision-oriented
+causal context. Its packaged skill uses the owner-approved decision-oriented
 structure and keeps the single lead accountable for both project direction and
 execution coordination. The skill owns the required message-to-sync procedure
 while assigned work remains in flight; this is operating guidance, not runtime
-enforcement or a permanent subscription. The candidate changes no Team storage
-schema, Task graph, model-tool, Membership, runtime, or Worker protocol contract.
-It is not pushed, tagged, published, or a GitHub Release.
+enforcement or a permanent subscription. The release changes no Team storage
+schema, Task graph, model-tool, Membership, runtime, or Worker protocol
+contract.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
+
+## v0.17.5 publication evidence
+
+The exact published source is `f1b9b9932e2e47bc25169ee23f1c941d365825f2`,
+from base `d5ed077f1ddc1af2b76aa104e3938a6481c2e20d`. The [release receipt](../journal/2026-09-13-v0.17.5-release-receipt.md)
+and [release checklist](../release/v0.17.5-release-checklist.md) hold the
+run, package, registry, provenance, and signature evidence. The [GitHub
+Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.5) is
+published and the `latest` dist-tag is `0.17.5`.
+
+Residual limitations are unchanged inherited full-history privacy findings and
+seven development dependency audit findings (four moderate, three high); the
+isolated registry install reported zero findings. Architecture impact: **none**.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
@@ -429,9 +442,9 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Keep stable `v0.17.1` and its package bytes immutable. Record downstream
+1. Keep published `v0.17.5` and its package bytes immutable. Record downstream
    HyperCarrier gitlink adoption as separate composition evidence.
-2. Preserve stable `v0.17.0` and all earlier release artifacts.
+2. Preserve `v0.17.0`, `v0.17.1`, and all earlier release artifacts.
 3. Define carrier actuation for Attempt model aliases before claiming that
    `capable` changes an existing Worker's active model.
 4. Decide whether graph persistence needs an append-only transaction store and
