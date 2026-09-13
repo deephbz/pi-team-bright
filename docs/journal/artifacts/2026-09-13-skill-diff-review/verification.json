@@ -1,0 +1,22 @@
+{
+  "purpose": "Review of lead ownership and mandatory post-message sync against the approved rewrite",
+  "git_base": "d5ed077f1ddc1af2b76aa104e3938a6481c2e20d",
+  "comparison": "approved_draft_to_working_copy",
+  "source_sha256": {
+    "old": "a7600734e7d40ad09cfe835d1c17e2823793afd8804b7f1c56e38645e5d31852",
+    "new": "e995b5fce1ae7b9b5095f020fb790ae8dc04e72b15f50914d1e990b540c41f50"
+  },
+  "url": "http://127.0.0.1:4381/?review=lead-sync",
+  "renderer": "@pierre/diffs@1.4.2",
+  "build": "passed",
+  "browser": {
+    "page_errors": [],
+    "page_color_scheme": "light",
+    "split_columns": 2,
+    "base_label": "Approved draft a7600734",
+    "visual_review": "passed"
+  },
+  "patch_check": "git apply --reverse --check passed against the working skill; no patch applied by the viewer",
+  "working_copy_matches_review": true,
+  "architecture_impact": "none"
+}

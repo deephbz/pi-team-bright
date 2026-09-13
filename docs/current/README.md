@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-08-27
+Updated: 2026-09-13
 
 Current published release: stable `0.17.4` is on npm `latest` from annotated
 tag `v0.17.4` and the GitHub Release at
@@ -13,9 +13,13 @@ Local patch candidate `0.17.5` clarifies packaged Team and Worker topology:
 Team, Worker, and Task use different lifecycles; Team reuse is the project-level
 default; Worker creation must unlock parallelism, establish durable semantic
 scope, or deliberately isolate perspective; dependent execution normally keeps
-causal context. The candidate changes no Team storage schema, Task graph,
-model-tool, Membership, runtime, or Worker protocol contract. It is not pushed,
-tagged, published, or a GitHub Release.
+causal context. Its packaged skill now uses the owner-approved decision-oriented
+structure and keeps the single lead accountable for both project direction and
+execution coordination. The skill owns the required message-to-sync procedure
+while assigned work remains in flight; this is operating guidance, not runtime
+enforcement or a permanent subscription. The candidate changes no Team storage
+schema, Task graph, model-tool, Membership, runtime, or Worker protocol contract.
+It is not pushed, tagged, published, or a GitHub Release.
 
 Lifecycle stage: **hardening** for the DAG-native Task coordination release.
 The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.

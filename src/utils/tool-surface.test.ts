@@ -67,7 +67,6 @@ describe("minimal PiTeams agent-facing surface", () => {
     }
     expect(reference).not.toMatch(/^### `[^`]+`$/m);
     expect(reference).not.toMatch(/Required:|Optional:/);
-    expect(skill).toMatch(/executable schema.+source of truth/is);
     expect(skill).not.toMatch(/^### `[^`]+`$/m);
     expect(current).toMatch(/Lifecycle stage: \*\*hardening\*\* for the DAG-native Task coordination release/);
     expect(current).toMatch(/Membership-observation surface remains in \*\*sharing\*\*/);
@@ -80,11 +79,9 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(sync.parameters.properties).not.toHaveProperty("team_name");
     expect(sync.parameters.properties).not.toHaveProperty("cursor");
     expect(sync.description).toMatch(/current|incremental|supervision/i);
-    expect(skill).toMatch(/snapshot|updates/);
-    expect(skill).toMatch(/For a new Team, call `team_create` before the first `team_sync`/);
   });
 
-  it("makes Worker claim and timeout recovery rules explicit", () => {
+  it("keeps the Worker Task transition surface executable", () => {
     const previousAgentName = process.env.PI_AGENT_NAME;
     process.env.PI_AGENT_NAME = "worker-surface-test";
     const workerTools: RegisteredTool[] = [];
@@ -103,10 +100,6 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(JSON.stringify(workerUpdate?.parameters.properties?.transition)).toContain("claim");
     expect(JSON.stringify(workerUpdate?.parameters.properties?.transition)).not.toMatch(/dependency_waiting|ready/);
     expect(registeredTools.some((candidate) => candidate.name === "task_link")).toBe(false);
-    expect(skill).toMatch(/sends `claim` with the exact Task version/is);
-    expect(skill).toMatch(/Beads timeout.+unknown authority outcome/is);
-    expect(skill).toMatch(/same operation ID and identical/i);
-    expect(skill).toMatch(/Only `goal_achieved` satisfies a.+prerequisite/is);
   });
 
   it("keeps terminal window placement as Team policy", () => {
@@ -126,8 +119,6 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(update.parameters.properties).toHaveProperty("expected_version");
     expect(update.parameters.properties).toHaveProperty("transition");
     expect(update.parameters.properties).not.toHaveProperty("updates");
-    expect(skill).toMatch(/success signals|acceptance criteria/);
-    expect(skill).toMatch(/`goal_achieved` with.+success evidence|`block` only.+blocker/is);
   });
 
   it("separates stable Worker identity from assigned work", () => {
@@ -154,7 +145,6 @@ describe("minimal PiTeams agent-facing surface", () => {
     for (const kind of ["clarification", "attention", "announcement"]) {
       expect(alertSchema).toContain(kind);
     }
-    expect(skill).toMatch(/clarification, attention, or announcements/);
   });
 
   it("does not re-expose alternate work, polling, catalog, or template tools", () => {

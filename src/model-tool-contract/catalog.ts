@@ -852,7 +852,7 @@ export const modelToolCatalog = {
       whenNotToUse: [
         "Do not use it to inspect full Task journal history; batch-read selected Tasks instead.",
         "Do not use it to poll Worker runtime or infer progress from terminal activity.",
-        "Do not use it immediately after a mutation receipt that already contains post-state.",
+        "Do not use it solely to recheck a mutation receipt. Continue supervision with updates while assigned Tasks remain in flight.",
       ],
       sideEffects: [
         "A persisted snapshot establishes the hidden incremental baseline at its observed head.",
