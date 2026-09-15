@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import type {
   GraphAttemptView,
-  GraphControlModelAlias,
   GraphTaskController,
   GraphTaskView,
 } from "../task-authority/graph-control";
@@ -56,8 +55,6 @@ export interface TaskGraphAttemptDetail {
   ordinal: number;
   state: TaskGraphAttemptState;
   current: boolean;
-  model_alias: GraphControlModelAlias;
-  resolved_model: string;
   outcome?: TaskGraphAttemptOutcome;
 }
 
@@ -72,7 +69,6 @@ export interface TaskGraphViewNode {
   activity_cursor: string;
   first_activity_at?: string;
   last_activity_at?: string;
-  model_alias?: GraphControlModelAlias;
   attempts_started?: number;
   display_attempt?: TaskGraphAttemptDetail;
   failure_reason?: TaskGraphFailureReason;
@@ -130,7 +126,6 @@ const FAILURE_REASON = new Set<TaskGraphFailureReason>([
 const EDGE_KIND = new Set<TaskGraphEdgeKind>(["goal_achieved", "goal_failed", "legacy_dependency"]);
 const ATTEMPT_STATE = new Set<TaskGraphAttemptState>(["in_progress", "blocked", "completed", "superseded", "cancelled"]);
 const ATTEMPT_OUTCOME = new Set<TaskGraphAttemptOutcome>(["goal_achieved", "goal_failed"]);
-const MODEL_ALIAS = new Set<GraphControlModelAlias>(["default", "capable"]);
 const CURSOR = /^(0|[1-9][0-9]*)$/;
 
 function record(value: unknown, field: string): Record<string, unknown> {
@@ -238,10 +233,9 @@ function assertSuccessAcyclic(nodes: readonly TaskGraphViewNode[], edges: readon
 
 function parseAttempt(value: unknown, field: string): TaskGraphAttemptDetail {
   const attempt = record(value, field);
-  exactKeys(attempt, ["id", "ordinal", "state", "current", "model_alias", "resolved_model", "outcome"], field);
+  exactKeys(attempt, ["id", "ordinal", "state", "current", "outcome"], field);
   if (!ATTEMPT_STATE.has(attempt.state as TaskGraphAttemptState)) throw new Error(`${field}.state is invalid.`);
   if (typeof attempt.current !== "boolean") throw new Error(`${field}.current must be boolean.`);
-  if (!MODEL_ALIAS.has(attempt.model_alias as GraphControlModelAlias)) throw new Error(`${field}.model_alias is invalid.`);
   if (attempt.outcome !== undefined && !ATTEMPT_OUTCOME.has(attempt.outcome as TaskGraphAttemptOutcome)) {
     throw new Error(`${field}.outcome is invalid.`);
   }
@@ -253,8 +247,6 @@ function parseAttempt(value: unknown, field: string): TaskGraphAttemptDetail {
     ordinal: parseBoundedInteger(attempt.ordinal, `${field}.ordinal`, 1, 1_000_000_000),
     state: attempt.state as TaskGraphAttemptState,
     current: attempt.current,
-    model_alias: attempt.model_alias as GraphControlModelAlias,
-    resolved_model: displayString(attempt.resolved_model, `${field}.resolved_model`, 256),
     ...(attempt.outcome ? { outcome: attempt.outcome as TaskGraphAttemptOutcome } : {}),
   };
 }
@@ -273,7 +265,6 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
     "activity_cursor",
     "first_activity_at",
     "last_activity_at",
-    "model_alias",
     "attempts_started",
     "display_attempt",
     "failure_reason",
@@ -286,9 +277,6 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
   const state = node.state as TaskGraphNodeState;
   if ((state === "dependency_waiting") !== (waiting.length > 0)) {
     throw new Error(`${field} must name waiting Tasks exactly when state is dependency_waiting.`);
-  }
-  if (node.model_alias !== undefined && !MODEL_ALIAS.has(node.model_alias as GraphControlModelAlias)) {
-    throw new Error(`${field}.model_alias is invalid.`);
   }
   if (node.failure_reason !== undefined && !FAILURE_REASON.has(node.failure_reason as TaskGraphFailureReason)) {
     throw new Error(`${field}.failure_reason is invalid.`);
@@ -327,7 +315,6 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
     waiting_on_task_ids: waiting,
     activity_cursor: parseCursor(node.activity_cursor, `${field}.activity_cursor`),
     ...(firstActivityAt ? { first_activity_at: firstActivityAt, last_activity_at: lastActivityAt! } : {}),
-    ...(node.model_alias === undefined ? {} : { model_alias: node.model_alias as GraphControlModelAlias }),
     ...(attemptsStarted === undefined ? {} : { attempts_started: attemptsStarted }),
     ...(displayAttempt ? { display_attempt: displayAttempt } : {}),
     ...(node.failure_reason === undefined ? {} : { failure_reason: node.failure_reason as TaskGraphFailureReason }),
@@ -390,11 +377,11 @@ export function parseTaskGraphViewSource(value: unknown): TaskGraphViewSource {
     if (nodeIds.has(node.id)) throw new Error(`Task graph source contains duplicate node ${JSON.stringify(node.id)}.`);
     nodeIds.add(node.id);
     if (authority === "graph_control") {
-      if (node.state === "legacy_completed" || node.model_alias === undefined || node.attempts_started === undefined
+      if (node.state === "legacy_completed" || node.attempts_started === undefined
         || node.goal === undefined || node.current_context === undefined) {
-        throw new Error(`Graph-control Task ${node.id} lacks graph-control state, detail, model alias, or Attempt count.`);
+        throw new Error(`Graph-control Task ${node.id} lacks graph-control state, detail, or Attempt count.`);
       }
-    } else if (node.model_alias !== undefined || node.attempts_started !== undefined || node.display_attempt !== undefined
+    } else if (node.attempts_started !== undefined || node.display_attempt !== undefined
       || node.failure_reason !== undefined || ["goal_failed", "goal_achieved", "cancelled"].includes(node.state)) {
       throw new Error(`Legacy Task ${node.id} contains unsupported graph-control meaning.`);
     }
@@ -654,7 +641,6 @@ export function projectGraphControlTaskGraphViewSource(input: {
         first_activity_at: activity.byTask.get(task.id)!.firstActivityAt,
         last_activity_at: activity.byTask.get(task.id)!.lastActivityAt!,
       } : {}),
-      model_alias: task.modelAlias,
       attempts_started: task.attemptsStarted,
       ...(attempt ? {
         display_attempt: {
@@ -662,8 +648,6 @@ export function projectGraphControlTaskGraphViewSource(input: {
           ordinal: attempt.ordinal,
           state: attempt.state,
           current: attempt.current,
-          model_alias: attempt.modelAlias,
-          resolved_model: attempt.resolvedModel,
           ...(attempt.outcome ? { outcome: attempt.outcome } : {}),
         },
       } : {}),

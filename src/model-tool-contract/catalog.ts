@@ -43,11 +43,17 @@ const TeamCurrent = Type.Object({
   lifecycle: Type.Enum(["active", "stopped"]),
 }, { additionalProperties: false });
 
+export const WorkerModelProfileSummarySchema = Type.Object({
+  alias: Type.String({ minLength: 1, maxLength: 64 }),
+  use: Type.String({ minLength: 1 }),
+}, { additionalProperties: false });
+
 export const WorkerCurrentSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1, description: "Concise semantic area owned by this Worker, not its current Task." }),
   carrier: WorkerCarrier,
   nonterminal_task_ids: Type.Array(TaskId),
+  model: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
 
 export { TaskGraphApplyParametersSchema, GraphTaskUpdateParametersSchema, GraphVersionRefSchema };
@@ -165,7 +171,7 @@ export const TaskUpdateResultSchema = Type.Union([
   Type.Object({
     ...TaskUpdateOutcomeBase,
     kind: Type.Literal("refused"),
-    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "legacy_transition_unsupported", "worker_mismatch", "worker_occupied", "evidence_required", "model_alias_unresolved"]),
+    reason: Type.Enum(["task_not_found", "version_conflict", "operation_conflict", "invalid_transition", "legacy_transition_unsupported", "worker_mismatch", "worker_occupied", "evidence_required"]),
     message: Type.String({ minLength: 1 }),
     current_task: Type.Optional(TaskCardSchema),
     state_changed: Type.Literal(false),
@@ -224,6 +230,7 @@ export const TeamCreateResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("team_created"),
     team: TeamCurrent,
+    model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummarySchema)),
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
@@ -248,6 +255,7 @@ export const TeamSyncParametersSchema = Type.Object({
 export const TeamSnapshotResultSchema = Type.Object({
   kind: Type.Literal("snapshot"),
   team: TeamCurrent,
+  model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummarySchema)),
   workers: Type.Array(WorkerCurrentSchema),
   tasks: Type.Array(TaskCardSchema),
   task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
@@ -324,12 +332,14 @@ export const EnsureWorkerParametersSchema = Type.Object({
     minLength: 1,
     description: "Standing semantic area, not the current Task.",
   }),
+  model: Type.Optional(Type.String({ minLength: 1, maxLength: 64, description: "Configured Worker model profile alias." })),
 }, { additionalProperties: false });
 
 const EnsuredWorker = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1 }),
   carrier: WorkerCarrier,
+  model: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
 
 export const EnsureWorkerResultSchema = Type.Union([
@@ -340,8 +350,10 @@ export const EnsureWorkerResultSchema = Type.Union([
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
-    reason: Type.Literal("name_scope_conflict"),
-    existing_worker: EnsuredWorker,
+    reason: Type.Enum(["name_scope_conflict", "invalid_model_profile", "model_conflict"]),
+    existing_worker: Type.Optional(EnsuredWorker),
+    valid_model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummarySchema)),
+    message: Type.Optional(Type.String({ minLength: 1 })),
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
   Type.Object({
@@ -503,7 +515,6 @@ const taskCreateResult = {
       title: "Verify release candidate",
       goal: "Confirm the candidate installs cleanly, preserve the exact digest boundary, and report the external verification signal.",
       assignee: "release-verifier",
-      model: "default",
       needs: [],
       status: "ready",
       state: { kind: "ready" },
@@ -709,7 +720,6 @@ const taskUpdateResult = {
     current_attempt: {
       id: "verify@1",
       ordinal: 1,
-      resolved_model: "openai-codex/gpt-5.6-codex:medium",
       input_attempt_ids: {},
     },
     attempts_started: 1,

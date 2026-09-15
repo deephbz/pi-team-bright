@@ -18,7 +18,8 @@ const EXPECTED_TOOL_NAMES = [
 const MAX_COMPACT_CHARACTERS = {
   team_create: 660,
   team_sync: 380,
-  ensure_worker: 440,
+  // Baseline 411 chars; approved optional model alias adds 111 chars. Keep 18 chars of guard.
+  ensure_worker: 540,
   task_graph_apply: 1_500,
   task_read: 360,
   task_update: 1_200,

@@ -1,6 +1,5 @@
 import { Type, type Static } from "typebox";
 export declare const GraphVersionRefSchema: Type.TString;
-export declare const GraphControlModelAliasSchema: Type.TEnum<["default", "capable"]>;
 export declare const GraphTaskTransitionSchema: Type.TEnum<["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel"]>;
 export declare const GraphFailureEdgeSchema: Type.TObject<{
     target: Type.TString;
@@ -43,7 +42,6 @@ export declare const GraphTaskStateSchema: Type.TUnion<[Type.TObject<{
 export declare const GraphAttemptSummarySchema: Type.TObject<{
     id: Type.TString;
     ordinal: Type.TInteger;
-    resolved_model: Type.TString;
     input_attempt_ids: Type.TRecord<"^.*$", Type.TString>;
 }>;
 /** Canonical graph-native Task card used by tools, delivery, and Coordination. */
@@ -52,7 +50,6 @@ export declare const GraphTaskCardSchema: Type.TObject<{
     title: Type.TString;
     goal: Type.TString;
     assignee: Type.TString;
-    model: Type.TEnum<["default", "capable"]>;
     needs: Type.TArray<Type.TString>;
     on_goal_failed: Type.TOptional<Type.TObject<{
         target: Type.TString;
@@ -100,7 +97,6 @@ export declare const GraphTaskCardSchema: Type.TObject<{
     current_attempt: Type.TOptional<Type.TObject<{
         id: Type.TString;
         ordinal: Type.TInteger;
-        resolved_model: Type.TString;
         input_attempt_ids: Type.TRecord<"^.*$", Type.TString>;
     }>>;
     attempts_started: Type.TInteger;
@@ -134,7 +130,6 @@ export declare const TaskGraphApplyParametersSchema: Type.TObject<{
         title: Type.TString;
         goal: Type.TString;
         assignee: Type.TString;
-        model: Type.TOptional<Type.TEnum<["default", "capable"]>>;
         needs: Type.TOptional<Type.TArray<Type.TString>>;
         on_goal_failed: Type.TOptional<Type.TObject<{
             target: Type.TString;

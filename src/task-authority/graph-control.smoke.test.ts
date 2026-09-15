@@ -6,15 +6,10 @@ import {
   type GraphTaskDefinitionInput,
 } from "./graph-control";
 
-const aliases = {
-  default: "openai-codex/gpt-5.6-codex:medium",
-  capable: "openai-codex/gpt-5.6-codex:max",
-};
-
 function graph(): GraphTaskDefinitionInput[] {
   return [
     { key: "plan", title: "Plan", goal: "Produce an accepted plan.", assignee: "planner" },
-    { key: "implement", title: "Implement", goal: "Implement the accepted plan.", assignee: "builder", modelAlias: "capable", needs: ["plan"] },
+    { key: "implement", title: "Implement", goal: "Implement the accepted plan.", assignee: "builder", needs: ["plan"] },
     {
       key: "review",
       title: "Review",
@@ -52,14 +47,14 @@ function achieve(authority: Controller, taskId: string, sequence: number): void 
 
 describe("graph-native control executable contract", () => {
   it("runs the Auto Compact repair loop without releasing verification on failed review", () => {
-    const authority = new GraphTaskController(aliases);
+    const authority = new GraphTaskController();
     const applied = authority.applyGraph({ operationId: "graph-1", tasks: graph() });
     expect(applied.readyTaskIds).toEqual(["plan"]);
 
     achieve(authority, "plan", 1);
     achieve(authority, "implement", 1);
     const implementation = authority.readAttempts("implement")[0];
-    expect(implementation).toMatchObject({ modelAlias: "capable", resolvedModel: aliases.capable });
+    expect(implementation).toMatchObject({ assignee: "builder" });
 
     transition(authority, "review", "claim", 1);
     const failed = authority.transition({
@@ -101,7 +96,7 @@ describe("graph-native control executable contract", () => {
   });
 
   it("derives joins, bounded failure exhaustion, exact replay, recovery, and cancellation", () => {
-    const authority = new GraphTaskController(aliases);
+    const authority = new GraphTaskController();
     const joinGraph: GraphTaskDefinitionInput[] = [
       { key: "left", title: "Left", goal: "Pass left.", assignee: "left-worker" },
       { key: "right", title: "Right", goal: "Pass right.", assignee: "right-worker" },
@@ -130,7 +125,7 @@ describe("graph-native control executable contract", () => {
     transition(authority, "retry", "goal_failed", 2, "Second criterion failure.");
     expect(authority.readTask("retry").state).toMatchObject({ kind: "goal_failed", reason: "failure_edge_exhausted", traversals: 1 });
 
-    const recovered = GraphTaskController.recover(authority.snapshot(), aliases);
+    const recovered = GraphTaskController.recover(authority.snapshot());
     expect(recovered.trace()).toEqual(authority.trace());
     transition(recovered, "join", "cancel", 1, "Operator stopped this branch.");
     expect(recovered.readTask("join").state).toEqual({ kind: "cancelled", reason: "Operator stopped this branch." });
@@ -138,7 +133,7 @@ describe("graph-native control executable contract", () => {
   });
 
   it("atomically revises the graph, preserves unchanged success, and rejects stale completion", () => {
-    const authority = new GraphTaskController(aliases);
+    const authority = new GraphTaskController();
     authority.applyGraph({ operationId: "revision-1", tasks: graph() });
     achieve(authority, "plan", 1);
     const planAttempt = authority.readTask("plan").acceptedAttemptId;

@@ -57,8 +57,7 @@ export type GraphTransitionOrchestrationOutcome =
       | "invalid_transition"
       | "worker_mismatch"
       | "worker_occupied"
-      | "evidence_required"
-      | "model_alias_unresolved";
+      | "evidence_required";
     message: string;
     currentTask?: GraphTaskCard;
   }
@@ -104,7 +103,7 @@ function refusalReason(error: GraphControlRefusal): Extract<GraphTransitionOrche
   if (error.code === "worker_mismatch") return "worker_mismatch";
   if (error.code === "worker_occupied") return "worker_occupied";
   if (error.code === "evidence_required") return "evidence_required";
-  return "model_alias_unresolved";
+  return "invalid_transition";
 }
 
 function changeEvidence(input: GraphTaskTransitionInput, task: GraphTaskCard): { kind: "status" | "result" | "blocker" | "decision" | "note"; text: string } {

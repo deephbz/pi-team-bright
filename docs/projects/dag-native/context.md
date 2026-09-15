@@ -56,7 +56,7 @@ elapsed duration.
 
 `Tab` switches between canvas pan and node selection. In selection mode,
 `hjkl` and arrows choose a stable spatial neighbor, and Enter expands only the
-selected Task. The detail panel shows goal, current context, Attempt/model,
+selected Task. The detail panel shows goal, current context, Attempt,
 waiting Tasks, exact first/last committed activity times, and elapsed duration.
 The timing source is the append-only Team Task-event journal: `first_activity_at`
 is the first event still present in that journal, and `last_activity_at` is its

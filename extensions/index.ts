@@ -352,7 +352,7 @@ export default function (pi: ExtensionAPI) {
       leaderProjectTrusted: projectTrust(ctx),
     });
     for (const message of resources.policy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
-    return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel };
+      return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel, modelProfiles: resources.policy.modelProfiles };
   }
 
   const taskAuthorityTeam = new DurableTaskAuthorityTeam();

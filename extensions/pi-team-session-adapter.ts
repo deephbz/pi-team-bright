@@ -620,16 +620,16 @@ pi.on("before_agent_start", async (event, ctx) => {
       try {
         const member = await teamQuery.workerProfile(teamName, agentName);
         if (member?.prompt) profileInfo = `\nYour standing Worker profile: ${member.prompt}`;
-        if (member?.model) {
-          modelInfo = `\nYou are currently using model: ${member.model}`;
-          if (member.thinking) {
-            modelInfo += ` with thinking level: ${member.thinking}`;
-          }
-          modelInfo += `. When reporting your model or thinking level, use these exact values.`;
+        if (member?.model || member?.modelAlias) {
+          modelInfo = `\nYour configured initial model assignment: ${member.modelAlias ? `profile '${member.modelAlias}'` : member.model}`;
         }
-      } catch (e) {
-        // Ignore
+      } catch {
+        // Ignore unavailable Worker evidence.
       }
+    }
+    const currentModel = ctx.model;
+    if (currentModel?.provider && currentModel?.id) {
+      modelInfo += `\nYour current Pi model selection is ${currentModel.provider}/${currentModel.id} with thinking level ${ctx.thinkingLevel}. This is runtime Session evidence.`;
     }
 
     const taskInstruction = "Assigned Tasks are your work contracts. Canonical Task changes are delivered in context, but presentation never changes Task state. Waiting and ready are derived. Claim a ready Task before work. When the goal passes its external criteria, call task_update with goal_achieved and exact evidence. Use goal_failed when criteria fail; Task authority then applies any bounded failure edge. Use block only for an external blocker, and include blocker evidence. Use alert_send only for exceptional clarification or escalation; an alert never changes Task state. Re-read Task authority before a conflicting write.";

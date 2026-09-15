@@ -69,7 +69,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
   return {
     async teamCreate(leaderSessionId, parameters) {
       const outcome = await port.team.createTeam(leaderSessionId, parameters);
-      if (outcome.kind === "created") return { kind: "team_created", team: outcome.team };
+      if (outcome.kind === "created") return { kind: "team_created", team: outcome.team, ...(outcome.modelProfiles ? { model_profiles: outcome.modelProfiles } : {}) };
       if (outcome.kind === "unavailable") {
         return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
       }
@@ -96,10 +96,16 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
       if (outcome.kind === "scope_conflict") {
         return { kind: "refused", reason: "name_scope_conflict", existing_worker: outcome.worker, state_changed: false };
       }
+      if (outcome.kind === "invalid_model_profile") {
+        return { kind: "refused", reason: "invalid_model_profile", valid_model_profiles: outcome.validModelProfiles, message: outcome.message, state_changed: false };
+      }
+      if (outcome.kind === "model_conflict") {
+        return { kind: "refused", reason: "model_conflict", existing_worker: outcome.worker, message: outcome.message, state_changed: false };
+      }
       if (outcome.kind === "unavailable") {
         return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
       }
-      return { kind: "worker_ensured", effect: outcome.kind, worker: outcome.worker };
+      return { kind: "worker_ensured", effect: outcome.kind === "created" ? "created" : "reused", worker: outcome.worker };
     },
 
     async taskCreate(leaderSessionId, parameters) {
@@ -111,7 +117,6 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
           title: task.title,
           goal: task.goal,
           assignee: task.assignee,
-          ...(task.model ? { model: task.model } : {}),
           ...(task.needs ? { needs: [...task.needs] } : {}),
           ...(task.on_goal_failed ? { onGoalFailed: { target: task.on_goal_failed.target, maxTraversals: task.on_goal_failed.max_traversals } } : {}),
         })),
@@ -405,7 +410,8 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
         ? {
           kind: "snapshot" as const,
           team: outcome.team,
-          workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, nonterminal_task_ids: worker.nonterminalTaskIds })),
+          ...(outcome.modelProfiles ? { model_profiles: outcome.modelProfiles } : {}),
+          workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, ...(worker.model ? { model: worker.model } : {}), nonterminal_task_ids: worker.nonterminalTaskIds })),
           tasks: outcome.tasks,
           ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
         }

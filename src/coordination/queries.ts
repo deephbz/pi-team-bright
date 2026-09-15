@@ -1,5 +1,6 @@
 import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
+import type { WorkerModelBinding } from "../team-authority/contracts";
 
 /** Minimum current Membership evidence used to derive Worker run state. */
 export interface CoordinationMemberEvidence {
@@ -8,6 +9,8 @@ export interface CoordinationMemberEvidence {
   pendingLaunchId?: string;
   sessionFile?: string;
   isActive?: boolean;
+  cwd?: string;
+  modelProfile?: WorkerModelBinding;
 }
 
 /** Exact runtime record fields that affect liveness. */
@@ -87,6 +90,7 @@ export type CoordinationTaskReadOutcome =
 export interface CoordinationLogicalWorkerEvidence {
   name: string;
   scope: string;
+  modelProfile?: WorkerModelBinding;
 }
 
 /** Exact active leader binding and logical Worker evidence for observation. */

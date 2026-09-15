@@ -8,6 +8,7 @@ import type { TeamEvent } from "./contracts";
 import type { CoordinationHiddenObservationPort, CoordinationHiddenObservationProjection, CoordinationQueryBundle, CoordinationTaskReadOutcome, CoordinationLeaderBindingEvidence } from "./queries";
 import { CoordinationNudgeDebtService, type CoordinationNudgeStore, type SyncNudgeDebt } from "./nudge-debt";
 import { taskProjectionRevision } from "./task-projection-revision";
+import { loadWorkerResourcePolicy } from "../utils/worker-resource-projection";
 export { taskProjectionRevision } from "./task-projection-revision";
 import type { CoordinationObservationBinding, CoordinationPendingObservation, CoordinationSnapshotResult, CoordinationSyncResult, CoordinationTaskProjection, CoordinationTeamCurrent, CoordinationWorkerCurrent } from "./observation-contracts";
 
@@ -25,6 +26,13 @@ function currentTeam(config: CoordinationLeaderBindingEvidence): CoordinationTea
 function latestMember(config: CoordinationLeaderBindingEvidence, workerName: string) { return [...config.members].reverse().find((member) => member.name === workerName && member.isActive !== false); }
 function workerCarrier(member: ReturnType<typeof latestMember>): CoordinationWorkerCurrent["carrier"] { return !member ? "absent" : member.sessionFile ? "connected" : member.pendingLaunchId ? "starting" : "absent"; }
 function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "created" | "connected" | "stopped" | "failed" { return event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase; }
+
+export interface CoordinationObservationContext {
+  /** Exact leader cwd from the context that owns launch and trust resolution. */
+  cwd?: string;
+  /** Resolved project trust for that exact leader Session. */
+  projectTrusted?: boolean;
+}
 
 export interface CoordinationObservationStore {
   /** Coordination-owned hidden record port, exposed as observation operations. */
@@ -77,8 +85,9 @@ export class CoordinationObservationService {
   private taskProjectionKey(teamName: string, epochId: string, exactSessionId: string): string { return JSON.stringify([teamName, epochId, exactSessionId]); }
   private cachedTaskProjection(teamName: string, epochId: string, exactSessionId: string, acknowledgedEntryId: string, acknowledgedLineage: readonly string[], teamEventCursor: string): TaskProjection | undefined { const cached = this.taskProjections.get(this.taskProjectionKey(teamName, epochId, exactSessionId)); if (!cached || cached.acknowledgedEntryId !== acknowledgedEntryId || cached.teamEventCursor !== teamEventCursor || JSON.stringify(cached.acknowledgedLineage) !== JSON.stringify(acknowledgedLineage)) return undefined; return structuredClone(cached.projection); }
   private cacheTaskProjection(cache: any): void { this.taskProjections.set(this.taskProjectionKey(cache.teamName, cache.epochId, cache.exactSessionId), { ...cache, acknowledgedLineage: [...cache.acknowledgedLineage], projection: structuredClone(cache.projection) }); }
-  async readSnapshot(exactSessionFile: string): Promise<CoordinationSnapshotResult> { const bound = await this.boundTeam(exactSessionFile); if (!bound) return { kind: "no_active_team" }; return this.readSnapshotForBound(bound); }
-  private async readSnapshotForBound(bound: BoundTeam): Promise<CoordinationSnapshotResult> { const tasks = await this.readTaskProjection(bound.teamName); if (tasks.kind !== "tasks") return tasks; const workers = this.readWorkers(bound, tasks.tasks); return { kind: "snapshot", team: currentTeam(bound.config), workers, tasks: tasks.tasks, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) }; }
+  async readSnapshot(exactSessionFile: string, context?: CoordinationObservationContext): Promise<CoordinationSnapshotResult> { const bound = await this.boundTeam(exactSessionFile); if (!bound) return { kind: "no_active_team" }; return this.readSnapshotForBound(bound, context); }
+  private async readSnapshotForBound(bound: BoundTeam, context?: CoordinationObservationContext): Promise<CoordinationSnapshotResult> { const tasks = await this.readTaskProjection(bound.teamName); if (tasks.kind !== "tasks") return tasks; const workers = this.readWorkers(bound, tasks.tasks); const leader = [...bound.config.members].reverse().find((member) => member.name === "team-lead"); const profiles = leader ? loadWorkerResourcePolicy({ cwd: context?.cwd ?? leader.cwd ?? process.cwd(), projectTrusted: context?.projectTrusted ?? true }).modelProfiles ?? {} : {};
+    const modelProfiles = Object.entries(profiles).sort(([a], [b]) => a.localeCompare(b)).map(([alias, profile]) => ({ alias, use: profile.use })); return { kind: "snapshot", team: currentTeam(bound.config), modelProfiles, workers, tasks: tasks.tasks, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) }; }
   async acknowledge(exactSessionFile: string, entryId: string, branchIds: string[]): Promise<boolean> { const pending = this.takePending(exactSessionFile); if (!pending || !branchIds.includes(entryId)) return false; const committed = await this.store.commitHidden(pending.teamName, { teamEpochId: pending.epochId, exactSessionId: pending.sessionId, branchLineage: branchIds, acknowledgedEntryId: entryId, teamEventCursor: String(pending.head), authorityRevisions: pending.authorityRevisions }); if (committed.kind !== "committed") return false; if (pending.taskProjection) this.cacheTaskProjection({ teamName: pending.teamName, epochId: pending.epochId, exactSessionId: pending.sessionId, acknowledgedEntryId: committed.projection.acknowledgedEntryId, acknowledgedLineage: [...committed.projection.acknowledgedLineage], teamEventCursor: committed.projection.teamEventCursor, projection: pending.taskProjection }); this.clearPending(exactSessionFile); return true; }
   private async boundTeam(sessionFile: string): Promise<BoundTeam | undefined> { const config = await this.coordinationQueries.teamRuntime.readLeaderBinding?.(sessionFile); if (!config?.epochId || !config.logicalWorkers) return undefined; return { teamName: config.teamName, config: config as BoundTeam["config"], sessionFile }; }
   /** Exact nudge binding deliberately excludes logical-Worker observation requirements. */
@@ -103,6 +112,7 @@ export class CoordinationObservationService {
     view: "snapshot" | "updates",
     signal: AbortSignal,
     toolCallId: string,
+    context?: CoordinationObservationContext,
   ): Promise<CoordinationSyncResult> {
     const bound = await this.boundTeam(exactSessionFile);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
@@ -261,7 +271,7 @@ export class CoordinationObservationService {
       }, tasksResult);
       return projected;
     }
-    const snapshot = await this.readSnapshotForBound(bound);
+    const snapshot = await this.readSnapshotForBound(bound, context);
     if (snapshot.kind !== "snapshot") {
       if (snapshot.kind === "contract_gap" || snapshot.kind === "unavailable") return snapshot;
       return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
@@ -407,6 +417,7 @@ export class CoordinationObservationService {
         name: logical.name,
         scope: logical.scope,
         carrier: workerCarrier(member),
+        ...((logical as { modelProfile?: { alias?: string } }).modelProfile?.alias ? { model: (logical as { modelProfile?: { alias?: string } }).modelProfile!.alias } : {}),
         nonterminalTaskIds: this.projection.projectNonterminalTaskIds(taskProjection, logical.name),
       };
     }).sort((left, right) => left.name.localeCompare(right.name));

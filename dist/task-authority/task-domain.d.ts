@@ -149,7 +149,6 @@ export declare const TaskCardSchema: Type.TUnion<[Type.TObject<{
     title: Type.TString;
     goal: Type.TString;
     assignee: Type.TString;
-    model: Type.TEnum<["default", "capable"]>;
     needs: Type.TArray<Type.TString>;
     on_goal_failed: Type.TOptional<Type.TObject<{
         target: Type.TString;
@@ -197,7 +196,6 @@ export declare const TaskCardSchema: Type.TUnion<[Type.TObject<{
     current_attempt: Type.TOptional<Type.TObject<{
         id: Type.TString;
         ordinal: Type.TInteger;
-        resolved_model: Type.TString;
         input_attempt_ids: Type.TRecord<"^.*$", Type.TString>;
     }>>;
     attempts_started: Type.TInteger;

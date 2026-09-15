@@ -76,6 +76,7 @@
     "README.md",
     "docs/current/README.md",
     "docs/reference.md",
+    "docs/examples/worker-model-profiles.settings.json",
     "dist"
   ],
   "publishConfig": {

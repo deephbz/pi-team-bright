@@ -7,6 +7,7 @@ import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TE
 import * as paths from "./paths";
 import { withLock } from "./lock";
 import { normalizeTeamPaneLayout, type TeamPaneLayout } from "./team-pane-layout";
+import { THINKING_LEVELS } from "../team-authority/contracts";
 
 export interface CutoverMarker {
   state: "prepared" | "active";
@@ -109,6 +110,12 @@ function validateConfigShape(value: Record<string, unknown>, configFile: string)
       if (typeof worker.name !== "string" || !worker.name || typeof worker.scope !== "string" || !worker.scope.trim()) {
         throw malformedConfigError(configFile, `logicalWorkers[${index}] requires non-empty name and scope strings`);
       }
+      if (worker.modelProfile !== undefined) {
+        const profile = worker.modelProfile;
+        if (!profile || typeof profile !== "object" || typeof profile.provider !== "string" || !profile.provider.trim() || profile.provider.includes("/") || typeof profile.model !== "string" || !profile.model.trim() || (profile.thinking !== undefined && !THINKING_LEVELS.includes(profile.thinking as any)) || (profile.alias !== undefined && (typeof profile.alias !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(profile.alias)))) {
+          throw malformedConfigError(configFile, `logicalWorkers[${index}].modelProfile is invalid`);
+        }
+      }
       try {
         sanitizeName(worker.name);
       } catch (error) {
@@ -135,6 +142,12 @@ function validateConfigShape(value: Record<string, unknown>, configFile: string)
         throw malformedConfigError(configFile, `members[${index}] must be an object`);
       }
       const member = rawMember as Partial<Member>;
+      if (member.modelProfile !== undefined) {
+        const profile = member.modelProfile;
+        if (!profile || typeof profile !== "object" || typeof profile.provider !== "string" || !profile.provider.trim() || profile.provider.includes("/") || typeof profile.model !== "string" || !profile.model.trim() || (profile.alias !== undefined && (typeof profile.alias !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(profile.alias))) || (profile.thinking !== undefined && !THINKING_LEVELS.includes(profile.thinking as any))) {
+          throw malformedConfigError(configFile, `members[${index}].modelProfile is invalid`);
+        }
+      }
       if (member.terminalTarget !== undefined) {
         try {
           assertTerminalTargetShape(member.terminalTarget, `members[${index}].terminalTarget`);
@@ -751,6 +764,9 @@ export async function ensureLogicalWorker(
   if (typeof input.scope !== "string" || !input.scope.trim()) {
     throw new Error("Logical Worker scope must be a non-empty string.");
   }
+  if (input.modelProfile && (!input.modelProfile.provider.trim() || input.modelProfile.provider.includes("/") || !input.modelProfile.model.trim() || (input.modelProfile.alias !== undefined && !/^[A-Za-z0-9_-]{1,64}$/.test(input.modelProfile.alias)) || (input.modelProfile.thinking !== undefined && !THINKING_LEVELS.includes(input.modelProfile.thinking as any)))) {
+    throw new Error("Logical Worker modelProfile is invalid.");
+  }
   const p = configPath(teamName);
   if (!fs.existsSync(p)) throw new Error(`Team ${teamName} not found`);
   return withLock(p, async () => {
@@ -760,7 +776,9 @@ export async function ensureLogicalWorker(
     const existing = config.logicalWorkers!.find((worker) => worker.name === input.name);
     if (existing) {
       const worker = structuredClone(existing);
-      return existing.scope === input.scope
+      const sameProfile = input.modelProfile === undefined
+        || JSON.stringify(existing.modelProfile ?? null) === JSON.stringify(input.modelProfile);
+      return existing.scope === input.scope && sameProfile
         ? { kind: "reused", worker }
         : { kind: "scope_conflict", worker };
     }

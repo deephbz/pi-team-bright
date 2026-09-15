@@ -22,7 +22,6 @@ import { DurableGraphTaskOrchestration } from "./graph-orchestration";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 
 const created: string[] = [];
-const aliases = { default: "test/default", capable: "test/capable" };
 
 function fixture(suffix: string) {
   const teamName = `graph-replacement-${suffix}-${process.pid}-${Date.now()}`;
@@ -50,7 +49,7 @@ function fixture(suffix: string) {
   fs.mkdirSync(teamDir(teamName), { recursive: true });
   writeConfigAtomic(configPath(teamName), config);
   const publication = new DurableTaskMutationPublication();
-  const authority = new DurableGraphTaskAuthority(() => aliases);
+  const authority = new DurableGraphTaskAuthority();
   const orchestration = new DurableGraphTaskOrchestration(authority, publication, publication, publication);
   return { teamName, sessionFile, publication, authority, orchestration };
 }
@@ -72,7 +71,6 @@ function deliveryTask(id: string, versionSeed: string, overrides: Record<string,
     status: "ready" as const,
     assignee: "worker",
     version: taskVersionRef(versionSeed),
-    model: "default" as const,
     needs: [],
     state: { kind: "ready" as const },
     attempts_started: 0,

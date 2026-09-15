@@ -75,7 +75,7 @@ export class DurablePiSessionTeamQuery implements PiSessionTeamQueryPort {
     const member = (await readConfig(teamName)).members.find((candidate) =>
       candidate.name === workerName && candidate.isActive !== false,
     );
-    return member ? { prompt: member.prompt, model: member.model, thinking: member.thinking } : null;
+    return member ? { prompt: member.prompt, model: member.model, modelAlias: member.modelProfile?.alias, thinking: member.thinking } : null;
   }
 
   async activeMembershipId(teamName: string, memberName: string): Promise<string | undefined> {

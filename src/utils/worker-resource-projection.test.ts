@@ -18,6 +18,8 @@ import {
   removeWorkerAggregate,
   resolveQualifiedWorkerDefaultModel,
   resolveWorkerLaunchResources,
+  resolveWorkerModelProfile,
+  WorkerModelProfileConfigurationError,
 } from "./worker-resource-projection";
 
 const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-worker-resource-"));
@@ -42,6 +44,38 @@ describe("Worker resource projection", () => {
 
     const loaded = loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent });
     expect(projectWorkerTools([], ["a", "b"], loaded)).toEqual(["b"]);
+  });
+
+  it("loads model profile aliases with exact provider-local IDs and project override shadowing", () => {
+    const root = temp();
+    const agent = path.join(root, "agent");
+    const cwd = path.join(root, "project");
+    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    fs.mkdirSync(agent, { recursive: true });
+    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
+      fast: { provider: "openrouter", model: "openai/gpt-5.6/fast", thinking: "low", use: "Global fast" },
+      keep: { provider: "openai", model: "gpt-5.6", thinking: "medium", use: "Keep" },
+      collision: { provider: "foo/bar", model: "baz", thinking: "low", use: "Collision" },
+    } } }));
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
+      fast: { provider: "openrouter", model: "openai/gpt-5.6/local", thinking: "high", use: "Project fast" },
+      keep: 3,
+    } } }));
+    const loaded = loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent });
+    expect(loaded.modelProfiles).toEqual({ fast: { provider: "openrouter", model: "openai/gpt-5.6/local", thinking: "high", use: "Project fast" } });
+    expect(resolveWorkerModelProfile("fast", loaded.modelProfiles!, new Set(["openrouter/openai/gpt-5.6/local"]))).toEqual({ alias: "fast", provider: "openrouter", model: "openai/gpt-5.6/local", thinking: "high" });
+    expect(loaded.modelProfiles).not.toHaveProperty("collision");
+    expect(() => resolveWorkerModelProfile("collision", { collision: { provider: "foo/bar", model: "baz", thinking: "low", use: "Collision" } }, new Set(["foo/bar/baz"]))).toThrow(/provider ID containing/);
+    expect(() => resolveWorkerModelProfile("keep", loaded.modelProfiles!, new Set(["openai/gpt-5.6"]))).toThrow(WorkerModelProfileConfigurationError);
+    expect(() => resolveWorkerModelProfile("fast", loaded.modelProfiles!)).toThrow(/catalog is unavailable/i);
+    const tooLong = "x".repeat(65);
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
+      [tooLong]: { provider: "openai", model: "gpt-5.6", thinking: "low", use: "Too long" },
+    } } }));
+    expect(loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent }).modelProfiles).toEqual({
+      fast: { provider: "openrouter", model: "openai/gpt-5.6/fast", thinking: "low", use: "Global fast" },
+      keep: { provider: "openai", model: "gpt-5.6", thinking: "medium", use: "Keep" },
+    });
   });
 
   it("uses a trusted project's Worker model setting over global and ignores untrusted project settings", () => {

@@ -12,11 +12,6 @@ import type { TeamConfig } from "../team-authority/contracts";
 import type { TaskVersionRef } from "./task-version-ref";
 
 const teamName = `graph-smoke-${process.pid}`;
-const aliases = {
-  default: "openai-codex/gpt-5.6-codex:medium",
-  capable: "openai-codex/gpt-5.6-codex:max",
-};
-
 function config(): TeamConfig {
   const workers = ["planner", "builder", "reviewer", "verifier"];
   return {
@@ -78,7 +73,7 @@ describe("durable graph-control integration", () => {
     writeConfigAtomic(configPath(teamName), config());
     const publication = new DurableTaskMutationPublication();
     const orchestration = new DurableGraphTaskOrchestration(
-      new DurableGraphTaskAuthority(() => aliases),
+      new DurableGraphTaskAuthority(),
       publication,
       publication,
       publication,
@@ -88,7 +83,7 @@ describe("durable graph-control integration", () => {
       operationId: "apply-smoke-graph",
       tasks: [
         { key: "plan", title: "Plan", goal: "Produce an accepted plan.", assignee: "planner" },
-        { key: "implement", title: "Implement", goal: "Implement the accepted plan.", assignee: "builder", modelAlias: "capable", needs: ["plan"] },
+        { key: "implement", title: "Implement", goal: "Implement the accepted plan.", assignee: "builder", needs: ["plan"] },
         { key: "review", title: "Review", goal: "Accept only when criteria pass.", assignee: "reviewer", needs: ["implement"], onGoalFailed: { target: "implement", maxTraversals: 1 } },
         { key: "verify", title: "Verify", goal: "Verify the accepted result.", assignee: "verifier", needs: ["review"] },
       ],
@@ -100,7 +95,7 @@ describe("durable graph-control integration", () => {
     await achieve(orchestration, "plan", 1);
     await achieve(orchestration, "implement", 1);
     let tasks = await orchestration.readTasks(teamName);
-    expect(byId(tasks, "implement").current_attempt).toMatchObject({ resolved_model: aliases.capable });
+    expect(byId(tasks, "implement").current_attempt).toMatchObject({ id: "implement@1" });
 
     let review = byId(tasks, "review");
     await transition(orchestration, review, "claim", "review-claim-1");
@@ -118,7 +113,7 @@ describe("durable graph-control integration", () => {
 
     expect(fs.existsSync(graphTaskAuthorityPath(teamName))).toBe(true);
     const recovered = new DurableGraphTaskOrchestration(
-      new DurableGraphTaskAuthority(() => { throw new Error("recovery must use captured aliases"); }),
+      new DurableGraphTaskAuthority(),
       publication,
       publication,
       publication,

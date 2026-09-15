@@ -4,12 +4,12 @@ import { findDirectionalTaskGraphNode, inspectTaskGraphCanvas, layoutTaskGraph, 
 import { projectGraphControlTaskGraphViewSource } from "./source";
 
 function source() {
-  const controller = new GraphTaskController({ default: "provider/default:medium", capable: "provider/capable:max" });
+  const controller = new GraphTaskController();
   controller.applyGraph({
     operationId: "graph",
     tasks: [
       { key: "plan", title: "Plan", goal: "Plan.", assignee: "planner" },
-      { key: "build", title: "Build", goal: "Build.", assignee: "builder", modelAlias: "capable", needs: ["plan"] },
+      { key: "build", title: "Build", goal: "Build.", assignee: "builder", needs: ["plan"] },
       { key: "test", title: "Test", goal: "Test.", assignee: "tester", needs: ["plan"] },
       {
         key: "ship",
@@ -39,13 +39,13 @@ function islands(count: number, islandSize = 5) {
       ...(position === islandSize - 1 ? { onGoalFailed: { target: `task-${root}`, maxTraversals: 2 } } : {}),
     };
   });
-  const controller = new GraphTaskController({ default: "provider/default", capable: "provider/capable" });
+  const controller = new GraphTaskController();
   controller.applyGraph({ operationId: `islands-${count}`, tasks });
   return projectGraphControlTaskGraphViewSource({ teamName: `islands-${count}`, trace: controller.trace() });
 }
 
 describe("Task graph terminal layout", () => {
-  it("is deterministic and renders graph-control state, typed routes, joins, Attempts, and model detail", () => {
+  it("is deterministic and renders graph-control state, typed routes, joins, and Attempts", () => {
     const first = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32, now: 0 });
     const second = layoutTaskGraph(source(), "all", { direction: "TB", nodeWidth: 32, now: 0 });
     expect(first).toEqual(second);
@@ -58,9 +58,7 @@ describe("Task graph terminal layout", () => {
     expect(first.nodes.find((box) => box.node.id === "plan")?.node.display_attempt).toMatchObject({
       ordinal: 1,
       current: true,
-      resolved_model: "provider/default:medium",
     });
-    expect(first.nodes.find((box) => box.node.id === "build")?.node.model_alias).toBe("capable");
     expect(plain).toMatch(/[━┃┏┓┗┛]/u);
     expect(plain).toMatch(/[╌╎]/u);
     expect(plain).toContain("↺0/2");
@@ -117,7 +115,7 @@ describe("Task graph terminal layout", () => {
   });
 
   it("keeps failure self-loops and backward repair lanes legible beside node boxes", () => {
-    const controller = new GraphTaskController({ default: "provider/default", capable: "provider/capable" });
+    const controller = new GraphTaskController();
     controller.applyGraph({ operationId: "repair-routes", tasks: [
       {
         key: "self",
@@ -165,7 +163,7 @@ describe("Task graph terminal layout", () => {
   });
 
   it("packs several single-node islands deterministically", () => {
-    const controller = new GraphTaskController({ default: "provider/default", capable: "provider/capable" });
+    const controller = new GraphTaskController();
     controller.applyGraph({ operationId: "singletons", tasks: Array.from({ length: 12 }, (_, index) => ({
       key: `single-${String(index).padStart(2, "0")}`,
       title: `Single ${index}`,

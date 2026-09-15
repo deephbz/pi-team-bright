@@ -79,8 +79,12 @@ exhaustive parameter reference.
 - [`src/coordination/event-journal.ts`](../src/coordination/event-journal.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
 - [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)
-  owns Worker-only Pi settings parsing plus context and model-tool projection;
-  its focused executable anchors are `worker-resource-projection.test.ts` and
+  owns Worker-only Pi settings and model-profile catalog parsing.
+  [`src/team-authority/contracts.ts`](../src/team-authority/contracts.ts) and
+  [`worker-launch-bridge.ts`](../src/team-authority/worker-launch-bridge.ts)
+  own the configured Worker binding and initial-launch/same-Session recovery
+  boundary. [Decision 0014](decisions/0014-worker-model-profiles.md) records intent.
+  Focused settings anchors are `worker-resource-projection.test.ts` and
   `worker-resource-extension.contract.test.ts`.
 - [`src/utils/worker-startup-observation.ts`](../src/utils/worker-startup-observation.ts)
   owns the bounded exact-Membership startup observation used after a new or

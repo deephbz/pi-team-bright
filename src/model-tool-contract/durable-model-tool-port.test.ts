@@ -82,7 +82,10 @@ async function teamFixture(implementationVersion: string | undefined) {
   config.logicalWorkers = [{ name: "worker", scope: "fixture scope" }];
   teams.writeConfigAtomic(paths.configPath(name), config);
 
-  const launchBridge = { ensureWorker: vi.fn() };
+  const launchBridge = {
+    ensureWorker: vi.fn(),
+    resolveInitialWorkerModel: vi.fn().mockReturnValue({}),
+  };
   const lifecycle: ModelToolLifecycle = {
     stopWorker: vi.fn(),
     shutdownTeam: vi.fn(),
@@ -318,6 +321,34 @@ describe("DurableModelToolTeamPort durable authority", () => {
       reason: "task_authority_unavailable",
     });
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
+  });
+
+  it.each([false, true])("projects snapshot model profiles with the exact leader trust (%s)", async (projectTrusted) => {
+    const { name, port, leaderSessionId } = await teamFixture(undefined);
+    const root = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "pi-team-snapshot-trust-"));
+    paneSettingsRoots.push(root);
+    const agentDir = path.join(root, "agent");
+    const cwd = path.join(root, "project");
+    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
+      global: { provider: "fixture", model: "global", thinking: "low", use: "Global only" },
+      shared: { provider: "fixture", model: "global-shared", thinking: "low", use: "Global shared" },
+    } } }));
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
+      project: { provider: "fixture", model: "project", thinking: "medium", use: "Project only" },
+      shared: { provider: "fixture", model: "project-shared", thinking: "high", use: "Project override" },
+    } } }));
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+    port.setLeaderLaunchContext(leaderSessionId, { cwd, projectTrusted });
+    readPort.listTaskIds.mockResolvedValue([]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
+    await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
+      kind: "snapshot",
+      modelProfiles: projectTrusted
+        ? [{ alias: "global", use: "Global only" }, { alias: "project", use: "Project only" }, { alias: "shared", use: "Project override" }]
+        : [{ alias: "global", use: "Global only" }, { alias: "shared", use: "Global shared" }],
+    });
   });
 
   it("keeps read-only snapshot and nudge-debt use available without a launch bridge", async () => {
