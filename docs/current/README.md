@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-09-13
+Updated: 2026-09-15
 
 Current published release: stable `0.17.5` is on npm `latest` from annotated
 tag `v0.17.5`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
@@ -81,6 +81,15 @@ restating executable definitions.
 
 ## Decisions still in force
 
+- [Decision 0014](../decisions/0014-worker-model-profiles.md) accepts fixed
+  Worker model profiles, compact alias discovery, valid-choice error hints,
+  and human-only TUI settings guidance. It removes per-Task model selection
+  without compatibility. The working-tree implementation passed independent
+  verification and is not part of npm `0.17.5`. Same-Session recovery preserves
+  the model and thinking level recorded by Pi, including human overrides.
+  The [result and evidence](../projects/worker-model-profiles-verification.md)
+  include a real two-profile DAG and operator-override recovery, full-lane and
+  package checks, and focused trust/prebinding regressions.
 - The strict Task/Beads cutover keeps native records, metadata, revisions, and
   mutation syntax inside the Beads adapter modules. `TaskCard` and opaque
   `TaskVersionRef` remain the public Task coordinates above that boundary;
@@ -176,7 +185,8 @@ restating executable definitions.
 - The selected stable source now contains the graph-native production path.
   `task_graph_apply` replaces `task_create` without adding a
   leader tool. A Team-scoped snapshot stores complete graph revisions,
-  immutable Attempts, replay receipts, and per-Attempt model resolution.
+  immutable Attempts and replay receipts. Worker profiles own initial model
+  selection; native Pi Session history owns continued model selection.
   `dependency_waiting` and `ready` are derived; only `goal_achieved` releases a
   prerequisite, while `goal_failed` applies a bounded failure edge. Runtime
   composition includes recovery, ready delivery, Coordination reads, lifecycle
@@ -331,10 +341,12 @@ restating executable definitions.
   `--approve`/`--no-approve`: a saved decision for a different Worker cwd wins,
   otherwise the Worker inherits the leader's resolved trust, with `true` when the
   trust context is unavailable. An available `default_model`, split at its first
-  slash into provider and nonempty model ID, is captured on new Membership only
-  after explicit Worker/template and durable Team defaults; invalid settings refuse
-  before carrier creation, while recovery uses the captured Membership model. It
-  never changes native Pi settings, Task, Session, or observation records. This is
+  slash into provider and nonempty model ID, follows explicit Worker/template
+  and durable Team defaults. The resolved creation binding belongs to the
+  logical Worker; invalid profile selection refuses before Worker creation.
+  Same-Session recovery preserves Pi's recorded model and thinking selection.
+  Profile settings never overwrite native Pi selection, Task, or public
+  observation records. This is
   a Worker launch contract change with no topology change. Intent and reversal criteria are in
   [decision 0008](../decisions/0008-worker-resource-projection.md).
 - Worker admission remains a two-phase external-actuation protocol. Herdr
@@ -445,8 +457,9 @@ Next steps:
 1. Keep published `v0.17.5` and its package bytes immutable. Record downstream
    HyperCarrier gitlink adoption as separate composition evidence.
 2. Preserve `v0.17.0`, `v0.17.1`, and all earlier release artifacts.
-3. Define carrier actuation for Attempt model aliases before claiming that
-   `capable` changes an existing Worker's active model.
+3. Keep the verified, unreleased
+   [Worker model-profile change](../projects/worker-model-profiles.md) separate
+   from published `0.17.5`. Publication and parent adoption require separate work.
 4. Decide whether graph persistence needs an append-only transaction store and
    exact Coordination publication outbox.
 5. Design immutable legacy Task-create operation identity before changing Beads

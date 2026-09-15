@@ -30,6 +30,10 @@ establishes a distinct reusable scope, or isolates a perspective. Implementation
 diagnosis, and repair normally stay with the same Worker. Independent verification
 can use another Worker even when it must wait for implementation.
 
+Choose a new Worker's model alias from the Team creation or snapshot catalog.
+Keep model selection at Worker creation. Tasks select an assignee; reuse keeps
+its model assignment. Invalid selections return valid alias choices.
+
 For example, a builder implements and repairs; a reviewer checks independently.
 Their scopes stay stable while their assigned Tasks change. Reuse the recorded
 Worker name and exact scope with `ensure_worker`; put new work in Tasks, not scope.
@@ -84,6 +88,7 @@ only when the owner explicitly ends or resets its durable boundary; reconcile fi
 ## Worker: execute the assigned Task
 
 Use your runtime-provided Worker tools and claim an assigned ready Task before work.
+Keep the selected model during work. Human model changes in Pi remain authoritative.
 Record success or failure with external evidence. Use `block` for an external blocker
 and `resume` when it clears. Follow the returned Task state after every transition.
 Keep still-relevant execution context in `current_context`; use evidence for outcomes

@@ -5,8 +5,7 @@ import {
   type GraphApplyInput,
   type GraphApplyResult,
   type GraphAttemptView,
-  type GraphControlDurableSnapshot,
-  type GraphControlModelAliases,
+  type GraphControlSnapshot,
   type GraphTaskTransitionInput,
   type GraphVersionRef,
   type GraphTransitionResult,
@@ -41,7 +40,6 @@ function toCard(task: ReturnType<GraphTaskController["readTask"]>, attempts: Gra
     title: task.title,
     goal: task.goal,
     assignee: task.assignee,
-    model: task.modelAlias,
     needs: [...task.needs],
     ...(task.onGoalFailed ? { on_goal_failed: { target: task.onGoalFailed.target, max_traversals: task.onGoalFailed.maxTraversals } } : {}),
     status: task.state.kind,
@@ -77,7 +75,6 @@ function toCard(task: ReturnType<GraphTaskController["readTask"]>, attempts: Gra
       current_attempt: {
         id: currentAttempt.id,
         ordinal: currentAttempt.ordinal,
-        resolved_model: currentAttempt.resolvedModel,
         input_attempt_ids: { ...currentAttempt.inputAttemptIds },
       },
     } : {}),
@@ -96,19 +93,8 @@ function cards(controller: GraphTaskController): GraphTaskCard[] {
   return controller.readTasks().map((task) => toCard(task, attempts.filter((attempt) => attempt.taskId === task.id)));
 }
 
-function aliasesFromEnvironment(): GraphControlModelAliases {
-  const fallback = process.env.PI_MODEL_TOOL_WORKER_MODEL?.trim()
-    || (process.env.PI_PROVIDER && process.env.PI_MODEL ? `${process.env.PI_PROVIDER}/${process.env.PI_MODEL}` : undefined)
-    || "current-worker-model";
-  return {
-    default: process.env.PI_TEAM_BRIGHT_MODEL_DEFAULT?.trim() || fallback,
-    capable: process.env.PI_TEAM_BRIGHT_MODEL_CAPABLE?.trim() || fallback,
-  };
-}
-
 /** Team-scoped durable composition around the backend-neutral controller. */
 export class DurableGraphTaskAuthority {
-  constructor(private readonly resolveAliases: () => GraphControlModelAliases = aliasesFromEnvironment) {}
 
   exists(teamName: string): boolean {
     return fs.existsSync(graphTaskAuthorityPath(teamName));
@@ -159,7 +145,7 @@ export class DurableGraphTaskAuthority {
       const controller = this.load(teamName);
       const before = cards(controller);
       const result = apply(controller);
-      writeJsonAtomic(file, controller.durableSnapshot());
+      writeJsonAtomic(file, controller.snapshot());
       const after = cards(controller);
       const readyIds = new Set(controller.selectReadyFrontier().map((task) => task.id));
       const trace = controller.trace();
@@ -181,14 +167,23 @@ export class DurableGraphTaskAuthority {
 
   private load(teamName: string): GraphTaskController {
     const file = graphTaskAuthorityPath(teamName);
-    if (!fs.existsSync(file)) return new GraphTaskController(this.resolveAliases());
-    let snapshot: GraphControlDurableSnapshot;
+    if (!fs.existsSync(file)) return new GraphTaskController();
+    let snapshot: GraphControlSnapshot;
     try {
-      snapshot = JSON.parse(fs.readFileSync(file, "utf8")) as GraphControlDurableSnapshot;
+      snapshot = JSON.parse(fs.readFileSync(file, "utf8")) as GraphControlSnapshot;
     } catch (error) {
       throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot cannot be decoded: ${error instanceof Error ? error.message : String(error)}`);
     }
-    if (!snapshot.modelAliases) throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has no model alias configuration.");
-    return GraphTaskController.recover(snapshot, snapshot.modelAliases);
+    const legacyModelFields = snapshot as unknown as {
+      modelAliases?: unknown;
+      graphRevisions?: Array<{ tasks?: Array<Record<string, unknown>> }>;
+      events?: Array<Record<string, unknown>>;
+    };
+    if (legacyModelFields.modelAliases !== undefined
+      || legacyModelFields.graphRevisions?.some((revision) => revision.tasks?.some((task) => task.modelAlias !== undefined || task.model !== undefined))
+      || legacyModelFields.events?.some((event) => event.kind === "attempt_started" && (event.modelAlias !== undefined || event.resolvedModel !== undefined))) {
+      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot contains removed Task model selection fields; migration is not supported.");
+    }
+    return GraphTaskController.recover(snapshot);
   }
 }

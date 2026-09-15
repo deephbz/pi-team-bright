@@ -156,7 +156,7 @@ describe("Coordination observation service equivalence fences", () => {
 
   it("keeps the Coordination application as the observation-service delegate without a copied algorithm", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-coordination-application.ts"), "utf8");
-    expect(source).toContain("this.service.readTeamSync(file, view, signal, call)");
+    expect(source).toContain("this.service.readTeamSync(file, view, signal, call, context)");
     expect(source).toContain("this.service.acknowledge(");
     expect(source).toContain("this.service.setBranchContext(");
     expect(source).toContain("this.service.pending(");

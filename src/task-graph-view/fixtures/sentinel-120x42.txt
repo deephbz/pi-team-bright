@@ -3,7 +3,7 @@ View: SELECT · 7/7 tasks · all tasks · all states · TB · island 1/3 · offs
 Legend: ◷ wait · ● ready · ▶ active · ■ blocked · ✓ achieved · ✕ failed · ⊘ cancelled · ━ success · ╌ failure
 Details: [in_progress] dag1-task2@worker2 · DAG 1 Task 2
 Timing: first observed 2026-08-14 09:05:00Z · last update 2026-08-14 11:50:00Z · elapsed 2h 55m
-Attempt: try 1/1 · default current · model2-default
+Attempt: try 1/1 current
 Goal: goal2: build the active branch.
 Context: context2: branch construction is in progress.
  island 1/3 · 4 tasks                                                                                 island 2/3 · 2 tas

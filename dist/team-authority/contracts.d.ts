@@ -6,6 +6,14 @@ export interface TerminalTarget {
     kind: "pane" | "window";
     targetId: string;
 }
+export interface WorkerModelBinding {
+    /** Configured alias when explicit; omitted for a resolved native/default choice. */
+    alias?: string;
+    provider: string;
+    /** Full provider-local model ID. Later slashes are part of this ID. */
+    model: string;
+    thinking?: ThinkingLevel;
+}
 export interface Member {
     /** Unique identity for this one Team membership generation. */
     membershipId?: string;
@@ -15,7 +23,10 @@ export interface Member {
     agentId: string;
     name: string;
     agentType: string;
+    /** Resolved configured launch model. Runtime model selection is Session evidence. */
     model?: string;
+    /** Durable Worker assignment used for initial launch and first-binding retry. */
+    modelProfile?: WorkerModelBinding;
     joinedAt: number;
     /** Backend-qualified terminal carrier for this Membership generation. */
     terminalTarget?: TerminalTarget;
@@ -42,6 +53,8 @@ export interface LogicalWorker {
     name: string;
     /** Durable semantic area owned by this Worker, not its current Task. */
     scope: string;
+    /** Durable Worker model assignment. Omitted when Pi owns native default selection. */
+    modelProfile?: WorkerModelBinding;
 }
 /**
  * Historical TeamConfig import path. The mixed persisted record is composed in

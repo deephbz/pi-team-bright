@@ -46,7 +46,6 @@ export class DurableModelToolTaskApplication implements ModelToolTaskApplication
         title: task.title,
         goal: task.goal,
         assignee: task.assignee,
-        ...(task.model ? { modelAlias: task.model } : {}),
         ...(task.needs ? { needs: [...task.needs] } : {}),
         ...(task.onGoalFailed ? { onGoalFailed: { ...task.onGoalFailed } } : {}),
       })),

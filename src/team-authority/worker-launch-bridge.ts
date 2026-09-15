@@ -2,7 +2,7 @@ import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
-import { removeWorkerAggregate, type QualifiedAvailableModelKeys, type WorkerDefaultModelOverride } from "../utils/worker-resource-projection";
+import { removeWorkerAggregate, resolveWorkerModelProfile, type QualifiedAvailableModelKeys, type WorkerDefaultModelOverride, type WorkerModelProfiles } from "../utils/worker-resource-projection";
 import {
   normalizeWorkerCarrier,
   planWorkerEnsure,
@@ -25,6 +25,7 @@ export interface WorkerAggregate {
   path?: string;
   projectTrusted: boolean;
   defaultModel?: WorkerDefaultModelOverride;
+  modelProfiles?: WorkerModelProfiles;
 }
 
 export interface WorkerLaunchBridgeDependencies {
@@ -48,14 +49,23 @@ export class WorkerDefaultModelConfigurationError extends Error {
   }
 }
 
+export class WorkerModelConflictError extends Error {
+  constructor(readonly workerName: string, readonly currentAlias: string | undefined, readonly requestedAlias: string) {
+    super(`Worker ${workerName} already has model profile ${currentAlias ?? "<native/default>"}; refusing to reconfigure it with ${requestedAlias}.`);
+    this.name = "WorkerModelConflictError";
+  }
+}
+
 export interface WorkerLaunchRequest {
   teamName: string;
   workerName: string;
   /** Durable logical Worker scope. It becomes the launch prompt/profile only. */
   scope: string;
   cwd: string;
+  /** Explicit configured model profile alias. */
   model?: string;
   thinking?: Member["thinking"];
+  modelProfile?: Member["modelProfile"];
   /** Ephemeral qualified keys captured from this exact model-tool invocation. */
   availableModelKeys?: QualifiedAvailableModelKeys;
   signal?: AbortSignal;
@@ -143,8 +153,20 @@ export function launchObservationState(observation: WorkerStartupObservation): W
     : { carrier: observation.carrier, runtime: "not_observed" };
 }
 
+export type ResolvedWorkerModel = { model?: string; binding?: Member["modelProfile"] };
+
+function resolvedBinding(value: string, thinking: Member["thinking"]): Member["modelProfile"] {
+  const separator = value.indexOf("/");
+  if (separator <= 0 || separator === value.length - 1) throw new Error(`Worker model ${value} must be a qualified provider/model string.`);
+  return { provider: value.slice(0, separator), model: value.slice(separator + 1), ...(thinking ? { thinking } : {}) };
+}
+
 export class WorkerLaunchBridge {
   constructor(private readonly dependencies: WorkerLaunchBridgeDependencies) {}
+
+  resolveInitialWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): ResolvedWorkerModel {
+    return this.resolveNewWorkerModel(request, teamConfig, aggregate);
+  }
 
   async ensureWorker(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
     return withSemanticTrace(
@@ -165,6 +187,9 @@ export class WorkerLaunchBridge {
       member.name === workerName && member.agentType === "teammate" && member.isActive !== false);
 
     if (existingMember) {
+      if (request.model !== undefined && existingMember.modelProfile?.alias !== request.model) {
+        throw new WorkerModelConflictError(workerName, existingMember.modelProfile?.alias, request.model);
+      }
       const existingTarget = memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name);
       if (existingTarget) assertTargetSupportedByTerminal(teamTerminal, existingTarget);
       const carrierObservation = existingTarget?.kind === "window"
@@ -207,8 +232,13 @@ export class WorkerLaunchBridge {
         throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
       }
       const aggregate = this.resolveWorkerAggregate(request, existingMember.cwd);
-      const model = existingMember.model;
-      const baseArgv = this.dependencies.buildWorkerArgv(model, existingMember.thinking, aggregate.path, aggregate.projectTrusted);
+      const recovery = workerPlan.carrier;
+      const exactSessionResume = recovery.kind === "bound";
+      const model = exactSessionResume ? undefined : existingMember.model;
+      // A prepared retry has no Session to restore human overrides from. Use
+      // the pinned profile's effective thinking before the legacy member field.
+      const thinking = exactSessionResume ? undefined : existingMember.modelProfile?.thinking ?? existingMember.thinking;
+      const baseArgv = this.dependencies.buildWorkerArgv(model, thinking, aggregate.path, aggregate.projectTrusted);
       const env: Record<string, string> = {
         ...process.env,
         ...request.launchEnvironment,
@@ -217,14 +247,13 @@ export class WorkerLaunchBridge {
         ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
       };
 
-      const recovery = workerPlan.carrier;
       if (recovery.kind === "prepared") {
         env.PI_AGENT_LAUNCH_ID = recovery.pendingLaunchId;
       } else {
         delete env.PI_AGENT_LAUNCH_ID;
       }
       env.PI_TEAM_MEMBERSHIP_ID = recovery.membershipId;
-      const argv = recovery.kind === "bound"
+      const argv = exactSessionResume
         ? [...baseArgv, "--session", recovery.sessionFile]
         : baseArgv;
       let recoveryCursor: string;
@@ -306,9 +335,9 @@ export class WorkerLaunchBridge {
     if (absentPlan.action !== "create") throw new Error("Worker ensure planner returned no executable create action.");
 
     const aggregate = this.resolveWorkerAggregate(request, cwd);
-    let chosenModel: string | undefined;
+    let chosen: ResolvedWorkerModel;
     try {
-      chosenModel = this.resolveNewWorkerModel(request, teamConfig, aggregate);
+      chosen = this.resolveNewWorkerModel(request, teamConfig, aggregate);
     } catch (error) {
       removeWorkerAggregate(aggregate.path);
       throw error;
@@ -325,14 +354,17 @@ export class WorkerLaunchBridge {
       agentId: `${workerName}@${teamName}`,
       name: workerName,
       agentType: "teammate",
-      model: chosenModel,
+      model: chosen.model,
+      modelProfile: chosen.binding,
       joinedAt: Date.now(),
       cwd,
       subscriptions: [],
       isActive: true,
       prompt: scope,
       color: "blue",
-      thinking: request.thinking,
+      // Persist the effective profile thinking so a prepared Membership retry
+      // reconstructs the same initial launch settings before Session binding.
+      thinking: chosen.binding?.thinking ?? request.thinking,
     };
 
     let preparedEvent: { cursor: string };
@@ -349,7 +381,7 @@ export class WorkerLaunchBridge {
       throw error;
     }
 
-    const piCmd = this.dependencies.buildWorkerArgv(chosenModel, request.thinking, aggregate.path, aggregate.projectTrusted);
+    const piCmd = this.dependencies.buildWorkerArgv(chosen.model, chosen.binding?.thinking ?? request.thinking, aggregate.path, aggregate.projectTrusted);
     const env: Record<string, string> = {
       ...process.env,
       ...request.launchEnvironment,
@@ -397,31 +429,43 @@ export class WorkerLaunchBridge {
     return request.workerAggregate?.(cwd) ?? this.dependencies.workerAggregate(cwd);
   }
 
-  private resolveNewWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): string | undefined {
-    let model = request.model || teamConfig.defaultModel;
-    if (model) {
-      if (!model.includes("/")) {
-        const resolved = this.dependencies.resolveModel(model);
-        if (resolved) {
-          model = resolved;
-        } else if (teamConfig.defaultModel && teamConfig.defaultModel.includes("/")) {
-          const [provider] = teamConfig.defaultModel.split("/");
-          model = `${provider}/${model}`;
-        }
+  private resolveNewWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): ResolvedWorkerModel {
+    if (request.modelProfile) {
+      return { model: `${request.modelProfile.provider}/${request.modelProfile.model}`, binding: request.modelProfile };
+    }
+    if (request.model !== undefined) {
+      // Direct launch callers may still supply a resolved model for low-level
+      // carrier tests and template launches; public ensure_worker supplies a
+      // settings alias through a populated profile projection.
+      if (aggregate.modelProfiles === undefined) {
+        const model = this.dependencies.resolveModel(request.model) ?? request.model;
+        return { model, binding: resolvedBinding(model, request.thinking) };
       }
-      return model;
+      const binding = resolveWorkerModelProfile(request.model, aggregate.modelProfiles, request.availableModelKeys);
+      const qualified = `${binding.provider}/${binding.model}`;
+      if (request.availableModelKeys === undefined && !this.dependencies.resolveSettingsModel(qualified)) {
+        throw new Error(`Worker model profile '${request.model}' resolves to unavailable model ${qualified}. Valid aliases: ${Object.keys(aggregate.modelProfiles).sort().join(", ") || "<none>"}. Edit pi_team_bright.model_profiles, then retry before creating a Worker carrier.`);
+      }
+      return { model: qualified, binding };
+    }
+    if (teamConfig.defaultModel) {
+      const model = teamConfig.defaultModel.includes("/")
+        ? teamConfig.defaultModel
+        : this.dependencies.resolveModel(teamConfig.defaultModel) ?? teamConfig.defaultModel;
+      return { model, binding: resolvedBinding(model, request.thinking) };
     }
 
     const configured = aggregate.defaultModel;
-    if (!configured) return undefined;
+    if (!configured) return {};
     if (configured.error) throw new WorkerDefaultModelConfigurationError(configured.scope, configured.error);
-    const separator = configured.value?.indexOf("/") ?? -1;
-    if (separator <= 0 || separator === configured.value!.length - 1 || /\s/.test(configured.value!)) {
+    const value = configured.value!;
+    const separator = value.indexOf("/");
+    if (separator <= 0 || separator === value.length - 1 || /\s/.test(value)) {
       throw new WorkerDefaultModelConfigurationError(configured.scope, "must be a qualified provider/model string");
     }
-    const resolved = this.dependencies.resolveSettingsModel(configured.value!, request.availableModelKeys);
-    if (!resolved) throw new WorkerDefaultModelConfigurationError(configured.scope, `'${configured.value}' is unavailable from Pi`);
-    return resolved;
+    const resolved = this.dependencies.resolveSettingsModel(value, request.availableModelKeys);
+    if (!resolved) throw new WorkerDefaultModelConfigurationError(configured.scope, `'${value}' is unavailable from Pi`);
+    return { model: resolved, binding: resolvedBinding(resolved, request.thinking) };
   }
 
   async launchPreparedMembership(

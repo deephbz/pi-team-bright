@@ -6,7 +6,6 @@ const TaskKey = Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const OperationId = Type.String({ minLength: 1, maxLength: 128 });
 export const GraphVersionRefSchema = Type.String({ pattern: "^g_[0-9a-f]{16}$", minLength: 18, maxLength: 18 });
-export const GraphControlModelAliasSchema = Type.Enum(["default", "capable"]);
 export const GraphTaskTransitionSchema = Type.Enum(["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel"]);
 
 export const GraphFailureEdgeSchema = Type.Object({
@@ -57,7 +56,6 @@ export const GraphTaskStateSchema = Type.Union([
 export const GraphAttemptSummarySchema = Type.Object({
   id: Type.String({ minLength: 1 }),
   ordinal: Type.Integer({ minimum: 1 }),
-  resolved_model: Type.String({ minLength: 1 }),
   input_attempt_ids: Type.Record(TaskId, Type.String({ minLength: 1 })),
 }, { additionalProperties: false });
 
@@ -67,7 +65,6 @@ export const GraphTaskCardSchema = Type.Object({
   title: Type.String({ minLength: 1, maxLength: 80 }),
   goal: Type.String({ minLength: 1, maxLength: 1_000 }),
   assignee: WorkerName,
-  model: GraphControlModelAliasSchema,
   needs: Type.Array(TaskId),
   on_goal_failed: Type.Optional(GraphFailureEdgeSchema),
   status: Type.Enum(["dependency_waiting", "ready", "in_progress", "blocked", "goal_failed", "goal_achieved", "cancelled"]),
@@ -102,7 +99,6 @@ const GraphTaskItemSchema = Type.Object({
   title: Type.String({ minLength: 1, maxLength: 80 }),
   goal: Type.String({ minLength: 1, maxLength: 1_000, description: "Desired outcome and external success signal." }),
   assignee: WorkerName,
-  model: Type.Optional(GraphControlModelAliasSchema),
   needs: Type.Optional(Type.Array(TaskKey, { uniqueItems: true })),
   on_goal_failed: Type.Optional(GraphFailureEdgeSchema),
 }, { additionalProperties: false });

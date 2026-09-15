@@ -8,6 +8,16 @@ import type { TaskVersionRef } from "../task-authority/task-version-ref";
 const session = exactLeaderSessionId("019fc274-f97e-7910-b6b6-579a20b3b1d0");
 
 describe("isolated in-memory authority fakes", () => {
+  it("refuses model profile selection instead of creating an unassigned fake Worker", async () => {
+    const { ports } = createInMemoryModelToolJourney();
+    await ports.team.createTeam(session, { name: "profile-team", purpose: "purpose" });
+    await expect(ports.team.ensureWorker(session, { name: "worker", scope: "scope", model: "fast" })).resolves.toEqual({
+      kind: "invalid_model_profile",
+      message: expect.stringContaining("cannot resolve model profile"),
+      validModelProfiles: [],
+    });
+    expect((await ports.team.ensureWorker(session, { name: "worker", scope: "scope" })).kind).toBe("created");
+  });
   it("commits a Task before injected publication failure and does not advance observation", async () => {
     const { ports } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });

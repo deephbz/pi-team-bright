@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GraphTaskUpdateParametersSchema = exports.TaskGraphApplyParametersSchema = exports.GraphTaskCardSchema = exports.GraphAttemptSummarySchema = exports.GraphTaskStateSchema = exports.GraphFailureEdgeSchema = exports.GraphTaskTransitionSchema = exports.GraphControlModelAliasSchema = exports.GraphVersionRefSchema = void 0;
+exports.GraphTaskUpdateParametersSchema = exports.TaskGraphApplyParametersSchema = exports.GraphTaskCardSchema = exports.GraphAttemptSummarySchema = exports.GraphTaskStateSchema = exports.GraphFailureEdgeSchema = exports.GraphTaskTransitionSchema = exports.GraphVersionRefSchema = void 0;
 const typebox_1 = require("typebox");
 const task_version_ref_1 = require("./task-version-ref");
 const TaskId = typebox_1.Type.String({ minLength: 1, maxLength: 128 });
@@ -8,7 +8,6 @@ const TaskKey = typebox_1.Type.String({ minLength: 1, maxLength: 64, pattern: "^
 const WorkerName = typebox_1.Type.String({ minLength: 1, maxLength: 64 });
 const OperationId = typebox_1.Type.String({ minLength: 1, maxLength: 128 });
 exports.GraphVersionRefSchema = typebox_1.Type.String({ pattern: "^g_[0-9a-f]{16}$", minLength: 18, maxLength: 18 });
-exports.GraphControlModelAliasSchema = typebox_1.Type.Enum(["default", "capable"]);
 exports.GraphTaskTransitionSchema = typebox_1.Type.Enum(["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel"]);
 exports.GraphFailureEdgeSchema = typebox_1.Type.Object({
     target: TaskKey,
@@ -56,7 +55,6 @@ exports.GraphTaskStateSchema = typebox_1.Type.Union([
 exports.GraphAttemptSummarySchema = typebox_1.Type.Object({
     id: typebox_1.Type.String({ minLength: 1 }),
     ordinal: typebox_1.Type.Integer({ minimum: 1 }),
-    resolved_model: typebox_1.Type.String({ minLength: 1 }),
     input_attempt_ids: typebox_1.Type.Record(TaskId, typebox_1.Type.String({ minLength: 1 })),
 }, { additionalProperties: false });
 /** Canonical graph-native Task card used by tools, delivery, and Coordination. */
@@ -65,7 +63,6 @@ exports.GraphTaskCardSchema = typebox_1.Type.Object({
     title: typebox_1.Type.String({ minLength: 1, maxLength: 80 }),
     goal: typebox_1.Type.String({ minLength: 1, maxLength: 1_000 }),
     assignee: WorkerName,
-    model: exports.GraphControlModelAliasSchema,
     needs: typebox_1.Type.Array(TaskId),
     on_goal_failed: typebox_1.Type.Optional(exports.GraphFailureEdgeSchema),
     status: typebox_1.Type.Enum(["dependency_waiting", "ready", "in_progress", "blocked", "goal_failed", "goal_achieved", "cancelled"]),
@@ -99,7 +96,6 @@ const GraphTaskItemSchema = typebox_1.Type.Object({
     title: typebox_1.Type.String({ minLength: 1, maxLength: 80 }),
     goal: typebox_1.Type.String({ minLength: 1, maxLength: 1_000, description: "Desired outcome and external success signal." }),
     assignee: WorkerName,
-    model: typebox_1.Type.Optional(exports.GraphControlModelAliasSchema),
     needs: typebox_1.Type.Optional(typebox_1.Type.Array(TaskKey, { uniqueItems: true })),
     on_goal_failed: typebox_1.Type.Optional(exports.GraphFailureEdgeSchema),
 }, { additionalProperties: false });

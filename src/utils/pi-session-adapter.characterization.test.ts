@@ -465,7 +465,8 @@ describe("registered Pi Session adapter characterization", () => {
 
     expect(bound).toHaveBeenCalledWith(name, "worker", sessionFile);
     expect(prompt.systemPrompt).toContain("Your standing Worker profile: Keep Task evidence exact.");
-    expect(prompt.systemPrompt).toContain("currently using model: test/model with thinking level: high");
+    expect(prompt.systemPrompt).toContain("Your configured initial model assignment: test/model");
+    expect(prompt.systemPrompt).toContain("Your current Pi model selection is test/test");
   });
 
   it("keeps nudge actuation suppressed when the current Team policy disables it", async () => {

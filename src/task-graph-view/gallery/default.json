@@ -25,15 +25,12 @@
         "activity_cursor": "120",
         "first_activity_at": "2026-08-14T08:00:00.000Z",
         "last_activity_at": "2026-08-14T09:00:00.000Z",
-        "model_alias": "capable",
         "attempts_started": 1,
         "display_attempt": {
           "id": "dag1-task1@1",
           "ordinal": 1,
           "state": "completed",
           "current": false,
-          "model_alias": "capable",
-          "resolved_model": "model1-capable",
           "outcome": "goal_achieved"
         }
       },
@@ -48,15 +45,12 @@
         "activity_cursor": "119",
         "first_activity_at": "2026-08-14T09:05:00.000Z",
         "last_activity_at": "2026-08-14T11:50:00.000Z",
-        "model_alias": "default",
         "attempts_started": 1,
         "display_attempt": {
           "id": "dag1-task2@1",
           "ordinal": 1,
           "state": "in_progress",
-          "current": true,
-          "model_alias": "default",
-          "resolved_model": "model2-default"
+          "current": true
         }
       },
       {
@@ -70,7 +64,6 @@
         "activity_cursor": "118",
         "first_activity_at": "2026-08-14T09:05:00.000Z",
         "last_activity_at": "2026-08-14T09:05:00.000Z",
-        "model_alias": "default",
         "attempts_started": 0
       },
       {
@@ -84,7 +77,6 @@
         "activity_cursor": "117",
         "first_activity_at": "2026-08-14T09:05:00.000Z",
         "last_activity_at": "2026-08-14T09:05:00.000Z",
-        "model_alias": "capable",
         "attempts_started": 0
       },
       {
@@ -98,15 +90,12 @@
         "activity_cursor": "116",
         "first_activity_at": "2026-08-14T08:30:00.000Z",
         "last_activity_at": "2026-08-14T11:40:00.000Z",
-        "model_alias": "default",
         "attempts_started": 1,
         "display_attempt": {
           "id": "dag2-task1@1",
           "ordinal": 1,
           "state": "blocked",
-          "current": true,
-          "model_alias": "default",
-          "resolved_model": "model5-default"
+          "current": true
         }
       },
       {
@@ -120,15 +109,12 @@
         "activity_cursor": "115",
         "first_activity_at": "2026-08-14T07:00:00.000Z",
         "last_activity_at": "2026-08-14T10:30:00.000Z",
-        "model_alias": "capable",
         "attempts_started": 1,
         "display_attempt": {
           "id": "dag2-task2@1",
           "ordinal": 1,
           "state": "completed",
           "current": false,
-          "model_alias": "capable",
-          "resolved_model": "model6-capable",
           "outcome": "goal_failed"
         },
         "failure_reason": "criterion_failed"
@@ -144,15 +130,12 @@
         "activity_cursor": "114",
         "first_activity_at": "2026-08-14T06:00:00.000Z",
         "last_activity_at": "2026-08-14T08:00:00.000Z",
-        "model_alias": "default",
         "attempts_started": 1,
         "display_attempt": {
           "id": "dag3-task1@1",
           "ordinal": 1,
           "state": "cancelled",
-          "current": false,
-          "model_alias": "default",
-          "resolved_model": "model7-default"
+          "current": false
         }
       }
     ],

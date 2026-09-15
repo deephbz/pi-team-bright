@@ -10,7 +10,6 @@ import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
  */
 
 export const GRAPH_CONTROL_MAX_FAILURE_TRAVERSALS = 8;
-export const GRAPH_CONTROL_MODEL_ALIASES = ["default", "capable"] as const;
 export const GRAPH_CONTROL_TASK_STATES = [
   "dependency_waiting",
   "ready",
@@ -21,7 +20,6 @@ export const GRAPH_CONTROL_TASK_STATES = [
   "cancelled",
 ] as const;
 
-export type GraphControlModelAlias = typeof GRAPH_CONTROL_MODEL_ALIASES[number];
 export type GraphVersionRef = `g_${string}`;
 export type GraphTaskOutcome = "goal_achieved" | "goal_failed";
 export type GraphTaskTransition =
@@ -31,11 +29,6 @@ export type GraphTaskTransition =
   | "goal_achieved"
   | "goal_failed"
   | "cancel";
-
-export interface GraphControlModelAliases {
-  default: string;
-  capable: string;
-}
 
 export interface GraphFailureEdge {
   target: string;
@@ -47,7 +40,6 @@ export interface GraphTaskDefinitionInput {
   title: string;
   goal: string;
   assignee: string;
-  modelAlias?: GraphControlModelAlias;
   needs?: string[];
   onGoalFailed?: GraphFailureEdge;
 }
@@ -88,7 +80,6 @@ export interface GraphTaskView {
   title: string;
   goal: string;
   assignee: string;
-  modelAlias: GraphControlModelAlias;
   needs: string[];
   onGoalFailed?: GraphFailureEdge;
   state: GraphTaskState;
@@ -108,16 +99,13 @@ export interface GraphAttemptView {
   activationKey: string;
   inputAttemptIds: Record<string, string>;
   assignee: string;
-  modelAlias: GraphControlModelAlias;
-  resolvedModel: string;
   state: "in_progress" | "blocked" | "completed" | "superseded" | "cancelled";
   current: boolean;
   outcome?: GraphTaskOutcome;
   evidence?: string;
 }
 
-interface StoredTaskDefinition extends Omit<GraphTaskDefinitionInput, "modelAlias" | "needs" | "onGoalFailed"> {
-  modelAlias: GraphControlModelAlias;
+interface StoredTaskDefinition extends Omit<GraphTaskDefinitionInput, "needs" | "onGoalFailed"> {
   needs: string[];
   onGoalFailed?: GraphFailureEdge;
   lineage: string;
@@ -141,8 +129,6 @@ interface AttemptStartedEvent {
   activationKey: string;
   inputAttemptIds: Record<string, string>;
   assignee: string;
-  modelAlias: GraphControlModelAlias;
-  resolvedModel: string;
 }
 
 interface AttemptBlockedEvent {
@@ -270,10 +256,6 @@ export interface GraphControlSnapshot {
   receipts: StoredReceipt[];
 }
 
-export interface GraphControlDurableSnapshot extends GraphControlSnapshot {
-  modelAliases: GraphControlModelAliases;
-}
-
 export class GraphControlRefusal extends Error {
   constructor(
     readonly code:
@@ -285,8 +267,7 @@ export class GraphControlRefusal extends Error {
       | "invalid_transition"
       | "worker_mismatch"
       | "worker_occupied"
-      | "evidence_required"
-      | "model_alias_unresolved",
+      | "evidence_required",
     message: string,
   ) {
     super(message);
@@ -343,7 +324,6 @@ function semanticDefinition(definition: Omit<StoredTaskDefinition, "lineage">): 
     title: definition.title,
     goal: definition.goal,
     assignee: definition.assignee,
-    modelAlias: definition.modelAlias,
     needs: definition.needs,
     onGoalFailed: definition.onGoalFailed ?? null,
   };
@@ -359,15 +339,7 @@ export class GraphTaskController {
   private readonly events: GraphControlEvent[];
   private readonly receipts: Map<string, StoredReceipt>;
 
-  constructor(
-    private readonly modelAliases: GraphControlModelAliases,
-    snapshot?: GraphControlSnapshot,
-  ) {
-    for (const alias of GRAPH_CONTROL_MODEL_ALIASES) {
-      if (!modelAliases[alias]?.trim()) {
-        throw new GraphControlRefusal("model_alias_unresolved", `Model alias ${alias} has no configured model.`);
-      }
-    }
+  constructor(snapshot?: GraphControlSnapshot) {
     if (snapshot && snapshot.schema !== "pi-team-bright-graph-control/1") {
       throw new GraphControlRefusal("invalid_graph", `Unsupported snapshot schema ${String(snapshot.schema)}.`);
     }
@@ -376,9 +348,9 @@ export class GraphTaskController {
     this.receipts = new Map((snapshot?.receipts ?? []).map(receipt => [receipt.operationId, clone(receipt)]));
   }
 
-  static recover(snapshot: GraphControlSnapshot, modelAliases: GraphControlModelAliases): GraphTaskController {
+  static recover(snapshot: GraphControlSnapshot): GraphTaskController {
     validateSnapshot(snapshot);
-    return new GraphTaskController(modelAliases, snapshot);
+    return new GraphTaskController(snapshot);
   }
 
   snapshot(): GraphControlSnapshot {
@@ -390,9 +362,6 @@ export class GraphTaskController {
     };
   }
 
-  durableSnapshot(): GraphControlDurableSnapshot {
-    return { ...this.snapshot(), modelAliases: clone(this.modelAliases) };
-  }
 
   currentGraphVersion(): GraphVersionRef | undefined {
     return this.currentRevision()?.version;
@@ -564,8 +533,6 @@ export class GraphTaskController {
           activationKey: attempt.started.activationKey,
           inputAttemptIds: clone(attempt.started.inputAttemptIds),
           assignee: attempt.started.assignee,
-          modelAlias: attempt.started.modelAlias,
-          resolvedModel: attempt.started.resolvedModel,
           state,
           current: currentAttemptIds.has(attempt.started.attemptId),
           ...(attempt.completed ? { outcome: attempt.completed.outcome, evidence: attempt.completed.evidence } : {}),
@@ -615,8 +582,6 @@ export class GraphTaskController {
       activationKey: derived.activationKey!,
       inputAttemptIds: clone(derived.inputAttemptIds),
       assignee: task.assignee,
-      modelAlias: task.modelAlias,
-      resolvedModel: this.modelAliases[task.modelAlias],
     });
   }
 
@@ -930,7 +895,6 @@ export class GraphTaskController {
       title: task.definition.title,
       goal: task.definition.goal,
       assignee: task.definition.assignee,
-      modelAlias: task.definition.modelAlias,
       needs: clone(task.definition.needs),
       ...(task.definition.onGoalFailed ? { onGoalFailed: clone(task.definition.onGoalFailed) } : {}),
       state: clone(task.state),
@@ -970,7 +934,6 @@ function validateSnapshot(snapshot: GraphControlSnapshot): void {
       title: task.title,
       goal: task.goal,
       assignee: task.assignee,
-      modelAlias: task.modelAlias,
       needs: task.needs,
       ...(task.onGoalFailed ? { onGoalFailed: task.onGoalFailed } : {}),
     })));
@@ -1002,7 +965,6 @@ function normalizeAndValidate(input: GraphTaskDefinitionInput[]): Array<Omit<Sto
     title: task.title,
     goal: task.goal,
     assignee: task.assignee,
-    modelAlias: task.modelAlias ?? "default" as const,
     needs: [...(task.needs ?? [])].sort(),
     ...(task.onGoalFailed ? { onGoalFailed: { ...task.onGoalFailed } } : {}),
   }));
@@ -1012,9 +974,6 @@ function normalizeAndValidate(input: GraphTaskDefinitionInput[]): Array<Omit<Sto
       throw new GraphControlRefusal("invalid_graph", "Every Task requires nonempty key, title, goal, and assignee values.");
     }
     if (byId.has(task.key)) throw new GraphControlRefusal("invalid_graph", `Task key ${task.key} occurs more than once.`);
-    if (!GRAPH_CONTROL_MODEL_ALIASES.includes(task.modelAlias)) {
-      throw new GraphControlRefusal("invalid_graph", `Task ${task.key} has unsupported model alias ${String(task.modelAlias)}.`);
-    }
     if (new Set(task.needs).size !== task.needs.length) {
       throw new GraphControlRefusal("invalid_graph", `Task ${task.key} repeats a prerequisite.`);
     }

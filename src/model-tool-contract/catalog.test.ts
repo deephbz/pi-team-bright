@@ -224,6 +224,7 @@ describe("candidate model-tool catalog", () => {
       { scope: "Own independent release verification." },
       { ...valid, team_name: "release-team" },
       { ...valid, task_id: "task-1" },
+      { ...valid, model: "x".repeat(65) },
     ]) {
       expect(Check(EnsureWorkerParametersSchema, invalid), JSON.stringify(invalid)).toBe(false);
     }
@@ -233,7 +234,7 @@ describe("candidate model-tool catalog", () => {
       additionalProperties: false,
       required: ["name", "scope"],
     });
-    expect(Object.keys(EnsureWorkerParametersSchema.properties)).toEqual(["name", "scope"]);
+    expect(Object.keys(EnsureWorkerParametersSchema.properties)).toEqual(["name", "scope", "model"]);
   });
 
   it("keeps all calls and raw results executable against the matching schema", () => {

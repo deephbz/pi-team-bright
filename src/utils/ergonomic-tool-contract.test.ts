@@ -486,7 +486,10 @@ describe("ergonomic agent-facing Team contracts", () => {
       name: "worker",
       agentType: "teammate",
       model: "openai-codex/example-model",
-      thinking: "medium",
+      // The configured profile is the source of truth for a retry before
+      // Session binding. The old bug persisted request.thinking instead.
+      modelProfile: { alias: "deep", provider: "openai-codex", model: "example-model", thinking: "high" },
+      thinking: undefined,
       joinedAt: Date.now(),
       cwd: process.cwd(),
       subscriptions: [],
@@ -520,6 +523,8 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(spawnOptions.argv).toEqual(expect.arrayContaining([
       "-e",
       "/private/exact-team-extension.ts",
+      "--model",
+      "openai-codex/example-model:high",
     ]));
     expect(spawnOptions.argv).not.toContain("-ns");
     expect(spawnOptions.argv).not.toContain("-ne");
@@ -687,8 +692,10 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
     const spawnOptions = spawn.mock.calls[0][0];
     expect(spawnOptions.argv).toEqual(expect.arrayContaining([
-      "--model", "openai-codex/example-model:medium", "--session", workerSession,
+      "--session", workerSession,
     ]));
+    expect(spawnOptions.argv).not.toContain("--model");
+    expect(spawnOptions.argv).not.toContain("--thinking");
     expect(spawnOptions.env).toMatchObject({ PI_TEAM_NAME: team, PI_AGENT_NAME: "worker", PI_TEAM_MEMBERSHIP_ID: worker.membershipId });
     expect(spawnOptions.env).not.toHaveProperty("PI_AGENT_LAUNCH_ID");
     expect(leaderAdmission).not.toHaveBeenCalled();

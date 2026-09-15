@@ -1,0 +1,27 @@
+{
+  "pi_team_bright": {
+    "worker": {
+      "default_model": "openai-codex/gpt-5.6-luna"
+    },
+    "model_profiles": {
+      "frontier-reviewer-claude": {
+        "provider": "anthropic",
+        "model": "claude-opus-4-6",
+        "thinking": "high",
+        "use": "Independent UI/UX, data pipeline, and research methodology review."
+      },
+      "fast-scouter": {
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna",
+        "thinking": "low",
+        "use": "Source discovery and evidence gathering."
+      },
+      "fast-tester": {
+        "provider": "openai-codex",
+        "model": "gpt-5.6-luna",
+        "thinking": "medium",
+        "use": "Write and run focused tests; report reproducible failures."
+      }
+    }
+  }
+}

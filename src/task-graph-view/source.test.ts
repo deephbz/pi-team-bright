@@ -13,8 +13,6 @@ import {
   TASK_GRAPH_VIEW_SCHEMA,
 } from "./source";
 
-const aliases = { default: "openai/default:medium", capable: "openai/capable:max" };
-
 function transition(
   controller: GraphTaskController,
   taskId: string,
@@ -39,11 +37,11 @@ function achieve(controller: GraphTaskController, taskId: string): void {
 }
 
 function graphControlSource() {
-  const controller = new GraphTaskController(aliases);
+  const controller = new GraphTaskController();
   controller.applyGraph({
     operationId: "graph",
     tasks: [
-      { key: "implement", title: "Implement", goal: "Implement.", assignee: "builder", modelAlias: "capable" },
+      { key: "implement", title: "Implement", goal: "Implement.", assignee: "builder" },
       {
         key: "review",
         title: "Review",
@@ -100,7 +98,7 @@ function legacyTask(input: {
 }
 
 describe("Task graph view source", () => {
-  it("projects graph-control states, typed edges, loop traversal, joins, Attempts, and model aliases", () => {
+  it("projects graph-control states, typed edges, loop traversal, joins, and Attempts", () => {
     const source = graphControlSource();
     const state = Object.fromEntries(source.nodes.map((node) => [node.id, node.state]));
     expect(source).toMatchObject({ schema: TASK_GRAPH_VIEW_SCHEMA, authority: "graph_control" });
@@ -120,15 +118,12 @@ describe("Task graph view source", () => {
     expect(source.nodes.find((node) => node.id === "implement")).toMatchObject({
       goal: "Implement.",
       current_context: "Work has not started.",
-      model_alias: "capable",
       attempts_started: 1,
       display_attempt: {
         ordinal: 1,
         state: "completed",
         current: false,
         outcome: "goal_achieved",
-        model_alias: "capable",
-        resolved_model: aliases.capable,
       },
     });
     expect(source.nodes.find((node) => node.id === "review")?.display_attempt).toMatchObject({
@@ -151,7 +146,7 @@ describe("Task graph view source", () => {
   });
 
   it("includes graph authority sequence in freshness even when activity does not change", () => {
-    const controller = new GraphTaskController(aliases);
+    const controller = new GraphTaskController();
     controller.applyGraph({ operationId: "graph", tasks: [
       { key: "task", title: "Task", goal: "Pass.", assignee: "worker" },
     ] });
@@ -181,7 +176,7 @@ describe("Task graph view source", () => {
     const projected = projectGraphControlTaskGraphViewSource({
       teamName: source.team_name,
       trace: (() => {
-        const controller = new GraphTaskController(aliases);
+        const controller = new GraphTaskController();
         controller.applyGraph({ operationId: "small-graph", tasks: [
           { key: "current", title: "Current", goal: "Stay current.", assignee: "worker" },
         ] });

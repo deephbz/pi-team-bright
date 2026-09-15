@@ -257,6 +257,70 @@ enabled with a `1200` second delay. Malformed nudge values use these defaults an
 emit diagnostics; set `nudge_enabled` to `false` to disable nudges.
 Stop and recreate the Team to apply a new policy.
 
+## Worker model profiles
+
+This section describes the unreleased source contract. npm `0.17.5` does
+not include model-profile selection.
+
+Start with the [copyable settings example](docs/examples/worker-model-profiles.settings.json).
+It defines `frontier-reviewer-claude`, `fast-scouter`, and `fast-tester`, plus an
+optional Worker default for selections that omit an alias.
+
+1. Merge its `pi_team_bright` entries into Pi's global `settings.json`
+   (normally `~/.pi/agent/settings.json`) or a trusted project's `.pi/settings.json`.
+   Preserve your other settings.
+2. Run `pi --list-models` and replace the example's provider/model pairs with
+   exact available models. Choose thinking levels those models support.
+3. Create a new Team with the unreleased source, then select aliases at Worker
+   creation. Do not upgrade an existing live Team in place.
+
+The scout and tester examples use the same model with different thinking levels.
+You can assign different models to them. Profiles do not change the leader's
+model. A profile owns model selection only; scope and Task goals still define
+the work. Provider keys cannot contain `/`. Model IDs may contain additional
+slashes.
+
+```js
+ensure_worker({
+  name: "reviewer",
+  scope: "Independent design and methodology review.",
+  model: "frontier-reviewer-claude"
+})
+
+ensure_worker({
+  name: "scout",
+  scope: "Source discovery and evidence gathering.",
+  model: "fast-scouter"
+})
+
+ensure_worker({
+  name: "tester",
+  scope: "Independent test design and execution.",
+  model: "fast-tester"
+})
+```
+
+Team creation and snapshots show aliases and short usage descriptions. Routine
+updates do not repeat the catalog. An invalid alias returns valid choices and
+creates no Worker. Both successful and failed `ensure_worker` TUI results point
+to settings; Ctrl+O shows a configuration example.
+
+The Worker retains its initial assignment across Tasks. Reuse does not change
+it, and a conflicting explicit selection refuses. Settings edits can supply
+new aliases for future selections without changing an existing Worker. Omission
+for a new Worker keeps the default-model behavior described below.
+
+A human can change the model or thinking level in the Pi pane. Same-Session
+recovery preserves Pi's recorded selection, including that override. The initial
+profile remains configuration evidence; it is not a claim about the current
+runtime model. Tasks contain no model selector, and Pi Team Bright does not
+switch models between Tasks.
+
+This contract replaces the old per-Task `default`/`capable` mechanism without a
+compatibility or migration path. Keep existing Team stores and Session logs;
+do not upgrade a live Team in place. See [decision 0014](docs/decisions/0014-worker-model-profiles.md)
+for the accepted boundary.
+
 ## Worker resource settings
 
 Worker-only prompt, tool, and default-model projection uses Pi settings. Put it under
@@ -273,7 +337,9 @@ slashes, for example `openrouter/openai/gpt-5.1`. Pi Team Bright requires the
 exact available identifier and never selects a provider for this setting. Explicit Worker or template models and the durable Team `default_model`
 take precedence. Then trusted-project and global Worker settings apply. If none
 apply, Pi receives no `--model` and uses its native default. Pi Team Bright stores
-the selected exact model on Membership before launch, so recovery cannot drift.
+the selected exact model before initial launch. Same-Session recovery preserves
+Pi's recorded model and thinking selection instead of overriding it with the
+initial launch configuration.
 A malformed, bare, or unavailable setting refuses the launch before carrier
 creation. The refusal identifies the global or trusted-project scope; edit it and
 retry. An untrusted or unknown Worker ignores project settings and can use only

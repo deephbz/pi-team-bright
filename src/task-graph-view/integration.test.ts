@@ -31,7 +31,7 @@ class Host implements TaskGraphPaneHost {
 }
 
 function graphTrace() {
-  const controller = new GraphTaskController({ default: "provider/default", capable: "provider/capable" });
+  const controller = new GraphTaskController();
   controller.applyGraph({ operationId: "graph", tasks: [
     { key: "graph-task", title: "Graph Task", goal: "Pass.", assignee: "worker" },
   ] });

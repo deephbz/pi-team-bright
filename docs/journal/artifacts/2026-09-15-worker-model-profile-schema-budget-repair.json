@@ -1,0 +1,15 @@
+{
+  "artifact": "worker-model-profile-schema-budget-repair",
+  "date": "2026-09-15",
+  "tool": "ensure_worker",
+  "measurement": {
+    "before_optional_model_alias_chars": 411,
+    "after_optional_model_alias_chars": 522,
+    "approved_field_delta_chars": 111,
+    "guard_chars": 18,
+    "recalibrated_limit_chars": 540
+  },
+  "method": "Compact JSON length of the registered ensure_worker parameter schema. The before value removes only the approved optional model property from the current schema. The after value includes that property.",
+  "scope": "Only the ensure_worker budget changed. No blanket model-tool budget change was made.",
+  "anchor": "scripts/model-tool-context-budget.test.ts"
+}

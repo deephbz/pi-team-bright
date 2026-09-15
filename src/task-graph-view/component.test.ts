@@ -19,7 +19,7 @@ function source(count = 20, islandSize = 5) {
       } : {}),
     };
   });
-  const controller = new GraphTaskController({ default: "provider/default", capable: "provider/capable" });
+  const controller = new GraphTaskController();
   controller.applyGraph({ operationId: `component-${count}`, tasks });
   return projectGraphControlTaskGraphViewSource({
     teamName: "component-team",

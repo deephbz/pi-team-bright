@@ -13,7 +13,6 @@ function task(id: string, versionSeed = id): CanonicalTaskCard {
     current_context: "Ready.",
     status: "ready",
     assignee: "worker",
-    model: "default",
     needs: [],
     state: { kind: "ready" },
     attempts_started: 0,

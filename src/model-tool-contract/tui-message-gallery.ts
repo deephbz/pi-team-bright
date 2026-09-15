@@ -91,6 +91,42 @@ function toolScenarios(): TuiMessageGalleryScenario[] {
     }
   }
 
+  scenarios.push({
+    id: "ensure_worker.invalid-model-profile",
+    title: "ensure_worker: invalid profile with valid aliases",
+    source: "tool",
+    resultKind: "refused",
+    message: projectModelToolTuiMessage("ensure_worker", {
+      kind: "refused",
+      reason: "invalid_model_profile",
+      valid_model_profiles: [{ alias: "fast-reviewer", use: "Fast focused review" }],
+      message: "Unknown model profile.",
+    }),
+  });
+
+  scenarios.push({
+    id: "ensure_worker.selected-profile",
+    title: "ensure_worker: successful explicit profile selection",
+    source: "tool",
+    resultKind: "worker_ensured",
+    message: projectModelToolTuiMessage("ensure_worker", {
+      kind: "worker_ensured",
+      effect: "created",
+      worker: { name: "profile-worker", carrier: "connected", model: "fast-reviewer" },
+    }),
+  });
+  scenarios.push({
+    id: "ensure_worker.model-conflict",
+    title: "ensure_worker: refuse a conflicting profile",
+    source: "tool",
+    resultKind: "refused",
+    message: projectModelToolTuiMessage("ensure_worker", {
+      kind: "refused",
+      reason: "model_conflict",
+      existing_worker: { name: "profile-worker", scope: "Review.", carrier: "connected", model: "fast-reviewer" },
+      message: "Worker already has a different model profile.",
+    }),
+  });
   const graphApplied = scenarios.find((item) => item.id === "task_graph_apply.task_graph_applied")!;
   scenarios.push({
     id: "task_graph_apply.replayed",

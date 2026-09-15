@@ -10,6 +10,8 @@ export interface PiTeamBrightTuiMessage {
   tone: TuiMessageTone;
   lines: string[];
   detail: unknown;
+  /** Human-only content shown after raw detail when the operator expands a message. */
+  expandedLines?: string[];
   provenance: TuiMessageProvenance;
 }
 
@@ -42,7 +44,7 @@ export function projectionLines(
   const lines = [
     ...(options.includeHeader === false ? [] : [messageHeader(message.type)]),
     ...message.lines,
-    ...(options.expanded ? ["details:", ...prettyDetail(message.detail).split("\n")] : []),
+    ...(options.expanded ? ["details:", ...prettyDetail(message.detail).split("\n"), ...(message.expandedLines ?? [])] : []),
   ];
   if (!options.width) return lines;
   return lines.flatMap((line) => wrapTextWithAnsi(line, options.width!));

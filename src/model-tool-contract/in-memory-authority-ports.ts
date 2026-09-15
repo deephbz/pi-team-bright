@@ -7,7 +7,7 @@ import type { AlertTarget, AlertSendPortResult, CreateTaskGraphPortResult, Creat
 import { TaskGraphValidationError, validateTaskGraph } from "../task-authority/dag";
 import type { InMemoryAlertState, InMemoryCoordinationState, InMemoryEvent, InMemorySupportRevisionClock, InMemoryTaskRecord, InMemoryTaskState, InMemoryTeamRecord, InMemoryTeamState } from "./in-memory-state";
 
-export interface InMemoryTeamQuery { active(session: ExactLeaderSessionId): InMemoryTeamRecord | undefined; worker(teamId: string, name: string): ModelToolWorkerCurrent | undefined; snapshot(team: InMemoryTeamRecord): { team: ModelToolTeamCurrent; workers: ModelToolWorkerCurrent[] }; }
+export interface InMemoryTeamQuery { active(session: ExactLeaderSessionId): InMemoryTeamRecord | undefined; worker(teamId: string, name: string): ModelToolWorkerCurrent | undefined; snapshot(team: InMemoryTeamRecord): { team: ModelToolTeamCurrent; modelProfiles: Array<{ alias: string; use: string }>; workers: ModelToolWorkerCurrent[] }; }
 export interface InMemoryTaskQuery { record(teamId: string): InMemoryTaskRecord; tasks(teamId: string): TaskCard[]; nonterminalAssigned(teamId: string, worker: string): string[]; }
 export type InMemoryPublicationResult = { kind: "published" } | { kind: "failed"; message: string };
 export interface InMemoryCoordinationPublication { publish(event: InMemoryEvent, source: "task" | "alert" | "team"): InMemoryPublicationResult; }
@@ -17,14 +17,13 @@ const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const taskKey = (taskId: string, operationId: string) => `${taskId}\u0000${operationId}`;
 const legacyTransition = (status: TaskCard["status"]): "claim" | "block" | "context_updated" => status === "in_progress" ? "claim" : status === "blocked" ? "block" : "context_updated";
-const graphCard = (task: TaskCard, model: "default" | "capable" = "default"): CanonicalTaskCard => ({
+const graphCard = (task: TaskCard): CanonicalTaskCard => ({
   id: task.id,
   title: task.title,
   goal: "goal" in task ? task.goal : "Graph fixture goal is incomplete.",
   current_context: task.current_context,
   version: task.version,
   assignee: task.assignee!,
-  model,
   needs: (task.relations ?? []).filter((relation) => relation.relation === "blocked_by").map((relation) => relation.target_task_id),
   relations: [...(task.relations ?? [])],
   dependency_state: task.dependency_state,
@@ -40,17 +39,18 @@ export class InMemoryTeamApplicationPort implements ModelToolTeamApplicationPort
   constructor(private readonly state: InMemoryTeamState, private readonly tasks: InMemoryTaskQuery, private readonly publication: InMemoryCoordinationPublication, private readonly revision: InMemorySupportRevision) {}
   active(session: ExactLeaderSessionId) { const id = this.state.bindings.get(session); return id ? this.state.teams.get(id) : undefined; }
   worker(teamId: string, name: string) { return this.state.teams.get(teamId)?.workers.get(name); }
-  snapshot(team: InMemoryTeamRecord) { return { team: { name: team.name, purpose: team.purpose, lifecycle: "active" as const }, workers: [...team.workers.values()].map(worker => ({ ...worker })) }; }
+  snapshot(team: InMemoryTeamRecord) { return { team: { name: team.name, purpose: team.purpose, lifecycle: "active" as const }, modelProfiles: [] as Array<{ alias: string; use: string }>, workers: [...team.workers.values()].map(worker => ({ ...worker })) }; }
   async createTeam(session: ExactLeaderSessionId, input: { name: string; purpose: string }) : Promise<CreateTeamPortResult> {
     if (this.active(session)) return { kind: "refused", reason: "active_team_exists" };
     if (this.state.names.has(input.name)) return { kind: "refused", reason: "name_unavailable" };
     const team: InMemoryTeamRecord = { id: `in-memory-team-${this.state.next++}`, leaderSessionId: session, name: input.name, purpose: input.purpose, workers: new Map() };
     this.state.teams.set(team.id, team); this.state.names.set(team.name, team.id); this.state.bindings.set(session, team.id); this.revision.commit();
     this.publication.publish({ teamId: team.id, kind: "team_created" }, "team");
-    return { kind: "created", team: this.snapshot(team).team };
+    return { kind: "created", team: this.snapshot(team).team, modelProfiles: [] };
   }
-  async ensureWorker(session: ExactLeaderSessionId, input: { name: string; scope: string }, _execution?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult> {
+  async ensureWorker(session: ExactLeaderSessionId, input: { name: string; scope: string; model?: string }, _execution?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult> {
     const team = this.active(session); if (!team) return { kind: "no_active_team" };
+    if (input.model !== undefined) return { kind: "invalid_model_profile", message: "The in-memory Team port cannot resolve model profile aliases; use the durable Team port.", validModelProfiles: [] };
     const existing = team.workers.get(input.name); if (existing) return existing.scope === input.scope ? { kind: "reused", worker: { ...existing } } : { kind: "scope_conflict", worker: { ...existing } };
     const worker: ModelToolWorkerCurrent = { name: input.name, scope: input.scope, carrier: "absent" }; team.workers.set(worker.name, worker); this.revision.commit();
     this.publication.publish({ teamId: team.id, kind: "worker_created", workerName: worker.name }, "team"); return { kind: "created", worker: { ...worker } };
@@ -80,8 +80,7 @@ export class InMemoryTaskApplicationPort implements ModelToolTaskApplicationPort
     if (prior) {
       if (prior.fingerprint !== fingerprint) return { kind: "refused", operationId: input.operationId, reason: "operation_conflict", message: "The create operation ID was already used with different graph semantics." };
       const tasksByKey = Object.fromEntries(Object.entries(prior.taskIdsByKey).map(([key, taskId]) => {
-        const definition = input.tasks.find((task) => task.key === key);
-        return [key, graphCard(cloneTask(record.tasks.get(taskId)!), definition?.model)];
+        return [key, graphCard(cloneTask(record.tasks.get(taskId)!))];
       }));
       return { kind: "created", operationId: input.operationId, replayed: true, graphVersion: "g_0000000000000000", tasksByKey, readyTaskIds: Object.values(tasksByKey).filter(task => task.dependency_state?.kind === "ready").map(task => task.id).sort(), ...(prior.deliveryWarnings?.length ? { deliveryWarnings: [...prior.deliveryWarnings] } : {}) };
     }
@@ -127,8 +126,7 @@ export class InMemoryTaskApplicationPort implements ModelToolTaskApplicationPort
     record.creates.set(input.operationId, { fingerprint, taskIdsByKey, ...(warnings.length ? { deliveryWarnings: warnings } : {}) });
     this.revision.commit();
     const tasksByKey = Object.fromEntries(Object.entries(taskIdsByKey).map(([key, taskId]) => {
-      const definition = input.tasks.find((task) => task.key === key);
-      return [key, graphCard(cloneTask(record.tasks.get(taskId)!), definition?.model)];
+      return [key, graphCard(cloneTask(record.tasks.get(taskId)!))];
     }));
     return { kind: "created", operationId: input.operationId, replayed: false, graphVersion: "g_0000000000000000", tasksByKey, readyTaskIds: Object.values(tasksByKey).filter(task => task.dependency_state?.kind === "ready").map(task => task.id).sort(), ...(warnings.length ? { deliveryWarnings: warnings } : {}) };
   }
@@ -164,7 +162,7 @@ export class InMemoryCoordinationApplicationPort implements ModelToolCoordinatio
   constructor(private readonly state: InMemoryCoordinationState, private readonly teams: InMemoryTeamQuery, private readonly tasks: InMemoryTaskQuery, private readonly revision: InMemorySupportRevision) {}
   failNextPublication(source: "task" | "alert", count = 1) { this.state.failPublications[source] += count; }
   publish(event: InMemoryEvent, source: "task" | "alert" | "team"): InMemoryPublicationResult { if ((source === "task" || source === "alert") && this.state.failPublications[source] > 0) { this.state.failPublications[source]--; return { kind: "failed", message: `Injected ${source} publication failure.` }; } this.state.events.push(event); for (const waiter of [...this.state.waiters]) if (waiter.sessionId === this.teams.active(waiter.sessionId)?.leaderSessionId) { this.state.waiters.delete(waiter); waiter.signal.removeEventListener("abort", waiter.abort); this.readTeamSync(waiter.sessionId, "updates", waiter.signal, waiter.toolCallId).then(waiter.resolve); } return { kind: "published" }; }
-  async readSnapshot(session: ExactLeaderSessionId): Promise<TeamSnapshotPortResult> { const team = this.teams.active(session); if (!team) return { kind: "no_active_team" }; const view = this.teams.snapshot(team); return { kind: "snapshot", team: view.team, workers: view.workers.map(worker => ({ ...worker, nonterminalTaskIds: this.tasks.nonterminalAssigned(team.id, worker.name).sort() })).sort((a,b)=>a.name.localeCompare(b.name)), tasks: this.tasks.tasks(team.id) }; }
+  async readSnapshot(session: ExactLeaderSessionId): Promise<TeamSnapshotPortResult> { const team = this.teams.active(session); if (!team) return { kind: "no_active_team" }; const view = this.teams.snapshot(team); return { kind: "snapshot", team: view.team, modelProfiles: view.modelProfiles, workers: view.workers.map(worker => ({ ...worker, nonterminalTaskIds: this.tasks.nonterminalAssigned(team.id, worker.name).sort() })).sort((a,b)=>a.name.localeCompare(b.name)), tasks: this.tasks.tasks(team.id) }; }
   async readTeamSync(session: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, toolCallId: string): Promise<TeamSyncPortResult> { const team = this.teams.active(session); if (!team) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." }; const pending = this.state.pending.get(session); if (pending) return pending.result; const branches = this.state.branches.get(session) ?? []; const baseline = this.state.baselines.get(session); if (baseline && (!branches.includes(baseline.entryId) || baseline.epochId !== team.id)) this.state.baselines.delete(session); const current = this.state.baselines.get(session); if (view === "updates" && !current) return { kind: "snapshot_required", message: "Take a Team snapshot before requesting updates." }; const events = this.state.events.filter(event => event.teamId === team.id); if (view === "updates" && events.length <= (current?.head ?? 0)) return new Promise(resolve => { const abort = () => { this.state.waiters.delete(waiter); resolve({ kind: "cancelled", message: "The updates wait was cancelled before an observation was published." }); }; const waiter = { sessionId: session, resolve, signal, abort, toolCallId }; if (signal.aborted) return abort(); signal.addEventListener("abort", abort, { once: true }); this.state.waiters.add(waiter); }); const result: TeamSyncPortResult = view === "snapshot" ? { ...(await this.readSnapshot(session)), head: events.length, epochId: team.id } as Extract<TeamSyncPortResult,{kind:"snapshot"}> : this.updates(team, events.slice(current?.head ?? 0), events.length); this.state.pending.set(session, { sessionId: session, toolCallId, resultText: "", resultDigest: "", head: events.length, epochId: team.id, result }); return result; }
   private updates(team: InMemoryTeamRecord, events: InMemoryEvent[], head: number): Extract<TeamSyncPortResult,{kind:"updates"}> { const teamChanges: any[]=[]; const workerChanges: any[]=[]; const taskChanges = new Map<string, any>(); for (const event of events) { if (event.kind === "team_created") teamChanges.push({kind:"created",text:`Team ${team.name} was created.`}); if (event.kind === "worker_created" && event.workerName) { const worker=team.workers.get(event.workerName); if(worker) workerChanges.push({worker:worker.name,scope:worker.scope,kind:"created",text:`Worker ${worker.name} was created.`}); } if ((event.kind === "task_created" || event.kind === "task_updated") && event.taskId) { const current=taskChanges.get(event.taskId) ?? {changeKinds:[],journalEntries:[]}; const kind=event.kind === "task_created" ? "created" : "progress"; if(!current.changeKinds.includes(kind)) current.changeKinds.push(kind); if(event.statusChanged&&!current.changeKinds.includes("status")) current.changeKinds.push("status"); current.journalEntries.push(...(event.journalEntries??[])); taskChanges.set(event.taskId,current); } } const tasks=new Map(this.tasks.tasks(team.id).map(task=>[task.id,task])); return {kind:"updates",teamChanges,workerChanges,taskChanges:[...taskChanges].map(([taskId,change])=>({taskId,...change,current:tasks.get(taskId)!})),alerts:[],head,epochId:team.id}; }
   setPendingObservationResult(session: ExactLeaderSessionId, result: unknown) { const pending=this.state.pending.get(session); if(!pending)return; const text=JSON.stringify(result); pending.resultText=text; pending.resultDigest=digest(text); }

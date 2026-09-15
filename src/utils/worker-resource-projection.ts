@@ -4,6 +4,17 @@ import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import * as childProcess from "node:child_process";
 import { ProjectTrustStore, type ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { THINKING_LEVELS, type ThinkingLevel, type WorkerModelBinding } from "../team-authority/contracts";
+
+export interface WorkerModelProfile {
+  provider: string;
+  /** Full provider-local model ID. Later slashes are preserved. */
+  model: string;
+  thinking: ThinkingLevel;
+  use: string;
+}
+
+export type WorkerModelProfiles = Readonly<Record<string, WorkerModelProfile>>;
 
 export type WorkerDefaultModelOverride = {
   scope: "global" | "project";
@@ -15,6 +26,8 @@ export interface WorkerResourcePolicy {
   replaceGlobal?: { path: string; content: string };
   appendGlobal?: { path: string; content: string };
   defaultModel?: WorkerDefaultModelOverride;
+  /** Settings projection. Existing Worker bindings do not follow changes here. */
+  modelProfiles?: WorkerModelProfiles;
   enable: string[];
   disable: string[];
   diagnostics: string[];
@@ -50,6 +63,35 @@ function worker(root?: JsonRecord): JsonRecord | undefined {
   return isRecord(namespace) && isRecord(namespace.worker) ? namespace.worker : undefined;
 }
 
+function readModelProfiles(root: JsonRecord | undefined, policy: WorkerResourcePolicy, invalidAliases?: Set<string>): WorkerModelProfiles {
+  const namespace = root?.pi_team_bright;
+  const raw = isRecord(namespace) ? namespace.model_profiles : undefined;
+  if (raw === undefined) return {};
+  if (!isRecord(raw)) {
+    warn(policy, "pi_team_bright.model_profiles must map aliases to profiles; it was ignored.");
+    return {};
+  }
+  const result: Record<string, WorkerModelProfile> = Object.create(null) as Record<string, WorkerModelProfile>;
+  for (const [alias, value] of Object.entries(raw)) {
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(alias) || !isRecord(value)
+      || typeof value.provider !== "string" || !value.provider.trim() || value.provider.includes("/")
+      || typeof value.model !== "string" || !value.model.trim()
+      || typeof value.thinking !== "string" || !THINKING_LEVELS.includes(value.thinking as ThinkingLevel)
+      || typeof value.use !== "string" || !value.use.trim()) {
+      warn(policy, `pi_team_bright.model_profiles.${alias} is invalid and was ignored.`);
+      invalidAliases?.add(alias);
+      continue;
+    }
+    result[alias] = {
+      provider: value.provider.trim(),
+      model: value.model.trim(),
+      thinking: value.thinking as ThinkingLevel,
+      use: value.use.trim(),
+    };
+  }
+  return result;
+}
+
 function workerDefaultModel(root: JsonRecord | undefined, scope: WorkerDefaultModelOverride["scope"]): WorkerDefaultModelOverride | undefined {
   if (!root || !Object.hasOwn(root, "default_model")) return undefined;
   const value = root.default_model;
@@ -64,6 +106,39 @@ function activeAgentDir(): string {
 }
 
 export type QualifiedAvailableModelKeys = ReadonlySet<string>;
+
+export class WorkerModelProfileConfigurationError extends Error {
+  constructor(readonly alias: string, readonly choices: string[], reason: string) {
+    super(`Worker model profile '${alias}' ${reason}. Valid aliases: ${choices.length ? choices.join(", ") : "<none>"}. Edit pi_team_bright.model_profiles, then retry before creating a Worker carrier.`);
+    this.name = "WorkerModelProfileConfigurationError";
+  }
+}
+
+/** Resolve one configured profile against the invocation's available-model snapshot. */
+export function resolveWorkerModelProfile(
+  alias: string,
+  profiles: WorkerModelProfiles,
+  availableModelKeys?: QualifiedAvailableModelKeys,
+): WorkerModelBinding {
+  const choices = Object.keys(profiles).sort();
+  const profile = Object.hasOwn(profiles, alias) ? profiles[alias] : undefined;
+  if (!profile) throw new WorkerModelProfileConfigurationError(alias, choices, "is not configured");
+  if (profile.provider.includes("/")) {
+    throw new WorkerModelProfileConfigurationError(alias, choices, "has an invalid provider ID containing '/'");
+  }
+  if (availableModelKeys === undefined) {
+    throw new WorkerModelProfileConfigurationError(alias, [], "cannot verify availability because Pi's current model catalog is unavailable");
+  }
+  const qualified = `${profile.provider}/${profile.model}`;
+  if (!availableModelKeys.has(qualified)) {
+    const selectable = Object.entries(profiles)
+      .filter(([, candidate]) => availableModelKeys.has(`${candidate.provider}/${candidate.model}`))
+      .map(([candidateAlias]) => candidateAlias)
+      .sort();
+    throw new WorkerModelProfileConfigurationError(alias, selectable, `resolves to unavailable model ${qualified}`);
+  }
+  return { alias, provider: profile.provider, model: profile.model, thinking: profile.thinking };
+}
 
 /** Capture only exact qualified keys from the current tool's available-model snapshot. */
 export function captureQualifiedAvailableModelKeys(
@@ -138,10 +213,12 @@ export function savedProjectTrust(cwd: string, agentDir = activeAgentDir()): boo
 }
 
 export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: boolean; agentDir?: string }): WorkerResourcePolicy {
-  const policy: WorkerResourcePolicy = { enable: [], disable: [], diagnostics: [] };
+  const policy: WorkerResourcePolicy = { enable: [], disable: [], diagnostics: [], modelProfiles: {} };
   const agentDir = input.agentDir ?? activeAgentDir();
-  const global = worker(json(path.join(agentDir, "settings.json"), policy));
-  const project = input.projectTrusted ? worker(json(path.join(input.cwd, ".pi", "settings.json"), policy)) : undefined;
+  const globalRoot = json(path.join(agentDir, "settings.json"), policy);
+  const projectRoot = input.projectTrusted ? json(path.join(input.cwd, ".pi", "settings.json"), policy) : undefined;
+  const global = worker(globalRoot);
+  const project = worker(projectRoot);
   const globalTools = isRecord(global?.tools) ? global.tools : undefined;
   const projectTools = isRecord(project?.tools) ? project.tools : undefined;
   const globalAgents = isRecord(global?.agents) ? global.agents : undefined;
@@ -149,6 +226,12 @@ export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: b
   const agents = { ...globalAgents, ...projectAgents };
 
   policy.defaultModel = workerDefaultModel(project, "project") ?? workerDefaultModel(global, "global");
+  const invalidProjectAliases = new Set<string>();
+  const configuredProfiles = { ...readModelProfiles(globalRoot, policy) } as Record<string, WorkerModelProfile>;
+  const projectProfiles = readModelProfiles(projectRoot, policy, invalidProjectAliases);
+  for (const alias of invalidProjectAliases) delete configuredProfiles[alias];
+  Object.assign(configuredProfiles, projectProfiles);
+  policy.modelProfiles = configuredProfiles;
   policy.enable = names(projectTools?.enable ?? globalTools?.enable, policy, "worker.tools.enable");
   policy.disable = names(projectTools?.disable ?? globalTools?.disable, policy, "worker.tools.disable");
   policy.replaceGlobal = file(agents.replace_global, policy, "worker.agents.replace_global");

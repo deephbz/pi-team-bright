@@ -291,11 +291,11 @@ function failureLabel(node: TaskGraphViewNode): string {
 }
 
 export function taskGraphAttemptLabel(node: TaskGraphViewNode): string {
-  if (node.attempts_started === undefined || node.model_alias === undefined) return "legacy Task card";
+  if (node.attempts_started === undefined) return "legacy Task card";
   const attempt = node.display_attempt;
-  if (!attempt) return `tries ${node.attempts_started} · ${node.model_alias}`;
+  if (!attempt) return `tries ${node.attempts_started}`;
   const current = attempt.current ? " current" : "";
-  return `try ${attempt.ordinal}/${node.attempts_started} · ${attempt.model_alias}${current} · ${attempt.resolved_model}`;
+  return `try ${attempt.ordinal}/${node.attempts_started}${current}`;
 }
 
 export function formatTaskGraphDuration(milliseconds: number): string {
