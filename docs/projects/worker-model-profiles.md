@@ -1,11 +1,12 @@
 # Worker model profiles
 
-Status: complete and independently verified; unreleased
+Status: complete, independently verified, and published in `0.18.0`
 Stage: hardening
 Base: `9f5bffd02c2c3f92260f54b805fa225ef2cb1c0f`
-Scope: one semantic change in the Pi Team Bright child repository, prepared as
-one owner-requested commit. No release, parent gitlink update, or
-installed-settings change was performed.
+Scope: one semantic implementation commit in the Pi Team Bright child repository.
+The [v0.18.0 release receipt](../journal/2026-09-15-v0.18.0-release-receipt.md)
+records subsequent publication. No parent gitlink update or installed-settings
+change was performed.
 
 [Decision 0014](../decisions/0014-worker-model-profiles.md) owns accepted intent.
 [Independent verification](worker-model-profiles-verification.md) owns test,
@@ -60,8 +61,9 @@ TUI exports, and cleanup evidence. Disposable test panes/processes, test Teams,
 and the auth reference were cleaned. Existing coordination work was preserved.
 
 Product and systems observers reviewed the implementation and the final fixes.
-No implementation blocker remains. This evidence does not establish a published
-release, parent integration, or availability of arbitrary model/provider pairs.
+No implementation blocker remains. The release receipt separately establishes
+publication. Parent integration and availability of arbitrary model/provider
+pairs remain outside this evidence.
 
 ## Architecture impact
 

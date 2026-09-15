@@ -2,46 +2,34 @@
 
 Updated: 2026-09-15
 
-Release candidate: `0.18.0` contains the independently verified Worker
-model-profile change. The [release checklist](../release/v0.18.0-release-checklist.md)
-tracks publication gates; do not infer publication from the source version.
-This breaking release requires new Team epochs and removes per-Task model
-selection without migration. Parent composition and live settings stay unchanged.
+Current published release: stable `0.18.0` is on npm `latest` from annotated
+tag `v0.18.0`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.18.0)
+was published at `2026-09-15T07:32:44Z`; it is not a draft or prerelease.
 
-Current published release: stable `0.17.5` is on npm `latest` from annotated
-tag `v0.17.5`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.5)
-was published at `2026-09-13T15:55:27Z`; it is not a draft or prerelease.
+Worker model profiles select a fixed initial execution binding at Worker
+creation. Tasks select an assignee only. This breaking release requires new Team
+epochs and removes per-Task model selection without migration. Keep existing
+Teams on their original version until they finish or stop; preserve their
+stores and native Session logs. Parent composition and live settings remain
+separate from this publication.
 
-Patch `0.17.4` activates one recipient-delivery pair on initial leader Team
-binding and makes full shutdown end the exact lead runtime and Session binding.
-Published patch `0.17.5` clarifies packaged Team and Worker topology: Team,
-Worker, and Task use different lifecycles; Team reuse is the project-level
-default; Worker creation must unlock parallelism, establish durable semantic
-scope, or deliberately isolate perspective; dependent execution normally keeps
-causal context. Its packaged skill uses the owner-approved decision-oriented
-structure and keeps the single lead accountable for both project direction and
-execution coordination. The skill owns the required message-to-sync procedure
-while assigned work remains in flight; this is operating guidance, not runtime
-enforcement or a permanent subscription. The release changes no Team storage
-schema, Task graph, model-tool, Membership, runtime, or Worker protocol
-contract.
+Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
+model profiles. The Membership-observation surface remains in **sharing**.
 
-Lifecycle stage: **hardening** for the DAG-native Task coordination release.
-The published Task-first surface is unchanged. The Membership-observation surface remains in **sharing**.
+## v0.18.0 publication evidence
 
-## v0.17.5 publication evidence
-
-The exact published source is `f1b9b9932e2e47bc25169ee23f1c941d365825f2`,
-from base `d5ed077f1ddc1af2b76aa104e3938a6481c2e20d`. The [release receipt](../journal/2026-09-13-v0.17.5-release-receipt.md)
-and [release checklist](../release/v0.17.5-release-checklist.md) hold the
-run, package, registry, provenance, and signature evidence. The [GitHub
-Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.5) is
-published and the `latest` dist-tag is `0.17.5`.
+The exact published source is `f43d4739556f2ac4b82070fef64007a304801ef1`,
+from published main base `9f5bffd02c2c3f92260f54b805fa225ef2cb1c0f`.
+The [release receipt](../journal/2026-09-15-v0.18.0-release-receipt.md) and
+[release checklist](../release/v0.18.0-release-checklist.md) hold full-test,
+CI, exact-package install, OIDC, registry-integrity, and provenance evidence.
 
 Residual limitations are unchanged inherited full-history privacy findings and
-seven development dependency audit findings (four moderate, three high); the
-isolated registry install reported zero findings. Architecture impact: **none**.
+seven development dependency audit findings (four moderate, three high).
+Architecture impact: the accepted implementation changed Worker/Task contracts
+inside Pi Team Bright; publication adds no further change. HyperCarrier topology
+remains unchanged.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
@@ -90,8 +78,8 @@ restating executable definitions.
 - [Decision 0014](../decisions/0014-worker-model-profiles.md) accepts fixed
   Worker model profiles, compact alias discovery, valid-choice error hints,
   and human-only TUI settings guidance. It removes per-Task model selection
-  without compatibility. The `0.18.0` candidate passed independent
-  implementation verification and is not part of npm `0.17.5`. Same-Session recovery preserves
+  without compatibility. The implementation passed independent verification
+  and is published in `0.18.0`. Same-Session recovery preserves
   the model and thinking level recorded by Pi, including human overrides.
   The [result and evidence](../projects/worker-model-profiles-verification.md)
   include a real two-profile DAG and operator-override recovery, full-lane and
@@ -460,11 +448,11 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Keep published `v0.17.5` and its package bytes immutable. Record downstream
+1. Keep published `v0.18.0` and its package bytes immutable. Record downstream
    HyperCarrier gitlink adoption as separate composition evidence.
 2. Preserve `v0.17.0`, `v0.17.1`, and all earlier release artifacts.
-3. Complete the [v0.18.0 release gates](../release/v0.18.0-release-checklist.md)
-   for the [Worker model-profile change](../projects/worker-model-profiles.md).
+3. Preserve existing Team epochs on their original version. Use new Teams for
+   the released [Worker model-profile change](../projects/worker-model-profiles.md).
    Parent adoption remains separate composition work.
 4. Decide whether graph persistence needs an append-only transaction store and
    exact Coordination publication outbox.

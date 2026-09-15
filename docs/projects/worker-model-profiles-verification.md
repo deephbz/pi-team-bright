@@ -1,13 +1,15 @@
 ---
 purpose: Evidence contract for independent ADR0014 profile verification.
 scope: Point to the executable receipt and TUI checks; live Team operation and builder-owned tests remain outside this artifact.
-status: Independently verified on stable working-tree source; unreleased.
+status: Independently verified implementation; publication recorded separately in the v0.18.0 release receipt.
 ---
 
 # Worker model profiles: verification evidence
 
 [Decision 0014](../decisions/0014-worker-model-profiles.md) owns intent.
 [Worker model profiles](worker-model-profiles.md) owns the project contract.
+The [release receipt](../journal/2026-09-15-v0.18.0-release-receipt.md) owns
+publication and exact-package verification.
 The executable procedure lives in:
 
 - [`scripts/worker-model-profiles-canary/assert.mjs`](../../scripts/worker-model-profiles-canary/assert.mjs)
