@@ -183,8 +183,15 @@ Task.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.17.5
+pi install npm:@hypercarrier/pi-team-bright@0.18.0
 ```
+
+Version `0.18.0` adds Worker model profiles and removes per-Task model selection.
+This is a breaking change. Finish or stop existing Teams under their original
+version, preserve their stores and Session logs, then start new Teams with
+`0.18.0`. Old graph snapshots with Task/Attempt model fields are refused; no
+migration runs. Update saved Task graphs to omit `model` and select aliases with
+`ensure_worker` instead. See the [release notes](https://github.com/deephbz/pi-team-bright/releases/tag/v0.18.0).
 
 Version `0.17.0` replaces the leader tool `task_create` with
 `task_graph_apply`. It also replaces authored Task status changes with explicit
@@ -259,8 +266,8 @@ Stop and recreate the Team to apply a new policy.
 
 ## Worker model profiles
 
-This section describes the unreleased source contract. npm `0.17.5` does
-not include model-profile selection.
+Worker model profiles require `0.18.0` or later. npm `0.17.5` does not include
+model-profile selection.
 
 Start with the [copyable settings example](docs/examples/worker-model-profiles.settings.json).
 It defines `frontier-reviewer-claude`, `fast-scouter`, and `fast-tester`, plus an
@@ -271,7 +278,7 @@ optional Worker default for selections that omit an alias.
    Preserve your other settings.
 2. Run `pi --list-models` and replace the example's provider/model pairs with
    exact available models. Choose thinking levels those models support.
-3. Create a new Team with the unreleased source, then select aliases at Worker
+3. Create a new Team with `0.18.0` or later, then select aliases at Worker
    creation. Do not upgrade an existing live Team in place.
 
 The scout and tester examples use the same model with different thinking levels.

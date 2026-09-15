@@ -2,6 +2,12 @@
 
 Updated: 2026-09-15
 
+Release candidate: `0.18.0` contains the independently verified Worker
+model-profile change. The [release checklist](../release/v0.18.0-release-checklist.md)
+tracks publication gates; do not infer publication from the source version.
+This breaking release requires new Team epochs and removes per-Task model
+selection without migration. Parent composition and live settings stay unchanged.
+
 Current published release: stable `0.17.5` is on npm `latest` from annotated
 tag `v0.17.5`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
 The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.17.5)
@@ -84,8 +90,8 @@ restating executable definitions.
 - [Decision 0014](../decisions/0014-worker-model-profiles.md) accepts fixed
   Worker model profiles, compact alias discovery, valid-choice error hints,
   and human-only TUI settings guidance. It removes per-Task model selection
-  without compatibility. The working-tree implementation passed independent
-  verification and is not part of npm `0.17.5`. Same-Session recovery preserves
+  without compatibility. The `0.18.0` candidate passed independent
+  implementation verification and is not part of npm `0.17.5`. Same-Session recovery preserves
   the model and thinking level recorded by Pi, including human overrides.
   The [result and evidence](../projects/worker-model-profiles-verification.md)
   include a real two-profile DAG and operator-override recovery, full-lane and
@@ -457,9 +463,9 @@ Next steps:
 1. Keep published `v0.17.5` and its package bytes immutable. Record downstream
    HyperCarrier gitlink adoption as separate composition evidence.
 2. Preserve `v0.17.0`, `v0.17.1`, and all earlier release artifacts.
-3. Keep the verified, unreleased
-   [Worker model-profile change](../projects/worker-model-profiles.md) separate
-   from published `0.17.5`. Publication and parent adoption require separate work.
+3. Complete the [v0.18.0 release gates](../release/v0.18.0-release-checklist.md)
+   for the [Worker model-profile change](../projects/worker-model-profiles.md).
+   Parent adoption remains separate composition work.
 4. Decide whether graph persistence needs an append-only transaction store and
    exact Coordination publication outbox.
 5. Design immutable legacy Task-create operation identity before changing Beads
