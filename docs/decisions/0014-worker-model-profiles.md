@@ -1,7 +1,7 @@
 # 0014 — Select a model profile when creating a Worker
 
 Date: 2026-09-15
-Status: accepted; implemented and independently verified in the unreleased working tree
+Status: accepted; implemented, independently verified, and published in `0.18.0`
 
 Pi Team Bright needs persistent frontier reviewers and cost-efficient specialist
 Workers. The leader selects one model profile when it creates a Worker with
