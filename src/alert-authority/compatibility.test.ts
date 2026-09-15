@@ -167,7 +167,8 @@ describe("Alert canonical authority compatibility", () => {
       },
       files: [
         "extensions", "skills", "src", "!src/**/*.test.ts", "!src/**/fixtures", "tsconfig.json",
-        "package.json", "LICENSE", "README.md", "docs/current/README.md", "docs/reference.md", "dist",
+        "package.json", "LICENSE", "README.md", "docs/current/README.md", "docs/reference.md",
+        "docs/examples/worker-model-profiles.settings.json", "dist",
       ],
       pi: {
         image: "https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.17.0-rc.14/pi-team-in-action.png",
