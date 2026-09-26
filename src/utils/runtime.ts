@@ -172,8 +172,13 @@ export async function writeRuntimeStatus(
       }
     }
 
+    const nextMembershipId = membershipId ?? updates.membershipId ?? current.membershipId;
+    const replacementGeneration =
+      (nextMembershipId !== current.membershipId)
+      || (updates.pid !== undefined && updates.pid !== current.pid)
+      || (updates.startedAt !== undefined && updates.startedAt !== current.startedAt);
     const next: AgentRuntimeStatus = {
-      ...current,
+      ...(replacementGeneration ? { teamName, agentName } : current),
       ...updates,
       teamName,
       agentName,

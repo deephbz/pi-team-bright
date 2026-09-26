@@ -77,6 +77,31 @@ describe("runtime status", () => {
     expect(runtime?.ready).toBe(true);
   });
 
+  it("does not carry settled state or readiness into a replacement process generation", async () => {
+    await writeRuntimeStatus(teamName, agentName, {
+      pid: 123,
+      startedAt: 1000,
+      runState: "settled",
+      ready: true,
+      lastHeartbeatAt: 2000,
+    }, "membership-1");
+
+    await writeRuntimeStatus(teamName, agentName, {
+      pid: 456,
+      startedAt: 3000,
+    }, "membership-1");
+
+    expect(await readRuntimeStatus(teamName, agentName)).toEqual(expect.objectContaining({
+      membershipId: "membership-1",
+      pid: 456,
+      startedAt: 3000,
+    }));
+    const current = await readRuntimeStatus(teamName, agentName);
+    expect(current?.runState).toBeUndefined();
+    expect(current?.ready).toBeUndefined();
+    expect(current?.lastHeartbeatAt).toBeUndefined();
+  });
+
   it("returns null when status does not exist", async () => {
     const missing = await readRuntimeStatus(teamName, "missing-agent");
     expect(missing).toBeNull();

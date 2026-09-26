@@ -89,7 +89,9 @@ export class TeamSessionLifecycleService {
   async writeBoundWorkerRuntime(input: { teamName: string; workerName: string; sessionFile: string; membershipId?: string; updates: Partial<runtime.AgentRuntimeStatus> }): Promise<string> {
     const member = await teams.assertCurrentSessionBinding(input.teamName, input.workerName, input.sessionFile);
     if (!member.membershipId || (input.membershipId && input.membershipId !== member.membershipId)) throw new Error(`Runtime update rejected for stale Membership of ${input.workerName} on team ${input.teamName}.`);
-    await runtime.writeRuntimeStatus(input.teamName, input.workerName, input.updates, member.membershipId);
+    await teams.withCurrentSessionBinding(input.teamName, input.workerName, input.sessionFile, member.membershipId, async () => {
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, input.updates, member.membershipId);
+    });
     return member.membershipId;
   }
 }
