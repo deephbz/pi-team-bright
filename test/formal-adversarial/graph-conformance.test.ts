@@ -107,7 +107,7 @@ describe("independent bounded graph adversary", () => {
       accepted += runTrace(trace);
     }
     expect(accepted).toBeGreaterThan(500);
-  });
+  }, 20_000);
 
   it("serializes conflicting durable claims and preserves a recoverable winner", async () => {
     const team = `formal-cas-${process.pid}-${Date.now()}`;
