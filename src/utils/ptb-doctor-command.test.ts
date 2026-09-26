@@ -218,6 +218,23 @@ describe("doctor failure and ownership boundaries", () => {
     expect(run.sendMessage.mock.calls[0][0].content).not.toContain("SECRET_INVALID_JSON");
   });
 
+  it("labels malformed member entries as samples without projecting Team lifecycle", async () => {
+    const name = `doctor-members-${process.pid}`;
+    const config = team(name, "/tmp/doctor-members.jsonl");
+    fs.writeFileSync(paths.configPath(name), JSON.stringify({ ...config, members: [{}] }));
+    const before = treeBytes(paths.teamDir(name));
+    const run = harness();
+    await run.command!.handler(`doctor ${name}`, session("/tmp/doctor-inspector.jsonl").ctx);
+    const report = metadata(run).team;
+    expect(report.config_state).toBe("parseable_unverified");
+    expect(report.sampled_active_member_entries).toBe(1);
+    expect(report.sampled_worker_entries).toBe(0);
+    expect(report).not.toHaveProperty("lifecycle");
+    expect(report).not.toHaveProperty("active_members");
+    expect(report).not.toHaveProperty("active_workers");
+    expect(treeBytes(paths.teamDir(name))).toEqual(before);
+  });
+
   it("does not fall back to Beads when graph JSON is damaged", async () => {
     const name = `doctor-graph-damaged-${process.pid}`;
     team(name, "/tmp/doctor-graph.jsonl", "beads");
@@ -229,7 +246,7 @@ describe("doctor failure and ownership boundaries", () => {
     expect(run.sendMessage.mock.calls[0][0].content).not.toContain("SECRET_GRAPH_DAMAGE");
   });
 
-  it.each(["session", "branch", "reload"])("cancels a late diagnostic after %s changes", async (kind) => {
+  it.each(["session", "branch", "reload", "pre-tree", "pre-compact"])("cancels a late diagnostic after %s changes", async (kind) => {
     let release!: (content: string) => void;
     vi.spyOn(doctor, "collectPtbDoctorContext").mockImplementation(() => new Promise((resolve) => { release = resolve; }));
     const run = harness();
@@ -238,6 +255,8 @@ describe("doctor failure and ownership boundaries", () => {
     if (kind === "session") { state.setId("new-session"); state.setFile("/tmp/doctor-new.jsonl"); }
     if (kind === "branch") state.setBranch("new-leaf");
     if (kind === "reload") for (const hook of run.hooks.get("session_shutdown") ?? []) await hook({ reason: "reload" }, state.ctx);
+    if (kind === "pre-tree") for (const hook of run.hooks.get("session_before_tree") ?? []) await hook({ reason: "tree" }, state.ctx);
+    if (kind === "pre-compact") for (const hook of run.hooks.get("session_before_compact") ?? []) await hook({ reason: "compact" }, state.ctx);
     release("late context");
     await pending;
     expect(run.sendMessage).not.toHaveBeenCalled();

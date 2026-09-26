@@ -2,7 +2,8 @@
 
 Purpose: start agent-led diagnosis with the packaged repair guide and local
 Team metadata. Scope: context injection; Team mutation stays with existing
-operations. Base: `bfacea5`; the change is stacked on formal hardening.
+operations. Base: `c5557ff`; formal hardening now follows the model-role and framework-sync
+features at `70bfe4f`.
 
 ## Interaction design
 
@@ -24,7 +25,7 @@ operations. Base: `bfacea5`; the change is stacked on formal hardening.
 Other PTB commands keep their current names. Architecture impact: none for
 component ownership, storage, or deployment topology.
 
-## Verification
+## Verification before feature integration
 
 The full lane passed 1,085 tests across 152 active files, with four existing
 skips. The 13 command tests cover held locks, missing and damaged records,
@@ -40,3 +41,11 @@ interaction; they do not claim that an agent can repair every Team fault.
 
 The change is committed separately from its hardening base. It is not installed
 or published. Existing PTB commands retain their names.
+
+## Integration regression
+
+Adversarial command tests reproduced late context submission after tree
+navigation or compaction began while the guide was loading. Both pre-events
+now invalidate the pending request. Doctor reports sampled Member-entry counts
+without deriving Team lifecycle from malformed records. All 16 focused command
+tests pass. The integrated campaign owns the wider verification record.
