@@ -56,12 +56,6 @@ function parseExpandedDetail(lines: string[]): unknown {
   throw new Error("expanded detail is not valid JSON");
 }
 
-function parseSettingsExample(lines: string[]): any {
-  const marker = lines.indexOf("settings example:");
-  expect(marker).toBeGreaterThan(0);
-  return JSON.parse(lines.slice(marker + 1).join("\n"));
-}
-
 describe("TUI message gallery", () => {
   it("covers every displayed tool and every allowed top-level model-result kind", () => {
     const scenarios = tuiMessageGallery();
@@ -80,42 +74,27 @@ describe("TUI message gallery", () => {
     }
   });
 
-  it("keeps ensure_worker settings guidance human-only across every typed outcome", () => {
+  it("shows the packaged example only for model-role configuration refusals", () => {
     const scenarios = tuiMessageGallery().filter((scenario) => scenario.message.type === "ensure_worker");
     expect(scenarios.length).toBeGreaterThan(1);
     for (const scenario of scenarios) {
       const collapsed = projectionLines(scenario.message, { expanded: false }).join("\n");
       const expanded = projectionLines(scenario.message, { expanded: true }).join("\n");
-      expect(collapsed, scenario.id).toContain("Aliases can be added in Pi Team Bright settings.");
-      expect(collapsed, scenario.id).not.toContain('"model_profiles"');
-      expect(expanded.match(/"model_profiles"/g), scenario.id).toHaveLength(1);
-      expect(expanded, scenario.id).toContain('"fast-reviewer"');
-      expect(expanded, scenario.id).toContain('"model": "gpt-5.6-luna"');
-      expect(expanded, scenario.id).toContain("Pi global settings.json");
-      expect(expanded, scenario.id).toContain("trusted project's .pi/settings.json");
-      expect(parseSettingsExample(projectionLines(scenario.message, { expanded: true })), scenario.id).toEqual({
-        pi_team_bright: {
-          model_profiles: {
-            "fast-reviewer": {
-              provider: "openai-codex",
-              model: "gpt-5.6-luna",
-              thinking: "medium",
-              use: "Fast focused review",
-            },
-          },
-        },
-      });
-      expect(JSON.stringify(scenario.message.detail), scenario.id).not.toContain("pi_team_bright");
-      expect(JSON.stringify(scenario.message.detail), scenario.id).not.toMatch(/"model_profiles"\s*:/);
+      const detail = scenario.message.detail as { kind?: string; reason?: string } | undefined;
+      const hasConfigError = detail?.kind === "refused" && detail.reason === "invalid_model_role";
+      expect(collapsed.includes("docs/examples/pi-team-bright.settings.json"), scenario.id).toBe(hasConfigError);
+      expect(expanded.includes("docs/examples/pi-team-bright.settings.json"), scenario.id).toBe(hasConfigError);
+      expect(collapsed, scenario.id).not.toContain("settings example:");
+      expect(expanded, scenario.id).not.toContain("settings example:");
     }
-    const selected = scenarios.find((scenario) => scenario.id === "ensure_worker.selected-profile")!;
-    expect(projectionLines(selected.message, { expanded: false }).join("\n")).toContain('Model alias "fast-reviewer" selected.');
+    const selected = scenarios.find((scenario) => scenario.id === "ensure_worker.selected-role")!;
+    expect(projectionLines(selected.message, { expanded: false }).join("\n")).toContain('Model role "fast-reviewer" selected.');
     const conflict = scenarios.find((scenario) => scenario.id === "ensure_worker.model-conflict")!;
     expect(projectionLines(conflict.message, { expanded: false }).join("\n")).toContain("model conflict");
-    expect(projectionLines(conflict.message, { expanded: false }).join("\n")).toContain('Existing model alias: "fast-reviewer".');
+    expect(projectionLines(conflict.message, { expanded: false }).join("\n")).toContain('Existing model role: "fast-reviewer".');
   });
 
-  it("keeps settings guidance in renderer execution and projection-error paths", () => {
+  it("does not infer a settings fault from execution and projection errors", () => {
     const render = (details: unknown, isError: boolean): string => createToolResultRenderer("ensure_worker")(
       { content: [{ type: "text", text: "raw execution report" }], details },
       { expanded: true, isPartial: false },
@@ -127,8 +106,8 @@ describe("TUI message gallery", () => {
       render({ kind: "unavailable", reason: "carrier_unavailable", message: "Carrier failed.", state_changed: false }, true),
       render({ malformed: true }, false),
     ]) {
-      expect(rendered).toContain("Aliases can be added in Pi Team Bright settings.");
-      expect(rendered.match(/"model_profiles"/g)).toHaveLength(1);
+      expect(rendered).not.toContain("docs/examples/pi-team-bright.settings.json");
+      expect(rendered).not.toContain("settings example:");
     }
   });
 
@@ -193,7 +172,7 @@ describe("TUI message gallery", () => {
   });
 
   it("keeps raw semantic JSON in detail mode instead of the lossy model projection", () => {
-    const raw = { kind: "team_created", team: { name: "review", purpose: "Raw purpose", lifecycle: "active" }, model_profiles: [] };
+    const raw = { kind: "team_created", team: { name: "review", purpose: "Raw purpose", lifecycle: "active" }, model_roles: [] };
     const projection = projectToolTuiMessage({ tool: "team_create", details: raw, expanded: true });
     expect(parseExpandedDetail(projectionLines(projection, { expanded: true }))).toEqual(raw);
   });

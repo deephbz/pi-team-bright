@@ -234,7 +234,7 @@ describe("candidate model-tool catalog", () => {
       additionalProperties: false,
       required: ["name", "scope"],
     });
-    expect(Object.keys(EnsureWorkerParametersSchema.properties)).toEqual(["name", "scope", "model"]);
+    expect(Object.keys(EnsureWorkerParametersSchema.properties)).toEqual(["name", "scope", "model_role"]);
   });
 
   it("keeps all calls and raw results executable against the matching schema", () => {

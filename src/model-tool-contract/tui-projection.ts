@@ -1,5 +1,6 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { projectToolResult, type ProjectedTool } from "./result-projection";
+import { piTeamBrightSettingsExamplePath } from "../utils/package-example-path";
 import {
   projectionLines,
   renderProjectionWithTheme,
@@ -23,31 +24,12 @@ const quoted = (value: string): string => JSON.stringify(value);
 const status = (value: any): string => value.status;
 const owner = (value: any): string => value.assignee ? `@ ${value.assignee}` : "unassigned";
 
-const MODEL_PROFILE_SETTINGS_HINT = "  Aliases can be added in Pi Team Bright settings.";
-const MODEL_PROFILE_SETTINGS_EXAMPLE = [
-  "Add aliases in Pi global settings.json or a trusted project's .pi/settings.json.",
-  "Replace provider and model IDs with models available in your Pi installation.",
-  "settings example:",
-  "  {",
-  '    "pi_team_bright": {',
-  '      "model_profiles": {',
-  '        "fast-reviewer": {',
-  '          "provider": "openai-codex",',
-  '          "model": "gpt-5.6-luna",',
-  '          "thinking": "medium",',
-  '          "use": "Fast focused review"',
-  "        }",
-  "      }",
-  "    }",
-  "  }",
-];
+const MODEL_ROLE_SETTINGS_HINT = `  Check Pi Team Bright settings. Example: ${piTeamBrightSettingsExamplePath}.`;
 
-function withEnsureWorkerGuidance(
-  tool: ProjectedTool,
-  lines: string[],
-): Pick<PiTeamBrightTuiMessage, "lines" | "expandedLines"> {
-  if (tool !== "ensure_worker") return { lines };
-  return { lines: [...lines, MODEL_PROFILE_SETTINGS_HINT], expandedLines: MODEL_PROFILE_SETTINGS_EXAMPLE };
+function withEnsureWorkerGuidance(tool: ProjectedTool, model: any, lines: string[]): string[] {
+  if (tool !== "ensure_worker" || model.kind !== "refused"
+    || !["invalid_model_role", "legacy_team_model_default"].includes(model.reason)) return lines;
+  return [...lines, MODEL_ROLE_SETTINGS_HINT];
 }
 
 function taskLine(task: any): string {
@@ -76,17 +58,17 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
   } else if (tool === "ensure_worker") {
     if (model.kind === "worker_ensured") {
       lines.push(`Worker ${quoted(model.worker.name)} ${model.effect} · carrier ${model.worker.carrier}.`);
-      if (model.worker.model) lines.push(`Model alias ${quoted(model.worker.model)} selected.`);
+      if (model.worker.model_role) lines.push(`Model role ${quoted(model.worker.model_role)} selected.`);
     } else if (model.kind === "refused" && model.existing_worker) {
       const conflict = model.reason === "model_conflict" ? "model conflict" : "scope conflict";
       lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · ${conflict}.`);
-      if (model.existing_worker.model) lines.push(`Existing model alias: ${quoted(model.existing_worker.model)}.`);
+      if (model.existing_worker.model_role) lines.push(`Existing model role: ${quoted(model.existing_worker.model_role)}.`);
     } else {
       lines.push(`${model.kind} · ${model.reason}: ${compact(model.message ?? "No further details.")}`);
     }
-    if (Array.isArray(model.valid_model_profiles)) {
-      const choices = model.valid_model_profiles.map((profile: any) => `${quoted(profile.alias)} (${compact(profile.use, 60)})`);
-      lines.push(`Valid aliases: ${choices.join(", ") || "none"}.`);
+    if (Array.isArray(model.valid_model_roles)) {
+      const choices = model.valid_model_roles.map((role: any) => `${quoted(role.name)} (${compact(role.use, 60)})`);
+      lines.push(`Valid model roles: ${choices.join(", ") || "none"}.`);
     }
   } else if (tool === "task_graph_apply" || tool === "task_create") {
     if (model.kind === "task_graph_applied") {
@@ -162,14 +144,14 @@ function toneFor(tool: ProjectedTool, model: any): { tone: TuiMessageTone; label
 /** Project an already validated model result. The gallery uses this exhaustive seam. */
 export function projectModelToolTuiMessage(tool: ProjectedTool, model: any, detail: unknown = model): PiTeamBrightTuiMessage {
   const { tone, label } = toneFor(tool, model);
-  const guidance = withEnsureWorkerGuidance(tool, [
+  const lines = withEnsureWorkerGuidance(tool, model, [
     `${tone === "success" ? "✓" : "!"} ${label}`,
     ...toolLines(tool, model).map((line) => `  ${line}`),
   ]);
   return {
     type: tool,
     tone,
-    ...guidance,
+    lines,
     detail,
     provenance: "tool-result",
   };
@@ -177,14 +159,14 @@ export function projectModelToolTuiMessage(tool: ProjectedTool, model: any, deta
 
 function errorMessage(input: TuiInput, issue: "execution_error" | "result_projection_error"): PiTeamBrightTuiMessage {
   const report = { tool: input.tool, issue, content: input.content ?? [], details: input.details };
-  const guidance = withEnsureWorkerGuidance(input.tool, [
+  const lines = [
     `✗ ${issue === "execution_error" ? "execution error" : "result projection error"}`,
     "  Press Ctrl+O to inspect the raw JSON report. Review sensitive fields before sharing.",
-  ]);
+  ];
   return {
     type: input.tool,
     tone: "error",
-    ...guidance,
+    lines,
     detail: report,
     provenance: "tool-result",
   };

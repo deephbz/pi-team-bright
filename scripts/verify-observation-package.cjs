@@ -15,11 +15,21 @@ try {
   tarball = path.join(root, packed.filename);
   execFileSync("npm", ["init", "-y"], { cwd: work, stdio: "ignore" });
   execFileSync("npm", ["install", "--ignore-scripts", tarball], { cwd: work, stdio: "ignore" });
+  const installedRoot = path.join(work, "node_modules", ...packageName.split("/"));
+  const examplePath = "docs/examples/pi-team-bright.settings.json";
+  const installedExample = fs.readFileSync(path.join(installedRoot, examplePath), "utf8");
+  if (installedExample !== fs.readFileSync(path.join(root, examplePath), "utf8")) {
+    throw new Error("installed canonical settings example differs from source");
+  }
+  JSON.parse(installedExample);
+  if (fs.existsSync(path.join(installedRoot, "docs/examples/worker-model-profiles.settings.json"))) {
+    throw new Error("package contains the superseded settings example");
+  }
   const probe = `const o=require('${packageName}/observation'); if(o.OBSERVATION_SCHEMA !== 'pi-teams-observation/1' || typeof o.readObservationSnapshot !== 'function') process.exit(1); o.readObservationSnapshot({teamsRoot: process.cwd()}).then(x => { if (!x.schema) process.exit(1); });`;
   execFileSync(process.execPath, ["-e", probe], { cwd: work, stdio: "inherit" });
   fs.writeFileSync(path.join(work, "probe.ts"), `import { OBSERVATION_SCHEMA, readObservationSnapshot } from '${packageName}/observation'; void readObservationSnapshot; const schema: 'pi-teams-observation/1' = OBSERVATION_SCHEMA;\n`);
   execFileSync(path.join(root, "node_modules", ".bin", "tsc"), ["--noEmit", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ESNext", "probe.ts"], { cwd: work, stdio: "inherit" });
-  console.log("packed observation package probe passed");
+  console.log("packed observation and canonical settings example probes passed");
 } finally {
   if (tarball) fs.rmSync(tarball, { force: true });
   fs.rmSync(work, { recursive: true, force: true });

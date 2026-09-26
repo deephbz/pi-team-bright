@@ -92,39 +92,39 @@ function toolScenarios(): TuiMessageGalleryScenario[] {
   }
 
   scenarios.push({
-    id: "ensure_worker.invalid-model-profile",
-    title: "ensure_worker: invalid profile with valid aliases",
+    id: "ensure_worker.invalid-model-role",
+    title: "ensure_worker: invalid model role with valid choices",
     source: "tool",
     resultKind: "refused",
     message: projectModelToolTuiMessage("ensure_worker", {
       kind: "refused",
-      reason: "invalid_model_profile",
-      valid_model_profiles: [{ alias: "fast-reviewer", use: "Fast focused review" }],
-      message: "Unknown model profile.",
+      reason: "invalid_model_role",
+      valid_model_roles: [{ name: "fast-reviewer", use: "Fast focused review" }],
+      message: "Unknown model role.",
     }),
   });
 
   scenarios.push({
-    id: "ensure_worker.selected-profile",
-    title: "ensure_worker: successful explicit profile selection",
+    id: "ensure_worker.selected-role",
+    title: "ensure_worker: successful explicit model role selection",
     source: "tool",
     resultKind: "worker_ensured",
     message: projectModelToolTuiMessage("ensure_worker", {
       kind: "worker_ensured",
       effect: "created",
-      worker: { name: "profile-worker", carrier: "connected", model: "fast-reviewer" },
+      worker: { name: "role-worker", carrier: "connected", model_role: "fast-reviewer" },
     }),
   });
   scenarios.push({
     id: "ensure_worker.model-conflict",
-    title: "ensure_worker: refuse a conflicting profile",
+    title: "ensure_worker: refuse a conflicting model role",
     source: "tool",
     resultKind: "refused",
     message: projectModelToolTuiMessage("ensure_worker", {
       kind: "refused",
       reason: "model_conflict",
-      existing_worker: { name: "profile-worker", scope: "Review.", carrier: "connected", model: "fast-reviewer" },
-      message: "Worker already has a different model profile.",
+      existing_worker: { name: "role-worker", scope: "Review.", carrier: "connected", model_role: "fast-reviewer" },
+      message: "Worker already has a different model role.",
     }),
   });
   const graphApplied = scenarios.find((item) => item.id === "task_graph_apply.task_graph_applied")!;

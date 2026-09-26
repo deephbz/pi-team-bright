@@ -10,8 +10,9 @@ import * as teams from "./teams";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
-import { createWorkerLaunchBridge } from "./worker-launch-bridge";
+import { createWorkerLaunchBridge as createRuntimeWorkerLaunchBridge, type WorkerLaunchBridgeDependencies, type WorkerLaunchRequest } from "./worker-launch-bridge";
 import { materializeWorkerAggregate } from "./worker-resource-projection";
+import type { ModelRoleSettings } from "./model-role-settings";
 
 type RegisteredTool = {
   name: string;
@@ -20,16 +21,38 @@ type RegisteredTool = {
 
 const created: string[] = [];
 
+const fixtureModelRoleSettings: ModelRoleSettings = {
+  roles: { fixture: { model: "fixture/model", thinking: "low", use: "Carrier lifecycle tests" } },
+  defaultRole: "fixture", diagnostics: [], invalidRoles: new Set(), invalidDefault: false,
+  invalidRoleMap: false, invalidGlobalRoleMap: false, invalidProjectRoleMap: false,
+  roleSources: { fixture: "global" }, sourceFiles: { global: "/fixture/global.json", project: "/fixture/project.json" },
+};
+const fixtureAvailableModelKeys = Object.assign(new Set(["fixture/model"]), {
+  thinkingLevelsByKey: new Map([["fixture/model", new Set(["low" as const])]]),
+});
+
+function createWorkerLaunchBridge(dependencies: WorkerLaunchBridgeDependencies) {
+  const originalAggregate = dependencies.workerAggregate;
+  const bridge = createRuntimeWorkerLaunchBridge({ ...dependencies, workerAggregate: (cwd) => ({
+    modelRoleSettings: fixtureModelRoleSettings, ...originalAggregate(cwd),
+  }) });
+  const ensureWorker = bridge.ensureWorker.bind(bridge);
+  bridge.ensureWorker = (request: WorkerLaunchRequest) => ensureWorker({
+    ...request, availableModelKeys: request.availableModelKeys ?? fixtureAvailableModelKeys,
+  });
+  return bridge;
+}
+
 function unique(suffix: string): string {
   const name = `launch-comp-${suffix}-${process.pid}-${Date.now()}-${created.length}`;
   created.push(name);
   return name;
 }
 
-function context(sessionFile: string, modelRegistry?: { getAvailable(): readonly { provider: string; id: string }[] }) {
+function context(sessionFile: string, modelRegistry: { getAvailable(): readonly { provider: string; id: string; reasoning?: boolean }[] } = { getAvailable: () => [{ provider: "fixture", id: "model", reasoning: true }] }) {
   return {
     cwd: process.cwd(),
-    ...(modelRegistry ? { modelRegistry } : {}),
+    modelRegistry,
     sessionManager: {
       getSessionFile: () => sessionFile,
       buildContextEntries: () => [],
@@ -73,6 +96,13 @@ async function team(suffix: string, defaultModel?: string, terminalBackend = "la
   const name = unique(suffix);
   const leadSession = `/tmp/${name}-lead.jsonl`;
   const taskWorkspace = paths.teamDir(name);
+  const agentDir = path.join(taskWorkspace, "agent");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
+    model_roles: { fixture: { model: "fixture/model", thinking: "low", use: "Carrier lifecycle tests" } },
+    default_model_role: "fixture",
+  } }));
+  vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
   fs.mkdirSync(`${taskWorkspace}/.beads`, { recursive: true });
   fs.writeFileSync(`${taskWorkspace}/.beads/metadata.json`, JSON.stringify({
     database: "dolt",
@@ -121,8 +151,6 @@ describe("compensated Worker launch", () => {
     setAdapter(a.terminal);
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => [],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
@@ -162,8 +190,6 @@ describe("compensated Worker launch", () => {
     setAdapter(a.terminal);
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
@@ -207,8 +233,6 @@ describe("compensated Worker launch", () => {
     vi.spyOn(lifecycle, "observeWorkerStartup").mockRejectedValue(cancelled);
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: lifecycle,
     });
@@ -245,8 +269,6 @@ describe("compensated Worker launch", () => {
     });
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: lifecycle,
     });
@@ -270,8 +292,6 @@ describe("compensated Worker launch", () => {
     setAdapter(a.terminal);
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
@@ -299,8 +319,6 @@ describe("compensated Worker launch", () => {
       .mockResolvedValueOnce({ observed: true, carrier: "session_bound", runtime: "observed", cursor: "2" });
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: lifecycle,
     });
@@ -327,8 +345,6 @@ describe("compensated Worker launch", () => {
     setAdapter(a.terminal);
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
@@ -376,8 +392,6 @@ describe("compensated Worker launch", () => {
     });
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: lifecycle,
     });
@@ -404,17 +418,15 @@ describe("compensated Worker launch", () => {
     vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
     const firstAggregate = materializeWorkerAggregate({
       cwd: process.cwd(),
-      policy: { appendGlobal: { path: "/fixture/first.md", content: "first" }, enable: [], disable: [], diagnostics: [] },
+      policy: { appendGlobal: { path: "/fixture/first.md", content: "first" }, enable: [], disable: [], diagnostics: [], modelRoleSettings: fixtureModelRoleSettings },
     })!;
     const staleEnsureAggregate = materializeWorkerAggregate({
       cwd: process.cwd(),
-      policy: { appendGlobal: { path: "/fixture/stale.md", content: "stale" }, enable: [], disable: [], diagnostics: [] },
+      policy: { appendGlobal: { path: "/fixture/stale.md", content: "stale" }, enable: [], disable: [], diagnostics: [], modelRoleSettings: fixtureModelRoleSettings },
     })!;
     const aggregates = [firstAggregate, staleEnsureAggregate];
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ path: aggregates.shift(), projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
@@ -472,8 +484,6 @@ describe("compensated Worker launch", () => {
     vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
@@ -489,174 +499,39 @@ describe("compensated Worker launch", () => {
     }));
   });
 
-  it("captures a qualified Worker settings model before carrier creation and preserves explicit and Team defaults", async () => {
+  it("preserves a resolved model role through prepared recovery", async () => {
     const captured: Array<string | undefined> = [];
-    const availableModelKeys = new Set(["setting/provider"]);
-    const resolveSettingsModel = vi.fn((model: string, keys?: ReadonlySet<string>) => keys?.has(model) ? model : null);
     const a = adapter();
-    a.spawn.mockReturnValueOnce("pane-settings").mockReturnValueOnce("pane-settings-retry").mockReturnValueOnce("pane-explicit").mockReturnValueOnce("pane-team").mockReturnValueOnce("pane-template");
+    a.spawn.mockReturnValueOnce("pane-role").mockReturnValueOnce("pane-role-retry");
     setAdapter(a.terminal);
     vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
     const bridge = createWorkerLaunchBridge({
-      buildWorkerArgv: (model) => {
-        captured.push(model);
-        return ["pi", ...(model ? ["--model", model] : [])];
-      },
-      resolveModel: (model) => `resolved/${model}`,
-      resolveSettingsModel,
-      workerAggregate: () => ({
-        projectTrusted: false,
-        defaultModel: { scope: "global", value: "setting/provider" },
-      }),
-      lifecyclePublication: new DurableTeamLifecyclePublication(),
-    });
-
-    const settingsTeam = await team("settings-model");
-    const settingsWorker = await bridge.ensureWorker({
-      teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(), availableModelKeys,
-    });
-    expect(settingsWorker.member.model).toBe("setting/provider");
-    expect(resolveSettingsModel).toHaveBeenCalledWith("setting/provider", availableModelKeys);
-    const recoveredSettings = await bridge.ensureWorker({
-      teamName: settingsTeam.name, workerName: "settings", scope: "Settings model", cwd: process.cwd(),
-    });
-    expect(recoveredSettings.action).toBe("recovered");
-    expect(recoveredSettings.member.model).toBe("setting/provider");
-    expect(resolveSettingsModel).toHaveBeenCalledOnce();
-
-    const explicitWorker = await bridge.ensureWorker({
-      teamName: settingsTeam.name, workerName: "explicit", scope: "Explicit model", cwd: process.cwd(), model: "explicit",
-    });
-    expect(explicitWorker.member.model).toBe("resolved/explicit");
-
-    const teamDefault = await team("team-model", "team/default");
-    const teamWorker = await bridge.ensureWorker({
-      teamName: teamDefault.name, workerName: "team", scope: "Team model", cwd: process.cwd(),
-    });
-    expect(teamWorker.member.model).toBe("team/default");
-    expect(resolveSettingsModel).toHaveBeenCalledOnce();
-
-    const templateWorker = await bridge.ensureWorker({
-      teamName: settingsTeam.name,
-      workerName: "template",
-      scope: "Template model",
-      cwd: process.cwd(),
-      availableModelKeys,
-      initialMessage: async () => ({ id: "template-message", from: "lead", to: "template", text: "Template prompt", timestamp: new Date().toISOString(), read: false }),
-    });
-    expect(templateWorker.member.model).toBe("setting/provider");
-    expect(captured).toEqual(expect.arrayContaining(["setting/provider", "resolved/explicit", "team/default"]));
-    expect(captured.filter((model) => model === "setting/provider")).toHaveLength(3);
-  });
-
-  it("validates a first model-tool Worker default from its exact registry snapshot", async () => {
-    const f = await team("model-registry-default");
-    const a = adapter();
-    vi.stubEnv("PI_AGENT_NAME", "");
-    const tools = register(a.terminal);
-    const agentDir = `${paths.teamDir(f.name)}/agent`;
-    fs.mkdirSync(agentDir, { recursive: true });
-    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: "fixture/selected" } },
-    }));
-    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
-    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
-    const result = await tools.get("ensure_worker")!.execute(
-      "ensure-model-registry-default",
-      { name: "worker", scope: "Use the configured model." },
-      undefined,
-      undefined,
-      context(f.leadSession, { getAvailable: () => [{ provider: "fixture", id: "selected" }] }),
-    );
-
-    expect(result.details).toMatchObject({ kind: "worker_ensured", effect: "created" });
-    expect((await teams.currentMembership(f.name, "worker")).model).toBe("fixture/selected");
-  });
-
-  it("accepts a canonical nested Worker settings model and persists its exact ID", async () => {
-    const f = await team("nested-settings-model");
-    const a = adapter();
-    setAdapter(a.terminal);
-    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
-    const nested = "openrouter/openai/gpt-5.1";
-    const argv = vi.fn((model: string | undefined) => ["pi", ...(model ? ["--model", model] : [])]);
-    const bridge = createWorkerLaunchBridge({
-      buildWorkerArgv: argv,
-      resolveModel: () => null,
-      resolveSettingsModel: (model) => model === nested ? model : null,
-      workerAggregate: () => ({ projectTrusted: false, defaultModel: { scope: "global", value: nested } }),
-      lifecyclePublication: new DurableTeamLifecyclePublication(),
-    });
-
-    const worker = await bridge.ensureWorker({ teamName: f.name, workerName: "nested", scope: "Nested model", cwd: process.cwd() });
-    expect(worker.member.model).toBe(nested);
-    expect(argv).toHaveBeenCalledWith(nested, undefined, undefined, false);
-  });
-
-  it("keeps Pi's native default when no Worker, Team, or explicit model applies", async () => {
-    const captured: Array<string | undefined> = [];
-    const f = await team("native-model");
-    const a = adapter();
-    setAdapter(a.terminal);
-    vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "0");
-    const bridge = createWorkerLaunchBridge({
-      buildWorkerArgv: (model) => {
-        captured.push(model);
-        return ["pi"];
-      },
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
+      buildWorkerArgv: (model) => { captured.push(model); return ["pi", ...(model ? ["--model", model] : [])]; },
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
-
-    const worker = await bridge.ensureWorker({ teamName: f.name, workerName: "native", scope: "Native model", cwd: process.cwd() });
-    expect(worker.member.model).toBeUndefined();
-    expect(captured).toEqual([undefined]);
+    const f = await team("role-recovery");
+    const createdWorker = await bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own work", cwd: process.cwd() });
+    expect(createdWorker.member.modelProfile).toMatchObject({ alias: "fixture", provider: "fixture", model: "model", thinking: "low" });
+    const recovered = await bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own work", cwd: process.cwd() });
+    expect(recovered.action).toBe("recovered");
+    expect(recovered.member.modelProfile).toEqual(createdWorker.member.modelProfile);
+    expect(captured).toEqual(["fixture/model", "fixture/model"]);
   });
 
-  it("refuses an invalid Worker settings model before Membership or carrier creation", async () => {
-    const f = await team("invalid-settings-model");
+  it("refuses a legacy Team raw default before Membership or carrier creation", async () => {
+    const f = await team("legacy-team-default", "legacy/model");
     const a = adapter();
     setAdapter(a.terminal);
     const bridge = createWorkerLaunchBridge({
       buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
-      workerAggregate: () => ({
-        projectTrusted: false,
-        defaultModel: { scope: "project", value: "bare-model" },
-      }),
+      workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication: new DurableTeamLifecyclePublication(),
     });
-
-    await expect(bridge.ensureWorker({
-      teamName: f.name, workerName: "invalid", scope: "Invalid settings", cwd: process.cwd(),
-    })).rejects.toThrow(/trusted project Pi settings.*qualified provider\/model.*Edit.*retry/i);
+    await expect(bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own work", cwd: process.cwd() }))
+      .rejects.toMatchObject({ name: "WorkerLegacyTeamModelDefaultError" });
     expect(a.spawn).not.toHaveBeenCalled();
-    expect((await teams.readConfig(f.name)).members.find((member) => member.name === "invalid")).toBeUndefined();
-  });
-
-  it("refuses an unavailable qualified Worker settings model before Membership or carrier creation", async () => {
-    const f = await team("unavailable-settings-model");
-    const a = adapter();
-    setAdapter(a.terminal);
-    const bridge = createWorkerLaunchBridge({
-      buildWorkerArgv: () => ["pi"],
-      resolveModel: () => null,
-      resolveSettingsModel: (model, keys) => keys?.has(model) ? model : null,
-      workerAggregate: () => ({
-        projectTrusted: false,
-        defaultModel: { scope: "global", value: "missing/model" },
-      }),
-      lifecyclePublication: new DurableTeamLifecyclePublication(),
-    });
-
-    await expect(bridge.ensureWorker({
-      teamName: f.name, workerName: "missing", scope: "Unavailable settings", cwd: process.cwd(), availableModelKeys: new Set(["known/model"]),
-    })).rejects.toThrow(/global Pi settings.*missing\/model.*unavailable.*Edit.*retry/i);
-    expect(a.spawn).not.toHaveBeenCalled();
-    expect((await teams.readConfig(f.name)).members.find((member) => member.name === "missing")).toBeUndefined();
+    expect((await teams.readConfig(f.name)).members.find((member) => member.name === "worker")).toBeUndefined();
   });
 
   it("does not create a Worker carrier when Membership preparation persistence fails", async () => {

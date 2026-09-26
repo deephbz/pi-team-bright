@@ -9,14 +9,13 @@ import {
   projectSyncNudgeMessage,
   projectTaskChangeMessage,
 } from "../src/model-tool-contract/custom-message-projection";
-import { resolveQualifiedWorkerDefaultModel, resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
+import { resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
 import { SYNC_NUDGE_CUSTOM_TYPE } from "../src/utils/sync-nudge";
 import { LEGACY_TASK_CHANGE_CUSTOM_TYPE, TASK_CHANGE_CUSTOM_TYPE } from "../src/utils/task-delivery";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../src/alert-authority/direct-delivery";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { spawnSync } from "node:child_process";
 import { registerAutomaticSummaryPolicyProvider } from "../src/utils/automatic-summary-policy";
 import { createWorkerLaunchBridge, type WorkerAggregate } from "../src/team-authority/worker-launch-bridge";
 import { DurableAssignedWorkGuard } from "../src/adapters/durable-assigned-work-guard";
@@ -103,142 +102,13 @@ function getPiLaunchArgv(): string[] {
 
 export function buildPiArgv(base: string[], model?: string, thinking?: string, aggregatePrompt?: string, projectTrusted?: boolean): string[] {
   const argv = [...base];
-  if (model) argv.push("--model", thinking ? `${model}:${thinking}` : model);
-  else if (thinking) argv.push("--thinking", thinking);
+  if (model) argv.push("--model", model);
+  if (thinking) argv.push("--thinking", thinking);
   // Worker model-facing tools are projected in the Worker process. Do not pass
   // a CLI allowlist, because it cannot re-enable registered tools at runtime.
   if (aggregatePrompt) argv.push("--no-context-files", "--append-system-prompt", aggregatePrompt);
   if (projectTrusted !== undefined) argv.push(projectTrusted ? "--approve" : "--no-approve");
   return argv;
-}
-
-// Cache for available models
-let availableModelsCache: Array<{ provider: string; model: string }> | null = null;
-let modelsCacheTime = 0;
-const MODELS_CACHE_TTL = 60000; // 1 minute
-
-/**
- * Query available models from pi --list-models
- */
-function getAvailableModels(): Array<{ provider: string; model: string }> {
-  const now = Date.now();
-  if (availableModelsCache && now - modelsCacheTime < MODELS_CACHE_TTL) {
-    return availableModelsCache;
-  }
-
-  try {
-    const result = spawnSync("pi", ["--list-models"], {
-      encoding: "utf-8",
-      timeout: 10000,
-    });
-
-    if (result.status !== 0 || !result.stdout) {
-      return [];
-    }
-
-    const models: Array<{ provider: string; model: string }> = [];
-    const lines = result.stdout.split("\n");
-
-    for (const line of lines) {
-      // Skip header line and empty lines
-      if (!line.trim() || line.startsWith("provider")) continue;
-
-      // Parse: provider model context max-out thinking images
-      const parts = line.trim().split(/\s+/);
-      if (parts.length >= 2) {
-        const provider = parts[0];
-        const model = parts[1];
-        if (provider && model) {
-          models.push({ provider, model });
-        }
-      }
-    }
-
-    availableModelsCache = models;
-    modelsCacheTime = now;
-    return models;
-  } catch (e) {
-    return [];
-  }
-}
-
-/**
- * Provider priority list - OAuth/subscription providers first (cheaper), then API-key providers
- */
-const PROVIDER_PRIORITY = [
-  // OAuth / Subscription providers (typically free/cheaper)
-  "google-gemini-cli",  // Google Gemini CLI - OAuth, free tier
-  "github-copilot",     // GitHub Copilot - subscription
-  "kimi-sub",           // Kimi subscription
-  // API key providers
-  "anthropic",
-  "openai",
-  "google",
-  "zai",
-  "openrouter",
-  "azure-openai",
-  "amazon-bedrock",
-  "mistral",
-  "groq",
-  "cerebras",
-  "xai",
-  "vercel-ai-gateway",
-];
-
-/**
- * Find the best matching provider for a given model name.
- * Returns the full provider/model string or null if not found.
- */
-function resolveModelWithProvider(modelName: string): string | null {
-  // If already has provider prefix, return as-is
-  if (modelName.includes("/")) {
-    return modelName;
-  }
-
-  const availableModels = getAvailableModels();
-  if (availableModels.length === 0) {
-    return null;
-  }
-
-  const lowerModelName = modelName.toLowerCase();
-
-  // Find all exact matches (case-insensitive) and sort by provider priority
-  const exactMatches = availableModels.filter(
-    (m) => m.model.toLowerCase() === lowerModelName
-  );
-
-  if (exactMatches.length > 0) {
-    // Sort by provider priority (lower index = higher priority)
-    exactMatches.sort((a, b) => {
-      const aIndex = PROVIDER_PRIORITY.indexOf(a.provider);
-      const bIndex = PROVIDER_PRIORITY.indexOf(b.provider);
-      // If provider not in priority list, put it at the end
-      const aPriority = aIndex === -1 ? 999 : aIndex;
-      const bPriority = bIndex === -1 ? 999 : bIndex;
-      return aPriority - bPriority;
-    });
-    return `${exactMatches[0].provider}/${exactMatches[0].model}`;
-  }
-
-  // Try partial match (model name contains the search term)
-  const partialMatches = availableModels.filter((m) =>
-    m.model.toLowerCase().includes(lowerModelName)
-  );
-
-  if (partialMatches.length > 0) {
-    for (const preferredProvider of PROVIDER_PRIORITY) {
-      const match = partialMatches.find(
-        (m) => m.provider === preferredProvider
-      );
-      if (match) {
-        return `${match.provider}/${match.model}`;
-      }
-    }
-    // Return first match if no preferred provider found
-    return `${partialMatches[0].provider}/${partialMatches[0].model}`;
-  }
-
-  return null;
 }
 
 export interface AgentSessionCleanupInspection {
@@ -351,8 +221,7 @@ export default function (pi: ExtensionAPI) {
       leaderCwd: ctx.cwd ?? process.cwd(),
       leaderProjectTrusted: projectTrust(ctx),
     });
-    for (const message of resources.policy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
-      return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, defaultModel: resources.policy.defaultModel, modelProfiles: resources.policy.modelProfiles };
+    return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, modelRoleSettings: resources.policy.modelRoleSettings };
   }
 
   const taskAuthorityTeam = new DurableTaskAuthorityTeam();
@@ -400,10 +269,7 @@ export default function (pi: ExtensionAPI) {
       argv.push("-e", process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION || __filename);
       return buildPiArgv(argv, undefined, undefined, aggregatePath, projectTrusted);
     },
-    resolveModel: resolveModelWithProvider,
-    resolveSettingsModel: resolveQualifiedWorkerDefaultModel,
-    // No leader context exists on this fallback path; the resolver applies the
-    // authorized always-trust default instead of manufacturing false.
+    // The launch adapter reads saved trust when no leader context is available.
     workerAggregate: (cwd) => workerAggregate(cwd, { cwd }),
     lifecyclePublication,
   });

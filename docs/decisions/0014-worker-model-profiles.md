@@ -9,6 +9,10 @@ Workers. The leader selects one model profile when it creates a Worker with
 choice. This keeps model selection out of repeated graph revisions and preserves
 reusable Worker context.
 
+The model-role settings decision [0015](0015-model-role-settings.md) supersedes
+this decision's public naming, raw default fallback, and repeated TUI settings
+examples. Fixed Worker bindings and human-authoritative Session recovery remain.
+
 ## Model selection
 
 - A configured alias names an exact provider, model ID, and thinking level.

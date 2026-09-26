@@ -76,7 +76,7 @@
     "README.md",
     "docs/current/README.md",
     "docs/reference.md",
-    "docs/examples/worker-model-profiles.settings.json",
+    "docs/examples/pi-team-bright.settings.json",
     "dist"
   ],
   "publishConfig": {

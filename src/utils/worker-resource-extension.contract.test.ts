@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { materializeWorkerAggregate } from "./worker-resource-projection";
+import { loadModelRoleSettings } from "./model-role-settings";
 
 type RegisteredTool = { name: string; parameters: { properties?: Record<string, unknown>; minProperties?: number } };
 type Handler = (event: any, ctx: any) => Promise<void>;
@@ -36,7 +37,7 @@ function context(cwd: string) {
   return {
     cwd,
     isProjectTrusted: () => true,
-    ui: { notify: vi.fn(), setStatus: vi.fn(), setTitle: vi.fn(), setFooter: vi.fn() },
+    ui: { notify: vi.fn(), setStatus: vi.fn(), setTitle: vi.fn(), setFooter: vi.fn(), setWidget: vi.fn() },
     sessionManager: { getSessionFile: () => undefined },
   };
 }
@@ -48,10 +49,65 @@ afterEach(() => {
 });
 
 describe("Worker resource extension projection", () => {
+  it("shows a native settings warning again after reload and stays quiet once settings are clean", async () => {
+    const home = tempHome();
+    const agentDir = path.join(home, ".pi", "agent");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({
+      pi_team_bright: { model_roles: [] },
+    }));
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "team-lead");
+    const harness = await extensionHarness();
+    const ctx = context(home);
+
+    await harness.handlers.get("session_start")!({ reason: "startup" }, ctx);
+    const warnings = () => ctx.ui.notify.mock.calls.filter(([message, severity]) =>
+      severity === "warning" && typeof message === "string" && message.includes("Pi Team Bright settings:"));
+    expect(warnings()).toHaveLength(1);
+    expect(warnings()[0][0]).toContain("pi_team_bright.model_roles");
+    expect(warnings()[0][0]).toContain("docs/examples/pi-team-bright.settings.json");
+
+    await harness.handlers.get("session_shutdown")!({ reason: "reload" }, ctx);
+    await harness.handlers.get("session_start")!({ reason: "reload" }, ctx);
+    expect(warnings()).toHaveLength(2);
+
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {} }));
+    await harness.handlers.get("session_shutdown")!({ reason: "reload" }, ctx);
+    await harness.handlers.get("session_start")!({ reason: "reload" }, ctx);
+    expect(warnings()).toHaveLength(2);
+  });
+
+  it("does not read project settings when Pi trust is unknown", async () => {
+    const home = tempHome();
+    const agentDir = path.join(home, ".pi", "agent");
+    const cwd = path.join(home, "project");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
+      pi_team_bright: { model_roles: [] },
+    }));
+    vi.stubEnv("HOME", home);
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "team-lead");
+    const harness = await extensionHarness();
+    const ctx = { ...context(cwd), isProjectTrusted: () => { throw new Error("trust unavailable"); } };
+
+    await harness.handlers.get("session_start")!({ reason: "startup" }, ctx);
+    expect(ctx.ui.notify.mock.calls.some(([message, severity]) => severity === "warning"
+      && typeof message === "string" && message.includes("Pi Team Bright settings:"))).toBe(false);
+  });
+
   it("uses one aggregate CLI prompt, exact trust flag, and no tool allowlist", async () => {
     const { buildPiArgv } = await import("../../extensions/index.js");
     expect(buildPiArgv(["pi"], "provider/model", "high", "/private/aggregate.md", true)).toEqual([
-      "pi", "--model", "provider/model:high", "--no-context-files", "--append-system-prompt", "/private/aggregate.md", "--approve",
+      "pi", "--model", "provider/model", "--thinking", "high", "--no-context-files", "--append-system-prompt", "/private/aggregate.md", "--approve",
+    ]);
+    expect(buildPiArgv(["pi"], "provider/model:high", "low")).toEqual([
+      "pi", "--model", "provider/model:high", "--thinking", "low",
     ]);
     expect(buildPiArgv(["pi"], undefined, undefined, undefined, false)).toEqual(["pi", "--no-approve"]);
   });
@@ -208,7 +264,7 @@ describe("Worker resource extension projection", () => {
     fs.mkdirSync(cwd, { recursive: true });
     const aggregate = materializeWorkerAggregate({
       cwd,
-      policy: { enable: [], disable: [], diagnostics: [] },
+      policy: { enable: [], disable: [], diagnostics: [], modelRoleSettings: loadModelRoleSettings({ cwd, projectTrusted: false }) },
       force: true,
     })!;
     vi.stubEnv("HOME", home);

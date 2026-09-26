@@ -79,11 +79,14 @@ exhaustive parameter reference.
 - [`src/coordination/event-journal.ts`](../src/coordination/event-journal.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
 - [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)
-  owns Worker-only Pi settings and model-profile catalog parsing.
+  owns Worker-only prompt and tool projection.
+  [`src/utils/model-role-settings.ts`](../src/utils/model-role-settings.ts) owns
+  model-role settings, reference resolution, and structured diagnostics.
   [`src/team-authority/contracts.ts`](../src/team-authority/contracts.ts) and
   [`worker-launch-bridge.ts`](../src/team-authority/worker-launch-bridge.ts)
   own the configured Worker binding and initial-launch/same-Session recovery
-  boundary. [Decision 0014](decisions/0014-worker-model-profiles.md) records intent.
+  boundary. [Decision 0015](decisions/0015-model-role-settings.md) records intent.
+  The [canonical example](examples/pi-team-bright.settings.json) is shipped with the package.
   Focused settings anchors are `worker-resource-projection.test.ts` and
   `worker-resource-extension.contract.test.ts`.
 - [`src/utils/worker-startup-observation.ts`](../src/utils/worker-startup-observation.ts)

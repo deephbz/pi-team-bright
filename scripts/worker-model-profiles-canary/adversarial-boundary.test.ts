@@ -7,7 +7,7 @@ import { DurableModelToolBindings } from "../../src/model-tool-contract/durable-
 import { DurableModelToolTeamApplication } from "../../src/model-tool-contract/durable-model-tool-team-application";
 import { exactLeaderSessionId } from "../../src/model-tool-contract/model-tool-contracts";
 import { WorkerLaunchBridge, type WorkerLaunchBridgeDependencies } from "../../src/team-authority/worker-launch-bridge";
-import { loadWorkerResourcePolicy, resolveWorkerModelProfile } from "../../src/utils/worker-resource-projection";
+import { loadModelRoleSettings, resolveWorkerModelRole } from "../../src/utils/model-role-settings";
 import * as paths from "../../src/utils/paths";
 import * as teams from "../../src/utils/teams";
 import type { Member, TeamConfig } from "../../src/team-authority/contracts";
@@ -15,8 +15,7 @@ import type { Member, TeamConfig } from "../../src/team-authority/contracts";
 const createdTeams: string[] = [];
 const createdRoots: string[] = [];
 const profile = {
-  provider: "openrouter",
-  model: "openai/gpt-5.1",
+  model: "openrouter/openai/gpt-5.1",
   thinking: "low" as const,
   use: "Focused verification",
 };
@@ -69,8 +68,8 @@ function workerMember(team: string): Member {
     cwd: process.cwd(),
     subscriptions: [],
     isActive: true,
-    model: `${profile.provider}/${profile.model}`,
-    modelProfile: { alias: "fast", provider: profile.provider, model: profile.model, thinking: profile.thinking },
+    model: profile.model,
+    modelProfile: { alias: "fast", provider: "openrouter", model: "openai/gpt-5.1", thinking: profile.thinking },
   };
 }
 
@@ -83,13 +82,13 @@ afterEach(() => {
   for (const root of createdRoots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-describe("ADR0014 direct production-boundary adversarial checks", () => {
-  it("rejects an unknown prototype-name alias without mutating logical Worker or Membership state", async () => {
+describe("model role production-boundary adversarial checks", () => {
+  it("rejects an unknown prototype-name role without mutating logical Worker or Membership state", async () => {
     const root = tempRoot();
     const agentDir = path.join(root, "agent");
     const cwd = path.join(root, "project");
     fs.mkdirSync(cwd, { recursive: true });
-    writeSettings(agentDir, { pi_team_bright: { model_profiles: { fast: profile, review: { ...profile, model: "openai/gpt-5.2" } } } });
+    writeSettings(agentDir, { pi_team_bright: { model_roles: { fast: profile, review: { ...profile, model: "openrouter/openai/gpt-5.2" } } } });
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
 
     const team = await createTeam();
@@ -97,40 +96,47 @@ describe("ADR0014 direct production-boundary adversarial checks", () => {
     const app = new DurableModelToolTeamApplication(modelBindings, resolverBridge());
     const before = await teams.readConfig(team.name);
 
-    const outcome = await app.ensureWorker(leaderId, { name: "prototype-name", scope: "Should never be created.", model: "prototype-name" });
+    const outcome = await app.ensureWorker(leaderId, { name: "prototype-name", scope: "Should never be created.", model_role: "prototype-name" });
 
-    expect(outcome).toMatchObject({ kind: "invalid_model_profile", validModelProfiles: [{ alias: "fast" }, { alias: "review" }] });
+    expect(outcome).toMatchObject({ kind: "invalid_model_role", validModelRoles: [] });
     expect(await teams.readConfig(team.name)).toEqual(before);
     expect(await teams.readLogicalWorker(team.name, "prototype-name")).toEqual({ kind: "not_found" });
     expect((await teams.readConfig(team.name)).members.filter((member) => member.name === "prototype-name")).toHaveLength(0);
   });
 
-  it("removes a malformed project profile override instead of falling back to its global alias", () => {
+  it("keeps a malformed project role override as an invalid shadow", () => {
     const root = tempRoot();
     const agentDir = path.join(root, "agent");
     const cwd = path.join(root, "project");
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     writeSettings(agentDir, {
       pi_team_bright: {
-        model_profiles: {
+        model_roles: {
           shadowed: profile,
-          globalOnly: { ...profile, model: "openai/gpt-5.2" },
+          globalOnly: { ...profile, model: "openrouter/openai/gpt-5.2" },
         },
       },
     });
     fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
-      pi_team_bright: { model_profiles: { shadowed: { ...profile, thinking: "not-a-thinking-level" } } },
+      pi_team_bright: { model_roles: { shadowed: { ...profile, thinking: "not-a-thinking-level" } } },
     }));
 
-    const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir });
+    const settings = loadModelRoleSettings({ cwd, projectTrusted: true, agentDir });
 
-    expect(policy.modelProfiles).toEqual({ globalOnly: { ...profile, model: "openai/gpt-5.2" } });
-    expect(policy.diagnostics).toContain("pi_team_bright.model_profiles.shadowed is invalid and was ignored.");
+    expect(settings.roles).toEqual({ globalOnly: { ...profile, model: "openrouter/openai/gpt-5.2" } });
+    expect(settings.invalidRoles.has("shadowed")).toBe(true);
+    expect(settings.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ source: "project", path: "pi_team_bright.model_roles.shadowed", code: "invalid_value" }),
+    ]));
   });
 
-  it("refuses an explicit profile when registry evidence is missing and settings validation cannot confirm it", () => {
+  it("refuses an explicit role when registry evidence is missing", () => {
     const resolveSettingsModel = vi.fn(() => null);
     const bridge = resolverBridge(resolveSettingsModel);
+    const root = tempRoot();
+    const agentDir = path.join(root, "agent");
+    writeSettings(agentDir, { pi_team_bright: { model_roles: { fast: profile } } });
+    const settings = loadModelRoleSettings({ cwd: root, projectTrusted: false, agentDir });
 
     expect(() => bridge.resolveInitialWorkerModel(
       {
@@ -138,12 +144,12 @@ describe("ADR0014 direct production-boundary adversarial checks", () => {
         workerName: "worker",
         scope: "Verify selection.",
         cwd: process.cwd(),
-        model: "fast",
+        modelRole: "fast",
         availableModelKeys: undefined,
       },
       {} as TeamConfig,
-      { projectTrusted: true, modelProfiles: { fast: profile } },
-    )).toThrow(/cannot verify availability because Pi's current model catalog is unavailable/i);
+      { projectTrusted: true, modelRoleSettings: settings },
+    )).toThrow(/cannot be verified because Pi's model catalog is unavailable/i);
     expect(resolveSettingsModel).not.toHaveBeenCalled();
   });
 
@@ -152,7 +158,7 @@ describe("ADR0014 direct production-boundary adversarial checks", () => {
     const agentDir = path.join(root, "agent");
     const cwd = path.join(root, "project");
     fs.mkdirSync(cwd, { recursive: true });
-    writeSettings(agentDir, { pi_team_bright: { model_profiles: { fast: profile } } });
+    writeSettings(agentDir, { pi_team_bright: { model_roles: { fast: profile } } });
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
 
     const team = await createTeam();
@@ -164,7 +170,7 @@ describe("ADR0014 direct production-boundary adversarial checks", () => {
     });
     await teams.addMember(team.name, existing);
 
-    writeSettings(agentDir, { pi_team_bright: { model_profiles: { replacement: { ...profile, model: "openai/gpt-5.2" } } } });
+    writeSettings(agentDir, { pi_team_bright: { model_roles: { replacement: { ...profile, model: "openrouter/openai/gpt-5.2" } } } });
     const launchBridge = {
       resolveInitialWorkerModel: vi.fn(),
       ensureWorker: vi.fn(async () => ({ action: "reused", member: existing, membershipId: existing.membershipId! })),
@@ -174,33 +180,24 @@ describe("ADR0014 direct production-boundary adversarial checks", () => {
 
     const outcome = await app.ensureWorker(leaderId, { name: existing.name, scope: "Keep the existing assignment." });
 
-    expect(outcome).toMatchObject({ kind: "reused", worker: { name: existing.name, model: "fast" } });
+    expect(outcome).toMatchObject({ kind: "reused", worker: { name: existing.name, modelRole: "fast" } });
     expect(launchBridge.resolveInitialWorkerModel).not.toHaveBeenCalled();
     expect(launchBridge.ensureWorker).toHaveBeenCalledWith(expect.objectContaining({ modelProfile: existing.modelProfile }));
   });
 
-  it("does not add an off thinking flag when defaults are omitted", () => {
+  it("keeps an omitted thinking flag out of Pi argv", () => {
     expect(buildPiArgv(["pi"], undefined, undefined)).toEqual(["pi"]);
     expect(buildPiArgv(["pi"], "openrouter/openai/gpt-5.1", undefined)).toEqual([
       "pi", "--model", "openrouter/openai/gpt-5.1",
     ]);
-    expect(resolverBridge().resolveInitialWorkerModel(
-      { teamName: "team", workerName: "worker", scope: "Use native defaults.", cwd: process.cwd() },
-      {} as TeamConfig,
-      { projectTrusted: true, modelProfiles: { fast: profile } },
-    )).toEqual({});
-    expect(resolverBridge().resolveInitialWorkerModel(
-      { teamName: "team", workerName: "worker", scope: "Use the configured default.", cwd: process.cwd() },
-      { defaultModel: "openrouter/openai/gpt-5.1" } as TeamConfig,
-      { projectTrusted: true, modelProfiles: {} },
-    )).toEqual({
-      model: "openrouter/openai/gpt-5.1",
-      binding: { provider: "openrouter", model: "openai/gpt-5.1" },
-    });
   });
 
-  it("keeps the profile resolver own-property bounded for prototype names", () => {
-    expect(() => resolveWorkerModelProfile("constructor", { fast: profile })).toThrow(/is not configured/i);
-    expect(() => resolveWorkerModelProfile("__proto__", { fast: profile })).toThrow(/is not configured/i);
+  it("keeps the role resolver own-property bounded for prototype names", () => {
+    const root = tempRoot();
+    const agentDir = path.join(root, "agent");
+    writeSettings(agentDir, { pi_team_bright: { model_roles: { fast: profile } } });
+    const settings = loadModelRoleSettings({ cwd: root, projectTrusted: false, agentDir });
+    expect(() => resolveWorkerModelRole("constructor", settings)).toThrow(/is not configured/i);
+    expect(() => resolveWorkerModelRole("__proto__", settings)).toThrow(/is not configured/i);
   });
 });

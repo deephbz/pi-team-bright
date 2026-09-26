@@ -2,32 +2,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
-import * as childProcess from "node:child_process";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { ProjectTrustStore, type ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { THINKING_LEVELS, type ThinkingLevel, type WorkerModelBinding } from "../team-authority/contracts";
-
-export interface WorkerModelProfile {
-  provider: string;
-  /** Full provider-local model ID. Later slashes are preserved. */
-  model: string;
-  thinking: ThinkingLevel;
-  use: string;
-}
-
-export type WorkerModelProfiles = Readonly<Record<string, WorkerModelProfile>>;
-
-export type WorkerDefaultModelOverride = {
-  scope: "global" | "project";
-  value?: string;
-  error?: string;
-};
+import { THINKING_LEVELS, type ThinkingLevel } from "../team-authority/contracts";
+import { loadModelRoleSettings, type AvailableModelRoles, type ModelRoleSettings } from "./model-role-settings";
 
 export interface WorkerResourcePolicy {
   replaceGlobal?: { path: string; content: string };
   appendGlobal?: { path: string; content: string };
-  defaultModel?: WorkerDefaultModelOverride;
   /** Settings projection. Existing Worker bindings do not follow changes here. */
-  modelProfiles?: WorkerModelProfiles;
+  modelRoleSettings: ModelRoleSettings;
   enable: string[];
   disable: string[];
   diagnostics: string[];
@@ -63,82 +47,11 @@ function worker(root?: JsonRecord): JsonRecord | undefined {
   return isRecord(namespace) && isRecord(namespace.worker) ? namespace.worker : undefined;
 }
 
-function readModelProfiles(root: JsonRecord | undefined, policy: WorkerResourcePolicy, invalidAliases?: Set<string>): WorkerModelProfiles {
-  const namespace = root?.pi_team_bright;
-  const raw = isRecord(namespace) ? namespace.model_profiles : undefined;
-  if (raw === undefined) return {};
-  if (!isRecord(raw)) {
-    warn(policy, "pi_team_bright.model_profiles must map aliases to profiles; it was ignored.");
-    return {};
-  }
-  const result: Record<string, WorkerModelProfile> = Object.create(null) as Record<string, WorkerModelProfile>;
-  for (const [alias, value] of Object.entries(raw)) {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(alias) || !isRecord(value)
-      || typeof value.provider !== "string" || !value.provider.trim() || value.provider.includes("/")
-      || typeof value.model !== "string" || !value.model.trim()
-      || typeof value.thinking !== "string" || !THINKING_LEVELS.includes(value.thinking as ThinkingLevel)
-      || typeof value.use !== "string" || !value.use.trim()) {
-      warn(policy, `pi_team_bright.model_profiles.${alias} is invalid and was ignored.`);
-      invalidAliases?.add(alias);
-      continue;
-    }
-    result[alias] = {
-      provider: value.provider.trim(),
-      model: value.model.trim(),
-      thinking: value.thinking as ThinkingLevel,
-      use: value.use.trim(),
-    };
-  }
-  return result;
-}
-
-function workerDefaultModel(root: JsonRecord | undefined, scope: WorkerDefaultModelOverride["scope"]): WorkerDefaultModelOverride | undefined {
-  if (!root || !Object.hasOwn(root, "default_model")) return undefined;
-  const value = root.default_model;
-  if (typeof value !== "string" || !value.trim()) {
-    return { scope, error: "must be a nonempty qualified provider/model string" };
-  }
-  return { scope, value: value.trim() };
-}
-
 function activeAgentDir(): string {
   return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
 }
 
-export type QualifiedAvailableModelKeys = ReadonlySet<string>;
-
-export class WorkerModelProfileConfigurationError extends Error {
-  constructor(readonly alias: string, readonly choices: string[], reason: string) {
-    super(`Worker model profile '${alias}' ${reason}. Valid aliases: ${choices.length ? choices.join(", ") : "<none>"}. Edit pi_team_bright.model_profiles, then retry before creating a Worker carrier.`);
-    this.name = "WorkerModelProfileConfigurationError";
-  }
-}
-
-/** Resolve one configured profile against the invocation's available-model snapshot. */
-export function resolveWorkerModelProfile(
-  alias: string,
-  profiles: WorkerModelProfiles,
-  availableModelKeys?: QualifiedAvailableModelKeys,
-): WorkerModelBinding {
-  const choices = Object.keys(profiles).sort();
-  const profile = Object.hasOwn(profiles, alias) ? profiles[alias] : undefined;
-  if (!profile) throw new WorkerModelProfileConfigurationError(alias, choices, "is not configured");
-  if (profile.provider.includes("/")) {
-    throw new WorkerModelProfileConfigurationError(alias, choices, "has an invalid provider ID containing '/'");
-  }
-  if (availableModelKeys === undefined) {
-    throw new WorkerModelProfileConfigurationError(alias, [], "cannot verify availability because Pi's current model catalog is unavailable");
-  }
-  const qualified = `${profile.provider}/${profile.model}`;
-  if (!availableModelKeys.has(qualified)) {
-    const selectable = Object.entries(profiles)
-      .filter(([, candidate]) => availableModelKeys.has(`${candidate.provider}/${candidate.model}`))
-      .map(([candidateAlias]) => candidateAlias)
-      .sort();
-    throw new WorkerModelProfileConfigurationError(alias, selectable, `resolves to unavailable model ${qualified}`);
-  }
-  return { alias, provider: profile.provider, model: profile.model, thinking: profile.thinking };
-}
+export type QualifiedAvailableModelKeys = AvailableModelRoles;
 
 /** Capture only exact qualified keys from the current tool's available-model snapshot. */
 export function captureQualifiedAvailableModelKeys(
@@ -148,33 +61,21 @@ export function captureQualifiedAvailableModelKeys(
     if (!registry) return undefined;
     const models = registry.getAvailable();
     if (!Array.isArray(models)) return undefined;
-    const keys = new Set<string>();
+    const keys = new Set<string>() as Set<string> & AvailableModelRoles;
+    const thinkingLevelsByKey = new Map<string, ReadonlySet<ThinkingLevel>>();
     for (const model of models) {
       if (typeof model?.provider === "string" && model.provider && typeof model.id === "string" && model.id) {
-        keys.add(`${model.provider}/${model.id}`);
+        const key = `${model.provider}/${model.id}`;
+        keys.add(key);
+        thinkingLevelsByKey.set(key, new Set(getSupportedThinkingLevels(model).filter(
+          (level): level is ThinkingLevel => THINKING_LEVELS.includes(level as ThinkingLevel),
+        )));
       }
     }
+    keys.thinkingLevelsByKey = thinkingLevelsByKey;
     return keys;
   } catch {
     return undefined;
-  }
-}
-
-/** Confirm an exact provider/model setting from a current snapshot or Pi's CLI fallback. */
-export function resolveQualifiedWorkerDefaultModel(
-  modelName: string,
-  availableModelKeys?: QualifiedAvailableModelKeys,
-): string | null {
-  if (availableModelKeys !== undefined) return availableModelKeys.has(modelName) ? modelName : null;
-  try {
-    const result = childProcess.spawnSync("pi", ["--list-models"], { encoding: "utf8", timeout: 10_000 });
-    if (result.status !== 0 || !result.stdout) return null;
-    return result.stdout.split("\n").some((line) => {
-      const [provider, model] = line.trim().split(/\s+/, 3);
-      return `${provider}/${model}` === modelName;
-    }) ? modelName : null;
-  } catch {
-    return null;
   }
 }
 
@@ -213,7 +114,10 @@ export function savedProjectTrust(cwd: string, agentDir = activeAgentDir()): boo
 }
 
 export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: boolean; agentDir?: string }): WorkerResourcePolicy {
-  const policy: WorkerResourcePolicy = { enable: [], disable: [], diagnostics: [], modelProfiles: {} };
+  const policy: WorkerResourcePolicy = {
+    enable: [], disable: [], diagnostics: [],
+    modelRoleSettings: loadModelRoleSettings(input),
+  };
   const agentDir = input.agentDir ?? activeAgentDir();
   const globalRoot = json(path.join(agentDir, "settings.json"), policy);
   const projectRoot = input.projectTrusted ? json(path.join(input.cwd, ".pi", "settings.json"), policy) : undefined;
@@ -225,13 +129,6 @@ export function loadWorkerResourcePolicy(input: { cwd: string; projectTrusted: b
   const projectAgents = isRecord(project?.agents) ? project.agents : undefined;
   const agents = { ...globalAgents, ...projectAgents };
 
-  policy.defaultModel = workerDefaultModel(project, "project") ?? workerDefaultModel(global, "global");
-  const invalidProjectAliases = new Set<string>();
-  const configuredProfiles = { ...readModelProfiles(globalRoot, policy) } as Record<string, WorkerModelProfile>;
-  const projectProfiles = readModelProfiles(projectRoot, policy, invalidProjectAliases);
-  for (const alias of invalidProjectAliases) delete configuredProfiles[alias];
-  Object.assign(configuredProfiles, projectProfiles);
-  policy.modelProfiles = configuredProfiles;
   policy.enable = names(projectTools?.enable ?? globalTools?.enable, policy, "worker.tools.enable");
   policy.disable = names(projectTools?.disable ?? globalTools?.disable, policy, "worker.tools.disable");
   policy.replaceGlobal = file(agents.replace_global, policy, "worker.agents.replace_global");
@@ -250,12 +147,11 @@ export function resolveWorkerLaunchResources(input: {
   const sameCwd = path.resolve(input.cwd) === path.resolve(input.leaderCwd);
   const savedTrust = sameCwd ? undefined : savedProjectTrust(input.cwd, input.agentDir);
   // A saved decision for a different Worker cwd is authoritative. Otherwise
-  // inherit the leader's resolved trust, with the always-trust fallback when
-  // neither Pi context is available.
-  const projectTrusted = savedTrust ?? input.leaderProjectTrusted ?? true;
+  // inherit explicit leader trust. Missing trust does not authorize project settings.
+  const projectTrusted = savedTrust ?? input.leaderProjectTrusted ?? false;
   const policy = loadWorkerResourcePolicy({ cwd: input.cwd, projectTrusted, agentDir: input.agentDir });
   if (savedTrust === undefined && input.leaderProjectTrusted === undefined) {
-    warn(policy, "Worker Pi trust context unavailable; launched with --approve and trusted project settings enabled.");
+    warn(policy, "Worker Pi trust context unavailable; project settings ignored and approval was not assumed.");
   }
   return {
     aggregatePath: materializeWorkerAggregate({ cwd: input.cwd, policy, agentDir: input.agentDir }),

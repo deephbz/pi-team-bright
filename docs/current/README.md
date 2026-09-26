@@ -1,13 +1,13 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-09-15
+Updated: 2026-09-26
 
 Current published release: stable `0.18.0` is on npm `latest` from annotated
 tag `v0.18.0`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
 The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.18.0)
 was published at `2026-09-15T07:32:44Z`; it is not a draft or prerelease.
 
-Worker model profiles select a fixed initial execution binding at Worker
+The published `0.18.0` model profiles select a fixed initial execution binding at Worker
 creation. Tasks select an assignee only. This breaking release requires new Team
 epochs and removes per-Task model selection without migration. Keep existing
 Teams on their original version until they finish or stop; preserve their
@@ -15,7 +15,18 @@ stores and native Session logs. Parent composition and live settings remain
 separate from this publication.
 
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
-model profiles. The Membership-observation surface remains in **sharing**.
+model roles. The Membership-observation surface remains in **sharing**.
+
+## Unreleased model-role change
+
+The accepted [model-role decision](../decisions/0015-model-role-settings.md)
+replaces profile aliases and raw defaults with one named map and a default
+reference. Implementation and independent verification are complete.
+Public naming is `model_roles`, `default_model_role`, and `model_role`.
+Each role has one qualified model reference plus thinking and usage guidance.
+The [canonical example](../examples/pi-team-bright.settings.json) is the setup
+entry point. The [work record](../projects/model-role-settings.md) tracks the
+base, scope, verification, and remaining work. This change is not published.
 
 ## v0.18.0 publication evidence
 
@@ -55,6 +66,7 @@ variables do not.
 | Concern | Authority |
 |---|---|
 | Public tool selection and TUI message projection | [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts), [`src/model-tool-contract/tui-projection.ts`](../../src/model-tool-contract/tui-projection.ts), [`src/model-tool-contract/tui-message-projection.ts`](../../src/model-tool-contract/tui-message-projection.ts), and [`extensions/index.ts`](../../extensions/index.ts). The executable review inventory is [`tui-message-gallery.ts`](../../src/model-tool-contract/tui-message-gallery.ts). |
+| Model-role settings and diagnostics | [`src/utils/model-role-settings.ts`](../../src/utils/model-role-settings.ts) |
 | Worker-only settings resource projection | [`src/utils/worker-resource-projection.ts`](../../src/utils/worker-resource-projection.ts) and its focused tests |
 | Tool parameters, descriptions, guards, and execution | TypeBox registrations in [`extensions/index.ts`](../../extensions/index.ts) |
 | Machine result schema | Raw catalog unions and model projection schemas in [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts) |
@@ -74,6 +86,10 @@ The [contract source map](../reference.md) gives one-hop navigation without
 restating executable definitions.
 
 ## Decisions still in force
+
+- [Decision 0015](../decisions/0015-model-role-settings.md) supersedes the profile
+  naming, default fallback, and repeated TUI examples from Decision 0014.
+  Fixed Worker bindings and native Session recovery remain in force.
 
 - [Decision 0014](../decisions/0014-worker-model-profiles.md) accepts fixed
   Worker model profiles, compact alias discovery, valid-choice error hints,
@@ -331,18 +347,15 @@ restating executable definitions.
   wired at Worker session and launch composition in
   [`extensions/index.ts`](../../extensions/index.ts). It reads the active Pi global
   directory and trusted project settings under `pi_team_bright.worker`. The launch
-  resolves one Pi trust boolean for both trusted project settings and child
-  `--approve`/`--no-approve`: a saved decision for a different Worker cwd wins,
-  otherwise the Worker inherits the leader's resolved trust, with `true` when the
-  trust context is unavailable. An available `default_model`, split at its first
-  slash into provider and nonempty model ID, follows explicit Worker/template
-  and durable Team defaults. The resolved creation binding belongs to the
-  logical Worker; invalid profile selection refuses before Worker creation.
-  Same-Session recovery preserves Pi's recorded model and thinking selection.
-  Profile settings never overwrite native Pi selection, Task, or public
-  observation records. This is
-  a Worker launch contract change with no topology change. Intent and reversal criteria are in
-  [decision 0008](../decisions/0008-worker-resource-projection.md).
+  requires explicit trust before reading project settings. A saved decision for a
+  different Worker cwd wins; otherwise the Worker inherits the leader's resolved
+  trust. Unknown trust uses global settings. Model selection comes from the
+  model-role catalog and its default reference. The resolved creation binding
+  belongs to the logical Worker; invalid selection refuses before Worker
+  creation. Same-Session recovery preserves Pi's recorded model and thinking.
+  Settings do not rewrite Task or public observation records. The Worker resource
+  boundary remains in [decision 0008](../decisions/0008-worker-resource-projection.md);
+  [decision 0015](../decisions/0015-model-role-settings.md) owns model selection.
 - Worker admission remains a two-phase external-actuation protocol. Herdr
   acceptance is positive actuation evidence, not Worker authority. Exact
   Membership, Session, and runtime-generation binding is the linearization

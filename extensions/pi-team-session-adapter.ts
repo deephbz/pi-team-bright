@@ -26,6 +26,7 @@ import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTea
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
+import { createSettingsWarningPresenter } from "./settings-warning";
 
 export interface PiTeamSessionAdapter {
   readonly modelToolLifecycle: ModelToolLifecycle;
@@ -75,6 +76,7 @@ export function createPiTeamSessionAdapter(options: {
   let footerModel: any;
   let workerResourcePolicy: WorkerResourcePolicy | undefined;
   let workerActiveToolBaseline: string[] | undefined;
+  const settingsWarnings = createSettingsWarningPresenter();
   const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
 
   const modelToolJourney = () => getModelToolJourney();
@@ -82,7 +84,7 @@ export function createPiTeamSessionAdapter(options: {
 function configureWorkerResources(ctx: any): void {
   if (!isTeammate) return;
   const cwd = ctx.cwd ?? process.cwd();
-  workerResourcePolicy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) ?? true });
+  workerResourcePolicy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) === true });
   // Capture this once, before this extension projects settings. Reload always
   // derives from it so removing settings restores Pi's active-tool baseline.
   workerActiveToolBaseline ??= pi.getActiveTools?.() ?? [];
@@ -96,10 +98,13 @@ function configureWorkerResources(ctx: any): void {
   ];
   const projected = projectWorkerTools([...new Set(workerSurface)], workerEligibleRegistered, workerResourcePolicy);
   pi.setActiveTools?.(projected);
-  for (const message of workerResourcePolicy.diagnostics) ctx.ui?.notify?.(`Pi Team Bright Worker settings: ${message}`, "warning");
 }
 
 const registerCommand = (pi as any).registerCommand?.bind(pi);
+registerCommand?.("pi-team-bright-settings", {
+  description: "Show current Pi Team Bright settings diagnostics",
+  handler: async (_args: string, ctx: any) => settingsWarnings.showAll(ctx, projectTrust(ctx) === true),
+});
 registerCommand?.("pi-team-graph", {
   description: "Toggle a read-only Task graph pane in this exact Herdr tab (limit: 25, 50, 100, 200, or all)",
   getArgumentCompletions: (prefix: string) => ["25", "50", "100", "200", "all"]
@@ -409,6 +414,7 @@ function registerSessionHooks() {
     agentName = "unbound-session";
     teamName = null;
     currentMembershipId = undefined;
+    settingsWarnings.refresh(ctx, projectTrust(ctx) === true, true);
     return;
   }
 
@@ -432,6 +438,8 @@ function registerSessionHooks() {
   if (!isTeammate && !teamName) {
     teamName = teamQuery.findLeadTeamForSession(piSessionFile);
   }
+
+  settingsWarnings.refresh(ctx, projectTrust(ctx) === true, !isTeammate);
 
   if (envTeamName && !teamQuery.teamExists(envTeamName)) {
     throw new Error(
@@ -526,6 +534,7 @@ function registerSessionHooks() {
 });
 
 pi.on("session_shutdown", async (event, ctx) => {
+  settingsWarnings.clear(ctx);
   if (isTeammate && event.reason === "reload") {
     // Pi captures active tools after this hook and replaces this extension
     // closure. Restore the immutable baseline before that capture.
@@ -533,7 +542,7 @@ pi.on("session_shutdown", async (event, ctx) => {
     const aggregate = process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
     if (aggregate && ownsWorkerAggregate(aggregate)) {
       const cwd = ctx.cwd ?? process.cwd();
-      const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) ?? true });
+      const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) === true });
       // Keep the fixed CLI path, but overwrite it atomically even if both
       // entries disappeared. Pi reload then sees native global/ancestor/project content.
       materializeWorkerAggregate({ cwd, policy, target: aggregate, force: true });
