@@ -50,6 +50,14 @@ The [work record](../projects/task-timeline-view.md) gives scope and verificatio
 This changes internal recorded evidence and presentation; the public Membership
 observation protocol and HyperCarrier integration boundary remain unchanged.
 
+## Unreleased formal hardening
+
+The [formal hardening work](../projects/formal-hardening.md) strengthens existing
+graph recovery, operation replay, Membership fencing, and Task delivery. It adds
+bounded TLA+ checks and independent adversarial and process-recovery tests. This
+work does not change the published release or deployment topology. Its evidence
+and limits are separate from the v0.18.0 publication receipt.
+
 ## v0.18.0 publication evidence
 
 The exact published source is `f43d4739556f2ac4b82070fef64007a304801ef1`,
