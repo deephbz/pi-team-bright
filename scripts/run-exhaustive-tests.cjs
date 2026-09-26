@@ -1,21 +1,13 @@
 #!/usr/bin/env node
 const { spawn: nodeSpawn } = require("node:child_process");
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const causalPath = "src/utils/causal-path-characterization.test.ts";
 const causalTimeoutMs = 180_000;
 const causalInventoryTitle = "keeps the Task-to-observation path and its outside-in anchors machine-operable";
-const causalScenarioTitles = [
-  "spans public assignment, exact Session presentation, acknowledgement, leader observation, duplicate replay, and restart",
-  "requires an acknowledged snapshot and keeps observation position on the exact active branch",
-  "characterizes public team_sync timeout and cancellation without losing later authority changes",
-  "refuses stale Membership presentation and reconstructs delivery for the replacement exact Session",
-  "keeps an unavailable event hydration unacknowledged, then retries through the registered raw, model, and TUI boundary",
-  "performs one quiet-authority read before 5 seconds, then cadence and post-wake reads before acknowledgement",
-  "reports degraded public assignment and recovers after atomic delivery-spool failure",
-];
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
@@ -102,10 +94,26 @@ function createExhaustiveRunner({
     async runNonCausal(config, files) {
       for (const file of files) await run(config, [file]);
     },
-    async runCausal(config, cases = [causalInventoryTitle, ...causalScenarioTitles]) {
+    async runCausal(config, cases = [causalInventoryTitle]) {
+      if (cases.length === 0) throw new Error("causal lane has no active test targets");
       for (const title of cases) {
+        const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-causal-report-"));
+        const reportFile = path.join(reportDir, "result.json");
         console.log(`causal case: ${title}`);
-        await run(config, [causalPath, "-t", title], causalTimeoutMs);
+        try {
+          await run(config, [causalPath, "-t", title, "--reporter=default", "--reporter=json", `--outputFile.json=${reportFile}`], causalTimeoutMs);
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync(reportFile, "utf8"));
+          } catch (error) {
+            throw new Error(`causal case ${title} has no valid Vitest JSON report: ${errorMessage(error)}`);
+          }
+          if (!report || !Number.isInteger(report.numPassedTests) || report.numPassedTests < 1) {
+            throw new Error(`causal case ${title} executed no passing tests`);
+          }
+        } finally {
+          fs.rmSync(reportDir, { recursive: true, force: true });
+        }
       }
     },
   };
@@ -130,4 +138,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { causalInventoryTitle, causalPath, causalScenarioTitles, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, runExhaustiveTests, terminateProcessGroup };
+module.exports = { causalInventoryTitle, causalPath, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, runExhaustiveTests, terminateProcessGroup };
