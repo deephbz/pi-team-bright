@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
@@ -35,6 +35,7 @@ const PUBLIC_TOOLS = [
 ];
 
 const createdTeams: string[] = [];
+const createdAgentDirs: string[] = [];
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
@@ -47,10 +48,24 @@ function uniqueTeam(suffix: string): string {
 function context(sessionFile: string, cwd = process.cwd()) {
   return {
     cwd,
+    modelRegistry: { getAvailable: () => [{ provider: "fixture", id: "model", reasoning: true }] },
     sessionManager: { getSessionFile: () => sessionFile },
     ui: { setStatus() {}, notify() {} },
   };
 }
+
+beforeEach(() => {
+  const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-model-role-fixture-"));
+  createdAgentDirs.push(agentDir);
+  const promptPath = path.join(agentDir, "worker.md");
+  fs.writeFileSync(promptPath, "Carrier lifecycle test prompt.");
+  fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
+    model_roles: { fixture: { model: "fixture/model", thinking: "low", use: "Contract tests" } },
+    default_model_role: "fixture",
+    worker: { agents: { append_global: promptPath } },
+  } }));
+  vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
+});
 
 function member(name: string, sessionFile: string, extra: Partial<Member> = {}): Member {
   return {
@@ -142,6 +157,7 @@ afterEach(() => {
     fs.rmSync(paths.teamDir(team), { recursive: true, force: true });
     fs.rmSync(paths.taskDir(team), { recursive: true, force: true });
   }
+  for (const agentDir of createdAgentDirs.splice(0)) fs.rmSync(agentDir, { recursive: true, force: true });
 });
 
 describe("ergonomic agent-facing Team contracts", () => {
@@ -524,7 +540,9 @@ describe("ergonomic agent-facing Team contracts", () => {
       "-e",
       "/private/exact-team-extension.ts",
       "--model",
-      "openai-codex/example-model:high",
+      "openai-codex/example-model",
+      "--thinking",
+      "high",
     ]));
     expect(spawnOptions.argv).not.toContain("-ns");
     expect(spawnOptions.argv).not.toContain("-ne");

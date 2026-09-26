@@ -1,0 +1,33 @@
+{
+  "pi_team_bright": {
+    "model_roles": {
+      "standard-worker": {
+        "model": "openai-codex/gpt-5.6-luna",
+        "thinking": "high",
+        "use": "Implementation and validation."
+      },
+      "reviewer": {
+        "model": "anthropic/claude-opus-4-6",
+        "thinking": "high",
+        "use": "Independent review of design and evidence."
+      }
+    },
+    "default_model_role": "standard-worker",
+    "team": {
+      "pane_layout": {
+        "leader_share": 0.6,
+        "worker_tiling": "linear"
+      },
+      "wait_seconds": 120,
+      "nudge_enabled": true,
+      "nudge_delay_seconds": 1200
+    },
+    "worker": {
+      "agents": {},
+      "tools": {
+        "enable": [],
+        "disable": []
+      }
+    }
+  }
+}

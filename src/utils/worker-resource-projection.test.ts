@@ -1,10 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
-
-const { spawnSync } = vi.hoisted(() => ({ spawnSync: vi.fn() }));
-vi.mock("node:child_process", async (importOriginal) => ({
-  ...await importOriginal<typeof import("node:child_process")>(),
-  spawnSync,
-}));
+import { describe, expect, it } from "vitest";
 
 import fs from "node:fs";
 import os from "node:os";
@@ -16,16 +10,21 @@ import {
   materializeWorkerAggregate,
   projectWorkerTools,
   removeWorkerAggregate,
-  resolveQualifiedWorkerDefaultModel,
   resolveWorkerLaunchResources,
-  resolveWorkerModelProfile,
-  WorkerModelProfileConfigurationError,
 } from "./worker-resource-projection";
 
 const temp = () => fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-worker-resource-"));
 
 function policy(overrides: Partial<ReturnType<typeof loadWorkerResourcePolicy>> = {}) {
-  return { enable: [], disable: [], diagnostics: [], ...overrides };
+  return {
+    enable: [], disable: [], diagnostics: [],
+    modelRoleSettings: {
+      roles: {}, diagnostics: [], invalidRoles: new Set<string>(), invalidDefault: false,
+      invalidRoleMap: false, invalidGlobalRoleMap: false, invalidProjectRoleMap: false,
+      roleSources: {}, sourceFiles: { global: "", project: "" },
+    },
+    ...overrides,
+  };
 }
 
 describe("Worker resource projection", () => {
@@ -46,122 +45,38 @@ describe("Worker resource projection", () => {
     expect(projectWorkerTools([], ["a", "b"], loaded)).toEqual(["b"]);
   });
 
-  it("loads model profile aliases with exact provider-local IDs and project override shadowing", () => {
+  it("projects the shared model role settings into Worker resources", () => {
     const root = temp();
     const agent = path.join(root, "agent");
     const cwd = path.join(root, "project");
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     fs.mkdirSync(agent, { recursive: true });
-    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
-      fast: { provider: "openrouter", model: "openai/gpt-5.6/fast", thinking: "low", use: "Global fast" },
-      keep: { provider: "openai", model: "gpt-5.6", thinking: "medium", use: "Keep" },
-      collision: { provider: "foo/bar", model: "baz", thinking: "low", use: "Collision" },
-    } } }));
-    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
-      fast: { provider: "openrouter", model: "openai/gpt-5.6/local", thinking: "high", use: "Project fast" },
-      keep: 3,
-    } } }));
-    const loaded = loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent });
-    expect(loaded.modelProfiles).toEqual({ fast: { provider: "openrouter", model: "openai/gpt-5.6/local", thinking: "high", use: "Project fast" } });
-    expect(resolveWorkerModelProfile("fast", loaded.modelProfiles!, new Set(["openrouter/openai/gpt-5.6/local"]))).toEqual({ alias: "fast", provider: "openrouter", model: "openai/gpt-5.6/local", thinking: "high" });
-    expect(loaded.modelProfiles).not.toHaveProperty("collision");
-    expect(() => resolveWorkerModelProfile("collision", { collision: { provider: "foo/bar", model: "baz", thinking: "low", use: "Collision" } }, new Set(["foo/bar/baz"]))).toThrow(/provider ID containing/);
-    expect(() => resolveWorkerModelProfile("keep", loaded.modelProfiles!, new Set(["openai/gpt-5.6"]))).toThrow(WorkerModelProfileConfigurationError);
-    expect(() => resolveWorkerModelProfile("fast", loaded.modelProfiles!)).toThrow(/catalog is unavailable/i);
-    const tooLong = "x".repeat(65);
-    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
-      [tooLong]: { provider: "openai", model: "gpt-5.6", thinking: "low", use: "Too long" },
-    } } }));
-    expect(loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent }).modelProfiles).toEqual({
-      fast: { provider: "openrouter", model: "openai/gpt-5.6/fast", thinking: "low", use: "Global fast" },
-      keep: { provider: "openai", model: "gpt-5.6", thinking: "medium", use: "Keep" },
-    });
+    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({ pi_team_bright: {
+      model_roles: { worker: { model: "openrouter/openai/gpt-5.6", thinking: "low", use: "Routine work" } },
+      default_model_role: "worker",
+    } }));
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: {
+      model_roles: { worker: { model: "openrouter/openai/gpt-5.6/local", thinking: "high", use: "Local work" } },
+    } }));
+
+    const trusted = loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent });
+    expect(trusted.modelRoleSettings.roles.worker.model).toBe("openrouter/openai/gpt-5.6/local");
+    expect(trusted.modelRoleSettings.defaultRole).toBe("worker");
+    const untrusted = loadWorkerResourcePolicy({ cwd, projectTrusted: false, agentDir: agent });
+    expect(untrusted.modelRoleSettings.roles.worker.model).toBe("openrouter/openai/gpt-5.6");
   });
 
-  it("uses a trusted project's Worker model setting over global and ignores untrusted project settings", () => {
-    const root = temp();
-    const agent = path.join(root, "agent");
-    const cwd = path.join(root, "project");
-    fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
-    fs.mkdirSync(agent, { recursive: true });
-    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: "global/model" } },
-    }));
-    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: "project/model" } },
-    }));
-
-    expect(loadWorkerResourcePolicy({ cwd, projectTrusted: true, agentDir: agent }).defaultModel)
-      .toEqual({ scope: "project", value: "project/model" });
-    expect(loadWorkerResourcePolicy({ cwd, projectTrusted: false, agentDir: agent }).defaultModel)
-      .toEqual({ scope: "global", value: "global/model" });
-  });
-
-  it("uses PI_CODING_AGENT_DIR for the active global Worker setting", () => {
-    const root = temp();
-    const agent = path.join(root, "active-agent");
-    fs.mkdirSync(agent, { recursive: true });
-    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: "openrouter/openai/gpt-5.1" } },
-    }));
-    const prior = process.env.PI_CODING_AGENT_DIR;
-    process.env.PI_CODING_AGENT_DIR = agent;
-    try {
-      expect(loadWorkerResourcePolicy({ cwd: root, projectTrusted: false }).defaultModel)
-        .toEqual({ scope: "global", value: "openrouter/openai/gpt-5.1" });
-    } finally {
-      if (prior === undefined) delete process.env.PI_CODING_AGENT_DIR;
-      else process.env.PI_CODING_AGENT_DIR = prior;
-    }
-  });
-
-  it("retains malformed Worker model setting scope for launch refusal", () => {
-    const root = temp();
-    const agent = path.join(root, "agent");
-    fs.mkdirSync(agent, { recursive: true });
-    fs.writeFileSync(path.join(agent, "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: 7 } },
-    }));
-
-    expect(loadWorkerResourcePolicy({ cwd: root, projectTrusted: false, agentDir: agent }).defaultModel)
-      .toEqual({ scope: "global", error: "must be a nonempty qualified provider/model string" });
-  });
-
-  it("uses an exact available-model snapshot without a catalog subprocess", () => {
-    spawnSync.mockImplementation(() => {
-      throw new Error("snapshot validation must not start pi");
-    });
-    try {
-      const snapshot = captureQualifiedAvailableModelKeys({
-        getAvailable: () => [
-          { provider: "openrouter", id: "openai/gpt-5.1" },
-          { provider: "openai", id: "gpt-5.1" },
-        ],
-      } as never);
-
-      expect(snapshot).toEqual(new Set(["openrouter/openai/gpt-5.1", "openai/gpt-5.1"]));
-      expect(resolveQualifiedWorkerDefaultModel("openrouter/openai/gpt-5.1", snapshot)).toBe("openrouter/openai/gpt-5.1");
-      expect(resolveQualifiedWorkerDefaultModel("missing/model", snapshot)).toBeNull();
-      const emptySnapshot = captureQualifiedAvailableModelKeys({ getAvailable: () => [] } as never);
-      expect(resolveQualifiedWorkerDefaultModel("missing/model", emptySnapshot)).toBeNull();
-      expect(spawnSync).not.toHaveBeenCalled();
-    } finally {
-      spawnSync.mockReset();
-    }
-  });
-
-  it("falls back to Pi's catalog only when the exact model snapshot is unavailable", () => {
-    spawnSync.mockReturnValue({
-      status: 0,
-      stdout: "provider model\nlisted model\n",
+  it("captures exact model keys and supported thinking without a child process", () => {
+    const snapshot = captureQualifiedAvailableModelKeys({
+      getAvailable: () => [
+        { provider: "openrouter", id: "openai/gpt-5.1", reasoning: true },
+        { provider: "openai", id: "gpt-5.1", reasoning: false },
+      ],
     } as never);
-    try {
-      expect(captureQualifiedAvailableModelKeys(undefined)).toBeUndefined();
-      expect(resolveQualifiedWorkerDefaultModel("listed/model")).toBe("listed/model");
-      expect(spawnSync).toHaveBeenCalledWith("pi", ["--list-models"], { encoding: "utf8", timeout: 10_000 });
-    } finally {
-      spawnSync.mockReset();
-    }
+    expect([...snapshot!]).toEqual(["openrouter/openai/gpt-5.1", "openai/gpt-5.1"]);
+    expect(snapshot?.thinkingLevelsByKey?.get("openai/gpt-5.1")).toEqual(new Set(["off"]));
+    expect(snapshot?.thinkingLevelsByKey?.get("openrouter/openai/gpt-5.1")?.has("low")).toBe(true);
+    expect(captureQualifiedAvailableModelKeys(undefined)).toBeUndefined();
   });
 
   it("aggregates replacement, ancestor context, then append in a private file", () => {
@@ -238,7 +153,7 @@ describe("Worker resource projection", () => {
     expect(resolveWorkerLaunchResources({ cwd: worker, leaderCwd: leader, leaderProjectTrusted: false, agentDir: agent }).projectTrusted).toBe(false);
   });
 
-  it("uses saved decisions for a different Worker cwd and trusts when context is unavailable", () => {
+  it("uses saved trust and excludes project settings when trust is unknown", () => {
     const root = temp();
     const agent = path.join(root, "agent");
     const leader = path.join(root, "leader");
@@ -250,25 +165,25 @@ describe("Worker resource projection", () => {
     fs.mkdirSync(savedFalse, { recursive: true });
     fs.mkdirSync(savedTrue, { recursive: true });
     fs.mkdirSync(path.join(unknown, ".pi"), { recursive: true });
-    fs.writeFileSync(path.join(unknown, ".pi", "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: "project/model" } },
-    }));
+    fs.writeFileSync(path.join(unknown, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: {
+      model_roles: { project: { model: "project/model", thinking: "low", use: "Project role" } },
+      worker: { tools: { enable: ["project-tool"] } },
+    } }));
     const trustStore = new ProjectTrustStore(agent);
     trustStore.set(savedFalse, false);
     trustStore.set(savedTrue, true);
 
     expect(resolveWorkerLaunchResources({ cwd: savedFalse, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent }).projectTrusted).toBe(false);
     expect(resolveWorkerLaunchResources({ cwd: savedTrue, leaderCwd: leader, leaderProjectTrusted: false, agentDir: agent }).projectTrusted).toBe(true);
-
     const inherited = resolveWorkerLaunchResources({ cwd: unknown, leaderCwd: leader, leaderProjectTrusted: true, agentDir: agent });
     expect(inherited.projectTrusted).toBe(true);
-    expect(inherited.policy.defaultModel).toEqual({ scope: "project", value: "project/model" });
-
+    expect(inherited.policy.modelRoleSettings.roles).toHaveProperty("project");
     const fallback = resolveWorkerLaunchResources({ cwd: unknown, leaderCwd: leader, agentDir: agent });
-    expect(fallback.projectTrusted).toBe(true);
-    expect(fallback.policy.defaultModel).toEqual({ scope: "project", value: "project/model" });
+    expect(fallback.projectTrusted).toBe(false);
+    expect(fallback.policy.modelRoleSettings.roles).not.toHaveProperty("project");
+    expect(fallback.policy.enable).toEqual([]);
     expect(fallback.policy.diagnostics).toContain(
-      "Worker Pi trust context unavailable; launched with --approve and trusted project settings enabled.",
+      "Worker Pi trust context unavailable; project settings ignored and approval was not assumed.",
     );
   });
 

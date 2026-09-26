@@ -2,7 +2,8 @@ import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
-import { removeWorkerAggregate, resolveWorkerModelProfile, type QualifiedAvailableModelKeys, type WorkerDefaultModelOverride, type WorkerModelProfiles } from "../utils/worker-resource-projection";
+import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
+import { resolveWorkerModelRole, type ModelRoleSettings } from "../utils/model-role-settings";
 import {
   normalizeWorkerCarrier,
   planWorkerEnsure,
@@ -24,35 +25,29 @@ export type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: Id
 export interface WorkerAggregate {
   path?: string;
   projectTrusted: boolean;
-  defaultModel?: WorkerDefaultModelOverride;
-  modelProfiles?: WorkerModelProfiles;
+  modelRoleSettings?: ModelRoleSettings;
 }
 
 export interface WorkerLaunchBridgeDependencies {
   /** Build the normal Pi argv with the already resolved model and aggregate. */
   buildWorkerArgv(model: string | undefined, thinking: Member["thinking"], aggregatePath: string | undefined, projectTrusted: boolean): string[];
-  /** Resolve a model name to provider/model form when the caller requests one. */
-  resolveModel(modelName: string): string | null;
-  /** Confirm that a qualified Worker setting is available without provider selection. */
-  resolveSettingsModel(modelName: string, availableModelKeys?: QualifiedAvailableModelKeys): string | null;
   /** Resolve the Worker-process resource projection for one launch. */
   workerAggregate(cwd: string): WorkerAggregate;
   /** Durable Coordination publication and startup observation for Worker carriers. */
   lifecyclePublication: TeamLifecyclePublication;
 }
 
-export class WorkerDefaultModelConfigurationError extends Error {
-  constructor(readonly scope: WorkerDefaultModelOverride["scope"], reason: string) {
-    const location = scope === "project" ? "trusted project Pi settings" : "global Pi settings";
-    super(`Worker default_model in ${location} ${reason}. Edit pi_team_bright.worker.default_model, then retry before creating a Worker carrier.`);
-    this.name = "WorkerDefaultModelConfigurationError";
+export class WorkerModelConflictError extends Error {
+  constructor(readonly workerName: string, readonly currentAlias: string | undefined, readonly requestedAlias: string) {
+    super(`Worker ${workerName} already has model role ${currentAlias ?? "<historical selection>"}; refusing to reconfigure it with ${requestedAlias}.`);
+    this.name = "WorkerModelConflictError";
   }
 }
 
-export class WorkerModelConflictError extends Error {
-  constructor(readonly workerName: string, readonly currentAlias: string | undefined, readonly requestedAlias: string) {
-    super(`Worker ${workerName} already has model profile ${currentAlias ?? "<native/default>"}; refusing to reconfigure it with ${requestedAlias}.`);
-    this.name = "WorkerModelConflictError";
+export class WorkerLegacyTeamModelDefaultError extends Error {
+  constructor() {
+    super("This Team has a legacy raw model default. Finish it with its original version or create a new Team with pi_team_bright.default_model_role before creating another Worker.");
+    this.name = "WorkerLegacyTeamModelDefaultError";
   }
 }
 
@@ -62,8 +57,10 @@ export interface WorkerLaunchRequest {
   /** Durable logical Worker scope. It becomes the launch prompt/profile only. */
   scope: string;
   cwd: string;
-  /** Explicit configured model profile alias. */
-  model?: string;
+  /** Explicit configured model role name. */
+  modelRole?: string;
+  /** A historical logical Worker exists without a stored binding. */
+  preserveHistoricalModelSelection?: boolean;
   thinking?: Member["thinking"];
   modelProfile?: Member["modelProfile"];
   /** Ephemeral qualified keys captured from this exact model-tool invocation. */
@@ -155,12 +152,6 @@ export function launchObservationState(observation: WorkerStartupObservation): W
 
 export type ResolvedWorkerModel = { model?: string; binding?: Member["modelProfile"] };
 
-function resolvedBinding(value: string, thinking: Member["thinking"]): Member["modelProfile"] {
-  const separator = value.indexOf("/");
-  if (separator <= 0 || separator === value.length - 1) throw new Error(`Worker model ${value} must be a qualified provider/model string.`);
-  return { provider: value.slice(0, separator), model: value.slice(separator + 1), ...(thinking ? { thinking } : {}) };
-}
-
 export class WorkerLaunchBridge {
   constructor(private readonly dependencies: WorkerLaunchBridgeDependencies) {}
 
@@ -187,8 +178,8 @@ export class WorkerLaunchBridge {
       member.name === workerName && member.agentType === "teammate" && member.isActive !== false);
 
     if (existingMember) {
-      if (request.model !== undefined && existingMember.modelProfile?.alias !== request.model) {
-        throw new WorkerModelConflictError(workerName, existingMember.modelProfile?.alias, request.model);
+      if (request.modelRole !== undefined && existingMember.modelProfile?.alias !== request.modelRole) {
+        throw new WorkerModelConflictError(workerName, existingMember.modelProfile?.alias, request.modelRole);
       }
       const existingTarget = memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name);
       if (existingTarget) assertTargetSupportedByTerminal(teamTerminal, existingTarget);
@@ -430,42 +421,15 @@ export class WorkerLaunchBridge {
   }
 
   private resolveNewWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): ResolvedWorkerModel {
+    if (request.preserveHistoricalModelSelection) return {};
     if (request.modelProfile) {
       return { model: `${request.modelProfile.provider}/${request.modelProfile.model}`, binding: request.modelProfile };
     }
-    if (request.model !== undefined) {
-      // Direct launch callers may still supply a resolved model for low-level
-      // carrier tests and template launches; public ensure_worker supplies a
-      // settings alias through a populated profile projection.
-      if (aggregate.modelProfiles === undefined) {
-        const model = this.dependencies.resolveModel(request.model) ?? request.model;
-        return { model, binding: resolvedBinding(model, request.thinking) };
-      }
-      const binding = resolveWorkerModelProfile(request.model, aggregate.modelProfiles, request.availableModelKeys);
-      const qualified = `${binding.provider}/${binding.model}`;
-      if (request.availableModelKeys === undefined && !this.dependencies.resolveSettingsModel(qualified)) {
-        throw new Error(`Worker model profile '${request.model}' resolves to unavailable model ${qualified}. Valid aliases: ${Object.keys(aggregate.modelProfiles).sort().join(", ") || "<none>"}. Edit pi_team_bright.model_profiles, then retry before creating a Worker carrier.`);
-      }
-      return { model: qualified, binding };
-    }
-    if (teamConfig.defaultModel) {
-      const model = teamConfig.defaultModel.includes("/")
-        ? teamConfig.defaultModel
-        : this.dependencies.resolveModel(teamConfig.defaultModel) ?? teamConfig.defaultModel;
-      return { model, binding: resolvedBinding(model, request.thinking) };
-    }
-
-    const configured = aggregate.defaultModel;
-    if (!configured) return {};
-    if (configured.error) throw new WorkerDefaultModelConfigurationError(configured.scope, configured.error);
-    const value = configured.value!;
-    const separator = value.indexOf("/");
-    if (separator <= 0 || separator === value.length - 1 || /\s/.test(value)) {
-      throw new WorkerDefaultModelConfigurationError(configured.scope, "must be a qualified provider/model string");
-    }
-    const resolved = this.dependencies.resolveSettingsModel(value, request.availableModelKeys);
-    if (!resolved) throw new WorkerDefaultModelConfigurationError(configured.scope, `'${value}' is unavailable from Pi`);
-    return { model: resolved, binding: resolvedBinding(resolved, request.thinking) };
+    if (teamConfig.defaultModel !== undefined) throw new WorkerLegacyTeamModelDefaultError();
+    const settings = aggregate.modelRoleSettings;
+    if (!settings) throw new Error("Worker model role settings are unavailable.");
+    const binding = resolveWorkerModelRole(request.modelRole, settings, request.availableModelKeys);
+    return { model: `${binding.provider}/${binding.model}`, binding };
   }
 
   async launchPreparedMembership(

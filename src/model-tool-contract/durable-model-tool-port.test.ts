@@ -323,7 +323,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(port.getPendingObservation(leaderSessionId)).toBeUndefined();
   });
 
-  it.each([false, true])("projects snapshot model profiles with the exact leader trust (%s)", async (projectTrusted) => {
+  it.each([false, true])("projects snapshot model roles with the exact leader trust (%s)", async (projectTrusted) => {
     const { name, port, leaderSessionId } = await teamFixture(undefined);
     const root = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "pi-team-snapshot-trust-"));
     paneSettingsRoots.push(root);
@@ -331,13 +331,13 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const cwd = path.join(root, "project");
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     fs.mkdirSync(agentDir, { recursive: true });
-    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
-      global: { provider: "fixture", model: "global", thinking: "low", use: "Global only" },
-      shared: { provider: "fixture", model: "global-shared", thinking: "low", use: "Global shared" },
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { model_roles: {
+      global: { model: "fixture/global", thinking: "low", use: "Global only" },
+      shared: { model: "fixture/global-shared", thinking: "low", use: "Global shared" },
     } } }));
-    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_profiles: {
-      project: { provider: "fixture", model: "project", thinking: "medium", use: "Project only" },
-      shared: { provider: "fixture", model: "project-shared", thinking: "high", use: "Project override" },
+    fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({ pi_team_bright: { model_roles: {
+      project: { model: "fixture/project", thinking: "medium", use: "Project only" },
+      shared: { model: "fixture/project-shared", thinking: "high", use: "Project override" },
     } } }));
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
     port.setLeaderLaunchContext(leaderSessionId, { cwd, projectTrusted });
@@ -345,9 +345,9 @@ describe("DurableModelToolTeamPort durable authority", () => {
     readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
     await expect(port.readSnapshot(leaderSessionId)).resolves.toMatchObject({
       kind: "snapshot",
-      modelProfiles: projectTrusted
-        ? [{ alias: "global", use: "Global only" }, { alias: "project", use: "Project only" }, { alias: "shared", use: "Project override" }]
-        : [{ alias: "global", use: "Global only" }, { alias: "shared", use: "Global shared" }],
+      modelRoles: projectTrusted
+        ? [{ name: "global", use: "Global only" }, { name: "project", use: "Project only" }, { name: "shared", use: "Project override" }]
+        : [{ name: "global", use: "Global only" }, { name: "shared", use: "Global shared" }],
     });
   });
 
@@ -453,7 +453,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const cwd = path.join(paths.teamDir(name), "leader-cwd");
     fs.mkdirSync(path.join(cwd, ".pi"), { recursive: true });
     fs.writeFileSync(path.join(cwd, ".pi", "settings.json"), JSON.stringify({
-      pi_team_bright: { worker: { default_model: "project/model" } },
+      pi_team_bright: { model_roles: { project: { model: "fixture/selected", thinking: "low", use: "Project Worker" } } },
     }));
     launchBridge.ensureWorker.mockResolvedValue({
       action: "created",
@@ -501,7 +501,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(JSON.stringify(result.content)).not.toContain("fixture/not-in-result");
     expect(request.workerAggregate(cwd)).toMatchObject({
       projectTrusted,
-      defaultModel: projectTrusted ? { scope: "project", value: "project/model" } : undefined,
+      modelRoleSettings: { roles: projectTrusted ? { project: { model: "fixture/selected", thinking: "low", use: "Project Worker" } } : {} },
     });
   });
 

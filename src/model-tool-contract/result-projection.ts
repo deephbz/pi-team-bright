@@ -47,8 +47,8 @@ const TaskId = Type.String({ minLength: 1, maxLength: 128 });
 const TaskVersion = TaskVersionRefSchema;
 const GraphVersion = Type.String({ pattern: "^g_[0-9a-f]{16}$", minLength: 18, maxLength: 18 });
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
-const WorkerModelAlias = Type.String({ minLength: 1, maxLength: 64 });
-const WorkerModelProfileSummary = Type.Object({ alias: WorkerModelAlias, use: Type.String({ minLength: 1 }) }, { additionalProperties: false });
+const WorkerModelRoleName = Type.String({ minLength: 1, maxLength: 64 });
+const WorkerModelRoleSummary = Type.Object({ name: WorkerModelRoleName, use: Type.String({ minLength: 1 }) }, { additionalProperties: false });
 const LegacyTaskStatus = Type.Enum(["open", "in_progress", "blocked", "closed"]);
 const GraphTaskStatus = Type.Enum(["dependency_waiting", "ready", "in_progress", "blocked", "goal_failed", "goal_achieved", "cancelled"]);
 const TaskStatus = Type.Union([LegacyTaskStatus, GraphTaskStatus]);
@@ -69,13 +69,13 @@ const ModelFailure = (reasons: TSchema) => Type.Object({
 }, { additionalProperties: false });
 
 export const TeamCreateModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("team_created"), team: Type.Object({ name: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummary)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("team_created"), team: Type.Object({ name: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("active_team_exists"), Type.Literal("name_unavailable"), Type.Literal("team_authority_unavailable"), Type.Literal("session_binding_unavailable"), Type.Literal("task_authority_unavailable"), Type.Literal("carrier_unavailable")])),
 ]);
 
 export const EnsureWorkerModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("worker_ensured"), effect: Type.Enum(["created", "reused", "reconnected"]), worker: Type.Object({ name: WorkerName, carrier: Type.Enum(["starting", "connected", "absent"]), model: Type.Optional(WorkerModelAlias) }, { additionalProperties: false }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("refused"), reason: Type.Enum(["name_scope_conflict", "invalid_model_profile", "model_conflict"]), existing_worker: Type.Optional(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), model: Type.Optional(WorkerModelAlias) }, { additionalProperties: false })), valid_model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummary)), message: Type.Optional(Type.String()) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("worker_ensured"), effect: Type.Enum(["created", "reused", "reconnected"]), worker: Type.Object({ name: WorkerName, carrier: Type.Enum(["starting", "connected", "absent"]), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), reason: Type.Enum(["name_scope_conflict", "invalid_model_role", "legacy_team_model_default", "model_conflict"]), existing_worker: Type.Optional(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), valid_model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), message: Type.Optional(Type.String()) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("carrier_unavailable"), Type.Literal("team_authority_unavailable")])),
 ]);
 
@@ -153,7 +153,7 @@ export const TaskUpdateModelResultSchema = Type.Union([
 
 const SyncRecovery = Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false });
 export const TeamSyncModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummary)), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId), model: Type.Optional(WorkerModelAlias) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(TeamDeltaSchema), worker_changes: Type.Array(WorkerDeltaSchema), task_changes: Type.Array(TaskDeltaSchema), alerts: Type.Array(AlertDeltaSchema), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("caught_up"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("indeterminate"), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
@@ -343,10 +343,10 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
       return rest;
     }
   }
-  if (tool === "team_create" && raw.kind === "team_created") return { kind: raw.kind, team: { name: raw.team.name, lifecycle: raw.team.lifecycle }, model_profiles: raw.model_profiles };
+  if (tool === "team_create" && raw.kind === "team_created") return { kind: raw.kind, team: { name: raw.team.name, lifecycle: raw.team.lifecycle }, model_roles: raw.model_roles, ...(raw.default_model_role ? { default_model_role: raw.default_model_role } : {}) };
   if (tool === "ensure_worker") {
-    if (raw.kind === "worker_ensured") return { kind: raw.kind, effect: raw.effect, worker: { name: raw.worker.name, carrier: raw.worker.carrier, ...(raw.worker.model ? { model: raw.worker.model } : {}) } };
-    if (raw.kind === "refused") return { kind: raw.kind, reason: raw.reason, ...(raw.existing_worker ? { existing_worker: raw.existing_worker } : {}), ...(raw.valid_model_profiles ? { valid_model_profiles: raw.valid_model_profiles } : {}), ...(raw.message ? { message: raw.message } : {}) };
+    if (raw.kind === "worker_ensured") return { kind: raw.kind, effect: raw.effect, worker: { name: raw.worker.name, carrier: raw.worker.carrier, ...(raw.worker.model_role ? { model_role: raw.worker.model_role } : {}) } };
+    if (raw.kind === "refused") return { kind: raw.kind, reason: raw.reason, ...(raw.existing_worker ? { existing_worker: raw.existing_worker } : {}), ...(raw.valid_model_roles ? { valid_model_roles: raw.valid_model_roles } : {}), ...(raw.message ? { message: raw.message } : {}) };
   }
   if (tool === "alert_send" && raw.kind === "alert_sent") return {
     kind: raw.kind,

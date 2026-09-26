@@ -30,9 +30,10 @@ establishes a distinct reusable scope, or isolates a perspective. Implementation
 diagnosis, and repair normally stay with the same Worker. Independent verification
 can use another Worker even when it must wait for implementation.
 
-Choose a new Worker's model alias from the Team creation or snapshot catalog.
-Keep model selection at Worker creation. Tasks select an assignee; reuse keeps
-its model assignment. Invalid selections return valid alias choices.
+Choose a new Worker's model role from the Team creation or snapshot catalog.
+Omission selects the configured default model role; without one, select a role
+explicitly. Keep model selection at Worker creation. Tasks select an assignee;
+reuse keeps the saved binding. Invalid selections return valid model role names.
 
 For example, a builder implements and repairs; a reviewer checks independently.
 Their scopes stay stable while their assigned Tasks change. Reuse the recorded

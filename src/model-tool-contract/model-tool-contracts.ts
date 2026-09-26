@@ -31,7 +31,7 @@ export type ModelToolWorkerCurrent = CoordinationWorkerCurrent;
 export type ModelToolTaskProjectionField = "title" | "goal" | "current_context";
 
 export type CreateTeamPortResult =
-  | { kind: "created"; team: ModelToolTeamCurrent; modelProfiles?: Array<{ alias: string; use: string }> }
+  | { kind: "created"; team: ModelToolTeamCurrent; modelRoles?: Array<{ name: string; use: string }>; defaultModelRole?: string }
   | { kind: "refused"; reason: "active_team_exists" | "name_unavailable" }
   | { kind: "unavailable"; reason: "team_authority_unavailable" | "session_binding_unavailable" | "task_authority_unavailable" | "carrier_unavailable"; message: string };
 
@@ -39,7 +39,8 @@ export type EnsureWorkerPortResult =
   | { kind: "created"; worker: ModelToolWorkerCurrent }
   | { kind: "reused"; worker: ModelToolWorkerCurrent }
   | { kind: "scope_conflict"; worker: ModelToolWorkerCurrent }
-  | { kind: "invalid_model_profile"; message: string; validModelProfiles: Array<{ alias: string; use: string }> }
+  | { kind: "invalid_model_role"; message: string; validModelRoles: Array<{ name: string; use: string }> }
+  | { kind: "legacy_team_model_default"; message: string }
   | { kind: "model_conflict"; worker: ModelToolWorkerCurrent; message: string }
   | { kind: "unavailable"; reason: "carrier_unavailable" | "team_authority_unavailable"; message: string }
   | { kind: "no_active_team" };
@@ -169,7 +170,7 @@ export interface ModelToolLeaderLaunchContext {
 /** Flat compatibility contract. Compatibility wrappers depend inward on this contract. */
 export interface ModelToolTeamPort {
   createTeam(leaderSessionId: ExactLeaderSessionId, input: { name: string; purpose: string; pane_layout?: TeamPaneLayout }): Promise<CreateTeamPortResult>;
-  ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string; model?: string }, context?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult>;
+  ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string; model_role?: string }, context?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult>;
   readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult>;
   createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
   createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;

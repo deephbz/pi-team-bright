@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
@@ -28,6 +29,7 @@ function uniqueTeam(suffix: string): string {
 
 function context(sessionFile: string) {
   return {
+    modelRegistry: { getAvailable: () => [{ provider: "fixture", id: "model", reasoning: true }] },
     sessionManager: { getSessionFile: () => sessionFile },
     ui: { setStatus() {}, notify() {} },
   };
@@ -138,6 +140,13 @@ describe("Team topology/lifecycle lease", () => {
 
     const name = uniqueTeam("shutdown-spawn");
     const leadSession = `/tmp/${name}-lead.jsonl`;
+    const agentDir = path.join(paths.teamDir(name), "agent");
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
+      model_roles: { lifecycle: { model: "fixture/model", thinking: "low", use: "Topology lifecycle test" } },
+      default_model_role: "lifecycle",
+    } }));
+    vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
     await createBeadsTeam(name, leadSession);
     const old = member("old", `/tmp/${name}-old.jsonl`, "pane-old");
     await teams.addMember(name, old);

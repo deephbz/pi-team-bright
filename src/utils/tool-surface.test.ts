@@ -68,7 +68,7 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(reference).not.toMatch(/^### `[^`]+`$/m);
     expect(reference).not.toMatch(/Required:|Optional:/);
     expect(skill).not.toMatch(/^### `[^`]+`$/m);
-    expect(current).toMatch(/Lifecycle stage: \*\*hardening\*\* for the DAG-native Task coordination release/);
+    expect(current).toMatch(/Lifecycle stage: \*\*hardening\*\* for DAG-native Task coordination and Worker\s+model roles/);
     expect(current).toMatch(/Membership-observation surface remains in \*\*sharing\*\*/);
     expect(current).toMatch(/Sources of truth/);
   });

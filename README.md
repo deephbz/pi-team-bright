@@ -44,7 +44,7 @@ snapshot and updates through `team_sync` → inspect goal evidence → resolve
 Tasks. Stop Workers or shut down the Team only when their lifecycle boundary
 ends.
 
-A minimal agent-led run looks like this:
+Configure a model role and its default using the [canonical settings example](docs/examples/pi-team-bright.settings.json). A minimal agent-led run looks like this:
 
 ```js
 team_create({ name: "review", purpose: "Audit the recovery contract." })
@@ -224,34 +224,9 @@ contract change, or when a Team policy requires a new epoch.
 
 Set the optional Team policy under `pi_team_bright.team` in global
 `settings.json` or a trusted project's `.pi/settings.json`. Pane layout values
-use Pi's normal trusted-project precedence. Sync liveness values are read from
-global settings only. This complete example also shows the related Worker settings:
-
-```json
-{
-  "pi_team_bright": {
-    "team": {
-      "pane_layout": {
-        "leader_share": 0.6,
-        "worker_tiling": "grid"
-      },
-      "wait_seconds": 120,
-      "nudge_enabled": true,
-      "nudge_delay_seconds": 1200
-    },
-    "worker": {
-      "default_model": "openai-codex/gpt-5.6-luna",
-      "agents": {
-        "append_global": "/absolute/path/to/worker-AGENTS.md"
-      },
-      "tools": {
-        "enable": ["tool-name"],
-        "disable": ["tool-name"]
-      }
-    }
-  }
-}
-```
+use trusted-project precedence. Sync liveness values are global only. The
+[canonical settings example](docs/examples/pi-team-bright.settings.json) contains
+Team, Worker, and model-role settings.
 
 `leader_share` is the fraction kept by the leader after the first Worker split.
 It must be greater than `0.1` and less than `1.0`; the default is `0.6`.
@@ -264,93 +239,86 @@ enabled with a `1200` second delay. Malformed nudge values use these defaults an
 emit diagnostics; set `nudge_enabled` to `false` to disable nudges.
 Stop and recreate the Team to apply a new policy.
 
-## Worker model profiles
+## Worker model roles
 
-Worker model profiles require `0.18.0` or later. npm `0.17.5` does not include
-model-profile selection.
+A model role names one execution choice and its intended use. Worker scope and
+Task goals define the work. A model role does not grant authority or install
+prompts, tools, or skills. It never changes the leader's model.
 
-Start with the [copyable settings example](docs/examples/worker-model-profiles.settings.json).
-It defines `frontier-reviewer-claude`, `fast-scouter`, and `fast-tester`, plus an
-optional Worker default for selections that omit an alias.
+Start with the [canonical settings example](docs/examples/pi-team-bright.settings.json).
+It is shipped in the package and is the only maintained JSON example.
+Merge the complete example's `pi_team_bright` entries into the active Pi agent
+directory's `settings.json` (`PI_CODING_AGENT_DIR`, normally `~/.pi/agent`).
+Preserve unrelated Pi settings. A trusted project's `.pi/settings.json` can
+override model roles, their default reference, Worker resources, and pane layout.
+Keep sync wait and nudge settings global; copying them into project settings
+produces a scope warning. Run
+`pi --list-models` and replace the example model references with exact available
+`provider/model-id` values. Model IDs may contain additional slashes. Select
+thinking levels supported by those models.
 
-1. Merge its `pi_team_bright` entries into Pi's global `settings.json`
-   (normally `~/.pi/agent/settings.json`) or a trusted project's `.pi/settings.json`.
-   Preserve your other settings.
-2. Run `pi --list-models` and replace the example's provider/model pairs with
-   exact available models. Choose thinking levels those models support.
-3. Create a new Team with `0.18.0` or later, then select aliases at Worker
-   creation. Do not upgrade an existing live Team in place.
-
-The scout and tester examples use the same model with different thinking levels.
-You can assign different models to them. Profiles do not change the leader's
-model. A profile owns model selection only; scope and Task goals still define
-the work. Provider keys cannot contain `/`. Model IDs may contain additional
-slashes.
+`model_roles` maps names to `model`, `thinking`, and `use` entries.
+`default_model_role` references one existing name. Both explicit selection and
+omission resolve through that map. If no default is configured, select a role
+explicitly. An invalid or missing selection refuses before Worker creation;
+there is no raw-model or Pi-native fallback.
 
 ```js
 ensure_worker({
   name: "reviewer",
   scope: "Independent design and methodology review.",
-  model: "frontier-reviewer-claude"
-})
-
-ensure_worker({
-  name: "scout",
-  scope: "Source discovery and evidence gathering.",
-  model: "fast-scouter"
-})
-
-ensure_worker({
-  name: "tester",
-  scope: "Independent test design and execution.",
-  model: "fast-tester"
+  model_role: "reviewer"
 })
 ```
 
-Team creation and snapshots show aliases and short usage descriptions. Routine
-updates do not repeat the catalog. An invalid alias returns valid choices and
-creates no Worker. Both successful and failed `ensure_worker` TUI results point
-to settings; Ctrl+O shows a configuration example.
+Team creation and snapshots show model role names, usage guidance, and the
+configured default. Routine updates omit the catalog. Invalid selections return
+valid choices. A trusted project's entry replaces the complete global entry of
+the same name. An invalid project override remains invalid; it does not reveal
+the global definition. The default resolves against this effective map.
 
-The Worker retains its initial assignment across Tasks. Reuse does not change
-it, and a conflicting explicit selection refuses. Settings edits can supply
-new aliases for future selections without changing an existing Worker. Omission
-for a new Worker keeps the default-model behavior described below.
+The Worker retains its initial binding across Tasks. Editing, deleting, or
+renaming a model role affects future creation. Reuse keeps the stored binding;
+a conflicting explicit selection refuses. A human can change the runtime model
+or thinking level in the Pi pane. Same-Session recovery preserves Pi's recorded
+selection. Initial binding details are configuration evidence, not a claim about
+the current runtime model. Tasks have no model selector.
 
-A human can change the model or thinking level in the Pi pane. Same-Session
-recovery preserves Pi's recorded selection, including that override. The initial
-profile remains configuration evidence; it is not a claim about the current
-runtime model. Tasks contain no model selector, and Pi Team Bright does not
-switch models between Tasks.
+### Upgrade from model profiles
 
-This contract replaces the old per-Task `default`/`capable` mechanism without a
-compatibility or migration path. Keep existing Team stores and Session logs;
-do not upgrade a live Team in place. See [decision 0014](docs/decisions/0014-worker-model-profiles.md)
-for the accepted boundary.
+This model-role contract is an unreleased breaking change from `0.18.0`.
+Finish existing live Teams under their original version before switching.
+Preserve their stores and native Session logs.
+
+1. Rename `model_profiles` to `model_roles`.
+2. In each entry, join `provider` and the old `model` with `/`, store that
+   reference in `model`, and remove `provider`. Keep `thinking` and `use`.
+3. Set `default_model_role` to the intended entry name. Remove
+   `worker.default_model`. A role name alone does not make that role the default.
+4. Update saved Worker calls from `model` to `model_role`.
+5. Reload Pi and address any settings warning before creating Workers.
+
+A legacy Team with a raw model default cannot create new Workers through this
+contract. The refusal directs the operator to finish the old Team with its
+original version or create a new Team. Existing binding and Session evidence
+remain readable. Configuration changes never rewrite Team stores or user files.
+
+### Configuration warnings
+
+Pi startup and reload use Pi's native warning notification and theme warning
+color. The warning includes the affected field, source, consequence, and
+canonical example path. Repair the settings and reload Pi to stop new warnings.
+The warning does not start a model turn or enter model-visible Session history.
+Pi remains usable; a dependent invalid Worker selection still refuses.
+An absent extension configuration produces no warning during standalone Pi use.
 
 ## Worker resource settings
 
-Worker-only prompt, tool, and default-model projection uses Pi settings. Put it under
-`pi_team_bright.worker` in the active Pi agent directory's `settings.json`
-(`PI_CODING_AGENT_DIR`, normally `~/.pi/agent`), or in a trusted project's
-`.pi/settings.json`. Pi applies its normal global/project merge, so the trusted
-project's nested Worker values take precedence. No Pi Team Bright settings file exists.
-Replace the example's model, absolute prompt path, and tool names with values
-available in the Worker environment.
-
-`default_model` is optional and applies only to new Workers. Its first slash
-separates a provider from a nonempty model ID; the model ID can contain later
-slashes, for example `openrouter/openai/gpt-5.1`. Pi Team Bright requires the
-exact available identifier and never selects a provider for this setting. Explicit Worker or template models and the durable Team `default_model`
-take precedence. Then trusted-project and global Worker settings apply. If none
-apply, Pi receives no `--model` and uses its native default. Pi Team Bright stores
-the selected exact model before initial launch. Same-Session recovery preserves
-Pi's recorded model and thinking selection instead of overriding it with the
-initial launch configuration.
-A malformed, bare, or unavailable setting refuses the launch before carrier
-creation. The refusal identifies the global or trusted-project scope; edit it and
-retry. An untrusted or unknown Worker ignores project settings and can use only
-the global Worker setting.
+Worker-only prompt and tool projection uses `pi_team_bright.worker` in the same
+Pi settings files. Trusted-project values take precedence. The canonical example
+leaves optional prompt paths and tool lists empty. Supply absolute `agents`
+paths and registered tool names when needed. Model selection belongs to the
+model-role map and its default reference.
 
 Both `agents` paths are optional and must be absolute. The four cases are:
 

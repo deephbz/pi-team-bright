@@ -1,4 +1,4 @@
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
@@ -10,7 +10,7 @@ export interface TerminalTarget {
 }
 
 export interface WorkerModelBinding {
-  /** Configured alias when explicit; omitted for a resolved native/default choice. */
+  /** Historical model role name when selected; older bindings may omit it. */
   alias?: string;
   provider: string;
   /** Full provider-local model ID. Later slashes are part of this ID. */
@@ -59,7 +59,7 @@ export interface LogicalWorker {
   name: string;
   /** Durable semantic area owned by this Worker, not its current Task. */
   scope: string;
-  /** Durable Worker model assignment. Omitted when Pi owns native default selection. */
+  /** Durable initial Worker model assignment. Older Workers may omit it. */
   modelProfile?: WorkerModelBinding;
 }
 

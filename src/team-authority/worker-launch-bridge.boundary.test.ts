@@ -29,8 +29,6 @@ describe("Team Worker carrier publication boundary", () => {
     const lifecyclePublication = publication();
     const dependencies = {
       buildWorkerArgv: () => [],
-      resolveModel: () => null,
-      resolveSettingsModel: () => null,
       workerAggregate: () => ({ projectTrusted: false }),
       lifecyclePublication,
     } satisfies WorkerLaunchBridgeDependencies;

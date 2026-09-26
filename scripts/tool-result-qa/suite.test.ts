@@ -46,8 +46,16 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     PI_AGENT_LAUNCH_ID: process.env.PI_AGENT_LAUNCH_ID,
     TMUX: process.env.TMUX,
     TMUX_PANE: process.env.TMUX_PANE,
+    PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
   };
   process.env.HOME = fakeHome;
+  const agentDir = path.join(fakeHome, ".pi", "agent");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
+    model_roles: { qa: { model: "fixture/model", thinking: "low", use: "Tool result QA Worker" } },
+    default_model_role: "qa",
+  } }));
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   delete process.env.PI_TEAM_NAME;
   delete process.env.PI_AGENT_NAME;
   delete process.env.PI_AGENT_LAUNCH_ID;
@@ -121,6 +129,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       const sessionId = `qa-${path.basename(sessionFile)}`;
       return {
         cwd: process.cwd(),
+        modelRegistry: { getAvailable: () => [{ provider: "fixture", id: "model", reasoning: true }] },
         sessionManager: {
           getSessionId: () => sessionId,
           getSessionFile: () => sessionFile,

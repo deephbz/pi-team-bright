@@ -43,8 +43,8 @@ const TeamCurrent = Type.Object({
   lifecycle: Type.Enum(["active", "stopped"]),
 }, { additionalProperties: false });
 
-export const WorkerModelProfileSummarySchema = Type.Object({
-  alias: Type.String({ minLength: 1, maxLength: 64 }),
+export const WorkerModelRoleSummarySchema = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 64 }),
   use: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
@@ -53,7 +53,7 @@ export const WorkerCurrentSchema = Type.Object({
   scope: Type.String({ minLength: 1, description: "Concise semantic area owned by this Worker, not its current Task." }),
   carrier: WorkerCarrier,
   nonterminal_task_ids: Type.Array(TaskId),
-  model: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
 
 export { TaskGraphApplyParametersSchema, GraphTaskUpdateParametersSchema, GraphVersionRefSchema };
@@ -230,7 +230,8 @@ export const TeamCreateResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("team_created"),
     team: TeamCurrent,
-    model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummarySchema)),
+    model_roles: Type.Optional(Type.Array(WorkerModelRoleSummarySchema)),
+    default_model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
@@ -255,7 +256,8 @@ export const TeamSyncParametersSchema = Type.Object({
 export const TeamSnapshotResultSchema = Type.Object({
   kind: Type.Literal("snapshot"),
   team: TeamCurrent,
-  model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummarySchema)),
+  model_roles: Type.Optional(Type.Array(WorkerModelRoleSummarySchema)),
+  default_model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   workers: Type.Array(WorkerCurrentSchema),
   tasks: Type.Array(TaskCardSchema),
   task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
@@ -330,16 +332,16 @@ export const EnsureWorkerParametersSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({
     minLength: 1,
-    description: "Standing semantic area, not the current Task.",
+    description: "Standing area, not a Task.",
   }),
-  model: Type.Optional(Type.String({ minLength: 1, maxLength: 64, description: "Configured Worker model profile alias." })),
+  model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64, description: "Model role name; omit for the configured default on new Workers." })),
 }, { additionalProperties: false });
 
 const EnsuredWorker = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1 }),
   carrier: WorkerCarrier,
-  model: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
 
 export const EnsureWorkerResultSchema = Type.Union([
@@ -350,9 +352,9 @@ export const EnsureWorkerResultSchema = Type.Union([
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
-    reason: Type.Enum(["name_scope_conflict", "invalid_model_profile", "model_conflict"]),
+    reason: Type.Enum(["name_scope_conflict", "invalid_model_role", "legacy_team_model_default", "model_conflict"]),
     existing_worker: Type.Optional(EnsuredWorker),
-    valid_model_profiles: Type.Optional(Type.Array(WorkerModelProfileSummarySchema)),
+    valid_model_roles: Type.Optional(Type.Array(WorkerModelRoleSummarySchema)),
     message: Type.Optional(Type.String({ minLength: 1 })),
     state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
@@ -834,7 +836,7 @@ export const modelToolCatalog = {
         "Record concise current context without authoring derived readiness.",
       ],
       whenNotToUse: [
-        "Do not change assignment, model alias, dependencies, or failure edges.",
+        "Do not change assignment, model role, dependencies, or failure edges.",
         "Do not author dependency_waiting or ready.",
       ],
       sideEffects: [
@@ -880,7 +882,7 @@ export const modelToolCatalog = {
     {
       name: "ensure_worker",
       label: "Ensure Worker",
-      responsibility: "Create, reconnect, or reuse a Worker for a standing semantic area. Assign executable work with task_graph_apply.",
+      responsibility: "Create or reuse a Worker for a standing area. Assign work with task_graph_apply.",
       actors: ["leader"],
       commonUseCases: [
         "Create one Worker whose area can proceed with little prerequisite overlap.",
