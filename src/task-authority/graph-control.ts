@@ -355,7 +355,12 @@ export class GraphTaskController {
   }
 
   static recover(snapshot: GraphControlSnapshot, clock?: () => Date): GraphTaskController {
-    validateSnapshot(snapshot);
+    try {
+      validateSnapshot(snapshot);
+    } catch (error) {
+      if (error instanceof GraphControlRefusal) throw error;
+      throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot is malformed: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return new GraphTaskController(snapshot, clock);
   }
 
@@ -371,6 +376,10 @@ export class GraphTaskController {
 
   currentGraphVersion(): GraphVersionRef | undefined {
     return this.currentRevision()?.version;
+  }
+
+  hasOperationReceipt(operationId: string): boolean {
+    return this.receipts.has(operationId);
   }
 
   applyGraph(input: GraphApplyInput): GraphApplyResult & { replayed: boolean } {
@@ -753,6 +762,12 @@ export class GraphTaskController {
       if (prior.fingerprint !== fingerprint) {
         throw new GraphControlRefusal("operation_conflict", `Operation ${operationId} was already used with different semantics.`);
       }
+      try {
+        validateReceiptProjection(this.snapshot(), prior);
+      } catch (error) {
+        if (error instanceof GraphControlRefusal) throw error;
+        throw new GraphControlRefusal("invalid_graph", `Operation ${operationId} receipt is malformed: ${error instanceof Error ? error.message : String(error)}`);
+      }
       return { ...clone(prior.result as Result), replayed: true };
     }
 
@@ -834,11 +849,11 @@ export class GraphTaskController {
       const failedPrerequisites: string[] = [];
       const cancelledPrerequisites: string[] = [];
       const waitingPrerequisites: string[] = [];
-      const inputAttemptIds: Record<string, string> = {};
+      const inputAttempts: Array<[string, string]> = [];
       for (const prerequisiteId of definition.needs) {
         const prerequisite = result.get(prerequisiteId)!;
         if (prerequisite.state.kind === "goal_achieved") {
-          inputAttemptIds[prerequisiteId] = prerequisite.state.attemptId;
+          inputAttempts.push([prerequisiteId, prerequisite.state.attemptId]);
         } else if (prerequisite.state.kind === "cancelled") {
           cancelledPrerequisites.push(prerequisiteId);
         } else if (prerequisite.state.kind === "goal_failed") {
@@ -848,6 +863,7 @@ export class GraphTaskController {
         }
       }
 
+      const inputAttemptIds = Object.fromEntries(inputAttempts);
       const demand = this.events.filter((event): event is FailureEdgeTraversedEvent =>
         event.kind === "failure_edge_traversed"
         && event.targetTaskId === taskId
@@ -943,6 +959,14 @@ function validateSnapshot(snapshot: GraphControlSnapshot): void {
     || new Set(sequences).size !== sequences.length) {
     throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has invalid or duplicate event sequences.");
   }
+  if (snapshot.graphRevisions.some((revision, index) => index > 0 && revision.sequence <= snapshot.graphRevisions[index - 1].sequence)
+    || snapshot.events.some((event, index) => index > 0 && event.sequence <= snapshot.events[index - 1].sequence)) {
+    throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has out-of-order records.");
+  }
+  if (new Set(snapshot.graphRevisions.map((revision) => revision.version)).size !== snapshot.graphRevisions.length) {
+    throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot repeats a graph version.");
+  }
+  let previousRevision: GraphRevision | undefined;
   for (const revision of snapshot.graphRevisions) {
     if (!revision || typeof revision.version !== "string" || !Array.isArray(revision.tasks)) {
       throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid graph revision.");
@@ -959,16 +983,148 @@ function validateSnapshot(snapshot: GraphControlSnapshot): void {
       || normalized.some((task) => !revision.tasks.find((stored) => stored.key === task.key)?.lineage?.trim())) {
       throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid Task lineage.");
     }
+    const previousTasks = new Map(previousRevision?.tasks.map((task) => [task.key, task]) ?? []);
+    for (const task of revision.tasks) {
+      const prior = previousTasks.get(task.key);
+      const sameMeaning = prior && digest(semanticDefinition(prior)) === digest(semanticDefinition(task));
+      const expectedLineage = sameMeaning
+        ? prior.lineage
+        : digest({ task: semanticDefinition(task), introducedAt: revision.sequence });
+      if (task.lineage !== expectedLineage) {
+        throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot has invalid lineage for Task ${task.key}.`);
+      }
+    }
+    if (revision.version !== graphVersion({ previous: previousRevision?.version ?? null, tasks: revision.tasks })) {
+      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid graph version.");
+    }
+    previousRevision = revision;
   }
   const operations = new Set<string>();
   for (const receipt of snapshot.receipts) {
-    if (!receipt || !receipt.operationId?.trim() || !receipt.fingerprint?.trim() || !receipt.result) {
+    if (!receipt || !receipt.operationId?.trim() || !/^[0-9a-f]{64}$/.test(receipt.fingerprint) || !receipt.result
+      || receipt.result.operationId !== receipt.operationId) {
       throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid operation receipt.");
     }
     if (operations.has(receipt.operationId)) {
       throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot repeats operation ${receipt.operationId}.`);
     }
     operations.add(receipt.operationId);
+  }
+  const attempts = new Map<string, AttemptStartedEvent>();
+  const completed = new Map<string, AttemptCompletedEvent>();
+  const startsPerTask = new Map<string, number>();
+  const traversalsPerSource = new Map<string, number>();
+  const failureEventsPerAttempt = new Set<string>();
+  for (const event of snapshot.events) {
+    if (!event || !event.operationId?.trim() || !operations.has(event.operationId)) {
+      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an event without an operation receipt.");
+    }
+    const revision = snapshot.graphRevisions.findLast((candidate) => candidate.sequence < event.sequence);
+    if (!revision) throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an event before the first graph revision.");
+    if (event.kind === "attempt_started") {
+      const task = revision.tasks.find((candidate) => candidate.key === event.taskId);
+      const nextOrdinal = (startsPerTask.get(event.taskId) ?? 0) + 1;
+      if (!task || task.lineage !== event.taskLineage || revision.version !== event.graphVersion
+        || task.assignee !== event.assignee || event.ordinal !== nextOrdinal
+        || event.attemptId !== `${event.taskId}@${event.ordinal}` || attempts.has(event.attemptId)
+        || !event.activationKey?.trim() || !event.inputAttemptIds || typeof event.inputAttemptIds !== "object"
+        || Array.isArray(event.inputAttemptIds)) {
+        throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid Attempt start.");
+      }
+      attempts.set(event.attemptId, event);
+      startsPerTask.set(event.taskId, nextOrdinal);
+    } else if (event.kind === "attempt_blocked" || event.kind === "attempt_resumed"
+      || event.kind === "attempt_completed" || event.kind === "attempt_superseded") {
+      if (!attempts.has(event.attemptId)) {
+        throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot refers to missing Attempt ${event.attemptId}.`);
+      }
+      if (event.kind === "attempt_completed") {
+        if (completed.has(event.attemptId) || !["goal_achieved", "goal_failed"].includes(event.outcome) || !event.evidence?.trim()) {
+          throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid Attempt completion.");
+        }
+        completed.set(event.attemptId, event);
+      } else if ((event.kind === "attempt_blocked" || event.kind === "attempt_resumed") && completed.has(event.attemptId)) {
+        throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot changes a completed Attempt.");
+      }
+    } else if (event.kind === "task_cancelled" || event.kind === "task_context_updated") {
+      const task = revision.tasks.find((candidate) => candidate.key === event.taskId);
+      if (!task || task.lineage !== event.taskLineage
+        || (event.kind === "task_cancelled" && event.attemptId && attempts.get(event.attemptId)?.taskId !== event.taskId)) {
+        throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an event for a missing Task lineage.");
+      }
+    } else if (event.kind === "failure_edge_traversed" || event.kind === "failure_edge_exhausted") {
+      const source = revision.tasks.find((candidate) => candidate.key === event.sourceTaskId);
+      const completion = completed.get(event.sourceAttemptId);
+      if (!source || source.lineage !== event.sourceTaskLineage
+        || attempts.get(event.sourceAttemptId)?.taskId !== event.sourceTaskId
+        || completion?.outcome !== "goal_failed" || source.onGoalFailed?.target !== event.targetTaskId
+        || failureEventsPerAttempt.has(event.sourceAttemptId)) {
+        throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid failure-edge event.");
+      }
+      failureEventsPerAttempt.add(event.sourceAttemptId);
+      const sourceKey = `${event.sourceTaskId}\0${event.sourceTaskLineage}`;
+      const traversals = traversalsPerSource.get(sourceKey) ?? 0;
+      if (event.kind === "failure_edge_traversed"
+        && (revision.tasks.find((candidate) => candidate.key === event.targetTaskId)?.lineage !== event.targetTaskLineage
+          || event.traversal !== traversals + 1 || event.traversal > source.onGoalFailed.maxTraversals)) {
+        throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid failure traversal.");
+      }
+      if (event.kind === "failure_edge_traversed") traversalsPerSource.set(sourceKey, event.traversal);
+      else if (event.traversals !== traversals || !["limit_reached", "target_cancelled"].includes(event.reason)) {
+        throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid failure exhaustion.");
+      }
+    } else {
+      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an unknown event kind.");
+    }
+  }
+}
+
+function validateReceiptProjection(snapshot: GraphControlSnapshot, receipt: StoredReceipt): void {
+  const result = receipt.result;
+  const operationEvents = snapshot.events.filter((event) => event.operationId === receipt.operationId);
+  const appliedRevision = result.kind === "graph_applied"
+    ? snapshot.graphRevisions.find((revision) => revision.version === result.graphVersion)
+    : undefined;
+  const lastSequence = Math.max(appliedRevision?.sequence ?? 0, ...operationEvents.map((event) => event.sequence));
+  if (!lastSequence || (result.kind !== "graph_applied" && result.kind !== "task_transitioned")
+    || (result.kind === "graph_applied" && !appliedRevision)
+    || (result.kind === "task_transitioned" && !operationEvents.length)) {
+    throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has a receipt without a committed command.");
+  }
+  const atCommit = new GraphTaskController({
+    schema: snapshot.schema,
+    graphRevisions: snapshot.graphRevisions.filter((revision) => revision.sequence <= lastSequence),
+    events: snapshot.events.filter((event) => event.sequence <= lastSequence),
+    receipts: [],
+  });
+  const tasks = atCommit.readTasks();
+  if (result.kind === "graph_applied") {
+    if (digest(result.tasks) !== digest(tasks) || digest(result.readyTaskIds) !== digest(readyIds(tasks))) {
+      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has a graph receipt that differs from committed state.");
+    }
+  } else {
+    const directEvent = operationEvents[0];
+    const transition = directEvent.kind === "attempt_started" ? "claim"
+      : directEvent.kind === "attempt_blocked" ? "block"
+        : directEvent.kind === "attempt_resumed" ? "resume"
+          : directEvent.kind === "attempt_completed" ? directEvent.outcome
+            : directEvent.kind === "task_cancelled" ? "cancel"
+              : directEvent.kind === "task_context_updated" ? "context_updated"
+                : undefined;
+    const taskId = "taskId" in directEvent ? directEvent.taskId
+      : "attemptId" in directEvent ? snapshot.events.find((event): event is AttemptStartedEvent =>
+        event.kind === "attempt_started" && event.attemptId === directEvent.attemptId)?.taskId
+        : undefined;
+    const expectedTask = tasks.find((task) => task.id === taskId);
+    const traversal = operationEvents.find((event): event is FailureEdgeTraversedEvent => event.kind === "failure_edge_traversed");
+    const expectedTraversal = traversal
+      ? { sourceTaskId: traversal.sourceTaskId, targetTaskId: traversal.targetTaskId, traversal: traversal.traversal }
+      : undefined;
+    if (!expectedTask || transition !== result.transition || digest(result.task) !== digest(expectedTask)
+      || digest(result.readyTaskIds) !== digest(readyIds(tasks))
+      || digest(result.failureTraversal ?? null) !== digest(expectedTraversal ?? null)) {
+      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has a Task receipt that differs from committed state.");
+    }
   }
 }
 

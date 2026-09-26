@@ -1,0 +1,19 @@
+# Graph control hardening evidence
+
+Base: `0d4389d98cf5044bdd67b07fed82e01c304b6e9c`. Scope: existing graph control and durable authority. Architecture impact: none.
+
+| Invariant | Minimal trigger and base result | Repair and check |
+|---|---|---|
+| Accepted prerequisite Attempt IDs remain exact for every valid Task key. | Use `__proto__` as a prerequisite key. The base controller reported the consumer ready but omitted that key from its Attempt input map. The focused test failed on the base before production edits. | Build the input map from entries. The regression now checks the own key and accepted Attempt ID. |
+| Corrupt event references do not silently change Task state. | Change a committed block event to name a missing Attempt. The base recovery accepted it and derived `in_progress`. The focused test failed on the base before production edits. | Recovery checks record order, revision lineage/version, Attempt references, and failure-edge references. It refuses the tampered snapshot. |
+| Stored failure traversals obey the configured bound. | Change a valid traversal from `1` to `9` under a limit of `1`. The base recovery accepted it. The focused test failed before the repair. | Recovery checks the sequential count and limit for each source Task lineage. It refuses the damaged event. |
+| Exact replay uses the original committed operation. | Replay an apply or claim after later graph or Task changes. The base durable adapter returned only current before/after state. | The adapter reconstructs the command boundary from stored sequence prefixes. A focused test checks original and current projections separately. Replay does not rewrite the snapshot. |
+| A tampered receipt cannot provide a false replay result. | Change the ready IDs in an apply receipt. | Exact replay checks its receipt against the committed historical projection and refuses it. Normal recovery performs bounded structural checks; deep receipt checks run when a receipt is used. |
+
+Focused checks: `graph-control-hardening.test.ts`, `graph-control.smoke.test.ts`, and `graph-control.integration.smoke.test.ts` passed (9 tests). Package typecheck passed. The first two adversarial regressions failed against the unmodified production base, then passed after repair. The failure-budget test also failed before its repair. One warm local spot check of a fresh durable claim took 12.2 ms with 20 independent Tasks and 13.4 ms with 60; this is not a capacity claim. The runtime and formal lanes have separate owners; this file does not claim their completion.
+
+Compatibility check: a disposable archive of exact base `0d4389d98cf5044bdd67b07fed82e01c304b6e9c` generated a JSON snapshot after an accepted prerequisite Attempt, a failed review Attempt, and one failure-edge traversal. The new controller recovered those unchanged bytes with an identical trace and returned the identical exact apply replay result. The isolated compatibility test passed (1/1). It did not read or change a live Team.
+
+Diagnostic boundary: the durable adapter classifies malformed stored snapshots and malformed exact replay receipts as `GraphSnapshotCorruption`. Invalid fresh graph input and explicit removed-model-field migration refusal retain their prior `invalid_graph` classification. This lets orchestration report authority unavailability for corruption without mislabeling user input.
+
+Residual limits: recovery checks selected structural and event integrity classes. It does not fully validate arbitrary coordinated rewriting of event history. Deep receipt projection checks run on exact replay, rather than on every normal load. The opaque graph token uses a truncated digest; a duplicate token is refused because CAS and event-free apply replay cannot distinguish its revisions. The model-to-code mapping and external delivery side effects remain separate evidence obligations.
