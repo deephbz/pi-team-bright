@@ -7,6 +7,12 @@ tag `v0.18.0`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
 The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.18.0)
 was published at `2026-09-15T07:32:44Z`; it is not a draft or prerelease.
 
+The `0.19.0` source is a release candidate. Its package version and
+[release notes](../release/v0.19.0-release-notes.md) are prepared. The
+[release checklist](../release/v0.19.0-release-checklist.md) tracks the
+remaining gates. npm, the version tag, and the GitHub Release remain at the
+published `0.18.0` state until those gates complete.
+
 The published `0.18.0` model profiles select a fixed initial execution binding at Worker
 creation. Tasks select an assignee only. This breaking release requires new Team
 epochs and removes per-Task model selection without migration. Keep existing
@@ -17,7 +23,7 @@ separate from this publication.
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
 model roles. The Membership-observation surface remains in **sharing**.
 
-## Unreleased model-role change
+## v0.19.0 candidate: model roles
 
 The accepted [model-role decision](../decisions/0015-model-role-settings.md)
 replaces profile aliases and raw defaults with one named map and a default
@@ -28,7 +34,7 @@ The [canonical example](../examples/pi-team-bright.settings.json) is the setup
 entry point. The [work record](../projects/model-role-settings.md) tracks the
 base, scope, verification, and remaining work. This change is not published.
 
-## Unreleased synchronization continuity
+## v0.19.0 candidate: synchronization continuity
 
 The owner authorized framework-driven synchronization. The
 [decision](../decisions/0016-framework-team-synchronization.md) separates Team
@@ -39,7 +45,7 @@ Implementation and five verification rounds are complete. The full suite passed
 checks passed, including provider failure, abort, and process-reload recovery.
 This candidate is unpublished; live settings and parent adoption are unchanged.
 
-## Unreleased Task timeline view
+## v0.19.0 candidate: Task timeline view
 
 `/pi-team-graph` keeps its dependency DAG as the initial view. The same pane
 can show a waterfall of recorded Attempts. Both views share one validated
@@ -50,7 +56,7 @@ The [work record](../projects/task-timeline-view.md) gives scope and verificatio
 This changes internal recorded evidence and presentation; the public Membership
 observation protocol and HyperCarrier integration boundary remain unchanged.
 
-## Unreleased formal hardening
+## v0.19.0 candidate: formal hardening
 
 The [formal hardening work](../projects/formal-hardening.md) strengthens existing
 graph recovery, operation replay, Membership fencing, and Task delivery. It adds
@@ -58,7 +64,7 @@ bounded TLA+ checks and independent adversarial and process-recovery tests. This
 work does not change the published release or deployment topology. Its evidence
 and limits are separate from the v0.18.0 publication receipt.
 
-## Unreleased doctor command
+## v0.19.0 candidate: doctor command
 
 `/ptb doctor` loads the packaged repair guide and local Team metadata into a
 visible diagnostic turn. It can inspect an explicitly named Team without a
