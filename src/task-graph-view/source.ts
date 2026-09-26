@@ -58,6 +58,20 @@ export interface TaskGraphAttemptDetail {
   outcome?: TaskGraphAttemptOutcome;
 }
 
+export interface TimelineAttempt {
+  id: string;
+  ordinal: number;
+  state: TaskGraphAttemptState;
+  current: boolean;
+  outcome?: TaskGraphAttemptOutcome;
+  segments: Array<{
+    state: "in_progress" | "blocked";
+    started_at: string;
+    ended_at?: string;
+  }>;
+  timing: "recorded" | "unavailable";
+}
+
 export interface TaskGraphViewNode {
   id: string;
   title: string;
@@ -71,6 +85,7 @@ export interface TaskGraphViewNode {
   last_activity_at?: string;
   attempts_started?: number;
   display_attempt?: TaskGraphAttemptDetail;
+  timeline_attempts?: TimelineAttempt[];
   failure_reason?: TaskGraphFailureReason;
 }
 
@@ -251,6 +266,57 @@ function parseAttempt(value: unknown, field: string): TaskGraphAttemptDetail {
   };
 }
 
+function parseTimelineAttempt(value: unknown, field: string): TimelineAttempt {
+  const attempt = record(value, field);
+  exactKeys(attempt, ["id", "ordinal", "state", "current", "outcome", "segments", "timing"], field);
+  const detail = parseAttempt({
+    id: attempt.id,
+    ordinal: attempt.ordinal,
+    state: attempt.state,
+    current: attempt.current,
+    ...(attempt.outcome === undefined ? {} : { outcome: attempt.outcome }),
+  }, field);
+  if (attempt.timing !== "recorded" && attempt.timing !== "unavailable") {
+    throw new Error(`${field}.timing is invalid.`);
+  }
+  if (!Array.isArray(attempt.segments) || attempt.segments.length > TASK_GRAPH_MAX_EVENTS) {
+    throw new Error(`${field}.segments is invalid.`);
+  }
+  const segments: TimelineAttempt["segments"] = attempt.segments.map((value, index) => {
+    const segmentField = `${field}.segments[${index}]`;
+    const segment = record(value, segmentField);
+    exactKeys(segment, ["state", "started_at", "ended_at"], segmentField);
+    if (segment.state !== "in_progress" && segment.state !== "blocked") {
+      throw new Error(`${segmentField}.state is invalid.`);
+    }
+    const startedAt = isoInstant(segment.started_at, `${segmentField}.started_at`);
+    const endedAt = segment.ended_at === undefined ? undefined : isoInstant(segment.ended_at, `${segmentField}.ended_at`);
+    if (endedAt && Date.parse(endedAt) < Date.parse(startedAt)) {
+      throw new Error(`${segmentField}.ended_at cannot precede started_at.`);
+    }
+    return { state: segment.state, started_at: startedAt, ...(endedAt ? { ended_at: endedAt } : {}) };
+  });
+  if (attempt.timing === "unavailable" && segments.length) {
+    throw new Error(`${field} cannot have segments when timing is unavailable.`);
+  }
+  if (attempt.timing === "recorded") {
+    if (!segments.length || segments[0].state !== "in_progress") throw new Error(`${field} has invalid first segment.`);
+    for (let index = 1; index < segments.length; index++) {
+      if (segments[index - 1].ended_at !== segments[index].started_at
+        || segments[index - 1].state === segments[index].state) {
+        throw new Error(`${field} has discontinuous segments.`);
+      }
+    }
+    const last = segments.at(-1)!;
+    if (detail.state === "in_progress" || detail.state === "blocked") {
+      if (last.state !== detail.state || last.ended_at) throw new Error(`${field} has an invalid open segment.`);
+    } else if (!last.ended_at) {
+      throw new Error(`${field} has an open terminal segment.`);
+    }
+  }
+  return { ...detail, segments, timing: attempt.timing };
+}
+
 function parseNode(value: unknown, index: number): TaskGraphViewNode {
   const field = `nodes[${index}]`;
   const node = record(value, field);
@@ -267,6 +333,7 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
     "last_activity_at",
     "attempts_started",
     "display_attempt",
+    "timeline_attempts",
     "failure_reason",
   ], field);
   if (!NODE_STATE.has(node.state as TaskGraphNodeState)) throw new Error(`${field}.state is invalid.`);
@@ -290,8 +357,31 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
   const displayAttempt = node.display_attempt === undefined
     ? undefined
     : parseAttempt(node.display_attempt, `${field}.display_attempt`);
+  if (node.timeline_attempts !== undefined && (!Array.isArray(node.timeline_attempts)
+    || node.timeline_attempts.length > TASK_GRAPH_MAX_ATTEMPTS)) {
+    throw new Error(`${field}.timeline_attempts is invalid.`);
+  }
+  const timelineAttempts = node.timeline_attempts === undefined
+    ? undefined
+    : node.timeline_attempts.map((attempt, attemptIndex) =>
+      parseTimelineAttempt(attempt, `${field}.timeline_attempts[${attemptIndex}]`));
   if (displayAttempt && attemptsStarted !== undefined && displayAttempt.ordinal > attemptsStarted) {
     throw new Error(`${field}.display_attempt ordinal exceeds attempts_started.`);
+  }
+  if (timelineAttempts) {
+    const ids = new Set<string>();
+    const ordinals = new Set<number>();
+    for (const attempt of timelineAttempts) {
+      if (ids.has(attempt.id) || ordinals.has(attempt.ordinal)
+        || (attemptsStarted !== undefined && attempt.ordinal > attemptsStarted)) {
+        throw new Error(`${field}.timeline_attempts has duplicate or out-of-range Attempts.`);
+      }
+      ids.add(attempt.id);
+      ordinals.add(attempt.ordinal);
+    }
+    if (timelineAttempts.some((attempt, index) => index > 0 && timelineAttempts[index - 1].ordinal >= attempt.ordinal)) {
+      throw new Error(`${field}.timeline_attempts must be ordered by ordinal.`);
+    }
   }
   const firstActivityAt = node.first_activity_at === undefined
     ? undefined
@@ -317,6 +407,7 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
     ...(firstActivityAt ? { first_activity_at: firstActivityAt, last_activity_at: lastActivityAt! } : {}),
     ...(attemptsStarted === undefined ? {} : { attempts_started: attemptsStarted }),
     ...(displayAttempt ? { display_attempt: displayAttempt } : {}),
+    ...(timelineAttempts ? { timeline_attempts: timelineAttempts } : {}),
     ...(node.failure_reason === undefined ? {} : { failure_reason: node.failure_reason as TaskGraphFailureReason }),
   };
 }
@@ -382,7 +473,8 @@ export function parseTaskGraphViewSource(value: unknown): TaskGraphViewSource {
         throw new Error(`Graph-control Task ${node.id} lacks graph-control state, detail, or Attempt count.`);
       }
     } else if (node.attempts_started !== undefined || node.display_attempt !== undefined
-      || node.failure_reason !== undefined || ["goal_failed", "goal_achieved", "cancelled"].includes(node.state)) {
+      || node.timeline_attempts !== undefined || node.failure_reason !== undefined
+      || ["goal_failed", "goal_achieved", "cancelled"].includes(node.state)) {
       throw new Error(`Legacy Task ${node.id} contains unsupported graph-control meaning.`);
     }
   }
@@ -596,6 +688,91 @@ function displayAttempt(task: GraphTaskView, attempts: readonly GraphAttemptView
       : latest, undefined);
 }
 
+type AttemptTimelineEvent = Extract<TaskGraphControlTrace["events"][number],
+  { kind: "attempt_started" | "attempt_blocked" | "attempt_resumed" | "attempt_completed" | "attempt_superseded" | "task_cancelled" }>;
+
+function recordedInstant(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) && new Date(milliseconds).toISOString() === value ? value : undefined;
+}
+
+function timelineAttempt(attempt: GraphAttemptView, rawEvents: readonly AttemptTimelineEvent[]): TimelineAttempt {
+  const detail: TaskGraphAttemptDetail = {
+    id: attempt.id,
+    ordinal: attempt.ordinal,
+    state: attempt.state,
+    current: attempt.current,
+    ...(attempt.outcome ? { outcome: attempt.outcome } : {}),
+  };
+  const unavailable = (): TimelineAttempt => ({ ...detail, segments: [], timing: "unavailable" });
+  const events = [...rawEvents].sort((left, right) => left.sequence - right.sequence);
+  if (!events.length || events[0].kind !== "attempt_started") return unavailable();
+  const segments: TimelineAttempt["segments"] = [];
+  let phase: "in_progress" | "blocked" = "in_progress";
+  let startedAt: string | undefined;
+  let previousAt: string | undefined;
+  let previousSequence = 0;
+  let terminal: AttemptTimelineEvent["kind"] | undefined;
+  for (const event of events) {
+    if (terminal) {
+      // A completed Attempt can be invalidated by a later graph revision.
+      // Its execution still ended at completion.
+      if (terminal === "attempt_completed" && event.kind === "attempt_superseded") continue;
+      return unavailable();
+    }
+    const at = recordedInstant(event.recorded_at);
+    if (!at || event.sequence <= previousSequence || (previousAt && Date.parse(at) < Date.parse(previousAt))) {
+      return unavailable();
+    }
+    if (event.kind === "attempt_started") {
+      if (startedAt !== undefined) return unavailable();
+      startedAt = at;
+    } else if (event.kind === "attempt_blocked") {
+      if (phase !== "in_progress" || startedAt === undefined) return unavailable();
+      segments.push({ state: phase, started_at: startedAt, ended_at: at });
+      phase = "blocked";
+      startedAt = at;
+    } else if (event.kind === "attempt_resumed") {
+      if (phase !== "blocked" || startedAt === undefined) return unavailable();
+      segments.push({ state: phase, started_at: startedAt, ended_at: at });
+      phase = "in_progress";
+      startedAt = at;
+    } else {
+      if (startedAt === undefined) return unavailable();
+      if (event.kind === "attempt_completed" && phase !== "in_progress") return unavailable();
+      segments.push({ state: phase, started_at: startedAt, ended_at: at });
+      terminal = event.kind;
+    }
+    previousAt = at;
+    previousSequence = event.sequence;
+  }
+  if (!terminal) {
+    if (attempt.state !== phase || startedAt === undefined) return unavailable();
+    segments.push({ state: phase, started_at: startedAt });
+  } else if ((terminal === "attempt_completed" && attempt.state !== "completed")
+    || (terminal === "attempt_superseded" && attempt.state !== "superseded")
+    || (terminal === "task_cancelled" && attempt.state !== "cancelled")) {
+    return unavailable();
+  }
+  return { ...detail, segments, timing: "recorded" };
+}
+
+/** Wall time below a prior recorded instant cannot share the same elapsed axis. */
+function unreliableTimingSequences(trace: TaskGraphControlTrace): Set<number> {
+  const unreliable = new Set<number>();
+  let highWater = Number.NEGATIVE_INFINITY;
+  for (const entry of [...trace.graphRevisions, ...trace.events].sort((a, b) => a.sequence - b.sequence)) {
+    const at = recordedInstant(entry.recorded_at);
+    // Missing legacy metadata does not invalidate later complete Attempts.
+    if (!at) continue;
+    const time = Date.parse(at);
+    if (time < highWater) unreliable.add(entry.sequence);
+    highWater = Math.max(highWater, time);
+  }
+  return unreliable;
+}
+
 /** Project the executable graph-control trace into the narrow human transport. */
 export function projectGraphControlTaskGraphViewSource(input: {
   teamName: string;
@@ -617,6 +794,16 @@ export function projectGraphControlTaskGraphViewSource(input: {
     attempts.push(attempt);
     attemptsByTask.set(attempt.taskId, attempts);
   }
+  const unreliable = unreliableTimingSequences(input.trace);
+  const eventsByAttempt = new Map<string, AttemptTimelineEvent[]>();
+  for (const event of input.trace.events) {
+    if (!("attemptId" in event) || !event.attemptId || ![
+      "attempt_started", "attempt_blocked", "attempt_resumed", "attempt_completed", "attempt_superseded", "task_cancelled",
+    ].includes(event.kind)) continue;
+    const events = eventsByAttempt.get(event.attemptId) ?? [];
+    events.push((unreliable.has(event.sequence) ? { ...event, recorded_at: undefined } : event) as AttemptTimelineEvent);
+    eventsByAttempt.set(event.attemptId, events);
+  }
 
   const currentLineage = new Map(revision.tasks.map((task) => [task.key, task.lineage]));
   const failureTraversals = new Map<string, number>();
@@ -628,6 +815,11 @@ export function projectGraphControlTaskGraphViewSource(input: {
 
   const nodes: TaskGraphViewNode[] = input.trace.tasks.map((task) => {
     const attempt = displayAttempt(task, attemptsByTask.get(task.id) ?? []);
+    const lineage = currentLineage.get(task.id);
+    const timelineAttempts = (attemptsByTask.get(task.id) ?? [])
+      .filter((candidate) => candidate.taskLineage === lineage)
+      .sort((left, right) => left.ordinal - right.ordinal || left.id.localeCompare(right.id))
+      .map((candidate) => timelineAttempt(candidate, eventsByAttempt.get(candidate.id) ?? []));
     return {
       id: task.id,
       title: task.title,
@@ -642,6 +834,7 @@ export function projectGraphControlTaskGraphViewSource(input: {
         last_activity_at: activity.byTask.get(task.id)!.lastActivityAt!,
       } : {}),
       attempts_started: task.attemptsStarted,
+      timeline_attempts: timelineAttempts,
       ...(attempt ? {
         display_attempt: {
           id: attempt.id,

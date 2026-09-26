@@ -32,7 +32,7 @@ describe("Task graph sentinel render quality", () => {
     expect(rendered).toContain("Goal: goal2:");
     expect(rendered).toContain("Context: context2:");
     expect(rendered).toContain("[dependency_waiting] dag1-task4@worker4");
-    expect(rendered).toContain("updated 10m ago · elapsed 2h 55m");
+    expect(rendered).toContain("updated 10m ago · activity 2h 55m");
     expect(rendered).toMatch(/[┏┓┗┛┣┫┳┻╋]/u);
     expect(rendered).toMatch(/[╌╎]/u);
     expect(rendered).not.toContain("╳");

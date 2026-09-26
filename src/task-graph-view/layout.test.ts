@@ -4,7 +4,7 @@ import { findDirectionalTaskGraphNode, inspectTaskGraphCanvas, layoutTaskGraph, 
 import { projectGraphControlTaskGraphViewSource } from "./source";
 
 function source() {
-  const controller = new GraphTaskController();
+  const controller = new GraphTaskController(undefined, () => new Date("2030-01-01T00:00:00.000Z"));
   controller.applyGraph({
     operationId: "graph",
     tasks: [
@@ -39,7 +39,7 @@ function islands(count: number, islandSize = 5) {
       ...(position === islandSize - 1 ? { onGoalFailed: { target: `task-${root}`, maxTraversals: 2 } } : {}),
     };
   });
-  const controller = new GraphTaskController();
+  const controller = new GraphTaskController(undefined, () => new Date("2030-01-01T00:00:00.000Z"));
   controller.applyGraph({ operationId: `islands-${count}`, tasks });
   return projectGraphControlTaskGraphViewSource({ teamName: `islands-${count}`, trace: controller.trace() });
 }
@@ -115,7 +115,7 @@ describe("Task graph terminal layout", () => {
   });
 
   it("keeps failure self-loops and backward repair lanes legible beside node boxes", () => {
-    const controller = new GraphTaskController();
+    const controller = new GraphTaskController(undefined, () => new Date("2030-01-01T00:00:00.000Z"));
     controller.applyGraph({ operationId: "repair-routes", tasks: [
       {
         key: "self",
@@ -163,7 +163,7 @@ describe("Task graph terminal layout", () => {
   });
 
   it("packs several single-node islands deterministically", () => {
-    const controller = new GraphTaskController();
+    const controller = new GraphTaskController(undefined, () => new Date("2030-01-01T00:00:00.000Z"));
     controller.applyGraph({ operationId: "singletons", tasks: Array.from({ length: 12 }, (_, index) => ({
       key: `single-${String(index).padStart(2, "0")}`,
       title: `Single ${index}`,

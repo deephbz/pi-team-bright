@@ -42,6 +42,17 @@ exhaustive parameter reference.
 - [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.
 - [`extensions/index.ts`](../extensions/index.ts) registers `/pi-team-bright [status|help]`; it has no `/pi-teams` alias.
 
+## Read-only Task views
+
+- [`source.ts`](../src/task-graph-view/source.ts) validates the shared Task view
+  source and projects recorded Attempt intervals from graph authority events.
+- [`component.ts`](../src/task-graph-view/component.ts) owns the DAG/Timeline
+  toggle and shared Task selection. [`layout.ts`](../src/task-graph-view/layout.ts)
+  renders dependencies; [`timeline.ts`](../src/task-graph-view/timeline.ts)
+  renders elapsed Attempt time.
+- [`graph-control.ts`](../src/task-authority/graph-control.ts) owns recorded
+  transition times. Team journal publication times remain observed activity.
+
 ## Result and projection contract
 
 - [`result-projection.ts`](../src/model-tool-contract/result-projection.ts)

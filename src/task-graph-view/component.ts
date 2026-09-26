@@ -25,6 +25,12 @@ import {
   type TaskGraphViewNode,
   type TaskGraphViewSource,
 } from "./source";
+import {
+  formatTaskTimelineScale,
+  layoutTaskTimeline,
+  renderTaskTimelineViewport,
+  type TaskTimelineLayout,
+} from "./timeline";
 
 const RESET = "\u001b[0m";
 const BOLD = "\u001b[1m";
@@ -35,9 +41,10 @@ const HUD_ROWS = 3;
 const FOOTER_ROWS = 1;
 
 type TaskGraphInteractionMode = "pan" | "select";
+type TaskGraphViewKind = "DAG" | "TIMELINE";
 
 function fit(text: string, width: number): string {
-  const clipped = truncateToWidth(text, Math.max(1, width), "…");
+  const clipped = truncateToWidth(text, Math.max(1, width), "…").replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "");
   return clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
 }
 
@@ -79,11 +86,17 @@ export class TaskGraphPaneComponent implements Component {
   private limit: TaskGraphRecentLimit;
   private stateFilter: TaskGraphStateFilter = "all";
   private direction: TaskGraphDirection = "TB";
+  private viewKind: TaskGraphViewKind = "DAG";
   private mode: TaskGraphInteractionMode = "pan";
   private selectedTaskId?: string;
   private expandedTaskId?: string;
   private x = 0;
   private y = 0;
+  private timelineX = 0;
+  private timelineY = 0;
+  private timelineZoom = 1;
+  private timeline?: TaskTimelineLayout;
+  private timelineKey?: string;
   private islandIndex = 0;
   private canvas?: TaskGraphCanvas;
   private canvasKey?: string;
@@ -118,6 +131,8 @@ export class TaskGraphPaneComponent implements Component {
   invalidate(): void {
     this.canvas = undefined;
     this.canvasKey = undefined;
+    this.timeline = undefined;
+    this.timelineKey = undefined;
   }
 
   private style(style: string, text: string): string {
@@ -129,7 +144,9 @@ export class TaskGraphPaneComponent implements Component {
     const node = this.source.nodes.find((candidate) => candidate.id === this.expandedTaskId);
     if (!node) return [];
     const now = this.now();
-    const timing = `first observed ${exactTime(node.first_activity_at)} · last update ${exactTime(node.last_activity_at)} · elapsed ${elapsed(node, now)}`;
+    const timing = this.viewKind === "TIMELINE"
+      ? `first observed ${exactTime(node.first_activity_at)} · last update ${exactTime(node.last_activity_at)} · Attempt spans below`
+      : `first observed ${exactTime(node.first_activity_at)} · last update ${exactTime(node.last_activity_at)} · activity span ${elapsed(node, now)}`;
     const waiting = node.waiting_on_task_ids.length ? ` · waiting on ${node.waiting_on_task_ids.join(", ")}` : "";
     const lines = [
       fit(`Details: [${node.state}] ${node.id}@${node.assignee ?? "unassigned"} · ${node.title}`, width),
@@ -168,6 +185,47 @@ export class TaskGraphPaneComponent implements Component {
       this.clampViewport(width);
     }
     return this.canvas;
+  }
+
+  private getTimeline(width: number): TaskTimelineLayout {
+    const timeBucket = Math.floor(this.now() / 1_000);
+    const key = `${this.source.source_revision}\u0000${this.limit}\u0000${this.stateFilter}\u0000${width}\u0000${this.timelineZoom}\u0000${timeBucket}`;
+    if (!this.timeline || this.timelineKey !== key) {
+      this.timeline = layoutTaskTimeline(this.source, this.limit, this.stateFilter, width, this.now(), this.timelineZoom);
+      this.timelineKey = key;
+      if (this.selectedTaskId && !this.timeline.taskRows.has(this.selectedTaskId)) {
+        this.selectedTaskId = undefined;
+        this.expandedTaskId = undefined;
+      }
+      this.clampTimeline(width);
+    }
+    return this.timeline;
+  }
+
+  private clampTimeline(width: number): void {
+    if (!this.timeline) return;
+    this.timelineX = Math.max(0, Math.min(this.timelineX, this.timeline.maxX));
+    this.timelineY = Math.max(0, Math.min(this.timelineY, Math.max(0, this.timeline.rows.length - this.viewportHeight(width) + 1)));
+  }
+
+  private focusTimelineTask(taskId: string, width: number): void {
+    const row = this.getTimeline(width).taskRows.get(taskId);
+    if (row === undefined) return;
+    const height = Math.max(1, this.viewportHeight(width) - 1);
+    if (row < this.timelineY) this.timelineY = row;
+    else if (row >= this.timelineY + height) this.timelineY = row - height + 1;
+    this.clampTimeline(width);
+  }
+
+  private moveTimelineSelection(direction: -1 | 1, width: number): void {
+    const nodes = this.getTimeline(width).visible.nodes;
+    if (!nodes.length) return;
+    const index = nodes.findIndex((node) => node.id === this.selectedTaskId);
+    const next = nodes[Math.max(0, Math.min(nodes.length - 1, (index < 0 ? 0 : index) + direction))];
+    if (!next) return;
+    this.selectedTaskId = next.id;
+    this.expandedTaskId = undefined;
+    this.focusTimelineTask(next.id, width);
   }
 
   private clampViewport(width: number): void {
@@ -219,6 +277,15 @@ export class TaskGraphPaneComponent implements Component {
   private switchMode(width: number): void {
     if (this.mode === "pan") {
       this.mode = "select";
+      if (this.viewKind === "TIMELINE") {
+        const selected = this.selectedTaskId && this.getTimeline(width).taskRows.has(this.selectedTaskId)
+          ? this.selectedTaskId : this.getTimeline(width).visible.nodes[0]?.id;
+        if (selected) {
+          this.selectedTaskId = selected;
+          this.focusTimelineTask(selected, width);
+        }
+        return;
+      }
       const selected = this.selectedTaskId
         ? this.getCanvas(width).nodes.find((box) => box.node.id === this.selectedTaskId)
         : this.initialSelection(width);
@@ -245,6 +312,17 @@ export class TaskGraphPaneComponent implements Component {
   }
 
   private resetView(width: number): void {
+    if (this.viewKind === "TIMELINE") {
+      this.timelineX = 0;
+      this.timelineY = 0;
+      this.timelineZoom = 1;
+      this.timeline = undefined;
+      this.expandedTaskId = undefined;
+      if (this.mode === "select") {
+        this.selectedTaskId = this.getTimeline(width).visible.nodes[0]?.id;
+      }
+      return;
+    }
     this.x = 0;
     this.y = 0;
     this.islandIndex = 0;
@@ -262,6 +340,13 @@ export class TaskGraphPaneComponent implements Component {
   }
 
   private legend(width: number): string {
+    if (this.viewKind === "TIMELINE") {
+      const timeline = this.getTimeline(width);
+      const axis = timeline.origin === undefined
+        ? "no recorded Attempt timing"
+        : `${new Date(timeline.origin).toISOString().replace(".000Z", "Z")} · ${formatTaskTimelineScale(timeline.scaleMs)}`;
+      return fit(`Time: ${axis} · ━ in progress ▒ blocked ▶ open`, width);
+    }
     const full = "Legend: ◷ wait · ● ready · ▶ active · ■ blocked · ✓ achieved · ✕ failed · ⊘ cancelled · ━ success · ╌ failure";
     const compact = "Legend: ◷ wait ● ready ▶ active ■ block ✓ done ✕ fail ⊘ cancel | ━ success ╌ failure";
     return fit(width >= 100 ? full : compact, width);
@@ -270,31 +355,40 @@ export class TaskGraphPaneComponent implements Component {
   render(width: number): string[] {
     const safeWidth = Math.max(1, width);
     this.lastWidth = safeWidth;
-    const canvas = this.getCanvas(safeWidth);
+    const canvas = this.viewKind === "DAG" ? this.getCanvas(safeWidth) : undefined;
+    const timeline = this.viewKind === "TIMELINE" ? this.getTimeline(safeWidth) : undefined;
+    const visible = canvas?.visible ?? timeline!.visible;
     const filter = this.limit === "all" ? "all tasks" : `recent ${this.limit}`;
     const authority = this.source.authority === "graph_control" ? "graph control" : "legacy cards";
-    const island = canvas.islands.length ? `${this.islandIndex + 1}/${canvas.islands.length}` : "0/0";
-    const hiddenTasks = canvas.visible.recencyOmittedNodeCount + canvas.visible.filterOmittedNodeCount;
+    const island = canvas && canvas.islands.length ? `${this.islandIndex + 1}/${canvas.islands.length}` : "0/0";
+    const hiddenTasks = visible.recencyOmittedNodeCount + visible.filterOmittedNodeCount;
     const header = fit(`Task graph: ${this.source.team_name} · ${authority} · rev ${this.source.source_revision} · updated ${this.sourceUpdatedAt()}`, safeWidth);
-    const view = fit(`View: ${this.mode.toUpperCase()} · ${canvas.visible.nodes.length}/${this.source.nodes.length} tasks · ${filter} · ${this.stateFilter} states · ${this.direction} · island ${island} · offset ${this.x},${this.y} · hidden ${hiddenTasks} tasks/${canvas.visible.boundaryEdgeCount} edges`, safeWidth);
+    const location = canvas
+      ? `${this.direction} · island ${island} · offset ${this.x},${this.y}`
+      : `offset ${this.timelineX},${this.timelineY} · zoom ${this.timelineZoom}x`;
+    const view = fit(`View: ${this.mode.toUpperCase()} · ${this.viewKind} · ${visible.nodes.length}/${this.source.nodes.length} tasks · ${filter} · ${this.stateFilter} states · ${location} · hidden ${hiddenTasks} tasks/${visible.boundaryEdgeCount} edges`, safeWidth);
     const details = this.detailLines(safeWidth).map((line, index) => this.style(index === 0 ? BOLD : DIM, line));
-    const footerText = this.mode === "pan"
-      ? "Shortcuts: Tab select · hjkl/arrows pan · [/] island · f recent · s state · r rotate · Home reset"
-      : "Shortcuts: Tab/Esc pan · hjkl/arrows select · Enter details · [/] island · f recent · s state · r rotate · Home reset";
+    const footerText = this.viewKind === "TIMELINE"
+      ? this.mode === "pan"
+        ? "Shortcuts: v DAG · Tab select · hjkl/arrows scroll · +/- time zoom · f recent · s state · Home reset"
+        : "Shortcuts: v DAG · Tab/Esc pan · j/k select Task · h/l time pan · Enter details · +/- zoom · f recent · s state"
+      : this.mode === "pan"
+        ? "Shortcuts: v Timeline · Tab select · hjkl/arrows pan · [/] island · f recent · s state · r rotate · Home reset"
+        : "Shortcuts: v Timeline · Tab/Esc pan · hjkl/arrows select · Enter details · [/] island · f recent · s state · r rotate · Home reset";
     return [
       this.style(BOLD, header),
       this.style(DIM, view),
       this.style(DIM, this.legend(safeWidth)),
       ...details,
-      ...renderTaskGraphViewport({
-        canvas,
-        x: this.x,
-        y: this.y,
-        width: safeWidth,
-        height: this.viewportHeight(safeWidth),
-        color: this.color,
+      ...(canvas ? renderTaskGraphViewport({
+        canvas, x: this.x, y: this.y, width: safeWidth,
+        height: this.viewportHeight(safeWidth), color: this.color,
         ...(this.mode === "select" && this.selectedTaskId ? { selectedTaskId: this.selectedTaskId } : {}),
-      }),
+      }) : renderTaskTimelineViewport({
+        layout: timeline!, x: this.timelineX, y: this.timelineY,
+        height: this.viewportHeight(safeWidth), now: this.now(), color: this.color,
+        ...(this.mode === "select" && this.selectedTaskId ? { selectedTaskId: this.selectedTaskId } : {}),
+      })),
       this.style(DIM, fit(footerText, safeWidth)),
     ];
   }
@@ -302,21 +396,44 @@ export class TaskGraphPaneComponent implements Component {
   handleInput(data: string): void {
     const width = this.lastWidth;
     let changed = true;
-    if (matchesKey(data, Key.tab)) this.switchMode(width);
+    if (matchesKey(data, "v")) {
+      this.viewKind = this.viewKind === "DAG" ? "TIMELINE" : "DAG";
+      if (this.mode === "select" && this.selectedTaskId) {
+        if (this.viewKind === "TIMELINE") this.focusTimelineTask(this.selectedTaskId, width);
+        else {
+          const box = this.getCanvas(width).nodes.find((candidate) => candidate.node.id === this.selectedTaskId);
+          if (box) this.focusBox(box, width);
+        }
+      }
+    } else if (matchesKey(data, Key.tab)) this.switchMode(width);
     else if (this.mode === "select" && matchesKey(data, Key.escape)) this.switchMode(width);
-    else if (matchesKey(data, "[")) this.focusIsland(this.islandIndex - 1, width);
-    else if (matchesKey(data, "]")) this.focusIsland(this.islandIndex + 1, width);
+    else if (this.viewKind === "TIMELINE" && (data === "+" || matchesKey(data, "="))) {
+      this.timelineZoom = Math.min(64, this.timelineZoom * 2);
+      this.timeline = undefined;
+      this.getTimeline(width);
+    } else if (this.viewKind === "TIMELINE" && matchesKey(data, "-")) {
+      this.timelineZoom = Math.max(1, this.timelineZoom / 2);
+      this.timeline = undefined;
+      this.getTimeline(width);
+    } else if (this.viewKind === "DAG" && matchesKey(data, "[")) this.focusIsland(this.islandIndex - 1, width);
+    else if (this.viewKind === "DAG" && matchesKey(data, "]")) this.focusIsland(this.islandIndex + 1, width);
     else if (matchesKey(data, Key.home)) this.resetView(width);
     else if (this.mode === "select" && (matchesKey(data, Key.enter) || matchesKey(data, Key.space) || matchesKey(data, "e"))) {
       if (this.selectedTaskId) this.expandedTaskId = this.expandedTaskId === this.selectedTaskId ? undefined : this.selectedTaskId;
-    } else if (this.mode === "select" && (matchesKey(data, Key.left) || matchesKey(data, "h"))) this.moveSelection("left", width);
-    else if (this.mode === "select" && (matchesKey(data, Key.right) || matchesKey(data, "l"))) this.moveSelection("right", width);
-    else if (this.mode === "select" && (matchesKey(data, Key.up) || matchesKey(data, "k"))) this.moveSelection("up", width);
-    else if (this.mode === "select" && (matchesKey(data, Key.down) || matchesKey(data, "j"))) this.moveSelection("down", width);
-    else if (this.mode === "pan" && (matchesKey(data, Key.left) || matchesKey(data, "h"))) this.x -= 3;
-    else if (this.mode === "pan" && (matchesKey(data, Key.right) || matchesKey(data, "l"))) this.x += 3;
-    else if (this.mode === "pan" && (matchesKey(data, Key.up) || matchesKey(data, "k"))) this.y -= 2;
-    else if (this.mode === "pan" && (matchesKey(data, Key.down) || matchesKey(data, "j"))) this.y += 2;
+    } else if (this.viewKind === "TIMELINE" && this.mode === "select" && (matchesKey(data, Key.up) || matchesKey(data, "k"))) this.moveTimelineSelection(-1, width);
+    else if (this.viewKind === "TIMELINE" && this.mode === "select" && (matchesKey(data, Key.down) || matchesKey(data, "j"))) this.moveTimelineSelection(1, width);
+    else if (this.viewKind === "DAG" && this.mode === "select" && (matchesKey(data, Key.left) || matchesKey(data, "h"))) this.moveSelection("left", width);
+    else if (this.viewKind === "DAG" && this.mode === "select" && (matchesKey(data, Key.right) || matchesKey(data, "l"))) this.moveSelection("right", width);
+    else if (this.viewKind === "DAG" && this.mode === "select" && (matchesKey(data, Key.up) || matchesKey(data, "k"))) this.moveSelection("up", width);
+    else if (this.viewKind === "DAG" && this.mode === "select" && (matchesKey(data, Key.down) || matchesKey(data, "j"))) this.moveSelection("down", width);
+    else if (this.viewKind === "TIMELINE" && (matchesKey(data, Key.left) || matchesKey(data, "h"))) this.timelineX -= 3;
+    else if (this.viewKind === "TIMELINE" && (matchesKey(data, Key.right) || matchesKey(data, "l"))) this.timelineX += 3;
+    else if (this.viewKind === "TIMELINE" && this.mode === "pan" && (matchesKey(data, Key.up) || matchesKey(data, "k"))) this.timelineY -= 2;
+    else if (this.viewKind === "TIMELINE" && this.mode === "pan" && (matchesKey(data, Key.down) || matchesKey(data, "j"))) this.timelineY += 2;
+    else if (this.viewKind === "DAG" && this.mode === "pan" && (matchesKey(data, Key.left) || matchesKey(data, "h"))) this.x -= 3;
+    else if (this.viewKind === "DAG" && this.mode === "pan" && (matchesKey(data, Key.right) || matchesKey(data, "l"))) this.x += 3;
+    else if (this.viewKind === "DAG" && this.mode === "pan" && (matchesKey(data, Key.up) || matchesKey(data, "k"))) this.y -= 2;
+    else if (this.viewKind === "DAG" && this.mode === "pan" && (matchesKey(data, Key.down) || matchesKey(data, "j"))) this.y += 2;
     else if (matchesKey(data, "f")) {
       const index = LIMIT_SEQUENCE.indexOf(this.limit);
       this.limit = LIMIT_SEQUENCE[(index + 1) % LIMIT_SEQUENCE.length];
@@ -327,14 +444,19 @@ export class TaskGraphPaneComponent implements Component {
       this.stateFilter = FILTER_SEQUENCE[(index + 1) % FILTER_SEQUENCE.length];
       this.invalidate();
       this.resetView(width);
-    } else if (matchesKey(data, "r")) {
+    } else if (this.viewKind === "DAG" && matchesKey(data, "r")) {
       this.direction = this.direction === "TB" ? "LR" : "TB";
       this.invalidate();
       this.resetView(width);
     } else changed = false;
     if (changed) {
-      this.getCanvas(width);
-      this.clampViewport(width);
+      if (this.viewKind === "DAG") {
+        this.getCanvas(width);
+        this.clampViewport(width);
+      } else {
+        this.getTimeline(width);
+        this.clampTimeline(width);
+      }
       this.request();
     }
   }
