@@ -33,6 +33,10 @@ vi.mock("../utils/teams", () => ({
     fixture.events.push(`lease:${membershipId}`);
     return action(fixture.current);
   },
+  withCurrentSessionBinding: async (_team: string, _worker: string, _session: string, membershipId: string, action: () => Promise<unknown>) => {
+    fixture.events.push(`session-lease:${membershipId}`);
+    return action();
+  },
   bindMemberSession: () => { fixture.events.push("bind"); return fixture.bind(); },
   updateMembership: () => { fixture.events.push("membership-update"); return fixture.update(); },
   assertCurrentSessionBinding: () => { fixture.events.push("exact-binding"); return fixture.current; },
@@ -171,6 +175,16 @@ describe("Team Session lifecycle boundary", () => {
     const service = new TeamSessionLifecycleService(publication());
     await expect(service.writeBoundWorkerRuntime({ teamName: "team", workerName: "worker", sessionFile: "/tmp/worker.jsonl", membershipId: "old-membership", updates: { ready: true } })).rejects.toThrow("Runtime update rejected for stale Membership of worker on team team.");
     expect(fixture.writeRuntime).not.toHaveBeenCalled();
+  });
+
+  it("holds the exact Session mutation lease through a runtime update", async () => {
+    reset(); fixture.current = member("worker", "/tmp/worker.jsonl");
+    const service = new TeamSessionLifecycleService(publication());
+    await expect(service.writeBoundWorkerRuntime({
+      teamName: "team", workerName: "worker", sessionFile: "/tmp/worker.jsonl",
+      membershipId: "worker-membership", updates: { runState: "active" },
+    })).resolves.toBe("worker-membership");
+    expect(fixture.events).toEqual(["exact-binding", "session-lease:worker-membership", "runtime-write"]);
   });
 
   it("records admission failure as best-effort at the registered caller boundary", async () => {
