@@ -441,6 +441,10 @@ npm run verify:package
 `npm test` is the fast deterministic lane; `npm run test:full` includes the
 broader suite, and `npm run verify:package` probes the packed public artifact.
 
+`npm run verify:formal` runs bounded TLA+ models and negative controls. It needs
+Java and the pinned TLC jar. See [formal verification](formal/README.md) for
+setup, bounds, source mapping, and limits.
+
 For current stage, constraints, and open work, read the
 [maintained context](docs/current/README.md). For one-hop links to tool schemas,
 authority implementations, types, event semantics, adapters, and focused tests,

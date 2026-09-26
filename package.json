@@ -54,7 +54,8 @@
     "qa:tui-messages:export-expanded": "ts-node --transpile-only src/cli/tui-message-gallery.ts --format plain --expanded",
     "qa:tui-messages:gallery": "ts-node --transpile-only src/cli/tui-message-gallery.ts",
     "qa:tui-messages:check": "vitest run src/model-tool-contract/tui-message-gallery.test.ts",
-    "test:lanes": "node scripts/verify-test-lanes.cjs"
+    "test:lanes": "node scripts/verify-test-lanes.cjs",
+    "verify:formal": "bash scripts/formal-check.sh"
   },
   "main": "extensions/index.ts",
   "exports": {

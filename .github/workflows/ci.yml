@@ -28,3 +28,25 @@ jobs:
       - run: TERM_PROGRAM=iTerm.app npm run test:exhaustive-only
       - run: npm run test:lanes
       - run: npm run verify:package
+
+  formal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch pinned TLC artifact
+        run: curl --fail --location --retry 2 https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar --output "$RUNNER_TEMP/tla2tools.jar"
+      - name: Check bounded models and negative controls
+        env:
+          TLA2TOOLS_JAR: ${{ runner.temp }}/tla2tools.jar
+          FORMAL_RESULTS_DIR: ${{ runner.temp }}/formal-results
+        run: bash scripts/formal-check.sh
+      - name: Retain model checker evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: formal-results
+          path: ${{ runner.temp }}/formal-results
