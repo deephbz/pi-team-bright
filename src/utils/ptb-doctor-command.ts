@@ -142,9 +142,8 @@ export async function collectPtbDoctorContext(coordinates: PtbDoctorCoordinates)
         const active = members.filter((member) => member && typeof member === "object" && !Array.isArray(member)
           && (member as Record<string, unknown>).isActive !== false);
         team.epoch_id = typeof record.epochId === "string" ? bounded(record.epochId, 128) ?? "omitted_over_limit" : "unavailable";
-        team.lifecycle = active.length ? "active" : "stopped";
-        team.active_members = active.length;
-        team.active_workers = active.filter((member) => (member as Record<string, unknown>).agentType === "teammate").length;
+        team.sampled_active_member_entries = active.length;
+        team.sampled_worker_entries = active.filter((member) => (member as Record<string, unknown>).agentType === "teammate").length;
         team.task_backend = record.taskBackend === "beads" || record.taskBackend === "legacy" ? record.taskBackend : "unconfigured_or_invalid";
         if (typeof record.taskWorkspace === "string" && path.isAbsolute(record.taskWorkspace)) {
           const workspace = bounded(record.taskWorkspace, 512);

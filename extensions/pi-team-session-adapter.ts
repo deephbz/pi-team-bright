@@ -516,8 +516,8 @@ async function refuseTeamSession(
 function registerSessionHooks() {
   pi.on("session_before_switch", () => { frameworkSync.invalidate(); });
   pi.on("session_before_fork", () => { frameworkSync.invalidate(); });
-  pi.on("session_before_tree", () => { frameworkSync.invalidate(); });
-  pi.on("session_before_compact", () => { frameworkSync.invalidate(); });
+  pi.on("session_before_tree", () => { frameworkSync.invalidate(); doctorGeneration++; });
+  pi.on("session_before_compact", () => { frameworkSync.invalidate(); doctorGeneration++; });
   pi.on("session_start", async (event, ctx) => {
   doctorGeneration++;
   paths.ensureDirs();
