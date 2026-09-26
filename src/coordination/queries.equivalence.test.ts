@@ -178,7 +178,7 @@ describe("durable Coordination query equivalence", () => {
     runtime = { membershipId: "worker-1", pid: 42, startedAt: 1, runState: "settled" };
     const caughtUp = await service.readTeamSync("leader", "updates", new AbortController().signal, "success");
     expect(caughtUp).toEqual({ kind: "caught_up", head: 0, epochId: "epoch-1" });
-    expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime"]);
+    expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime", "binding"]);
     expect(commits).toBe(0);
     expect(projectToolResult("team_sync", { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true })).toEqual({ kind: "caught_up", head: 0, epoch_id: "epoch-1" });
     expect(projectTui({ tool: "team_sync", details: { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true }, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("caught_up")]));

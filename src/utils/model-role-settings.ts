@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Check, Value } from "typebox/value";
 import { THINKING_LEVELS, type ThinkingLevel, type WorkerModelBinding } from "../team-authority/contracts";
-import { MAX_SYNC_TIMER_SECONDS } from "./sync-liveness-settings";
+import { MAX_AUTO_SYNC_UPDATE_THRESHOLD, MAX_SYNC_TIMER_SECONDS } from "./sync-liveness-settings";
 import { TeamPaneLayoutSchema } from "./team-pane-layout";
 
 /** Owns the extension settings contract. Pi owns every other settings namespace. */
@@ -126,24 +126,40 @@ function validateSharedNamespace(
 
   const team = nestedObject(namespace, "team", "pi_team_bright.team", source, file, diagnostics);
   if (!team) return;
-  keys(team, ["pane_layout", "wait_seconds", "nudge_enabled", "nudge_delay_seconds"], [],
-    "pi_team_bright.team", source, file, diagnostics);
+  keys(team, ["pane_layout", "wait_seconds", "auto_sync_enabled", "auto_sync_delay_seconds", "auto_sync_update_threshold",
+    "nudge_enabled", "nudge_delay_seconds"], [], "pi_team_bright.team", source, file, diagnostics);
+  for (const [oldKey, newKey] of [["nudge_enabled", "auto_sync_enabled"], ["nudge_delay_seconds", "auto_sync_delay_seconds"]] as const) {
+    if (!has(team, oldKey)) continue;
+    diagnostic(diagnostics, source, file, `pi_team_bright.team.${oldKey}`, "obsolete_key",
+      `pi_team_bright.team.${oldKey} is deprecated; use pi_team_bright.team.${newKey}.`,
+      source === "project" ? "This project value has no effect on Team sync policy." :
+        has(team, newKey) ? "The new value takes precedence." : "The old value remains effective for this Team epoch.");
+  }
   if (source === "project") {
-    for (const key of ["wait_seconds", "nudge_enabled", "nudge_delay_seconds"]) {
+    for (const key of ["wait_seconds", "auto_sync_enabled", "auto_sync_delay_seconds", "auto_sync_update_threshold", "nudge_enabled", "nudge_delay_seconds"]) {
       if (has(team, key)) diagnostic(diagnostics, source, file, `pi_team_bright.team.${key}`, "invalid_value",
         `pi_team_bright.team.${key} is global-only.`, "This project value has no effect on Team sync policy.");
     }
   }
-  for (const key of ["wait_seconds", "nudge_delay_seconds"]) {
+  for (const key of ["wait_seconds", "auto_sync_delay_seconds", "nudge_delay_seconds"]) {
     const value = team[key];
     if (has(team, key) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_SYNC_TIMER_SECONDS)) {
       diagnostic(diagnostics, source, file, `pi_team_bright.team.${key}`, "invalid_value",
         `pi_team_bright.team.${key} must be from 0 through ${MAX_SYNC_TIMER_SECONDS} seconds.`, "The default timer is used.");
     }
   }
-  if (has(team, "nudge_enabled") && typeof team.nudge_enabled !== "boolean") {
-    diagnostic(diagnostics, source, file, "pi_team_bright.team.nudge_enabled", "invalid_value",
-      "pi_team_bright.team.nudge_enabled must be boolean.", "The default nudge policy is used.");
+  for (const key of ["auto_sync_enabled", "nudge_enabled"]) {
+    if (has(team, key) && typeof team[key] !== "boolean") {
+      diagnostic(diagnostics, source, file, `pi_team_bright.team.${key}`, "invalid_value",
+        `pi_team_bright.team.${key} must be boolean.`, "The default auto sync policy is used when this value is selected.");
+    }
+  }
+  const threshold = team.auto_sync_update_threshold;
+  if (has(team, "auto_sync_update_threshold") &&
+    (typeof threshold !== "number" || !Number.isSafeInteger(threshold) || threshold < 1 || threshold > MAX_AUTO_SYNC_UPDATE_THRESHOLD)) {
+    diagnostic(diagnostics, source, file, "pi_team_bright.team.auto_sync_update_threshold", "invalid_value",
+      `pi_team_bright.team.auto_sync_update_threshold must be an integer from 1 through ${MAX_AUTO_SYNC_UPDATE_THRESHOLD}.`,
+      "The default update threshold is used.");
   }
   const layout = nestedObject(team, "pane_layout", "pi_team_bright.team.pane_layout", source, file, diagnostics);
   if (layout) {

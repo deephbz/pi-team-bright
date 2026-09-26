@@ -14,7 +14,7 @@ import { projectToolResult } from "../../src/model-tool-contract/result-projecti
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 import { commitHiddenObservationProjection, readHiddenObservationProjection } from "../../src/utils/hidden-observation";
-import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
+import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../../src/utils/sync-nudge-conductor";
 import {
   createSyncNudgeRecord,
@@ -229,13 +229,14 @@ describe("hardened coordination liveness boundaries", () => {
   it("uses settings defaults and overrides for bounded wait and delayed nudge policy", () => {
     const agentDir = tempAgentDir();
     fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({}));
-    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
-    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { wait_seconds: 7.5, nudge_enabled: true, nudge_delay_seconds: 3 } } }));
-    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 7.5, nudgeEnabled: true, nudgeDelaySeconds: 3 });
+    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 120, autoSyncEnabled: true, autoSyncDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS, autoSyncUpdateThreshold: DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD, diagnostics: [] });
+    fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { wait_seconds: 7.5, auto_sync_enabled: true, auto_sync_delay_seconds: 3, auto_sync_update_threshold: 2 } } }));
+    expect(loadSyncLivenessSettings({ agentDir })).toMatchObject({ waitSeconds: 7.5, autoSyncEnabled: true, autoSyncDelaySeconds: 3, autoSyncUpdateThreshold: 2, diagnostics: [] });
   });
 
   it("keeps active authority scans at the five-second floor while event hints stay immediate", async () => {
     vi.useFakeTimers();
+    vi.spyOn(fs, "watch").mockImplementation(() => ({ on: vi.fn(), close: vi.fn() }) as any);
     const name = teamName("authority-cadence");
     fs.mkdirSync(paths.teamDir(name), { recursive: true });
     const check = vi.fn(() => false);
@@ -243,10 +244,12 @@ describe("hardened coordination liveness boundaries", () => {
     const controller = new AbortController();
     const waiting = waitForLivenessHint({ teamName: name, waitMs: 10_000, signal: controller.signal, check, checkAuthority });
     await Promise.resolve();
+    await Promise.resolve();
     expect(checkAuthority).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(4_999);
     expect(checkAuthority).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
+    await Promise.resolve();
     expect(checkAuthority).toHaveBeenCalledTimes(2);
     controller.abort();
     await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
@@ -421,15 +424,17 @@ describe("hardened coordination liveness boundaries", () => {
     });
     expect(baseline.kind).toBe("committed");
 
-    const revision = await fixture.port.readSyncNudgeDebt(fixture.session, branch);
-    expect(revision).toMatchObject({ kind: "indeterminate" });
-
-    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("v_0000000000000001") }, change: "note", actor: "team-lead" });
+    // An old revision coordinate alone does not create a canonical unseen Task.
+    await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({ kind: "none" });
+    readPort.listTaskIds.mockResolvedValue(["task-1"]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([taskEnvelope()]);
+    readPort.readTaskAuthorityRecordEnvelope.mockResolvedValue(taskEnvelope());
+    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") }, change: "status", actor: "team-lead" });
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({ kind: "none" });
 
-    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("v_0000000000000001") }, change: "note", actor: "worker" });
+    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") }, change: "status", actor: "worker" });
     const postSettle = await fixture.port.readSyncNudgeDebt(fixture.session, branch);
-    expect(postSettle).toMatchObject({ kind: "eligible", requestedView: "updates" });
+    expect(postSettle).toMatchObject({ kind: "eligible", requestedView: "updates", updateCount: 1 });
   });
 
   it("requires a snapshot nudge when the exact branch has no hidden baseline", async () => {
@@ -438,24 +443,29 @@ describe("hardened coordination liveness boundaries", () => {
     expect(debt).toMatchObject({ kind: "eligible", requestedView: "snapshot", branchLineage: ["root", "branch"], leaderSessionId: fixture.sessionFile });
   });
 
-  it("scans every unseen event page before deciding actor provenance", async () => {
+  it("schedules a bounded first page when later canonical external Task evidence exists", async () => {
     const fixture = await durableFixture();
     const branch = ["root", "branch"];
     expect(await commitHiddenObservationProjection(fixture.name, {
       teamEpochId: fixture.config.epochId!, exactSessionId: fixture.sessionFile, branchLineage: branch,
       acknowledgedEntryId: "branch", teamEventCursor: "0", authorityRevisions: { task_projection: "current" },
     })).toMatchObject({ kind: "committed" });
+    readPort.listTaskIds.mockResolvedValue(["task-1"]);
+    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([taskEnvelope()]);
+    readPort.readTaskAuthorityRecordEnvelope.mockResolvedValue(taskEnvelope());
     for (let index = 0; index < 55; index++) {
       await teamEvents.appendTeamEvent(fixture.name, {
-        type: "task", ref: { taskId: `leader-task-${index}`, version: taskVersionRef(`leader-${index}`) },
-        change: "note", actor: "team-lead",
+        type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") },
+        change: "status", actor: "team-lead",
       });
     }
     await teamEvents.appendTeamEvent(fixture.name, {
-      type: "task", ref: { taskId: "worker-task-after-page-one", version: taskVersionRef("worker-after-page-one") },
-      change: "note", actor: "worker",
+      type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") },
+      change: "status", actor: "worker",
     });
-    await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({ kind: "eligible", requestedView: "updates" });
+    await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({
+      kind: "eligible", requestedView: "updates", updateCount: 0,
+    });
   });
 
   it("requires exact current Membership and the full branch lineage for nudge debt", async () => {
@@ -470,9 +480,10 @@ describe("hardened coordination liveness boundaries", () => {
     const clock = new FakeClock();
     let settled = false;
     let busy = true;
-    let debt: SyncNudgeDebt = { kind: "eligible", debtKey: "debt-1", requestedView: "snapshot", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "1" };
-    const present = vi.fn();
-    const conductor = new SyncNudgeConductor({ clock, delayMs: 10, readDebt: async () => debt, isSettled: () => settled, isBusy: () => busy, alreadyPresented: () => false, present });
+    let debt: SyncNudgeDebt = { kind: "eligible", debtKey: "debt-1", scopeKey: "baseline-1", updateCount: 1, requestedView: "snapshot", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "2" };
+    let delivered = false;
+    const present = vi.fn(() => { delivered = true; return true; });
+    const conductor = new SyncNudgeConductor({ clock, delayMs: 10, readDebt: async () => debt, isSettled: () => settled, isBusy: () => busy, alreadyPresented: () => delivered, present });
     conductor.start();
     await conductor.reconcile();
     await clock.advance(20);
@@ -506,8 +517,8 @@ describe("hardened coordination liveness boundaries", () => {
     const clock = new FakeClock();
     let sent = 0;
     let already = false;
-    let debt: SyncNudgeDebt = { kind: "eligible", debtKey: "debt-1", requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root", "branch"], branchId: "branch", policyVersion: "1" };
-    const conductor = new SyncNudgeConductor({ clock, delayMs: 5, readDebt: async () => debt, isSettled: () => true, isBusy: () => false, alreadyPresented: () => already, present: async () => { sent++; already = true; } });
+    let debt: SyncNudgeDebt = { kind: "eligible", debtKey: "debt-1", scopeKey: "baseline-1", updateCount: 1, requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root", "branch"], branchId: "branch", policyVersion: "2" };
+    const conductor = new SyncNudgeConductor({ clock, delayMs: 5, readDebt: async () => debt, isSettled: () => true, isBusy: () => false, alreadyPresented: () => already, present: async () => { sent++; already = true; return true; } });
     conductor.start();
     await conductor.reconcile();
     await clock.advance(5);
@@ -517,7 +528,7 @@ describe("hardened coordination liveness boundaries", () => {
     await clock.advance(5);
     expect(sent).toBe(1);
     already = false;
-    debt = { ...debt, debtKey: "debt-2", branchLineage: ["root", "new-branch"], branchId: "new-branch" };
+    debt = { ...debt, debtKey: "debt-2", scopeKey: "baseline-2", branchLineage: ["root", "new-branch"], branchId: "new-branch" };
     conductor.notify();
     await conductor.reconcile();
     await clock.advance(5);

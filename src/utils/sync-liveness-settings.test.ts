@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS, DEFAULT_SYNC_WAIT_SECONDS, loadSyncLivenessSettings } from "./sync-liveness-settings";
+import {
+  DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD,
+  DEFAULT_SYNC_WAIT_SECONDS, loadSyncLivenessSettings,
+} from "./sync-liveness-settings";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -14,23 +17,53 @@ function settings(value: unknown): string {
   return root;
 }
 
+function team(value: Record<string, unknown>) {
+  return settings({ pi_team_bright: { team: value } });
+}
+
 describe("sync liveness settings", () => {
-  it("uses the wait and enabled nudge defaults when settings are omitted", () => {
+  it("uses quiet defaults when optional settings are absent", () => {
     const policy = loadSyncLivenessSettings({ agentDir: settings({}) });
-    expect(policy.waitSeconds).toBe(DEFAULT_SYNC_WAIT_SECONDS);
-    expect(policy.nudgeEnabled).toBe(true);
-    expect(policy.nudgeDelaySeconds).toBe(DEFAULT_SYNC_NUDGE_DELAY_SECONDS);
-    expect(policy.diagnostics.join(" ")).toMatch(/default true/);
-    expect(policy.diagnostics.join(" ")).toMatch(/default 1200 seconds/);
+    expect(policy).toMatchObject({
+      waitSeconds: DEFAULT_SYNC_WAIT_SECONDS,
+      autoSyncEnabled: true,
+      autoSyncDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS,
+      autoSyncUpdateThreshold: DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD,
+      diagnostics: [],
+    });
   });
 
-  it("reads the global Team policy and rejects malformed values", () => {
-    const policy = loadSyncLivenessSettings({ agentDir: settings({ pi_team_bright: { team: { wait_seconds: 30, nudge_enabled: true, nudge_delay_seconds: 5 } } }) });
-    expect(policy).toMatchObject({ waitSeconds: 30, nudgeEnabled: true, nudgeDelaySeconds: 5 });
-    const malformed = loadSyncLivenessSettings({ agentDir: settings({ pi_team_bright: { team: { wait_seconds: -1, nudge_enabled: "yes", nudge_delay_seconds: -2 } } }) });
-    expect(malformed).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
-    expect(malformed.diagnostics.length).toBeGreaterThanOrEqual(3);
-    const disabled = loadSyncLivenessSettings({ agentDir: settings({ pi_team_bright: { team: { nudge_enabled: false } } }) });
-    expect(disabled).toMatchObject({ nudgeEnabled: false, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
+  it("reads the global automatic sync policy for one Team epoch", () => {
+    const policy = loadSyncLivenessSettings({ agentDir: team({
+      wait_seconds: 30, auto_sync_enabled: true, auto_sync_delay_seconds: 0.2, auto_sync_update_threshold: 2,
+    }) });
+    expect(policy).toMatchObject({ waitSeconds: 30, autoSyncEnabled: true, autoSyncDelaySeconds: 0.2, autoSyncUpdateThreshold: 2, diagnostics: [] });
+  });
+
+  it("preserves a legacy explicit disable and delay until replacement fields appear", () => {
+    const old = loadSyncLivenessSettings({ agentDir: team({ nudge_enabled: false, nudge_delay_seconds: 17 }) });
+    expect(old).toMatchObject({ autoSyncEnabled: false, autoSyncDelaySeconds: 17, autoSyncUpdateThreshold: DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD });
+    expect(old.diagnostics.join(" ")).toMatch(/nudge_enabled.*deprecated.*auto_sync_enabled/);
+    expect(old.diagnostics.join(" ")).toMatch(/nudge_delay_seconds.*deprecated.*auto_sync_delay_seconds/);
+    const replaced = loadSyncLivenessSettings({ agentDir: team({
+      nudge_enabled: false, nudge_delay_seconds: 17, auto_sync_enabled: true, auto_sync_delay_seconds: 0,
+    }) });
+    expect(replaced).toMatchObject({ autoSyncEnabled: true, autoSyncDelaySeconds: 0 });
+    expect(replaced.diagnostics.join(" ")).toMatch(/new value takes precedence/);
+  });
+
+  it("rejects invalid selected fields without using stale aliases", () => {
+    const policy = loadSyncLivenessSettings({ agentDir: team({
+      wait_seconds: -1, nudge_enabled: false, nudge_delay_seconds: 17,
+      auto_sync_enabled: "yes", auto_sync_delay_seconds: -2, auto_sync_update_threshold: 0,
+    }) });
+    expect(policy).toMatchObject({
+      waitSeconds: DEFAULT_SYNC_WAIT_SECONDS,
+      autoSyncEnabled: true,
+      autoSyncDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS,
+      autoSyncUpdateThreshold: DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD,
+    });
+    expect(policy.diagnostics.join(" ")).toMatch(/auto_sync_enabled must be boolean/);
+    expect(policy.diagnostics.join(" ")).toMatch(/auto_sync_update_threshold must be an integer/);
   });
 });

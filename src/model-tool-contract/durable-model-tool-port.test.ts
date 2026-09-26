@@ -15,8 +15,7 @@ import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { registerModelToolJourney } from "./pi-registration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { taskVersionRef } from "./task-version-ref";
-import { DEFAULT_SYNC_NUDGE_DELAY_SECONDS } from "../utils/sync-liveness-settings";
-import { taskProjectionRevision } from "../coordination/task-projection-revision";
+import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD } from "../utils/sync-liveness-settings";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../coordination/observation-service";
 import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
 import { DurableCoordinationHiddenObservation } from "../adapters/durable-coordination-hidden-observation";
@@ -195,18 +194,18 @@ async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle) {
 }
 
 describe("DurableModelToolTeamPort sync liveness policy", () => {
-  it("persists resolved nudge defaults when a new Team epoch is created", async () => {
+  it("persists resolved auto-sync defaults when a new Team epoch is created", async () => {
     const { result, createArgs } = await createTeamWithPaneSettings(undefined, {});
     expect(result).toMatchObject({ kind: "created" });
     expect(createArgs[11]).toBeUndefined();
-    expect(createArgs[13]).toMatchObject({ waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
+    expect(createArgs[13]).toMatchObject({ waitSeconds: 120, autoSyncEnabled: true, autoSyncDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS, autoSyncUpdateThreshold: DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD });
   });
 
-  it("falls back to nudge defaults for malformed settings and preserves explicit disable", async () => {
+  it("falls back to auto-sync defaults for obsolete settings and preserves explicit disable", async () => {
     const malformed = await createTeamWithPaneSettings(undefined, { nudge_enabled: "yes", nudge_delay_seconds: -1 });
-    expect(malformed.createArgs[13]).toMatchObject({ nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
-    const disabled = await createTeamWithPaneSettings(undefined, { nudge_enabled: false });
-    expect(disabled.createArgs[13]).toMatchObject({ nudgeEnabled: false, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS });
+    expect(malformed.createArgs[13]).toMatchObject({ autoSyncEnabled: true, autoSyncDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS });
+    const disabled = await createTeamWithPaneSettings(undefined, { auto_sync_enabled: false });
+    expect(disabled.createArgs[13]).toMatchObject({ autoSyncEnabled: false, autoSyncDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS });
   });
 });
 
@@ -354,7 +353,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
   it("keeps read-only snapshot and nudge-debt use available without a launch bridge", async () => {
     const { name, leaderSessionId } = await teamFixture(undefined);
     const config = await teams.readConfig(name);
-    config.syncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_SYNC_NUDGE_DELAY_SECONDS, policyVersion: "1" };
+    config.syncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: DEFAULT_AUTO_SYNC_DELAY_SECONDS, policyVersion: "1" };
     teams.writeConfigAtomic(paths.configPath(name), config);
     readPort.listTaskIds.mockResolvedValue([]);
     readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
@@ -384,8 +383,11 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(debt).toEqual(expect.objectContaining({
       kind: "eligible",
       requestedView: "snapshot",
-      policyVersion: undefined,
-      debtKey: `${config.epochId}|${config.leadSessionId}|${lead.membershipId}|["legacy-branch"]|snapshot|0|${taskProjectionRevision([])}|undefined`,
+      policyVersion: "legacy",
+      leaderMembershipId: lead.membershipId,
+      updateCount: 1,
+      scopeKey: expect.any(String),
+      debtKey: expect.any(String),
     }));
 
     delete config.logicalWorkers;

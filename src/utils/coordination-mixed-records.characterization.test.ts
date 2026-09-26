@@ -95,6 +95,7 @@ async function acknowledge(harness: ReturnType<typeof registeredLeaderHarness>, 
     message: { role: "toolResult", toolCallId: callId, content: [{ type: "text", text: resultText }], isError: false, timestamp: Date.now() },
   });
   await harness.emit("before_provider_request", { payload: { persistedResult: resultText } }, context);
+  await harness.emit("turn_end", { message: { role: "assistant", stopReason: "stop" } }, context);
 }
 
 afterEach(() => {

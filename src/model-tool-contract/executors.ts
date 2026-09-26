@@ -21,7 +21,7 @@ import {
   AlertSendParametersSchema,
   AlertSendResultSchema,
 } from "./catalog";
-import type { AlertTarget, EnsureWorkerExecutionContext, ExactLeaderSessionId, ModelToolWorkerCurrent, ReadTaskContractGap } from "./model-tool-contracts";
+import type { AlertTarget, EnsureWorkerExecutionContext, ExactLeaderSessionId, ModelToolWorkerCurrent, ReadTaskContractGap, TeamSyncPortResult } from "./model-tool-contracts";
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
 import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
@@ -68,6 +68,81 @@ export interface ModelToolJourneyExecutors {
   taskLink(leaderSessionId: ExactLeaderSessionId, parameters: TaskLinkParameters): Promise<TaskLinkResult>;
   alertSend(leaderSessionId: ExactLeaderSessionId, parameters: AlertSendParameters): Promise<AlertSendResult>;
   teamSync(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult>;
+  teamSyncNow(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult | { kind: "quiet" }>;
+}
+
+function projectSyncOutcome(port: ModelToolJourneyPort, leaderSessionId: ExactLeaderSessionId, outcome: TeamSyncPortResult): TeamSyncResult {
+      if (outcome.kind === "unavailable") {
+        return {
+          kind: "unavailable",
+          reason: outcome.reason,
+          message: outcome.message,
+          state_changed: false,
+          observation_advanced: false,
+        };
+      }
+      if (outcome.kind === "snapshot_required") {
+        return {
+          kind: "snapshot_required",
+          message: outcome.message,
+          state_changed: false,
+          observation_advanced: false,
+        };
+      }
+      if (outcome.kind === "cancelled") {
+        return {
+          kind: "cancelled",
+          message: outcome.message,
+          state_changed: false,
+          observation_advanced: false,
+        };
+      }
+      if (outcome.kind === "contract_gap") {
+        return {
+          kind: "contract_gap",
+          reason: outcome.reason,
+          message: outcome.message,
+          state_changed: false,
+          observation_advanced: false,
+        };
+      }
+      if (outcome.kind === "caught_up") {
+        const result = {
+          kind: "caught_up" as const,
+          head: outcome.head,
+          epoch_id: outcome.epochId,
+          state_changed: false as const,
+          observation_advanced: true as const,
+        };
+        port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
+        return result;
+      }
+      if (outcome.kind === "indeterminate") return {
+        kind: "indeterminate" as const,
+        message: outcome.message,
+        state_changed: false,
+        observation_advanced: false,
+      };
+      const result = outcome.kind === "snapshot"
+        ? {
+          kind: "snapshot" as const,
+          team: outcome.team,
+          ...(outcome.modelRoles ? { model_roles: outcome.modelRoles } : {}),
+          ...(outcome.defaultModelRole ? { default_model_role: outcome.defaultModelRole } : {}),
+          workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, ...(worker.modelRole ? { model_role: worker.modelRole } : {}), nonterminal_task_ids: worker.nonterminalTaskIds })),
+          tasks: outcome.tasks,
+          ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
+        }
+        : {
+          kind: "updates" as const,
+          team_changes: outcome.teamChanges,
+          worker_changes: outcome.workerChanges,
+          task_changes: outcome.taskChanges.map((change) => ({ task_id: change.taskId, change_kinds: change.changeKinds, journal_entries: change.journalEntries, current: change.current })),
+          alerts: outcome.alerts,
+          ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
+        };
+      port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
+      return result;
 }
 
 export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): ModelToolJourneyExecutors {
@@ -363,77 +438,13 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
 
     async teamSync(leaderSessionId, parameters, signal = new AbortController().signal, toolCallId = "team-sync") {
       const outcome = await port.coordination.readTeamSync(leaderSessionId, parameters.view, signal, toolCallId);
-      if (outcome.kind === "unavailable") {
-        return {
-          kind: "unavailable",
-          reason: outcome.reason,
-          message: outcome.message,
-          state_changed: false,
-          observation_advanced: false,
-        };
-      }
-      if (outcome.kind === "snapshot_required") {
-        return {
-          kind: "snapshot_required",
-          message: outcome.message,
-          state_changed: false,
-          observation_advanced: false,
-        };
-      }
-      if (outcome.kind === "cancelled") {
-        return {
-          kind: "cancelled",
-          message: outcome.message,
-          state_changed: false,
-          observation_advanced: false,
-        };
-      }
-      if (outcome.kind === "contract_gap") {
-        return {
-          kind: "contract_gap",
-          reason: outcome.reason,
-          message: outcome.message,
-          state_changed: false,
-          observation_advanced: false,
-        };
-      }
-      if (outcome.kind === "caught_up") {
-        const result = {
-          kind: "caught_up" as const,
-          head: outcome.head,
-          epoch_id: outcome.epochId,
-          state_changed: false as const,
-          observation_advanced: true as const,
-        };
-        port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
-        return result;
-      }
-      if (outcome.kind === "indeterminate") return {
-        kind: "indeterminate" as const,
-        message: outcome.message,
-        state_changed: false,
-        observation_advanced: false,
-      };
-      const result = outcome.kind === "snapshot"
-        ? {
-          kind: "snapshot" as const,
-          team: outcome.team,
-          ...(outcome.modelRoles ? { model_roles: outcome.modelRoles } : {}),
-          ...(outcome.defaultModelRole ? { default_model_role: outcome.defaultModelRole } : {}),
-          workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, ...(worker.modelRole ? { model_role: worker.modelRole } : {}), nonterminal_task_ids: worker.nonterminalTaskIds })),
-          tasks: outcome.tasks,
-          ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
-        }
-        : {
-          kind: "updates" as const,
-          team_changes: outcome.teamChanges,
-          worker_changes: outcome.workerChanges,
-          task_changes: outcome.taskChanges.map((change) => ({ task_id: change.taskId, change_kinds: change.changeKinds, journal_entries: change.journalEntries, current: change.current })),
-          alerts: outcome.alerts,
-          ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
-        };
-      port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
-      return result;
+      return projectSyncOutcome(port, leaderSessionId, outcome);
+    },
+    async teamSyncNow(leaderSessionId, parameters, signal = new AbortController().signal, toolCallId = "team-sync-now") {
+      if (!port.coordination.readTeamSyncNow) return { kind: "indeterminate", message: "Immediate Team observation is unavailable.", state_changed: false, observation_advanced: false };
+      const outcome = await port.coordination.readTeamSyncNow(leaderSessionId, parameters.view, signal, toolCallId);
+      if (outcome.kind === "quiet") return { kind: "quiet" };
+      return projectSyncOutcome(port, leaderSessionId, outcome);
     },
   };
 }

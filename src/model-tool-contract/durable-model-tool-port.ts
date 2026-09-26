@@ -59,6 +59,10 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
   sendAlert(...args: Parameters<DurableModelToolAlertApplication["sendAlert"]>) { return this.alert.sendAlert(...args); }
   readSnapshot(...args: Parameters<DurableModelToolCoordinationApplication["readSnapshot"]>) { return this.coordination.readSnapshot(...args); }
   readTeamSync(...args: Parameters<DurableModelToolCoordinationApplication["readTeamSync"]>) { return this.coordination.readTeamSync(...args); }
+  readTeamSyncNow(...args: Parameters<DurableModelToolCoordinationApplication["readTeamSyncNow"]>) { return this.coordination.readTeamSyncNow(...args); }
+  peekTeamSync(...args: Parameters<DurableModelToolCoordinationApplication["peekTeamSync"]>) { return this.coordination.peekTeamSync(...args); }
+  selectTeamSyncView(...args: Parameters<DurableModelToolCoordinationApplication["selectTeamSyncView"]>) { return this.coordination.selectTeamSyncView(...args); }
+  discardPendingObservation(...args: Parameters<DurableModelToolCoordinationApplication["discardPendingObservation"]>) { return this.coordination.discardPendingObservation(...args); }
   readSyncNudgeDebt(...args: Parameters<DurableModelToolCoordinationApplication["readSyncNudgeDebt"]>) { return this.coordination.readSyncNudgeDebt(...args); }
   setPendingObservationResult(...args: Parameters<DurableModelToolCoordinationApplication["setPendingObservationResult"]>) { return this.coordination.setPendingObservationResult(...args); }
   acknowledgePendingObservation(...args: Parameters<DurableModelToolCoordinationApplication["acknowledgePendingObservation"]>) { return this.coordination.acknowledgePendingObservation(...args); }

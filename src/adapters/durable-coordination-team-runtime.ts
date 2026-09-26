@@ -1,4 +1,4 @@
-import { readRuntimeStatus } from "../utils/runtime";
+import { probePidPresence, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, resolveCurrentLeadSessionBinding } from "../utils/teams";
 import type {
   CoordinationMemberEvidence,
@@ -15,7 +15,9 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
       ...(status.membershipId !== undefined ? { membershipId: status.membershipId } : {}),
       ...(status.pid !== undefined ? { pid: status.pid } : {}),
       ...(status.startedAt !== undefined ? { startedAt: status.startedAt } : {}),
-      ...(status.runState !== undefined ? { runState: status.runState } : {}),
+      // A status file can outlive its Pi process. Process absence removes
+      // positive active evidence; it does not prove a settled run.
+      ...(status.runState !== undefined && !(status.runState === "active" && status.pid !== undefined && probePidPresence(status.pid) === "absent") ? { runState: status.runState } : {}),
     };
   }
 
@@ -30,6 +32,9 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
       sessionFile,
       ...(config.syncLiveness ? { syncLiveness: {
         waitSeconds: config.syncLiveness.waitSeconds,
+        autoSyncEnabled: config.syncLiveness.autoSyncEnabled,
+        autoSyncDelaySeconds: config.syncLiveness.autoSyncDelaySeconds,
+        autoSyncUpdateThreshold: config.syncLiveness.autoSyncUpdateThreshold,
         nudgeEnabled: config.syncLiveness.nudgeEnabled,
         nudgeDelaySeconds: config.syncLiveness.nudgeDelaySeconds,
         policyVersion: config.syncLiveness.policyVersion,

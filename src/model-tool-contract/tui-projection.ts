@@ -99,7 +99,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
   } else if (tool === "team_sync") {
     if (model.kind === "snapshot") lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}.`);
     else if (model.kind === "updates") {
-      lines.push(`Updates: ${model.task_changes.length} Task change${model.task_changes.length === 1 ? "" : "s"}, ${model.worker_changes.length} Worker change${model.worker_changes.length === 1 ? "" : "s"}, ${model.alerts.length} Alert${model.alerts.length === 1 ? "" : "s"}.`);
+      lines.push(`Updates: ${model.team_changes.length} Team change${model.team_changes.length === 1 ? "" : "s"}, ${model.task_changes.length} Task change${model.task_changes.length === 1 ? "" : "s"}, ${model.worker_changes.length} Worker change${model.worker_changes.length === 1 ? "" : "s"}, ${model.alerts.length} Alert${model.alerts.length === 1 ? "" : "s"}.`);
       for (const change of model.task_changes.slice(0, 4)) {
         const blocker = change.journal_entries.find((entry: any) => entry.kind === "blocker");
         lines.push(`Task ${quoted(change.task_id)} changed · ${change.current.status}${change.current.assignee ? ` · @ ${change.current.assignee}` : " · unassigned"}${blocker ? ` · blocker: ${compact(blocker.text)}` : ""}.`);

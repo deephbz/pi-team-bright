@@ -102,13 +102,29 @@ perspective matters. Before `worker_stop`, resolve every nonterminal assigned
 Task and reconcile once more. Never infer Team shutdown from completed Tasks,
 an empty ready front, or idle time.
 
-While assigned nonterminal Tasks remain, including waiting and blocked Tasks, each
-user-facing reply, progress note, and blocker escalation is an interim message.
-The lead makes `team_sync({view:"updates"})` the last action before yielding,
-unless the owner explicitly pauses or stops the work. A mutation receipt does not
-replace this sync. This is operating guidance, not a runtime enforcement claim.
-If no actor can progress, name the blocker and next actor instead of repeating
-identical empty sync calls.
+Use `team_sync({view:"updates"})` when the lead needs to wait for Worker results.
+The framework keeps that wait open while a current Worker is active. Internal
+wait deadlines trigger a new evidence check without another model call.
+`caught_up` reports current quiescence; unfinished Tasks can still need action.
+`indeterminate` reports incomplete evidence and preserves the observation cursor.
+
+The framework also collects unseen changes when the lead finishes a reply.
+Automatic sync batches them by a maximum delay or an update-count threshold.
+A new batch resumes the settled leader once. Empty checks and unfinished Tasks
+alone do not start turns. Use `/teamsync` for one immediate check: changes arrive
+as a framework-executed `team_sync` result; an empty check displays “No updates”
+in the TUI without a model turn. Native Session history records framework origin;
+the provider context receives the corresponding tool call and exact tool result.
+The observation cursor advances after a successful provider turn. An automatic
+delivery gets one retry after provider failure. Repeated failure pauses delivery
+for that batch and shows a warning. Use `/teamsync` after recovery. Cancelling
+a turn also leaves that batch available for a manual check.
+Update delivery uses bounded event pages. The first observation on a branch
+still sends a complete Team snapshot; a large Team can require substantial
+model context.
+
+If no actor can progress, name the blocker and next actor. Task completion does
+not stop the Team or its future update monitoring.
 
 Task assignment and goal or dependency changes belong in the Task graph, not in
 Alerts or context updates. Alerts are only for exceptional clarification,
@@ -234,10 +250,17 @@ It must be greater than `0.1` and less than `1.0`; the default is `0.6`.
 global settings, then `{ "leader_share": 0.6, "worker_tiling": "linear" }`.
 Herdr supports `linear` and `grid`; other pane backends support `linear` only.
 The resolved policy is stored in `TeamConfig`, so later settings changes do not
-move a live Team. `wait_seconds` defaults to `120`. Nudge settings default to
-enabled with a `1200` second delay. Malformed nudge values use these defaults and
-emit diagnostics; set `nudge_enabled` to `false` to disable nudges.
-Stop and recreate the Team to apply a new policy.
+move a live Team. `wait_seconds` defaults to `120` and controls the internal
+liveness recheck interval. Automatic synchronization defaults to enabled and
+flushes after 20 seconds or three unseen projected changes. Several events
+for one Task can count as one change. Configure
+`auto_sync_enabled`, `auto_sync_delay_seconds`, and
+`auto_sync_update_threshold` in the global Team settings. Invalid values use
+validated defaults and produce a settings diagnostic. The old `nudge_enabled`
+and `nudge_delay_seconds` names are deprecated fallbacks when their replacements
+are absent. An existing explicit disable remains disabled.
+Existing Teams keep their stored policy, including an older delay. Stop and
+recreate the Team to apply a new policy.
 
 ## Worker model roles
 
@@ -251,7 +274,7 @@ Merge the complete example's `pi_team_bright` entries into the active Pi agent
 directory's `settings.json` (`PI_CODING_AGENT_DIR`, normally `~/.pi/agent`).
 Preserve unrelated Pi settings. A trusted project's `.pi/settings.json` can
 override model roles, their default reference, Worker resources, and pane layout.
-Keep sync wait and nudge settings global; copying them into project settings
+Keep sync wait and automatic-sync settings global; copying them into project settings
 produces a scope warning. Run
 `pi --list-models` and replace the example model references with exact available
 `provider/model-id` values. Model IDs may contain additional slashes. Select

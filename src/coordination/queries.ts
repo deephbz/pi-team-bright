@@ -99,7 +99,15 @@ export interface CoordinationLeaderBindingEvidence {
   epochId?: string;
   sessionFile: string;
   purpose?: string;
-  syncLiveness?: { waitSeconds: number; nudgeEnabled?: boolean; nudgeDelaySeconds?: number; policyVersion?: string };
+  syncLiveness?: {
+    waitSeconds: number;
+    autoSyncEnabled?: boolean;
+    autoSyncDelaySeconds?: number;
+    autoSyncUpdateThreshold?: number;
+    nudgeEnabled?: boolean;
+    nudgeDelaySeconds?: number;
+    policyVersion?: string;
+  };
   members: Array<CoordinationMemberEvidence & { agentType?: string }>;
   logicalWorkers?: CoordinationLogicalWorkerEvidence[];
 }

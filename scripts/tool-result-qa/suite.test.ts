@@ -156,10 +156,10 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       if (actor === "team-lead") delete process.env.PI_AGENT_NAME;
       else process.env.PI_AGENT_NAME = actor;
       const tools = new Map<string, RegisteredTool>();
-      const handlers = new Map<string, (event: any, ctx: any) => void | Promise<void>>();
+      const handlers = new Map<string, Array<(event: any, ctx: any) => void | Promise<void>>>();
       extension({
         registerTool(tool: RegisteredTool) { tools.set(tool.name, tool); },
-        on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) { handlers.set(event, handler); },
+        on(event: string, handler: (event: any, ctx: any) => void | Promise<void>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
         sendMessage() {},
         sendUserMessage() {},
         appendEntry() {},
@@ -236,6 +236,9 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
         }
       }
       const handlers = options.actor === "team-lead" ? leadRegistration.handlers : undefined;
+      const emit = async (event: string, payload: any) => {
+        for (const handler of handlers?.get(event) ?? []) await handler(payload, options.ctx);
+      };
       const captured = await captureToolCase({
         ...options,
         args,
@@ -244,7 +247,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
         snapshot,
         before: previousSnapshot,
         beforeExecute: async () => {
-          await handlers?.get("tool_call")?.({ toolName: options.tool }, options.ctx);
+          await emit("tool_call", { toolName: options.tool });
         },
         signal: options.signal,
         afterExecute: async (result) => {
@@ -257,7 +260,10 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
             message: { role: "toolResult", toolCallId: options.id, content: result.content },
           });
           branches.set(sessionId, entries);
-          await handlers.get("before_provider_request")?.({ payload: result.content }, options.ctx);
+          await emit("before_provider_request", { payload: result.content });
+          // This fixture models the successful provider turn after the tool
+          // result. The real Pi adapter commits observation only at turn_end.
+          await emit("turn_end", { message: { role: "assistant", stopReason: "stop" } });
         },
       });
       previousSnapshot = captured.oracle.after;

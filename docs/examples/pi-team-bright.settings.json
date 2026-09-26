@@ -19,8 +19,9 @@
         "worker_tiling": "linear"
       },
       "wait_seconds": 120,
-      "nudge_enabled": true,
-      "nudge_delay_seconds": 1200
+      "auto_sync_enabled": true,
+      "auto_sync_delay_seconds": 20,
+      "auto_sync_update_threshold": 3
     },
     "worker": {
       "agents": {},
