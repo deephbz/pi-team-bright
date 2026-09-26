@@ -28,6 +28,17 @@ The [canonical example](../examples/pi-team-bright.settings.json) is the setup
 entry point. The [work record](../projects/model-role-settings.md) tracks the
 base, scope, verification, and remaining work. This change is not published.
 
+## Unreleased synchronization continuity
+
+The owner authorized framework-driven synchronization. The
+[decision](../decisions/0016-framework-team-synchronization.md) separates Team
+observation, Worker activity, delivery, and acknowledgement. The
+[work record](../projects/team-sync-continuity.md) tracks five verification rounds.
+Implementation and five verification rounds are complete. The full suite passed
+1,084 tests with four skipped tests. Real Pi 0.87.1 leader, Worker, and TUI
+checks passed, including provider failure, abort, and process-reload recovery.
+This candidate is unpublished; live settings and parent adoption are unchanged.
+
 ## v0.18.0 publication evidence
 
 The exact published source is `f43d4739556f2ac4b82070fef64007a304801ef1`,
@@ -145,8 +156,9 @@ restating executable definitions.
   absence of future events. It reports `indeterminate` when run-state or
   actuation evidence is incomplete and does not advance observation. Pi `>=0.83`
   is the supported boundary for exact Worker `agent_start` and `agent_settled`
-  evidence. Global `pi_team_bright.team` settings resolve the `120` second wait,
-  enabled nudges, and the `1200` second nudge delay once per Team epoch.
+  evidence. Global `pi_team_bright.team` settings resolve the internal wait
+  interval and automatic-sync delay/count policy once per Team epoch. The
+  canonical settings example owns copyable configuration.
 - Pane placement is a typed terminal-adapter responsibility. Herdr and tmux
   receive the durable leader pane plus current Worker panes from
   [`src/utils/team-pane-placement.ts`](../../src/utils/team-pane-placement.ts),
@@ -317,10 +329,9 @@ restating executable definitions.
   actuation evidence is incomplete; this does not advance the hidden
   observation. Pi `>=0.83` is required for exact `agent_start` and
   `agent_settled` evidence. Global `pi_team_bright.team.wait_seconds` controls
-  the bounded wait and keeps its `120` second default. The same global section
-  resolves internal sync nudges: `nudge_enabled` defaults to `true`, and
-  `nudge_delay_seconds` defaults to `1200`. A nudge is one exact-leader
-  presentation record, not an Alert, Task mutation, or observation advance.
+  the internal recheck interval. The released reminder mechanism is superseded
+  by the unreleased synchronization-continuity change above. Historical nudge
+  records remain presentation evidence, never Task state or observation advance.
 - Task mutation publication now crosses a consumer-owned port. The durable
   adapter preserves Beads commit, Membership-lease release, acting-Session
   suppression, serial event, failed-hint, recipient delivery, inline recovery,

@@ -40,12 +40,18 @@ import { DurableTaskChangeDeliveryMembership } from "../src/adapters/durable-tas
 import { DurablePiSessionTeamQuery } from "../src/adapters/durable-pi-session-team-query";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
-import { DurableCoordinationNudgeRecord } from "../src/adapters/durable-coordination-nudge-record";
 import { createDurableCoordinationNudgeStore } from "../src/adapters/durable-coordination-nudge-store";
 import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../src/coordination/observation-service";
 import { DurableCoordinationHiddenObservation } from "../src/adapters/durable-coordination-hidden-observation";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
+import {
+  FRAMEWORK_SYNC_MESSAGE_TYPE,
+  FRAMEWORK_SYNC_ACK_TYPE,
+  hasStructuredFrameworkSyncPair,
+  persistedFrameworkSyncForPending,
+  projectFrameworkSyncMessage,
+} from "./framework-sync-execution";
 
 import { GraphTaskUpdateParametersSchema, TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
 import { transitionLegacyGraphTask } from "../src/model-tool-contract/legacy-graph-task-transition-adapter";
@@ -169,6 +175,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer?.(DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
   pi.registerMessageRenderer?.(LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
   pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, createCustomMessageRenderer(projectSyncNudgeMessage) as any);
+  pi.registerMessageRenderer?.(FRAMEWORK_SYNC_MESSAGE_TYPE, createCustomMessageRenderer(projectFrameworkSyncMessage) as any);
   registerAutomaticSummaryPolicyProvider(pi);
   // Leader and Worker tools are separate role projections. The leader owns
   // the current model-tool journey; Workers own the three Task/Alert tools.
@@ -248,7 +255,6 @@ export default function (pi: ExtensionAPI) {
     undefined,
     coordinationNudgeStore,
   );
-  const nudgeRecords = new DurableCoordinationNudgeRecord();
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
   const legacyAssignedWorkGuard = new DurableAssignedWorkGuard(
@@ -310,7 +316,7 @@ export default function (pi: ExtensionAPI) {
     const entry = ctx.sessionManager.getBranch().find((candidate) => {
       if (candidate.type !== "message") return false;
       const message = candidate.message;
-      return message.role === "toolResult"
+      return message?.role === "toolResult"
         && message.toolCallId === toolCallId
         && message.content.some((part) => part.type === "text" && part.text === resultText);
     });
@@ -318,6 +324,9 @@ export default function (pi: ExtensionAPI) {
   }
 
   if (modelToolJourney) {
+    let providerProof: { source: "native" | "framework"; sessionId: string; sessionFile: string; branch: string[]; entryId: string; toolCallId: string; resultText: string } | undefined;
+    pi.on("session_start", () => { providerProof = undefined; });
+    pi.on("session_shutdown", () => { providerProof = undefined; });
     pi.on("tool_call", (event, ctx) => {
       if (sessionAdapter.isTeammate() || !leaderToolNames.has(event.toolName)) return;
       modelToolJourney.port.coordination.setBranchContext(
@@ -326,19 +335,46 @@ export default function (pi: ExtensionAPI) {
       );
     });
     pi.on("before_provider_request", async (event, ctx) => {
+      providerProof = undefined;
       if (sessionAdapter.isTeammate()) return;
       const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
       const lineage = modelToolBranchIds(ctx);
       modelToolJourney.port.coordination.setBranchContext(sessionId, lineage);
       const pending = modelToolJourney.port.coordination.getPendingObservation?.(sessionId);
-      if (!pending || !modelToolContainsExact(event.payload, pending.resultText)) return;
-      const entryId = modelToolPersistedToolResult(ctx, pending.toolCallId, pending.resultText);
+      if (!pending) return;
+      const nativeEntryId = modelToolContainsExact(event.payload, pending.resultText)
+        ? modelToolPersistedToolResult(ctx, pending.toolCallId, pending.resultText) : undefined;
+      const framework = persistedFrameworkSyncForPending(
+        ctx.sessionManager.getBranch(), sessionId, ctx.sessionManager.getSessionFile?.() ?? "", pending.toolCallId, pending.resultText,
+      );
+      const frameworkEntryId = framework && hasStructuredFrameworkSyncPair(event.payload, framework.record) ? framework.entryId : undefined;
+      const entryId = nativeEntryId ?? frameworkEntryId;
       if (!entryId) return;
+      providerProof = { source: nativeEntryId ? "native" : "framework", sessionId, sessionFile: ctx.sessionManager.getSessionFile?.() ?? "", branch: lineage, entryId, toolCallId: pending.toolCallId, resultText: pending.resultText };
+    });
+    pi.on("turn_end", async (event, ctx) => {
+      const proof = providerProof;
+      providerProof = undefined;
+      if (!proof || sessionAdapter.isTeammate() || event.message.role !== "assistant" || ["error", "aborted", "pending"].includes(event.message.stopReason)) return;
+      const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
+      const sessionFile = ctx.sessionManager.getSessionFile?.() ?? "";
+      if (sessionId !== proof.sessionId || sessionFile !== proof.sessionFile) return;
+      const branch = ctx.sessionManager.getBranch();
+      if (proof.branch.some((id, index) => branch[index]?.id !== id)) return;
+      const frameworkRecord = proof.source === "framework"
+        ? persistedFrameworkSyncForPending(branch, sessionId, sessionFile, proof.toolCallId, proof.resultText) : undefined;
+      const persisted = proof.source === "framework" ? frameworkRecord?.entryId : modelToolPersistedToolResult(ctx, proof.toolCallId, proof.resultText);
+      if (persisted !== proof.entryId) return;
+      const lineage = branch.map((entry) => entry.id);
+      let acknowledged: boolean;
       if (modelToolJourney.port.coordination.acknowledgePendingObservationAsync) {
-        await modelToolJourney.port.coordination.acknowledgePendingObservationAsync(sessionId, entryId, lineage);
+        acknowledged = await modelToolJourney.port.coordination.acknowledgePendingObservationAsync(sessionId, proof.entryId, lineage);
       } else {
-        modelToolJourney.port.coordination.acknowledgePendingObservation(sessionId, entryId, lineage);
+        acknowledged = modelToolJourney.port.coordination.acknowledgePendingObservation(sessionId, proof.entryId, lineage);
       }
+      if (acknowledged && frameworkRecord) pi.appendEntry(FRAMEWORK_SYNC_ACK_TYPE, {
+        version: 1, recordId: frameworkRecord.record.id, acknowledgedEntryId: proof.entryId, sessionId, sessionFile,
+      });
     });
   }
 
@@ -388,7 +424,6 @@ export default function (pi: ExtensionAPI) {
     lifecyclePublication,
     alertMembership,
     taskDeliveryMembership,
-    nudgeRecords,
     taskReadAdapterFactory,
     teamQuery: piSessionTeamQuery,
     leaderToolNames,

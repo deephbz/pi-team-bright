@@ -65,13 +65,15 @@ Use `team_sync` updates for progress and waiting. Follow its request for a snaps
 when an observation baseline is needed. Mutation receipts already report post-state;
 read again only when required meaning is missing, stale, or conflicting.
 
-Define in-flight work as assigned nonterminal Tasks, including waiting or blocked
-Tasks. While any remain and the owner has not explicitly paused or stopped work,
-every user-facing reply or progress note is an interim message. Make
-`team_sync({view:"updates"})` the last action before yielding. This includes blocker
-escalations. A mutation receipt does not replace this sync: it reports the lead's
-write, while sync observes other Workers and waits for subsequent changes. Handle
-returned changes and continue synchronization while work can progress.
+Use `team_sync({view:"updates"})` to wait while Workers can progress. The runtime
+keeps one wait open across internal rechecks. After a lead reply, automatic sync
+resumes the lead for a new batch of Team changes. Do not use sleep or repeated
+empty sync calls to keep orchestration alive. `/teamsync` performs one immediate
+human-requested check. An empty check does not start a model turn.
+
+Handle returned changes and continue toward the requested outcome. Assigned
+nonterminal Tasks can remain when all Workers are idle; use their current records
+to decide what can proceed or what requires intervention.
 
 `caught_up` means no new change is available now, not that every Task succeeded.
 `indeterminate` means observation evidence is incomplete. If work remains, use

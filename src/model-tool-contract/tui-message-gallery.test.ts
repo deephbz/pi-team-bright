@@ -27,6 +27,7 @@ import {
   formatTaskChangeBatch,
   presentedTaskDeliveryIdsFromEntries,
 } from "../utils/task-delivery";
+import { FRAMEWORK_SYNC_MESSAGE_TYPE } from "../../extensions/framework-sync-execution";
 import { SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nudge";
 import {
   DIRECT_MESSAGE_CUSTOM_TYPE,
@@ -195,6 +196,7 @@ describe("TUI message gallery", () => {
       LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE,
       LEGACY_TASK_CHANGE_CUSTOM_TYPE,
       SYNC_NUDGE_CUSTOM_TYPE,
+      FRAMEWORK_SYNC_MESSAGE_TYPE,
       TASK_CHANGE_CUSTOM_TYPE,
     ].sort());
   });

@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as journal from "./event-journal";
 import * as legacyJournal from "../utils/team-events";
-import { configPath, teamDir } from "../utils/paths";
+import { configPath, teamDir, teamEventJournalPath } from "../utils/paths";
 
 function productionTypeScriptPaths(directory: string): string[] {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -70,6 +70,21 @@ describe("Coordination event-journal ownership boundary", () => {
         },
       ],
     });
+  });
+
+  it("splits one journal image into bounded continuation pages", () => {
+    const events = Array.from({ length: 121 }, (_, index) => ({
+      type: "task", cursor: String(index + 1), at: "2026-09-26T00:00:00Z",
+      ref: { taskId: `task-${index}`, version: "v_0000000000000001" },
+      actor: "worker", change: "status",
+    }));
+    fs.mkdirSync(path.dirname(teamEventJournalPath(teamName)), { recursive: true });
+    fs.writeFileSync(teamEventJournalPath(teamName), `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
+    const pages = journal.readTeamEventPages(teamName, { afterCursor: "0" });
+    expect(pages.map((page) => page.events.length)).toEqual([50, 50, 21]);
+    expect(pages.map((page) => page.cursor)).toEqual(["50", "100", "121"]);
+    expect(pages.map((page) => page.remaining)).toEqual([71, 21, 0]);
+    expect(journal.readTeamEventPages(teamName, { afterCursor: "100" }).map((page) => page.cursor)).toEqual(["121"]);
   });
 
   it("keeps the historical utility path as a re-export only", () => {

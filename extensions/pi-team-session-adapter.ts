@@ -1,16 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { randomUUID } from "node:crypto";
 import * as paths from "../src/utils/paths";
 import * as runtime from "../src/utils/runtime";
+import * as teams from "../src/utils/teams";
 import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
 import type { AlertMembershipPort } from "../src/alert-authority/contracts";
 import { TaskChangeDelivery, taskPollMs, type TaskDeliveryMembershipPort } from "../src/utils/task-delivery";
 import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding } from "../src/utils/recipient-delivery-lifecycle";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
-import type { CoordinationNudgeRecordPort } from "../src/coordination/nudge-record-port";
-import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE, validateSyncNudgeRecord, syncNudgeContent } from "../src/utils/sync-nudge";
+import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD } from "../src/utils/sync-liveness-settings";
 import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
 import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import type { PiSessionCurrentWorkerMember, PiSessionTeamQueryPort } from "../src/team-authority/pi-session-team-query";
@@ -27,6 +26,14 @@ import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
+import {
+  FRAMEWORK_SYNC_ENTRY_TYPE,
+  FRAMEWORK_SYNC_MESSAGE_TYPE,
+  FrameworkSyncExecutionController,
+  persistedFrameworkSyncForPending,
+  projectFrameworkSyncContext,
+  validateFrameworkSyncRecord,
+} from "./framework-sync-execution";
 
 export interface PiTeamSessionAdapter {
   readonly modelToolLifecycle: ModelToolLifecycle;
@@ -45,7 +52,6 @@ export function createPiTeamSessionAdapter(options: {
   lifecyclePublication: { recordWorkerFailed(input: { teamName: string; workerName: string; membershipId: string }): Promise<unknown> };
   alertMembership: AlertMembershipPort;
   taskDeliveryMembership: TaskDeliveryMembershipPort;
-  nudgeRecords: CoordinationNudgeRecordPort;
   taskReadAdapterFactory: BeadsTaskAdapterFactory;
   teamQuery: PiSessionTeamQueryPort;
   leaderToolNames: ReadonlySet<string>;
@@ -55,7 +61,7 @@ export function createPiTeamSessionAdapter(options: {
   taskReadyReconciliation?: Pick<TaskOrchestrationPort, "reconcileReady">;
   taskGraphControlSource?: TaskGraphControlReadSource;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, nudgeRecords, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
   const terminal = getTerminalAdapter();
   const taskGraphPane = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: taskGraphControlSource });
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
@@ -68,6 +74,10 @@ export function createPiTeamSessionAdapter(options: {
   let syncNudgeConductor: SyncNudgeConductor | null = null;
   let stopSyncNudgeMonitor: (() => void) | null = null;
   let leaderRunSettled = false;
+  let failedFrameworkSync: { record: NonNullable<ReturnType<typeof persistedFrameworkSyncForPending>>["record"]; reason: "error" | "aborted" } | undefined;
+  let frameworkRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  const frameworkRetryCount = new Map<string, number>();
+  const suppressedAutomaticDebt = new Set<string>();
   let leaderContext: any;
   let deliveryContext: any;
   const recipientDeliveries = new RecipientDeliveryLifecycle({
@@ -80,6 +90,39 @@ export function createPiTeamSessionAdapter(options: {
   const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
 
   const modelToolJourney = () => getModelToolJourney();
+  const frameworkSync = new FrameworkSyncExecutionController({
+    pi,
+    current: () => {
+      const ctx = leaderContext;
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+      const branch = ctx?.sessionManager?.getBranch?.();
+      if (isTeammate || !teamName || !sessionId || !sessionFile || !Array.isArray(branch)) return undefined;
+      return { sessionId, sessionFile, branch };
+    },
+    executeNow: (sessionId, view, signal, toolCallId) => modelToolJourney()!.executors.teamSyncNow(exactLeaderSessionId(sessionId), { view }, signal, toolCallId),
+    readTeamBinding: async (name, sessionFile) => {
+      const config = await teams.readConfig(name);
+      const lead = config.members.find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === sessionFile);
+      return config.epochId && config.leadSessionId === sessionFile && lead?.membershipId
+        ? { epochId: config.epochId, membershipId: lead.membershipId } : undefined;
+    },
+    pendingObservation: (sessionId) => modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)),
+    setBranchContext: (sessionId, branch) => modelToolJourney()!.port.coordination.setBranchContext(exactLeaderSessionId(sessionId), branch),
+    clearPending: (sessionId, toolCallId) => modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), toolCallId),
+    isBusy: (ownToolCallId) => {
+      const ctx = leaderContext;
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
+      return !leaderRunSettled || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
+        || (!!pending && pending.toolCallId !== ownToolCallId);
+    },
+    notify: (message, level = "info") => {
+      const ctx = leaderContext;
+      if (ctx?.hasUI !== false && ctx?.ui?.notify) ctx.ui.notify(message, level);
+      else process.stderr.write(`${message}\n`);
+    },
+  });
 
 function configureWorkerResources(ctx: any): void {
   if (!isTeammate) return;
@@ -104,6 +147,29 @@ const registerCommand = (pi as any).registerCommand?.bind(pi);
 registerCommand?.("pi-team-bright-settings", {
   description: "Show current Pi Team Bright settings diagnostics",
   handler: async (_args: string, ctx: any) => settingsWarnings.showAll(ctx, projectTrust(ctx) === true),
+});
+registerCommand?.("teamsync", {
+  description: "Read current Team updates once and continue the leader when changes exist",
+  handler: async (_args: string, ctx: any) => {
+    leaderContext = ctx;
+    if (isTeammate || !teamName || agentName !== "team-lead") {
+      ctx.ui?.notify?.("No current leader Team is bound to this Pi Session.", "warning");
+      return;
+    }
+    if (ctx?.isIdle?.() !== false) leaderRunSettled = true;
+    if (frameworkRetryTimer) { clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
+    const sessionId = ctx?.sessionManager?.getSessionId?.();
+    const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+    const branch = modelToolBranchIds(ctx);
+    if (!sessionId || !sessionFile || !branch.length) return;
+    const pending = modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId));
+    const prior = pending ? persistedFrameworkSyncForPending(ctx.sessionManager.getBranch(), sessionId, sessionFile, pending.toolCallId, pending.resultText) : undefined;
+    if (prior && await frameworkSync.rePresent(prior.record)) return;
+    const view = await modelToolJourney()?.port.coordination.selectTeamSyncView?.(exactLeaderSessionId(sessionId), branch) ?? "updates";
+    if (ctx.sessionManager.getSessionId() !== sessionId || ctx.sessionManager.getSessionFile() !== sessionFile
+      || modelToolBranchIds(ctx).some((id: string, index: number) => id !== branch[index]) || modelToolBranchIds(ctx).length !== branch.length) return;
+    await frameworkSync.execute(teamName, "command", view);
+  },
 });
 registerCommand?.("pi-team-graph", {
   description: "Toggle a read-only Task graph pane in this exact Herdr tab (limit: 25, 50, 100, 200, or all)",
@@ -178,22 +244,24 @@ async function refreshTeamFooter(ctx: any) {
 }
 
 function stopSyncNudgeConductor() {
+  frameworkSync.invalidate();
+  if (frameworkRetryTimer) { clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
+  failedFrameworkSync = undefined;
+  frameworkRetryCount.clear();
+  suppressedAutomaticDebt.clear();
   syncNudgeConductor?.stop();
   syncNudgeConductor = null;
   stopSyncNudgeMonitor?.();
   stopSyncNudgeMonitor = null;
 }
 
-function syncNudgeMessageDelivered(ctx: any, record: { id: string; branchLineage: readonly string[] }): boolean {
+function frameworkSyncDelivered(ctx: any, debtKey: string): boolean {
   const branch = ctx?.sessionManager?.getBranch?.() ?? [];
-  const ids = branch.map((entry: any) => entry.id);
-  if (record.branchLineage.some((id, index) => ids[index] !== id)) return false;
-  return branch.some((entry: any) => {
-    if (entry.type !== "custom_message" || entry.customType !== SYNC_NUDGE_CUSTOM_TYPE) return false;
-    const details = validateSyncNudgeRecord(entry.details);
-    return details?.kind === "presented" && details.id === record.id
-      && details.branchLineage.length === record.branchLineage.length
-      && details.branchLineage.every((value, index) => value === record.branchLineage[index]);
+  return branch.some((entry: any, index: number) => {
+    if (entry.type !== "custom" || entry.customType !== FRAMEWORK_SYNC_ENTRY_TYPE) return false;
+    const record = validateFrameworkSyncRecord(entry.data);
+    if (!record || record.debtKey !== debtKey || record.sessionId !== ctx.sessionManager.getSessionId() || record.sessionFile !== ctx.sessionManager.getSessionFile()) return false;
+    return branch.slice(index + 1).some((later: any) => later.type === "custom_message" && later.customType === FRAMEWORK_SYNC_MESSAGE_TYPE && later.details?.recordId === record.id);
   });
 }
 
@@ -202,8 +270,8 @@ async function startSyncNudgeConductor(ctx: any) {
   if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.coordination.readSyncNudgeDebt) return;
   let policy;
   try { policy = await teamQuery.syncNudgePolicy(teamName); } catch { return; }
-  if (!policy?.nudgeEnabled || policy.nudgeDelaySeconds === undefined) return;
-  const delayMs = Math.max(0, policy.nudgeDelaySeconds * 1000);
+  if (!(policy?.autoSyncEnabled ?? policy?.nudgeEnabled ?? true)) return;
+  const delayMs = Math.max(0, (policy?.autoSyncDelaySeconds ?? policy?.nudgeDelaySeconds ?? DEFAULT_AUTO_SYNC_DELAY_SECONDS) * 1000);
   // Model-tool registration normally binds lazily on the first tool call.
   // Resume nudge reconciliation has no such call, so bind the exact current
   // Pi Session before it can ask the port for debt.
@@ -220,53 +288,40 @@ async function startSyncNudgeConductor(ctx: any) {
   const busy = (): boolean => {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     return !leaderRunSettled || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
+      || frameworkSync.isRunning
       || (!!sessionId && !!modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)));
   };
   syncNudgeConductor = new SyncNudgeConductor({
     clock: { setTimeout: (callback, ms) => setTimeout(callback, ms), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
     delayMs,
+    updateThreshold: policy?.autoSyncUpdateThreshold ?? DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD,
     readDebt: debt,
     isSettled: () => leaderRunSettled,
     isBusy: busy,
-    alreadyPresented: (debtKey, branchLineage) => nudgeRecords.readPresented(teamName!).some((record) => record.debtKey === debtKey && record.branchLineage.length === branchLineage.length && record.branchLineage.every((value, index) => value === branchLineage[index])),
+    alreadyPresented: (debtKey) => suppressedAutomaticDebt.has(debtKey) || frameworkSyncDelivered(ctx, debtKey),
     present: async (candidate) => {
       const sessionFile = ctx?.sessionManager?.getSessionFile?.();
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const branch = modelToolBranchIds(ctx);
-      if (!sessionFile || !sessionId || branch.length === 0 || busy()) return;
+      if (!sessionFile || !sessionId || branch.length === 0 || busy()) return false;
       if (!await teamQuery.matchesSyncNudgeCandidate({
         teamName: teamName!,
         teamEpochId: candidate.teamEpochId,
         leaderSessionFile: sessionFile,
         leaderMembershipId: candidate.leaderMembershipId,
-      })) return;
+      })) return false;
       const latest = await modelToolJourney()!.port.coordination.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
-      if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value: string, index: number) => value !== candidate.branchLineage[index]) || busy()) return;
-      const existing = nudgeRecords.findReservation(teamName!, candidate.debtKey, candidate.branchLineage);
-      if (existing && syncNudgeMessageDelivered(ctx, existing)) {
-        nudgeRecords.present(existing);
-        return;
-      }
-      const record = existing ?? createSyncNudgeRecord({
-        kind: "reserved",
-        id: randomUUID(), teamName: teamName!, teamEpochId: candidate.teamEpochId,
-        leaderSessionId: candidate.leaderSessionId, leaderMembershipId: candidate.leaderMembershipId,
-        branchLineage: [...candidate.branchLineage], branchId: candidate.branchId, debtKey: candidate.debtKey,
-        requestedView: candidate.requestedView, reservedAt: new Date().toISOString(), policyVersion: candidate.policyVersion,
-      });
-      if (!existing) nudgeRecords.reserve(record);
-      const presented = createSyncNudgeRecord({ ...record, kind: "presented", presentedAt: new Date().toISOString() });
-      // Reservation is internal. The model receives only the validated
-      // presented semantic record; persistence follows exact Session proof.
-      pi.sendMessage({ customType: SYNC_NUDGE_CUSTOM_TYPE, content: syncNudgeContent(presented), display: true, details: presented }, { triggerTurn: true, deliverAs: "followUp" });
-      // Promote only after the durable Session contains this exact custom
-      // message on the same full branch lineage.
-      if (syncNudgeMessageDelivered(ctx, presented)) nudgeRecords.present(record, presented.presentedAt);
+      if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.scopeKey !== candidate.scopeKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value: string, index: number) => value !== candidate.branchLineage[index]) || busy()) return false;
+      const result = await frameworkSync.execute(teamName!, "automatic", candidate.requestedView, candidate.debtKey);
+      if (result === "quiet" || result === "failed") suppressedAutomaticDebt.add(candidate.debtKey);
+      return result === "published";
     },
   });
   const eventDirectory = path.join(paths.teamDir(teamName), "events");
   fs.mkdirSync(eventDirectory, { recursive: true });
-  const watcher = fs.watch(eventDirectory, () => syncNudgeConductor?.notify());
+  const watcher = fs.watch(eventDirectory, (_event, filename) => {
+    if (typeof filename === "string" && filename === "team-events.jsonl") syncNudgeConductor?.notify();
+  });
   watcher.on("error", () => syncNudgeConductor?.notify());
   const interval = setInterval(() => syncNudgeConductor?.notify(), Math.max(5_000, Math.min(30_000, Math.max(100, delayMs))));
   interval.unref?.();
@@ -399,6 +454,10 @@ async function refuseTeamSession(
 }
 
 function registerSessionHooks() {
+  pi.on("session_before_switch", () => { frameworkSync.invalidate(); });
+  pi.on("session_before_fork", () => { frameworkSync.invalidate(); });
+  pi.on("session_before_tree", () => { frameworkSync.invalidate(); });
+  pi.on("session_before_compact", () => { frameworkSync.invalidate(); });
   pi.on("session_start", async (event, ctx) => {
   paths.ensureDirs();
   stopDeliveries();
@@ -562,8 +621,15 @@ pi.on("model_select", async (event) => {
   footerModel = event.model;
 });
 
-pi.on("context", async (event) => {
+pi.on("context", async (event, ctx) => {
   await recipientDeliveries.observeContext(event.messages);
+  if (isTeammate) return;
+  const sessionId = ctx?.sessionManager?.getSessionId?.();
+  const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+  const branch = ctx?.sessionManager?.getBranch?.();
+  if (!sessionId || !sessionFile || !Array.isArray(branch)) return;
+  const messages = projectFrameworkSyncContext(event.messages, branch, sessionId, sessionFile);
+  if (messages !== event.messages && messages.some((message) => message.role === "toolResult" && String(message.toolCallId).startsWith("framework-team-sync-"))) return { messages };
 });
 
 pi.on("agent_start", async (_event, ctx) => {
@@ -579,6 +645,33 @@ pi.on("agent_settled", async (_event, ctx) => {
     await writeCurrentTeammateRuntime(ctx, { runState: "settled", lastHeartbeatAt: Date.now() });
   } else {
     leaderRunSettled = true;
+    const failed = failedFrameworkSync;
+    failedFrameworkSync = undefined;
+    if (failed) {
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
+      if (pending?.toolCallId === failed.record.toolCallId) {
+        const retryKey = failed.record.debtKey ?? failed.record.id;
+        const attempts = frameworkRetryCount.get(retryKey) ?? 0;
+        if (failed.reason === "error" && failed.record.source === "automatic" && attempts < 1) {
+          frameworkRetryCount.set(retryKey, attempts + 1);
+          frameworkRetryTimer = setTimeout(async () => {
+            frameworkRetryTimer = undefined;
+            if (!await frameworkSync.rePresent(failed.record)) {
+              modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), failed.record.toolCallId);
+              ctx.ui?.notify?.("Automatic Team synchronization could not resume. Run /teamsync to retry.", "warning");
+            }
+          }, 0);
+        } else {
+          modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), failed.record.toolCallId);
+          ctx.ui?.notify?.(failed.reason === "aborted"
+            ? "Team synchronization was cancelled. Run /teamsync to retry."
+            : failed.record.source === "command"
+              ? "Team synchronization failed. Run /teamsync to retry."
+              : "Automatic Team synchronization stopped after one retry. Run /teamsync to retry.", "warning");
+        }
+      }
+    }
     syncNudgeConductor?.notify();
   }
 });
@@ -586,6 +679,15 @@ pi.on("agent_settled", async (_event, ctx) => {
 pi.on("turn_end", async (event, ctx) => {
   const stopReason = event.message?.role === "assistant" ? event.message.stopReason : undefined;
   if (stopReason === "error" || stopReason === "aborted") {
+    if (!isTeammate) {
+      const sessionId = ctx?.sessionManager?.getSessionId?.();
+      const sessionFile = ctx?.sessionManager?.getSessionFile?.();
+      const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
+      const prior = sessionId && sessionFile && pending
+        ? persistedFrameworkSyncForPending(ctx.sessionManager.getBranch(), sessionId, sessionFile, pending.toolCallId, pending.resultText) : undefined;
+      if (prior) failedFrameworkSync = { record: prior.record, reason: stopReason };
+      else if (sessionId && pending) modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), pending.toolCallId);
+    }
     if (isTeammate && teamName && currentMembershipId) {
       await lifecyclePublication.recordWorkerFailed({ teamName, workerName: agentName, membershipId: currentMembershipId }).catch(() => undefined);
     }

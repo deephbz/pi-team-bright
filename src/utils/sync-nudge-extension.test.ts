@@ -1,277 +1,204 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { DurableModelToolBindings, DurableModelToolCoordinationApplication, DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
-import { exactLeaderSessionId } from "../model-tool-contract/runtime";
+import { FRAMEWORK_SYNC_ENTRY_TYPE, FRAMEWORK_SYNC_MESSAGE_TYPE, makeFrameworkSyncRecord } from "../../extensions/framework-sync-execution";
+import { DurableModelToolBindings, DurableModelToolCoordinationApplication } from "../model-tool-contract/durable-model-tool-port";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
-import type { TeamConfig } from "./models";
-import { readSyncNudgeRecords, readSyncNudges } from "./sync-nudge";
-import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
 
-const createdTeams: string[] = [];
-
-function teamName(suffix: string): string {
-  const name = `sync-nudge-extension-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
-  createdTeams.push(name);
-  return name;
-}
-
-async function createTeam(name: string, sessionFile: string): Promise<TeamConfig> {
-  const config = await teams.createTeam(
-    name,
-    sessionFile,
-    "lead-agent",
-    "Resumed nudge binding test.",
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 0, policyVersion: "test" },
-  );
+const names: string[] = [];
+async function fixture(autoSyncEnabled: boolean) {
+  const name = `framework-sync-${process.pid}-${Date.now()}-${names.length}`;
+  names.push(name);
+  const sessionFile = `/tmp/${name}.jsonl`;
+  const config = await teams.createTeam(name, sessionFile, "lead-agent", "Framework sync test.",
+    undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+    { waitSeconds: 120, autoSyncEnabled, autoSyncDelaySeconds: 0, autoSyncUpdateThreshold: 1, policyVersion: "test" });
   config.logicalWorkers = [{ name: "worker", scope: "test scope" }];
   teams.writeConfigAtomic(paths.configPath(name), config);
-  return config;
-}
-
-function context(sessionFile: string, sessionId: string, branch: any[]) {
-  return {
-    model: { id: "test-model", provider: "test-provider", contextWindow: 10_000 },
-    isIdle: vi.fn(() => true),
-    hasPendingMessages: vi.fn(() => false),
-    sessionManager: {
-      getSessionFile: vi.fn(() => sessionFile),
-      getSessionId: vi.fn(() => sessionId),
-      getBranch: vi.fn(() => branch),
-      getEntries: vi.fn(() => branch),
-      getSessionName: vi.fn(() => undefined),
-    },
-    modelRegistry: {
-      isUsingOAuth: vi.fn(() => false),
-      getProvider: vi.fn(() => undefined),
-    },
-    getContextUsage: vi.fn(() => ({ tokens: 1, contextWindow: 10_000, percent: 1 })),
-    ui: {
-      setFooter: vi.fn(),
-      setStatus: vi.fn(),
-      notify: vi.fn(),
-      setTitle: vi.fn(),
-    },
-  };
-}
-
-function registerExtension(branch: any[], sent: any[], beforeSend?: (message: any) => void) {
-  const handlers = new Map<string, (...args: any[]) => any>();
+  const lead = config.members.find((member) => member.name === "team-lead")!;
+  await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
+  vi.stubEnv("PI_AGENT_NAME", ""); vi.stubEnv("PI_TEAM_NAME", name);
+  const branch: any[] = [{ id: "root", type: "message" }];
+  const handlers = new Map<string, Array<(...args: any[]) => any>>();
+  const commands = new Map<string, any>();
+  const sent: any[] = [];
   piTeams({
-    registerTool() {},
-    registerMessageRenderer() {},
-    on(event: string, handler: (...args: any[]) => any) { handlers.set(event, handler); },
-    sendMessage(message: any) {
-      beforeSend?.(message);
-      sent.push(message);
-      branch.push({
-        id: `nudge-entry-${sent.length}`,
-        type: "custom_message",
-        timestamp: new Date().toISOString(),
-        customType: message.customType,
-        details: message.details,
-      });
-    },
+    registerTool() {}, registerMessageRenderer() {},
+    registerCommand(command: string, options: any) { commands.set(command, options); },
+    on(event: string, handler: (...args: any[]) => any) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+    appendEntry(customType: string, data: unknown) { branch.push({ id: `entry-${branch.length}`, type: "custom", customType, data }); },
+    sendMessage(message: any) { sent.push(message); branch.push({ id: `message-${branch.length}`, type: "custom_message", customType: message.customType, details: message.details }); },
     sendUserMessage() {},
   } as never);
-  return handlers;
+  const ctx = {
+    model: { id: "test-model", provider: "test-provider", contextWindow: 10_000 },
+    isIdle: vi.fn(() => true), hasPendingMessages: vi.fn(() => false),
+    sessionManager: {
+      getSessionFile: vi.fn(() => sessionFile), getSessionId: vi.fn(() => "session-1"), getBranch: vi.fn(() => branch),
+      getEntries: vi.fn(() => branch), getSessionName: vi.fn(() => undefined),
+    },
+    modelRegistry: { isUsingOAuth: vi.fn(() => false), getProvider: vi.fn(() => undefined) },
+    getContextUsage: vi.fn(() => ({ tokens: 1, contextWindow: 10_000, percent: 1 })),
+    ui: { setFooter: vi.fn(), setStatus: vi.fn(), notify: vi.fn(), setTitle: vi.fn() },
+  };
+  const emit = async (event: string, value: unknown) => { for (const handler of handlers.get(event) ?? []) await handler(value, ctx); };
+  return { name, sessionFile, config, lead, branch, commands, sent, ctx, emit };
 }
 
 afterEach(() => {
-  vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.unstubAllEnvs();
-  for (const name of createdTeams.splice(0)) {
-    fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
-    fs.rmSync(paths.taskDir(name), { recursive: true, force: true });
-  }
+  vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs();
+  for (const name of names.splice(0)) { fs.rmSync(paths.teamDir(name), { recursive: true, force: true }); fs.rmSync(paths.taskDir(name), { recursive: true, force: true }); }
 });
 
-describe("resumed leader sync nudge binding", () => {
-  it("binds the exact resumed Session before Worker-authored debt arms and presents once", async () => {
-    vi.useFakeTimers();
-    const name = teamName("eligible");
-    const sessionFile = `/tmp/${name}-lead.jsonl`;
-    const sessionId = `pi-session-${name}`;
-    const config = await createTeam(name, sessionFile);
-    const lead = config.members.find((member) => member.name === "team-lead")!;
-    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
-    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
-    const sent: any[] = [];
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", name);
-    const readDebt = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
-      kind: "eligible",
-      debtKey: "worker-authored-task-change",
-      requestedView: "updates",
-      teamEpochId: config.epochId!,
-      leaderSessionId: sessionFile,
-      leaderMembershipId: lead.membershipId!,
-      branchLineage: ["root"],
-      branchId: "root",
-      policyVersion: "test",
-    });
+describe("leader framework team synchronization", () => {
+  it("runs /teamsync once without a model turn when no updates exist", async () => {
+    const test = await fixture(false);
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "selectTeamSyncView").mockResolvedValue("updates");
+    const read = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readTeamSyncNow").mockResolvedValue({ kind: "quiet" });
+    await test.emit("session_start", { reason: "resume" });
+    await test.commands.get("teamsync").handler("", test.ctx);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(test.ctx.ui.notify).toHaveBeenCalledWith("No Team updates.", "info");
+    expect(test.sent).toEqual([]);
+    expect(test.branch).toHaveLength(1);
+    await test.emit("session_shutdown", { reason: "quit" });
+  });
+
+  it("binds the resumed Session and publishes one actual result when automatic debt is due", async () => {
     const bind = vi.spyOn(DurableModelToolBindings.prototype, "setLeaderSessionFile");
-    const handlers = registerExtension(branch, sent);
-
-    const resumedContext = context(sessionFile, sessionId, branch);
-    await handlers.get("session_start")!({ reason: "resume" }, resumedContext);
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(bind).toHaveBeenCalledWith(sessionId, sessionFile);
-    expect(readDebt).toHaveBeenCalledWith(sessionId, ["root"]);
-    expect(bind.mock.invocationCallOrder[0]).toBeLessThan(readDebt.mock.invocationCallOrder[0]);
-    expect(sent).toHaveLength(1);
-    expect(sent[0].customType).toBe("pi-team-bright.sync-nudge");
-    expect(branch.at(-1)?.details).toMatchObject({ kind: "presented", debtKey: "worker-authored-task-change" });
-
-    await handlers.get("session_shutdown")!({ reason: "quit" }, context(sessionFile, sessionId, branch));
-  });
-
-  it("reserves before a lineage race and promotes only one fresh eligible nudge", async () => {
+    const test = await fixture(true);
     vi.useFakeTimers();
-    const name = teamName("lineage-race");
-    const sessionFile = `/tmp/${name}-lead.jsonl`;
-    const sessionId = `pi-session-${name}`;
-    const config = await createTeam(name, sessionFile);
-    const lead = config.members.find((member) => member.name === "team-lead")!;
-    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
-    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
-    const sent: any[] = [];
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", name);
-    const stale = {
-      kind: "eligible" as const, debtKey: "stale-debt", requestedView: "updates" as const,
-      teamEpochId: config.epochId!, leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!,
+    const debt = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
+      kind: "eligible", debtKey: "debt-1", scopeKey: "scope-1", updateCount: 1, requestedView: "updates",
+      teamEpochId: test.config.epochId!, leaderSessionId: test.sessionFile, leaderMembershipId: test.lead.membershipId!,
       branchLineage: ["root"], branchId: "root", policyVersion: "test",
-    };
-    const fresh = {
-      ...stale, debtKey: "fresh-debt", branchLineage: ["fork-root"], branchId: "fork-root",
-    };
-    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockImplementation(async (_session, lineage) =>
-      lineage[0] === "root" ? stale : lineage[0] === "fork-root" ? fresh : { kind: "none" },
-    );
-    let raced = false;
-    const handlers = registerExtension(branch, sent, () => {
-      if (!raced) {
-        raced = true;
-        branch.splice(0, branch.length, { id: "fork-root", type: "message", timestamp: new Date().toISOString() });
-      }
     });
-    const resumed = context(sessionFile, sessionId, branch);
-
-    await handlers.get("session_start")!({ reason: "resume" }, resumed);
+    const read = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readTeamSyncNow").mockResolvedValue({
+      kind: "updates", teamChanges: [{ kind: "purpose", text: "Changed." }], workerChanges: [], taskChanges: [], alerts: [], head: 1, epochId: test.config.epochId!,
+    });
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "getPendingObservation").mockImplementation(() => {
+      const call = read.mock.calls.at(-1);
+      return call ? { sessionId: test.sessionFile, toolCallId: call[3], resultText: JSON.stringify({ kind: "updates", team_changes: [{ kind: "purpose", text: "Changed." }], worker_changes: [], task_changes: [], alerts: [] }), resultDigest: "digest", head: 1, epochId: test.config.epochId!, baselineCursor: "0", baselineAcknowledgedEntryId: null } : undefined;
+    });
+    await test.emit("session_start", { reason: "resume" });
     await vi.advanceTimersByTimeAsync(0);
-    // The monitor is the deterministic producer hint for the fresh fork debt.
+    expect(bind).toHaveBeenCalledWith("session-1", test.sessionFile);
+    expect(debt).toHaveBeenCalledWith("session-1", ["root"]);
+    expect(bind.mock.invocationCallOrder[0]).toBeLessThan(debt.mock.invocationCallOrder[0]);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(test.sent).toHaveLength(1);
+    expect(test.sent[0].customType).toBe("pi-team-bright.framework-sync-result");
+    expect(test.branch[1].data).toMatchObject({ provenance: "pi-team-bright/framework", source: "automatic", debtKey: "debt-1", result: { kind: "updates" } });
+    await test.emit("session_shutdown", { reason: "quit" });
+  });
+
+  it("does not execute after the lead Membership changes", async () => {
+    const test = await fixture(true);
+    vi.useFakeTimers();
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
+      kind: "eligible", debtKey: "debt-1", scopeKey: "scope-1", updateCount: 1, requestedView: "updates",
+      teamEpochId: test.config.epochId!, leaderSessionId: test.sessionFile, leaderMembershipId: test.lead.membershipId!,
+      branchLineage: ["root"], branchId: "root", policyVersion: "test",
+    });
+    const read = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readTeamSyncNow").mockResolvedValue({ kind: "quiet" });
+    const changed = structuredClone(test.config);
+    changed.members = changed.members.map((member) => member.name === "team-lead" ? { ...member, membershipId: "new-membership" } : member);
+    teams.writeConfigAtomic(paths.configPath(test.name), changed);
+    await test.emit("session_start", { reason: "resume" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(read).not.toHaveBeenCalled();
+    expect(test.sent).toEqual([]);
+    await test.emit("session_shutdown", { reason: "quit" });
+  });
+
+  it("does not repeat an automatic empty race or show its quiet notice", async () => {
+    const test = await fixture(true);
+    vi.useFakeTimers();
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
+      kind: "eligible", debtKey: "stale-debt", scopeKey: "scope-1", updateCount: 1, requestedView: "updates",
+      teamEpochId: test.config.epochId!, leaderSessionId: test.sessionFile, leaderMembershipId: test.lead.membershipId!,
+      branchLineage: ["root"], branchId: "root", policyVersion: "test",
+    });
+    const read = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readTeamSyncNow").mockResolvedValue({ kind: "quiet" });
+    await test.emit("session_start", { reason: "resume" });
+    await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(5_000);
-    await vi.advanceTimersByTimeAsync(0);
-
-    expect(sent).toHaveLength(2);
-    expect(readSyncNudgeRecords(name)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "reserved", debtKey: "stale-debt", branchLineage: ["root"] }),
-      expect.objectContaining({ kind: "presented", debtKey: "fresh-debt", branchLineage: ["fork-root"] }),
-    ]));
-    expect(readSyncNudges(name)).toEqual([
-      expect.objectContaining({ kind: "presented", debtKey: "fresh-debt", branchLineage: ["fork-root"] }),
-    ]);
-    expect(branch.filter((entry) => entry.type === "custom_message" && entry.details?.debtKey === "stale-debt")).toHaveLength(1);
-
-    await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(test.sent).toEqual([]);
+    expect(test.ctx.ui.notify).not.toHaveBeenCalledWith("No Team updates.", "info");
+    await test.emit("session_shutdown", { reason: "quit" });
   });
 
-  it("suppresses a candidate after exact lead Membership replacement", async () => {
+  it("acknowledges a framework result only after its matching successful provider turn", async () => {
+    const test = await fixture(false);
+    await test.emit("session_start", { reason: "resume" });
+    const record = makeFrameworkSyncRecord({ source: "command", teamName: test.name, sessionId: "session-1", sessionFile: test.sessionFile,
+      branchLineage: ["root"], toolCallId: "framework-team-sync-test", arguments: { view: "updates" },
+      result: { kind: "updates", team_changes: [{ kind: "purpose", text: "Changed." }], worker_changes: [], task_changes: [], alerts: [] } });
+    test.branch.push({ id: "framework-entry", type: "custom", customType: FRAMEWORK_SYNC_ENTRY_TYPE, data: record });
+    test.branch.push({ id: "framework-message", type: "custom_message", customType: FRAMEWORK_SYNC_MESSAGE_TYPE, details: { recordId: record.id, record } });
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "getPendingObservation").mockReturnValue({ sessionId: test.sessionFile, toolCallId: record.toolCallId, resultText: record.resultText, resultDigest: "digest", head: 1, epochId: test.config.epochId! });
+    const ack = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "acknowledgePendingObservationAsync").mockResolvedValue(true);
+    const payload = { messages: [
+      { role: "assistant", tool_calls: [{ id: record.toolCallId, function: { name: "team_sync", arguments: JSON.stringify(record.arguments) } }] },
+      { role: "tool", tool_call_id: record.toolCallId, content: record.resultText },
+    ] };
+    await test.emit("before_provider_request", { payload });
+    expect(ack).not.toHaveBeenCalled();
+    await test.emit("turn_end", { message: { role: "assistant", stopReason: "stop" } });
+    expect(ack).toHaveBeenCalledWith("session-1", "framework-entry", ["root", "framework-entry", "framework-message"]);
+    await test.emit("session_shutdown", { reason: "quit" });
+  });
+
+  it("keeps an error turn unacknowledged and releases its pending manual observation", async () => {
+    const test = await fixture(false);
+    await test.emit("session_start", { reason: "resume" });
+    const record = makeFrameworkSyncRecord({ source: "command", teamName: test.name, sessionId: "session-1", sessionFile: test.sessionFile,
+      branchLineage: ["root"], toolCallId: "framework-team-sync-error", arguments: { view: "updates" },
+      result: { kind: "updates", team_changes: [{ kind: "purpose", text: "Changed." }], worker_changes: [], task_changes: [], alerts: [] } });
+    test.branch.push({ id: "framework-entry", type: "custom", customType: FRAMEWORK_SYNC_ENTRY_TYPE, data: record });
+    test.branch.push({ id: "framework-message", type: "custom_message", customType: FRAMEWORK_SYNC_MESSAGE_TYPE, details: { recordId: record.id, record } });
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "getPendingObservation").mockReturnValue({ sessionId: test.sessionFile, toolCallId: record.toolCallId, resultText: record.resultText, resultDigest: "digest", head: 1, epochId: test.config.epochId! });
+    const ack = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "acknowledgePendingObservationAsync").mockResolvedValue(true);
+    const discard = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "discardPendingObservation");
+    await test.emit("before_provider_request", { payload: { messages: [
+      { role: "assistant", tool_calls: [{ id: record.toolCallId, function: { name: "team_sync" } }] },
+      { role: "tool", tool_call_id: record.toolCallId, content: record.resultText },
+    ] } });
+    await test.emit("turn_end", { message: { role: "assistant", stopReason: "error" } });
+    expect(ack).not.toHaveBeenCalled();
+    await test.emit("agent_settled", {});
+    expect(discard).toHaveBeenCalledWith("session-1", record.toolCallId);
+    expect(test.ctx.ui.notify).toHaveBeenCalledWith("Team synchronization failed. Run /teamsync to retry.", "warning");
+    await test.emit("session_shutdown", { reason: "quit" });
+  });
+
+  it("re-presents one automatic error once, then stops without a retry loop", async () => {
+    const test = await fixture(false);
+    await test.emit("session_start", { reason: "resume" });
     vi.useFakeTimers();
-    const name = teamName("lead-replaced");
-    const sessionFile = `/tmp/${name}-lead.jsonl`;
-    const sessionId = `pi-session-${name}`;
-    const config = await createTeam(name, sessionFile);
-    const lead = config.members.find((member) => member.name === "team-lead")!;
-    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
-    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
-    const sent: any[] = [];
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", name);
-    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
-      kind: "eligible", debtKey: "old-lead-debt", requestedView: "updates", teamEpochId: config.epochId!,
-      leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!, branchLineage: ["root"], branchId: "root", policyVersion: "test",
-    });
-    const handlers = registerExtension(branch, sent);
-    const resumed = context(sessionFile, sessionId, branch);
-
-    await handlers.get("session_start")!({ reason: "resume" }, resumed);
-    const replaced = await teams.readConfig(name);
-    replaced.members = replaced.members.map((member) => member.name === "team-lead"
-      ? { ...member, membershipId: "replacement-membership" }
-      : member);
-    teams.writeConfigAtomic(paths.configPath(name), replaced);
+    const record = makeFrameworkSyncRecord({ source: "automatic", debtKey: "debt-1", teamName: test.name,
+      epochId: test.config.epochId!, leaderMembershipId: test.lead.membershipId!,
+      sessionId: "session-1", sessionFile: test.sessionFile, branchLineage: ["root"], toolCallId: "framework-team-sync-retry",
+      arguments: { view: "updates" }, result: { kind: "updates", team_changes: [{ kind: "purpose", text: "Changed." }], worker_changes: [], task_changes: [], alerts: [] } });
+    test.branch.push({ id: "framework-entry", type: "custom", customType: FRAMEWORK_SYNC_ENTRY_TYPE, data: record });
+    test.branch.push({ id: "framework-message", type: "custom_message", customType: FRAMEWORK_SYNC_MESSAGE_TYPE, details: { recordId: record.id, record } });
+    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "getPendingObservation").mockReturnValue({ sessionId: test.sessionFile, toolCallId: record.toolCallId, resultText: record.resultText, resultDigest: "digest", head: 1, epochId: test.config.epochId! });
+    const discard = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "discardPendingObservation");
+    await test.emit("turn_end", { message: { role: "assistant", stopReason: "error" } });
+    await test.emit("agent_settled", {});
     await vi.advanceTimersByTimeAsync(0);
-
-    expect(sent).toEqual([]);
-    expect(readSyncNudgeRecords(name)).toEqual([]);
-    await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
-  });
-
-  it("keeps a reservation unpresented when Pi Session nudge actuation fails", async () => {
-    vi.useFakeTimers();
-    const name = teamName("actuation-failure");
-    const sessionFile = `/tmp/${name}-lead.jsonl`;
-    const sessionId = `pi-session-${name}`;
-    const config = await createTeam(name, sessionFile);
-    const lead = config.members.find((member) => member.name === "team-lead")!;
-    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
-    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", name);
-    vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({
-      kind: "eligible", debtKey: "failed-actuation", requestedView: "updates", teamEpochId: config.epochId!,
-      leaderSessionId: sessionFile, leaderMembershipId: lead.membershipId!, branchLineage: ["root"], branchId: "root", policyVersion: "test",
-    });
-    const handlers = registerExtension(branch, [], () => { throw new Error("Pi Session send failed"); });
-    const resumed = context(sessionFile, sessionId, branch);
-
-    await handlers.get("session_start")!({ reason: "resume" }, resumed);
+    expect(test.sent).toHaveLength(1);
+    expect(test.sent[0].details.recordId).toBe(record.id);
+    expect(discard).not.toHaveBeenCalled();
+    await test.emit("turn_end", { message: { role: "assistant", stopReason: "error" } });
+    await test.emit("agent_settled", {});
     await vi.advanceTimersByTimeAsync(0);
-
-    expect(readSyncNudgeRecords(name)).toEqual([
-      expect.objectContaining({ kind: "reserved", debtKey: "failed-actuation", branchLineage: ["root"] }),
-    ]);
-    expect(readSyncNudges(name)).toEqual([]);
-    expect(branch).toHaveLength(1);
-
-    await handlers.get("session_shutdown")!({ reason: "quit" }, resumed);
-  });
-
-  it("suppresses forked Sessions and real stale/unbound port bindings", async () => {
-    const readDebt = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "readSyncNudgeDebt").mockResolvedValue({ kind: "eligible", debtKey: "must-not-read", requestedView: "updates", teamEpochId: "epoch", leaderSessionId: "session", leaderMembershipId: "membership", branchLineage: ["root"], branchId: "root", policyVersion: "test" });
-    const branch: any[] = [{ id: "root", type: "message", timestamp: new Date().toISOString() }];
-    const sent: any[] = [];
-    vi.stubEnv("PI_AGENT_NAME", "");
-    vi.stubEnv("PI_TEAM_NAME", "");
-    const handlers = registerExtension(branch, sent);
-
-    await handlers.get("session_start")!({ reason: "fork" }, context("/tmp/fork.jsonl", "fork-session", branch));
-    expect(readDebt).not.toHaveBeenCalled();
-    expect(sent).toHaveLength(0);
-    readDebt.mockRestore();
-
-    const name = teamName("stale");
-    const currentSession = `/tmp/${name}-current.jsonl`;
-    await createTeam(name, currentSession);
-    const stalePort = composedDurableModelToolPort();
-    stalePort.setLeaderSessionFile(exactLeaderSessionId("stale-session"), `/tmp/${name}-stale.jsonl`);
-    await expect(stalePort.readSyncNudgeDebt(exactLeaderSessionId("stale-session"), ["root"])).resolves.toEqual({ kind: "none" });
-    const unboundPort = composedDurableModelToolPort();
-    await expect(unboundPort.readSyncNudgeDebt(exactLeaderSessionId("unbound-session"), ["root"])).resolves.toEqual({ kind: "none" });
+    expect(test.sent).toHaveLength(1);
+    expect(discard).toHaveBeenCalledOnce();
+    expect(test.ctx.ui.notify).toHaveBeenCalledWith("Automatic Team synchronization stopped after one retry. Run /teamsync to retry.", "warning");
+    await test.emit("session_shutdown", { reason: "quit" });
   });
 });

@@ -1,88 +1,90 @@
-import { describe, expect, it } from "vitest";
-import { taskProjectionRevision } from "./observation-service";
+import { describe, expect, it, vi } from "vitest";
 import { CoordinationNudgeDebtService } from "./nudge-debt";
 
-const task = { id: "task-1", version: "v_0123456789abcdef" } as any;
-const bound = (members: any[] = [{ name: "team-lead", agentType: "lead", membershipId: "lead-1", sessionFile: "/sessions/lead", isActive: true }]) => ({
-  teamName: "nudge-debt-test",
-  sessionFile: "/sessions/lead",
-  config: { epochId: "epoch-1", members, syncLiveness: { nudgeEnabled: true, nudgeDelaySeconds: 5, policyVersion: "1" } },
+const lead = { name: "team-lead", agentType: "lead", membershipId: "lead-1", sessionFile: "/sessions/lead", isActive: true };
+const bound = (members: unknown[] = [lead], syncLiveness: Record<string, unknown> = { autoSyncEnabled: true, policyVersion: "2" }) => ({
+  teamName: "debt-test", sessionFile: "/sessions/lead",
+  config: { epochId: "epoch-1", members, syncLiveness },
 });
-
-function service(overrides: Record<string, unknown> = {}) {
-  const observation = { readTaskProjection: async () => ({ kind: "tasks", tasks: [task], warnings: [] }) };
-  const store = {
-    readHidden: () => ({ kind: "missing" }),
-    readEvents: () => ({ events: [], headCursor: "0", cursor: "0", truncated: false }),
-    readFailureHints: () => ({ cursor: "0", headCursor: "0", hints: [] }),
-    ...overrides,
-  };
-  return new CoordinationNudgeDebtService(observation as any, store as any);
+const found = { kind: "found", projection: { teamEventCursor: "2", authorityRevisions: {} } };
+const prepared = (view: "snapshot" | "updates", updateCount: number, scopeKey = "scope-1", marker = "one") => ({
+  kind: "prepared", updateCount, scopeKey,
+  result: view === "snapshot"
+    ? { kind: "snapshot", epochId: "epoch-1", head: 3, team: { name: "debt-test", purpose: marker, lifecycle: "active" }, workers: [], tasks: [] }
+    : { kind: "updates", epochId: "epoch-1", head: 3, teamChanges: [], workerChanges: [{ worker: "worker", scope: marker, kind: "created", text: marker }], taskChanges: [], alerts: [] },
+});
+function service(hidden: unknown = { kind: "missing" }, projection: unknown = prepared("snapshot", 1)) {
+  const readHidden = vi.fn().mockResolvedValue(hidden);
+  const peekTeamSync = vi.fn().mockResolvedValue(projection);
+  return { debt: new CoordinationNudgeDebtService({ peekTeamSync } as any, { readHidden } as any), readHidden, peekTeamSync };
 }
 
-const found = (overrides: Record<string, unknown> = {}) => ({
-  kind: "found",
-  projection: {
-    teamEventCursor: "0",
-    authorityRevisions: { task_projection: taskProjectionRevision([task]), task_event_failure_hints: "0" },
-    ...overrides,
-  },
-});
-
-describe("Coordination nudge debt equivalence", () => {
-  it("derives snapshot debt only for an exact active lead and distinct full lineage", async () => {
-    const debt = await service().read(bound() as any, ["root", "branch"]);
-    expect(debt).toMatchObject({ kind: "eligible", requestedView: "snapshot", leaderMembershipId: "lead-1", branchLineage: ["root", "branch"] });
-    await expect(service().read(bound() as any, ["root", "root"])).resolves.toEqual({ kind: "none" });
-    await expect(service().read(bound([{ name: "team-lead", agentType: "teammate", membershipId: "wrong-kind", sessionFile: "/sessions/lead", isActive: true }]) as any, ["root"])).resolves.toEqual({ kind: "none" });
+describe("Coordination nudge debt from canonical observation", () => {
+  it("selects snapshot or updates from the exact hidden baseline and forwards full lineage", async () => {
+    const initial = service();
+    await expect(initial.debt.read(bound() as any, ["root", "branch"])).resolves.toMatchObject({
+      kind: "eligible", requestedView: "snapshot", scopeKey: "scope-1", updateCount: 1,
+      leaderMembershipId: "lead-1", branchLineage: ["root", "branch"], branchId: "branch",
+    });
+    expect(initial.readHidden).toHaveBeenCalledWith("debt-test", {
+      teamEpochId: "epoch-1", exactSessionId: "/sessions/lead", branchLineage: ["root", "branch"],
+    });
+    expect(initial.peekTeamSync).toHaveBeenCalledWith("/sessions/lead", "snapshot", ["root", "branch"]);
+    const updates = service(found, prepared("updates", 2));
+    await expect(updates.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "eligible", requestedView: "updates", updateCount: 2 });
+    expect(updates.peekTeamSync).toHaveBeenCalledWith("/sessions/lead", "updates", ["root"]);
   });
 
-  it("suppresses leader-only changes but arms external events and failure hints", async () => {
-    const leaderOnly = service({
-      readHidden: () => found(),
-      readEvents: () => ({ events: [{ type: "task", actor: "team-lead" }], headCursor: "1", cursor: "1", truncated: false }),
-    });
-    await expect(leaderOnly.read(bound() as any, ["root"])).resolves.toEqual({ kind: "none" });
-
-    const externalEvent = service({
-      readHidden: () => found(),
-      readEvents: () => ({ events: [{ type: "task", actor: "worker" }], headCursor: "1", cursor: "1", truncated: false }),
-    });
-    await expect(externalEvent.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "eligible", requestedView: "updates" });
-
-    const externalHint = service({
-      readHidden: () => found(),
-      readFailureHints: () => ({ cursor: "1", headCursor: "1", hints: [{ actorKind: "non-leader/external" }] }),
-    });
-    await expect(externalHint.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "eligible", requestedView: "updates" });
+  it("does not probe when exact identity, lineage, or policy is invalid", async () => {
+    const cases = [
+      [bound([{ ...lead, agentType: "teammate" }]), ["root"]],
+      [bound([{ ...lead, sessionFile: "/sessions/old" }]), ["root"]],
+      [bound(), ["root", "root"]],
+      [bound(), []],
+      [bound([lead], { autoSyncEnabled: false, policyVersion: "2" }), ["root"]],
+      [bound([lead], { nudgeEnabled: false, policyVersion: "1" }), ["root"]],
+    ] as const;
+    for (const [team, lineage] of cases) {
+      const candidate = service();
+      await expect(candidate.debt.read(team as any, [...lineage])).resolves.toEqual({ kind: "none" });
+      expect(candidate.peekTeamSync).not.toHaveBeenCalled();
+    }
   });
 
-  it("returns indeterminate or unavailable without inventing provenance", async () => {
-    const unknownActor = service({ readHidden: () => found({ authorityRevisions: { task_projection: "old", task_event_failure_hints: "0" } }) });
-    await expect(unknownActor.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "indeterminate" });
-
-    const brokenHints = service({ readHidden: () => found(), readFailureHints: () => { throw new Error("hint store offline"); } });
-    await expect(brokenHints.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "indeterminate", message: expect.stringContaining("hint store offline") });
-
-    const unavailableTasks = new CoordinationNudgeDebtService(
-      { readTaskProjection: async () => ({ kind: "unavailable", message: "Task store offline" }) } as any,
-      { readHidden: () => ({ kind: "missing" }), readEvents: () => ({ events: [], headCursor: "0", cursor: "0", truncated: false }), readFailureHints: () => ({ cursor: "0", headCursor: "0", hints: [] }) } as any,
-    );
-    await expect(unavailableTasks.read(bound() as any, ["root"])).resolves.toEqual({ kind: "unavailable", message: "Task store offline" });
+  it("uses the canonical projected eligible count and does not fabricate debt from other changes", async () => {
+    const zero = service(found, prepared("updates", 0));
+    await expect(zero.debt.read(bound() as any, ["root"])).resolves.toEqual({ kind: "none" });
+    const continuation = service(found, { ...prepared("updates", 0), continuationEligible: true });
+    await expect(continuation.debt.read(bound() as any, ["root"])).resolves.toMatchObject({
+      kind: "eligible", requestedView: "updates", updateCount: 0, scopeKey: "scope-1",
+    });
+    const quiet = service(found, { kind: "quiet", updateCount: 0, scopeKey: "scope-1" });
+    await expect(quiet.debt.read(bound() as any, ["root"])).resolves.toEqual({ kind: "none" });
+    const unknown = service(found, { ...prepared("updates", 1), updateCount: Number.NaN });
+    await expect(unknown.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "indeterminate" });
   });
 
-  it("uses later event pages and the replacement lead identity in its update coordinate", async () => {
-    let page = 0;
-    const paged = service({
-      readHidden: () => found(),
-      readEvents: () => page++ === 0
-        ? { events: [{ type: "task", actor: "team-lead" }], headCursor: "2", cursor: "1", truncated: true }
-        : { events: [{ type: "task", actor: "worker" }], headCursor: "2", cursor: "2", truncated: false },
-    });
-    const members = [
-      { name: "team-lead", agentType: "lead", membershipId: "old-lead", sessionFile: "/sessions/lead", isActive: false },
-      { name: "team-lead", agentType: "lead", membershipId: "new-lead", sessionFile: "/sessions/lead", isActive: true },
-    ];
-    await expect(paged.read(bound(members) as any, ["root", "branch"])).resolves.toMatchObject({ kind: "eligible", requestedView: "updates", leaderMembershipId: "new-lead" });
+  it("keeps the scheduling scope stable while its content coordinate changes", async () => {
+    const probe = vi.fn()
+      .mockResolvedValueOnce(prepared("updates", 1, "scope-1", "one"))
+      .mockResolvedValueOnce(prepared("updates", 2, "scope-1", "two"));
+    const debt = new CoordinationNudgeDebtService({ peekTeamSync: probe } as any, { readHidden: async () => found } as any);
+    const first = await debt.read(bound() as any, ["root"]);
+    const second = await debt.read(bound() as any, ["root"]);
+    expect(first.kind).toBe("eligible"); expect(second.kind).toBe("eligible");
+    if (first.kind !== "eligible" || second.kind !== "eligible") return;
+    expect(second.scopeKey).toBe(first.scopeKey);
+    expect(second.debtKey).not.toBe(first.debtKey);
+    expect(second.updateCount).toBe(2);
+  });
+
+  it("suppresses mismatched views and unavailable observations", async () => {
+    const mismatch = service(found, prepared("snapshot", 1));
+    await expect(mismatch.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "indeterminate" });
+    const unavailable = service(found, { kind: "unavailable", message: "Task store offline" });
+    await expect(unavailable.debt.read(bound() as any, ["root"])).resolves.toEqual({ kind: "unavailable", message: "Task store offline" });
+    const rejected = service(found);
+    rejected.peekTeamSync.mockRejectedValueOnce(new Error("probe offline"));
+    await expect(rejected.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "indeterminate" });
   });
 });

@@ -23,6 +23,20 @@ exhaustive parameter reference.
   verifies the nine-tool selection and the irreducible Task, Worker, sync, and
   Alert distinctions.
 
+## Team synchronization
+
+- [`observation-service.ts`](../src/coordination/observation-service.ts) owns the
+  shared probe, immediate observation, productive wait, and acknowledgement.
+- [`sync-nudge-conductor.ts`](../src/utils/sync-nudge-conductor.ts) owns batch
+  scheduling. [`sync-liveness-settings.ts`](../src/utils/sync-liveness-settings.ts)
+  resolves its global policy and deprecated setting fallbacks.
+- [`pi-team-session-adapter.ts`](../extensions/pi-team-session-adapter.ts) owns
+  `/teamsync` and automatic delivery.
+  [`framework-sync-execution.ts`](../extensions/framework-sync-execution.ts)
+  owns framework-origin records and provider-context projection.
+- [Decision 0016](decisions/0016-framework-team-synchronization.md) records intent.
+  The [work record](projects/team-sync-continuity.md) records real Pi evidence.
+
 ## Read-only status diagnosis
 
 - [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.

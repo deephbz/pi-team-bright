@@ -367,6 +367,34 @@ export function readTeamEvents(teamName: string, options: TeamEventReadOptions =
   };
 }
 
+/** Read one journal image and split unseen events into bounded observation pages. */
+export function readTeamEventPages(teamName: string, options: Pick<TeamEventReadOptions, "afterCursor" | "limit"> = {}): TeamEventBatch[] {
+  const after = parseCursor(options.afterCursor);
+  const events = readJournal(teamName);
+  const headCursor = events.at(-1)?.cursor ?? ZERO_CURSOR;
+  if (after > parseCursor(headCursor)) {
+    throw new TeamEventCursorAheadError(options.afterCursor!, headCursor);
+  }
+  const limit = validatedLimit(options.limit);
+  const unseen = events.filter((event) => parseCursor(event.cursor) > after);
+  if (unseen.length === 0) {
+    return [{ events: [], cursor: headCursor, headCursor, truncated: false, remaining: 0 }];
+  }
+  const pages: TeamEventBatch[] = [];
+  for (let offset = 0; offset < unseen.length; offset += limit) {
+    const selected = unseen.slice(offset, offset + limit);
+    const remaining = unseen.length - offset - selected.length;
+    pages.push({
+      events: selected,
+      cursor: remaining > 0 ? selected.at(-1)!.cursor : headCursor,
+      headCursor,
+      truncated: remaining > 0,
+      remaining,
+    });
+  }
+  return pages;
+}
+
 export function readTeamEventCursor(teamName: string): string {
   return readJournal(teamName).at(-1)?.cursor ?? ZERO_CURSOR;
 }

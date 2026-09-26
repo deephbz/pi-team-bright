@@ -24,6 +24,7 @@ import type { TeamPaneLayout } from "../utils/team-pane-layout";
 import type { ModelToolTaskUpdateInput } from "../task-authority/contracts";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
+import type { CoordinationSyncProbe, CoordinationSyncNowResult } from "../coordination/observation-contracts";
 
 export interface ModelToolTeamApplicationPort {
   createTeam(leaderSessionId: ExactLeaderSessionId, input: { name: string; purpose: string; pane_layout?: TeamPaneLayout }): Promise<CreateTeamPortResult>;
@@ -49,6 +50,10 @@ export interface ModelToolAlertApplicationPort {
 export interface ModelToolCoordinationApplicationPort {
   readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult>;
   readTeamSync(leaderSessionId: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, toolCallId: string): Promise<TeamSyncPortResult>;
+  readTeamSyncNow?(leaderSessionId: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, toolCallId: string): Promise<CoordinationSyncNowResult>;
+  peekTeamSync?(leaderSessionId: ExactLeaderSessionId, view: "snapshot" | "updates", branchLineage: string[]): Promise<CoordinationSyncProbe>;
+  selectTeamSyncView?(leaderSessionId: ExactLeaderSessionId, branchLineage: string[]): Promise<"snapshot" | "updates">;
+  discardPendingObservation?(leaderSessionId: ExactLeaderSessionId, toolCallId: string): void;
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void;
   acknowledgePendingObservation(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): boolean;
   setBranchContext(leaderSessionId: ExactLeaderSessionId, branchIds: string[]): void;

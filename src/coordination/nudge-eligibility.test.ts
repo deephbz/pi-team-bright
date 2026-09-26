@@ -25,8 +25,6 @@ function serviceWithInjectedDerivedStore(config: any, calls: string[]) {
     readFailureHints: () => ({ headCursor: "0", cursor: "0", hints: [] }),
   }, undefined, {
     readHidden: async () => { calls.push("hidden"); return { kind: "missing" }; },
-    readEvents: () => { calls.push("events"); return { events: [], headCursor: "0", cursor: "0", truncated: false }; },
-    readFailureHints: () => ({ headCursor: "0", hints: [] }),
   });
 }
 
@@ -39,16 +37,15 @@ const exactLead = {
 };
 
 describe("Coordination nudge eligibility compatibility", () => {
-  it("passes an exact lead without logicalWorkers to its injected derived-store boundary", async () => {
+  it("does not schedule an automatic observation without logical Worker authority", async () => {
     const calls: string[] = [];
     // This is a Coordination seam test. The durable port owns the strict
     // logical_workers_missing oracle in durable-model-tool-port.test.ts.
     const result = await serviceWithInjectedDerivedStore(exactLead, calls).readSyncNudgeDebt("/sessions/lead", ["root"]);
 
     expect(exactLead).not.toHaveProperty("logicalWorkers");
-    expect(result).toMatchObject({ kind: "eligible", requestedView: "snapshot", debtKey: expect.stringContaining("|undefined") });
-    expect((result as any).policyVersion).toBeUndefined();
-    expect(calls).toEqual(["binding:/sessions/lead", "hidden", "list", "read", "events"]);
+    expect(result).toMatchObject({ kind: "unavailable" });
+    expect(calls).toEqual(["binding:/sessions/lead", "hidden", "binding:/sessions/lead"]);
   });
 
   it("requires the current exact lead Membership before any nudge-derived read", async () => {

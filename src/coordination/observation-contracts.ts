@@ -30,6 +30,14 @@ export type CoordinationSyncResult =
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }
   | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string };
 
+/** A single nonblocking read. Quiet reads carry no model presentation or cursor change. */
+export type CoordinationSyncNowResult = CoordinationSyncResult | { kind: "quiet" };
+
+export type CoordinationSyncProbe =
+  | { kind: "prepared"; result: Extract<CoordinationSyncResult, { kind: "snapshot" | "updates" }>; updateCount: number; scopeKey: string; continuationEligible?: true }
+  | { kind: "quiet"; updateCount: 0; scopeKey: string }
+  | Extract<CoordinationSyncResult, { kind: "indeterminate" | "snapshot_required" | "contract_gap" | "unavailable" }>;
+
 export interface CoordinationPendingPresentation {
   sessionId: string;
   toolCallId: string;
@@ -37,6 +45,9 @@ export interface CoordinationPendingPresentation {
   resultDigest: string;
   head: number;
   epochId: string;
+  /** Hidden baseline used to select this result. Null denotes a new snapshot. */
+  baselineCursor?: string | null;
+  baselineAcknowledgedEntryId?: string | null;
 }
 
 /** A branch-local durable observation coordinate. */
@@ -55,6 +66,8 @@ export interface CoordinationPendingObservation<TResult = unknown> {
   resultDigest: string;
   head: number;
   epochId: string;
+  baselineCursor?: string | null;
+  baselineAcknowledgedEntryId?: string | null;
   result: TResult;
 }
 

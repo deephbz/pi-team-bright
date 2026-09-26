@@ -138,15 +138,11 @@ describe("Coordination hidden-observation port characterization", () => {
       readFailureHints: vi.fn(() => ({ hints: [], cursor: "0", headCursor: "0" })),
     }, undefined, {
       readHidden: vi.fn(async () => ({ kind: "missing" as const })),
-      readEvents: vi.fn(() => ({ events: [], cursor: "0", headCursor: "0", truncated: false })),
-      readFailureHints: vi.fn(() => ({ hints: [], headCursor: "0" })),
     });
 
     await expect(service.readTeamSync(sessionFile, "snapshot", new AbortController().signal, "normal"))
       .resolves.toMatchObject({ kind: "unavailable", reason: "no_active_team" });
-    await expect(service.readSyncNudgeDebt(sessionFile, ["root"])).resolves.toMatchObject({
-      kind: "eligible", requestedView: "snapshot", teamEpochId: "epoch-1", leaderSessionId: sessionFile, leaderMembershipId: "lead-1", branchLineage: ["root"],
-    });
+    await expect(service.readSyncNudgeDebt(sessionFile, ["root"])).resolves.toMatchObject({ kind: "unavailable" });
   });
 
   it("keeps hidden persistence, DTO liveness, and nudge actuation on separate static boundaries", () => {
