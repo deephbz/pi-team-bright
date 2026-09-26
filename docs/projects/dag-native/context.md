@@ -65,6 +65,10 @@ nonterminal Tasks, it advances from the first event to the current render time.
 Missing journal history displays `unknown`; the view never invents creation or
 completion times.
 
+The unreleased [Task timeline view](../task-timeline-view.md) adds an Attempt
+waterfall from graph authority transition times. The DAG's activity labels
+retain their journal-observation meaning. `v` switches views in the same pane.
+
 ## Contention-rebase diagnosis and repair
 
 The DAG branch now starts at documentation tip

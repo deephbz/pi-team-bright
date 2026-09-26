@@ -148,11 +148,22 @@ Task authority presents at most one ready Task to each stable Worker. Different
 Workers can execute the ready front in parallel. Several unordered ready Tasks
 for one Worker remain queued; add `needs` edges when their order matters.
 
-In Herdr, `/pi-team-graph` toggles a read-only graph pane in the exact current
-tab. An optional limit is `25`, `50`, `100`, `200`, or `all`. The pane supports
-TB and LR layouts, disconnected islands, pan and selection modes, bounded Task
-details, and terminal-owned semantic colors. It never schedules or changes a
-Task.
+In Herdr, `/pi-team-graph` opens or closes a read-only Task pane in the exact
+current tab. An optional limit is `25`, `50`, `100`, `200`, or `all`.
+
+The pane opens in DAG view. Press `v` to switch between DAG and Timeline.
+Both views use the same Task source and keep the selected Task, recent limit,
+and state filter. Press `Tab` for pan or selection mode, `f` to change the
+recent limit, `s` to change the state filter, and Enter for Task details.
+The DAG supports TB and LR layouts and disconnected islands.
+
+Timeline shows one row per Attempt, including retries. Its bars show elapsed
+calendar time with separate running and blocked segments. Active Attempts have
+an open end. These times come from recorded Task transitions; they do not
+measure model effort or prove that a Worker process is alive. Older Attempts
+without complete timing show `timing unavailable`. In Timeline, `+` and `-`
+zoom time, arrows pan, and Home restores the full time span. Neither view schedules or
+changes a Task.
 
 ## Candid limits
 

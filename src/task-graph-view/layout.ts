@@ -315,10 +315,10 @@ function terminalState(state: TaskGraphNodeState): boolean {
 }
 
 function timingLabel(node: TaskGraphViewNode, now: number): string {
-  if (!node.first_activity_at || !node.last_activity_at) return "updated unknown · elapsed unknown";
+  if (!node.first_activity_at || !node.last_activity_at) return "updated unknown · activity unknown";
   const updated = Date.parse(node.last_activity_at);
   const end = terminalState(node.state) ? updated : now;
-  return `updated ${formatTaskGraphDuration(Math.max(0, now - updated))} ago · elapsed ${formatTaskGraphDuration(Math.max(0, end - Date.parse(node.first_activity_at)))}`;
+  return `updated ${formatTaskGraphDuration(Math.max(0, now - updated))} ago · activity ${formatTaskGraphDuration(Math.max(0, end - Date.parse(node.first_activity_at)))}`;
 }
 
 function priorityLine(prefix: string, value: string, width: number): string {

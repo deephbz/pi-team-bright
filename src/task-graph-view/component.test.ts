@@ -60,7 +60,7 @@ describe("Task graph pane component", () => {
     expect(lines[1]).toContain("hidden 80 tasks/40 edges");
     expect(lines[2]).toMatch(/^Legend:/u);
     expect(rendered).toContain("island 1/20 · offset 0,0");
-    expect(rendered).toContain("updated 1h 0m ago · elapsed 2h 0m");
+    expect(rendered).toContain("updated 1h 0m ago · activity 2h 0m");
     expect(lines.at(-1)).toMatch(/^Shortcuts:/u);
     expect(requestRender).toHaveBeenCalledTimes(1);
   });

@@ -39,6 +39,17 @@ Implementation and five verification rounds are complete. The full suite passed
 checks passed, including provider failure, abort, and process-reload recovery.
 This candidate is unpublished; live settings and parent adoption are unchanged.
 
+## Unreleased Task timeline view
+
+`/pi-team-graph` keeps its dependency DAG as the initial view. The same pane
+can show a waterfall of recorded Attempts. Both views share one validated
+Task source, selection, recent limit, and state filter. The graph authority
+records transition times; the view derives elapsed and blocked spans from
+those records. Old Attempts without complete timing remain unavailable.
+The [work record](../projects/task-timeline-view.md) gives scope and verification.
+This changes internal recorded evidence and presentation; the public Membership
+observation protocol and HyperCarrier integration boundary remain unchanged.
+
 ## v0.18.0 publication evidence
 
 The exact published source is `f43d4739556f2ac4b82070fef64007a304801ef1`,

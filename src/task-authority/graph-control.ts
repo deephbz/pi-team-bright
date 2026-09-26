@@ -115,9 +115,14 @@ export interface GraphRevision {
   sequence: number;
   version: GraphVersionRef;
   tasks: StoredTaskDefinition[];
+  recorded_at?: string;
 }
 
-interface AttemptStartedEvent {
+interface RecordedEvent {
+  recorded_at?: string;
+}
+
+interface AttemptStartedEvent extends RecordedEvent {
   kind: "attempt_started";
   sequence: number;
   operationId: string;
@@ -131,7 +136,7 @@ interface AttemptStartedEvent {
   assignee: string;
 }
 
-interface AttemptBlockedEvent {
+interface AttemptBlockedEvent extends RecordedEvent {
   kind: "attempt_blocked";
   sequence: number;
   operationId: string;
@@ -139,14 +144,14 @@ interface AttemptBlockedEvent {
   evidence: string;
 }
 
-interface AttemptResumedEvent {
+interface AttemptResumedEvent extends RecordedEvent {
   kind: "attempt_resumed";
   sequence: number;
   operationId: string;
   attemptId: string;
 }
 
-interface AttemptCompletedEvent {
+interface AttemptCompletedEvent extends RecordedEvent {
   kind: "attempt_completed";
   sequence: number;
   operationId: string;
@@ -155,7 +160,7 @@ interface AttemptCompletedEvent {
   evidence: string;
 }
 
-interface AttemptSupersededEvent {
+interface AttemptSupersededEvent extends RecordedEvent {
   kind: "attempt_superseded";
   sequence: number;
   operationId: string;
@@ -163,7 +168,7 @@ interface AttemptSupersededEvent {
   reason: "graph_revised" | "repair_requested" | "dependency_cancelled";
 }
 
-interface TaskCancelledEvent {
+interface TaskCancelledEvent extends RecordedEvent {
   kind: "task_cancelled";
   sequence: number;
   operationId: string;
@@ -173,7 +178,7 @@ interface TaskCancelledEvent {
   reason: string;
 }
 
-interface TaskContextUpdatedEvent {
+interface TaskContextUpdatedEvent extends RecordedEvent {
   kind: "task_context_updated";
   sequence: number;
   operationId: string;
@@ -182,7 +187,7 @@ interface TaskContextUpdatedEvent {
   currentContext: string;
 }
 
-interface FailureEdgeTraversedEvent {
+interface FailureEdgeTraversedEvent extends RecordedEvent {
   kind: "failure_edge_traversed";
   sequence: number;
   operationId: string;
@@ -194,7 +199,7 @@ interface FailureEdgeTraversedEvent {
   traversal: number;
 }
 
-interface FailureEdgeExhaustedEvent {
+interface FailureEdgeExhaustedEvent extends RecordedEvent {
   kind: "failure_edge_exhausted";
   sequence: number;
   operationId: string;
@@ -338,8 +343,9 @@ export class GraphTaskController {
   private readonly graphRevisions: GraphRevision[];
   private readonly events: GraphControlEvent[];
   private readonly receipts: Map<string, StoredReceipt>;
+  private commandRecordedAt?: string;
 
-  constructor(snapshot?: GraphControlSnapshot) {
+  constructor(snapshot?: GraphControlSnapshot, private readonly clock: () => Date = () => new Date()) {
     if (snapshot && snapshot.schema !== "pi-team-bright-graph-control/1") {
       throw new GraphControlRefusal("invalid_graph", `Unsupported snapshot schema ${String(snapshot.schema)}.`);
     }
@@ -348,9 +354,9 @@ export class GraphTaskController {
     this.receipts = new Map((snapshot?.receipts ?? []).map(receipt => [receipt.operationId, clone(receipt)]));
   }
 
-  static recover(snapshot: GraphControlSnapshot): GraphTaskController {
+  static recover(snapshot: GraphControlSnapshot, clock?: () => Date): GraphTaskController {
     validateSnapshot(snapshot);
-    return new GraphTaskController(snapshot);
+    return new GraphTaskController(snapshot, clock);
   }
 
   snapshot(): GraphControlSnapshot {
@@ -412,7 +418,12 @@ export class GraphTaskController {
         ...reverseClosure([...directlyChanged], tasks),
       ]);
 
-      this.graphRevisions.push({ sequence: revisionSequence, version, tasks });
+      this.graphRevisions.push({
+        sequence: revisionSequence,
+        version,
+        tasks,
+        ...(this.commandRecordedAt ? { recorded_at: this.commandRecordedAt } : {}),
+      });
       for (const taskId of [...affected].sort()) {
         const attemptId = activeBefore.get(taskId)
           ?? attemptsBefore.findLast(attempt => attempt.taskId === taskId && attempt.current)?.id;
@@ -749,6 +760,7 @@ export class GraphTaskController {
     const eventLength = this.events.length;
     const receiptSize = this.receipts.size;
     try {
+      this.commandRecordedAt = this.clock().toISOString();
       const result = apply();
       this.receipts.set(operationId, { operationId, fingerprint, result: clone(result) });
       return { ...clone(result), replayed: false };
@@ -757,11 +769,17 @@ export class GraphTaskController {
       this.events.length = eventLength;
       if (this.receipts.size !== receiptSize) this.receipts.delete(operationId);
       throw error;
+    } finally {
+      this.commandRecordedAt = undefined;
     }
   }
 
   private append(event: GraphControlEventInput): void {
-    this.events.push({ ...event, sequence: this.nextSequence() } as GraphControlEvent);
+    this.events.push({
+      ...event,
+      sequence: this.nextSequence(),
+      ...(this.commandRecordedAt ? { recorded_at: this.commandRecordedAt } : {}),
+    } as GraphControlEvent);
   }
 
   private nextSequence(): number {
