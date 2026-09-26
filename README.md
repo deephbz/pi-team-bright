@@ -219,18 +219,23 @@ changes a Task.
 
 ## Install and upgrade
 
-Install the stable release by exact version:
+After publication, install `0.19.0` by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.18.0
+pi install npm:@hypercarrier/pi-team-bright@0.19.0
 ```
 
-Version `0.18.0` adds Worker model profiles and removes per-Task model selection.
-This is a breaking change. Finish or stop existing Teams under their original
-version, preserve their stores and Session logs, then start new Teams with
-`0.18.0`. Old graph snapshots with Task/Attempt model fields are refused; no
-migration runs. Update saved Task graphs to omit `model` and select aliases with
-`ensure_worker` instead. See the [release notes](https://github.com/deephbz/pi-team-bright/releases/tag/v0.18.0).
+Version `0.19.0` replaces model profiles and raw model defaults with named
+model roles. This is a breaking Worker-creation change. Finish or stop live
+Teams under their original version. Preserve their Team stores and native Pi
+Session logs. Update settings to `model_roles` and `default_model_role`, then
+start new Team epochs under `0.19.0`. Do not reload `0.19.0` into a live Team
+from an older release. See the [v0.19.0 release notes](docs/release/v0.19.0-release-notes.md)
+and the [upgrade steps](#upgrade-from-model-profiles).
+
+Version `0.18.0` added Worker model profiles and removed per-Task model
+selection. Its [release notes](docs/release/v0.18.0-release-notes.md) preserve
+that earlier upgrade boundary.
 
 Version `0.17.0` replaces the leader tool `task_create` with
 `task_graph_apply`. It also replaces authored Task status changes with explicit
@@ -255,9 +260,9 @@ The package owns its local Task backend through the exact runtime dependency
 `@beads/bd@1.1.0`; a separate global `bd` installation is not required.
 
 For an upgrade or rollback, restart each Pi process that must load the chosen
-extension. Do not recreate the Team only because the package version changed.
-Stop or migrate a Team only when release notes identify a real persistence
-contract change, or when a Team policy requires a new epoch.
+extension. Follow that release's Team boundary. Compatible patches do not
+require Team recreation; `0.19.0` requires new Team epochs for the model-role
+contract.
 
 ## Team pane layout settings
 
@@ -332,7 +337,7 @@ the current runtime model. Tasks have no model selector.
 
 ### Upgrade from model profiles
 
-This model-role contract is an unreleased breaking change from `0.18.0`.
+Version `0.19.0` replaces the `0.18.0` model-profile contract.
 Finish existing live Teams under their original version before switching.
 Preserve their stores and native Session logs.
 
@@ -342,7 +347,8 @@ Preserve their stores and native Session logs.
 3. Set `default_model_role` to the intended entry name. Remove
    `worker.default_model`. A role name alone does not make that role the default.
 4. Update saved Worker calls from `model` to `model_role`.
-5. Reload Pi and address any settings warning before creating Workers.
+5. Install `0.19.0` and restart Pi. Address any settings warning, then start
+   new Team epochs before creating Workers.
 
 A legacy Team with a raw model default cannot create new Workers through this
 contract. The refusal directs the operator to finish the old Team with its
