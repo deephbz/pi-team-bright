@@ -22,6 +22,7 @@ import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
 import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
+import { collectPtbDoctorContext, getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
@@ -87,6 +88,7 @@ export function createPiTeamSessionAdapter(options: {
   let workerResourcePolicy: WorkerResourcePolicy | undefined;
   let workerActiveToolBaseline: string[] | undefined;
   const settingsWarnings = createSettingsWarningPresenter();
+  let doctorGeneration = 0;
   const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
 
   const modelToolJourney = () => getModelToolJourney();
@@ -171,6 +173,63 @@ registerCommand?.("teamsync", {
     await frameworkSync.execute(teamName, "command", view);
   },
 });
+registerCommand?.("ptb", {
+  description: "Pi Team Bright help or an on-demand Team doctor turn",
+  getArgumentCompletions: getPtbArgumentCompletions,
+  handler: async (args: string, ctx: any) => {
+    const present = (text: string, level: "info" | "warning" | "error" = "info") => {
+      if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
+      else process.stderr.write(`${text}\n`);
+    };
+    const command = parsePtbCommand(args);
+    if (command.kind === "invalid") { present(PTB_COMMAND_USAGE, "warning"); return; }
+    if (command.kind === "help") {
+      present(`${PTB_COMMAND_USAGE}\n/ptb doctor sends a guide and sampled metadata to the agent and starts a model turn.`);
+      return;
+    }
+
+    const coordinates = () => ({
+      generation: doctorGeneration,
+      sessionId: ctx.sessionManager?.getSessionId?.() as string | undefined,
+      sessionFile: ctx.sessionManager?.getSessionFile?.() as string | undefined,
+      leafId: ctx.sessionManager?.getLeafId?.() as string | null | undefined,
+      boundTeamName: teamName,
+      role: agentName,
+      membershipId: currentMembershipId,
+    });
+    const owner = coordinates();
+    const selectedTeamName = command.teamName ?? owner.boundTeamName ?? undefined;
+    let content: string;
+    try {
+      content = await collectPtbDoctorContext({
+        requestedAt: new Date().toISOString(),
+        selectedTeamName,
+        boundTeamName: owner.boundTeamName ?? undefined,
+        role: owner.role,
+        membershipId: owner.membershipId,
+        sessionId: owner.sessionId,
+        sessionFile: owner.sessionFile,
+        leafId: owner.leafId ?? undefined,
+      });
+    } catch {
+      present("Doctor guide or metadata is unavailable. Check the installed package and retry.", "error");
+      return;
+    }
+    const current = coordinates();
+    if (Object.keys(owner).some((key) => owner[key as keyof typeof owner] !== current[key as keyof typeof current])) {
+      present("Doctor request cancelled because the Session or Team changed. Run /ptb doctor again.", "warning");
+      return;
+    }
+    const queued = ctx.isIdle?.() !== true;
+    try {
+      pi.sendMessage({ customType: PTB_DOCTOR_CUSTOM_TYPE, content, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+      present(queued ? "Doctor queued after current turn." : "Doctor context submitted.");
+    } catch {
+      present("Doctor context could not be sent. Retry /ptb doctor.", "error");
+    }
+  },
+});
+
 registerCommand?.("pi-team-graph", {
   description: "Toggle a read-only Task graph pane in this exact Herdr tab (limit: 25, 50, 100, 200, or all)",
   getArgumentCompletions: (prefix: string) => ["25", "50", "100", "200", "all"]
@@ -440,6 +499,7 @@ async function refuseTeamSession(
   admission: Extract<TeamSessionAdmission, { kind: "refused" }>,
   shutdownCandidate = false,
 ) {
+  doctorGeneration++;
   if (!shutdownCandidate) {
     await teamSessionLifecycleService.recordAdmissionFailure(refusedTeam, role).catch(() => undefined);
   }
@@ -459,6 +519,7 @@ function registerSessionHooks() {
   pi.on("session_before_tree", () => { frameworkSync.invalidate(); });
   pi.on("session_before_compact", () => { frameworkSync.invalidate(); });
   pi.on("session_start", async (event, ctx) => {
+  doctorGeneration++;
   paths.ensureDirs();
   stopDeliveries();
   leaderRunSettled = false;
@@ -594,6 +655,7 @@ function registerSessionHooks() {
 
 pi.on("session_shutdown", async (event, ctx) => {
   settingsWarnings.clear(ctx);
+  doctorGeneration++;
   if (isTeammate && event.reason === "reload") {
     // Pi captures active tools after this hook and replaces this extension
     // closure. Restore the immutable baseline before that capture.
@@ -616,6 +678,10 @@ pi.on("session_shutdown", async (event, ctx) => {
   taskGraphPane.shutdown();
   clearTeamFooter(ctx);
 });
+
+pi.on("session_before_switch", () => { doctorGeneration++; });
+pi.on("session_before_fork", () => { doctorGeneration++; });
+pi.on("session_tree", () => { doctorGeneration++; });
 
 pi.on("model_select", async (event) => {
   footerModel = event.model;
@@ -754,6 +820,7 @@ pi.on("before_agent_start", async (event, ctx) => {
   return {
     modelToolLifecycle: {
       teamCreated: async (targetTeamName, sessionFile) => {
+        doctorGeneration++;
         isTeammate = false;
         agentName = "team-lead";
         teamName = targetTeamName;
@@ -775,6 +842,7 @@ pi.on("before_agent_start", async (event, ctx) => {
       shutdownTeam: async (targetTeamName) => {
         const result = await teamLifecycleService.shutdownTeam(targetTeamName);
         if (result.kind === "shutdown" && targetTeamName === teamName) {
+          doctorGeneration++;
           stopDeliveries();
           teamName = null;
           currentMembershipId = undefined;

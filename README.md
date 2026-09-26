@@ -131,6 +131,18 @@ Alerts or context updates. Alerts are only for exceptional clarification,
 attention, or announcements. They never assign, advance, block, or complete work,
 and they are not a chat-based substitute for Tasks.
 
+## Diagnose a Team problem
+
+Run `/ptb doctor` to send the repair guide and Team metadata observed at
+invocation to the agent. The command starts a diagnostic turn. During an active turn, Pi queues
+it as a follow-up. Use `/ptb doctor <team-name>` to inspect a named Team from
+an unbound Session. Selection does not join the Team.
+
+The command reads local metadata and changes no Team state. The agent checks
+fresh evidence before a repair. Missing or damaged Team records remain visible
+in the diagnostic context. `/ptb` and `/ptb help` show usage without a model turn.
+Other PTB slash commands keep their current names.
+
 ## Mission graph semantics
 
 `task_graph_apply` atomically applies the complete assigned Task graph. On the

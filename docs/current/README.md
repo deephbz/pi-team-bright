@@ -58,6 +58,14 @@ bounded TLA+ checks and independent adversarial and process-recovery tests. This
 work does not change the published release or deployment topology. Its evidence
 and limits are separate from the v0.18.0 publication receipt.
 
+## Unreleased doctor command
+
+`/ptb doctor` loads the packaged repair guide and local Team metadata into a
+visible diagnostic turn. It can inspect an explicitly named Team without a
+current binding. The command changes no Team authority and leaves the existing
+slash commands in place. The [work record](../projects/ptb-doctor.md) owns its
+scope and verification. This change is not published.
+
 ## v0.18.0 publication evidence
 
 The exact published source is `f43d4739556f2ac4b82070fef64007a304801ef1`,
