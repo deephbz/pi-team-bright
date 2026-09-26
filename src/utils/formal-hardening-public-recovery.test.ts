@@ -129,6 +129,15 @@ describe("registered Task tools across process loss", () => {
       expect(reopened.results[2].details.kind).toBe("snapshot");
       expect(fs.readFileSync(graphFile, "utf8")).toBe(committedGraph);
       expect(fs.readFileSync(eventFile, "utf8")).toBe(publishedEvents);
+      const hiddenRoot = path.join(teamRoot, "hidden-observations");
+      const [epochDirectory] = fs.readdirSync(hiddenRoot);
+      const [projectionName] = fs.readdirSync(path.join(hiddenRoot, epochDirectory));
+      const projectionFile = path.join(hiddenRoot, epochDirectory, projectionName);
+      const acknowledgedSnapshot = fs.readFileSync(projectionFile, "utf8");
+      expect(JSON.parse(acknowledgedSnapshot)).toMatchObject({
+        acknowledgedEntryId: "persisted-sync",
+        teamEventCursor: String(publishedEvents.trim().split("\n").length),
+      });
 
       const sourceVersion = receipt.tasks_by_key.source.version;
       const claimed = await run("worker-a", [{ name: "task_update", id: "claim", params: {
@@ -154,6 +163,7 @@ describe("registered Task tools across process loss", () => {
           { name: "team_sync", id: "partial-sync", params: { view: "updates" } },
         ], false);
         expect(partial.results[0].details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+        expect(fs.readFileSync(projectionFile, "utf8")).toBe(acknowledgedSnapshot);
       } finally {
         fs.writeFileSync(graphFile, committedAfterAchieve);
       }
