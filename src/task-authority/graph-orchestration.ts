@@ -1,4 +1,4 @@
-import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import { DurableGraphTaskAuthority, GraphSnapshotCorruption } from "../adapters/durable-graph-task-authority";
 import type {
   TaskMutationCoordinates,
   TaskMutationPublicationPort,
@@ -139,6 +139,28 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
     return this.authority.readTasks(teamName, taskIds);
   }
 
+  private async needsReplayPublication(
+    teamName: string,
+    task: GraphTaskCard,
+    current: ReadonlyMap<string, GraphTaskCard>,
+    evidence: ReturnType<typeof changeEvidence> | { kind: "created" | "goal"; text: string },
+  ): Promise<boolean> {
+    // Replay repairs only the exact Task coordinate current in this authority
+    // view. A later commit may still overlap publication.
+    if (current.get(task.id)?.version !== task.version) return false;
+    if (!this.publication.hasTaskMutationPublication) {
+      throw new Error("Task publication recovery query is unavailable.");
+    }
+    return !await this.publication.hasTaskMutationPublication({
+      teamName,
+      taskId: task.id,
+      taskVersion: task.version as TaskVersionRef,
+      versionScope: "task_version",
+      evidenceKind: evidence.kind,
+      evidenceText: evidence.text,
+    });
+  }
+
   async applyGraph(teamName: string, input: GraphApplyInput): Promise<GraphApplyOrchestrationOutcome> {
     try {
       const config = await readConfig(teamName);
@@ -154,27 +176,29 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
       }
       const mutation = await this.authority.applyGraph(teamName, input);
       const warnings: string[] = [];
-      const currentTasks = graphTaskCoordinates(mutation.after);
-      const retiredTasks = supersededTaskCoordinates(mutation.before, mutation.after);
-      try {
+      const current = new Map(mutation.after.map((task) => [task.id, task]));
+      if (mutation.operationAuthoritySequence === mutation.authoritySequence) try {
         await this.retirement.retireGraphRevision({
           teamName,
-          graphVersion: mutation.result.graphVersion,
-          graphSequence: mutation.graphSequence,
-          authoritySequence: mutation.authoritySequence,
+          graphVersion: mutation.operationGraphVersion,
+          graphSequence: mutation.operationGraphSequence,
+          authoritySequence: mutation.operationAuthoritySequence,
           operationId: mutation.result.operationId,
-          currentTasks,
-          retiredTasks,
+          currentTasks: graphTaskCoordinates(mutation.operationAfter),
+          retiredTasks: supersededTaskCoordinates(mutation.operationBefore, mutation.operationAfter),
         });
       } catch (error) {
         warnings.push(`Task graph committed but graph-revision retirement failed: ${error instanceof Error ? error.message : String(error)}`);
       }
-      if (!mutation.result.replayed) {
-        const before = new Map(mutation.before.map((task) => [task.id, task]));
-        for (const task of mutation.after) {
+      {
+        const before = new Map(mutation.operationBefore.map((task) => [task.id, task]));
+        for (const task of mutation.operationAfter) {
           const prior = before.get(task.id);
           if (prior && JSON.stringify(prior) === JSON.stringify(task)) continue;
           try {
+            const evidence = { kind: prior ? "goal" as const : "created" as const,
+              text: `${prior ? "Task graph definition changed in" : "Task created by"} graph revision ${mutation.result.graphVersion}.` };
+            if (mutation.result.replayed && !await this.needsReplayPublication(teamName, task, current, evidence)) continue;
             const publication = await this.publication.publishTaskMutation({
               teamName,
               before: coordinates(prior ?? task),
@@ -182,10 +206,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
               created: !prior,
               kind: prior ? "task_changed" : "assigned",
               actor: "team-lead",
-              taskEventEvidence: [{
-                kind: prior ? "goal" : "created",
-                text: `${prior ? "Task graph definition changed in" : "Task created by"} graph revision ${mutation.result.graphVersion}.`,
-              }],
+              taskEventEvidence: [evidence],
               deliver: false,
               taskCard: task,
             });
@@ -208,6 +229,14 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
         deliveryWarnings: [...new Set(warnings)].sort(),
       };
     } catch (error) {
+      if (error instanceof GraphSnapshotCorruption) {
+        return {
+          kind: "unavailable",
+          operationId: input.operationId,
+          reason: "task_authority_unavailable",
+          message: error.message,
+        };
+      }
       if (error instanceof GraphControlRefusal) {
         return {
           kind: "refused",
@@ -230,13 +259,18 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
     try {
       const mutation = await this.authority.transition(teamName, input);
       const warnings: string[] = [];
-      if (!mutation.result.replayed) {
-        const before = new Map(mutation.before.map((task) => [task.id, task]));
-        for (const task of mutation.after) {
+      const current = new Map(mutation.after.map((task) => [task.id, task]));
+      {
+        const before = new Map(mutation.operationBefore.map((task) => [task.id, task]));
+        for (const task of mutation.operationAfter) {
           const prior = before.get(task.id);
           if (!prior || JSON.stringify(prior) === JSON.stringify(task)) continue;
           const direct = task.id === input.taskId;
           try {
+            const evidence = direct
+              ? changeEvidence(input, task)
+              : { kind: "status" as const, text: `Graph control derived ${task.status} after operation ${input.operationId}.` };
+            if (mutation.result.replayed && !await this.needsReplayPublication(teamName, task, current, evidence)) continue;
             const publication = await this.publication.publishTaskMutation({
               teamName,
               before: coordinates(prior),
@@ -244,9 +278,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
               created: false,
               kind: prior.status === task.status ? "note_appended" : "status_changed",
               actor,
-              taskEventEvidence: [direct
-                ? changeEvidence(input, task)
-                : { kind: "status", text: `Graph control derived ${task.status} after operation ${input.operationId}.` }],
+              taskEventEvidence: [evidence],
               deliver: false,
               taskCard: task,
             });
@@ -256,15 +288,15 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
           }
         }
       }
-      try {
+      if (mutation.operationAuthoritySequence === mutation.authoritySequence) try {
         await this.retirement.retireGraphRevision({
           teamName,
-          graphVersion: mutation.graphVersion,
-          graphSequence: mutation.graphSequence,
-          authoritySequence: mutation.authoritySequence,
+          graphVersion: mutation.operationGraphVersion,
+          graphSequence: mutation.operationGraphSequence,
+          authoritySequence: mutation.operationAuthoritySequence,
           operationId: mutation.result.operationId,
-          currentTasks: graphTaskCoordinates(mutation.after),
-          retiredTasks: supersededTaskCoordinates(mutation.before, mutation.after),
+          currentTasks: graphTaskCoordinates(mutation.operationAfter),
+          retiredTasks: supersededTaskCoordinates(mutation.operationBefore, mutation.operationAfter),
         });
       } catch (error) {
         warnings.push(`Task transition committed but graph-revision retirement failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -285,6 +317,15 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
         deliveryWarnings: [...new Set(warnings)].sort(),
       };
     } catch (error) {
+      if (error instanceof GraphSnapshotCorruption) {
+        return {
+          kind: "unavailable",
+          operationId: input.operationId,
+          taskId: input.taskId,
+          reason: "task_authority_unavailable",
+          message: error.message,
+        };
+      }
       if (error instanceof GraphControlRefusal) {
         let currentTask: GraphTaskCard | undefined;
         try { currentTask = await this.authority.readTask(teamName, input.taskId); } catch {}

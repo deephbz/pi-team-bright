@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
-import { configPath, graphRevisionRetirementPath, taskDeliveryRecoveryPath, taskOwnerTransitionOutboxPath, teamDir } from "../utils/paths";
+import { configPath, graphRevisionRetirementPath, graphTaskAuthorityPath, taskDeliveryRecoveryPath, taskOwnerTransitionOutboxPath, teamDir } from "../utils/paths";
 import {
   readCurrentTaskDeliveries,
   readOwnerTransitionIntents,
@@ -17,7 +17,7 @@ import {
 import { writeConfigAtomic } from "../utils/teams";
 import { readGraphRevisionRetirement, recordGraphRevisionRetirement } from "../utils/graph-revision-retirement";
 import type { TeamConfig } from "../team-authority/contracts";
-import type { GraphApplyInput } from "./graph-control";
+import type { GraphApplyInput, GraphControlSnapshot } from "./graph-control";
 import { DurableGraphTaskOrchestration } from "./graph-orchestration";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 
@@ -93,6 +93,63 @@ afterEach(() => {
 });
 
 describe("complete graph replacement coherence", () => {
+  it("reports corrupt graph authority as unavailable while invalid graph input remains a refusal", async () => {
+    const { teamName, orchestration } = fixture("corrupt-authority-diagnostic");
+    const invalid = await orchestration.applyGraph(teamName, {
+      operationId: "invalid-definition",
+      tasks: [
+        { key: "same", title: "first", goal: "First goal.", assignee: "worker" },
+        { key: "same", title: "second", goal: "Second goal.", assignee: "worker" },
+      ],
+    });
+    expect(invalid).toMatchObject({ kind: "refused", reason: "invalid_graph" });
+
+    const first = await orchestration.applyGraph(teamName, graph("valid-first", undefined, ["keep"]));
+    if (first.kind !== "applied") throw new Error(first.message);
+    fs.writeFileSync(graphTaskAuthorityPath(teamName), "{malformed snapshot");
+
+    expect(await orchestration.applyGraph(teamName, graph("valid-next", first.graphVersion, ["keep"])))
+      .toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+    expect(await orchestration.transition(teamName, {
+      taskId: "keep", operationId: "claim-after-corruption",
+      expectedVersion: first.tasks[0].version as TaskVersionRef, transition: "claim", worker: "worker",
+    }, "worker")).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+  });
+
+  it("reports a forged stored transition receipt as unavailable on exact replay", async () => {
+    const { teamName, orchestration } = fixture("forged-transition-receipt");
+    const applied = await orchestration.applyGraph(teamName, graph("receipt-first", undefined, ["keep"]));
+    if (applied.kind !== "applied") throw new Error(applied.message);
+    const claim = {
+      taskId: "keep", operationId: "claim-receipt",
+      expectedVersion: applied.tasks[0].version as TaskVersionRef,
+      transition: "claim" as const, worker: "worker",
+    };
+    const first = await orchestration.transition(teamName, claim, "worker");
+    if (first.kind !== "updated") throw new Error(first.message);
+
+    const file = graphTaskAuthorityPath(teamName);
+    const snapshot = JSON.parse(fs.readFileSync(file, "utf8")) as GraphControlSnapshot;
+    const receipt = snapshot.receipts.find((candidate) => candidate.operationId === claim.operationId);
+    if (!receipt || receipt.result.kind !== "task_transitioned") throw new Error("Expected transition receipt.");
+    receipt.result.readyTaskIds = ["forged"];
+    fs.writeFileSync(file, JSON.stringify(snapshot));
+
+    expect(await orchestration.transition(teamName, claim, "worker"))
+      .toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+  });
+
+  it("reports a parseable graph snapshot with malformed collections as unavailable", async () => {
+    const { teamName, orchestration } = fixture("malformed-collection");
+    fs.mkdirSync(path.dirname(graphTaskAuthorityPath(teamName)), { recursive: true });
+    fs.writeFileSync(graphTaskAuthorityPath(teamName), JSON.stringify({
+      schema: "pi-team-bright-graph-control/1", graphRevisions: {}, events: [], receipts: [],
+    }));
+
+    expect(await orchestration.applyGraph(teamName, graph("valid-input-after-malformed-store", undefined, ["keep"])))
+      .toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
+  });
+
   it("fences pending Worker presentation while preserving delivery history", async () => {
     const { teamName, sessionFile, orchestration } = fixture("pending");
     const first = await orchestration.applyGraph(teamName, graph("apply-1"));
@@ -129,21 +186,16 @@ describe("complete graph replacement coherence", () => {
   });
 
   it("fences a retained Task old version before Worker presentation", async () => {
-    const { teamName, sessionFile, publication } = fixture("retained-version-pending");
-    const stale = deliveryTask("retained", "retained-v1");
-    const current = deliveryTask("retained", "retained-v2", { goal: "Complete the revised retained Task." });
-    await publication.enqueueReadyTask(teamName, stale, "worker");
-
-    await retireGraphRevisionDeliveries({
-      teamName,
-      graphVersion: "g_4444444444444444",
-      graphSequence: 1,
-      authoritySequence: 1,
-      operationId: "replace-retained-version",
-      currentTasks: [{ taskId: current.id, taskVersion: current.version }],
-      retiredTasks: [{ taskId: stale.id, taskVersion: stale.version }],
+    const { teamName, sessionFile, orchestration } = fixture("retained-version-pending");
+    const first = await orchestration.applyGraph(teamName, graph("retained-first", undefined, ["retained"]));
+    if (first.kind !== "applied") throw new Error(first.message);
+    const stale = first.tasks[0];
+    const second = await orchestration.applyGraph(teamName, {
+      ...graph("replace-retained-version", first.graphVersion, ["retained"]),
+      tasks: [{ key: "retained", title: "retained", goal: "Complete the revised retained Task.", assignee: "worker" }],
     });
-    await publication.enqueueReadyTask(teamName, current, "worker");
+    if (second.kind !== "applied") throw new Error(second.message);
+    const current = second.tasks[0];
 
     const sendMessage = vi.fn();
     const delivery = new TaskChangeDelivery({ sendMessage, appendEntry: vi.fn() }, {
@@ -170,20 +222,9 @@ describe("complete graph replacement coherence", () => {
   });
 
   it("fences an already staged delivery before successful-turn acknowledgement", async () => {
-    const { teamName, sessionFile, publication } = fixture("staged");
-    const version = taskVersionRef("staged-v1");
-    const staged = {
-      id: "staged",
-      title: "Staged",
-      goal: "Complete staged.",
-      current_context: "Ready.",
-      status: "open" as const,
-      assignee: "worker",
-      version,
-      relations: [],
-      dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
-    };
-    await publication.enqueueReadyTask(teamName, staged, "worker");
+    const { teamName, sessionFile, orchestration } = fixture("staged");
+    const first = await orchestration.applyGraph(teamName, graph("staged-first", undefined, ["staged"]));
+    if (first.kind !== "applied") throw new Error(first.message);
     const appendEntry = vi.fn();
     const delivery = new TaskChangeDelivery({ sendMessage: vi.fn(), appendEntry }, {
       teamName,
@@ -212,49 +253,37 @@ describe("complete graph replacement coherence", () => {
       },
     }])).toBe(1);
 
-    await retireGraphRevisionDeliveries({
-      teamName,
-      graphVersion: "g_3333333333333333",
-      graphSequence: 1,
-      authoritySequence: 1,
-      operationId: "remove-staged",
-      currentTasks: [{ taskId: "current", taskVersion: taskVersionRef("current-v1") }],
-      retiredTasks: [{ taskId: "staged", taskVersion: version }],
-    });
+    const second = await orchestration.applyGraph(teamName, graph("remove-staged", first.graphVersion, ["current"]));
+    if (second.kind !== "applied") throw new Error(second.message);
     await expect(delivery.commitPresentedAfterSuccessfulTurn("stop")).resolves.toBe(0);
     expect(appendEntry).not.toHaveBeenCalled();
     const historical = await readTaskDeliveries(teamName, "worker");
-    expect(historical).toEqual([
+    expect(historical).toEqual(expect.arrayContaining([
       expect.objectContaining({ ref: expect.objectContaining({ taskId: "staged" }), retiredAt: expect.any(String) }),
-    ]);
-    expect(historical[0].successfulTurnAckAt).toBeUndefined();
+    ]));
+    expect(historical.find((record) => record.ref.taskId === "staged")?.successfulTurnAckAt).toBeUndefined();
     delivery.stop();
   });
 
   it("does not record tool-post-state acknowledgement for a superseded retained version", async () => {
-    const { teamName, sessionFile, publication } = fixture("retained-version-suppression");
-    const stale = deliveryTask("retained", "retained-suppression-v1");
-    const current = deliveryTask("retained", "retained-suppression-v2", { goal: "Current suppression coordinate." });
-    await publication.enqueueReadyTask(teamName, stale, "worker");
-    await retireGraphRevisionDeliveries({
-      teamName,
-      graphVersion: "g_9999999999999999",
-      graphSequence: 1,
-      authoritySequence: 1,
-      operationId: "replace-before-suppression",
-      currentTasks: [{ taskId: current.id, taskVersion: current.version }],
-      retiredTasks: [{ taskId: stale.id, taskVersion: stale.version }],
+    const { teamName, sessionFile, orchestration } = fixture("retained-version-suppression");
+    const first = await orchestration.applyGraph(teamName, graph("suppression-first", undefined, ["retained"]));
+    if (first.kind !== "applied") throw new Error(first.message);
+    const stale = first.tasks[0];
+    const second = await orchestration.applyGraph(teamName, {
+      ...graph("replace-before-suppression", first.graphVersion, ["retained"]),
+      tasks: [{ key: "retained", title: "retained", goal: "Current suppression coordinate.", assignee: "worker" }],
     });
+    if (second.kind !== "applied") throw new Error(second.message);
 
     await suppressTaskVersionForSession(teamName, "worker", sessionFile, stale);
     expect(await readTaskDeliveryTombstones(teamName, "worker")).toEqual([]);
   });
 
   it("fences a retained Task old version after staging and before successful-turn acknowledgement", async () => {
-    const { teamName, sessionFile, publication } = fixture("retained-version-staged");
-    const stale = deliveryTask("retained", "retained-staged-v1");
-    const current = deliveryTask("retained", "retained-staged-v2", { goal: "Use revised evidence." });
-    await publication.enqueueReadyTask(teamName, stale, "worker");
+    const { teamName, sessionFile, orchestration } = fixture("retained-version-staged");
+    const first = await orchestration.applyGraph(teamName, graph("retained-staged-first", undefined, ["retained"]));
+    if (first.kind !== "applied") throw new Error(first.message);
     const appendEntry = vi.fn();
     const delivery = new TaskChangeDelivery({ sendMessage: vi.fn(), appendEntry }, {
       teamName,
@@ -282,15 +311,11 @@ describe("complete graph replacement coherence", () => {
       },
     }])).toBe(1);
 
-    await retireGraphRevisionDeliveries({
-      teamName,
-      graphVersion: "g_5555555555555555",
-      graphSequence: 1,
-      authoritySequence: 1,
-      operationId: "replace-staged-retained-version",
-      currentTasks: [{ taskId: current.id, taskVersion: current.version }],
-      retiredTasks: [{ taskId: stale.id, taskVersion: stale.version }],
+    const second = await orchestration.applyGraph(teamName, {
+      ...graph("replace-staged-retained-version", first.graphVersion, ["retained"]),
+      tasks: [{ key: "retained", title: "retained", goal: "Use revised evidence.", assignee: "worker" }],
     });
+    if (second.kind !== "applied") throw new Error(second.message);
     await expect(delivery.commitPresentedAfterSuccessfulTurn("stop")).resolves.toBe(0);
     expect(appendEntry).not.toHaveBeenCalled();
     delivery.stop();
