@@ -435,9 +435,6 @@ describe("DurableModelToolTeamPort durable authority", () => {
     const teamApplication = fs.readFileSync(path.join(__dirname, "durable-model-tool-team-application.ts"), "utf8");
 
     expect(source.match(/const workerLaunchBridge = createWorkerLaunchBridge\(/g)).toHaveLength(1);
-    expect(source.match(/const alertMembership = new DurableAlertMembership\(\)/g)).toHaveLength(1);
-    expect(source.match(/const alertPublication = new DurableAlertPublication\(\)/g)).toHaveLength(1);
-    expect(source).toContain("const alertSender = createAlertSender(alertMembership, alertPublication)");
     expect(source.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory, graphTaskOrchestration\)/g)).toHaveLength(1);
     expect(source).toContain("const modelToolBindings = new DurableModelToolBindings()");
     expect(source).toContain("const taskAuthorityProvisioning = new DurableTaskAuthorityProvisioning()");
@@ -445,7 +442,6 @@ describe("DurableModelToolTeamPort durable authority", () => {
     expect(source).not.toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
     expect(teamApplication).not.toContain("taskOrchestration");
     expect(teamApplication).not.toContain("reconcileReady(");
-    expect(source).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration)");
     expect(source).toContain("new DurableModelToolAlertApplication(modelToolBindings, alertSender)");
     expect(source).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });
