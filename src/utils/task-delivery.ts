@@ -19,9 +19,9 @@ import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { TaskReconciliationQuery } from "../task-authority/contracts";
 import type { GraphRevisionRetirementInput } from "../task-authority/graph-revision-retirement";
 import {
-  readGraphRevisionRetirementLocked,
   recordGraphRevisionRetirementLocked,
   taskIsCurrentInGraphLocked,
+  readCurrentGraphTaskCoordinatesLocked,
 } from "./graph-revision-retirement";
 
 export const TASK_CHANGE_CUSTOM_TYPE = "pi-team-bright.task-change";
@@ -676,9 +676,8 @@ export async function readTaskDeliveries(teamName: string, recipient: string): P
 /** Read current records while the caller owns the graph-revision fence lock. */
 async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
   const records = await readTaskDeliveries(teamName, recipient);
-  const retirement = readGraphRevisionRetirementLocked(teamName);
-  if (!retirement) return records.filter((record) => !record.retiredAt);
-  const current = new Set(retirement.current.currentTasks.map((task) => `${task.taskId}\u0000${task.taskVersion}`));
+  const current = readCurrentGraphTaskCoordinatesLocked(teamName);
+  if (!current) return records.filter((record) => !record.retiredAt);
   return records.filter((record) => !record.retiredAt && current.has(`${record.ref.taskId}\u0000${record.ref.version}`));
 }
 
@@ -1037,12 +1036,23 @@ export class TaskChangeDelivery {
     if (presented.size > 0) {
       const records = (await this.eligible()).filter((record) => presented.has(record.deliveryId));
       if (this.stopped || generation !== this.generation) return;
-      if (records.length > 0) this.sink.sendMessage({
-        customType: TASK_CHANGE_RESUME_TYPE,
-        content: "Resume the already-recorded Task changes. Full payloads are in preceding canonical custom entries.",
-        display: false,
-        details: this.details(records),
-      }, { triggerTurn: true, deliverAs: "steer" });
+      if (records.length > 0) await this.options.membership.withCurrentRecipient({
+        teamName: this.options.teamName,
+        recipient: this.options.recipient,
+        sessionFile: this.options.sessionFile,
+        membershipId: this.resolvedMembershipId,
+      }, async () => withLock(fenceFile, async () => {
+        const currentIds = new Set(records.map((record) => record.deliveryId));
+        const current = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
+          .filter((record) => currentIds.has(record.deliveryId));
+        if (this.stopped || generation !== this.generation || current.length === 0) return;
+        this.sink.sendMessage({
+          customType: TASK_CHANGE_RESUME_TYPE,
+          content: "Resume the already-recorded Task changes. Full payloads are in preceding canonical custom entries.",
+          display: false,
+          details: this.details(current),
+        }, { triggerTurn: true, deliverAs: "steer" });
+      }));
     }
     await this.scan();
   }
@@ -1180,7 +1190,13 @@ export class TaskChangeDelivery {
         recipient: this.options.recipient,
         sessionFile: this.options.sessionFile,
         membershipId: this.resolvedMembershipId,
-      }, async () => this.sink.sendMessage({ customType: TASK_CHANGE_CUSTOM_TYPE, content: formatTaskChangeBatch(records), display: true, details: this.details(records) }, { triggerTurn: true, deliverAs: "steer" }));
+      }, async () => withLock(graphRevisionRetirementPath(this.options.teamName), async () => {
+        const ids = new Set(records.map((record) => record.deliveryId));
+        const current = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
+          .filter((record) => ids.has(record.deliveryId));
+        if (this.stopped || generation !== this.generation || current.length === 0) return;
+        this.sink.sendMessage({ customType: TASK_CHANGE_CUSTOM_TYPE, content: formatTaskChangeBatch(current), display: true, details: this.details(current) }, { triggerTurn: true, deliverAs: "steer" });
+      }));
     } catch (error) {
       for (const record of records) this.attempted.delete(record.deliveryId);
       throw error;

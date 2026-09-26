@@ -186,7 +186,9 @@ export interface TaskMutationPublicationRecoveryInput {
   teamName: string;
   taskId: string;
   taskVersion: TaskVersionRef;
-  evidenceKind: "created" | "relation";
+  /** Legacy operation evidence follows a Task across versions; graph evidence requires the exact committed version. */
+  versionScope?: "task" | "task_version";
+  evidenceKind: "created" | "relation" | "goal" | "status" | "note" | "blocker" | "decision" | "result";
   evidenceText: string;
 }
 

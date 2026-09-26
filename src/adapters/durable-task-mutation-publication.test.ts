@@ -109,6 +109,23 @@ describe("DurableTaskMutationPublication", () => {
     });
   });
 
+  it("matches operation evidence across Task versions unless exact graph scope is requested", async () => {
+    const event = {
+      type: "task", ref: { taskId: "task-1", version: before.version },
+      taskEvidence: { kind: "created", text: "Created by operation op-1." },
+    };
+    calls.readEvents.mockReturnValue({ events: [event], truncated: false });
+    calls.projectEvidence.mockImplementation((candidate: typeof event) => candidate.taskEvidence);
+    const bridge = new DurableTaskMutationPublication();
+    const query = {
+      teamName: "publication-team", taskId: "task-1", taskVersion: after.version,
+      evidenceKind: "created" as const, evidenceText: "Created by operation op-1.",
+    };
+
+    await expect(bridge.hasTaskMutationPublication(query)).resolves.toBe(true);
+    await expect(bridge.hasTaskMutationPublication({ ...query, versionScope: "task_version" })).resolves.toBe(false);
+  });
+
   it("records an rc.10 failed-event hint before serial delivery and inline recovery", async () => {
     calls.append.mockImplementationOnce(async () => {
       calls.order.push("event");

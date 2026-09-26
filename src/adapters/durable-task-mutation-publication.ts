@@ -78,6 +78,7 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
       const batch = readTeamEvents(input.teamName, cursor === undefined ? {} : { afterCursor: cursor });
       if (batch.events.some((event) => event.type === "task"
         && event.ref.taskId === input.taskId
+        && (input.versionScope !== "task_version" || event.ref.version === input.taskVersion)
         && projectTaskEventEvidence(event)?.kind === input.evidenceKind
         && projectTaskEventEvidence(event)?.text === input.evidenceText)) return true;
       if (!batch.truncated) return false;
