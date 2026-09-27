@@ -1,9 +1,16 @@
 import type { TSchema } from "typebox";
-import { ModelResultSchemas, type ProjectedTool } from "./result-projection";
+import { ModelResultSchemas, projectToolResult, type ProjectedTool } from "./result-projection";
 import { projectModelToolTuiMessage, projectToolTuiMessage } from "./tui-projection";
 import { projectionAnsi, projectionLines, type PiTeamBrightTuiMessage } from "./tui-message-projection";
 import { projectDirectMessage, projectSyncNudgeMessage, projectTaskChangeMessage } from "./custom-message-projection";
-import { createSyncNudgeRecord } from "../utils/sync-nudge";
+import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nudge";
+import { TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE } from "../utils/task-delivery";
+import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
+import {
+  FRAMEWORK_SYNC_MESSAGE_TYPE,
+  projectFrameworkSyncMessage,
+  type FrameworkSyncExecutionRecord,
+} from "../../extensions/framework-sync-execution";
 
 export const DISPLAYED_TOOL_TYPES = [
   "team_create",
@@ -21,11 +28,20 @@ export interface TuiMessageGalleryScenario {
   id: string;
   title: string;
   source: "tool" | "custom" | "diagnostic";
+  customTypes?: readonly string[];
   resultKind?: string;
   message: PiTeamBrightTuiMessage;
 }
 
 export type TuiMessageGalleryFormat = "plain" | "ansi" | "json";
+
+const populatedUpdates = {
+  kind: "updates" as const,
+  team_changes: [{ kind: "purpose" as const, text: "Release verification scope changed." }],
+  worker_changes: [],
+  task_changes: [],
+  alerts: [],
+};
 
 function kindValues(schema: any): string[] {
   if (typeof schema?.const === "string") return [schema.const];
@@ -157,6 +173,13 @@ function toolScenarios(): TuiMessageGalleryScenario[] {
     }),
   });
   scenarios.push({
+    id: "team_sync.updates-populated",
+    title: "team_sync: one accepted Team change",
+    source: "tool",
+    resultKind: "updates",
+    message: projectModelToolTuiMessage("team_sync", populatedUpdates),
+  });
+  scenarios.push({
     id: "task_graph_apply.delivery-warning",
     title: "task_graph_apply: committed with delivery warning",
     source: "tool",
@@ -207,10 +230,29 @@ function customScenarios(): TuiMessageGalleryScenario[] {
     presentedAt: "2026-08-14T12:00:01.000Z",
     policyVersion: "1",
   });
+  const frameworkRecord: FrameworkSyncExecutionRecord = {
+    version: 1,
+    provenance: "pi-team-bright/framework",
+    id: "framework-sync-gallery-1",
+    source: "automatic",
+    teamName: "release-team",
+    sessionId: "lead-session-1",
+    sessionFile: "/example/lead-session.jsonl",
+    branchLineage: ["root"],
+    toolName: "team_sync",
+    toolCallId: "framework-team-sync-gallery-1",
+    arguments: { view: "updates" },
+    result: populatedUpdates,
+    resultText: JSON.stringify(projectToolResult("team_sync", populatedUpdates)),
+    recordedAt: Date.parse("2026-09-27T00:00:00.000Z"),
+  };
+  const frameworkMessage = projectFrameworkSyncMessage({ details: { recordId: frameworkRecord.id, record: frameworkRecord } });
+  if (!frameworkMessage) throw new Error("The framework synchronization gallery fixture is invalid.");
   return [
-    { id: "custom.task-change", title: "Task assignment delivery", source: "custom", message: projectTaskChangeMessage({ content: taskContent, details: { deliveryIds: ["delivery-1"] } }) },
-    { id: "custom.direct-message", title: "Direct coordination delivery", source: "custom", message: projectDirectMessage({ content: directContent, details: { messageIds: ["alert-1"] } }) },
-    { id: "custom.sync-nudge", title: "Team synchronization nudge", source: "custom", message: projectSyncNudgeMessage({ details: nudge })! },
+    { id: "custom.task-change", title: "Task assignment delivery", source: "custom", customTypes: [TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE], message: projectTaskChangeMessage({ content: taskContent, details: { deliveryIds: ["delivery-1"] } }) },
+    { id: "custom.direct-message", title: "Direct coordination delivery", source: "custom", customTypes: [DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE], message: projectDirectMessage({ content: directContent, details: { messageIds: ["alert-1"] } }) },
+    { id: "custom.sync-nudge", title: "Team synchronization nudge", source: "custom", customTypes: [SYNC_NUDGE_CUSTOM_TYPE], message: projectSyncNudgeMessage({ details: nudge })! },
+    { id: "custom.framework-sync", title: "Framework team_sync result", source: "custom", customTypes: [FRAMEWORK_SYNC_MESSAGE_TYPE], message: frameworkMessage },
     { id: "custom.task-change-malformed", title: "Malformed Task delivery projection", source: "diagnostic", message: projectTaskChangeMessage({ content: "not JSON", details: { deliveryIds: ["delivery-bad"] } }) },
     { id: "custom.direct-message-malformed", title: "Malformed coordination projection", source: "diagnostic", message: projectDirectMessage({ content: "not JSON", details: { messageIds: ["alert-bad"] } }) },
   ];
@@ -241,8 +283,10 @@ export function exportTuiMessageGallery(options: {
   format: TuiMessageGalleryFormat;
   expanded: boolean;
   width?: number;
+  scenarioId?: string;
 }): string {
-  const scenarios = tuiMessageGallery();
+  const scenarios = tuiMessageGallery().filter((scenario) => !options.scenarioId || scenario.id === options.scenarioId);
+  if (scenarios.length === 0) throw new Error(`Unknown message gallery scenario: ${options.scenarioId}`);
   if (options.format === "json") return `${JSON.stringify({
     schema: "pi-team-bright/tui-message-gallery/1",
     expanded: options.expanded,
@@ -251,6 +295,7 @@ export function exportTuiMessageGallery(options: {
       id: scenario.id,
       title: scenario.title,
       source: scenario.source,
+      customTypes: scenario.customTypes,
       resultKind: scenario.resultKind,
       projection: scenario.message,
       lines: projectionLines(scenario.message, { expanded: options.expanded, width: options.width }),
