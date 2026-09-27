@@ -53,13 +53,13 @@
     "qa:tui-messages:export": "ts-node --transpile-only src/cli/tui-message-gallery.ts --format plain",
     "qa:tui-messages:export-expanded": "ts-node --transpile-only src/cli/tui-message-gallery.ts --format plain --expanded",
     "qa:tui-messages:gallery": "ts-node --transpile-only src/cli/tui-message-gallery.ts",
-    "qa:tui-messages:check": "vitest run src/model-tool-contract/tui-message-gallery.test.ts",
+    "qa:tui-messages:check": "vitest run src/model-tool-contract/tui-message-gallery.test.ts src/model-tool-contract/tui-message-projection.test.ts",
     "test:lanes": "node scripts/verify-test-lanes.cjs",
     "verify:formal": "bash scripts/formal-check.sh",
     "review:tui": "npm run qa:tui-messages:gallery --",
     "review:palette": "ts-node --transpile-only src/cli/ptb-palette-gallery.ts",
     "review:graph": "npm run task-dag-islands:gallery --",
-    "review:check": "npm run typecheck && vitest run src/model-tool-contract/tui-message-gallery.test.ts src/model-tool-contract/tui-message-gallery-component.test.ts src/task-graph-view/gallery-config.test.ts src/task-graph-view/gallery-component.test.ts src/task-graph-view/sentinel.test.ts src/task-graph-view/task-timeline.integration.test.ts extensions/ptb-palette.test.ts extensions/ptb-command-palette.test.ts src/utils/ptb-command.test.ts src/utils/ptb-settings-editor.test.ts"
+    "review:check": "npm run typecheck && vitest run src/model-tool-contract/tui-message-gallery.test.ts src/model-tool-contract/tui-message-gallery-component.test.ts src/model-tool-contract/tui-message-projection.test.ts src/task-graph-view/gallery-config.test.ts src/task-graph-view/gallery-component.test.ts src/task-graph-view/sentinel.test.ts src/task-graph-view/task-timeline.integration.test.ts extensions/ptb-palette.test.ts extensions/ptb-command-palette.test.ts src/utils/ptb-command.test.ts src/utils/ptb-settings-editor.test.ts"
   },
   "main": "extensions/index.ts",
   "exports": {

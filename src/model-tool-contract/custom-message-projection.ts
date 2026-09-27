@@ -31,9 +31,12 @@ function contentText(content: unknown): string {
 /** Parse the controlled final JSON value while ignoring historical prose headings. */
 export function parseCustomMessageDetail(content: unknown): unknown {
   const text = contentText(content);
-  const start = text.search(/^[{[]/m);
-  if (start < 0) throw new Error("Custom message has no JSON payload.");
-  return JSON.parse(text.slice(start));
+  let candidates = 0;
+  for (const match of text.matchAll(/^[ \t]*[{[]/gm)) {
+    if (++candidates > 32) break;
+    try { return JSON.parse(text.slice(match.index).trim()); } catch { /* Historical headings can begin with '['. */ }
+  }
+  throw new Error("Custom message has no valid JSON payload.");
 }
 
 const compact = (value: unknown, limit = 120): string => {
@@ -45,20 +48,27 @@ export function projectTaskChangeMessage(message: PiCustomMessage): PiTeamBright
   try {
     const detail = parseCustomMessageDetail(message.content) as any;
     if (!detail || !Array.isArray(detail.changes)) throw new Error("Task change payload is invalid.");
-    const lines = [`${detail.changes.length} Task change${detail.changes.length === 1 ? "" : "s"} delivered.`];
-    for (const change of detail.changes.slice(0, 6)) {
+    const changes: string[] = [];
+    for (const change of detail.changes) {
       const task = change?.task;
       if (!task || typeof task.id !== "string") continue;
       const assignee = task.assignee || "unassigned";
-      lines.push(`[${task.status ?? "unknown"}] ${task.id}@${assignee} · ${compact(task.title)}`);
+      changes.push(`[${task.status ?? "unknown"}] ${task.id}@${assignee} · ${compact(task.title)}`);
     }
-    if (detail.changes.length > 6) lines.push(`… ${detail.changes.length - 6} more; press Ctrl+O for JSON.`);
-    return { type: "task-change", tone: "info", lines, detail, provenance: "task-delivery" };
+    return {
+      type: "task-change", tone: "info", status: "Task change received",
+      summary: `${detail.changes.length} Task change${detail.changes.length === 1 ? "" : "s"} delivered.`,
+      body: changes.slice(0, 6),
+      expandedLines: changes.length > 6 ? ["All Task changes:", ...changes.slice(6)] : undefined,
+      detail, provenance: "task-delivery",
+    };
   } catch (error) {
     return {
       type: "task-change",
       tone: "error",
-      lines: ["✗ Task change presentation payload is malformed.", "  Press Ctrl+O to inspect the raw report."],
+      status: "presentation error",
+      summary: "Task change presentation payload is malformed.",
+      body: ["Expand to inspect the raw report."],
       detail: { issue: error instanceof Error ? error.message : String(error), content: message.content, delivery: message.details },
       provenance: "task-delivery",
     };
@@ -69,21 +79,64 @@ export function projectDirectMessage(message: PiCustomMessage): PiTeamBrightTuiM
   try {
     const detail = parseCustomMessageDetail(message.content) as any;
     if (!detail || !Array.isArray(detail.messages)) throw new Error("Direct message payload is invalid.");
-    const lines = [`${detail.messages.length} coordination message${detail.messages.length === 1 ? "" : "s"} delivered.`];
-    for (const item of detail.messages.slice(0, 6)) {
-      lines.push(`From ${compact(item?.from || "unknown")}: ${compact(item?.summary || item?.content || "(no content)")}`);
-    }
-    if (detail.messages.length > 6) lines.push(`… ${detail.messages.length - 6} more; press Ctrl+O for JSON.`);
-    return { type: "direct-message", tone: "info", lines, detail, provenance: "direct-delivery" };
+    const items = detail.messages as any[];
+    const preview = (item: any): string => `${compact(item?.from || "unknown")}: ${compact(item?.summary || item?.content || "(no content)")}`;
+    const full = (item: any): string => `From ${compact(item?.from || "unknown")} — ${String(item?.content || item?.summary || "(no content)")}`;
+    const single = items.length === 1;
+    return {
+      type: "direct-message", tone: "info", status: single ? "Alert received" : `${items.length} Alerts received`,
+      source: single ? `From ${compact(items[0]?.from || "unknown")}` : undefined,
+      summary: single ? compact(items[0]?.summary || items[0]?.content || "(no content)") : `${items.length} Alerts delivered.`,
+      body: single ? [] : items.slice(0, 6).map(preview),
+      expandedLines: ["Full Alert content:", ...items.map(full)],
+      detail, provenance: "direct-delivery",
+    };
   } catch (error) {
     return {
       type: "direct-message",
       tone: "error",
-      lines: ["✗ Coordination message presentation payload is malformed.", "  Press Ctrl+O to inspect the raw report."],
+      status: "presentation error",
+      summary: "Alert presentation payload is malformed.",
+      body: ["Expand to inspect the raw report."],
       detail: { issue: error instanceof Error ? error.message : String(error), content: message.content, delivery: message.details },
       provenance: "direct-delivery",
     };
   }
+}
+
+/**
+ * Project the /ptb doctor follow-up into a compact transcript item.
+ *
+ * The complete guide and sampled metadata remain in `content` for the model.
+ * The TUI keeps that payload behind Pi's normal expansion affordance so a
+ * repair guide does not push the active conversation off screen.
+ */
+export function projectDoctorMessage(message: PiCustomMessage): PiTeamBrightTuiMessage {
+  const content = contentText(message.content).trim();
+  if (!content) {
+    return {
+      type: "doctor",
+      tone: "error",
+      status: "presentation error",
+      summary: "Team doctor context is empty.",
+      body: ["Run /ptb doctor again to collect a fresh guide and metadata sample."],
+      detail: { issue: "empty_content", content: message.content, details: message.details },
+      provenance: "doctor",
+    };
+  }
+  const marker = "Invocation metadata (observations, not authority):";
+  const metadataIndex = content.indexOf(marker);
+  const metadataSummary = metadataIndex >= 0 ? "Guide and sampled Team metadata" : "Repair guide";
+  return {
+    type: "doctor",
+    tone: "info",
+    status: "Team doctor context ready",
+    summary: `${metadataSummary} sent to the model.`,
+    body: [],
+    detail: { content, details: message.details },
+    expandedLines: ["", "Agent context:", ...content.split("\n")],
+    provenance: "doctor",
+  };
 }
 
 export function projectSyncNudgeMessage(message: PiCustomMessage): PiTeamBrightTuiMessage | undefined {
@@ -92,7 +145,8 @@ export function projectSyncNudgeMessage(message: PiCustomMessage): PiTeamBrightT
   return {
     type: "sync-nudge",
     tone: "warning",
-    lines: [syncNudgeTuiLine(record)],
+    status: "Team sync needed",
+    summary: syncNudgeTuiLine(record),
     detail: record,
     provenance: "sync-nudge",
   };

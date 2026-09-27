@@ -10,6 +10,7 @@ They do not read or change live Teams and need no model or Beads process.
 npm run review:tui
 npm run review:tui -- --help
 npm run review:tui -- --scenario custom.framework-sync
+npm run review:tui -- --scenario custom.doctor --theme light
 ```
 
 Use `h`/`l` or left/right to select a scene, `j`/`k` or up/down to scroll,
@@ -20,6 +21,9 @@ The catalog covers every result kind for the nine tool families, registered
 custom-message identities, and curated success, refusal, warning, and malformed
 input examples. Tool headers and results appear together. Generated result
 samples provide variant coverage; curated scenes provide readable examples.
+The catalog also includes the `/ptb doctor` repair context. Interactive review
+accepts `--theme dark` or `--theme light` and delegates message layout and
+semantic roles to the production PTB renderer.
 This is representative display coverage, not every possible payload. Pi owns
 ordinary user-message rendering, settings dialogs, and command notifications;
 those native surfaces must also be reviewed in Pi when they change.
@@ -55,6 +59,7 @@ component or interaction tests and a fresh Pi TUI check.
 ```sh
 npm run review:tui -- --format plain --width 80
 npm run review:tui -- --scenario custom.framework-sync --format json --expanded
+npm run review:tui -- --scenario custom.doctor --format ansi --theme light --expanded --width 80
 npm run review:graph -- --plain --view dag --width 120 --rows 42
 npm run review:graph -- --plain --view timeline --width 80 --rows 24
 ```

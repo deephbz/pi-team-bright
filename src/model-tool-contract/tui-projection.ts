@@ -14,6 +14,7 @@ export interface TuiInput {
   details: unknown;
   expanded: boolean;
   isError?: boolean;
+  isPartial?: boolean;
 }
 
 const compact = (value: string, limit = 120): string => {
@@ -24,7 +25,7 @@ const quoted = (value: string): string => JSON.stringify(value);
 const status = (value: any): string => value.status;
 const owner = (value: any): string => value.assignee ? `@ ${value.assignee}` : "unassigned";
 
-const MODEL_ROLE_SETTINGS_HINT = `  Check Pi Team Bright settings. Example: ${piTeamBrightSettingsExamplePath}.`;
+const MODEL_ROLE_SETTINGS_HINT = `Check Pi Team Bright settings. Example: ${piTeamBrightSettingsExamplePath}.`;
 
 function withEnsureWorkerGuidance(tool: ProjectedTool, model: any, lines: string[]): string[] {
   if (tool !== "ensure_worker" || model.kind !== "refused"
@@ -105,7 +106,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
         lines.push(`Task ${quoted(change.task_id)} changed · ${change.current.status}${change.current.assignee ? ` · @ ${change.current.assignee}` : " · unassigned"}${blocker ? ` · blocker: ${compact(blocker.text)}` : ""}.`);
       }
     } else if (model.kind === "caught_up") lines.push("Caught up: no current Worker producer requires a wait.");
-    else lines.push(`${model.kind} · ${model.reason ?? "observation not advanced"}${model.message ? `: ${compact(model.message)}` : "."}`);
+    else lines.push(model.message ? compact(model.message) : `${model.reason ?? "Observation did not advance."}`);
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
   } else if (tool === "task_link") {
@@ -141,17 +142,51 @@ function toneFor(tool: ProjectedTool, model: any): { tone: TuiMessageTone; label
   return { tone: warning ? "warning" : "success", label: warning ? (partialTaskGraph || partialAlert ? "partial" : model.kind) : model.kind };
 }
 
+function fullTask(task: any): string[] {
+  if (!task || typeof task.id !== "string") return [];
+  return [
+    `Task ${quoted(task.id)} · ${task.status ?? "unknown"} · ${task.assignee ? `@ ${task.assignee}` : "unassigned"}`,
+    ...(typeof task.title === "string" ? [`Title: ${task.title}`] : []),
+    ...(typeof task.goal === "string" ? [`Goal: ${task.goal}`] : []),
+    ...(typeof task.current_context === "string" ? [`Context: ${task.current_context}`] : []),
+  ];
+}
+
+function toolExpandedLines(tool: ProjectedTool, model: any): string[] {
+  if (tool === "team_sync" && model.kind === "snapshot") return [
+    ...model.workers.map((worker: any) => `Worker ${quoted(worker.name)} · ${worker.carrier} · Tasks: ${worker.nonterminal_task_ids.join(", ") || "none"}`),
+    ...model.tasks.flatMap(fullTask),
+  ];
+  if (tool === "team_sync" && model.kind === "updates") return [
+    ...model.team_changes.map((change: any) => `Team: ${change.text}`),
+    ...model.worker_changes.map((change: any) => `Worker ${quoted(change.worker)} · ${change.kind}: ${change.text}`),
+    ...model.task_changes.flatMap((change: any) => fullTask(change.current)),
+    ...model.alerts.map((alert: any) => `Alert from ${alert.from} · ${alert.kind}${alert.task_id ? ` · Task ${quoted(alert.task_id)}` : ""}: ${alert.text}`),
+  ];
+  if (tool === "task_read" && model.kind === "found") return fullTask(model.task);
+  if (tool === "task_read" && model.kind === "task_read_batch") return model.outcomes.flatMap((outcome: any) =>
+    outcome.kind === "found" ? fullTask(outcome.task) : [`Task ${quoted(outcome.task_id)} · ${outcome.kind}${outcome.message ? `: ${outcome.message}` : ""}`]);
+  return [
+    ...(typeof model.message === "string" && model.message.length > 120 ? [`Full message: ${model.message}`] : []),
+    ...(model.current_task ? fullTask(model.current_task) : []),
+  ];
+}
+
 /** Project an already validated model result. The gallery uses this exhaustive seam. */
 export function projectModelToolTuiMessage(tool: ProjectedTool, model: any, detail: unknown = model): PiTeamBrightTuiMessage {
   const { tone, label } = toneFor(tool, model);
-  const lines = withEnsureWorkerGuidance(tool, model, [
-    `${tone === "success" ? "✓" : "!"} ${label}`,
-    ...toolLines(tool, model).map((line) => `  ${line}`),
-  ]);
+  const [rawSummary = "", ...body] = withEnsureWorkerGuidance(tool, model, toolLines(tool, model));
+  const status = label.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+  const kind = typeof model.kind === "string" ? model.kind : "";
+  const repeatedKind = [kind, kind.replace(/_/g, " ")].find((prefix) => prefix && rawSummary.startsWith(`${prefix} · `));
+  const summary = repeatedKind ? rawSummary.slice(repeatedKind.length + 3) : rawSummary;
   return {
     type: tool,
     tone,
-    lines,
+    status,
+    summary,
+    body,
+    expandedLines: toolExpandedLines(tool, model),
     detail,
     provenance: "tool-result",
   };
@@ -159,20 +194,22 @@ export function projectModelToolTuiMessage(tool: ProjectedTool, model: any, deta
 
 function errorMessage(input: TuiInput, issue: "execution_error" | "result_projection_error"): PiTeamBrightTuiMessage {
   const report = { tool: input.tool, issue, content: input.content ?? [], details: input.details };
-  const lines = [
-    `✗ ${issue === "execution_error" ? "execution error" : "result projection error"}`,
-    "  Press Ctrl+O to inspect the raw JSON report. Review sensitive fields before sharing.",
-  ];
   return {
     type: input.tool,
     tone: "error",
-    lines,
+    status: issue === "execution_error" ? "execution error" : "result projection error",
+    summary: "The tool result could not be displayed.",
+    body: ["Expand to inspect the raw report. Review sensitive fields before sharing."],
     detail: report,
     provenance: "tool-result",
   };
 }
 
 export function projectToolTuiMessage(input: TuiInput): PiTeamBrightTuiMessage {
+  if (input.isPartial) return {
+    type: input.tool, tone: "info", status: "In progress", summary: "Waiting for the complete tool result.",
+    detail: input.details ?? input.content ?? null, provenance: "tool-result",
+  };
   if (input.isError) return errorMessage(input, "execution_error");
   try {
     return projectModelToolTuiMessage(input.tool, projectToolResult(input.tool, input.details), input.details);
@@ -193,10 +230,11 @@ export function createToolCallRenderer(tool: ProjectedTool): RenderCall {
   return (_args, theme) => renderProjectionWithTheme({
     type: tool,
     tone: "info",
-    lines: [],
+    status: "",
+    summary: "",
     detail: null,
     provenance: "tool-result",
-  }, { expanded: false }, theme);
+  }, { expanded: false, includeHeader: true }, theme);
 }
 
 export function createToolResultRenderer(tool: ProjectedTool): RenderResult {
@@ -206,6 +244,7 @@ export function createToolResultRenderer(tool: ProjectedTool): RenderResult {
       content: result.content,
       details: result.details,
       expanded: options.expanded,
+      isPartial: options.isPartial,
       isError: (context as any)?.isError === true,
     }),
     { expanded: options.expanded, includeHeader: false },

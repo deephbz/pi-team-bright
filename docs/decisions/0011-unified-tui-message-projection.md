@@ -1,7 +1,19 @@
 # Decision 0011: Unified Pi Team Bright TUI message projection
 
 Date: 2026-08-14
-Status: accepted
+Status: superseded by the 2026-09-27 presentation contract below
+
+## Supersession
+
+The original decision used a raw `[pi-team-bright.<message-type>]` line as the
+visible header and treated the first body line as status. The current contract
+keeps one audience projection but stores status, summary, body, source, and
+diagnostic detail as separate fields. The renderer displays a short `PTB ·`
+header, an explicit status line, and a concise summary. Expanded mode shows
+human-readable content first and diagnostic JSON after it. Tool and custom
+messages use the same theme roles, padding, background, and Pi expansion
+affordance. The non-mutating gallery calls this production renderer and
+supports deterministic dark and light review themes.
 
 ## Decision
 

@@ -1,11 +1,13 @@
 import type { TSchema } from "typebox";
 import { ModelResultSchemas, projectToolResult, type ProjectedTool } from "./result-projection";
 import { projectModelToolTuiMessage, projectToolTuiMessage } from "./tui-projection";
-import { projectionAnsi, projectionLines, type PiTeamBrightTuiMessage } from "./tui-message-projection";
-import { projectDirectMessage, projectSyncNudgeMessage, projectTaskChangeMessage } from "./custom-message-projection";
+import { projectionLines, renderProjectionWithTheme, type PiTeamBrightTuiMessage } from "./tui-message-projection";
+import { createTuiReviewTheme, type TuiReviewThemeName } from "./tui-review-theme";
+import { projectDirectMessage, projectDoctorMessage, projectSyncNudgeMessage, projectTaskChangeMessage } from "./custom-message-projection";
 import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nudge";
 import { TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE } from "../utils/task-delivery";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
+import { PTB_DOCTOR_CUSTOM_TYPE } from "../utils/ptb-doctor-command";
 import {
   FRAMEWORK_SYNC_MESSAGE_TYPE,
   projectFrameworkSyncMessage,
@@ -248,11 +250,16 @@ function customScenarios(): TuiMessageGalleryScenario[] {
   };
   const frameworkMessage = projectFrameworkSyncMessage({ details: { recordId: frameworkRecord.id, record: frameworkRecord } });
   if (!frameworkMessage) throw new Error("The framework synchronization gallery fixture is invalid.");
+  const doctorMessage = projectDoctorMessage({
+    content: "# Team doctor repair guide\nInspect the Team config and graph authority before repair.\n\nInvocation metadata (observations, not authority):\n{\"team\":{\"config_state\":\"parseable_unverified\"}}",
+    details: { source: "gallery-fixture" },
+  });
   return [
     { id: "custom.task-change", title: "Task assignment delivery", source: "custom", customTypes: [TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE], message: projectTaskChangeMessage({ content: taskContent, details: { deliveryIds: ["delivery-1"] } }) },
     { id: "custom.direct-message", title: "Direct coordination delivery", source: "custom", customTypes: [DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE], message: projectDirectMessage({ content: directContent, details: { messageIds: ["alert-1"] } }) },
     { id: "custom.sync-nudge", title: "Team synchronization nudge", source: "custom", customTypes: [SYNC_NUDGE_CUSTOM_TYPE], message: projectSyncNudgeMessage({ details: nudge })! },
     { id: "custom.framework-sync", title: "Framework team_sync result", source: "custom", customTypes: [FRAMEWORK_SYNC_MESSAGE_TYPE], message: frameworkMessage },
+    { id: "custom.doctor", title: "Team doctor repair context", source: "custom", customTypes: [PTB_DOCTOR_CUSTOM_TYPE], message: doctorMessage },
     { id: "custom.task-change-malformed", title: "Malformed Task delivery projection", source: "diagnostic", message: projectTaskChangeMessage({ content: "not JSON", details: { deliveryIds: ["delivery-bad"] } }) },
     { id: "custom.direct-message-malformed", title: "Malformed coordination projection", source: "diagnostic", message: projectDirectMessage({ content: "not JSON", details: { messageIds: ["alert-bad"] } }) },
   ];
@@ -284,12 +291,14 @@ export function exportTuiMessageGallery(options: {
   expanded: boolean;
   width?: number;
   scenarioId?: string;
+  theme?: TuiReviewThemeName;
 }): string {
   const scenarios = tuiMessageGallery().filter((scenario) => !options.scenarioId || scenario.id === options.scenarioId);
   if (scenarios.length === 0) throw new Error(`Unknown message gallery scenario: ${options.scenarioId}`);
   if (options.format === "json") return `${JSON.stringify({
     schema: "pi-team-bright/tui-message-gallery/1",
     expanded: options.expanded,
+    theme: options.theme ?? "dark",
     style: { header: { bold: true, role: "customMessageLabel" }, body: { role: "customMessageText", toneRole: true } },
     scenarios: scenarios.map((scenario) => ({
       id: scenario.id,
@@ -303,7 +312,7 @@ export function exportTuiMessageGallery(options: {
   }, null, 2)}\n`;
   return `${scenarios.map((scenario) => {
     const lines = options.format === "ansi"
-      ? projectionAnsi(scenario.message, { expanded: options.expanded, width: options.width })
+      ? renderProjectionWithTheme(scenario.message, { expanded: options.expanded }, createTuiReviewTheme(options.theme ?? "dark")).render(options.width ?? 100)
       : projectionLines(scenario.message, { expanded: options.expanded, width: options.width });
     return `=== ${scenario.id} — ${scenario.title} ===\n${lines.join("\n")}`;
   }).join("\n\n")}\n`;

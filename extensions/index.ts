@@ -8,11 +8,13 @@ import {
   projectDirectMessage,
   projectSyncNudgeMessage,
   projectTaskChangeMessage,
+  projectDoctorMessage,
 } from "../src/model-tool-contract/custom-message-projection";
 import { resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
 import { SYNC_NUDGE_CUSTOM_TYPE } from "../src/utils/sync-nudge";
 import { LEGACY_TASK_CHANGE_CUSTOM_TYPE, TASK_CHANGE_CUSTOM_TYPE } from "../src/utils/task-delivery";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../src/alert-authority/direct-delivery";
+import { PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -176,6 +178,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer?.(LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
   pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, createCustomMessageRenderer(projectSyncNudgeMessage) as any);
   pi.registerMessageRenderer?.(FRAMEWORK_SYNC_MESSAGE_TYPE, createCustomMessageRenderer(projectFrameworkSyncMessage) as any);
+  pi.registerMessageRenderer?.(PTB_DOCTOR_CUSTOM_TYPE, createCustomMessageRenderer(projectDoctorMessage) as any);
   registerAutomaticSummaryPolicyProvider(pi);
   // Leader and Worker tools are separate role projections. The leader owns
   // the current model-tool journey; Workers own the three Task/Alert tools.
@@ -195,6 +198,7 @@ export default function (pi: ExtensionAPI) {
   function registerProjectedWorkerTool(tool: ToolDefinition<any, any>): void {
     registerPublicTool({
       ...tool,
+      renderShell: "self",
       execute: async (...callArgs: any[]) => (tool.execute as any)(...callArgs),
       renderCall: createToolCallRenderer(tool.name as any),
       renderResult: createToolResultRenderer(tool.name as any),

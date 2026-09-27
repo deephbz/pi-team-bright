@@ -181,7 +181,7 @@ describe("durable Coordination query equivalence", () => {
     expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime", "binding"]);
     expect(commits).toBe(0);
     expect(projectToolResult("team_sync", { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true })).toEqual({ kind: "caught_up", head: 0, epoch_id: "epoch-1" });
-    expect(projectTui({ tool: "team_sync", details: { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true }, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("caught_up")]));
+    expect(projectTui({ tool: "team_sync", details: { kind: "caught_up", head: 0, epoch_id: "epoch-1", state_changed: false, observation_advanced: true }, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("Caught up")]));
     await expect(service.acknowledge("leader", "success", ["base", "success"])).resolves.toBe(true);
     expect(commits).toBe(1);
     expect(service.pending("leader")).toBeUndefined();
