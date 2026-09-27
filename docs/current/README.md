@@ -2,6 +2,10 @@
 
 Updated: 2026-09-27
 
+Release in preparation: `0.20.0`, a compatible minor with the command palette,
+scoped settings editing, unified transcript presentation, and the brand and
+website. Its [checklist](../release/v0.20.0-release-checklist.md) tracks the gates.
+
 Current published release: stable `0.19.0` is on npm `latest` from annotated
 tag `v0.19.0` at `1476140d432644e1972bae47d567a2f0ea5d70dd`.
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
@@ -67,7 +71,7 @@ current binding. The command changes no Team authority and leaves the existing
 slash commands in place. The [work record](../projects/ptb-doctor.md) owns its
 scope and verification.
 
-## Command palette (unreleased)
+## v0.20.0: command palette
 
 The owner requested one `/ptb` command with an interactive palette for commands
 and configuration. The palette uses the same action handlers as direct
@@ -78,6 +82,16 @@ configuration store and does not modify live Team records. The
 [`ptb-command.ts`](../../src/utils/ptb-command.ts) owns command syntax.
 This work builds on the composable mock review galleries. Architecture impact:
 none at the HyperCarrier boundary; PTB adds an internal configuration editor.
+
+## v0.20.0: brand and website
+
+[`brand/brand.js`](../../brand/brand.js) is the single source for colour and
+type tokens, product copy, drawing primitives, the mark, and the lockup.
+`brand/build.mjs` derives the logo, favicon set, banners, tokens, and the
+GitHub Pages site; the promo video draws with the same primitives. Each
+product claim in the copy names its source anchor. The `pages.yml` workflow
+checks generated assets and deploys the site from `main`. Architecture impact:
+none; the brand is outside the npm package.
 
 ## Publication evidence
 

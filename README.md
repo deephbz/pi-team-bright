@@ -226,8 +226,14 @@ changes a Task.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.19.0
+pi install npm:@hypercarrier/pi-team-bright@0.20.0
 ```
+
+Version `0.20.0` is backward compatible with `0.19.0` Team state. It adds the
+`/ptb` command palette, validated editing of scoped settings, and one transcript
+presentation for PTB messages. The old command names remain aliases. Restart Pi
+to load it; do not recreate a Team for this update. See the
+[v0.20.0 release notes](docs/release/v0.20.0-release-notes.md).
 
 Version `0.19.0` replaces model profiles and raw model defaults with named
 model roles. This is a breaking Worker-creation change. Finish or stop live
