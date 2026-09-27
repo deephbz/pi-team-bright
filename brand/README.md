@@ -67,4 +67,10 @@ npm run encode
 ```
 
 Audio, frames, and renders are derived and ignored. `music.mjs` regenerates
-the soundtrack deterministically.
+the soundtrack deterministically. The README thumbnail is `promo-video/preview.jpg`.
+Regenerate it from the final render:
+
+```sh
+ffmpeg -y -ss 18.5 -i brand/promo-video/out/pi-team-bright-promo.mp4 \
+  -vf scale=960:-1 -frames:v 1 -update 1 brand/promo-video/preview.jpg
+```
