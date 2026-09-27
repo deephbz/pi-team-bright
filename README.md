@@ -12,6 +12,13 @@ The lead can wait for changes instead of watching panes.
 
 Website: <https://deephbz.github.io/pi-team-bright/>
 
+## Watch the demo
+
+[![Watch the 90-second Pi Team Bright demo](https://raw.githubusercontent.com/deephbz/pi-team-bright/v0.20.1/brand/promo-video/preview.jpg)](https://github.com/deephbz/pi-team-bright/releases/download/v0.20.0/pi-team-bright-promo.mp4)
+
+[Play the video inline in the release notes](https://github.com/deephbz/pi-team-bright/releases/tag/v0.20.0#watch-the-demo)
+· [Download the MP4](https://github.com/deephbz/pi-team-bright/releases/download/v0.20.0/pi-team-bright-promo.mp4)
+
 ## From terminal juggling to accountable delegation
 
 Suppose a release needs two things at once: an API-contract audit and a rollback
