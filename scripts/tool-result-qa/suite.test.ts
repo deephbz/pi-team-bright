@@ -1249,7 +1249,8 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     for (const semanticCase of semanticTuiCases) {
       const item = cases.find((candidate) => candidate.id === semanticCase.id)!;
       for (const projection of [item.projections.human.compact, item.projections.human.expanded]) {
-        for (const fact of semanticCase.facts(item)) expect(projection, `${semanticCase.id}: ${fact}`).toContain(fact);
+        // Facts are semantic; the presentation title-cases status labels ("Partial").
+        for (const fact of semanticCase.facts(item)) expect(projection.toLowerCase(), `${semanticCase.id}: ${fact}`).toContain(fact.toLowerCase());
       }
     }
 
