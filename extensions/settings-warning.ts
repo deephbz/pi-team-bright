@@ -45,7 +45,7 @@ function warningLines(issues: readonly ModelRoleDiagnostic[], limit: number): st
   return [
     `Pi Team Bright settings: ${issues.length} issue${issues.length === 1 ? "" : "s"}.`,
     ...issues.slice(0, limit).flatMap(issueLines),
-    ...(issues.length > limit ? [`${issues.length - limit} more issue${issues.length - limit === 1 ? "" : "s"}; run /pi-team-bright-settings for details.`] : []),
+    ...(issues.length > limit ? [`${issues.length - limit} more issue${issues.length - limit === 1 ? "" : "s"}; run /ptb settings check for details.`] : []),
     `Example: ${piTeamBrightSettingsExamplePath}`,
   ];
 }

@@ -169,6 +169,90 @@ describe("registered /ptb doctor", () => {
   });
 });
 
+describe("registered /ptb command palette", () => {
+  it("routes a palette status choice through the same public action as the direct command", async () => {
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const direct = harness();
+    const directState = session("/tmp/ptb-direct-status.jsonl");
+    await direct.command!.handler("status", directState.ctx);
+
+    const palette = harness();
+    const paletteState = session("/tmp/ptb-palette-status.jsonl");
+    const ctx = paletteState.ctx as any;
+    ctx.mode = "tui";
+    ctx.isProjectTrusted = () => false;
+    ctx.ui.custom = vi.fn().mockResolvedValue({ id: "status", tab: "Actions" });
+    await palette.command!.handler("", ctx);
+    expect(ctx.ui.custom).toHaveBeenCalledOnce();
+    expect(paletteState.notify.mock.calls.at(-1)).toEqual(directState.notify.mock.calls.at(-1));
+    expect(palette.sendMessage).not.toHaveBeenCalled();
+    expect(palette.sendUserMessage).not.toHaveBeenCalled();
+    expect(palette.appendEntry).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["sync", "teamsync", ""],
+    ["graph 25", "pi-team-graph", "25"],
+    ["settings check", "pi-team-bright-settings", ""],
+  ])("keeps direct %s aligned with its registered legacy operation", async (directArgs, legacyName, legacyArgs) => {
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const run = harness();
+    const directState = session(`/tmp/ptb-${legacyName}-direct.jsonl`);
+    const legacyState = session(`/tmp/ptb-${legacyName}-legacy.jsonl`);
+    const before = treeBytes(paths.TEAMS_DIR);
+    await run.command!.handler(directArgs, directState.ctx);
+    await run.commands.get(legacyName)!.handler(legacyArgs, legacyState.ctx);
+    expect(directState.notify.mock.calls.at(-1)).toEqual(legacyState.notify.mock.calls.at(-1));
+    expect(run.sendMessage).not.toHaveBeenCalled();
+    expect(run.appendEntry).not.toHaveBeenCalled();
+    expect(treeBytes(paths.TEAMS_DIR)).toEqual(before);
+  });
+
+  it("keeps malformed input and a bare RPC command free of palette and Team effects", async () => {
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const run = harness();
+    const state = session("/tmp/ptb-invalid.jsonl");
+    const ctx = state.ctx as any;
+    ctx.mode = "rpc";
+    ctx.ui.custom = vi.fn();
+    const before = treeBytes(paths.TEAMS_DIR);
+    for (const args of ["", "graph 999", "doctor ../escape", "settings project extra", "status now"]) {
+      await run.command!.handler(args, ctx);
+    }
+    expect(ctx.ui.custom).not.toHaveBeenCalled();
+    expect(run.sendMessage).not.toHaveBeenCalled();
+    expect(run.sendUserMessage).not.toHaveBeenCalled();
+    expect(run.appendEntry).not.toHaveBeenCalled();
+    expect(treeBytes(paths.TEAMS_DIR)).toEqual(before);
+    expect(state.notify.mock.calls.at(-1)?.[0]).toContain("Usage: /ptb");
+  });
+
+  it.each(["session", "branch", "tree", "compact", "cancel"])('suppresses palette effects after %s while waiting for a choice', async (kind) => {
+    vi.stubEnv("PI_TEAM_NAME", "");
+    vi.stubEnv("PI_AGENT_NAME", "");
+    const run = harness();
+    const state = session("/tmp/ptb-palette-owner.jsonl");
+    const ctx = state.ctx as any;
+    ctx.mode = "tui";
+    ctx.isProjectTrusted = () => false;
+    let finish!: (value: unknown) => void;
+    ctx.ui.custom = vi.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = run.command!.handler("", ctx);
+    if (kind === "session") state.setId("new-session");
+    if (kind === "branch") state.setBranch("new-branch");
+    if (kind === "tree") for (const hook of run.hooks.get("session_before_tree") ?? []) await hook({}, ctx);
+    if (kind === "compact") for (const hook of run.hooks.get("session_before_compact") ?? []) await hook({}, ctx);
+    finish(kind === "cancel" ? undefined : { id: "doctor", tab: "Actions" });
+    await pending;
+    expect(run.sendMessage).not.toHaveBeenCalled();
+    expect(ctx.ui.input).toBeUndefined();
+    expect(run.appendEntry).not.toHaveBeenCalled();
+  });
+});
+
 function metadata(run: ReturnType<typeof harness>) {
   const content = run.sendMessage.mock.calls[0][0].content as string;
   return JSON.parse(content.split("Invocation metadata (observations, not authority):\n")[1]);

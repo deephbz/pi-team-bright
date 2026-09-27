@@ -143,7 +143,7 @@ describe("Pi extension command integration", () => {
       on() {},
       sendUserMessage() {},
     } as never);
-    expect(command?.description).toMatch(/status\/help/);
+    expect(command?.description).toMatch(/Legacy alias for \/ptb status or \/ptb help/);
 
     const notify = vi.fn();
     await command!.handler("status", {
