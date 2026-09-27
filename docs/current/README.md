@@ -1,29 +1,25 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-09-26
+Updated: 2026-09-27
 
-Current published release: stable `0.18.0` is on npm `latest` from annotated
-tag `v0.18.0`. npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.18.0)
-was published at `2026-09-15T07:32:44Z`; it is not a draft or prerelease.
+Current published release: stable `0.19.0` is on npm `latest` from annotated
+tag `v0.19.0` at `1476140d432644e1972bae47d567a2f0ea5d70dd`.
+npm `next` remains on historical prerelease `0.17.0-rc.14`.
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.19.0)
+was published at `2026-09-27T01:27:04Z`; it is not a draft or prerelease.
+The [release receipt](../journal/2026-09-27-v0.19.0-release-receipt.md) and
+[checklist](../release/v0.19.0-release-checklist.md) record the completed gates.
 
-The `0.19.0` source is a release candidate. Its package version and
-[release notes](../release/v0.19.0-release-notes.md) are prepared. The
-[release checklist](../release/v0.19.0-release-checklist.md) tracks the
-remaining gates. npm, the version tag, and the GitHub Release remain at the
-published `0.18.0` state until those gates complete.
-
-The published `0.18.0` model profiles select a fixed initial execution binding at Worker
-creation. Tasks select an assignee only. This breaking release requires new Team
-epochs and removes per-Task model selection without migration. Keep existing
-Teams on their original version until they finish or stop; preserve their
-stores and native Session logs. Parent composition and live settings remain
-separate from this publication.
+Named model roles replace model profiles and raw Worker defaults. Finish or
+stop live Teams on their original version. Preserve their stores and native
+Session logs, update settings, then restart Pi and start new Team epochs.
+The [release notes](../release/v0.19.0-release-notes.md) give the upgrade steps.
+Parent composition and installed settings remain separate from publication.
 
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
 model roles. The Membership-observation surface remains in **sharing**.
 
-## v0.19.0 candidate: model roles
+## v0.19.0: model roles
 
 The accepted [model-role decision](../decisions/0015-model-role-settings.md)
 replaces profile aliases and raw defaults with one named map and a default
@@ -32,20 +28,20 @@ Public naming is `model_roles`, `default_model_role`, and `model_role`.
 Each role has one qualified model reference plus thinking and usage guidance.
 The [canonical example](../examples/pi-team-bright.settings.json) is the setup
 entry point. The [work record](../projects/model-role-settings.md) tracks the
-base, scope, verification, and remaining work. This change is not published.
+base, scope, verification, and remaining work.
 
-## v0.19.0 candidate: synchronization continuity
+## v0.19.0: synchronization continuity
 
 The owner authorized framework-driven synchronization. The
 [decision](../decisions/0016-framework-team-synchronization.md) separates Team
 observation, Worker activity, delivery, and acknowledgement. The
 [work record](../projects/team-sync-continuity.md) tracks five verification rounds.
-Implementation and five verification rounds are complete. The full suite passed
-1,084 tests with four skipped tests. Real Pi 0.87.1 leader, Worker, and TUI
-checks passed, including provider failure, abort, and process-reload recovery.
-This candidate is unpublished; live settings and parent adoption are unchanged.
+Implementation and five verification rounds are complete. Real Pi 0.87.1
+leader, Worker, and TUI checks passed, including provider failure, abort, and
+process-reload recovery. The release receipt owns final integrated validation.
+Live settings and parent adoption remain unchanged.
 
-## v0.19.0 candidate: Task timeline view
+## v0.19.0: Task timeline view
 
 `/pi-team-graph` keeps its dependency DAG as the initial view. The same pane
 can show a waterfall of recorded Attempts. Both views share one validated
@@ -56,35 +52,34 @@ The [work record](../projects/task-timeline-view.md) gives scope and verificatio
 This changes internal recorded evidence and presentation; the public Membership
 observation protocol and HyperCarrier integration boundary remain unchanged.
 
-## v0.19.0 candidate: formal hardening
+## v0.19.0: formal hardening
 
 The [formal hardening work](../projects/formal-hardening.md) strengthens existing
 graph recovery, operation replay, Membership fencing, and Task delivery. It adds
-bounded TLA+ checks and independent adversarial and process-recovery tests. This
-work does not change the published release or deployment topology. Its evidence
-and limits are separate from the v0.18.0 publication receipt.
+bounded TLA+ checks and independent adversarial and process-recovery tests. The
+work record states their bounds. Deployment topology remains unchanged.
 
-## v0.19.0 candidate: doctor command
+## v0.19.0: doctor command
 
 `/ptb doctor` loads the packaged repair guide and local Team metadata into a
 visible diagnostic turn. It can inspect an explicitly named Team without a
 current binding. The command changes no Team authority and leaves the existing
 slash commands in place. The [work record](../projects/ptb-doctor.md) owns its
-scope and verification. This change is not published.
+scope and verification.
 
-## v0.18.0 publication evidence
+## Publication evidence
 
-The exact published source is `f43d4739556f2ac4b82070fef64007a304801ef1`,
-from published main base `9f5bffd02c2c3f92260f54b805fa225ef2cb1c0f`.
-The [release receipt](../journal/2026-09-15-v0.18.0-release-receipt.md) and
-[release checklist](../release/v0.18.0-release-checklist.md) hold full-test,
-CI, exact-package install, OIDC, registry-integrity, and provenance evidence.
+The v0.19.0 release passed 1,139 tests with four skipped tests, Node 22 and 24
+CI, bounded formal checks, exact-tarball Pi canaries, a fresh real Herdr Team
+workflow, hosted dry run, tagged OIDC publication, registry-byte comparison,
+provenance, and signature verification. The release receipt owns details and
+limits. The larger hostile Herdr campaign is not claimed complete.
 
-Residual limitations are unchanged inherited full-history privacy findings and
-seven development dependency audit findings (four moderate, three high).
-Architecture impact: the accepted implementation changed Worker/Task contracts
-inside Pi Team Bright; publication adds no further change. HyperCarrier topology
-remains unchanged.
+The full-history privacy scan still has inherited findings. Its result matches
+the published-base scan; the candidate range passed. Architecture changes stay
+inside Pi Team Bright. The HyperCarrier integration boundary is unchanged.
+The [v0.18.0 receipt](../journal/2026-09-15-v0.18.0-release-receipt.md) preserves
+prior publication evidence.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
