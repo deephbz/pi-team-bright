@@ -38,6 +38,18 @@ multiple graph islands and closed, open, blocked, superseded, and unavailable
 Attempt timing. It is a display catalog, not an execution trace.
 Use `--config FILE` to review another validated graph-view fixture.
 
+## Command palette review
+
+Run `npm run review:palette` to inspect the production palette with mock
+settings and Team labels. Use `--tab Models`, `--tab Team`, or `--tab Workers`
+to start in a configuration section. Tab and Shift+Tab switch sections.
+Selections report the chosen action; the mock browser does not run commands,
+open settings files, or save configuration.
+
+The palette component owns selection and rendering. The command coordinator
+owns native prompts, validation, and saving. Changes to either need focused
+component or interaction tests and a fresh Pi TUI check.
+
 ## Deterministic exports
 
 ```sh

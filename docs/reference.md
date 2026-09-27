@@ -31,7 +31,7 @@ exhaustive parameter reference.
   scheduling. [`sync-liveness-settings.ts`](../src/utils/sync-liveness-settings.ts)
   resolves its global policy and deprecated setting fallbacks.
 - [`pi-team-session-adapter.ts`](../extensions/pi-team-session-adapter.ts) owns
-  `/teamsync` and automatic delivery.
+  `/ptb sync` and automatic delivery.
   [`framework-sync-execution.ts`](../extensions/framework-sync-execution.ts)
   owns framework-origin records and provider-context projection.
 - [Decision 0016](decisions/0016-framework-team-synchronization.md) records intent.
@@ -40,7 +40,7 @@ exhaustive parameter reference.
 ## Read-only status diagnosis
 
 - [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.
-- [`extensions/index.ts`](../extensions/index.ts) registers `/pi-team-bright [status|help]`; it has no `/pi-teams` alias.
+- [`pi-team-session-adapter.ts`](../extensions/pi-team-session-adapter.ts) registers `/ptb`; the command grammar lives in [`ptb-command.ts`](../src/utils/ptb-command.ts).
 
 ## Read-only Task views
 
