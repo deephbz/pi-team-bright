@@ -199,6 +199,16 @@ describe("TUI message gallery", () => {
       FRAMEWORK_SYNC_MESSAGE_TYPE,
       TASK_CHANGE_CUSTOM_TYPE,
     ].sort());
+
+    const customScenes = tuiMessageGallery().filter((scenario) => scenario.source === "custom");
+    const scenesByRegisteredType = new Map(customScenes.flatMap((scenario) =>
+      (scenario.customTypes ?? []).map((type) => [type, scenario] as const)));
+    expect(new Set(scenesByRegisteredType.keys())).toEqual(new Set(renderers.keys()));
+    for (const [type, scenario] of scenesByRegisteredType) {
+      const text = projectionLines(scenario.message, { expanded: false }).join("\n");
+      expect(text, type).toContain(`[pi-team-bright.${scenario.message.type}]`);
+      expect(text.length, type).toBeGreaterThan(40);
+    }
   });
 });
 

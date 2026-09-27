@@ -1,93 +1,61 @@
 #!/usr/bin/env node
-import {
-  ProcessTerminal,
-  TUI,
-  matchesKey,
-  truncateToWidth,
-  type Component,
-} from "@earendil-works/pi-tui";
+import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";
 import {
   exportTuiMessageGallery,
   tuiMessageGallery,
   type TuiMessageGalleryFormat,
 } from "../model-tool-contract/tui-message-gallery";
-import { projectionAnsi } from "../model-tool-contract/tui-message-projection";
+import { TuiMessageGalleryComponent } from "../model-tool-contract/tui-message-gallery-component";
 
 function argument(name: string): string | undefined {
   const index = process.argv.indexOf(name);
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-const requestedFormat = argument("--format") as TuiMessageGalleryFormat | undefined;
-const expanded = process.argv.includes("--expanded");
-const widthValue = Number(argument("--width") ?? 100);
-const width = Number.isSafeInteger(widthValue) && widthValue >= 40 ? widthValue : 100;
+const scenarios = tuiMessageGallery();
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  process.stdout.write([
+    "Usage: qa:tui-messages:gallery [--scenario ID] [--expanded] [--width COLUMNS] [--format plain|ansi|json]",
+    "Review Pi Team Bright tool results and custom message projections one at a time.",
+    "Interactive shortcuts: h/l previous/next · j/k scroll · Ctrl+O detail · q quit",
+    "Scenario IDs:",
+    ...scenarios.map((scenario) => `  ${scenario.id} — ${scenario.title}`),
+    "",
+  ].join("\n"));
+} else {
+  const requestedFormat = argument("--format") as TuiMessageGalleryFormat | undefined;
+  const expanded = process.argv.includes("--expanded");
+  const scenarioId = argument("--scenario");
+  const widthValue = Number(argument("--width") ?? 100);
+  const width = Number.isSafeInteger(widthValue) && widthValue >= 40 ? widthValue : 100;
 
-if (requestedFormat) {
-  if (!["plain", "ansi", "json"].includes(requestedFormat)) {
+  if (requestedFormat && !["plain", "ansi", "json"].includes(requestedFormat)) {
     process.stderr.write("--format must be plain, ansi, or json.\n");
     process.exit(2);
   }
-  process.stdout.write(exportTuiMessageGallery({ format: requestedFormat, expanded, width }));
-} else if (!process.stdin.isTTY || !process.stdout.isTTY) {
-  process.stdout.write(exportTuiMessageGallery({ format: "plain", expanded, width }));
-} else {
-  const terminal = new ProcessTerminal();
-  const tui = new TUI(terminal, false);
-  const scenarios = tuiMessageGallery();
-
-  class Gallery implements Component {
-    private selected = 0;
-    private detail = expanded;
-    private scroll = 0;
-    private lastContentRows = 1;
-    private lastViewportRows = 1;
-
-    invalidate(): void {}
-
-    private move(delta: number): void {
-      this.selected = (this.selected + delta + scenarios.length) % scenarios.length;
-      this.scroll = 0;
-    }
-
-    handleInput(data: string): void {
-      if (data === "q" || data === "Q" || matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) {
-        tui.stop();
-        process.exit(0);
-      }
-      if (data === "h" || matchesKey(data, "left")) this.move(-1);
-      else if (data === "l" || matchesKey(data, "right")) this.move(1);
-      else if (data === "j" || matchesKey(data, "down")) this.scroll = Math.min(this.scroll + 1, Math.max(0, this.lastContentRows - this.lastViewportRows));
-      else if (data === "k" || matchesKey(data, "up")) this.scroll = Math.max(0, this.scroll - 1);
-      else if (matchesKey(data, "ctrl+o")) {
-        this.detail = !this.detail;
-        this.scroll = 0;
-      }
-      tui.requestRender(true);
-    }
-
-    render(columns: number): string[] {
-      const scenario = scenarios[this.selected];
-      const viewportRows = Math.max(1, terminal.rows - 4);
-      const content = projectionAnsi(scenario.message, { expanded: this.detail, width: columns });
-      this.lastContentRows = content.length;
-      this.lastViewportRows = viewportRows;
-      this.scroll = Math.min(this.scroll, Math.max(0, content.length - viewportRows));
-      const visible = content.slice(this.scroll, this.scroll + viewportRows);
-      const title = `\u001b[1mPi Team Bright TUI message gallery\u001b[0m  ${this.selected + 1}/${scenarios.length}  ${scenario.id}`;
-      const mode = `detail: ${this.detail ? "on" : "off"}  rows: ${this.scroll + 1}-${Math.min(content.length, this.scroll + viewportRows)}/${content.length}`;
-      const footer = "shortcuts: h/l previous/next · j/k scroll · Ctrl+O detail · q quit";
-      return [
-        truncateToWidth(title, columns),
-        truncateToWidth(`\u001b[2m${scenario.title} · ${mode}\u001b[0m`, columns),
-        ...visible,
-        truncateToWidth(`\u001b[2m${footer}\u001b[0m`, columns),
-      ];
-    }
+  if (process.argv.includes("--scenario") && (!scenarioId || !scenarios.some((scenario) => scenario.id === scenarioId))) {
+    process.stderr.write("Unknown --scenario. Use --help to list scenario IDs.\n");
+    process.exit(2);
   }
 
-  const gallery = new Gallery();
-  tui.addChild(gallery);
-  tui.setFocus(gallery);
-  tui.start();
+  if (requestedFormat || !process.stdin.isTTY || !process.stdout.isTTY) {
+    process.stdout.write(exportTuiMessageGallery({ format: requestedFormat ?? "plain", expanded, width, scenarioId }));
+  } else {
+    const terminal = new ProcessTerminal();
+    const tui = new TUI(terminal, false);
+    const gallery = new TuiMessageGalleryComponent({
+      scenarios,
+      initialScenarioId: scenarioId,
+      expanded,
+      terminalRows: () => terminal.rows,
+      requestRender: () => tui.requestRender(true),
+      quit: () => {
+        tui.stop();
+        process.exit(0);
+      },
+    });
+    tui.addChild(gallery);
+    tui.setFocus(gallery);
+    tui.start();
+  }
 }
