@@ -1,0 +1,15 @@
+{
+  "name": "ptb-promo-video",
+  "private": true,
+  "description": "Code-rendered Pi Team Bright promo video.",
+  "type": "module",
+  "scripts": {
+    "music": "node music.mjs",
+    "frames": "node render.mjs --frames --workers=6",
+    "encode": "node render.mjs --encode --out=out/pi-team-bright-promo.mp4",
+    "build": "npm run music && npm run frames && npm run encode"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.12.0"
+  }
+}

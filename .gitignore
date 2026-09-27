@@ -15,8 +15,9 @@ __pycache__/
 # Local Beads tracker state for development; not part of the package.
 .beads/
 
-# Unreleased marketing material (not ready to share)
-marketing/
+# Derived promo video artifacts
+brand/promo-video/out/
+brand/promo-video/assets/
 
 # Brand website build output
 _site/
