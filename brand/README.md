@@ -41,3 +41,30 @@ node brand/build.mjs --site _site
 
 Edit `brand.js`, then rebuild and commit `assets/` with it. Never edit files
 in `assets/` by hand.
+
+## Promo video
+
+The source bundle in [`promo-video/`](promo-video/) uses the shared brand
+primitives and fonts. `timeline.js` owns timing; `STORY.md` keeps the claims
+and review history.
+
+Prerequisites: Node.js with npm, ffmpeg on PATH, and Chrome at the default
+macOS path (`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`).
+
+```sh
+cd brand/promo-video
+npm ci && npm run build
+node budget.mjs
+```
+
+The `encode` script writes `out/pi-team-bright-promo.mp4` (90.6 s, 2,718
+frames). For another Chrome location, replace the build command with:
+
+```sh
+npm run music
+npm run frames -- --chrome=/path/to/chrome
+npm run encode
+```
+
+Audio, frames, and renders are derived and ignored. `music.mjs` regenerates
+the soundtrack deterministically.

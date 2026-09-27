@@ -3,9 +3,9 @@ name: Brand site
 on:
   push:
     branches: [main]
-    paths: ["brand/**", ".github/workflows/pages.yml"]
+    paths: ["brand/**", "!brand/promo-video/**", ".github/workflows/pages.yml"]
   pull_request:
-    paths: ["brand/**", ".github/workflows/pages.yml"]
+    paths: ["brand/**", "!brand/promo-video/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
