@@ -178,43 +178,16 @@ function validateSharedNamespace(
   }
 }
 
-function readSource(file: string, source: Source, diagnostics: ModelRoleDiagnostic[]): ParsedSource {
+function parseNamespace(value: unknown, source: Source, file: string, diagnostics: ModelRoleDiagnostic[]): ParsedSource {
   const result: ParsedSource = { roles: Object.create(null), invalidRoles: new Set(), invalidRoleMap: false, hasDefault: false, invalidDefault: false };
-  let text: string;
-  try {
-    text = fs.readFileSync(file, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return result;
-    diagnostic(diagnostics, source, file, "pi_team_bright", "unreadable", "Pi settings could not be read.", "Model roles from this source are unavailable.");
-    result.invalidRoleMap = true;
-    result.invalidDefault = true;
-    result.hasDefault = true;
-    return result;
-  }
-  let root: unknown;
-  try { root = JSON.parse(text); } catch {
-    diagnostic(diagnostics, source, file, "pi_team_bright", "malformed_json", "Pi settings contain malformed JSON.", "Model roles from this source are unavailable.");
-    result.invalidRoleMap = true;
-    result.invalidDefault = true;
-    result.hasDefault = true;
-    return result;
-  }
-  if (!isRecord(root)) {
-    diagnostic(diagnostics, source, file, "pi_team_bright", "invalid_shape", "Pi settings root must be an object.", "Model roles from this source are unavailable.");
-    result.invalidRoleMap = true;
-    result.invalidDefault = true;
-    result.hasDefault = true;
-    return result;
-  }
-  if (!has(root, "pi_team_bright")) return result;
-  if (!isRecord(root.pi_team_bright)) {
+  if (!isRecord(value)) {
     diagnostic(diagnostics, source, file, "pi_team_bright", "invalid_shape", "pi_team_bright must be an object.", "Model roles from this source are unavailable.");
     result.invalidRoleMap = true;
     result.invalidDefault = true;
     result.hasDefault = true;
     return result;
   }
-  const namespace = root.pi_team_bright;
+  const namespace = value;
   validateSharedNamespace(namespace, source, file, diagnostics);
   if (has(namespace, "model_roles")) {
     if (!isRecord(namespace.model_roles)) {
@@ -252,6 +225,58 @@ function readSource(file: string, source: Source, diagnostics: ModelRoleDiagnost
     } else result.defaultRole = namespace.default_model_role;
   }
   return result;
+}
+
+/** Validate an editor candidate with the same namespace parser used by Pi's settings loader. */
+export function validatePtbSettingsNamespace(
+  value: unknown,
+  input: { source: Source; file: string; inheritedRoleNames?: ReadonlySet<string> },
+): ModelRoleDiagnostic[] {
+  const diagnostics: ModelRoleDiagnostic[] = [];
+  const parsed = parseNamespace(value, input.source, input.file, diagnostics);
+  if (parsed.defaultRole && !Object.hasOwn(parsed.roles, parsed.defaultRole)
+    && !input.inheritedRoleNames?.has(parsed.defaultRole)) {
+    diagnostic(diagnostics, input.source, input.file, "pi_team_bright.default_model_role", "dangling_reference",
+      `Default model role '${parsed.defaultRole}' has no valid definition.`, "Omitted Worker selection is refused.");
+  }
+  return diagnostics;
+}
+
+/** Role names whose definitions pass the production source parser. */
+export function validPtbModelRoleNames(value: unknown, source: Source, file: string): ReadonlySet<string> {
+  return new Set(Object.keys(parseNamespace(value, source, file, []).roles));
+}
+
+function readSource(file: string, source: Source, diagnostics: ModelRoleDiagnostic[]): ParsedSource {
+  const result: ParsedSource = { roles: Object.create(null), invalidRoles: new Set(), invalidRoleMap: false, hasDefault: false, invalidDefault: false };
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return result;
+    diagnostic(diagnostics, source, file, "pi_team_bright", "unreadable", "Pi settings could not be read.", "Model roles from this source are unavailable.");
+    result.invalidRoleMap = true;
+    result.invalidDefault = true;
+    result.hasDefault = true;
+    return result;
+  }
+  let root: unknown;
+  try { root = JSON.parse(text); } catch {
+    diagnostic(diagnostics, source, file, "pi_team_bright", "malformed_json", "Pi settings contain malformed JSON.", "Model roles from this source are unavailable.");
+    result.invalidRoleMap = true;
+    result.invalidDefault = true;
+    result.hasDefault = true;
+    return result;
+  }
+  if (!isRecord(root)) {
+    diagnostic(diagnostics, source, file, "pi_team_bright", "invalid_shape", "Pi settings root must be an object.", "Model roles from this source are unavailable.");
+    result.invalidRoleMap = true;
+    result.invalidDefault = true;
+    result.hasDefault = true;
+    return result;
+  }
+  if (!has(root, "pi_team_bright")) return result;
+  return parseNamespace(root.pi_team_bright, source, file, diagnostics);
 }
 
 export function loadModelRoleSettings(input: { cwd: string; projectTrusted: boolean; agentDir?: string }): ModelRoleSettings {
