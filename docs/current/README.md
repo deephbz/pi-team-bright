@@ -2,19 +2,17 @@
 
 Updated: 2026-09-27
 
-Release in preparation: `0.20.0`, a compatible minor with the command palette,
-scoped settings editing, unified transcript presentation, and the brand and
-website. Its [checklist](../release/v0.20.0-release-checklist.md) tracks the gates.
-
-Current published release: stable `0.19.0` is on npm `latest` from annotated
-tag `v0.19.0` at `1476140d432644e1972bae47d567a2f0ea5d70dd`.
+Current published release: stable `0.20.0` is on npm `latest` from annotated
+tag `v0.20.0` at `7504afa1619934033f3a397717c77acbcd42aff2`.
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.19.0)
-was published at `2026-09-27T01:27:04Z`; it is not a draft or prerelease.
-The [release receipt](../journal/2026-09-27-v0.19.0-release-receipt.md) and
-[checklist](../release/v0.19.0-release-checklist.md) record the completed gates.
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.20.0)
+was published at `2026-09-27T11:30:31Z`; it is not a draft or prerelease.
+The [release receipt](../journal/2026-09-27-v0.20.0-release-receipt.md) and
+[checklist](../release/v0.20.0-release-checklist.md) record the completed gates.
+Version `0.20.0` is backward compatible with `0.19.0` Team state.
 
-Named model roles replace model profiles and raw Worker defaults. Finish or
+From versions before `0.19.0`, named model roles replace model profiles and
+raw Worker defaults. Finish or
 stop live Teams on their original version. Preserve their stores and native
 Session logs, update settings, then restart Pi and start new Team epochs.
 The [release notes](../release/v0.19.0-release-notes.md) give the upgrade steps.
@@ -95,16 +93,17 @@ none; the brand is outside the npm package.
 
 ## Publication evidence
 
-The v0.19.0 release passed 1,139 tests with four skipped tests, Node 22 and 24
-CI, bounded formal checks, exact-tarball Pi canaries, a fresh real Herdr Team
-workflow, hosted dry run, tagged OIDC publication, registry-byte comparison,
-provenance, and signature verification. The release receipt owns details and
-limits. The larger hostile Herdr campaign is not claimed complete.
+The v0.20.0 release passed 1,191 tests with one skipped test, Node 22 and 24
+CI, the brand asset check, exact-tarball Pi canaries in RPC, print, and TUI
+modes, a fresh real Herdr Team workflow, hosted dry run, tagged OIDC
+publication, registry-byte comparison, provenance, and signature verification.
+The release receipt owns details and limits. The larger hostile Herdr campaign
+is not claimed complete.
 
-The full-history privacy scan still has inherited findings. Its result matches
-the published-base scan; the candidate range passed. Architecture changes stay
+The full-history privacy scan still reports inherited findings from before the
+privacy baseline; the candidate range passed. Architecture changes stay
 inside Pi Team Bright. The HyperCarrier integration boundary is unchanged.
-The [v0.18.0 receipt](../journal/2026-09-15-v0.18.0-release-receipt.md) preserves
+The [v0.19.0 receipt](../journal/2026-09-27-v0.19.0-release-receipt.md) preserves
 prior publication evidence.
 
 This is the maintained context a new human or agent should read first. It
