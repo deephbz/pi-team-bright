@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buildPtbPaletteItems, openPtbCommandPalette } from "./ptb-command-palette";
+import { openPtbCommandPalette } from "./ptb-command-palette";
+import { buildPtbPaletteItems } from "./ptb-palette-items";
 
 const created: string[] = [];
 
