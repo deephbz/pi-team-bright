@@ -67,6 +67,18 @@ current binding. The command changes no Team authority and leaves the existing
 slash commands in place. The [work record](../projects/ptb-doctor.md) owns its
 scope and verification.
 
+## Command palette (unreleased)
+
+The owner requested one `/ptb` command with an interactive palette for commands
+and configuration. The palette uses the same action handlers as direct
+subcommands. Its settings editor validates and replaces only the PTB namespace
+in the existing global or trusted-project Pi settings file. It creates no new
+configuration store and does not modify live Team records. The
+[operator guide](../../README.md#command-palette) owns the human workflow;
+[`ptb-command.ts`](../../src/utils/ptb-command.ts) owns command syntax.
+This work builds on the composable mock review galleries. Architecture impact:
+none at the HyperCarrier boundary; PTB adds an internal configuration editor.
+
 ## Publication evidence
 
 The v0.19.0 release passed 1,139 tests with four skipped tests, Node 22 and 24

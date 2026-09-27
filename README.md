@@ -111,13 +111,13 @@ wait deadlines trigger a new evidence check without another model call.
 The framework also collects unseen changes when the lead finishes a reply.
 Automatic sync batches them by a maximum delay or an update-count threshold.
 A new batch resumes the settled leader once. Empty checks and unfinished Tasks
-alone do not start turns. Use `/teamsync` for one immediate check: changes arrive
+alone do not start turns. Use `/ptb sync` for one immediate check: changes arrive
 as a framework-executed `team_sync` result; an empty check displays “No updates”
 in the TUI without a model turn. Native Session history records framework origin;
 the provider context receives the corresponding tool call and exact tool result.
 The observation cursor advances after a successful provider turn. An automatic
 delivery gets one retry after provider failure. Repeated failure pauses delivery
-for that batch and shows a warning. Use `/teamsync` after recovery. Cancelling
+for that batch and shows a warning. Use `/ptb sync` after recovery. Cancelling
 a turn also leaves that batch available for a manual check.
 Update delivery uses bounded event pages. The first observation on a branch
 still sends a complete Team snapshot; a large Team can require substantial
@@ -140,7 +140,7 @@ an unbound Session. Selection does not join the Team.
 
 The command reads local metadata and changes no Team state. The agent checks
 fresh evidence before a repair. Missing or damaged Team records remain visible
-in the diagnostic context. `/ptb` and `/ptb help` show usage without a model turn.
+in the diagnostic context. `/ptb` opens the command palette. `/ptb help` shows usage without a model turn.
 Other PTB slash commands keep their current names.
 
 ## Mission graph semantics
@@ -160,7 +160,7 @@ Task authority presents at most one ready Task to each stable Worker. Different
 Workers can execute the ready front in parallel. Several unordered ready Tasks
 for one Worker remain queued; add `needs` edges when their order matters.
 
-In Herdr, `/pi-team-graph` opens or closes a read-only Task pane in the exact
+In Herdr, `/ptb graph` opens or closes a read-only Task pane in the exact
 current tab. An optional limit is `25`, `50`, `100`, `200`, or `all`.
 
 The pane opens in DAG view. Press `v` to switch between DAG and Timeline.
@@ -207,7 +207,7 @@ changes a Task.
   capability gate.
 - **Visibility is not progress.** Launch, delivery, process, runtime, pane, and
   window evidence is bounded evidence about those things only. Likewise,
-  `/pi-team-bright status` and `/pi-team-bright help` provide bounded local
+  `/ptb status` and `/ptb help` provide bounded local
   diagnosis; they are not Worker health, readiness, or progress checks.
 - **Beads list contention is unresolved.** While live Workers settle Tasks,
   ordinary `team_sync` can intermittently time out in the underlying Beads
@@ -444,6 +444,45 @@ the project.
 
 Report suspected vulnerabilities privately as described in
 [SECURITY.md](.github/SECURITY.md); do not open a public vulnerability issue.
+
+## Command palette
+
+Run `/ptb` in interactive Pi. Use Tab and Shift+Tab to switch Actions, Models,
+Team, and Workers. Use arrow keys to select a row, Enter to choose, and Escape
+to cancel. Actions include status, sync, graph, doctor, settings diagnostics,
+and command help. Doctor starts or queues a model turn; sync can continue the
+leader when changes exist.
+
+Direct commands use the same handlers:
+
+```text
+/ptb status
+/ptb sync
+/ptb graph [25|50|100|200|all]
+/ptb doctor [team-name]
+/ptb settings [global|project]
+/ptb settings check
+/ptb help
+```
+
+Settings show the edited scope and file. Global editing writes only
+`pi_team_bright` in Pi's global `settings.json`. Project editing requires Pi
+project trust and writes `.pi/settings.json`. Scope selection does not remove
+other overrides. Unset fields show `Not set here` or `No project override`; the screen shows
+values in the selected file, not a live Team's effective configuration.
+
+Choose common values with the pickers, or use **Edit PTB configuration JSON**
+for the full namespace. Each edit requires Save confirmation. Cancel leaves the
+file unchanged. Invalid settings or a file changed since opening refuse the
+save. Other Pi settings remain intact. Sync policy is global-only and applies
+to new Teams. Pane layout applies to new Teams. Model-role changes affect new
+Workers; existing Worker model bindings stay unchanged. Worker resources apply
+when a Worker process starts. These edits do not change live Team records.
+
+In RPC or headless mode, bare `/ptb` shows help. Use explicit commands for
+non-interactive work; configuration editing requires the TUI. The old
+`/pi-team-bright`, `/teamsync`, `/pi-team-graph`, and
+`/pi-team-bright-settings` names remain compatibility aliases.
 
 ## Review the terminal displays
 
