@@ -264,9 +264,10 @@ describe("Team topology/lifecycle lease", () => {
       guarding_task_ids: ["task-guarded"], state_changed: false,
     });
     expect(projectTui({ tool: "worker_stop", details: guardedResult.details, expanded: false })).toEqual([
-      "[pi-team-bright.worker_stop]",
-      "! refused",
-      "  Worker \"guarded\" was not stopped · nonterminal_tasks_assigned · guarding Tasks task-guarded.",
+      "PTB · Worker stop",
+      "! Refused",
+      "Worker \"guarded\" was not stopped · nonterminal_tasks_assigned · guarding Tasks task-guarded.",
+      "▸ Details",
     ]);
     const leaderResult = await stop.execute("stop-leader", { team_name: name, worker: "team-lead" }, undefined, undefined, context(leadSession));
     expect(leaderResult.details).toMatchObject({ kind: "refused", worker: "team-lead", reason: "leader_reserved", state_changed: false });
@@ -278,9 +279,10 @@ describe("Team topology/lifecycle lease", () => {
     const stoppedResult = await stop.execute("stop-ready", { team_name: name, worker: "ready" }, undefined, undefined, context(leadSession));
     expect(stoppedResult.details).toEqual({ kind: "worker_stopped", worker: "ready", state_changed: true });
     expect(projectTui({ tool: "worker_stop", details: stoppedResult.details, expanded: false })).toEqual([
-      "[pi-team-bright.worker_stop]",
-      "✓ worker_stopped",
-      "  Worker \"ready\" stopped; Task state unchanged.",
+      "PTB · Worker stop",
+      "✓ Worker stopped",
+      "Worker \"ready\" stopped; Task state unchanged.",
+      "▸ Details",
     ]);
     const afterStop = await teams.readConfig(name);
     expect(afterStop.members.find((candidate) => candidate.membershipId === ready.membershipId)).toMatchObject({
@@ -297,10 +299,11 @@ describe("Team topology/lifecycle lease", () => {
       kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: [], state_changed: true,
     });
     expect(projectTui({ tool: "team_shutdown", details: partial.details, expanded: false })).toEqual([
-      "[pi-team-bright.team_shutdown]",
-      "! partial",
-      "  Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: none.",
-      "  Next: resolve the named Worker stop failures, then retry Team shutdown.",
+      "PTB · Team shutdown",
+      "! Partial",
+      "Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: none.",
+      "Next: resolve the named Worker stop failures, then retry Team shutdown.",
+      "▸ Details",
     ]);
     expect((await teams.readConfig(name)).members.find((candidate) => candidate.membershipId === fails.membershipId)?.isActive).toBe(true);
 
@@ -309,9 +312,10 @@ describe("Team topology/lifecycle lease", () => {
     const final = await shutdown.execute("shutdown-final", { team_name: name }, undefined, undefined, context(leadSession));
     expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: [] });
     expect(projectTui({ tool: "team_shutdown", details: final.details, expanded: false })).toEqual([
-      "[pi-team-bright.team_shutdown]",
-      "✓ team_shutdown",
-      "  Team stopped · 2 Workers stopped · 0 unfinished Tasks retained.",
+      "PTB · Team shutdown",
+      "✓ Team shutdown",
+      "Team stopped · 2 Workers stopped · 0 unfinished Tasks retained.",
+      "▸ Details",
     ]);
     expect((await teams.readConfig(name)).members.filter((candidate) => candidate.isActive !== false)).toEqual([]);
     expect(killed.slice(0, 2)).toEqual(["pane-uncertain", "pane-ready"]);
