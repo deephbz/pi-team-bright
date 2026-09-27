@@ -1,0 +1,24 @@
+/* Generated from brand/brand.js by brand/build.mjs. Do not edit. */
+@font-face { font-family: "Archivo Black"; font-weight: 400; font-display: swap; src: url("../fonts/ArchivoBlack-Regular.ttf") format("truetype"); }
+@font-face { font-family: "Chakra Petch"; font-weight: 500; font-display: swap; src: url("../fonts/ChakraPetch-Medium.ttf") format("truetype"); }
+@font-face { font-family: "Chakra Petch"; font-weight: 700; font-display: swap; src: url("../fonts/ChakraPetch-Bold.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("../fonts/JetBrainsMono-Medium.ttf") format("truetype"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: swap; src: url("../fonts/JetBrainsMono-Bold.ttf") format("truetype"); }
+:root {
+  --ptb-ground: #F2F3F1;
+  --ptb-concrete: #E3E6E8;
+  --ptb-white: #FFFFFF;
+  --ptb-ink: #1B1D20;
+  --ptb-grey: #8C9399;
+  --ptb-focus: #E3262B;
+  --ptb-ok: #62C14E;
+  --ptb-agent-1: #2BB3D9;
+  --ptb-agent-2: #F5821F;
+  --ptb-agent-3: #F7C81E;
+  --ptb-agent-4: #1F5FD1;
+  --ptb-font-display: "Archivo Black", Impact, sans-serif;
+  --ptb-font-tech: "Chakra Petch", sans-serif;
+  --ptb-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --ptb-outline: 5px;
+  --ptb-shadow: 10px;
+}
