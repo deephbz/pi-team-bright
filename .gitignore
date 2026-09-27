@@ -14,3 +14,9 @@ __pycache__/
 .beads/proxieddb/
 # Local Beads tracker state for development; not part of the package.
 .beads/
+
+# Unreleased marketing material (not ready to share)
+marketing/
+
+# Brand website build output
+_site/

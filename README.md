@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/assets/banner.svg" alt="Pi Team Bright: one lead, a visible team, work you can prove." width="100%"></p>
+
 # Pi Team Bright
 
 **Delegate work to a visible Pi team without turning terminal activity into your
@@ -7,6 +9,8 @@ Pi Team Bright lets one Pi lead assign durable Tasks to stable, named Workers.
 Workers remain visible through terminal adapters, but the work lives in the
 Task: who owns it, what done means, and the evidence that achieved, failed, or blocked its goal.
 The lead can wait for changes instead of watching panes.
+
+Website: <https://deephbz.github.io/pi-team-bright/>
 
 ## From terminal juggling to accountable delegation
 
