@@ -12,3 +12,5 @@ __pycache__/
 *.db
 .beads-credential-key
 .beads/proxieddb/
+# Local Beads tracker state for development; not part of the package.
+.beads/
