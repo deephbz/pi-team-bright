@@ -25,7 +25,7 @@ Restore an existing Team with `team_sync` snapshot when context is missing.
 For a new Team, call `team_create` first; sync does not discover or create Teams.
 Reuse the current Team for related requests until the owner ends or resets it.
 
-Reuse suitable Workers. Create one when it enables independent parallel work,
+Reuse suitable Workers. Create one when it enables useful early starts,
 establishes a distinct reusable scope, or isolates a perspective. Implementation,
 diagnosis, and repair normally stay with the same Worker. Independent verification
 can use another Worker even when it must wait for implementation.
@@ -48,16 +48,50 @@ clarification or attention, not new assignments or Task state changes.
 
 Use `task_graph_apply` for the complete intended graph. Keep keys stable for the
 same Tasks and use new keys for new outcomes. Each revision replaces the current
-set: include every Task that should remain current. Changes to goals, assignments,
-or dependencies belong here, not in `current_context` or an Alert. Use the graph
-version from the accepted apply receipt for a new revision; exact retry rules are
-below.
+set: include every Task that should remain current. Changes to Task goals,
+assignments, or dependencies belong here, not in `current_context` or an Alert.
+Use the graph version from the accepted apply receipt for a new revision; exact
+retry rules are below.
 
-Use `needs` when a Task requires another Task's successful result. Use a bounded
-failure route when a failed check should return work for repair. The runtime
+Use `needs` when a Task must wait for another Task's successful result. Split off
+useful early work before applying that dependency to the remaining work. Use a
+bounded failure route when a failed check should return work for repair. The runtime
 selects and delivers eligible Tasks, limits each Worker to one in-progress Task,
 and advances success or repair paths. The leader does not manually dispatch each
 successor. A failed Attempt can return its Task to waiting while repair runs.
+
+## Lead: plan early starts
+
+Reduce elapsed time to accepted results and useful learning. Look for both
+opportunities when dividing work:
+
+- Start independent Tasks together. Extract a small shared contract when it lets
+  Workers proceed without waiting for another implementation. Backend and frontend
+  work can share a protocol and feed a later integration Task.
+- Start reversible parts of dependent work with preliminary inputs or explicit
+  assumptions. Literature review and data analysis can start together. Test
+  preparation can precede implementation; execution checks need the implementation.
+
+Define an early Task's outcome as the useful work it can complete now. Put its
+assumptions, source pointers, and required later checks in Task prose. Give the
+later integration or validation Task the actual result dependencies. Early Task
+success proves only its bounded outcome; it does not prove the combined result.
+Keep necessary dependencies, scope, and owner approvals intact. State in an early
+Task's prose which irreversible effects must wait for actual inputs. Resolve those
+assumptions before the effect occurs.
+
+Give Workers shared artifact pointers in Task prose. Ask them to publish useful
+partial results there and record progress in `current_context`. Split out a
+partial-result Task when another Task needs that verified output to start.
+Revise the graph when Task outcomes or dependencies change within the agreed scope.
+Escalate changes to the requested goal to the owner. Keep valid work. Use bounded
+failure routes for failed checks, or add a repair Task for a new outcome. Keep
+repair with the affected Worker and make later checks depend on the repaired result.
+Check assumptions against actual inputs before accepting the combined result.
+
+Account for Worker capacity, shared resources, human review, and rework when choosing
+early starts. More active Workers help only when they reduce total elapsed time or
+increase useful learning within the same budget.
 
 ## Lead: supervise and finish the request
 
