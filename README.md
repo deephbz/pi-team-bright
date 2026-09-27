@@ -445,6 +445,18 @@ the project.
 Report suspected vulnerabilities privately as described in
 [SECURITY.md](.github/SECURITY.md); do not open a public vulnerability issue.
 
+## Review the terminal displays
+
+From a source checkout, run `npm run review:tui` to inspect PTB message scenes
+one by one. Run `npm run review:graph` for the production DAG pane with mock
+Tasks, or `npm run review:graph -- --view timeline` for mock Attempt bars.
+Both programs use production rendering with fixed local fixtures. They need no
+model, Team, Beads database, or terminal multiplexer.
+
+The [TUI review guide](docs/maintainers/tui-review.md) explains the controls,
+text exports, reusable components, coverage, and required fixture updates when
+an interface changes.
+
 ## Verification and exact contracts
 
 From a source checkout, use the verification lane appropriate to the change:
