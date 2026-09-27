@@ -219,7 +219,7 @@ changes a Task.
 
 ## Install and upgrade
 
-After publication, install `0.19.0` by exact version:
+Install the stable release by exact version:
 
 ```sh
 pi install npm:@hypercarrier/pi-team-bright@0.19.0
