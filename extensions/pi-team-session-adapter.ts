@@ -22,11 +22,13 @@ import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
 import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
-import { collectPtbDoctorContext, getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
+import { collectPtbDoctorContext, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
+import { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbAction, type PtbSettingsScope } from "../src/utils/ptb-command";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
+import { openPtbCommandPalette } from "./ptb-command-palette";
 import {
   FRAMEWORK_SYNC_ENTRY_TYPE,
   FRAMEWORK_SYNC_MESSAGE_TYPE,
@@ -104,10 +106,15 @@ export function createPiTeamSessionAdapter(options: {
     },
     executeNow: (sessionId, view, signal, toolCallId) => modelToolJourney()!.executors.teamSyncNow(exactLeaderSessionId(sessionId), { view }, signal, toolCallId),
     readTeamBinding: async (name, sessionFile) => {
+      if (name !== teamName || isTeammate || agentName !== "team-lead") return undefined;
+      const generation = doctorGeneration;
+      const membershipId = currentMembershipId;
       const config = await teams.readConfig(name);
+      if (generation !== doctorGeneration || name !== teamName || membershipId !== currentMembershipId
+        || isTeammate || agentName !== "team-lead") return undefined;
       const lead = config.members.find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === sessionFile);
-      return config.epochId && config.leadSessionId === sessionFile && lead?.membershipId
-        ? { epochId: config.epochId, membershipId: lead.membershipId } : undefined;
+      return config.epochId && config.leadSessionId === sessionFile && membershipId && lead?.membershipId === membershipId
+        ? { epochId: config.epochId, membershipId } : undefined;
     },
     pendingObservation: (sessionId) => modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)),
     setBranchContext: (sessionId, branch) => modelToolJourney()!.port.coordination.setBranchContext(exactLeaderSessionId(sessionId), branch),
@@ -145,19 +152,69 @@ function configureWorkerResources(ctx: any): void {
   pi.setActiveTools?.(projected);
 }
 
+function commandOwner(ctx: any) {
+  const owner = {
+    generation: doctorGeneration,
+    sessionId: ctx.sessionManager?.getSessionId?.(),
+    sessionFile: ctx.sessionManager?.getSessionFile?.(),
+    leafId: ctx.sessionManager?.getLeafId?.(),
+    teamName,
+    role: agentName,
+    membershipId: currentMembershipId,
+    isTeammate,
+    cwd: ctx.cwd ?? process.cwd(),
+    projectTrusted: projectTrust(ctx) === true,
+  };
+  const isCurrent = () => owner.generation === doctorGeneration
+    && owner.sessionId === ctx.sessionManager?.getSessionId?.()
+    && owner.sessionFile === ctx.sessionManager?.getSessionFile?.()
+    && owner.leafId === ctx.sessionManager?.getLeafId?.()
+    && owner.teamName === teamName && owner.role === agentName
+    && owner.membershipId === currentMembershipId && owner.isTeammate === isTeammate
+    && owner.cwd === (ctx.cwd ?? process.cwd()) && owner.projectTrusted === (projectTrust(ctx) === true);
+  return { ...owner, isCurrent };
+}
+
+function presentCommand(ctx: any, text: string, level: "info" | "warning" | "error" = "info"): void {
+  if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
+  else process.stderr.write(`${text}\n`);
+}
+
+async function openCommandPalette(ctx: any, initialSettingsScope?: PtbSettingsScope): Promise<void> {
+  if (ctx.hasUI === false || ctx.mode !== "tui" || !ctx.ui?.custom) {
+    presentCommand(ctx, `${PTB_COMMAND_USAGE}\nThe command palette and settings editor require an interactive TUI.`);
+    return;
+  }
+  const owner = commandOwner(ctx);
+  await openPtbCommandPalette(ctx, {
+    isCurrent: owner.isCurrent,
+    runAction: async (action: PtbAction) => {
+      if (!owner.isCurrent()) {
+        presentCommand(ctx, "Command cancelled because the Session or Team changed. Run /ptb again.", "warning");
+        return;
+      }
+      await runPtbAction(action, ctx);
+    },
+    teamName: owner.teamName ?? undefined,
+    role: owner.role,
+    graphAvailable: terminal?.name === "herdr",
+    projectTrusted: projectTrust(ctx) === true,
+    initialSettingsScope,
+  });
+}
+
 const registerCommand = (pi as any).registerCommand?.bind(pi);
 registerCommand?.("pi-team-bright-settings", {
-  description: "Show current Pi Team Bright settings diagnostics",
-  handler: async (_args: string, ctx: any) => settingsWarnings.showAll(ctx, projectTrust(ctx) === true),
+  description: "Legacy alias for /ptb settings check",
+  handler: async (_args: string, ctx: any) => runPtbAction({ kind: "settings_check" }, ctx),
 });
-registerCommand?.("teamsync", {
-  description: "Read current Team updates once and continue the leader when changes exist",
-  handler: async (_args: string, ctx: any) => {
+const runSync = async (_args: string, ctx: any) => {
     leaderContext = ctx;
     if (isTeammate || !teamName || agentName !== "team-lead") {
       ctx.ui?.notify?.("No current leader Team is bound to this Pi Session.", "warning");
       return;
     }
+    const owner = commandOwner(ctx);
     if (ctx?.isIdle?.() !== false) leaderRunSettled = true;
     if (frameworkRetryTimer) { clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
     const sessionId = ctx?.sessionManager?.getSessionId?.();
@@ -166,45 +223,30 @@ registerCommand?.("teamsync", {
     if (!sessionId || !sessionFile || !branch.length) return;
     const pending = modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId));
     const prior = pending ? persistedFrameworkSyncForPending(ctx.sessionManager.getBranch(), sessionId, sessionFile, pending.toolCallId, pending.resultText) : undefined;
-    if (prior && await frameworkSync.rePresent(prior.record)) return;
-    const view = await modelToolJourney()?.port.coordination.selectTeamSyncView?.(exactLeaderSessionId(sessionId), branch) ?? "updates";
-    if (ctx.sessionManager.getSessionId() !== sessionId || ctx.sessionManager.getSessionFile() !== sessionFile
-      || modelToolBranchIds(ctx).some((id: string, index: number) => id !== branch[index]) || modelToolBranchIds(ctx).length !== branch.length) return;
-    await frameworkSync.execute(teamName, "command", view);
-  },
-});
-registerCommand?.("ptb", {
-  description: "Pi Team Bright help or an on-demand Team doctor turn",
-  getArgumentCompletions: getPtbArgumentCompletions,
-  handler: async (args: string, ctx: any) => {
-    const present = (text: string, level: "info" | "warning" | "error" = "info") => {
-      if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
-      else process.stderr.write(`${text}\n`);
-    };
-    const command = parsePtbCommand(args);
-    if (command.kind === "invalid") { present(PTB_COMMAND_USAGE, "warning"); return; }
-    if (command.kind === "help") {
-      present(`${PTB_COMMAND_USAGE}\n/ptb doctor sends a guide and sampled metadata to the agent and starts a model turn.`);
-      return;
+    if (!owner.isCurrent()) return;
+    if (prior) {
+      const presented = await frameworkSync.rePresent(prior.record);
+      if (!owner.isCurrent() || presented) return;
     }
-
-    const coordinates = () => ({
-      generation: doctorGeneration,
-      sessionId: ctx.sessionManager?.getSessionId?.() as string | undefined,
-      sessionFile: ctx.sessionManager?.getSessionFile?.() as string | undefined,
-      leafId: ctx.sessionManager?.getLeafId?.() as string | null | undefined,
-      boundTeamName: teamName,
-      role: agentName,
-      membershipId: currentMembershipId,
-    });
-    const owner = coordinates();
-    const selectedTeamName = command.teamName ?? owner.boundTeamName ?? undefined;
+    const view = await modelToolJourney()?.port.coordination.selectTeamSyncView?.(exactLeaderSessionId(sessionId), branch) ?? "updates";
+    if (!owner.isCurrent() || ctx.sessionManager.getSessionId() !== sessionId || ctx.sessionManager.getSessionFile() !== sessionFile
+      || modelToolBranchIds(ctx).some((id: string, index: number) => id !== branch[index]) || modelToolBranchIds(ctx).length !== branch.length) return;
+    await frameworkSync.execute(owner.teamName!, "command", view);
+};
+registerCommand?.("teamsync", {
+  description: "Legacy alias for /ptb sync",
+  handler: runSync,
+});
+const runDoctor = async (ctx: any, requestedTeamName?: string) => {
+    const present = (text: string, level: "info" | "warning" | "error" = "info") => presentCommand(ctx, text, level);
+    const owner = commandOwner(ctx);
+    const selectedTeamName = requestedTeamName ?? owner.teamName ?? undefined;
     let content: string;
     try {
       content = await collectPtbDoctorContext({
         requestedAt: new Date().toISOString(),
         selectedTeamName,
-        boundTeamName: owner.boundTeamName ?? undefined,
+        boundTeamName: owner.teamName ?? undefined,
         role: owner.role,
         membershipId: owner.membershipId,
         sessionId: owner.sessionId,
@@ -215,8 +257,7 @@ registerCommand?.("ptb", {
       present("Doctor guide or metadata is unavailable. Check the installed package and retry.", "error");
       return;
     }
-    const current = coordinates();
-    if (Object.keys(owner).some((key) => owner[key as keyof typeof owner] !== current[key as keyof typeof current])) {
+    if (!owner.isCurrent()) {
       present("Doctor request cancelled because the Session or Team changed. Run /ptb doctor again.", "warning");
       return;
     }
@@ -227,70 +268,109 @@ registerCommand?.("ptb", {
     } catch {
       present("Doctor context could not be sent. Retry /ptb doctor.", "error");
     }
+};
+registerCommand?.("ptb", {
+  description: "Pi Team Bright command palette and direct commands",
+  getArgumentCompletions: getPtbArgumentCompletions,
+  handler: async (args: string, ctx: any) => {
+    const command = parsePtbCommand(args);
+    if (command.kind === "invalid") { presentCommand(ctx, PTB_COMMAND_USAGE, "warning"); return; }
+    if (command.kind === "palette") { await openCommandPalette(ctx); return; }
+    await runPtbAction(command, ctx);
   },
 });
 
-registerCommand?.("pi-team-graph", {
-  description: "Toggle a read-only Task graph pane in this exact Herdr tab (limit: 25, 50, 100, 200, or all)",
-  getArgumentCompletions: (prefix: string) => ["25", "50", "100", "200", "all"]
-    .filter((value) => value.startsWith(prefix.trim()))
-    .map((value) => ({ value, label: value })),
-  handler: async (args: string, ctx: any) => {
+const runGraph = async (args: string, ctx: any) => {
     const present = (text: string, level: "info" | "warning" | "error" = "info") => {
       if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
       else process.stderr.write(`${text}\n`);
     };
-    if (!teamName) {
+    const owner = commandOwner(ctx);
+    if (!owner.teamName) {
       present("No current Team is bound to this Pi Session. Create or resume a Team first.", "warning");
       return;
     }
+    if (!owner.isCurrent()) return;
     try {
       const result = await taskGraphPane.toggle({
-        teamName,
-        actor: agentName,
+        teamName: owner.teamName,
+        actor: owner.role,
         cwd: ctx.cwd ?? process.cwd(),
         limitText: args,
       });
+      if (!owner.isCurrent()) return;
       present(result.kind === "opened"
         ? "Task graph pane opened in this Herdr tab. Run /pi-team-graph again to close it."
         : "Task graph pane closed.");
     } catch (error) {
+      if (!owner.isCurrent()) return;
       present(`Task graph pane failed: ${error instanceof Error ? error.message : String(error)}`, "error");
     }
-  },
+};
+registerCommand?.("pi-team-graph", {
+  description: "Legacy alias for /ptb graph (limit: 25, 50, 100, 200, or all)",
+  getArgumentCompletions: (prefix: string) => ["25", "50", "100", "200", "all"]
+    .filter((value) => value.startsWith(prefix.trim()))
+    .map((value) => ({ value, label: value })),
+  handler: runGraph,
 });
 
-registerCommand?.("pi-team-bright", {
-  description: "Pi Team Bright status/help — read-only Team and Beads authority diagnosis",
-  getArgumentCompletions: getPiTeamsArgumentCompletions,
-  handler: async (args: string, ctx: any) => {
-    const command = parsePiTeamsCommand(args);
+const runStatus = async (ctx: any) => {
     const present = (text: string, level: "info" | "warning" | "error" = "info") => {
       if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
       else process.stderr.write(`${text}\n`);
     };
-    if (!command.ok) { present(command.usage, "warning"); return; }
-    if (command.subcommand === "help") {
-      present(`${PI_TEAMS_COMMAND_USAGE}\nstatus is the default and reads TeamConfig plus exact Beads-root diagnostics.`); return;
-    }
-    if (!teamName) {
+    const owner = commandOwner(ctx);
+    if (!owner.teamName) {
       const known = knownTeamNames();
       present(`No current Team is bound to this Pi Session.${known.length ? ` Known Teams: ${known.slice(0, 8).join(", ")}.` : " Create a Team first with team_create."}`, "warning"); return;
     }
-    const sessionFile = ctx.sessionManager?.getSessionFile?.();
+    const sessionFile = owner.sessionFile;
     let sessionBinding: TeamSessionBindingStatus = sessionFile ? "stale" : "unavailable";
     let sessionDetail = sessionFile ? undefined : "durable Pi Session file unavailable";
     if (sessionFile) try {
-      const member = await teamQuery.currentSessionBinding(teamName, agentName, sessionFile);
-      if (currentMembershipId && member.membershipId !== currentMembershipId) sessionDetail = "current Team membership differs from this runtime generation";
+      const member = await teamQuery.currentSessionBinding(owner.teamName, owner.role, sessionFile);
+      if (owner.membershipId && member.membershipId !== owner.membershipId) sessionDetail = "current Team membership differs from this runtime generation";
       else sessionBinding = "current";
     } catch (error) { sessionDetail = error instanceof Error ? error.message : String(error); }
+    if (!owner.isCurrent()) return;
     try {
-      const report = await diagnoseTeam(teamName, { role: agentName, sessionBinding, sessionDetail });
+      const report = await diagnoseTeam(owner.teamName, { role: owner.role, sessionBinding, sessionDetail });
+      if (!owner.isCurrent()) return;
       present(formatTeamStatus(report), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
-    } catch (error) { present(`Pi Team Bright status failed for ${teamName}. ${error instanceof Error ? error.message : String(error)}`, "error"); }
+    } catch (error) {
+      if (owner.isCurrent()) present(`Pi Team Bright status failed for ${owner.teamName}. ${error instanceof Error ? error.message : String(error)}`, "error");
+    }
+};
+registerCommand?.("pi-team-bright", {
+  description: "Legacy alias for /ptb status or /ptb help",
+  getArgumentCompletions: getPiTeamsArgumentCompletions,
+  handler: async (args: string, ctx: any) => {
+    const command = parsePiTeamsCommand(args);
+    if (!command.ok) { presentCommand(ctx, command.usage, "warning"); return; }
+    if (command.subcommand === "help") {
+      presentCommand(ctx, `${PI_TEAMS_COMMAND_USAGE}\nstatus is the default and reads TeamConfig plus exact Beads-root diagnostics.`);
+      return;
+    }
+    await runStatus(ctx);
   },
 });
+
+async function runPtbAction(command: PtbAction, ctx: any): Promise<void> {
+  switch (command.kind) {
+    case "help":
+      presentCommand(ctx, `${PTB_COMMAND_USAGE}\n/ptb doctor sends a guide and sampled metadata to the agent and starts a model turn.`);
+      return;
+    case "status": return runStatus(ctx);
+    case "sync": return runSync("", ctx);
+    case "graph": return runGraph(command.limit ?? "", ctx);
+    case "doctor": return runDoctor(ctx, command.teamName);
+    case "settings_check":
+      settingsWarnings.showAll(ctx, projectTrust(ctx) === true);
+      return;
+    case "settings": return openCommandPalette(ctx, command.scope ?? "global");
+  }
+}
 
 async function refreshTeamFooter(ctx: any) {
   if (!ctx?.ui) return undefined;

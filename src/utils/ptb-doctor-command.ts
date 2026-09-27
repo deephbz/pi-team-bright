@@ -3,37 +3,8 @@ import path from "node:path";
 import packageJson from "../../package.json";
 import * as paths from "./paths";
 
-const SUBCOMMANDS = [
-  { value: "help", argument: "", description: "Show /ptb usage" },
-  { value: "doctor", argument: " [team-name]", description: "Send the Team doctor guide and sampled Team metadata to the agent" },
-] as const;
-
-export const PTB_COMMAND_USAGE = `Usage: ${SUBCOMMANDS.map((command) => `/ptb ${command.value}${command.argument}`).join(" | ")}. Bare /ptb shows help.`;
+export { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbCommand } from "./ptb-command";
 export const PTB_DOCTOR_CUSTOM_TYPE = "pi-team-bright.doctor";
-
-export type PtbCommand =
-  | { kind: "help" }
-  | { kind: "doctor"; teamName?: string }
-  | { kind: "invalid" };
-
-export function parsePtbCommand(args = ""): PtbCommand {
-  const tokens = args.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { kind: "help" };
-  const command = SUBCOMMANDS.find((candidate) => candidate.value === tokens[0]);
-  if (command?.value === "help" && tokens.length === 1) return { kind: "help" };
-  if (command?.value === "doctor" && tokens.length <= 2) {
-    if (tokens.length === 1) return { kind: "doctor" };
-    if (/^[A-Za-z0-9_-]{1,64}$/.test(tokens[1])) return { kind: "doctor", teamName: tokens[1] };
-  }
-  return { kind: "invalid" };
-}
-
-export function getPtbArgumentCompletions(prefix: string) {
-  const token = String(prefix ?? "").trimStart();
-  if (/\s/.test(token)) return null;
-  const matches = SUBCOMMANDS.filter((command) => command.value.startsWith(token));
-  return matches.length ? matches.map(({ value, description }) => ({ value, label: value, description })) : null;
-}
 
 const packageRoot = path.resolve(__dirname, "../..");
 export const PTB_DOCTOR_GUIDE_PATH = path.join(packageRoot, "skills/pi-team-bright/references/team-doctor.md");

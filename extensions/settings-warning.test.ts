@@ -66,7 +66,7 @@ describe("Pi Team Bright settings warning", () => {
     expect(writeStderr).toHaveBeenCalledTimes(1);
     expect(writeStderr.mock.calls[0][0].length).toBeLessThanOrEqual(1601);
     expect(writeStderr.mock.calls[0][0]).toContain("40 issues");
-    expect(writeStderr.mock.calls[0][0]).toContain("/pi-team-bright-settings");
+    expect(writeStderr.mock.calls[0][0]).toContain("/ptb settings check");
     presenter.clear(ctx);
     presenter.refresh(ctx, false, true);
     expect(writeStderr).toHaveBeenCalledTimes(1);
