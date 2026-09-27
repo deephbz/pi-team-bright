@@ -1,11 +1,11 @@
-Task graph: task-dag-islands-gallery · graph control · rev 120-gallery-sentinel-v1 · updated 2026-08-14 11:50:00Z
+Task graph: task-dag-islands-gallery · graph control · rev 120-mock-review-v2 · updated 2026-08-14 11:50:00Z
 View: SELECT · DAG · 7/7 tasks · all tasks · all states · LR · island 1/3 · offset 0,0 · hidden 0 tasks/0 edges
 Legend: ◷ wait · ● ready · ▶ active · ■ blocked · ✓ achieved · ✕ failed · ⊘ cancelled · ━ success · ╌ failure
 Details: [in_progress] dag1-task2@worker2 · DAG 1 Task 2
 Timing: first observed 2026-08-14 09:05:00Z · last update 2026-08-14 11:50:00Z · activity span 2h 55m
-Attempt: try 1/1 current
+Attempt: try 2/2 current
 Goal: goal2: build the active branch.
-Context: context2: branch construction is in progress.
+Context: context2: a prior-revision Attempt was superseded; the revised Task has an active Attempt.
  island 1/3 · 4 tasks                                                                                                                                     island 2/3 · 2 tasks
 
 

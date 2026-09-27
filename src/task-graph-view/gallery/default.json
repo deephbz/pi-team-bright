@@ -1,6 +1,6 @@
 {
   "schema": "pi-team-bright/task-dag-islands-gallery/1",
-  "name": "default sentinel DAG islands",
+  "name": "mock DAG and Timeline review",
   "review_now": "2026-08-14T12:00:00.000Z",
   "initial_limit": "all",
   "initial_direction": "TB",
@@ -10,7 +10,7 @@
     "schema": "pi-team-bright-task-graph-view/3",
     "team_name": "task-dag-islands-gallery",
     "authority": "graph_control",
-    "source_revision": "120-gallery-sentinel-v1",
+    "source_revision": "120-mock-review-v2",
     "graph_version": "g_0123456789abcdef",
     "authority_sequence": "120",
     "nodes": [
@@ -32,26 +32,61 @@
           "state": "completed",
           "current": false,
           "outcome": "goal_achieved"
-        }
+        },
+        "timeline_attempts": [
+          {
+            "id": "dag1-task1@1",
+            "ordinal": 1,
+            "state": "completed",
+            "current": false,
+            "outcome": "goal_achieved",
+            "segments": [
+              { "state": "in_progress", "started_at": "2026-08-14T08:00:00.000Z", "ended_at": "2026-08-14T09:00:00.000Z" }
+            ],
+            "timing": "recorded"
+          }
+        ]
       },
       {
         "id": "dag1-task2",
         "title": "DAG 1 Task 2",
         "goal": "goal2: build the active branch.",
-        "current_context": "context2: branch construction is in progress.",
+        "current_context": "context2: a prior-revision Attempt was superseded; the revised Task has an active Attempt.",
         "assignee": "worker2",
         "state": "in_progress",
         "waiting_on_task_ids": [],
         "activity_cursor": "119",
         "first_activity_at": "2026-08-14T09:05:00.000Z",
         "last_activity_at": "2026-08-14T11:50:00.000Z",
-        "attempts_started": 1,
+        "attempts_started": 2,
         "display_attempt": {
-          "id": "dag1-task2@1",
-          "ordinal": 1,
+          "id": "dag1-task2@2",
+          "ordinal": 2,
           "state": "in_progress",
           "current": true
-        }
+        },
+        "timeline_attempts": [
+          {
+            "id": "dag1-task2@1",
+            "ordinal": 1,
+            "state": "superseded",
+            "current": false,
+            "segments": [
+              { "state": "in_progress", "started_at": "2026-08-14T09:05:00.000Z", "ended_at": "2026-08-14T09:25:00.000Z" }
+            ],
+            "timing": "recorded"
+          },
+          {
+            "id": "dag1-task2@2",
+            "ordinal": 2,
+            "state": "in_progress",
+            "current": true,
+            "segments": [
+              { "state": "in_progress", "started_at": "2026-08-14T11:20:00.000Z" }
+            ],
+            "timing": "recorded"
+          }
+        ]
       },
       {
         "id": "dag1-task3",
@@ -96,7 +131,20 @@
           "ordinal": 1,
           "state": "blocked",
           "current": true
-        }
+        },
+        "timeline_attempts": [
+          {
+            "id": "dag2-task1@1",
+            "ordinal": 1,
+            "state": "blocked",
+            "current": true,
+            "segments": [
+              { "state": "in_progress", "started_at": "2026-08-14T08:30:00.000Z", "ended_at": "2026-08-14T09:00:00.000Z" },
+              { "state": "blocked", "started_at": "2026-08-14T09:00:00.000Z" }
+            ],
+            "timing": "recorded"
+          }
+        ]
       },
       {
         "id": "dag2-task2",
@@ -117,13 +165,26 @@
           "current": false,
           "outcome": "goal_failed"
         },
+        "timeline_attempts": [
+          {
+            "id": "dag2-task2@1",
+            "ordinal": 1,
+            "state": "completed",
+            "current": false,
+            "outcome": "goal_failed",
+            "segments": [
+              { "state": "in_progress", "started_at": "2026-08-14T07:00:00.000Z", "ended_at": "2026-08-14T10:30:00.000Z" }
+            ],
+            "timing": "recorded"
+          }
+        ],
         "failure_reason": "criterion_failed"
       },
       {
         "id": "dag3-task1",
         "title": "DAG 3 Task 1",
         "goal": "goal7: show cancelled work as a separate island.",
-        "current_context": "context7: the work became obsolete before completion.",
+        "current_context": "context7: a legacy Attempt has no recorded transition timing.",
         "assignee": "worker7",
         "state": "cancelled",
         "waiting_on_task_ids": [],
@@ -136,7 +197,17 @@
           "ordinal": 1,
           "state": "cancelled",
           "current": false
-        }
+        },
+        "timeline_attempts": [
+          {
+            "id": "dag3-task1@1",
+            "ordinal": 1,
+            "state": "cancelled",
+            "current": false,
+            "segments": [],
+            "timing": "unavailable"
+          }
+        ]
       }
     ],
     "edges": [
