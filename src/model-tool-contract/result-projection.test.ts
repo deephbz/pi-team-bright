@@ -298,9 +298,9 @@ describe("raw semantic result projections", () => {
       expanded: false,
       isError: true,
     }).join("\n");
-    expect(executionError).toContain("[pi-team-bright.task_graph_apply]");
+    expect(executionError).toContain("PTB · Task graph");
     expect(executionError).toContain("execution error");
-    expect(executionError).toContain("Press Ctrl+O");
+    expect(executionError).toContain("Expand to inspect");
     expect(executionError).not.toContain("Invalid semantic result for task_graph_apply.");
     expect(executionError).not.toContain('"operation_id": "apply-release"');
 
@@ -320,7 +320,7 @@ describe("raw semantic result projections", () => {
       details: { malformed: true },
       expanded: true,
     }).join("\n");
-    expect(malformedResult).toContain("[pi-team-bright.task_read]");
+    expect(malformedResult).toContain("PTB · Task read");
     expect(malformedResult).toContain("result projection error");
     expect(malformedResult).toContain('"malformed": true');
     expect(malformedResult).toContain("unprojected content");

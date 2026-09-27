@@ -1,6 +1,8 @@
 import { matchesKey, truncateToWidth, type Component } from "@earendil-works/pi-tui";
-import { projectionAnsi } from "./tui-message-projection";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { renderProjectionWithTheme } from "./tui-message-projection";
 import type { TuiMessageGalleryScenario } from "./tui-message-gallery";
+import { createTuiReviewTheme, type TuiReviewThemeName } from "./tui-review-theme";
 
 export interface TuiMessageGalleryComponentOptions {
   scenarios: readonly TuiMessageGalleryScenario[];
@@ -9,6 +11,7 @@ export interface TuiMessageGalleryComponentOptions {
   quit: () => void;
   expanded?: boolean;
   initialScenarioId?: string;
+  theme?: TuiReviewThemeName;
 }
 
 /** Browse projected messages. The host owns terminal state and process lifecycle. */
@@ -17,6 +20,7 @@ export class TuiMessageGalleryComponent implements Component {
   private readonly terminalRows: () => number;
   private readonly requestRender: () => void;
   private readonly quit: () => void;
+  private readonly theme: Theme;
   private selected: number;
   private detail: boolean;
   private scroll = 0;
@@ -33,6 +37,7 @@ export class TuiMessageGalleryComponent implements Component {
     this.terminalRows = options.terminalRows;
     this.requestRender = options.requestRender;
     this.quit = options.quit;
+    this.theme = createTuiReviewTheme(options.theme ?? "dark");
     this.selected = selected;
     this.detail = options.expanded ?? false;
   }
@@ -63,7 +68,7 @@ export class TuiMessageGalleryComponent implements Component {
   render(columns: number): string[] {
     const scenario = this.scenarios[this.selected];
     const viewportRows = Math.max(1, this.terminalRows() - 4);
-    const content = projectionAnsi(scenario.message, { expanded: this.detail, width: columns });
+    const content = renderProjectionWithTheme(scenario.message, { expanded: this.detail }, this.theme).render(columns);
     this.lastContentRows = content.length;
     this.lastViewportRows = viewportRows;
     this.scroll = Math.min(this.scroll, Math.max(0, content.length - viewportRows));

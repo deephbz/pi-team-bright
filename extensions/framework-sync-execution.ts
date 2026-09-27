@@ -161,7 +161,7 @@ export function projectFrameworkSyncMessage(message: { details?: unknown }): PiT
   const record = validateFrameworkSyncRecord(message.details.record);
   if (!record || message.details.recordId !== record.id) return undefined;
   const projection = projectModelToolTuiMessage("team_sync", JSON.parse(record.resultText), record.result);
-  return { ...projection, lines: ["Framework team_sync execution", ...projection.lines], provenance: "tool-result" };
+  return { ...projection, source: record.source === "automatic" ? "Automatic" : "Command", provenance: "tool-result" };
 }
 
 function providerNodes(value: unknown): Record<string, unknown>[] {

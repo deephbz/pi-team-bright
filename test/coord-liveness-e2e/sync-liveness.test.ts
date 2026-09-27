@@ -549,7 +549,7 @@ describe("hardened coordination liveness boundaries", () => {
     const unknown = { kind: "indeterminate", message: "Worker run-state evidence is incomplete.", state_changed: false, observation_advanced: false } as const;
     expect(projectToolResult("team_sync", caughtUp)).toEqual({ kind: "caught_up", head: 3, epoch_id: "epoch-1" });
     expect(projectToolResult("team_sync", unknown)).toEqual({ kind: "indeterminate", message: unknown.message });
-    expect(projectTui({ tool: "team_sync", details: unknown, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("indeterminate")]));
+    expect(projectTui({ tool: "team_sync", details: unknown, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("Indeterminate")]));
     expect(unknown).toMatchObject({ state_changed: false, observation_advanced: false });
   });
 

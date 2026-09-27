@@ -166,12 +166,15 @@ restating executable definitions.
   keeps environment precedence and hook timing. Architecture impact: **changed**
   for these internal authority boundaries. HyperCarrier's canonical Structurizr DSL
   remains unchanged because it keeps Pi Team Bright internals opaque.
-- Displayed extension messages use one audience projection and one bold
-  `[pi-team-bright.<message-type>]` first line. Collapsed mode is concise, and
-  detail mode adds raw structured JSON. Tool calls own the header while results
-  own the body. New Task and direct-message entries use `pi-team-bright.*`;
-  historical `pi-teams.*` entries remain read-compatible only. The exhaustive,
-  non-mutating terminal gallery is the human review surface. This is
+- Displayed extension messages use one audience projection with explicit
+  status, summary, body, source, and diagnostic detail fields. The renderer
+  shows a short `PTB ·` header, an explicit status line, and a concise summary
+  in collapsed mode. Expanded mode shows human-readable content first, then
+  diagnostic JSON. Tool results, delivered messages, framework sync, and
+  `/ptb doctor` use the same theme roles, padding, background, and Pi
+  expansion affordance. The non-mutating gallery calls this renderer and
+  supports deterministic dark and light review themes. Historical message
+  identities remain read-compatible. This supersedes
   [decision 0011](../decisions/0011-unified-tui-message-projection.md).
 - Assigned Tasks are the sole durable work-delegation protocol; Alerts remain
   exceptional coordination. Team, Worker, and Task have distinct lifecycles. A

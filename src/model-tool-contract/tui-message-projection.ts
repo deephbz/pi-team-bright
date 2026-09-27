@@ -1,16 +1,20 @@
-import { Text, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { Text, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
+import { createTuiReviewTheme } from "./tui-review-theme";
 
 export type TuiMessageTone = "success" | "warning" | "error" | "info";
-export type TuiMessageProvenance = "tool-result" | "task-delivery" | "direct-delivery" | "sync-nudge" | "gallery";
+export type TuiMessageProvenance = "tool-result" | "task-delivery" | "direct-delivery" | "sync-nudge" | "doctor" | "gallery";
 
-/** One audience projection shared by Pi renderers, tests, and the review gallery. */
+/** Owns transcript presentation only. Domain results and delivery records remain authoritative. */
 export interface PiTeamBrightTuiMessage {
   type: string;
   tone: TuiMessageTone;
-  lines: string[];
+  status: string;
+  summary: string;
+  source?: string;
+  body?: string[];
   detail: unknown;
-  /** Human-only content shown after raw detail when the operator expands a message. */
+  /** Full human-readable content appears before diagnostic JSON when expanded. */
   expandedLines?: string[];
   provenance: TuiMessageProvenance;
 }
@@ -21,6 +25,9 @@ export interface ProjectionRenderOptions {
   width?: number;
 }
 
+type LineRole = "header" | "status" | "body" | "hint";
+type ProjectedLine = { text: string; role: LineRole };
+
 const toneRole = (tone: TuiMessageTone): "success" | "warning" | "error" | "customMessageText" => {
   if (tone === "success") return "success";
   if (tone === "warning") return "warning";
@@ -29,23 +36,60 @@ const toneRole = (tone: TuiMessageTone): "success" | "warning" | "error" | "cust
 };
 
 export function messageHeader(type: string): string {
-  return `[pi-team-bright.${type}]`;
+  const names: Record<string, string> = {
+    team_create: "Team", ensure_worker: "Worker", task_graph_apply: "Task graph", task_create: "Task graph",
+    task_read: "Task read", task_update: "Task update", team_sync: "Team sync", task_link: "Task link",
+    alert_send: "Alert", worker_stop: "Worker stop", team_shutdown: "Team shutdown",
+    "task-change": "Task change", "direct-message": "Alert", "sync-nudge": "Team sync", doctor: "Doctor",
+  };
+  return `PTB · ${names[type] ?? type.replace(/[-_]/g, " ")}`;
 }
 
 export function prettyDetail(detail: unknown): string {
-  const encoded = JSON.stringify(detail ?? null, null, 2);
-  return encoded ?? JSON.stringify(String(detail));
+  try {
+    return JSON.stringify(detail ?? null, null, 2) ?? JSON.stringify(String(detail));
+  } catch {
+    return JSON.stringify("Diagnostic value could not be serialized.");
+  }
+}
+
+const statusMark = (tone: TuiMessageTone): string => {
+  if (tone === "success") return "✓";
+  if (tone === "warning") return "!";
+  if (tone === "error") return "✗";
+  return "•";
+};
+
+/** Display text may contain agent-supplied control bytes; JSON detail stays intact. */
+function safeText(value: string): string {
+  return value
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "");
+}
+
+function projectedLines(message: PiTeamBrightTuiMessage, options: ProjectionRenderOptions): ProjectedLine[] {
+  const lines: ProjectedLine[] = [];
+  if (options.includeHeader !== false) lines.push({ text: safeText(`${messageHeader(message.type)}${message.source ? ` · ${message.source}` : ""}`), role: "header" });
+  if (message.status) lines.push({ text: safeText(`${statusMark(message.tone)} ${message.status}`), role: "status" });
+  if (message.summary) lines.push({ text: safeText(message.summary), role: "body" });
+  for (const line of message.body ?? []) lines.push({ text: safeText(line), role: "body" });
+  if (!options.expanded && (message.detail != null || (message.expandedLines?.length ?? 0) > 0)) {
+    lines.push({ text: "▸ Details", role: "hint" });
+  }
+  if (options.expanded) {
+    for (const line of message.expandedLines ?? []) lines.push({ text: safeText(line), role: "body" });
+    lines.push({ text: "details:", role: "body" });
+    for (const line of prettyDetail(message.detail).split("\n")) lines.push({ text: line, role: "body" });
+  }
+  return lines;
 }
 
 export function projectionLines(
   message: PiTeamBrightTuiMessage,
   options: ProjectionRenderOptions,
 ): string[] {
-  const lines = [
-    ...(options.includeHeader === false ? [] : [messageHeader(message.type)]),
-    ...message.lines,
-    ...(options.expanded ? ["details:", ...prettyDetail(message.detail).split("\n"), ...(message.expandedLines ?? [])] : []),
-  ];
+  const lines = projectedLines(message, options).map((line) => line.text);
   if (!options.width) return lines;
   return lines.flatMap((line) => wrapTextWithAnsi(line, options.width!));
 }
@@ -55,40 +99,20 @@ export function renderProjectionWithTheme(
   options: ProjectionRenderOptions,
   theme: Theme,
 ): Text {
-  const raw = projectionLines(message, { ...options, width: undefined });
-  const headerIncluded = options.includeHeader !== false;
-  const styled = raw.map((line, index) => {
-    if (headerIncluded && index === 0) return theme.bold(theme.fg("customMessageLabel", line));
-    const bodyIndex = index - (headerIncluded ? 1 : 0);
-    if (bodyIndex === 0) return theme.fg(toneRole(message.tone), line);
-    return theme.fg("customMessageText", line);
+  const styled = projectedLines(message, options).map(({ text, role }) => {
+    if (role === "header") return theme.bold(theme.fg("customMessageLabel", text));
+    if (role === "status") return theme.fg(toneRole(message.tone), text);
+    if (role === "hint") return theme.fg("dim", text);
+    return theme.fg("customMessageText", text);
   });
-  return new Text(styled.join("\n"), 0, 0);
+  return new Text(styled.join("\n"), 1, 0, (text) => theme.bg("customMessageBg", text));
 }
 
-const ANSI = {
-  reset: "\u001b[0m",
-  bold: "\u001b[1m",
-  success: "\u001b[32m",
-  warning: "\u001b[33m",
-  error: "\u001b[31m",
-  info: "\u001b[36m",
-  body: "\u001b[37m",
-} as const;
-
-/** Deterministic ANSI adapter for terminal review without a running Pi Session. */
+/** Deterministic terminal adapter that exercises the production themed renderer. */
 export function projectionAnsi(
   message: PiTeamBrightTuiMessage,
   options: ProjectionRenderOptions,
 ): string[] {
-  const headerIncluded = options.includeHeader !== false;
-  const raw = projectionLines(message, { ...options, width: undefined });
-  const tone = ANSI[message.tone];
-  const styled = raw.map((line, index) => {
-    if (headerIncluded && index === 0) return `${ANSI.bold}${ANSI.info}${line}${ANSI.reset}`;
-    const bodyIndex = index - (headerIncluded ? 1 : 0);
-    return `${bodyIndex === 0 ? tone : ANSI.body}${line}${ANSI.reset}`;
-  });
-  if (!options.width) return styled;
-  return styled.flatMap((line) => wrapTextWithAnsi(line, options.width!));
+  const width = options.width ?? Math.max(4, ...projectionLines(message, { ...options, width: undefined }).map((line) => visibleWidth(line) + 2));
+  return renderProjectionWithTheme(message, { ...options, width: undefined }, createTuiReviewTheme("dark")).render(width);
 }

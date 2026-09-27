@@ -72,7 +72,9 @@ describe("framework team_sync execution", () => {
     expect(context[0].content[0].text).toContain("framework, not from the model");
     expect(context[0].content[1]).toMatchObject({ type: "toolCall", id: record.toolCallId, name: "team_sync", arguments: { view: "updates" } });
     expect(context[1]).toMatchObject({ role: "toolResult", toolCallId: record.toolCallId, content: [{ type: "text", text: record.resultText }] });
-    expect(projectFrameworkSyncMessage({ details: { recordId: record.id, record } })?.lines.join(" ")).toContain("1 Team change");
+    const frameworkProjection = projectFrameworkSyncMessage({ details: { recordId: record.id, record } });
+    expect(frameworkProjection?.source).toBe("Automatic");
+    expect([frameworkProjection?.status, frameworkProjection?.summary, ...(frameworkProjection?.body ?? [])].join(" ")).toContain("1 Team change");
     expect(persistedFrameworkSyncForPending(test.branch, "session-a", "/tmp/session-a.jsonl", record.toolCallId, record.resultText)?.entryId).toBe(test.branch[1].id);
   });
 

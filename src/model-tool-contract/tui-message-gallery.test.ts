@@ -29,6 +29,7 @@ import {
 } from "../utils/task-delivery";
 import { FRAMEWORK_SYNC_MESSAGE_TYPE } from "../../extensions/framework-sync-execution";
 import { SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nudge";
+import { PTB_DOCTOR_CUSTOM_TYPE } from "../utils/ptb-doctor-command";
 import {
   DIRECT_MESSAGE_CUSTOM_TYPE,
   LEGACY_DIRECT_MESSAGE_ACK_ENTRY_TYPE,
@@ -41,6 +42,7 @@ import {
 const theme = {
   fg: (role: string, text: string) => `<${role}>${text}</${role}>`,
   bold: (text: string) => `<bold>${text}</bold>`,
+  bg: (role: string, text: string) => `<${role}>${text}</${role}>`,
 } as any;
 
 function parseExpandedDetail(lines: string[]): unknown {
@@ -112,12 +114,12 @@ describe("TUI message gallery", () => {
     }
   });
 
-  it("renders one canonical header, concise collapsed text, and parseable expanded JSON", () => {
+  it("renders one human header, concise collapsed text, and parseable expanded JSON", () => {
     for (const scenario of tuiMessageGallery()) {
       const collapsed = projectionLines(scenario.message, { expanded: false });
       const expanded = projectionLines(scenario.message, { expanded: true });
-      expect(collapsed[0], scenario.id).toMatch(/^\[pi-team-bright\.[a-z0-9_-]+\]$/);
-      expect(collapsed.filter((line) => /^\[pi-team-bright\./.test(line)), scenario.id).toHaveLength(1);
+      expect(collapsed[0], scenario.id).toMatch(/^PTB · /);
+      expect(collapsed.filter((line) => /^PTB · /.test(line)), scenario.id).toHaveLength(1);
       expect(collapsed, scenario.id).not.toContain("details:");
       expect(parseExpandedDetail(expanded), scenario.id).toEqual(scenario.message.detail ?? null);
       expect([...collapsed, ...expanded].join("\n"), scenario.id).not.toMatch(/\[PiTeams|\[pi-teams\./);
@@ -160,15 +162,15 @@ describe("TUI message gallery", () => {
       theme,
       {} as any,
     ).render(200).join("\n");
-    expect(call).toContain("<bold><customMessageLabel>[pi-team-bright.team_create]");
-    expect(result).not.toContain("[pi-team-bright.team_create]");
+    expect(call).toContain("<bold><customMessageLabel>PTB · Team");
+    expect(result).not.toContain("PTB · Team");
     expect(result).toContain('"purpose": "Review."');
 
     const custom = createCustomMessageRenderer(projectTaskChangeMessage)({
       content: `Delivered.\n${JSON.stringify({ changes: [] })}`,
       details: {},
     }, { expanded: true }, theme)!.render(200).join("\n");
-    expect(custom).toContain("<bold><customMessageLabel>[pi-team-bright.task-change]");
+    expect(custom).toContain("<bold><customMessageLabel>PTB · Task change");
     expect(custom).toContain('"changes"');
   });
 
@@ -195,6 +197,7 @@ describe("TUI message gallery", () => {
       DIRECT_MESSAGE_CUSTOM_TYPE,
       LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE,
       LEGACY_TASK_CHANGE_CUSTOM_TYPE,
+      PTB_DOCTOR_CUSTOM_TYPE,
       SYNC_NUDGE_CUSTOM_TYPE,
       FRAMEWORK_SYNC_MESSAGE_TYPE,
       TASK_CHANGE_CUSTOM_TYPE,
@@ -206,7 +209,7 @@ describe("TUI message gallery", () => {
     expect(new Set(scenesByRegisteredType.keys())).toEqual(new Set(renderers.keys()));
     for (const [type, scenario] of scenesByRegisteredType) {
       const text = projectionLines(scenario.message, { expanded: false }).join("\n");
-      expect(text, type).toContain(`[pi-team-bright.${scenario.message.type}]`);
+      expect(text, type).toContain("PTB · ");
       expect(text.length, type).toBeGreaterThan(40);
     }
   });

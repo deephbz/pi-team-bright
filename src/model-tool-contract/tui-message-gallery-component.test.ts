@@ -20,7 +20,7 @@ describe("TUI message gallery component", () => {
     const initial = plain(component.render(80));
     expect(initial).toContain(initialScenarioId);
     expect(initial).toContain("detail: off");
-    expect(initial).toContain("[pi-team-bright.team_sync]");
+    expect(initial).toContain("PTB · Team sync · Automatic");
 
     component.handleInput("\x0f"); // Ctrl+O
     const detail = plain(component.render(80));
