@@ -2,14 +2,14 @@
 
 Updated: 2026-09-27
 
-Current published release: stable `0.20.0` is on npm `latest` from annotated
-tag `v0.20.0` at `7504afa1619934033f3a397717c77acbcd42aff2`.
+Current published release: stable `0.20.1` is on npm `latest` from annotated
+tag `v0.20.1` at `b4b1d99c8ee326bbf683acb26c6b4738f1a977f3`.
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.20.0)
-was published at `2026-09-27T11:30:31Z`; it is not a draft or prerelease.
-The [release receipt](../journal/2026-09-27-v0.20.0-release-receipt.md) and
-[checklist](../release/v0.20.0-release-checklist.md) record the completed gates.
-Version `0.20.0` is backward compatible with `0.19.0` Team state.
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.20.1)
+was published at `2026-09-27T14:01:52Z`; it is not a draft or prerelease.
+The [release receipt](../journal/2026-09-27-v0.20.1-release-receipt.md) records the
+completed gates. Version `0.20.1` preserves `0.20.0` runtime behavior and remains
+backward compatible with `0.19.0` Team state.
 
 From versions before `0.19.0`, named model roles replace model profiles and
 raw Worker defaults. Finish or
@@ -91,7 +91,22 @@ product claim in the copy names its source anchor. The `pages.yml` workflow
 checks generated assets and deploys the site from `main`. Architecture impact:
 none; the brand is outside the npm package.
 
-## Publication evidence
+## v0.20.1: demo and early-start guidance
+
+The README links a demo thumbnail to the release MP4. Release notes embed the
+video through a GitHub editor attachment. The reproducible source bundle lives
+in [`brand/promo-video/`](../../brand/promo-video/). The packaged lead skill now
+asks agents to start independent and reversible work early while preserving
+actual dependencies and approval boundaries. Runtime code is unchanged.
+
+The release passed local full tests, exact-main CI, package verification,
+installed-package canaries, a separate real Team integration test, hosted dry
+run, and tagged publication. Registry bytes matched the retained tarball;
+signatures and attestations verified. Public browser checks proved the README
+thumbnail loads and the release video plays. The release receipt above owns the
+details. Architecture impact: none.
+
+## v0.20.0 publication evidence
 
 The v0.20.0 release passed 1,191 tests with one skipped test, Node 22 and 24
 CI, the brand asset check, exact-tarball Pi canaries in RPC, print, and TUI
