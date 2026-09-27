@@ -7,7 +7,7 @@ import {
   type PtbPaletteSelection,
   type PtbPaletteTab,
 } from "../../extensions/ptb-palette";
-import { buildPtbPaletteItems } from "../../extensions/ptb-command-palette";
+import { buildPtbPaletteItems } from "../../extensions/ptb-palette-items";
 
 /** Render the production palette against fixed mock settings for review. */
 function argument(name: string): string | undefined {
