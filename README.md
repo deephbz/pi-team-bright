@@ -333,9 +333,9 @@ there is no raw-model or Pi-native fallback.
 
 ```js
 ensure_worker({
-  name: "reviewer",
-  scope: "Independent design and methodology review.",
-  model_role: "reviewer"
+  name: "second-opinion",
+  scope: "Independent judgment of plans and deliverables from a reading bundle.",
+  model_role: "second-opinion"
 })
 ```
 

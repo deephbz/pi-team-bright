@@ -12,6 +12,11 @@ the maintained [evergreen context](docs/current/README.md); consult the
   constraints, review requests, and acceptance criteria in Task prose.
 - Reuse stable Workers. Memberships, Pi Sessions, processes, and terminal
   surfaces are replaceable carriers, not work identity.
+- Workers establish facts; the lead forms opinions. Delegate search, checks,
+  fixes, and monitoring; read the located sources yourself.
+- A second opinion is opt-in for high-stakes work at the user's request. It
+  holds independent judgment; the lead collaborates with it and gives it a
+  reading bundle.
 - Observe normal progress through cursor-based `team_sync`; don't sleep, poll
   runtime state, inspect panes, or read an inbox as a work loop.
 - Use typed Alerts only for exceptional clarification, attention, or
