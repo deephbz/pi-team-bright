@@ -29,6 +29,15 @@ review an opt-in `second-opinion` Worker requested by the user. The packaged
 skill and `AGENTS.md` carry the procedure; the settings example names the role.
 Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
+## Session discovery isolation (unreleased)
+
+Session discovery reads Membership identity before validating matching Team
+settings. Unsupported settings in an unrelated Team cannot block an exact
+Session lookup. Unreadable Membership identity and invalid matching records
+still refuse. Team creation also refuses ambiguous and stale bindings.
+[`preview-team-authority.test.ts`](../../src/utils/preview-team-authority.test.ts)
+and the durable model-tool tests verify these boundaries.
+
 ## v0.19.0: model roles
 
 The accepted [model-role decision](../decisions/0015-model-role-settings.md)

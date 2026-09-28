@@ -225,6 +225,15 @@ describe("DurableModelToolTeamPort pane settings", () => {
 });
 
 describe("DurableModelToolTeamPort lifecycle callback", () => {
+  it.each(["ambiguous_binding", "stale_binding"] as const)("refuses Team creation when Session discovery reports %s", async (reason) => {
+    const { name, port, leaderSessionId } = await lifecycleCreateFixture({ stopWorker: vi.fn(), shutdownTeam: vi.fn() });
+    vi.mocked(teams.resolveCurrentLeadSessionBinding).mockResolvedValue({ status: "abstain", reason });
+    const create = vi.spyOn(teams, "createTeam");
+    await expect(port.createTeam(leaderSessionId, { name, purpose: "Fail closed on uncertain binding." })).resolves.toMatchObject({
+      kind: "unavailable", reason: "session_binding_unavailable",
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
   it("names the committed leader pane once without re-reading the ambient target", async () => {
     const renamePane = vi.fn();
     const currentTargetId = vi.fn().mockReturnValueOnce("leader-pane").mockReturnValue("other-pane");
