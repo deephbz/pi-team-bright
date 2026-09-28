@@ -29,7 +29,15 @@ review an opt-in `second-opinion` Worker requested by the user. The packaged
 skill and `AGENTS.md` carry the procedure; the settings example names the role.
 Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
-## Session discovery isolation (unreleased)
+## v0.21.1 preparation
+
+The [release checklist](../release/v0.21.1-release-checklist.md) tracks local and
+hosted gates. The candidate includes adaptive Herdr panes, exact leader pane
+names, Session-discovery isolation, and the lead delegation guidance. Published
+npm `latest` remains `0.20.1` until registry verification completes. Architecture
+impact: none at the HyperCarrier boundary.
+
+## Session discovery isolation
 
 Session discovery reads Membership identity before validating matching Team
 settings. Unsupported settings in an unrelated Team cannot block an exact
