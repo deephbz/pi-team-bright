@@ -282,8 +282,15 @@ restating executable definitions.
   resolved `pane_layout` once: explicit `team_create.pane_layout`, trusted project
   `pi_team_bright.team.pane_layout`, global settings, then `{ leader_share: 0.6,
   worker_tiling: "linear" }`. Settings changes do not move live Teams. Herdr
-  supports `linear` and deterministic `grid`; other pane backends refuse `grid`.
-  Never edit a live TeamConfig or pass a Worker placement override.
+  supports `linear` and live `adaptive` placement; adaptive ranks only registered
+  Worker panes in the leader tab and region by `max(width / columns_per_row,
+  height)`, defaults bias `columns_per_row` to 2, and splits the longer visual
+  dimension 50/50. It skips children below 20 columns or 5 rows and reports
+  insufficient geometry when no candidate remains. `grid` remains read-compatible
+  for historical records. An optional `worker_limit` caps current active Worker
+  Memberships; omitted preserves the historical unlimited behavior. Other pane
+  backends refuse adaptive/grid. Never edit a live TeamConfig or pass a Worker
+  placement override.
 
 ## Current status and anchors
 

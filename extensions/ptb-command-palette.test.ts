@@ -107,6 +107,23 @@ describe("/ptb palette coordinator", () => {
     expect(fs.existsSync(run.file)).toBe(false);
   });
 
+  it("materializes the complete inherited pane policy before editing one project field", async () => {
+    const run = harness([{ id: "columns_per_row", tab: "Team", value: "Edit" }, undefined]);
+    const global = { pi_team_bright: { team: { pane_layout: {
+      leader_share: 0.6, worker_tiling: "adaptive", worker_limit: 8, columns_per_row: 2,
+    } } } };
+    fs.writeFileSync(run.file, JSON.stringify(global));
+    run.options.projectTrusted = true;
+    run.ui.input.mockResolvedValueOnce("3");
+    run.ui.confirm.mockResolvedValueOnce(true);
+    await openPtbCommandPalette(run.ctx, { ...run.options, initialSettingsScope: "project" });
+    expect(JSON.parse(fs.readFileSync(path.join(run.cwd, ".pi", "settings.json"), "utf8"))).toEqual({
+      pi_team_bright: { team: { pane_layout: {
+        leader_share: 0.6, worker_tiling: "adaptive", worker_limit: 8, columns_per_row: 3,
+      } } },
+    });
+  });
+
   it("reports a post-confirmation revision conflict without a Saved notice", async () => {
     const run = harness([{ id: "auto_sync_enabled", tab: "Team", value: "Edit" }, undefined]);
     fs.writeFileSync(run.file, JSON.stringify({ theme: "dark", pi_team_bright: {} }));

@@ -125,7 +125,7 @@ export async function openPtbCommandPalette(ctx: ExtensionCommandContext, option
         if (field.kind === "boolean" || field.kind === "tiling" || field.kind === "role") {
           const inherited = scope === "project" ? readPtbSettingsDocument({ cwd: ctx.cwd, projectTrusted: false, scope: "global" }).namespace : {};
           const roleNames = Object.keys({ ...record(record(inherited).model_roles), ...record(next.model_roles) });
-          const choices = field.kind === "boolean" ? ["true", "false"] : field.kind === "tiling" ? ["linear", "grid"] : roleNames;
+          const choices = field.kind === "boolean" ? ["true", "false"] : field.kind === "tiling" ? ["linear", "adaptive", "grid"] : roleNames;
           const selection = await ctx.ui.select(field.label, [...choices, "Remove override"]);
           if (selection === undefined) continue;
           value = selection === "Remove override" ? undefined : field.kind === "boolean" ? selection === "true" : selection;
@@ -139,12 +139,13 @@ export async function openPtbCommandPalette(ctx: ExtensionCommandContext, option
           value = content === "" ? undefined : field.kind === "number" ? Number(content) : content;
         }
         // Pane layout is one complete policy in the existing contract.
-        if ((field.id === "leader_share" || field.id === "worker_tiling") && value !== undefined) {
+        if (["leader_share", "worker_tiling", "columns_per_row", "worker_limit"].includes(field.id) && value !== undefined) {
           const layout = record(record(next.team).pane_layout);
           const globalNamespace = scope === "project" ? readPtbSettingsDocument({ cwd: ctx.cwd, projectTrusted: false, scope: "global" }).namespace : {};
           const inherited = normalizeTeamPaneLayout(record(next.team).pane_layout ?? record(record(globalNamespace).team).pane_layout);
-          if (layout.leader_share === undefined) assign(next, ["team", "pane_layout", "leader_share"], inherited.leader_share);
-          if (layout.worker_tiling === undefined) assign(next, ["team", "pane_layout", "worker_tiling"], inherited.worker_tiling);
+          for (const key of ["leader_share", "worker_tiling", "columns_per_row", "worker_limit"] as const) {
+            if (layout[key] === undefined && inherited[key] !== undefined) assign(next, ["team", "pane_layout", key], inherited[key]);
+          }
         }
         if ((field.id === "leader_share" || field.id === "worker_tiling") && value === undefined) assign(next, ["team", "pane_layout"], undefined);
         else assign(next, [...field.path], value);

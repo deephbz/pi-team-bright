@@ -195,11 +195,19 @@ changes a Task.
 - **Terminal capabilities vary.** Herdr and tmux enforce the Team pane-placement
   invariant: the first Worker splits the exact leader pane right with a measured
   ratio that keeps the leader at least at its configured share. Linear placement
-  splits an exact current Worker pane down; Herdr grid placement creates a deterministic Worker
-  grid. Every target is checked against the leader tab and Worker region. They never use terminal
-  focus, select a whole-window layout, or close another pane during
-  Worker stop. iTerm2, Zellij, cmux, WezTerm, and Windows preserve their existing
-  placement behavior but do not guarantee this exact target-and-ratio invariant.
+  preserves its exact current-Worker target and downward split. Herdr adaptive
+  placement reads live rectangles, considers only registered Workers in the
+  leader tab and Worker region, ranks candidates by `max(width / columns_per_row,
+  height)`, and splits the longer visual dimension at 50/50. It skips a candidate
+  when either child would be below 20 columns or 5 rows, then reports insufficient
+  geometry when no candidate remains. Ties use pane ID order. The legacy `grid`
+  value remains readable as an alias for adaptive placement; new layouts can use
+  `adaptive` and need no fixed grid shape. An optional `worker_limit` caps current registered Worker
+  Memberships; omitted preserves the historical unlimited behavior. Every target
+  is checked against the leader tab and Worker region. Adapters never use terminal
+  focus, select a whole-window layout, or close another pane during Worker stop.
+  iTerm2, Zellij, cmux, WezTerm, and Windows preserve their existing placement
+  behavior but do not guarantee this exact target-and-ratio invariant.
   Herdr owns the `pi` executable used by `agent start`; a real Herdr Team must
   configure that executable to a supported Pi release (0.83.x or later). Pi 0.83 or later is required for
   exact Worker run-state evidence. Launching a supported local Pi only for the leader does not change
@@ -293,9 +301,13 @@ Team, Worker, and model-role settings.
 It must be greater than `0.1` and less than `1.0`; the default is `0.6`.
 `team_create.pane_layout` takes precedence over trusted project settings, then
 global settings, then `{ "leader_share": 0.6, "worker_tiling": "linear" }`.
-Herdr supports `linear` and `grid`; other pane backends support `linear` only.
-The resolved policy is stored in `TeamConfig`, so later settings changes do not
-move a live Team. `wait_seconds` defaults to `120` and controls the internal
+Herdr supports `linear`, `adaptive`, and the read-compatible `grid` value; other
+pane backends support `linear` only. Adaptive placement uses
+`columns_per_row: 2` when omitted and the fixed minimum of 20 columns by 5 rows.
+Set optional `worker_limit` in `pane_layout` to cap current registered Workers;
+omitting it keeps the historical unlimited behavior. The resolved policy is
+stored in `TeamConfig`, so later settings changes do not move a live Team.
+`wait_seconds` defaults to `120` and controls the internal
 liveness recheck interval. Automatic synchronization defaults to enabled and
 flushes after 20 seconds or three unseen projected changes. Several events
 for one Task can count as one change. Configure

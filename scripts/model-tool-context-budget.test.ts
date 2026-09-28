@@ -15,8 +15,9 @@ const EXPECTED_TOOL_NAMES = [
   "alert_send",
 ] as const;
 
+// team_create measured 744 characters after pane-layout fields expanded; keep a 16-character guard.
 const MAX_COMPACT_CHARACTERS = {
-  team_create: 660,
+  team_create: 760,
   team_sync: 380,
   // Baseline 411 chars; approved optional model alias adds 111 chars. Keep 18 chars of guard.
   ensure_worker: 540,

@@ -6,7 +6,13 @@ import {
   validateSpawnOptions,
 } from "../utils/terminal-adapter";
 import { createHash } from "node:crypto";
-import { DEFAULT_TEAM_PANE_LAYOUT, type TeamPaneLayout } from "../utils/team-pane-layout";
+import {
+  DEFAULT_COLUMNS_PER_ROW,
+  DEFAULT_TEAM_PANE_LAYOUT,
+  MIN_WORKER_PANE_HEIGHT,
+  MIN_WORKER_PANE_WIDTH,
+  type TeamPaneLayout,
+} from "../utils/team-pane-layout";
 import { recordWorkerLaunchStage } from "../utils/trace";
 
 type HerdrEnvelope = {
@@ -19,6 +25,9 @@ const SHELL_READY_RETRY_MS = 50;
 const SHELL_READY_TIMEOUT_MS = 5_000;
 /** Official Herdr agent-start readiness bound in milliseconds. */
 const AGENT_READY_TIMEOUT_MS = 6_000;
+
+interface PaneRect { x: number; y: number; width: number; height: number; }
+
 /** Herdr applies a right-split ratio to the existing (leader) pane. */
 const retryWait = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 
@@ -161,61 +170,153 @@ export class HerdrAdapter implements TerminalAdapter {
     return pane as Record<string, unknown>;
   }
 
+  private paneLayout(leaderPaneId: string): { record: Record<string, unknown>; panes: Record<string, unknown>[] } {
+    const layout = this.invoke(["pane", "layout", "--pane", leaderPaneId]).layout;
+    if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} returned no layout; refusing Worker spawn.`);
+    }
+    const record = layout as Record<string, unknown>;
+    if (!Array.isArray(record.panes)) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} layout has no usable panes; refusing Worker spawn.`);
+    }
+    const panes = record.panes.filter((pane): pane is Record<string, unknown> =>
+      !!pane && typeof pane === "object" && !Array.isArray(pane),
+    );
+    return { record, panes };
+  }
+
+  private rectFor(panes: Record<string, unknown>[], paneId: string, requireComplete = false): PaneRect | undefined {
+    const pane = panes.find((candidate) => candidate.pane_id === paneId);
+    const rect = pane?.rect;
+    if (!rect || typeof rect !== "object" || Array.isArray(rect)) {
+      if (requireComplete) throw new Error(`Herdr pane ${paneId} has no usable integer geometry; refusing Worker spawn.`);
+      return undefined;
+    }
+    const { x, y, width, height } = rect as Record<string, unknown>;
+    if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number"
+      || ![x, y, width, height].every(Number.isInteger) || width <= 0 || height <= 0) {
+      if (requireComplete) throw new Error(`Herdr pane ${paneId} has incomplete integer geometry; refusing Worker spawn.`);
+      return undefined;
+    }
+    return { x, y, width, height };
+  }
+
   private assertWorkerRegion(leaderPaneId: string, workerPaneId: string): void {
     const leader = this.paneRecord(leaderPaneId);
     const worker = this.paneRecord(workerPaneId);
     if (leader.tab_id !== worker.tab_id || leader.workspace_id !== worker.workspace_id) {
       throw new Error(`Herdr Team Worker pane ${workerPaneId} is not in the leader tab; refusing to split it.`);
     }
-    const layout = this.invoke(["pane", "layout", "--pane", leaderPaneId]).layout;
-    if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
-      throw new Error(`Herdr leader pane ${leaderPaneId} returned no layout; refusing Worker spawn.`);
-    }
-    const record = layout as Record<string, unknown>;
-    const panes = record.panes;
-    if (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id || !Array.isArray(panes)) {
+    const { record, panes } = this.paneLayout(leaderPaneId);
+    if (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id) {
       throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove its exact tab; refusing Worker spawn.`);
     }
-    const rectFor = (paneId: string) => {
-      const pane = panes.find((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate)
-        && (candidate as Record<string, unknown>).pane_id === paneId) as Record<string, unknown> | undefined;
+    const horizontalRect = (paneId: string): { x: number; width: number } | undefined => {
+      const pane = panes.find((candidate) => candidate.pane_id === paneId);
       const rect = pane?.rect;
       if (!rect || typeof rect !== "object" || Array.isArray(rect)) return undefined;
       const { x, width } = rect as Record<string, unknown>;
-      return typeof x === "number" && typeof width === "number" ? { x, width } : undefined;
+      return typeof x === "number" && typeof width === "number" && Number.isInteger(x) && Number.isInteger(width)
+        ? { x, width } : undefined;
     };
-    const leaderRect = rectFor(leaderPaneId);
-    const workerRect = rectFor(workerPaneId);
+    const leaderRect = horizontalRect(leaderPaneId);
+    const workerRect = horizontalRect(workerPaneId);
     if (!leaderRect || !workerRect || workerRect.x < leaderRect.x + leaderRect.width) {
       throw new Error(`Herdr Team Worker pane ${workerPaneId} is outside the leader Worker region; refusing to split it.`);
     }
   }
 
-  private firstWorkerLeaderShare(leaderPaneId: string, leaderShare: number): string {
-    const layout = this.invoke(["pane", "layout", "--pane", leaderPaneId]).layout;
-    if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
-      throw new Error(`Herdr leader pane ${leaderPaneId} returned no layout; refusing Worker spawn.`);
+  private firstWorkerLeaderShare(
+    leaderPaneId: string,
+    leaderShare: number,
+    enforceMinimum = false,
+    leaderIdentity?: Record<string, unknown>,
+  ): string {
+    const leader = enforceMinimum ? leaderIdentity : undefined;
+    if (leader && (typeof leader.tab_id !== "string" || !leader.tab_id || typeof leader.workspace_id !== "string" || !leader.workspace_id)) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} has no exact tab or workspace identity; refusing Worker spawn.`);
     }
-    const panes = (layout as Record<string, unknown>).panes;
-    if (!Array.isArray(panes)) {
-      throw new Error(`Herdr leader pane ${leaderPaneId} layout has no panes; refusing Worker spawn.`);
+    const { record, panes } = this.paneLayout(leaderPaneId);
+    if (leader && (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id)) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove its exact tab; refusing Worker spawn.`);
     }
-    const leader = panes.find((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate)
-      && (candidate as Record<string, unknown>).pane_id === leaderPaneId) as Record<string, unknown> | undefined;
-    const rect = leader?.rect;
-    const width = rect && typeof rect === "object" && !Array.isArray(rect)
-      ? (rect as Record<string, unknown>).width
-      : undefined;
-    if (typeof width !== "number" || !Number.isInteger(width) || width <= 0) {
-      throw new Error(`Herdr leader pane ${leaderPaneId} layout has no usable width; refusing Worker spawn.`);
-    }
+    const rect = enforceMinimum ? this.rectFor(panes, leaderPaneId, true) : undefined;
+    const width = rect?.width ?? (() => {
+      const pane = panes.find((candidate) => candidate.pane_id === leaderPaneId);
+      const candidateWidth = pane?.rect && typeof pane.rect === "object" && !Array.isArray(pane.rect)
+        ? (pane.rect as Record<string, unknown>).width : undefined;
+      if (typeof candidateWidth !== "number" || !Number.isInteger(candidateWidth) || candidateWidth <= 0) {
+        throw new Error(`Herdr leader pane ${leaderPaneId} layout has no usable width; refusing Worker spawn.`);
+      }
+      return candidateWidth;
+    })();
     // Herdr rounds the existing pane down. Round the requested share up so its
     // rendered integer width is never below the Team's configured invariant.
     const requestedLeaderWidth = Math.ceil(width * leaderShare);
+    const workerWidth = width - requestedLeaderWidth;
     if (requestedLeaderWidth >= width) {
       throw new Error(`Herdr leader pane ${leaderPaneId} is too narrow to represent leader_share=${leaderShare} while leaving a Worker region.`);
     }
+    if (enforceMinimum && (requestedLeaderWidth < MIN_WORKER_PANE_WIDTH || workerWidth < MIN_WORKER_PANE_WIDTH
+      || rect!.height < MIN_WORKER_PANE_HEIGHT)) {
+      throw new Error(`Herdr pane geometry is insufficient for the first Worker: leader and Worker panes require at least ${MIN_WORKER_PANE_WIDTH}x${MIN_WORKER_PANE_HEIGHT}.`);
+    }
     return String(requestedLeaderWidth / width);
+  }
+
+  /** Choose the largest viable registered Worker pane from the live Herdr layout. */
+  private adaptiveSplit(leaderPaneId: string, workerPaneIds: readonly string[], columnsPerRow: number): { targetPaneId: string; direction: "right" | "down" } {
+    const leader = this.paneRecord(leaderPaneId);
+    if (typeof leader.tab_id !== "string" || !leader.tab_id || typeof leader.workspace_id !== "string" || !leader.workspace_id) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} has no exact tab or workspace identity; refusing Worker spawn.`);
+    }
+    const registered = workerPaneIds.flatMap((paneId) => {
+      try {
+        return [{ paneId, pane: this.paneRecord(paneId) }];
+      } catch (error) {
+        if (isPaneNotFound(error)) return [];
+        throw error;
+      }
+    });
+    // Membership registration supplies the candidate set. A moved or otherwise
+    // unusable candidate is ignored; a valid registered candidate can still be
+    // selected without falling back to an ambient pane.
+    const eligibleRegistered = registered.filter(({ pane }) =>
+      leader.tab_id === pane.tab_id && leader.workspace_id === pane.workspace_id,
+    );
+    const { record, panes } = this.paneLayout(leaderPaneId);
+    if (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove its exact tab; refusing Worker spawn.`);
+    }
+    const leaderRect = this.rectFor(panes, leaderPaneId, true);
+    if (!leaderRect) throw new Error(`Herdr leader pane ${leaderPaneId} has no usable geometry; refusing Worker spawn.`);
+    const candidates: Array<{ paneId: string; score: number; direction: "right" | "down" }> = [];
+    for (const { paneId } of eligibleRegistered) {
+      const rect = this.rectFor(panes, paneId);
+      if (!rect || rect.x < leaderRect.x + leaderRect.width
+        || rect.y < leaderRect.y || rect.y + rect.height > leaderRect.y + leaderRect.height) continue;
+      const horizontal = rect.width / columnsPerRow >= rect.height;
+      const splitSize = horizontal ? rect.width : rect.height;
+      const firstChild = Math.floor(splitSize / 2);
+      const secondChild = splitSize - firstChild;
+      const childWidth = horizontal ? firstChild : rect.width;
+      const childHeight = horizontal ? rect.height : firstChild;
+      const secondChildWidth = horizontal ? secondChild : rect.width;
+      const secondChildHeight = horizontal ? rect.height : secondChild;
+      if (childWidth < MIN_WORKER_PANE_WIDTH || secondChildWidth < MIN_WORKER_PANE_WIDTH
+        || childHeight < MIN_WORKER_PANE_HEIGHT || secondChildHeight < MIN_WORKER_PANE_HEIGHT) continue;
+      candidates.push({
+        paneId,
+        score: Math.max(rect.width / columnsPerRow, rect.height),
+        direction: horizontal ? "right" : "down",
+      });
+    }
+    candidates.sort((a, b) => b.score - a.score || (a.paneId < b.paneId ? -1 : a.paneId > b.paneId ? 1 : 0));
+    const selected = candidates[0];
+    if (!selected) {
+      throw new Error(`Insufficient Herdr pane geometry for another Worker: every registered Worker pane would create a child below ${MIN_WORKER_PANE_WIDTH}x${MIN_WORKER_PANE_HEIGHT}.`);
+    }
+    return { targetPaneId: selected.paneId, direction: selected.direction };
   }
 
   spawn(options: SpawnOptions): string {
@@ -225,28 +326,29 @@ export class HerdrAdapter implements TerminalAdapter {
 
     const { leaderPaneId, workerPaneIds } = options.panePlacement;
     const paneLayout: TeamPaneLayout = options.panePlacement.paneLayout ?? DEFAULT_TEAM_PANE_LAYOUT;
-    const isGrid = paneLayout.worker_tiling === "grid";
-    // Grid placement is deliberately explicit. For four Workers, the first
-    // split creates the Worker region, the second creates its second row, and
-    // the third and fourth split the two rows into stable columns.
+    // `grid` remains a read-compatible alias for live adaptive placement.
+    const adaptive = paneLayout.worker_tiling === "adaptive" || paneLayout.worker_tiling === "grid";
     const workerCount = workerPaneIds.length;
-    const targetPaneId = workerCount === 0
-      ? leaderPaneId
-      : isGrid && workerCount >= 2
-        ? workerPaneIds[workerCount - 2]
-        : workerPaneIds.at(-1)!;
-    const direction = workerCount === 0
-      ? "right"
-      : isGrid && workerCount >= 2
-        ? "right"
-        : "down";
-    if (!targetPaneId || workerPaneIds.some((paneId) => !paneId || paneId === leaderPaneId)) {
+    if (paneLayout.worker_limit !== undefined && workerCount >= paneLayout.worker_limit) {
+      throw new Error(`Herdr Worker limit ${paneLayout.worker_limit} has been reached; refusing another Worker pane.`);
+    }
+    if (!workerPaneIds.every((paneId) => !!paneId && paneId !== leaderPaneId)
+      || new Set(workerPaneIds).size !== workerPaneIds.length) {
       throw new Error("Herdr Worker spawn requires distinct exact Team pane targets.");
     }
+    let adaptiveTarget: { targetPaneId: string; direction: "right" | "down" } | undefined;
+    if (workerCount > 0 && adaptive) {
+      adaptiveTarget = this.adaptiveSplit(leaderPaneId, workerPaneIds, paneLayout.columns_per_row ?? DEFAULT_COLUMNS_PER_ROW);
+    }
+    const targetPaneId = workerCount === 0 ? leaderPaneId : adaptiveTarget?.targetPaneId ?? workerPaneIds.at(-1)!;
+    const direction = workerCount === 0 ? "right" : adaptiveTarget?.direction ?? "down";
     const firstWorkerLeaderShare = workerCount === 0
-      ? (this.paneRecord(targetPaneId), this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share))
+      ? (() => {
+        const leaderRecord = this.paneRecord(targetPaneId);
+        return this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share, adaptive, leaderRecord);
+      })()
       : undefined;
-    if (workerCount > 0) this.assertWorkerRegion(leaderPaneId, targetPaneId);
+    if (workerCount > 0 && !adaptive) this.assertWorkerRegion(leaderPaneId, targetPaneId);
 
     const envArgs = Object.entries(options.env)
       .filter(([key, value]) => FORWARDED_ENV.test(key) && !value.includes("\0"))

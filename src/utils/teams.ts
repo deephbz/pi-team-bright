@@ -964,6 +964,12 @@ export async function addMember(teamName: string, member: Member) {
     if (config.members.some((candidate) => candidate.name === next.name && candidate.isActive !== false)) {
       throw new Error(`A current member named ${next.name} already exists in team ${teamName}.`);
     }
+    const workerLimit = config.paneLayout?.worker_limit;
+    const activeWorkers = config.members.filter((candidate) => candidate.agentType === "teammate" && candidate.isActive !== false).length;
+    if (next.isActive !== false && next.agentType === "teammate"
+      && workerLimit !== undefined && activeWorkers >= workerLimit) {
+      throw new Error(`Team Worker limit ${workerLimit} has been reached; stop a current Worker before ensuring another.`);
+    }
     config.members.push(next);
     writeConfigAtomic(p, config);
   });

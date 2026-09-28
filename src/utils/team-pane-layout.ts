@@ -5,9 +5,17 @@ import { Check, Value } from "typebox/value";
 import { Type, type Static } from "typebox";
 
 /** Durable pane placement policy captured by a Team epoch. */
+export const DEFAULT_COLUMNS_PER_ROW = 2;
+export const MIN_WORKER_PANE_WIDTH = 20;
+export const MIN_WORKER_PANE_HEIGHT = 5;
+
 export const TeamPaneLayoutSchema = Type.Object({
   leader_share: Type.Number({ exclusiveMinimum: 0.1, exclusiveMaximum: 1 }),
-  worker_tiling: Type.Enum(["linear", "grid"]),
+  /** `grid` is retained as a read-compatible alias for adaptive placement. */
+  worker_tiling: Type.Enum(["linear", "adaptive", "grid"]),
+  columns_per_row: Type.Optional(Type.Integer({ minimum: 1 })),
+  /** Optional cap on registered Workers. Omitted preserves the historical unlimited behavior. */
+  worker_limit: Type.Optional(Type.Integer({ minimum: 1 })),
 }, { additionalProperties: false });
 
 export type TeamPaneLayout = Static<typeof TeamPaneLayoutSchema>;
@@ -24,7 +32,7 @@ const isRecord = (value: unknown): value is JsonRecord => !!value && typeof valu
 
 function parsePolicy(value: unknown, source: TeamPaneLayoutSource): TeamPaneLayout {
   if (!Check(TeamPaneLayoutSchema, value)) {
-    let detail = "must contain leader_share > 0.1 and < 1, and worker_tiling linear or grid";
+    let detail = "must contain leader_share > 0.1 and < 1, worker_tiling linear, adaptive, or grid, and valid optional geometry limits";
     try {
       detail = Value.Errors(TeamPaneLayoutSchema, value).at(0)?.message ?? detail;
     } catch {
@@ -32,7 +40,12 @@ function parsePolicy(value: unknown, source: TeamPaneLayoutSource): TeamPaneLayo
     }
     throw new Error(`Invalid pane_layout from ${source}: ${detail}.`);
   }
-  return { leader_share: value.leader_share, worker_tiling: value.worker_tiling };
+  return {
+    leader_share: value.leader_share,
+    worker_tiling: value.worker_tiling,
+    ...(value.columns_per_row === undefined ? {} : { columns_per_row: value.columns_per_row }),
+    ...(value.worker_limit === undefined ? {} : { worker_limit: value.worker_limit }),
+  };
 }
 
 function settingsPaneLayout(file: string, source: TeamPaneLayoutSource): unknown | undefined {
@@ -70,8 +83,8 @@ export function loadTeamPaneLayoutSettings(input: {
 
 /** Refuse policies that the selected terminal adapter cannot implement. */
 export function assertTeamPaneLayoutSupported(policy: TeamPaneLayout, backend: string): void {
-  if (policy.worker_tiling === "grid" && backend !== "herdr") {
-    throw new Error(`Pane worker_tiling=grid is unsupported by terminal backend ${backend}; use worker_tiling=linear or a Herdr Team.`);
+  if ((policy.worker_tiling === "grid" || policy.worker_tiling === "adaptive") && backend !== "herdr") {
+    throw new Error(`Pane worker_tiling=${policy.worker_tiling} is unsupported by terminal backend ${backend}; use worker_tiling=linear or a Herdr Team.`);
   }
   if (backend === "tmux" && Math.floor((1 - policy.leader_share) * 100) < 1) {
     throw new Error(`Pane leader_share=${policy.leader_share} leaves tmux no Worker pane; use leader_share <= 0.99.`);

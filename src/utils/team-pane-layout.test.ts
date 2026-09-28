@@ -52,6 +52,19 @@ describe("Team pane layout policy", () => {
     expect(resolveTeamPaneLayout({ ...loaded, backend: "tmux" })).toEqual({ leader_share: 0.8, worker_tiling: "linear" });
   });
 
+  it("preserves adaptive geometry options and validates positive limits", () => {
+    expect(resolveTeamPaneLayout({
+      explicit: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2, worker_limit: 3 },
+      backend: "herdr",
+    })).toEqual({ leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2, worker_limit: 3 });
+    expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 0 }, backend: "herdr" }))
+      .toThrow(/Invalid pane_layout/);
+    expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 0.6, worker_tiling: "adaptive", worker_limit: 0 }, backend: "herdr" }))
+      .toThrow(/Invalid pane_layout/);
+    expect(() => resolveTeamPaneLayout({ explicit: { leader_share: 0.6, worker_tiling: "adaptive" }, backend: "tmux" }))
+      .toThrow(/unsupported.*tmux/i);
+  });
+
   it("accepts shares above 0.1 and refuses invalid or unsupported policies before creation", () => {
     expect(resolveTeamPaneLayout({ explicit: { leader_share: 0.1001, worker_tiling: "linear" }, backend: "tmux" }))
       .toEqual({ leader_share: 0.1001, worker_tiling: "linear" });

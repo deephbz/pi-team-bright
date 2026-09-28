@@ -192,53 +192,387 @@ describe("HerdrAdapter", () => {
     expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
   });
 
-  it("places four grid Workers as a stable 2x2 Worker region", () => {
-    const layout = success({ type: "pane_layout", layout: {
-      tab_id: "tab-a", workspace_id: "w4",
-      panes: [
-        { pane_id: "pane-leader", rect: { x: 0, width: 60 } },
-        { pane_id: "pane-worker-1", rect: { x: 60, width: 20 } },
-        { pane_id: "pane-worker-2", rect: { x: 60, width: 20 } },
-        { pane_id: "pane-worker-3", rect: { x: 80, width: 20 } },
-      ],
-    } });
+  it("enforces the first leader share and 20x5 geometry before splitting adaptively", () => {
     exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: { panes: [{ pane_id: "pane-leader", rect: { width: 100 } }] } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-1" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "workspace-a",
+        panes: [{ pane_id: "pane-leader", rect: { x: 0, y: 0, width: 100, height: 5 } }],
+      } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
       .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("pane-worker-1", "worker-1"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-2" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("pane-worker-2", "worker-2"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-3" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("pane-worker-3", "worker-3"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-worker-4" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("pane-worker-4", "worker-4"));
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
 
-    const placement = { leaderPaneId: "pane-leader", paneLayout: { leader_share: 0.6, worker_tiling: "grid" as const } };
-    expect(adapter.spawn({ name: "worker-1", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: [] } })).toBe("pane-worker-1");
-    expect(adapter.spawn({ name: "worker-2", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: ["pane-worker-1"] } })).toBe("pane-worker-2");
-    expect(adapter.spawn({ name: "worker-3", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: ["pane-worker-1", "pane-worker-2"] } })).toBe("pane-worker-3");
-    expect(adapter.spawn({ name: "worker-4", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { ...placement, workerPaneIds: ["pane-worker-1", "pane-worker-2", "pane-worker-3"] } })).toBe("pane-worker-4");
+    adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: [],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
+      },
+    });
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "pane-leader", "--direction", "right", "--ratio", "0.6",
+    ]));
+  });
 
-    expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "pane" && args[1] === "split").map(([, args]: [string, string[]]) => args)).toEqual([
-      expect.arrayContaining(["--pane", "pane-leader", "--direction", "right"]),
-      expect.arrayContaining(["--pane", "pane-worker-1", "--direction", "down"]),
-      expect.arrayContaining(["--pane", "pane-worker-1", "--direction", "right"]),
-      expect.arrayContaining(["--pane", "pane-worker-2", "--direction", "right"]),
+  it("refuses the first Worker when the leader or Worker region is below 20x5", () => {
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "workspace-a",
+        panes: [{ pane_id: "pane-leader", rect: { x: 0, y: 0, width: 30, height: 5 } }],
+      } }));
+
+    expect(() => adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: [],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
+      },
+    })).toThrow(/insufficient.*first Worker/i);
+    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
+  });
+
+  it("uses grid as a read-compatible alias for live adaptive placement", () => {
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "workspace-a",
+        panes: [
+          { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 42 } },
+          { pane_id: "worker-1", rect: { x: 60, y: 0, width: 48, height: 30 } },
+        ],
+      } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-2" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-2", "worker-2"));
+
+    expect(adapter.spawn({
+      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-1"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "grid" },
+      },
+    })).toBe("worker-2");
+    expect(exec).toHaveBeenCalledWith("herdr", [
+      "pane", "split", "--pane", "worker-1", "--direction", "down", "--ratio", "0.5",
+      "--cwd", "/repo", "--no-focus",
     ]);
+  });
+
+  it("ranks viable registered panes by max(width / columns_per_row, height) and splits the visual winner", () => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 42 } },
+      { pane_id: "worker-a", rect: { x: 60, y: 0, width: 100, height: 4 } },
+      { pane_id: "worker-b", rect: { x: 60, y: 0, width: 48, height: 30 } },
+      { pane_id: "worker-c", rect: { x: 60, y: 0, width: 40, height: 30 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-a", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-b", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-c", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    expect(adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader",
+        workerPaneIds: ["worker-a", "worker-b", "worker-c"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
+      },
+    })).toBe("worker-new");
+    expect(exec).toHaveBeenCalledWith("herdr", [
+      "pane", "split", "--pane", "worker-b", "--direction", "down", "--ratio", "0.5",
+      "--cwd", "/repo", "--no-focus",
+    ]);
+  });
+
+  it("reports insufficient geometry without splitting when every registered candidate is too small", () => {
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-a", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+        { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 42 } },
+        { pane_id: "worker-a", rect: { x: 60, y: 0, width: 39, height: 5 } },
+      ] } }));
+
+    expect(() => adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-a"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
+      },
+    })).toThrow(/insufficient.*geometry/i);
+    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
+  });
+
+  it("ranks by normalized dimension instead of area", () => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 70 } },
+      { pane_id: "worker-area", rect: { x: 60, y: 0, width: 50, height: 30 } },
+      { pane_id: "worker-score", rect: { x: 60, y: 30, width: 40, height: 36 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-area", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-score", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    expect(adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-area", "worker-score"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
+      },
+    })).toBe("worker-new");
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker-score", "--direction", "down",
+    ]));
+  });
+
+  it("re-reads live geometry after each split and follows reflowed panes", () => {
+    exec
+      // First Worker: leader 100x60, leader share 0.6 leaves a 40x60 region.
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "workspace-a",
+        panes: [{ pane_id: "pane-leader", rect: { x: 0, y: 0, width: 100, height: 60 } }],
+      } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-1", "worker-1"))
+      // Second Worker: the live layout makes worker-1 a 40x60 down-split candidate.
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "workspace-a",
+        panes: [
+          { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+          { pane_id: "worker-1", rect: { x: 60, y: 0, width: 40, height: 60 } },
+        ],
+      } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-2" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-2", "worker-2"))
+      // Third Worker: reflow leaves worker-2 larger; it must win over stale worker-1 geometry.
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-2", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
+        tab_id: "tab-a", workspace_id: "workspace-a",
+        panes: [
+          { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+          { pane_id: "worker-1", rect: { x: 60, y: 0, width: 40, height: 15 } },
+          { pane_id: "worker-2", rect: { x: 60, y: 15, width: 40, height: 30 } },
+        ],
+      } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-3" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-3", "worker-3"));
+
+    const policy = { leader_share: 0.6, worker_tiling: "adaptive" as const };
+    expect(adapter.spawn({ name: "worker-1", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: [], paneLayout: policy } })).toBe("worker-1");
+    expect(adapter.spawn({ name: "worker-2", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["worker-1"], paneLayout: policy } })).toBe("worker-2");
+    expect(adapter.spawn({ name: "worker-3", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["worker-1", "worker-2"], paneLayout: policy } })).toBe("worker-3");
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker-2", "--direction", "down",
+    ]));
+  });
+
+  it("breaks equal normalized scores by pane ID, independent of input order", () => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+      { pane_id: "worker-z", rect: { x: 60, y: 0, width: 40, height: 20 } },
+      { pane_id: "worker-a", rect: { x: 60, y: 20, width: 40, height: 20 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-z", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-a", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-z", "worker-a"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
+      },
+    });
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker-a", "--direction", "right",
+    ]));
+  });
+
+  it.each([
+    [2, "right"],
+    [3, "down"],
+  ] as const)("uses bias %s to choose the visual axis (%s)", (columnsPerRow, direction) => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+      { pane_id: "worker", rect: { x: 60, y: 0, width: 50, height: 20 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: columnsPerRow },
+      },
+    });
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker", "--direction", direction,
+    ]));
+  });
+
+  it("uses height for a square 50x50 pane", () => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+      { pane_id: "worker", rect: { x: 60, y: 0, width: 50, height: 50 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
+      },
+    });
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker", "--direction", "down",
+    ]));
+  });
+
+  it.each([
+    [41, 11, true, "right", 2],
+    [39, 11, false, "right", 2],
+    [37, 19, true, "down", 2],
+    [20, 9, false, "down", 3],
+    [20, 11, true, "down", 3],
+  ] as const)("handles odd dimensions %sx%s against the 20x5 minima", (width, height, viable, direction, columnsPerRow) => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+      { pane_id: "worker", rect: { x: 60, y: 0, width, height } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout);
+    if (viable) {
+      exec
+        .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+        .mockReturnValueOnce(renamed)
+        .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+      adapter.spawn({
+        name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+        panePlacement: {
+          leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
+          paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: columnsPerRow },
+        },
+      });
+      expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+        "pane", "split", "--pane", "worker", "--direction", direction,
+      ]));
+    } else {
+      expect(() => adapter.spawn({
+        name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+        panePlacement: {
+          leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
+          paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: columnsPerRow },
+        },
+      })).toThrow(/insufficient.*geometry/i);
+      expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
+    }
+  });
+
+  it("enforces the Worker limit before geometry queries", () => {
+    expect(() => adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-existing"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", worker_limit: 1 },
+      },
+    })).toThrow(/Worker limit 1/i);
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("skips stale and wrong-tab candidates, then selects a valid registered pane", () => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+      { pane_id: "worker-valid", rect: { x: 60, y: 0, width: 40, height: 30 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(failure("pane_not_found", "stale"))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-moved", tab_id: "tab-b", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-valid", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-stale", "worker-moved", "worker-valid"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
+      },
+    });
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker-valid",
+    ]));
+  });
+
+  it("excludes vertical-region candidates and panes absent from registration", () => {
+    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
+      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
+      { pane_id: "worker-vertical", rect: { x: 60, y: 1, width: 100, height: 60 } },
+      { pane_id: "rogue-not-registered", rect: { x: 60, y: 0, width: 100, height: 60 } },
+      { pane_id: "worker-valid", rect: { x: 60, y: 0, width: 40, height: 30 } },
+    ] } });
+    exec
+      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-vertical", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-valid", tab_id: "tab-a", workspace_id: "workspace-a" } }))
+      .mockReturnValueOnce(layout)
+      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
+      .mockReturnValueOnce(renamed)
+      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
+
+    adapter.spawn({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-vertical", "worker-valid"],
+        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
+      },
+    });
+    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+      "pane", "split", "--pane", "worker-valid",
+    ]));
   });
 
   it("refuses a stale exact Team Worker target without falling back to the leader", () => {
