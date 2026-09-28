@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-09-27
+Updated: 2026-09-28
 
 Current published release: stable `0.20.1` is on npm `latest` from annotated
 tag `v0.20.1` at `b4b1d99c8ee326bbf683acb26c6b4738f1a977f3`.
@@ -20,6 +20,14 @@ Parent composition and installed settings remain separate from publication.
 
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
 model roles. The Membership-observation surface remains in **sharing**.
+
+## Lead guidance: delegation boundary and second opinion
+
+[Decision 0017](../decisions/0017-delegation-boundary-and-second-opinion.md)
+keeps one lead, sets a fact/opinion delegation boundary, and makes independent
+review an opt-in `second-opinion` Worker requested by the user. The packaged
+skill and `AGENTS.md` carry the procedure; the settings example names the role.
+Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
 ## v0.19.0: model roles
 
@@ -166,6 +174,10 @@ restating executable definitions.
 
 ## Decisions still in force
 
+- [Decision 0017](../decisions/0017-delegation-boundary-and-second-opinion.md)
+  keeps one lead, delegates facts and keeps opinions with the lead, and makes
+  the second opinion opt-in. It narrows Decision 0014's persistent-reviewer
+  sentence to user request.
 - [Decision 0015](../decisions/0015-model-role-settings.md) supersedes the profile
   naming, default fallback, and repeated TUI examples from Decision 0014.
   Fixed Worker bindings and native Session recovery remain in force.

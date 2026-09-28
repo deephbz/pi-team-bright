@@ -6,10 +6,10 @@
         "thinking": "high",
         "use": "Implementation and validation."
       },
-      "reviewer": {
+      "second-opinion": {
         "model": "anthropic/claude-opus-4-6",
         "thinking": "high",
-        "use": "Independent review of design and evidence."
+        "use": "Opt-in independent judgment of plans and deliverables for high-stakes work."
       }
     },
     "default_model_role": "standard-worker",

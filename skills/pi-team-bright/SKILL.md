@@ -35,10 +35,44 @@ Omission selects the configured default model role; without one, select a role
 explicitly. Keep model selection at Worker creation. Tasks select an assignee;
 reuse keeps the saved binding. Invalid selections return valid model role names.
 
-For example, a builder implements and repairs; a reviewer checks independently.
+For example, a builder implements and repairs; a verifier checks independently.
 Their scopes stay stable while their assigned Tasks change. Reuse the recorded
 Worker name and exact scope with `ensure_worker`; put new work in Tasks, not scope.
 A launch receipt proves carrier setup, not that the Worker has accepted work.
+
+## Lead: delegate facts, keep opinions
+
+Workers establish facts. The lead forms opinions. Delegate bounded work whose
+result can be checked: searching git history, messages, data artifacts, and
+schemas; locating the relevant sources; checking a schema or contract; fixing
+lint and type errors; watching CI; running experiments and recording results.
+Ask such a Task for located sources with pointers and verified facts, at high
+precision and high recall, with observation separated from interpretation.
+
+Do not delegate understanding. Read the located sources yourself and form the
+whole picture before you decompose work, review a deliverable, or report to the
+user. When the material is too large to read, read the parts that decide the
+outcome, check the Worker's interpretation against them, and mark what you did
+not check as provisional. A report a Worker wrote is evidence to verify, not a
+conclusion to relay. The final report to the user is the lead's.
+
+## Lead: work with a second opinion
+
+The lead reviews deliverables itself unless the user requests a second opinion
+for high-stakes work. A second opinion is a Worker on the `second-opinion` model
+role with an independent perspective. It keeps its own judgment: a review Task
+asks for a verdict and ranked findings, never for confirmation of a decision
+already made. Answer disagreement with reasons; escalate unresolved disagreement
+to the user.
+
+Give the second opinion a reading bundle in Task prose: the goal in the user's
+terms, the audience, deliberate constraints, and direct pointers to the
+deliverable and the sources needed to judge it. Leave out the implementation
+history and earlier Attempts, so it judges what a reader without that history
+would see. The second opinion reports findings with a concrete simpler
+alternative for each; repair stays with the builder through a failure route.
+Reuse one second-opinion Worker for the Team. Create another only when the user
+asks for a cold read of one deliverable, and stop it after that Task resolves.
 
 ## Lead: assign or revise the Task graph
 
@@ -130,6 +164,12 @@ Record success or failure with external evidence. Use `block` for an external bl
 and `resume` when it clears. Follow the returned Task state after every transition.
 Keep still-relevant execution context in `current_context`; use evidence for outcomes
 and blockers. Send an Alert to the lead when exceptional clarification is needed.
+
+For a fact-finding Task, deliver located sources with pointers and verified facts.
+Separate what you observed from what you infer, and mark inference provisional.
+Do not write the conclusion the lead must form. For a second-opinion Task, judge
+the deliverable from the reading bundle and the sources it points to. Do not read
+other Workers' Task context or Attempts before you record your verdict.
 
 ## Refusals and recovery
 
