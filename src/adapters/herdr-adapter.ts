@@ -126,6 +126,10 @@ export class HerdrAdapter implements TerminalAdapter {
     return currentHerdrPane();
   }
 
+  renamePane(paneId: string, label: string): void {
+    this.invoke(["pane", "rename", paneId, label]);
+  }
+
   /**
    * Herdr identity may be inherited by an inner tmux server. That preserves
    * surface discovery but does not make tmux a valid carrier for a Herdr Team.
@@ -376,7 +380,7 @@ export class HerdrAdapter implements TerminalAdapter {
       // inference or mutation inside Herdr's readiness window. Presentation
       // failure must not prevent the Worker from starting.
       try {
-        this.invoke(["pane", "rename", paneId, options.name]);
+        this.renamePane(paneId, options.name);
         recordWorkerLaunchStage("carrier_label_applied");
       } catch (error) {
         recordWorkerLaunchStage("carrier_label_not_applied");

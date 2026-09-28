@@ -215,7 +215,9 @@ changes a Task.
   normal unrelated extension and Skill discovery. A distinct discovered Pi Team
   Bright copy violates the one-version-epoch rule and remains a documented
   installation risk. Herdr forwards the established Pi launch environment
-  allowlist into Worker launches. It names the exact pane returned by the split
+  allowlist into Worker launches. Team creation names the recorded leader pane
+  `<team name>-leader`. A naming failure warns without blocking Team creation.
+  It names the exact pane returned by the split
   with the stable Worker name before agent startup. A presentation-label failure
   is warned and traced but does not block Worker coordination.
   Placement remains Team-wide policy, never a per-Worker override; an unsupported

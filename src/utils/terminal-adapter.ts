@@ -53,6 +53,9 @@ export interface TerminalAdapter {
    */
   currentTargetId?(): string | null;
 
+  /** Set a presentation label on an exact pane without changing its identity. */
+  renamePane?(paneId: string, label: string): void;
+
   /**
    * Whether this process is directly carried by this backend rather than by a
    * nested terminal multiplexer. Each backend owns this evidence so future

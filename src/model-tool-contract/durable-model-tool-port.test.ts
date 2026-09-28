@@ -14,6 +14,7 @@ import { TASK_METADATA_SCHEMA } from "../utils/beads";
 import { readHiddenObservationProjection } from "../utils/hidden-observation";
 import { registerModelToolJourney } from "./pi-registration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
+import type { TerminalAdapter } from "../utils/terminal-adapter";
 import { taskVersionRef } from "./task-version-ref";
 import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD } from "../utils/sync-liveness-settings";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../coordination/observation-service";
@@ -155,7 +156,7 @@ async function createTeamWithPaneSettings(projectTrusted?: boolean, globalTeamSe
   return { result, createArgs };
 }
 
-async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle) {
+async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle, adapterOverrides: Partial<TerminalAdapter> = {}) {
   const root = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "pi-team-lifecycle-callback-"));
   paneSettingsRoots.push(root);
   const agentDir = path.join(root, "agent");
@@ -177,6 +178,7 @@ async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle) {
     setWindowTitle() {},
     killWindow() {},
     isWindowAlive: () => false,
+    ...adapterOverrides,
   });
   const name = teamName("lifecycle-callback");
   vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "abstain", reason: "not_bound" });
@@ -223,6 +225,50 @@ describe("DurableModelToolTeamPort pane settings", () => {
 });
 
 describe("DurableModelToolTeamPort lifecycle callback", () => {
+  it("names the committed leader pane once without re-reading the ambient target", async () => {
+    const renamePane = vi.fn();
+    const currentTargetId = vi.fn().mockReturnValueOnce("leader-pane").mockReturnValue("other-pane");
+    const lifecycle = { teamCreated: vi.fn(), stopWorker: vi.fn(), shutdownTeam: vi.fn() };
+    const { name, port, leaderSessionId } = await lifecycleCreateFixture(lifecycle, { renamePane, currentTargetId });
+
+    await expect(port.createTeam(leaderSessionId, { name, purpose: "Name the leader." })).resolves.toMatchObject({ kind: "created" });
+    const config = await teams.readConfig(name);
+    expect(config.members[0].terminalTarget).toEqual({ backend: "herdr", kind: "pane", targetId: "leader-pane" });
+    expect(currentTargetId).toHaveBeenCalledTimes(1);
+    expect(renamePane).toHaveBeenCalledExactlyOnceWith("leader-pane", `${name}-leader`);
+    expect(lifecycle.teamCreated.mock.invocationCallOrder[0]).toBeLessThan(renamePane.mock.invocationCallOrder[0]);
+  });
+
+  it("keeps the created Team usable when pane naming fails", async () => {
+    const renamePane = vi.fn(() => { throw new Error("pane rename unavailable"); });
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { name, port, leaderSessionId } = await lifecycleCreateFixture(
+      { stopWorker: vi.fn(), shutdownTeam: vi.fn() }, { renamePane },
+    );
+    await expect(port.createTeam(leaderSessionId, { name, purpose: "Non-blocking presentation." })).resolves.toMatchObject({ kind: "created" });
+    expect(teams.teamExists(name)).toBe(true);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("pane rename unavailable"));
+  });
+
+  it("does not rename an ambient pane when no exact leader target was recorded", async () => {
+    const renamePane = vi.fn();
+    const { name, port, leaderSessionId } = await lifecycleCreateFixture(
+      { stopWorker: vi.fn(), shutdownTeam: vi.fn() }, { renamePane, currentTargetId: () => null },
+    );
+    await expect(port.createTeam(leaderSessionId, { name, purpose: "No ambient fallback." })).resolves.toMatchObject({ kind: "created" });
+    expect(renamePane).not.toHaveBeenCalled();
+  });
+
+  it("does not rename a pane when Team creation fails", async () => {
+    const renamePane = vi.fn();
+    const { name, port, leaderSessionId } = await lifecycleCreateFixture(
+      { stopWorker: vi.fn(), shutdownTeam: vi.fn() }, { renamePane },
+    );
+    vi.spyOn(teams, "createTeam").mockRejectedValue(new Error("creation refused"));
+    await expect(port.createTeam(leaderSessionId, { name, purpose: "No naming before commit." })).resolves.toMatchObject({ kind: "unavailable" });
+    expect(renamePane).not.toHaveBeenCalled();
+  });
+
   it("creates durably before the callback and returns only after it completes", async () => {
     let enterCallback!: () => void;
     let releaseCallback!: () => void;

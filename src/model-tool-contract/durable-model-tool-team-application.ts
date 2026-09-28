@@ -38,7 +38,29 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
     try { const context = this.bindings.launchContext(id); const leaderCwd = context?.cwd ?? process.cwd(); const settings = loadTeamPaneLayoutSettings({ cwd: leaderCwd, projectTrusted: context?.projectTrusted ?? true }); paneLayout = resolveTeamPaneLayout({ explicit: input.pane_layout, project: settings.project, global: settings.global, backend: terminal.name }); const workerPolicy = loadWorkerResourcePolicy({ cwd: leaderCwd, projectTrusted: context?.projectTrusted === true }); modelRoles = compactModelRoles(workerPolicy.modelRoleSettings); defaultModelRole = workerPolicy.modelRoleSettings.defaultRole; const policy = loadSyncLivenessSettings(); syncLiveness = { waitSeconds: policy.waitSeconds, autoSyncEnabled: policy.autoSyncEnabled, autoSyncDelaySeconds: policy.autoSyncDelaySeconds, autoSyncUpdateThreshold: policy.autoSyncUpdateThreshold, policyVersion: policy.policyVersion, ...(policy.diagnostics.length ? { diagnostics: policy.diagnostics } : {}) }; } catch (error) { return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) }; }
     let authority; try { authority = await this.taskAuthority?.resolve(teamName); } catch (error) { return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) }; }
     if (!authority) return { kind: "unavailable", reason: "task_authority_unavailable", message: "The Team Task authority resolver is not attached to this port." };
-    try { const config = await teams.withTeamTopologyLease(teamName, (lease) => teams.createTeam(teamName, sessionFile, "lead-agent", input.purpose, undefined, undefined, authority.workspace, authority.authorityId, authority.fingerprint, lease, { backend: terminal.name, ...(terminal.currentTargetId?.() ? { leadTarget: { backend: terminal.name, kind: "pane", targetId: terminal.currentTargetId()! } } : {}) }, undefined, paneLayout, syncLiveness)); await this.lifecycle?.teamCreated?.(teamName, sessionFile); return { kind: "created", team: currentTeam(config), modelRoles, ...(defaultModelRole ? { defaultModelRole } : {}) }; } catch (error) { return { kind: "unavailable", reason: "team_authority_unavailable", message: error instanceof Error ? error.message : String(error) }; }
+    try {
+      const leaderPaneId = terminal.currentTargetId?.();
+      const config = await teams.withTeamTopologyLease(teamName, (lease) => teams.createTeam(
+        teamName, sessionFile, "lead-agent", input.purpose, undefined, undefined,
+        authority.workspace, authority.authorityId, authority.fingerprint, lease,
+        { backend: terminal.name, ...(leaderPaneId ? { leadTarget: { backend: terminal.name, kind: "pane", targetId: leaderPaneId } } : {}) },
+        undefined, paneLayout, syncLiveness,
+      ));
+      await this.lifecycle?.teamCreated?.(teamName, sessionFile);
+      const leader = config.members.find((member) => member.agentType === "lead" && member.isActive !== false);
+      const target = leader?.terminalTarget;
+      if (target?.kind === "pane" && target.backend === terminal.name && terminal.renamePane) {
+        try {
+          terminal.renamePane(target.targetId, `${config.name}-leader`);
+        } catch (error) {
+          // Naming is presentation; the committed Team remains usable.
+          console.warn(`[pi-teams] Team leader pane could not be named: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      return { kind: "created", team: currentTeam(config), modelRoles, ...(defaultModelRole ? { defaultModelRole } : {}) };
+    } catch (error) {
+      return { kind: "unavailable", reason: "team_authority_unavailable", message: error instanceof Error ? error.message : String(error) };
+    }
   }
   async ensureWorker(id: ExactLeaderSessionId, input: { name: string; scope: string; model_role?: string }, execution?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult> {
     const bound = await this.bindings.boundTeam(id); if (!bound) return { kind: "no_active_team" }; if (!this.launchBridge) return { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool Worker launch bridge is not attached to this port." };
