@@ -137,6 +137,98 @@ describe("TeamConfig authority recovery", () => {
     expect(JSON.parse(fs.readFileSync(configFile, "utf8")).paneLayout).toEqual(policy);
   });
 
+  it("counts current Worker Memberships for the optional capacity limit and frees stopped capacity", async () => {
+    await createTeam(
+      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
+      undefined, undefined, { backend: "tmux" }, "model-tools",
+      { leader_share: 0.6, worker_tiling: "linear", worker_limit: 1 },
+    );
+    const member = (name: string) => ({
+      membershipId: `membership-${name}`,
+      pendingLaunchId: `launch-${name}`,
+      agentId: `${name}@${teamName}`,
+      name,
+      agentType: "teammate",
+      joinedAt: 1,
+      cwd: "/tmp",
+      subscriptions: [],
+      isActive: true,
+    });
+    await addMember(teamName, member("worker-a"));
+    await expect(addMember(teamName, member("worker-b"))).rejects.toThrow(/Worker limit 1/i);
+    await expect(addMember(teamName, { ...member("historical-worker"), isActive: false })).resolves.toBeUndefined();
+    await deactivateMembership(teamName, "membership-worker-a", "replaced");
+    await expect(addMember(teamName, member("worker-b"))).resolves.toBeUndefined();
+  });
+
+  it("serializes competing capacity admissions and allows reuse after stop", async () => {
+    await createTeam(
+      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
+      undefined, undefined, { backend: "tmux" }, "model-tools",
+      { leader_share: 0.6, worker_tiling: "linear", worker_limit: 1 },
+    );
+    const member = (name: string) => ({
+      membershipId: `membership-${name}`,
+      pendingLaunchId: `launch-${name}`,
+      agentId: `${name}@${teamName}`,
+      name,
+      agentType: "teammate" as const,
+      joinedAt: 1,
+      cwd: "/tmp",
+      subscriptions: [],
+      isActive: true,
+    });
+    const results = await Promise.allSettled([
+      addMember(teamName, member("race-a")),
+      addMember(teamName, member("race-b")),
+    ]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+    await deactivateMembership(teamName, "membership-race-a", "replaced");
+    await deactivateMembership(teamName, "membership-race-b", "replaced");
+    await expect(addMember(teamName, member("race-reuse"))).resolves.toBeUndefined();
+  });
+
+  it("characterizes inactive insertion at a full current Worker limit", async () => {
+    await createTeam(
+      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
+      undefined, undefined, { backend: "tmux" }, "model-tools",
+      { leader_share: 0.6, worker_tiling: "linear", worker_limit: 1 },
+    );
+    const historical = {
+      membershipId: "membership-historical",
+      agentId: "historical@authority-unit",
+      name: "historical",
+      agentType: "teammate" as const,
+      joinedAt: 1,
+      cwd: "/tmp",
+      subscriptions: [],
+      isActive: false,
+    };
+    await expect(addMember(teamName, historical)).resolves.toBeUndefined();
+    await addMember(teamName, {
+      membershipId: "membership-current",
+      pendingLaunchId: "launch-current",
+      agentId: "current@authority-unit",
+      name: "current",
+      agentType: "teammate",
+      joinedAt: 1,
+      cwd: "/tmp",
+      subscriptions: [],
+      isActive: true,
+    });
+    await expect(addMember(teamName, {
+      membershipId: "membership-late-history",
+      agentId: "late-history@authority-unit",
+      name: "late-history",
+      agentType: "teammate",
+      joinedAt: 1,
+      cwd: "/tmp",
+      subscriptions: [],
+      isActive: false,
+    })).resolves.toBeUndefined();
+  });
+
   it("refuses an invalid pane policy before writing TeamConfig", async () => {
     await expect(createTeam(
       teamName, "session", "lead", "", undefined, undefined, undefined, undefined,

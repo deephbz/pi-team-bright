@@ -1,8 +1,15 @@
 import { Type, type Static } from "typebox";
 /** Durable pane placement policy captured by a Team epoch. */
+export declare const DEFAULT_COLUMNS_PER_ROW = 2;
+export declare const MIN_WORKER_PANE_WIDTH = 20;
+export declare const MIN_WORKER_PANE_HEIGHT = 5;
 export declare const TeamPaneLayoutSchema: Type.TObject<{
     leader_share: Type.TNumber;
-    worker_tiling: Type.TEnum<["linear", "grid"]>;
+    /** `grid` is retained as a read-compatible alias for adaptive placement. */
+    worker_tiling: Type.TEnum<["linear", "adaptive", "grid"]>;
+    columns_per_row: Type.TOptional<Type.TInteger>;
+    /** Optional cap on registered Workers. Omitted preserves the historical unlimited behavior. */
+    worker_limit: Type.TOptional<Type.TInteger>;
 }>;
 export type TeamPaneLayout = Static<typeof TeamPaneLayoutSchema>;
 export declare const DEFAULT_TEAM_PANE_LAYOUT: TeamPaneLayout;

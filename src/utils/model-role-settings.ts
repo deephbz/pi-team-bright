@@ -163,12 +163,12 @@ function validateSharedNamespace(
   }
   const layout = nestedObject(team, "pane_layout", "pi_team_bright.team.pane_layout", source, file, diagnostics);
   if (layout) {
-    keys(layout, ["leader_share", "worker_tiling"], [], "pi_team_bright.team.pane_layout", source, file, diagnostics);
+    keys(layout, ["leader_share", "worker_tiling", "columns_per_row", "worker_limit"], [], "pi_team_bright.team.pane_layout", source, file, diagnostics);
     if (!Check(TeamPaneLayoutSchema, layout)) {
       for (const error of Value.Errors(TeamPaneLayoutSchema, layout)) {
         const names = error.keyword === "required" ? error.params.requiredProperties : [error.instancePath.split("/").filter(Boolean)[0]];
         for (const key of names) {
-          if (key && !["leader_share", "worker_tiling"].includes(key)) continue;
+          if (key && !["leader_share", "worker_tiling", "columns_per_row", "worker_limit"].includes(key)) continue;
           const field = `pi_team_bright.team.pane_layout${key ? `.${key}` : ""}`;
           diagnostic(diagnostics, source, file, field, "invalid_value",
             `${field} is invalid: ${error.message}.`, "The pane layout is refused when this Team setting is selected.");
