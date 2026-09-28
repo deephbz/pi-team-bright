@@ -5,11 +5,13 @@ import path from "node:path";
 import * as paths from "./paths";
 import {
   createTeam,
+  addMember,
   deactivateMembership,
   ensureLogicalWorker,
   readConfig,
   readLogicalWorker,
   resolveCurrentLeadSessionBinding,
+  resolveCurrentTeammateSessionBinding,
   writeConfigAtomic,
 } from "./teams";
 import type { TeamConfig } from "./models";
@@ -123,6 +125,50 @@ describe("exact lead Session resolution", () => {
     for (const teamName of teamNames.splice(0)) {
       fs.rmSync(paths.teamDir(teamName), { recursive: true, force: true });
       fs.rmSync(paths.taskDir(teamName), { recursive: true, force: true });
+    }
+  });
+
+  it.each(["lead", "teammate"] as const)("isolates unrelated future settings during %s Session discovery", async (role) => {
+    const suffix = `${process.pid}-${Date.now()}-${role}`;
+    const own = `discovery-own-${suffix}`;
+    const foreign = `discovery-foreign-${suffix}`;
+    teamNames.push(own, foreign);
+    const session = `/tmp/discovery-${suffix}.jsonl`;
+    await createTeam(own, role === "lead" ? session : `${session}-lead`, "lead");
+    if (role === "teammate") await addMember(own, {
+      agentId: "worker", name: "worker", agentType: "teammate", membershipId: "worker-generation",
+      joinedAt: 1, cwd: "/tmp", subscriptions: [], isActive: true, sessionFile: session,
+    });
+    const other = await createTeam(foreign, `${session}-foreign`, "foreign-lead");
+    const file = paths.configPath(foreign);
+    const future = { ...other, terminalBackend: "herdr", paneLayout: { leader_share: 0.6, worker_tiling: "future-layout" } };
+    fs.writeFileSync(file, JSON.stringify(future));
+    const resolve = role === "lead" ? resolveCurrentLeadSessionBinding : resolveCurrentTeammateSessionBinding;
+
+    await expect(readConfig(foreign)).rejects.toThrow(/pane_layout/);
+    await expect(resolve(session)).resolves.toMatchObject({ status: "bound", teamName: own });
+    await expect(resolve(`${session}-unbound`)).resolves.toEqual({ status: "abstain", reason: "not_bound" });
+    expect(fs.readFileSync(file, "utf8")).toBe(JSON.stringify(future));
+
+    // A matching future record cannot be skipped as foreign evidence.
+    future.members[0].sessionFile = session;
+    fs.writeFileSync(file, JSON.stringify(future));
+    await expect(resolve(session)).resolves.toEqual({ status: "abstain", reason: "runtime_metadata_unavailable" });
+  });
+
+  it.each([
+    "{",
+    JSON.stringify({ members: "unreadable" }),
+    JSON.stringify({ members: [null] }),
+    JSON.stringify({ members: [{ sessionFile: 42 }] }),
+  ])("refuses to prove uniqueness from unreadable membership evidence (%s)", async (contents) => {
+    const suffix = `${process.pid}-${Date.now()}-${teamNames.length}`;
+    const name = `discovery-unreadable-${suffix}`;
+    teamNames.push(name);
+    fs.mkdirSync(paths.teamDir(name), { recursive: true });
+    fs.writeFileSync(paths.configPath(name), contents);
+    for (const resolve of [resolveCurrentLeadSessionBinding, resolveCurrentTeammateSessionBinding]) {
+      await expect(resolve(`/tmp/unbound-${suffix}.jsonl`)).resolves.toEqual({ status: "abstain", reason: "runtime_metadata_unavailable" });
     }
   });
 

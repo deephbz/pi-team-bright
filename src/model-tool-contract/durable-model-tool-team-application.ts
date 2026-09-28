@@ -30,7 +30,7 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
     if (!sessionFile) return { kind: "unavailable", reason: "session_binding_unavailable", message: "The model-tool surface requires the exact durable leader Session file." };
     const existing = await teams.resolveCurrentLeadSessionBinding(sessionFile);
     if (existing.status === "bound") return { kind: "refused", reason: "active_team_exists" };
-    if (existing.status !== "abstain" || existing.reason === "runtime_metadata_unavailable") return { kind: "unavailable", reason: "session_binding_unavailable", message: "The exact leader Session binding is not uniquely available." };
+    if (existing.reason !== "not_bound") return { kind: "unavailable", reason: "session_binding_unavailable", message: `The exact leader Session binding is not uniquely available (${existing.reason}).` };
     const teamName = paths.sanitizeName(input.name); const terminal = getTerminalAdapter();
     if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the model-tool Worker." };
     let paneLayout: TeamPaneLayout; let syncLiveness: TeamConfig["syncLiveness"];

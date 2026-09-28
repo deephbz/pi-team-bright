@@ -548,6 +548,33 @@ export function findTeammateBySessionFile(sessionFile: string): { teamName: stri
   return matches[0] ?? null;
 }
 
+/** Discovery reads stable Membership identity before validating Team-specific policy. */
+function configHasCurrentSession(file: string, sessionFile: string): boolean {
+  const value: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw malformedConfigError(file, "Session discovery requires a config object");
+  }
+  const record = value as Record<string, unknown>;
+  const members = record.members === undefined ? [] : record.members;
+  if (!Array.isArray(members)) throw malformedConfigError(file, "members must be an array");
+  let matches = false;
+  for (const raw of members) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw malformedConfigError(file, "Session discovery requires Membership objects");
+    }
+    const member = raw as Record<string, unknown>;
+    if (member.isActive !== undefined && typeof member.isActive !== "boolean") {
+      throw malformedConfigError(file, "Membership isActive must be a boolean");
+    }
+    if (member.isActive === false) continue;
+    if (member.sessionFile !== undefined && typeof member.sessionFile !== "string") {
+      throw malformedConfigError(file, "Membership sessionFile must be a string");
+    }
+    if (member.sessionFile === sessionFile) matches = true;
+  }
+  return matches;
+}
+
 export type CurrentLeadSessionBindingResolution =
   | { status: "bound"; teamName: string; member: Member }
   | {
@@ -570,6 +597,7 @@ export async function resolveCurrentLeadSessionBinding(
     for (const teamName of fs.readdirSync(TEAMS_DIR)) {
       const file = configPath(teamName);
       if (!fs.existsSync(file)) continue;
+      if (!configHasCurrentSession(file, sessionFile)) continue;
       const config = readConfigRaw(file);
       for (const member of config.members) {
         if (
@@ -631,7 +659,7 @@ export type CurrentTeammateSessionBindingResolution =
 /**
  * Resolve an operation-specific exact teammate binding without using names,
  * environment, process, pane, or launch metadata. A strict scan refuses to
- * claim uniqueness when any TeamConfig is unreadable, then the winning
+ * claim uniqueness when Membership identity is unreadable, then the winning
  * Membership generation is revalidated under its mutation and config locks.
  */
 export async function resolveCurrentTeammateSessionBinding(
@@ -645,6 +673,7 @@ export async function resolveCurrentTeammateSessionBinding(
     for (const teamName of fs.readdirSync(TEAMS_DIR)) {
       const file = configPath(teamName);
       if (!fs.existsSync(file)) continue;
+      if (!configHasCurrentSession(file, sessionFile)) continue;
       const config = readConfigRaw(file);
       for (const member of config.members) {
         if (member.isActive === false || member.sessionFile !== sessionFile)
