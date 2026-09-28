@@ -2,14 +2,13 @@
 
 Updated: 2026-09-28
 
-Current published release: stable `0.20.1` is on npm `latest` from annotated
-tag `v0.20.1` at `b4b1d99c8ee326bbf683acb26c6b4738f1a977f3`.
+Current published release: stable `0.21.1` is on npm `latest` from annotated
+tag `v0.21.1` at `de3f52c6b14db348d2a4d5149c8514ea65173925`.
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.20.1)
-was published at `2026-09-27T14:01:52Z`; it is not a draft or prerelease.
-The [release receipt](../journal/2026-09-27-v0.20.1-release-receipt.md) records the
-completed gates. Version `0.20.1` preserves `0.20.0` runtime behavior and remains
-backward compatible with `0.19.0` Team state.
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.21.1)
+was published at `2026-09-28T09:32:10Z`; it is not a draft or prerelease.
+The [release receipt](../journal/2026-09-28-v0.21.1-release-receipt.md) records the
+completed gates. No Team storage migration is required.
 
 From versions before `0.19.0`, named model roles replace model profiles and
 raw Worker defaults. Finish or
@@ -29,13 +28,13 @@ review an opt-in `second-opinion` Worker requested by the user. The packaged
 skill and `AGENTS.md` carry the procedure; the settings example names the role.
 Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
-## v0.21.1 preparation
+## v0.21.1
 
-The [release checklist](../release/v0.21.1-release-checklist.md) tracks local and
-hosted gates. The candidate includes adaptive Herdr panes, exact leader pane
-names, Session-discovery isolation, and the lead delegation guidance. Published
-npm `latest` remains `0.20.1` until registry verification completes. Architecture
-impact: none at the HyperCarrier boundary.
+The release includes adaptive Herdr panes, exact leader pane names,
+Session-discovery isolation, and the lead delegation guidance. The
+[release checklist](../release/v0.21.1-release-checklist.md) records completed
+local, installed-package, live-Team, hosted, and registry gates. Restart Pi to
+load the fixes. Architecture impact: none at the HyperCarrier boundary.
 
 ## Session discovery isolation
 
