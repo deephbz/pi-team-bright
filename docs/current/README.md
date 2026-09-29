@@ -36,6 +36,15 @@ Session-discovery isolation, and the lead delegation guidance. The
 local, installed-package, live-Team, hosted, and registry gates. Restart Pi to
 load the fixes. Architecture impact: none at the HyperCarrier boundary.
 
+## Delivery around compaction
+
+No Pi Team Bright model message reaches Pi while the Session compacts. One gate
+in the Session adapter holds Task, Alert, team_sync, and doctor sends until Pi
+reports the compaction end, then sends them in order. Pi 0.83 reports no failed
+compaction; a 15-minute hold limit covers that case. The
+[journal entry](../journal/2026-09-29-compaction-delivery-gate.md) records the
+real Pi evidence. Automatic compaction has no real-provider run yet.
+
 ## Session discovery isolation
 
 Session discovery reads Membership identity before validating matching Team

@@ -28,6 +28,7 @@ import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
+import { CompactionDeliveryGate } from "./compaction-delivery-gate";
 import { openPtbCommandPalette } from "./ptb-command-palette";
 import {
   FRAMEWORK_SYNC_ENTRY_TYPE,
@@ -94,8 +95,14 @@ export function createPiTeamSessionAdapter(options: {
   const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
 
   const modelToolJourney = () => getModelToolJourney();
+  // Every Pi Team Bright message to the model passes this gate.
+  const compactionGate = new CompactionDeliveryGate({
+    onError: (error) => console.error("[pi-teams] held delivery failed after compaction:", error),
+  });
+  const messageSink = compactionGate.sink(pi);
+  compactionGate.onOpen(() => syncNudgeConductor?.notify());
   const frameworkSync = new FrameworkSyncExecutionController({
-    pi,
+    pi: messageSink,
     current: () => {
       const ctx = leaderContext;
       const sessionId = ctx?.sessionManager?.getSessionId?.();
@@ -123,7 +130,7 @@ export function createPiTeamSessionAdapter(options: {
       const ctx = leaderContext;
       const sessionId = ctx?.sessionManager?.getSessionId?.();
       const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
-      return !leaderRunSettled || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
+      return !leaderRunSettled || compactionGate.isClosed || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
         || (!!pending && pending.toolCallId !== ownToolCallId);
     },
     notify: (message, level = "info") => {
@@ -261,9 +268,9 @@ const runDoctor = async (ctx: any, requestedTeamName?: string) => {
       present("Doctor request cancelled because the Session or Team changed. Run /ptb doctor again.", "warning");
       return;
     }
-    const queued = ctx.isIdle?.() !== true;
+    const queued = ctx.isIdle?.() !== true || compactionGate.isClosed;
     try {
-      pi.sendMessage({ customType: PTB_DOCTOR_CUSTOM_TYPE, content, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+      messageSink.sendMessage({ customType: PTB_DOCTOR_CUSTOM_TYPE, content, display: true }, { triggerTurn: true, deliverAs: "followUp" });
       present(queued ? "Doctor queued after current turn." : "Doctor context submitted.");
     } catch {
       present("Doctor context could not be sent. Retry /ptb doctor.", "error");
@@ -426,7 +433,7 @@ async function startSyncNudgeConductor(ctx: any) {
   };
   const busy = (): boolean => {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
-    return !leaderRunSettled || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
+    return !leaderRunSettled || compactionGate.isClosed || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
       || frameworkSync.isRunning
       || (!!sessionId && !!modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)));
   };
@@ -503,7 +510,7 @@ function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any) {
     throw new Error("Recipient delivery activation requires its exact current Pi Session context.");
   }
   const entries = () => ctx.sessionManager?.buildContextEntries?.() ?? ctx.sessionManager?.getEntries?.() ?? [];
-  const direct = new DirectMessageDelivery(pi, {
+  const direct = new DirectMessageDelivery(messageSink, {
     teamName: binding.teamName,
     recipient: binding.recipient,
     membershipId: binding.membershipId,
@@ -511,7 +518,7 @@ function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any) {
     pollMs: messagePollMs(),
     membership: alertMembership,
   });
-  const task = new TaskChangeDelivery(pi, {
+  const task = new TaskChangeDelivery(messageSink, {
     teamName: binding.teamName, recipient: binding.recipient, membershipId: binding.membershipId, sessionFile: binding.sessionFile,
     pollMs: taskPollMs(), membership: taskDeliveryMembership,
     reconciliationQuery: new BeadsTaskReconciliationQuery(binding.teamName, taskReadAdapterFactory),
@@ -597,8 +604,12 @@ function registerSessionHooks() {
   pi.on("session_before_switch", () => { frameworkSync.invalidate(); });
   pi.on("session_before_fork", () => { frameworkSync.invalidate(); });
   pi.on("session_before_tree", () => { frameworkSync.invalidate(); doctorGeneration++; });
-  pi.on("session_before_compact", () => { frameworkSync.invalidate(); doctorGeneration++; });
+  pi.on("session_before_compact", () => { compactionGate.begin(); frameworkSync.invalidate(); doctorGeneration++; });
+  pi.on("session_compact", () => { compactionGate.end(); });
+  // Pi 0.83 lacks this event; the gate's hold limit covers that version.
+  (pi.on as (event: string, handler: () => void) => void)("session_compact_failed", () => { compactionGate.end(); });
   pi.on("session_start", async (event, ctx) => {
+  compactionGate.reset();
   doctorGeneration++;
   paths.ensureDirs();
   stopDeliveries();
@@ -734,6 +745,7 @@ function registerSessionHooks() {
 });
 
 pi.on("session_shutdown", async (event, ctx) => {
+  compactionGate.reset();
   settingsWarnings.clear(ctx);
   doctorGeneration++;
   if (isTeammate && event.reason === "reload") {
