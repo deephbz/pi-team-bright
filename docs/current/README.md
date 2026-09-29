@@ -1,13 +1,13 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-09-28
+Updated: 2026-09-29
 
-Current published release: stable `0.21.1` is on npm `latest` from annotated
-tag `v0.21.1` at `de3f52c6b14db348d2a4d5149c8514ea65173925`.
+Current published release: stable `0.21.2` is on npm `latest` from annotated
+tag `v0.21.2` at `723225bc92ef239aeeae306baaf28486b61dcf2e`.
 npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.21.1)
-was published at `2026-09-28T09:32:10Z`; it is not a draft or prerelease.
-The [release receipt](../journal/2026-09-28-v0.21.1-release-receipt.md) records the
+The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.21.2)
+was published at `2026-09-29T15:25:53Z`; it is not a draft or prerelease.
+The [release receipt](../journal/2026-09-29-v0.21.2-release-receipt.md) records the
 completed gates. No Team storage migration is required.
 
 From versions before `0.19.0`, named model roles replace model profiles and
@@ -20,12 +20,12 @@ Parent composition and installed settings remain separate from publication.
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
 model roles. The Membership-observation surface remains in **sharing**.
 
-## v0.21.2 preparation
+## v0.21.2
 
-The [release checklist](../release/v0.21.2-release-checklist.md) tracks local and
-hosted gates. The candidate adds the compaction delivery gate. Published npm
-`latest` remains `0.21.1` until registry verification completes. Architecture
-impact: none at the HyperCarrier boundary.
+The release adds the compaction delivery gate. The
+[release checklist](../release/v0.21.2-release-checklist.md) records completed
+local, installed-package, live-Team, hosted, and registry gates. Restart Pi to
+load the fix. Architecture impact: none at the HyperCarrier boundary.
 
 ## Lead guidance: delegation boundary and second opinion
 
@@ -35,14 +35,6 @@ review an opt-in `second-opinion` Worker requested by the user. The packaged
 skill and `AGENTS.md` carry the procedure; the settings example names the role.
 Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
-## v0.21.1
-
-The release includes adaptive Herdr panes, exact leader pane names,
-Session-discovery isolation, and the lead delegation guidance. The
-[release checklist](../release/v0.21.1-release-checklist.md) records completed
-local, installed-package, live-Team, hosted, and registry gates. Restart Pi to
-load the fixes. Architecture impact: none at the HyperCarrier boundary.
-
 ## Delivery around compaction
 
 No Pi Team Bright model message reaches Pi while the Session compacts. One gate
@@ -50,7 +42,8 @@ in the Session adapter holds Task, Alert, team_sync, and doctor sends until Pi
 reports the compaction end, then sends them in order. Pi 0.83 reports no failed
 compaction; a 15-minute hold limit covers that case. The
 [journal entry](../journal/2026-09-29-compaction-delivery-gate.md) records the
-real Pi evidence. Automatic compaction has no real-provider run yet.
+real Pi evidence; the release receipt adds a real-provider manual compaction.
+Automatic compaction has no real-provider run yet.
 
 ## Session discovery isolation
 
