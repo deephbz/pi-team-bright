@@ -39,6 +39,8 @@ types, implementations, and tests.
 - `docs/decisions/` preserves durable rationale and explicit supersession.
 - `docs/journal/` is append-only historical evidence: attempts, observations,
   measurements, screenshots, and result artifacts.
+- A release is a pushed version tag; CI publishes. Publication adds no commit
+  ([releasing](docs/maintainers/releasing.md)).
 - After an interface stabilizes, its exact spec belongs in types, public
   schemas, implementations, and tests. Docs keep intent and pointers rather
   than a second parameter or state-machine copy.
