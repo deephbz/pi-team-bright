@@ -37,6 +37,15 @@ exhaustive parameter reference.
 - [Decision 0016](decisions/0016-framework-team-synchronization.md) records intent.
   The [work record](projects/team-sync-continuity.md) records real Pi evidence.
 
+## Delivery around compaction
+
+- [`compaction-delivery-gate.ts`](../extensions/compaction-delivery-gate.ts)
+  holds every Pi Team Bright model message while the Pi Session compacts.
+  The Session adapter routes Task, Alert, team_sync, and doctor sends through it.
+- [`compaction-delivery-adapter.test.ts`](../extensions/compaction-delivery-adapter.test.ts)
+  checks the adapter hooks. `npm run e2e:compaction-delivery` runs a real Pi
+  Team through manual compaction; `PI_TEAM_SYNC_TEST_PI_CLI` selects the Pi CLI.
+
 ## Read-only status diagnosis
 
 - [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.
