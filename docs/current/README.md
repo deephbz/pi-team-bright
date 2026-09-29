@@ -20,6 +20,13 @@ Parent composition and installed settings remain separate from publication.
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
 model roles. The Membership-observation surface remains in **sharing**.
 
+## v0.21.2 preparation
+
+The [release checklist](../release/v0.21.2-release-checklist.md) tracks local and
+hosted gates. The candidate adds the compaction delivery gate. Published npm
+`latest` remains `0.21.1` until registry verification completes. Architecture
+impact: none at the HyperCarrier boundary.
+
 ## Lead guidance: delegation boundary and second opinion
 
 [Decision 0017](../decisions/0017-delegation-boundary-and-second-opinion.md)
