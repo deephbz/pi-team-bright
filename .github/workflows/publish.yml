@@ -1,26 +1,13 @@
 name: Publish npm package
-run-name: ${{ inputs.run_nonce }}
 
+# Pushing tag v<package.json version> publishes. A prerelease version goes to
+# npm `next`; any other version goes to `latest`.
 on:
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Verify all release gates without publishing (set false only to publish)
-        required: true
-        default: true
-        type: boolean
-      run_nonce:
-        description: Correlation nonce for this dispatch
-        required: true
-        type: string
-      tag:
-        description: npm dist-tag used only when dry_run is false
-        required: true
-        default: next
-        type: string
+  push:
+    tags: ["v*"]
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -34,11 +21,26 @@ jobs:
           node-version: 24.x
           registry-url: https://registry.npmjs.org
           cache: npm
+      - name: Match tag to package version
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          test "$GITHUB_REF_NAME" = "v$version"
+          case "$version" in *-*) dist_tag=next ;; *) dist_tag=latest ;; esac
+          echo "NPM_DIST_TAG=$dist_tag" >> "$GITHUB_ENV"
       - run: npm ci
       - run: node scripts/materialize-beads-linux-amd64.cjs
       # Keep the same deterministic carrier surface as CI.
       - run: TERM_PROGRAM=iTerm.app npm run test:full
       - run: npm run test:lanes
       - run: npm run verify:package
-      - if: inputs.dry_run == false
-        run: npm publish --access public --provenance --tag "${{ inputs.tag }}"
+      - run: npm publish --access public --provenance --tag "$NPM_DIST_TAG"
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="docs/release/$GITHUB_REF_NAME-release-notes.md"
+          if [ -f "$notes" ]; then flags=(--notes-file "$notes"); else flags=(--generate-notes); fi
+          if [ "$NPM_DIST_TAG" = next ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" "${flags[@]}"
