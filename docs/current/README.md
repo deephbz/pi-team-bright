@@ -2,13 +2,9 @@
 
 Updated: 2026-09-29
 
-Current published release: stable `0.21.2` is on npm `latest` from annotated
-tag `v0.21.2` at `723225bc92ef239aeeae306baaf28486b61dcf2e`.
-npm `next` remains on historical prerelease `0.17.0-rc.14`.
-The [GitHub Release](https://github.com/deephbz/pi-team-bright/releases/tag/v0.21.2)
-was published at `2026-09-29T15:25:53Z`; it is not a draft or prerelease.
-The [release receipt](../journal/2026-09-29-v0.21.2-release-receipt.md) records the
-completed gates. No Team storage migration is required.
+Published versions and their evidence live in
+[GitHub Releases](https://github.com/deephbz/pi-team-bright/releases) and the npm
+dist-tags. This file does not track them.
 
 From versions before `0.19.0`, named model roles replace model profiles and
 raw Worker defaults. Finish or
@@ -19,13 +15,6 @@ Parent composition and installed settings remain separate from publication.
 
 Lifecycle stage: **hardening** for DAG-native Task coordination and Worker
 model roles. The Membership-observation surface remains in **sharing**.
-
-## v0.21.2
-
-The release adds the compaction delivery gate. The
-[release checklist](../release/v0.21.2-release-checklist.md) records completed
-local, installed-package, live-Team, hosted, and registry gates. Restart Pi to
-load the fix. Architecture impact: none at the HyperCarrier boundary.
 
 ## Lead guidance: delegation boundary and second opinion
 
@@ -42,8 +31,7 @@ in the Session adapter holds Task, Alert, team_sync, and doctor sends until Pi
 reports the compaction end, then sends them in order. Pi 0.83 reports no failed
 compaction; a 15-minute hold limit covers that case. The
 [journal entry](../journal/2026-09-29-compaction-delivery-gate.md) records the
-real Pi evidence; the release receipt adds a real-provider manual compaction.
-Automatic compaction has no real-provider run yet.
+real Pi evidence. Automatic compaction has no real-provider run yet.
 
 ## Session discovery isolation
 
@@ -73,7 +61,7 @@ observation, Worker activity, delivery, and acknowledgement. The
 [work record](../projects/team-sync-continuity.md) tracks five verification rounds.
 Implementation and five verification rounds are complete. Real Pi 0.87.1
 leader, Worker, and TUI checks passed, including provider failure, abort, and
-process-reload recovery. The release receipt owns final integrated validation.
+process-reload recovery.
 Live settings and parent adoption remain unchanged.
 
 ## v0.19.0: Task timeline view
@@ -132,27 +120,8 @@ in [`brand/promo-video/`](../../brand/promo-video/). The packaged lead skill now
 asks agents to start independent and reversible work early while preserving
 actual dependencies and approval boundaries. Runtime code is unchanged.
 
-The release passed local full tests, exact-main CI, package verification,
-installed-package canaries, a separate real Team integration test, hosted dry
-run, and tagged publication. Registry bytes matched the retained tarball;
-signatures and attestations verified. Public browser checks proved the README
-thumbnail loads and the release video plays. The release receipt above owns the
-details. Architecture impact: none.
-
-## v0.20.0 publication evidence
-
-The v0.20.0 release passed 1,191 tests with one skipped test, Node 22 and 24
-CI, the brand asset check, exact-tarball Pi canaries in RPC, print, and TUI
-modes, a fresh real Herdr Team workflow, hosted dry run, tagged OIDC
-publication, registry-byte comparison, provenance, and signature verification.
-The release receipt owns details and limits. The larger hostile Herdr campaign
-is not claimed complete.
-
 The full-history privacy scan still reports inherited findings from before the
-privacy baseline; the candidate range passed. Architecture changes stay
-inside Pi Team Bright. The HyperCarrier integration boundary is unchanged.
-The [v0.19.0 receipt](../journal/2026-09-27-v0.19.0-release-receipt.md) preserves
-prior publication evidence.
+privacy baseline. The larger hostile Herdr campaign is not claimed complete.
 
 This is the maintained context a new human or agent should read first. It
 contains only intent, decisions still in force, current status, constraints,
@@ -587,34 +556,30 @@ as fresh. The run does not establish a supported 160-Task snapshot capacity.
 
 Next steps:
 
-1. Keep published `v0.18.0` and its package bytes immutable. Record downstream
-   HyperCarrier gitlink adoption as separate composition evidence.
-2. Preserve `v0.17.0`, `v0.17.1`, and all earlier release artifacts.
-3. Preserve existing Team epochs on their original version. Use new Teams for
-   the released [Worker model-profile change](../projects/worker-model-profiles.md).
-   Parent adoption remains separate composition work.
-4. Decide whether graph persistence needs an append-only transaction store and
+1. Keep released tags and package bytes immutable. HyperCarrier adopts a
+   version through its own composition change.
+2. Decide whether graph persistence needs an append-only transaction store and
    exact Coordination publication outbox.
-5. Design immutable legacy Task-create operation identity before changing Beads
+3. Design immutable legacy Task-create operation identity before changing Beads
    replay code.
-6. Measure and repair Beads contention before making a Worker-capacity claim.
-7. Keep malformed-event diagnostics distinct from normal structural Task
+4. Measure and repair Beads contention before making a Worker-capacity claim.
+5. Keep malformed-event diagnostics distinct from normal structural Task
    events; structural creation, assignment, status, and relation events now
    sync without narrative evidence.
-8. Add payload-free outer-operation trace correlation before the representative
+6. Add payload-free outer-operation trace correlation before the representative
    performance epoch.
-9. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
+7. Benchmark snapshot and update views at 1, 20, and 60 Tasks, both idle and
    under concurrent writes. These workload points are not public count limits.
-10. Keep stable Workers bound when low-latency repeated work matters. The
-    separate [`worker-ensure-concurrency.md`](../projects/worker-ensure-concurrency.md)
-    context defers batched sibling-launch optimization for later design. Add
-    public Pi phase tracing before another cold-start optimization.
-11. Do not add generic warm capacity, a reusable Pi Session, a Node compile
-    cache, a Bun bundle, or Worker resource exclusions. A future strict 100 ms
-    new-Worker SLO needs a separately shaped one-use sealed launcher with a
-    profile digest, CAS reservation, activation identity, exact fences,
-    destroy-on-outcome behavior, lost-actuation reconciliation, and measured
-    stockout and replenishment distributions.
+8. Keep stable Workers bound when low-latency repeated work matters. The
+   separate [`worker-ensure-concurrency.md`](../projects/worker-ensure-concurrency.md)
+   context defers batched sibling-launch optimization for later design. Add
+   public Pi phase tracing before another cold-start optimization.
+9. Do not add generic warm capacity, a reusable Pi Session, a Node compile
+   cache, a Bun bundle, or Worker resource exclusions. A future strict 100 ms
+   new-Worker SLO needs a separately shaped one-use sealed launcher with a
+   profile digest, CAS reservation, activation identity, exact fences,
+   destroy-on-outcome behavior, lost-actuation reconciliation, and measured
+   stockout and replenishment distributions.
 
 
 ## Test lanes
