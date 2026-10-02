@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, ProcessTerminal, TUI } from "@earendil-works/pi-tui";
+import { matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
+import { createMainScreenTui } from "./main-screen-tui";
 import {
   createPtbPaletteComponent,
   PTB_PALETTE_TABS,
@@ -86,7 +87,7 @@ if (process.argv.includes("--plain") || !process.stdin.isTTY || !process.stdout.
   process.stdout.write(`${component.render(width).join("\n")}\n`);
 } else {
   const terminal = new ProcessTerminal();
-  const tui = new TUI(terminal, false);
+  const tui = createMainScreenTui(terminal, false);
   const theme = galleryTheme(true);
   let component: ReturnType<typeof createPtbPaletteComponent>;
   let stopping = false;

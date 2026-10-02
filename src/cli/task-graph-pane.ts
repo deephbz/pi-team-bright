@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";
+import { ProcessTerminal } from "@earendil-works/pi-tui";
+import { createMainScreenTui } from "./main-screen-tui";
 import { TaskGraphPaneComponent } from "../task-graph-view/component";
 import { parseTaskGraphLimit, parseTaskGraphViewSourceJson, type TaskGraphViewSource } from "../task-graph-view/source";
 
@@ -19,7 +20,7 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
   const readSource = (): TaskGraphViewSource => parseTaskGraphViewSourceJson(fs.readFileSync(sourcePath, "utf8"));
   let source = readSource();
   const terminal = new ProcessTerminal();
-  const tui = new TUI(terminal, false);
+  const tui = createMainScreenTui(terminal, false);
   const component = new TaskGraphPaneComponent({
     source,
     initialLimit,

@@ -54,6 +54,8 @@ function context(sessionFile: string) {
     hasPendingMessages: vi.fn(() => false),
     shutdown: vi.fn(),
     sessionManager: {
+      getLeafId: vi.fn(() => null),
+      getEntryCount: vi.fn(() => 0),
       getSessionFile: vi.fn(() => sessionFile),
       getSessionId: vi.fn(() => `session-${sessionFile}`),
       getBranch: vi.fn(() => []),
