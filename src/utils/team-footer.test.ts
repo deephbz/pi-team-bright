@@ -36,6 +36,9 @@ function context(sessionFile: string, cwd = "/tmp/footer-project", entries: any[
     mode: "tui" as const,
     ui: { setFooter, setStatus },
     sessionManager: {
+      getSessionId: vi.fn(() => `session-${sessionFile}`),
+      getLeafId: vi.fn(() => null),
+      getEntryCount: vi.fn(() => entries.length),
       getSessionFile: vi.fn(() => sessionFile),
       getEntries: vi.fn(() => entries),
       getBranch: vi.fn(() => []),

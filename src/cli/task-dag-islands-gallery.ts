@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { ProcessTerminal, TUI, matchesKey } from "@earendil-works/pi-tui";
+import { ProcessTerminal, matchesKey } from "@earendil-works/pi-tui";
+import { createMainScreenTui } from "./main-screen-tui";
 import { createTaskDagIslandsGalleryComponent, type TaskGraphGalleryView } from "../task-graph-view/gallery-component";
 import {
   DEFAULT_TASK_DAG_ISLANDS_GALLERY_CONFIG,
@@ -53,7 +54,7 @@ if (plain) {
   process.stdout.write(`${component.render(width).join("\n")}\n`);
 } else {
   const terminal = new ProcessTerminal();
-  const tui = new TUI(terminal, false);
+  const tui = createMainScreenTui(terminal, false);
   const component = createTaskDagIslandsGalleryComponent(config!, {
     rows: () => terminal.rows,
     requestRender: () => tui.requestRender(),

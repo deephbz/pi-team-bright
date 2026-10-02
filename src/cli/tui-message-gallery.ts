@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";
+import { ProcessTerminal } from "@earendil-works/pi-tui";
+import { createMainScreenTui } from "./main-screen-tui";
 import {
   exportTuiMessageGallery,
   tuiMessageGallery,
@@ -48,7 +49,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
     process.stdout.write(exportTuiMessageGallery({ format: requestedFormat ?? "plain", expanded, width, scenarioId, theme: requestedTheme ?? "dark" }));
   } else {
     const terminal = new ProcessTerminal();
-    const tui = new TUI(terminal, false);
+    const tui = createMainScreenTui(terminal, false);
     const gallery = new TuiMessageGalleryComponent({
       scenarios,
       initialScenarioId: scenarioId,
