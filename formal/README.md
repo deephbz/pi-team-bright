@@ -14,14 +14,18 @@ TLA2TOOLS_JAR=/path/to/tla2tools.jar bash scripts/formal-check.sh
 
 CI fetches the [official release artifact](https://github.com/tlaplus/tlaplus/releases/download/v1.8.0/tla2tools.jar).
 The runner requires jar SHA-256
-`ab4694601923fd5ac06452abbf847c366a5054a3d739552085edd6ed986c29ec`.
+`7beec0f04818732a62fa193731711a99aa4f11279499b2360a7d156c519ea78d`.
 It fails if Java or that exact jar is absent. It downloads nothing. Set
 `FORMAL_RESULTS_DIR` to an absolute or relative directory to retain full TLC
 logs, states, and counterexamples. Otherwise, the runner creates a temporary
 directory and prints its path. The pinned jar reports
-`TLC2 Version 2026.09.25.163503 (rev: 8f4bc8b)` at runtime. That observed
+`TLC2 Version 2026.10.06.014338 (rev: 94d0c50)` at runtime. That observed
 string differs from the release URL's `v1.8.0` label, so this record identifies
-the jar by checksum and observed runtime string.
+the jar by checksum and observed runtime string. The `v1.8.0` asset is
+rolling: on 2026-10-07 it no longer matched the earlier pin
+`ab4694601923fd5ac06452abbf847c366a5054a3d739552085edd6ed986c29ec`
+(`2026.09.25.163503`, rev `8f4bc8b`). When the asset changes again, rerun
+every case with the new jar before you update the pin.
 
 ## Models and source boundaries
 
@@ -42,8 +46,9 @@ revisions as changed coordinates.
 ## Checked results
 
 The checked source bundle uses the four `.tla` files, their `.cfg` files,
-and `scripts/formal-check.sh`. The first three models completed through the
-runner on 2026-09-26 with the pinned jar. Each passing search ended with an empty queue. “Depth” is TLC's
+and `scripts/formal-check.sh`. All 22 cases completed through the runner on
+2026-10-07 with the current pinned jar. The first three models reproduced the
+counts recorded on 2026-09-26 with the earlier jar. Each passing search ended with an empty queue. “Depth” is TLC's
 reported complete state-graph depth for a passing instance. Fault and witness
 runs stop at the first counterexample, so their state counts are partial.
 
@@ -52,18 +57,9 @@ runs stop at the first counterexample, so their state counts are partial.
 | `GraphAttempt` | 53 / 36 | 16 | Complete; no invariant error |
 | `MembershipFence` | 81 / 24 | 6 | Complete; no invariant error |
 | `PublicationObservation` | 23,825 / 6,267 | 14 | Complete; no invariant error |
-| `SyncPresentation` (2026-10-07; jar SHA `7beec0f04818732a62fa193731711a99aa4f11279499b2360a7d156c519ea78d`; TLC `2026.10.06.014338`, rev `94d0c50`) | 418,304 / 140,380 | 18 | Revision 2 complete; no invariant or temporal property error |
+| `SyncPresentation` | 418,304 / 140,380 | 18 | Revision 2 complete; no invariant or temporal property error |
 
-The revision-2 `SyncPresentation` runs used the current official release artifact
-with the runner's flags. The rolling `v1.8.0` asset no longer
-matches the pinned checksum. The runner still rejects it with exit 2. The pin
-stays unchanged. These results do not claim a pinned-jar runner pass. A temporary
-runner copy outside the repository changed only `expected_sha` to the downloaded
-artifact's checksum. It passed all 22 cases, including the seven sync cases.
-Its full logs and traces are in `/tmp/ptb-sync-formal-rev2-final/`. The summary
-is `/tmp/ptb-sync-formal-rev2-final.log`.
-
-To reproduce the passing instance with that verified artifact:
+To reproduce one instance directly with the pinned jar:
 
 ```sh
 java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
@@ -94,8 +90,7 @@ specific counterexamples:
 | `SyncPresentation.sequential-duplicate` | Provider request → completed assistant message → first sync stages `caught_up` → sequential second call reports a pending conflict | `SequentialRefusal` |
 | `SyncPresentation.native-empty-page` | Provider request → completed assistant message → sync reads an empty native page → returns empty updates | `NoEmptyUpdates` |
 
-All six sync mutant runs used the same jar SHA and TLC version as the passing
-revision-2 instance. All exited with code 12. Their searches are partial.
+All six sync mutant runs exited with code 12. Their searches are partial.
 
 | Sync mutant | Generated / distinct | Depth |
 | --- | ---: | ---: |

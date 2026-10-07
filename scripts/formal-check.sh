@@ -3,7 +3,7 @@ set -euo pipefail
 
 source_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 model_dir="$source_dir/formal"
-expected_sha=ab4694601923fd5ac06452abbf847c366a5054a3d739552085edd6ed986c29ec
+expected_sha=7beec0f04818732a62fa193731711a99aa4f11279499b2360a7d156c519ea78d
 jar=${TLA2TOOLS_JAR:-}
 if [[ -z "$jar" || ! -f "$jar" ]]; then
   echo "Set TLA2TOOLS_JAR to the pinned TLC jar path." >&2
