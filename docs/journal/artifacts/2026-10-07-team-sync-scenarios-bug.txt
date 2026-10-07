@@ -1,0 +1,11 @@
+npm warn Unknown user config "min-release-age". This will stop working in the next major version of npm.
+
+> @hypercarrier/pi-team-bright@0.21.2 e2e:team-sync-scenarios
+> node scripts/team-sync-scenarios/run.mjs
+
+{"scenario":"S1-consecutive","expect":"bug","status":"passed","results":["snapshot","indeterminate"]}
+{"scenario":"S2-parallel","expect":"bug","status":"passed","results":[{"kind":"snapshot","team":{"name":"scenario-df2d9105","purpose":"Verify scripted synchronization turns.","lifecycle":"active"},"model_roles":[{"name":"fixture","use":"Local scenario Worker"}],"default_model_role":"fixture","workers":[],"tasks":[]},{"kind":"indeterminate","message":"A Team observation is already in progress for this exact Session."}]}
+{"scenario":"S3-framework-then-model","expect":"bug","status":"passed","results":["framework:snapshot","indeterminate"]}
+{"scenario":"S4-sequential","expect":"bug","status":"passed","results":["snapshot","indeterminate","gate"]}
+{"scenario":"S5-absent-proof","expect":"bug","status":"passed","results":["proof:absent","indeterminate"]}
+{"scenario":"S6-historical-replay","expect":"bug","status":"passed","results":["indeterminate:rendered","indeterminate:replayed-unchanged"]}

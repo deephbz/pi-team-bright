@@ -1,0 +1,28 @@
+Formal verification tooling check, 2026-10-07
+Jar SHA-256: 7beec0f04818732a62fa193731711a99aa4f11279499b2360a7d156c519ea78d
+The repository pin stays unchanged. Its runner rejects this jar with exit 2.
+A temporary runner changed only expected_sha. All 22 cases passed.
+
+OK GraphAttempt: 53 states generated, 36 distinct states found, 0 states left on queue. The depth of the complete state graph search is 16.
+OK GraphAttempt.mutant: 12 states generated, 11 distinct states found, 4 states left on queue. The depth of the complete state graph search is 5.
+OK GraphAttempt.repair-bound: 55 states generated, 35 distinct states found, 1 states left on queue. The depth of the complete state graph search is 16.
+OK GraphAttempt.interleave: 20 states generated, 15 distinct states found, 3 states left on queue. The depth of the complete state graph search is 7.
+OK MembershipFence: 81 states generated, 24 distinct states found, 0 states left on queue. The depth of the complete state graph search is 6.
+OK MembershipFence.mutant: 11 states generated, 6 distinct states found, 3 states left on queue. The depth of the complete state graph search is 3.
+OK MembershipFence.stale-write: 48 states generated, 13 distinct states found, 6 states left on queue. The depth of the complete state graph search is 4.
+OK PublicationObservation: 23825 states generated, 6267 distinct states found, 0 states left on queue. The depth of the complete state graph search is 14.
+OK PublicationObservation.early-publication: 3 states generated, 3 distinct states found, 1 states left on queue. The depth of the complete state graph search is 2.
+OK PublicationObservation.partial-observation: 200 states generated, 126 distinct states found, 91 states left on queue. The depth of the complete state graph search is 5.
+OK PublicationObservation.trust-fence: 734 states generated, 381 distinct states found, 251 states left on queue. The depth of the complete state graph search is 6.
+OK PublicationObservation.skip-replay: 11 states generated, 11 distinct states found, 8 states left on queue. The depth of the complete state graph search is 3.
+OK PublicationObservation.retry-retirement: 21 states generated, 21 distinct states found, 16 states left on queue. The depth of the complete state graph search is 4.
+OK PublicationObservation.crash-replay: 235 states generated, 143 distinct states found, 102 states left on queue. The depth of the complete state graph search is 5.
+OK PublicationObservation.retirement-gap: 6 states generated, 6 distinct states found, 3 states left on queue. The depth of the complete state graph search is 3.
+OK SyncPresentation: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:47. Progress(12) at 2026-10-07 08:37:51: 223,141 states generated (223,141 s/min), 88,229 distinct states found (88,229 ds/min), 10,125 states left on queue. Progress(18) at 2026-10-07 08:37:53: 418,304 states generated, 140,380 distinct states found, 0 states left on queue. 418304 states generated, 140380 distinct states found, 0 states left on queue. The depth of the complete state graph search is 18.
+OK SyncPresentation.ack-turn-end: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:55. 12525 states generated, 7202 distinct states found, 4499 states left on queue. The depth of the complete state graph search is 4.
+OK SyncPresentation.keep-pending: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:56. 2863 states generated, 2703 distinct states found, 2001 states left on queue. The depth of the complete state graph search is 3.
+OK SyncPresentation.immediate-pending: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:56. 25365 states generated, 13384 distinct states found, 5380 states left on queue. The depth of the complete state graph search is 5.
+OK SyncPresentation.discard-only-ack-false: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:57. 2867 states generated, 2707 distinct states found, 2004 states left on queue. The depth of the complete state graph search is 3.
+OK SyncPresentation.sequential-duplicate: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:57. 38218 states generated, 19728 distinct states found, 7242 states left on queue. The depth of the complete state graph search is 6.
+OK SyncPresentation.native-empty-page: Finished computing initial states: 640 distinct states generated at 2026-10-07 08:37:58. 24039 states generated, 12510 distinct states found, 5130 states left on queue. The depth of the complete state graph search is 5.
+TLC logs: <external TLC result directory>

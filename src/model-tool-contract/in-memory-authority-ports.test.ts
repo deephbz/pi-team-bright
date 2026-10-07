@@ -8,6 +8,17 @@ import type { TaskVersionRef } from "../task-authority/task-version-ref";
 const session = exactLeaderSessionId("019fc274-f97e-7910-b6b6-579a20b3b1d0");
 
 describe("isolated in-memory authority fakes", () => {
+  it("B1-fake-mirrors-real-pending-call-id-refusal", async () => {
+    const { ports } = createInMemoryModelToolJourney();
+    await ports.team.createTeam(session, { name: "pending-team", purpose: "Expose presentation debt" });
+    const first = await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "first");
+    expect(first.kind).toBe("snapshot");
+    expect(await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "first")).toEqual(first);
+    expect(await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "second")).toMatchObject({ kind: "indeterminate", message: expect.stringContaining("presentation") });
+    expect(ports.coordination.getPendingObservation?.(session)?.toolCallId).toBe("first");
+    expect(ports.coordination.acknowledgePendingObservation(session, "entry", ["entry"])).toBe(true);
+    expect((await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "second")).kind).toBe("snapshot");
+  });
   it("refuses model role selection instead of creating an unassigned fake Worker", async () => {
     const { ports } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "profile-team", purpose: "purpose" });
