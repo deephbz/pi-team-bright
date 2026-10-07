@@ -68,7 +68,7 @@ export interface ModelToolJourneyExecutors {
   taskLink(leaderSessionId: ExactLeaderSessionId, parameters: TaskLinkParameters): Promise<TaskLinkResult>;
   alertSend(leaderSessionId: ExactLeaderSessionId, parameters: AlertSendParameters): Promise<AlertSendResult>;
   teamSync(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult>;
-  teamSyncNow(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult | { kind: "quiet" }>;
+  teamSyncNow(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult | { kind: "quiet" } | { kind: "indeterminate"; message: string; state_changed: false; observation_advanced: false }>;
 }
 
 function projectSyncOutcome(port: ModelToolJourneyPort, leaderSessionId: ExactLeaderSessionId, outcome: TeamSyncPortResult): TeamSyncResult {
@@ -76,14 +76,6 @@ function projectSyncOutcome(port: ModelToolJourneyPort, leaderSessionId: ExactLe
         return {
           kind: "unavailable",
           reason: outcome.reason,
-          message: outcome.message,
-          state_changed: false,
-          observation_advanced: false,
-        };
-      }
-      if (outcome.kind === "snapshot_required") {
-        return {
-          kind: "snapshot_required",
           message: outcome.message,
           state_changed: false,
           observation_advanced: false,
@@ -106,19 +98,17 @@ function projectSyncOutcome(port: ModelToolJourneyPort, leaderSessionId: ExactLe
           observation_advanced: false,
         };
       }
-      if (outcome.kind === "caught_up") {
-        const result = {
-          kind: "caught_up" as const,
-          head: outcome.head,
-          epoch_id: outcome.epochId,
-          state_changed: false as const,
-          observation_advanced: true as const,
-        };
+      if (outcome.kind === "caught_up" || outcome.kind === "unsettled") {
+        const common = { head: outcome.head, epoch_id: outcome.epochId, state_changed: false as const, observation_advanced: true as const };
+        const result: TeamSyncResult = outcome.kind === "unsettled"
+          ? { ...common, kind: "unsettled", workers: outcome.workers }
+          : { ...common, kind: "caught_up" };
         port.coordination.setPendingObservationResult(leaderSessionId, projectToolResult("team_sync", result));
         return result;
       }
-      if (outcome.kind === "indeterminate") return {
-        kind: "indeterminate" as const,
+      if (outcome.kind === "refused") return {
+        kind: "refused" as const,
+        reason: outcome.reason,
         message: outcome.message,
         state_changed: false,
         observation_advanced: false,
@@ -444,6 +434,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
       if (!port.coordination.readTeamSyncNow) return { kind: "indeterminate", message: "Immediate Team observation is unavailable.", state_changed: false, observation_advanced: false };
       const outcome = await port.coordination.readTeamSyncNow(leaderSessionId, parameters.view, signal, toolCallId);
       if (outcome.kind === "quiet") return { kind: "quiet" };
+      if (outcome.kind === "indeterminate") return { ...outcome, state_changed: false, observation_advanced: false };
       return projectSyncOutcome(port, leaderSessionId, outcome);
     },
   };

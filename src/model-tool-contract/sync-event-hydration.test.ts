@@ -292,10 +292,10 @@ describe("DurableModelToolTeamPort event-directed Task hydration", () => {
     fixture.port.setBranchContext(fixture.leaderSessionId, ["branch-b"]);
 
     await expect(fixture.port.readTeamSync(fixture.leaderSessionId, "updates", new AbortController().signal, "wrong-branch-update"))
-      .resolves.toEqual({ kind: "snapshot_required", message: "Take a Team snapshot before requesting updates." });
-    expect(list).not.toHaveBeenCalled();
-    expect(hydrate).not.toHaveBeenCalled();
-    expect(fixture.port.getPendingObservation(fixture.leaderSessionId)).toBeUndefined();
+      .resolves.toMatchObject({ kind: "snapshot", tasks: [{ id: taskId }] });
+    expect(list).toHaveBeenCalledOnce();
+    expect(hydrate).toHaveBeenCalledOnce();
+    expect(fixture.port.getPendingObservation(fixture.leaderSessionId)).toMatchObject({ toolCallId: "wrong-branch-update", baselineCursor: null });
   });
 
   it("rescans Task authority after a quiet wait wakes without a Task event", async () => {

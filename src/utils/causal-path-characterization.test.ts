@@ -217,6 +217,8 @@ async function acknowledgeSync(harness: Harness, ctx: TestContext, callId: strin
   await harness.emit("before_provider_request", {
     payload: { persistedResult: result.content[0].text },
   }, ctx);
+  await harness.emit("message_end", { message: { role: "assistant", stopReason: "stop" } }, ctx);
+  await harness.emit("turn_end", { message: { role: "assistant", stopReason: "stop" } }, ctx);
 }
 
 async function startWorker(harness: Harness, ctx: TestContext) {

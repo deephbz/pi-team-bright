@@ -9,6 +9,7 @@ import {
 } from "./catalog";
 import {
   ModelResultSchemas,
+  decodeHistoricalTeamSyncResult,
   assembleToolResult,
   parseToolResult,
   projectToolResult,
@@ -28,6 +29,21 @@ function captureError(action: () => unknown): Error {
 }
 
 describe("raw semantic result projections", () => {
+  it.each(["indeterminate", "snapshot_required"])("reads historical %s without admitting it to publication", (kind) => {
+    const old = { kind, message: "Historical incomplete observation.", state_changed: false, observation_advanced: false };
+    expect(decodeHistoricalTeamSyncResult(old)).toBe(old);
+    expect(() => projectToolResult("team_sync", old)).toThrow();
+    expect(projectTui({ tool: "team_sync", details: old, expanded: false }).join("\n")).toContain(old.message);
+    expect(decodeHistoricalTeamSyncResult({ ...old, state_changed: true })).toBeUndefined();
+  });
+
+  it("projects actionable unsettled evidence and duplicate refusal", () => {
+    const raw = { kind: "unsettled", head: 7, epoch_id: "epoch", workers: [{ name: "worker", reason: "delivery_state_unknown" }], state_changed: false, observation_advanced: true };
+    expect(projectToolResult("team_sync", raw)).toEqual({ kind: "unsettled", head: 7, epoch_id: "epoch", workers: raw.workers });
+    expect(projectTui({ tool: "team_sync", details: raw, expanded: false }).join("\n")).toContain("delivery state unknown");
+    const refused = { kind: "refused", reason: "observation_in_progress", message: "Use the other call's result.", state_changed: false, observation_advanced: false };
+    expect(projectToolResult("team_sync", refused)).toEqual(refused);
+  });
   it("assembles the same valid projection and preserves raw detail identity", () => {
     const raw = {
       kind: "team_created" as const,

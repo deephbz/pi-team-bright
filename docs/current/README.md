@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-09-29
+Updated: 2026-10-07
 
 Published versions and their evidence live in
 [GitHub Releases](https://github.com/deephbz/pi-team-bright/releases) and the npm
@@ -229,9 +229,9 @@ restating executable definitions.
   Session shutdown, and successful full Team shutdown stop it. Partial shutdown
   retains the current leader pair. Full shutdown ends only the exact lead
   runtime generation and fails closed around malformed or foreign evidence.
-- `team_sync` treats `caught_up` as proven current quiescence, not permanent
-  absence of future events. It reports `indeterminate` when run-state or
-  actuation evidence is incomplete and does not advance observation. Pi `>=0.83`
+- `team_sync` preserves `caught_up` for current quiescence. `unsettled` names
+  Workers whose activity or missing runtime/delivery evidence needs attention.
+  Both advance observation after exact presentation. Pi `>=0.83`
   is the supported boundary for exact Worker `agent_start` and `agent_settled`
   evidence. Global `pi_team_bright.team` settings resolve the internal wait
   interval and automatic-sync delay/count policy once per Team epoch. The
@@ -409,9 +409,16 @@ restating executable definitions.
   and TypeScript.
 - `team_sync({view:"updates"})` now has normal liveness outcomes. It returns
   `caught_up` when the exact leader is caught up and no current Worker producer
-  requires a wait. It returns `indeterminate` when required Worker run-state or
-  actuation evidence is incomplete; this does not advance the hidden
-  observation. Pi `>=0.83` is required for exact `agent_start` and
+  requires a wait. It returns `unsettled` with actionable Worker reasons when
+  activity or incomplete evidence prevents proven settlement. A zero wait does
+  one immediate recheck. Missing baselines return snapshots. Native sync skips
+  empty pages. Successful assistant `message_end` resolves the pre-request
+  pending slot through acknowledgement or exact-call discard. Historical result
+  decoding preserves old Session entries. Internal probes keep `indeterminate`.
+  The executable anchors are [`sync-continuity.test.ts`](../../src/coordination/sync-continuity.test.ts)
+  and [`sync-nudge-extension.test.ts`](../../src/utils/sync-nudge-extension.test.ts).
+  Architecture impact: **none** at the HyperCarrier boundary; the diagram keeps
+  Pi Team Bright internals opaque. Pi `>=0.83` is required for exact `agent_start` and
   `agent_settled` evidence. Global `pi_team_bright.team.wait_seconds` controls
   the internal recheck interval. The released reminder mechanism is superseded
   by the unreleased synchronization-continuity change above. Historical nudge

@@ -95,6 +95,7 @@ async function acknowledge(harness: ReturnType<typeof registeredLeaderHarness>, 
     message: { role: "toolResult", toolCallId: callId, content: [{ type: "text", text: resultText }], isError: false, timestamp: Date.now() },
   });
   await harness.emit("before_provider_request", { payload: { persistedResult: resultText } }, context);
+  await harness.emit("message_end", { message: { role: "assistant", stopReason: "stop" } }, context);
   await harness.emit("turn_end", { message: { role: "assistant", stopReason: "stop" } }, context);
 }
 
@@ -194,8 +195,9 @@ describe("mixed Coordination observation records through registered team_sync", 
     expect(afterAcknowledgement.projection.authorityRevisions.task_projection).not.toBe(baseline.projection.authorityRevisions.task_projection);
 
     const caughtUp = await invoke(harness, context, "mixed-caught-up", "updates");
-    const caughtUpRaw = { kind: "caught_up", head: 2, epoch_id: config.epochId!, state_changed: false, observation_advanced: true };
+    const caughtUpRaw = { head: 2, epoch_id: config.epochId!, state_changed: false, observation_advanced: true, kind: "caught_up" };
     expect(caughtUp.machine).toEqual({ details: caughtUpRaw, json: JSON.stringify(caughtUpRaw) });
-    expect(caughtUp.model).toEqual({ content: [{ type: "text", text: JSON.stringify({ kind: "caught_up", head: 2, epoch_id: config.epochId! }) }], text: JSON.stringify({ kind: "caught_up", head: 2, epoch_id: config.epochId! }) });
+    const caughtUpModel = { head: 2, epoch_id: config.epochId!, kind: "caught_up" };
+    expect(caughtUp.model).toEqual({ content: [{ type: "text", text: JSON.stringify(caughtUpModel) }], text: JSON.stringify(caughtUpModel) });
   });
 });

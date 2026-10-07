@@ -129,8 +129,8 @@ increase useful learning within the same budget.
 
 ## Lead: supervise and finish the request
 
-Use `team_sync` updates for progress and waiting. Follow its request for a snapshot
-when an observation baseline is needed. Mutation receipts already report post-state;
+Use `team_sync` updates for progress and waiting. Updates return a snapshot
+when an observation baseline is missing. Mutation receipts already report post-state;
 read again only when required meaning is missing, stale, or conflicting.
 
 Use `team_sync({view:"updates"})` to wait while Workers can progress. The runtime
@@ -143,10 +143,11 @@ Handle returned changes and continue toward the requested outcome. Assigned
 nonterminal Tasks can remain when all Workers are idle; use their current records
 to decide what can proceed or what requires intervention.
 
-`caught_up` means no new change is available now, not that every Task succeeded.
-`indeterminate` means observation evidence is incomplete. If work remains, use
-current Task and Worker records to identify a blocker or recovery need rather than
-repeat identical empty sync calls. Read selected Tasks with `task_read` when needed.
+`caught_up` means no new change is available and no current Worker producer
+requires a wait. It does not mean every Task succeeded. `unsettled` lists Workers
+whose activity or missing evidence needs attention. Use its reasons and current
+Task records to identify a blocker or recovery need. A duplicate sync in one
+message returns `refused`; use the other call's result. Read selected Tasks with `task_read` when needed.
 Use terminal evidence for exceptional diagnosis, not as Task progress. State the
 blocker and next actor when no actor can progress. Explicit owner pause or stop
 instructions remain authoritative.

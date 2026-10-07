@@ -9,13 +9,16 @@ Scope: deterministic checks and isolated real-Pi scenarios. Live model quality i
 2. **Unit traversal** enumerates observation-service inputs with fake stores. It covers liveness, failed reads, cursor fences, and empty journal pages. Run the focused `CoordinationObservationService` tests. Fake behavior must match the durable contract.
 3. **Scripted real Pi** drives the actual agent loop through a loopback OpenAI-compatible provider. It checks extension hooks, provider context, tool execution, and persisted Session entries. It uses no remote credentials.
 
-The unit [state traversal](../../src/coordination/sync-state-traversal.test.ts) enumerates 888 liveness rows: 0–2 Workers, five evidence states, pending actuation, visible events, Task revision changes, and zero or positive wait. Its named rows cover duplicate calls, missing baselines, native empty pages, acknowledgement failures, cursor fences, and wait transitions. Row IDs encode the input. Contract divergences use `it.fails` on the pre-fix tree; the fix owns removing those markers. The in-memory fake only mirrors the pre-fix pending-call behavior in this tooling change.
+The unit [state traversal](../../src/coordination/sync-state-traversal.test.ts) enumerates 888 liveness rows: 0–2 Workers, five evidence states, pending actuation, visible events, Task revision changes, and zero or positive wait. Its named rows cover duplicate calls, missing baselines, native empty pages, acknowledgement failures, cursor fences, and wait transitions. Row IDs encode the input. All 925 traversal tests now assert the fixed contract, including empty-page
+and Task-authority-change combinations.
+The in-memory fake matches pending-slot discard, duplicate refusal, and missing-baseline snapshot behavior.
 
 ```sh
 npx vitest run src/coordination/sync-state-traversal.test.ts src/coordination/sync-continuity.test.ts src/model-tool-contract/in-memory-authority-ports.test.ts
 ```
 
-The [focused unit evidence](../journal/artifacts/2026-10-07-team-sync-unit-traversal.txt) includes the fake's two consumer checks. It reports 743 passing rows and 206 expected-failing rows across five files.
+The [pre-fix unit evidence](../journal/artifacts/2026-10-07-team-sync-unit-traversal.txt) records 743 passing rows and 206 expected-failing rows across five files.
+The [fix record](../journal/2026-10-07-team-sync-presentation-fix.md) records the passing fixed tree.
 
 Each layer detects a separate risk. Use the smallest relevant check during an edit. Reserve the aggregate lane for the final stable tree.
 
@@ -28,7 +31,7 @@ npm run e2e:team-sync-scenarios
 EXPECT=bug npm run e2e:team-sync-scenarios
 ```
 
-Default mode asserts the accepted outcome. `EXPECT=bug` asserts the known pre-fix failure. It must observe `indeterminate`; it does not turn arbitrary failures into success.
+Default mode and `EXPECT=contract` assert the fixed contract. `EXPECT=bug` asserts the known pre-fix failure. It must observe `indeterminate`; it does not turn arbitrary failures into success.
 
 - S1: snapshot then updates in consecutive assistant turns within one Pi run.
 - S2: two `team_sync` calls in one assistant message under Pi's parallel execution. A test-only extension wrapper changes only the tool's scheduling hint. Production registers the tool as sequential.

@@ -328,9 +328,12 @@ export default function (pi: ExtensionAPI) {
   }
 
   if (modelToolJourney) {
+    // Supported composition: later extensions preserve this result in the payload
+    // and preserve the completed assistant message.
+    let providerCandidate: { sessionId: string; toolCallId: string } | undefined;
     let providerProof: { source: "native" | "framework"; sessionId: string; sessionFile: string; branch: string[]; entryId: string; toolCallId: string; resultText: string } | undefined;
-    pi.on("session_start", () => { providerProof = undefined; });
-    pi.on("session_shutdown", () => { providerProof = undefined; });
+    pi.on("session_start", () => { providerProof = undefined; providerCandidate = undefined; });
+    pi.on("session_shutdown", () => { providerProof = undefined; providerCandidate = undefined; });
     pi.on("tool_call", (event, ctx) => {
       if (sessionAdapter.isTeammate() || !leaderToolNames.has(event.toolName)) return;
       modelToolJourney.port.coordination.setBranchContext(
@@ -340,12 +343,14 @@ export default function (pi: ExtensionAPI) {
     });
     pi.on("before_provider_request", async (event, ctx) => {
       providerProof = undefined;
+      providerCandidate = undefined;
       if (sessionAdapter.isTeammate()) return;
       const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
       const lineage = modelToolBranchIds(ctx);
       modelToolJourney.port.coordination.setBranchContext(sessionId, lineage);
       const pending = modelToolJourney.port.coordination.getPendingObservation?.(sessionId);
       if (!pending) return;
+      providerCandidate = { sessionId, toolCallId: pending.toolCallId };
       const nativeEntryId = modelToolContainsExact(event.payload, pending.resultText)
         ? modelToolPersistedToolResult(ctx, pending.toolCallId, pending.resultText) : undefined;
       const framework = persistedFrameworkSyncForPending(
@@ -356,25 +361,41 @@ export default function (pi: ExtensionAPI) {
       if (!entryId) return;
       providerProof = { source: nativeEntryId ? "native" : "framework", sessionId, sessionFile: ctx.sessionManager.getSessionFile?.() ?? "", branch: lineage, entryId, toolCallId: pending.toolCallId, resultText: pending.resultText };
     });
-    pi.on("turn_end", async (event, ctx) => {
+    pi.on("message_end", async (event, ctx) => {
+      if (event.message.role !== "assistant") return;
       const proof = providerProof;
+      const candidate = providerCandidate;
       providerProof = undefined;
-      if (!proof || sessionAdapter.isTeammate() || event.message.role !== "assistant" || ["error", "aborted", "pending"].includes(event.message.stopReason)) return;
+      providerCandidate = undefined;
+      if (!candidate || sessionAdapter.isTeammate() || ["error", "aborted", "pending"].includes(event.message.stopReason)) return;
+      if (!proof) {
+        modelToolJourney.port.coordination.discardPendingObservation?.(exactLeaderSessionId(candidate.sessionId), candidate.toolCallId);
+        return;
+      }
       const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
       const sessionFile = ctx.sessionManager.getSessionFile?.() ?? "";
-      if (sessionId !== proof.sessionId || sessionFile !== proof.sessionFile) return;
+      const discard = () => modelToolJourney.port.coordination.discardPendingObservation?.(exactLeaderSessionId(proof.sessionId), proof.toolCallId);
+      if (sessionId !== proof.sessionId || sessionFile !== proof.sessionFile) { discard(); return; }
       const branch = ctx.sessionManager.getBranch();
-      if (proof.branch.some((id, index) => branch[index]?.id !== id)) return;
+      if (proof.branch.some((id, index) => branch[index]?.id !== id)) { discard(); return; }
       const frameworkRecord = proof.source === "framework"
         ? persistedFrameworkSyncForPending(branch, sessionId, sessionFile, proof.toolCallId, proof.resultText) : undefined;
       const persisted = proof.source === "framework" ? frameworkRecord?.entryId : modelToolPersistedToolResult(ctx, proof.toolCallId, proof.resultText);
-      if (persisted !== proof.entryId) return;
+      if (persisted !== proof.entryId) { discard(); return; }
+      const currentPending = modelToolJourney.port.coordination.getPendingObservation?.(sessionId);
+      if (!currentPending || currentPending.toolCallId !== proof.toolCallId || currentPending.resultText !== proof.resultText) { discard(); return; }
       const lineage = branch.map((entry) => entry.id);
-      let acknowledged: boolean;
-      if (modelToolJourney.port.coordination.acknowledgePendingObservationAsync) {
-        acknowledged = await modelToolJourney.port.coordination.acknowledgePendingObservationAsync(sessionId, proof.entryId, lineage);
-      } else {
-        acknowledged = modelToolJourney.port.coordination.acknowledgePendingObservation(sessionId, proof.entryId, lineage);
+      let acknowledged = false;
+      try {
+        if (modelToolJourney.port.coordination.acknowledgePendingObservationAsync) {
+          acknowledged = await modelToolJourney.port.coordination.acknowledgePendingObservationAsync(sessionId, proof.entryId, lineage);
+        } else {
+          acknowledged = modelToolJourney.port.coordination.acknowledgePendingObservation(sessionId, proof.entryId, lineage);
+        }
+      } catch {
+        // A failed hidden commit leaves the committed baseline available for replay.
+      } finally {
+        if (!acknowledged) discard();
       }
       if (acknowledged && frameworkRecord) pi.appendEntry(FRAMEWORK_SYNC_ACK_TYPE, {
         version: 1, recordId: frameworkRecord.record.id, acknowledgedEntryId: proof.entryId, sessionId, sessionFile,

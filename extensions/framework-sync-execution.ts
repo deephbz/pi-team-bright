@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { projectModelToolTuiMessage } from "../src/model-tool-contract/tui-projection";
-import { projectToolResult } from "../src/model-tool-contract/result-projection";
+import { decodeHistoricalTeamSyncResult, projectToolResult } from "../src/model-tool-contract/result-projection";
 import type { PiTeamBrightTuiMessage } from "../src/model-tool-contract/tui-message-projection";
 
 export const FRAMEWORK_SYNC_ENTRY_TYPE = "pi-team-bright.framework-sync-execution";
@@ -52,14 +52,18 @@ export function validateFrameworkSyncRecord(value: unknown): FrameworkSyncExecut
     || (value.baselineCursor !== undefined && value.baselineCursor !== null && typeof value.baselineCursor !== "string")
     || (value.baselineAcknowledgedEntryId !== undefined && value.baselineAcknowledgedEntryId !== null && typeof value.baselineAcknowledgedEntryId !== "string")
     || !isObject(value.arguments) || !["updates", "snapshot"].includes(String(value.arguments.view))
+    || !isObject(value.result) || !["updates", "snapshot"].includes(String(value.result.kind))
     || !Number.isFinite(value.recordedAt)) return undefined;
   try {
-    if (JSON.stringify(projectToolResult("team_sync", value.result)) !== value.resultText) return undefined;
+    const persisted = decodeHistoricalTeamSyncResult(JSON.parse(value.resultText as string));
+    const result = decodeHistoricalTeamSyncResult(value.result);
+    if (!persisted || !result || JSON.stringify(result) !== value.resultText) return undefined;
   } catch { return undefined; }
   return value as unknown as FrameworkSyncExecutionRecord;
 }
 
 export function makeFrameworkSyncRecord(input: Omit<FrameworkSyncExecutionRecord, "version" | "provenance" | "id" | "toolName" | "resultText" | "recordedAt">): FrameworkSyncExecutionRecord {
+  if (!isObject(input.result) || !["snapshot", "updates"].includes(String(input.result.kind))) throw new Error("Framework publication requires a snapshot or updates.");
   const record: FrameworkSyncExecutionRecord = {
     version: 1,
     provenance: "pi-team-bright/framework",

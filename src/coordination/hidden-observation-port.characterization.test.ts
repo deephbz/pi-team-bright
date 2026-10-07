@@ -41,9 +41,13 @@ function queries(overrides: Partial<CoordinationQueryBundle> = {}): Coordination
 }
 
 describe("Coordination hidden-observation port characterization", () => {
-  it("uses the injected hidden port with exact lead, epoch, and lineage, then commits before cache reuse and pending clear", async () => {
+  it("uses the injected hidden port with exact lead, epoch, and lineage, then releases pending before commit and reuses only the committed cache", async () => {
     const calls: string[] = [];
     const query = queries();
+    const binding = await query.teamRuntime.readLeaderBinding!(sessionFile);
+    if (!binding) throw new Error("Expected fixture leader binding");
+    binding.logicalWorkers = [{ name: "worker", scope: "Characterize cache reuse" }];
+    vi.mocked(query.teamRuntime.readLeaderBinding!).mockResolvedValue(binding);
     const hidden = {
       schema: "pi-teams-hidden-observation/1" as const,
       teamEpochId: "epoch-1",
@@ -62,13 +66,13 @@ describe("Coordination hidden-observation port characterization", () => {
       }),
       commitHidden: vi.fn(async (_team: string, input: any) => {
         calls.push(`commit:${input.teamEpochId}:${input.exactSessionId}:${input.branchLineage.join(",")}`);
-        expect(service.pending(sessionFile)).toBeDefined();
+        expect(service.pending(sessionFile)).toBeUndefined();
         committed = true;
         return { kind: "committed", projection: { ...hidden, acknowledgedEntryId: input.acknowledgedEntryId, acknowledgedLineage: input.branchLineage, teamEventCursor: input.teamEventCursor } };
       }),
-      readEvents: vi.fn(() => committed
+      readEvents: vi.fn((_team: string, options?: { afterCursor?: string }) => committed && Number(options?.afterCursor ?? "0") < 1
         ? { events: [{ type: "worker", phase: "prepared", worker: "worker", cursor: "1" }], cursor: "1", headCursor: "1", truncated: false }
-        : { events: [], cursor: "0", headCursor: "0", truncated: false }),
+        : { events: [], cursor: committed ? "1" : "0", headCursor: committed ? "1" : "0", truncated: false }),
       readEventCursor: vi.fn(() => "0"),
       waitEvents: vi.fn(),
       readFailureHints: vi.fn(() => ({ hints: [], cursor: "0", headCursor: "0" })),

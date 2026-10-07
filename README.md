@@ -116,8 +116,12 @@ an empty ready front, or idle time.
 Use `team_sync({view:"updates"})` when the lead needs to wait for Worker results.
 The framework keeps that wait open while a current Worker is active. Internal
 wait deadlines trigger a new evidence check without another model call.
-`caught_up` reports current quiescence; unfinished Tasks can still need action.
-`indeterminate` reports incomplete evidence and preserves the observation cursor.
+`caught_up` reports no new change and no current Worker producer that requires
+a wait. Unfinished Tasks can still need action. `unsettled` lists Workers whose
+activity, pending actuation, or missing evidence needs attention. A zero wait
+returns `unsettled` after one immediate recheck if a Worker remains active.
+Updates without a baseline return a snapshot. A duplicate sync in one message
+is refused; use the other call's result.
 
 The framework also collects unseen changes when the lead finishes a reply.
 Automatic sync batches them by a maximum delay or an update-count threshold.

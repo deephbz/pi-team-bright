@@ -593,7 +593,7 @@ describe("DurableModelToolTeamPort durable authority", () => {
     });
     expect(beforeFailure).toMatchObject({ kind: "found", projection: { teamEventCursor: "0" } });
 
-    const readEvents = vi.spyOn(teamEvents, "readTeamEvents").mockImplementation(() => {
+    const readEvents = vi.spyOn(teamEvents, "readTeamEventPages").mockImplementation(() => {
       throw new Error("simulated event authority failure");
     });
     await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "failed-updates"))
@@ -895,11 +895,10 @@ describe("DurableModelToolTeamPort durable authority", () => {
     hydrate.mockClear();
 
     port.setBranchContext(leaderSessionId, ["branch-b"]);
-    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "wrong-branch-update")).resolves.toEqual({
-      kind: "snapshot_required",
-      message: "Take a Team snapshot before requesting updates.",
+    await expect(port.readTeamSync(leaderSessionId, "updates", new AbortController().signal, "wrong-branch-update")).resolves.toMatchObject({
+      kind: "snapshot", tasks: [{ id: "branch-task" }],
     });
-    expect(hydrate).not.toHaveBeenCalled();
+    expect(hydrate).toHaveBeenCalledOnce();
   });
 
   it("rechecks complete Task authority after a quiet wait wakes", async () => {

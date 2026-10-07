@@ -17,6 +17,7 @@ export interface WorkerRunObservation {
   state: WorkerRunState;
   /** True when a carrier or delivery can produce a future run. */
   actuationPending: boolean;
+  unknownReasons?: Array<"run_state_unknown" | "delivery_state_unknown">;
 }
 
 function exactStatus(member: CoordinationMemberEvidence, status: CoordinationRuntimeEvidence | null): CoordinationRuntimeGeneration | undefined {
@@ -45,11 +46,14 @@ export function deriveWorkerRunObservation(
   const actuationKnown = evidence.taskDelivery.known && evidence.alertInbox.known;
   if (member.isActive === false) return { worker: member.name, state: "absent", actuationPending: false };
   const generation = exactStatus(member, evidence.runtime);
-  if (!member.sessionFile) return { worker: member.name, membershipId: member.membershipId, generation, state: !actuationKnown || actuationPending ? "unknown" : "absent", actuationPending };
-  if (!generation || !actuationKnown) return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending };
+  const unknownReasons: NonNullable<WorkerRunObservation["unknownReasons"]> = [];
+  if (!generation || !["active", "settled"].includes(evidence.runtime?.runState ?? "")) unknownReasons.push("run_state_unknown");
+  if (!actuationKnown) unknownReasons.push("delivery_state_unknown");
+  if (!member.sessionFile) return { worker: member.name, membershipId: member.membershipId, generation, state: !actuationKnown || actuationPending ? "unknown" : "absent", actuationPending, ...(!actuationKnown || actuationPending ? { unknownReasons } : {}) };
+  if (!generation || !actuationKnown) return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending, unknownReasons };
   if (evidence.runtime?.runState === "active") return { worker: member.name, membershipId: member.membershipId, generation, state: "active", actuationPending };
   if (evidence.runtime?.runState === "settled") return { worker: member.name, membershipId: member.membershipId, generation, state: "settled", actuationPending };
-  return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending };
+  return { worker: member.name, membershipId: member.membershipId, generation, state: "unknown", actuationPending, unknownReasons };
 }
 
 /** Reads liveness from the caller's explicit Coordination query bundle. */

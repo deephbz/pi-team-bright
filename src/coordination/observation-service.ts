@@ -95,13 +95,15 @@ export class CoordinationObservationService {
     const modelRoles = Object.entries(settings.roles).sort(([a], [b]) => a.localeCompare(b)).map(([name, role]) => ({ name, use: role.use })); return { kind: "snapshot", team: currentTeam(bound.config), modelRoles, ...(settings.defaultRole ? { defaultModelRole: settings.defaultRole } : {}), workers, tasks: tasks.tasks, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) }; }
   async acknowledge(exactSessionFile: string, entryId: string, branchIds: string[]): Promise<boolean> {
     const pending = this.takePending(exactSessionFile);
-    if (!pending || !branchIds.includes(entryId)) return false;
+    if (!pending) return false;
+    // Presentation consumes the staged result even if the baseline commit fails.
+    this.discardPending(exactSessionFile, pending.toolCallId);
+    if (!branchIds.includes(entryId)) return false;
     const current = await this.boundTeam(exactSessionFile);
     if (!current || current.teamName !== pending.teamName || current.config.epochId !== pending.epochId || this.leaderMembershipId(current) !== pending.leaderMembershipId) return false;
     const committed = await this.store.commitHidden(pending.teamName, { teamEpochId: pending.epochId, exactSessionId: pending.sessionId, branchLineage: branchIds, acknowledgedEntryId: entryId, teamEventCursor: String(pending.head), authorityRevisions: pending.authorityRevisions });
     if (committed.kind !== "committed") return false;
     if (pending.taskProjection) this.cacheTaskProjection({ teamName: pending.teamName, epochId: pending.epochId, exactSessionId: pending.sessionId, acknowledgedEntryId: committed.projection.acknowledgedEntryId, acknowledgedLineage: [...committed.projection.acknowledgedLineage], teamEventCursor: committed.projection.teamEventCursor, projection: pending.taskProjection });
-    this.clearPending(exactSessionFile);
     return true;
   }
   private leaderMembershipId(bound: BoundTeam): string | undefined { return [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === bound.sessionFile)?.membershipId; }
@@ -152,9 +154,9 @@ export class CoordinationObservationService {
     context: CoordinationObservationContext | undefined,
     mode: "wait" | "now",
   ): Promise<CoordinationSyncNowResult> {
-    if (this.inFlightBySession.has(exactSessionFile)) return { kind: "indeterminate", message: "A Team observation is already in progress for this exact Session." };
     const pending = this.pendingBySession.get(exactSessionFile);
-    if (pending && pending.toolCallId !== toolCallId) return { kind: "indeterminate", message: "A Team observation awaits exact Session presentation." };
+    if (pending?.toolCallId === toolCallId) return pending.internalResult;
+    if (pending || this.inFlightBySession.has(exactSessionFile)) return { kind: "refused", reason: "observation_in_progress", message: "Another team_sync call in this message owns the observation. Use its result." };
     this.inFlightBySession.add(exactSessionFile);
     try {
       return await this.readTeamSyncInternal(exactSessionFile, view, signal, toolCallId, context, mode, true);
@@ -194,6 +196,7 @@ export class CoordinationObservationService {
         ? { kind: "prepared", result, updateCount, scopeKey: before.scopeKey, ...(continuationEligible ? { continuationEligible: true as const } : {}) }
         : { kind: "quiet", updateCount: 0, scopeKey: before.scopeKey };
     }
+    if (result.kind === "unsettled") return { kind: "indeterminate", message: "Worker evidence is incomplete." };
     if (result.kind === "cancelled") return { kind: "indeterminate", message: result.message };
     return result;
   }
@@ -278,13 +281,16 @@ export class CoordinationObservationService {
       });
       if (observation.kind === "contract_gap") return { ...observation, message: `Model-tool ${observation.reason.replaceAll("_", " ")} is unavailable for Team ${bound.teamName}.` };
       if (observation.kind !== "found") {
-        return { kind: "snapshot_required", message: "Take a Team snapshot before requesting updates." };
+        return this.readTeamSyncInternal(exactSessionFile, "snapshot", signal, toolCallId, context, mode, publish, branchLineageOverride);
       }
       // Read the event batch first. Task events identify the smallest authority
       // read needed for this update; Worker-only events do not read Tasks when a
       // baseline is bound to this exact Team, epoch, Session, branch, and cursor.
-      const immediatePages = mode === "now" ? this.readCurrentEventPages(bound.teamName, observation.projection.teamEventCursor) : undefined;
-      let batch = immediatePages?.[0] ?? this.store.readEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
+      let readCursor = observation.projection.teamEventCursor;
+      const comparisonRevision = observation.projection.authorityRevisions.task_projection;
+      for (;;) {
+      const immediatePages = this.readCurrentEventPages(bound.teamName, readCursor);
+      let batch = immediatePages.find(page => page.events.length > 0) ?? immediatePages.at(-1)!;
       let tasksResult: TaskProjection | undefined;
       let taskRevisionChanged = false;
       let externallyChangedTaskIds: string[] = [];
@@ -294,55 +300,51 @@ export class CoordinationObservationService {
         const complete = await readTasks(bound.teamName);
         if (complete.kind !== "tasks") return complete;
         tasksResult = complete;
-        taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
+        taskRevisionChanged = comparisonRevision !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
         if (!taskRevisionChanged) {
           const observations = await this.workerRunObservations(bound);
+          const noChange = async (current: WorkerRunObservation[]): Promise<CoordinationSyncNowResult> => {
+            if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
+            if (publish && !await this.bindingStillCurrent(bound!)) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session no longer owns this Team observation." };
+            if (mode === "now") return { kind: "quiet" };
+            const workers: Extract<CoordinationSyncResult, { kind: "unsettled" }>["workers"] = current.flatMap<Extract<CoordinationSyncResult, { kind: "unsettled" }>["workers"][number]>((item) => {
+              if (item.state === "active") return [{ name: item.worker, reason: "still_active" as const }];
+              if (item.actuationPending) return [{ name: item.worker, reason: "actuation_pending" as const }];
+              return item.state === "unknown" ? (item.unknownReasons ?? ["run_state_unknown" as const]).map(reason => ({ name: item.worker, reason })) : [];
+            });
+            const result: Extract<CoordinationSyncResult, { kind: "caught_up" | "unsettled" }> = workers.length
+              ? { kind: "unsettled", head: asNumber(batch.cursor), epochId: bound!.config.epochId!, workers }
+              : { kind: "caught_up", head: asNumber(batch.cursor), epochId: bound!.config.epochId! };
+            if (publish) this.stage(exactSessionFile, bound!.sessionFile, toolCallId, result, result.head, result.epochId, bound!.teamName, view, {
+              team_events: String(result.head),
+              task_projection: taskProjectionRevision(tasksResult!.tasks, tasksResult!.warnings),
+              task_event_failure_hints: this.taskEventFailureHintCursor(bound!.teamName, result.epochId, tasksResult!.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
+            }, tasksResult, this.leaderMembershipId(bound!), { cursor: observation.projection.teamEventCursor, acknowledgedEntryId: observation.projection.acknowledgedEntryId });
+            return result;
+          };
           if (livenessIsComplete(observations)) {
-            // Keep the hardened eventless Task rescan path for logical Workers
-            // whose current Membership is absent. A zero-delay authority read
-            // preserves the old event check without adding a liveness wait.
-            const allAbsent = observations.length > 0 && observations.every((item) => item.state === "absent");
+            // Absent Memberships retain the hardened eventless Task rescan.
+            const allAbsent = observations.length > 0 && observations.every(item => item.state === "absent");
             if (allAbsent) {
               try {
-                batch = await this.store.waitEvents({ teamName: bound.teamName, afterCursor: observation.projection.teamEventCursor, waitMs: 0, signal });
+                batch = await this.store.waitEvents({ teamName: bound.teamName, afterCursor: readCursor, waitMs: 0, signal });
                 const beforeWait = tasksResult;
                 const rechecked = await readTasks(bound.teamName);
                 if (rechecked.kind !== "tasks") return rechecked;
                 tasksResult = rechecked;
-                externallyChangedTaskIds = beforeWait ? this.changedTaskIds(beforeWait, rechecked) : [];
-                taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
+                externallyChangedTaskIds = this.changedTaskIds(beforeWait, rechecked);
+                taskRevisionChanged = comparisonRevision !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
               } catch (error) {
                 if (isAbort(error)) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
                 throw error;
               }
-              if (batch.events.length > 0 || taskRevisionChanged) {
-                // Continue through canonical event hydration and projection.
-              } else {
-                if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
-                if (publish && !await this.bindingStillCurrent(bound)) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session no longer owns this Team observation." };
-                const result: Extract<CoordinationSyncResult, { kind: "caught_up" }> = { kind: "caught_up", head: asNumber(batch.headCursor), epochId: bound.config.epochId! };
-                if (mode === "now") return { kind: "quiet" };
-                if (publish) this.stage(exactSessionFile, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
-                  team_events: String(asNumber(batch.headCursor)),
-                  task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
-                  task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
-                }, tasksResult, this.leaderMembershipId(bound));
-                return result;
-              }
-            } else {
-              if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
-              if (publish && !await this.bindingStillCurrent(bound)) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session no longer owns this Team observation." };
-              const result: Extract<CoordinationSyncResult, { kind: "caught_up" }> = { kind: "caught_up", head: asNumber(batch.headCursor), epochId: bound.config.epochId! };
-              if (mode === "now") return { kind: "quiet" };
-              if (publish) this.stage(exactSessionFile, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
-                team_events: String(asNumber(batch.headCursor)),
-                task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
-                task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
-              }, tasksResult, this.leaderMembershipId(bound));
-              return result;
             }
+            if (batch.events.length === 0 && !taskRevisionChanged) return noChange(observations);
           }
-          if (!livenessIsProductive(observations) && !(batch.events.length > 0 || taskRevisionChanged)) return { kind: "indeterminate", message: "Worker run-state evidence is incomplete; no observation was published." };
+          if (!livenessIsProductive(observations) && !(batch.events.length > 0 || taskRevisionChanged)) {
+            if (mode === "now") return { kind: "indeterminate", message: "Worker run-state evidence is incomplete; no observation was published." };
+            return noChange(observations);
+          }
           if (batch.events.length === 0 && !taskRevisionChanged) {
             if (mode === "now") return { kind: "quiet" };
             try {
@@ -352,49 +354,39 @@ export class CoordinationObservationService {
               const originalEpoch = bound.config.epochId;
               const originalLead = [...bound.config.members].reverse().find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === exactSessionFile)?.membershipId;
               const producerHint = async (): Promise<boolean> => {
-                const next = this.store.readEvents(bound!.teamName, { afterCursor: observation.projection.teamEventCursor });
+                const next = this.store.readEvents(bound!.teamName, { afterCursor: readCursor });
                 if (next.events.length > 0) return true;
                 const latest = await this.boundTeam(exactSessionFile);
                 if (!latest || latest.teamName !== originalTeam || latest.config.epochId !== originalEpoch) return true;
                 const current = await this.workerRunObservations(latest);
-                return current.length !== priorObservations.length || current.some((item, index) => item.state !== priorObservations[index]?.state || item.actuationPending !== priorObservations[index]?.actuationPending || item.membershipId !== priorObservations[index]?.membershipId || JSON.stringify(item.generation) !== JSON.stringify(priorObservations[index]?.generation));
+                return current.length !== priorObservations.length || current.some((item, index) => item.state !== priorObservations[index]?.state || item.actuationPending !== priorObservations[index]?.actuationPending || item.membershipId !== priorObservations[index]?.membershipId || JSON.stringify(item.generation) !== JSON.stringify(priorObservations[index]?.generation) || JSON.stringify(item.unknownReasons) !== JSON.stringify(priorObservations[index]?.unknownReasons));
               };
               const authorityHint = async (): Promise<boolean> => {
                 if (await producerHint()) return true;
                 const currentTasks = await readTasks(bound!.teamName);
-                return currentTasks.kind === "tasks" && observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(currentTasks.tasks, currentTasks.warnings);
+                return currentTasks.kind === "tasks" && comparisonRevision !== taskProjectionRevision(currentTasks.tasks, currentTasks.warnings);
               };
               for (;;) {
                 // Zero means one immediate recheck. A positive interval is only an
                 // internal watcher deadline while a current Worker remains active.
-                await this.wait.waitForLivenessHint({ teamName: bound.teamName, waitMs, signal, authorityCheckMs: 5_000, check: producerHint, checkAuthority: authorityHint });
+                const waitOutcome = await this.wait.waitForLivenessHint({ teamName: bound.teamName, waitMs, signal, authorityCheckMs: 5_000, check: producerHint, checkAuthority: authorityHint });
                 if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
                 const latest = await this.boundTeam(exactSessionFile);
                 const latestLead = latest && [...latest.config.members].reverse().find((member) => member.name === "team-lead" && member.agentType === "lead" && member.isActive !== false && member.sessionFile === exactSessionFile)?.membershipId;
                 if (!latest || latest.teamName !== originalTeam || latest.config.epochId !== originalEpoch || latestLead !== originalLead) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session no longer owns this Team observation." };
                 bound = latest;
-                batch = this.store.readEvents(bound.teamName, { afterCursor: observation.projection.teamEventCursor });
+                batch = this.store.readEvents(bound.teamName, { afterCursor: readCursor });
                 const beforeWait = tasksResult;
                 const rechecked = await readTasks(bound.teamName);
                 if (rechecked.kind !== "tasks") return rechecked;
                 tasksResult = rechecked;
                 externallyChangedTaskIds = beforeWait ? this.changedTaskIds(beforeWait, rechecked) : [];
-                taskRevisionChanged = observation.projection.authorityRevisions.task_projection !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
+                taskRevisionChanged = comparisonRevision !== taskProjectionRevision(tasksResult.tasks, tasksResult.warnings);
                 if (batch.events.length === 0 && !taskRevisionChanged) {
                   const afterWait = await this.workerRunObservations(bound);
-                  if (livenessIsComplete(afterWait)) {
-                    if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
-                    if (publish && !await this.bindingStillCurrent(bound)) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session no longer owns this Team observation." };
-                    const result: Extract<CoordinationSyncResult, { kind: "caught_up" }> = { kind: "caught_up", head: asNumber(batch.headCursor), epochId: bound.config.epochId! };
-                    if (publish) this.stage(exactSessionFile, bound.sessionFile, toolCallId, result, asNumber(batch.headCursor), bound.config.epochId!, bound.teamName, view, {
-                      team_events: String(asNumber(batch.headCursor)),
-                      task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
-                      task_event_failure_hints: this.taskEventFailureHintCursor(bound.teamName, bound.config.epochId!, tasksResult.tasks, observation.projection.authorityRevisions.task_event_failure_hints ?? "0"),
-                    }, tasksResult, this.leaderMembershipId(bound));
-                    return result;
-                  }
-                  if (!afterWait.some((item) => item.state === "active")) return { kind: "indeterminate", message: "Worker run-state or pending actuation evidence is incomplete after the bounded wait; no observation was published." };
-                  if (waitMs === 0) return { kind: "indeterminate", message: "A current Worker remains active after the immediate liveness check; no observation was published." };
+                  if (livenessIsComplete(afterWait)) return noChange(afterWait);
+                  const evidenceChanged = JSON.stringify(afterWait) !== JSON.stringify(priorObservations);
+                  if (waitMs === 0 || (!afterWait.some((item) => item.state === "active") && (!afterWait.some((item) => item.actuationPending) || (waitOutcome === "timeout" && !evidenceChanged)))) return noChange(afterWait);
                   priorObservations = afterWait;
                   continue;
                 }
@@ -408,7 +400,7 @@ export class CoordinationObservationService {
         }
       }
 
-      const candidatePages = immediatePages?.[0] === batch ? immediatePages : [batch];
+      const candidatePages = immediatePages.includes(batch) ? immediatePages.slice(immediatePages.indexOf(batch)) : [batch];
       for (let pageIndex = 0; pageIndex < candidatePages.length; pageIndex++) {
         batch = candidatePages[pageIndex];
         if (batch.events.length > 0) {
@@ -445,11 +437,19 @@ export class CoordinationObservationService {
         const projected = await this.projectUpdates(bound, batch.events, observation.projection, tasksResult.tasks, taskRevisionChanged, tasksResult.warnings, externallyChangedTaskIds);
         if (projected.kind !== "updates") return projected;
         if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };
-        if (mode === "now" && this.visibleUpdateCount(projected) === 0) continue;
+        if (this.visibleUpdateCount(projected) === 0) {
+          // A pure removal has no current Task card for the eventless rescan.
+          // Present the complete empty set rather than consume an unseen revision.
+          if (mode === "wait" && batch.events.length === 0 && taskRevisionChanged && tasksResult.tasks.length === 0) {
+            return this.readTeamSyncInternal(exactSessionFile, "snapshot", signal, toolCallId, context, mode, publish, branchLineageOverride);
+          }
+          continue;
+        }
         if (publish && !await this.bindingStillCurrent(bound)) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session no longer owns this Team observation." };
         // The page cursor is the last event represented in this result. The
         // journal head may include later pages that have not been projected.
         const pageCursor = asNumber(batch.cursor);
+        projected.head = pageCursor;
         if (publish) this.stage(exactSessionFile, bound.sessionFile, toolCallId, projected, pageCursor, bound.config.epochId!, bound.teamName, view, {
           team_events: String(pageCursor),
           task_projection: taskProjectionRevision(tasksResult.tasks, tasksResult.warnings),
@@ -458,7 +458,10 @@ export class CoordinationObservationService {
         onSelectedPage?.(batch, candidatePages.slice(pageIndex + 1));
         return projected;
       }
-      return { kind: "quiet" };
+      if (mode === "now") return { kind: "quiet" };
+      if (batch.events.length > 0 && batch.cursor === readCursor) throw new Error("Team observation pagination did not advance.");
+      readCursor = batch.cursor;
+      }
     }
     const snapshot = await this.readSnapshotForBound(bound, context, publish);
     if (signal.aborted) return { kind: "cancelled", message: "The updates wait was cancelled before an observation was published." };

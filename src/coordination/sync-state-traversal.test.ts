@@ -67,7 +67,7 @@ function fixture(input: { workers?: Worker[]; events?: TeamEvent[]; changed?: bo
     projectTaskChanges: (events, tasks) => ({ kind: "projected", changes: events.filter((event) => event.type === "task").map((event) => ({ taskId: event.ref.taskId, changeKinds: ["progress"], journalEntries: [], current: tasks.find((task) => task.id === event.ref.taskId)! })) }),
   }, {
     readHidden, commitHidden, readEvents, readEventCursor: () => String(events.length),
-    waitEvents: async () => ({ ...readEvents("traversal"), timedOut: true }),
+    waitEvents: async (input) => ({ ...readEvents(input.teamName, { afterCursor: input.afterCursor }), timedOut: true }),
     readFailureHints: () => ({ hints: [], cursor: "0", headCursor: "0" }),
   }, { waitForLivenessHint: wait });
   service.setBranchContext(session, ["base"]);
@@ -94,12 +94,12 @@ const rows = combinations.flatMap((combination) => [false, true].flatMap((event)
   const workers = combination.map((worker, index) => ({ ...worker, name: `worker-${index}` }));
   const final = workers.map((worker) => worker.state === "active" && waitSeconds > 0 ? { ...worker, state: "settled" as const, pending: false } : worker);
   const kind = event || changed ? "updates" : unresolved(final).length ? "unsettled" : "caught_up";
-  return { id: `L[${workers.map((worker) => `${worker.state}:p${Number(worker.pending)}`).join("+") || "none"}]-e${Number(event)}-t${Number(changed)}-w${waitSeconds}`, workers, final, event, changed, waitSeconds, kind, diverges: kind === "unsettled" };
+  return { id: `L[${workers.map((worker) => `${worker.state}:p${Number(worker.pending)}`).join("+") || "none"}]-e${Number(event)}-t${Number(changed)}-w${waitSeconds}`, workers, final, event, changed, waitSeconds, kind };
 }))));
 
 describe("team_sync contract state traversal (revision 2)", () => {
   for (const row of rows) {
-    (row.diverges ? it.fails : it)(row.id, async () => {
+    it(row.id, async () => {
       let fx!: ReturnType<typeof fixture>;
       fx = fixture({ workers: row.workers, events: row.event ? [taskEvent("1", row.changed ? "v_2" : "v_1")] : [], changed: row.changed, waitSeconds: row.waitSeconds,
         wait: (round) => { if (round === 2 && row.waitSeconds > 0) fx.workers.forEach((worker) => { if (worker.state === "active") { worker.state = "settled"; worker.pending = false; } }); } });
@@ -119,14 +119,13 @@ describe("team_sync contract state traversal (revision 2)", () => {
   }
 });
 
-// Both kinds are already representable by base types. Commit 2 flips only the expected-failure marker.
 describe("team_sync named branch traversal", () => {
   for (const state of ["none", "settled", "active"] as const) for (const page of ["retired-worker", "stale-task"] as const) {
-    it.fails(`B8-empty-${page}-authority-change-${state}`, async () => {
+    it(`B8-empty-${page}-authority-change-${state}`, async () => {
       const fx = fixture({ workers: state === "none" ? [] : [{ name: "worker", state, pending: false }], changed: true,
         events: [page === "retired-worker" ? emptyEvent : taskEvent()] });
       const result: any = await observe(fx, "changed-after-empty");
-      expect(result).toMatchObject({ kind: "updates", taskChanges: [{ taskId: task.id, current: { version: "v_2", current_context: "Changed" } }] });
+      expect(result).toMatchObject({ kind: "updates", head: 1, taskChanges: [{ taskId: task.id, current: { version: "v_2", current_context: "Changed" } }] });
       expect(fx.wait).not.toHaveBeenCalled();
       expect(fx.service.pending(session)).toMatchObject({ head: 1, baselineCursor: "0" });
       expect(await fx.service.acknowledge(session, "changed-entry", ["base", "changed-entry"])).toBe(true);
@@ -135,7 +134,7 @@ describe("team_sync named branch traversal", () => {
     });
   }
   for (const state of ["none", "settled", "active"] as const) {
-    it.fails(`B8-empty-page-pure-removal-${state}`, async () => {
+    it(`B8-empty-page-pure-removal-${state}`, async () => {
       const fx = fixture({ workers: state === "none" ? [] : [{ name: "worker", state, pending: false }], events: [emptyEvent] });
       fx.setTasks([]);
       expect(await observe(fx, "removed-after-empty")).toMatchObject({ kind: "snapshot", tasks: [], head: 1 });
@@ -145,19 +144,19 @@ describe("team_sync named branch traversal", () => {
       expect(fx.hidden().teamEventCursor).toBe("1");
     });
   }
-  it.fails("B7-updates-without-baseline-stages-snapshot", async () => {
+  it("B7-updates-without-baseline-stages-snapshot", async () => {
     const fx = fixture({ missingBaseline: true });
     expect(await observe(fx, "missing")).toMatchObject({ kind: "snapshot", tasks: [{ id: task.id }] });
     expect(fx.service.pending(session)?.toolCallId).toBe("missing");
   });
-  it.fails("B10-sequential-duplicate-refused", async () => {
+  it("B10-sequential-duplicate-refused", async () => {
     const fx = fixture();
     const first = await observe(fx, "first", "snapshot");
     expect(await observe(fx, "first", "snapshot")).toEqual(first);
     expect(await observe(fx, "second", "snapshot")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
     expect(fx.service.pending(session)?.toolCallId).toBe("first");
   });
-  it.fails("B3-parallel-duplicate-refused", async () => {
+  it("B3-parallel-duplicate-refused", async () => {
     const fx = fixture();
     let release!: () => void;
     let entered!: () => void;
@@ -173,7 +172,7 @@ describe("team_sync named branch traversal", () => {
     expect(fx.service.pending(session)?.toolCallId).toBe("first");
   });
   for (const state of ["active", "settled"] as const) for (const later of [false, true]) {
-    it.fails(`B8-native-empty-page-${state}-later${Number(later)}`, async () => {
+    it(`B8-native-empty-page-${state}-later${Number(later)}`, async () => {
       let fx!: ReturnType<typeof fixture>;
       fx = fixture({ workers: [{ name: "worker", state, pending: false }], events: [emptyEvent, ...(later ? [taskEvent("2")] : [])],
         wait: () => { fx.workers[0].state = "settled"; } });
@@ -190,7 +189,7 @@ describe("team_sync named branch traversal", () => {
 
 describe("team_sync acknowledgement and wait transitions", () => {
   for (const failure of ["branch", "epoch", "membership", "commit-refused", "commit-throws"] as const) {
-    it.fails(`B2-${failure}-releases-pending-and-reprojects`, async () => {
+    it(`B2-${failure}-releases-pending-and-reprojects`, async () => {
       const fx = fixture({ events: [taskEvent()] });
       const before = fx.hidden();
       expect((await observe(fx, "first")).kind).toBe("updates");

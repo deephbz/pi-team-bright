@@ -77,6 +77,16 @@ describe("TUI message gallery", () => {
     }
   });
 
+  it("shows actionable Worker evidence and duplicate observation recovery", () => {
+    const scenarios = tuiMessageGallery();
+    const unsettled = scenarios.find(scenario => scenario.id === "team_sync.unsettled-workers")!;
+    const lines = projectionLines(unsettled.message, { expanded: false }).join("\n");
+    for (const reason of ["still active", "actuation pending", "run state unknown", "delivery state unknown"]) expect(lines).toContain(reason);
+    const refused = scenarios.find(scenario => scenario.id === "team_sync.observation-in-progress")!;
+    expect(projectionLines(refused.message, { expanded: false }).join("\n")).toContain("Use its result.");
+    expect(refused.message.detail).toMatchObject({ state_changed: false, observation_advanced: false });
+  });
+
   it("shows the packaged example only for model-role configuration refusals", () => {
     const scenarios = tuiMessageGallery().filter((scenario) => scenario.message.type === "ensure_worker");
     expect(scenarios.length).toBeGreaterThan(1);

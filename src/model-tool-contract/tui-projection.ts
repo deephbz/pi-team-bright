@@ -1,5 +1,5 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { projectToolResult, type ProjectedTool } from "./result-projection";
+import { decodeHistoricalTeamSyncResult, projectToolResult, type ProjectedTool } from "./result-projection";
 import { piTeamBrightSettingsExamplePath } from "../utils/package-example-path";
 import {
   projectionLines,
@@ -106,6 +106,10 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
         lines.push(`Task ${quoted(change.task_id)} changed · ${change.current.status}${change.current.assignee ? ` · @ ${change.current.assignee}` : " · unassigned"}${blocker ? ` · blocker: ${compact(blocker.text)}` : ""}.`);
       }
     } else if (model.kind === "caught_up") lines.push("Caught up: no current Worker producer requires a wait.");
+    else if (model.kind === "unsettled") {
+      lines.push("No new Team change; Worker evidence needs attention.");
+      for (const worker of model.workers) lines.push(`Worker ${quoted(worker.name)} · ${worker.reason.replaceAll("_", " ")}.`);
+    }
     else lines.push(model.message ? compact(model.message) : `${model.reason ?? "Observation did not advance."}`);
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
@@ -137,7 +141,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
 function toneFor(tool: ProjectedTool, model: any): { tone: TuiMessageTone; label: string } {
   const partialTaskGraph = (tool === "task_graph_apply" || tool === "task_create") && model.kind === "task_graph_applied" && model.delivery_warnings?.length;
   const partialAlert = tool === "alert_send" && model.kind === "alert_sent" && model.failed_recipients.length > 0;
-  const warningKinds = ["missing", "refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "partial", "unknown_outcome"];
+  const warningKinds = ["missing", "refused", "unavailable", "contract_gap", "cancelled", "snapshot_required", "indeterminate", "unsettled", "partial", "unknown_outcome"];
   const warning = partialTaskGraph || partialAlert || warningKinds.includes(model.kind);
   return { tone: warning ? "warning" : "success", label: warning ? (partialTaskGraph || partialAlert ? "partial" : model.kind) : model.kind };
 }
@@ -211,6 +215,9 @@ export function projectToolTuiMessage(input: TuiInput): PiTeamBrightTuiMessage {
     detail: input.details ?? input.content ?? null, provenance: "tool-result",
   };
   if (input.isError) return errorMessage(input, "execution_error");
+  // Historical Session entries remain readable without reopening the live schema.
+  const historical = input.tool === "team_sync" ? decodeHistoricalTeamSyncResult(input.details) : undefined;
+  if (historical) return projectModelToolTuiMessage(input.tool, historical, input.details);
   try {
     return projectModelToolTuiMessage(input.tool, projectToolResult(input.tool, input.details), input.details);
   } catch {

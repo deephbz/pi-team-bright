@@ -262,7 +262,8 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
           branches.set(sessionId, entries);
           await emit("before_provider_request", { payload: result.content });
           // This fixture models the successful provider turn after the tool
-          // result. The real Pi adapter commits observation only at turn_end.
+          // result. Pi resolves the staged observation at assistant message_end.
+          await emit("message_end", { message: { role: "assistant", stopReason: "stop" } });
           await emit("turn_end", { message: { role: "assistant", stopReason: "stop" } });
         },
       });

@@ -63,6 +63,9 @@ async function main() {
       for (const handler of handlers.get("before_provider_request") || []) {
         await handler({ payload: { persistedResult: result.content?.[0]?.text } }, ctx);
       }
+      for (const handler of handlers.get("message_end") || []) {
+        await handler({ message: { role: "assistant", stopReason: "stop" } }, ctx);
+      }
       for (const handler of handlers.get("turn_end") || []) {
         await handler({ message: { role: "assistant", stopReason: "stop" } }, ctx);
       }
