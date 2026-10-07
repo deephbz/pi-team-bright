@@ -62,4 +62,11 @@ run_case PublicationObservation PublicationObservation.skip-replay TruthfulRepla
 run_case PublicationObservation PublicationObservation.retry-retirement NoStaleRetirement
 run_case PublicationObservation PublicationObservation.crash-replay NoCrashReplayWitness
 run_case PublicationObservation PublicationObservation.retirement-gap NoRetirementGapWitness
+run_case SyncPresentation SyncPresentation pass
+run_case SyncPresentation SyncPresentation.ack-turn-end NoWastedSyncAfterPresentation
+run_case SyncPresentation SyncPresentation.keep-pending NoStuckPending
+run_case SyncPresentation SyncPresentation.immediate-pending LivenessOutcomeC4
+run_case SyncPresentation SyncPresentation.discard-only-ack-false NoStuckPendingWithoutProof
+run_case SyncPresentation SyncPresentation.sequential-duplicate SequentialRefusal
+run_case SyncPresentation SyncPresentation.native-empty-page NoEmptyUpdates
 echo "TLC logs: $result_dir"

@@ -86,6 +86,21 @@ export function toolCallResponse(name, args, id = `call_${randomUUID().replaceAl
   return { kind: "tool", name, args, id };
 }
 
+export function toolCallsResponse(...calls) {
+  assert(calls.length > 0);
+  assert.equal(new Set(calls.map((call) => call.id)).size, calls.length, "Tool call IDs must be unique");
+  return { kind: "tools", calls };
+}
+
+/** Extract model-visible JSON results by call ID, independent of context order. */
+export function toolResults(request, calls) {
+  return calls.map((call) => {
+    const message = request.body.messages.findLast((item) => item.role === "tool" && item.tool_call_id === call.id);
+    assert(message, `Missing tool result for ${call.name} (${call.id})`);
+    return JSON.parse(message.content);
+  });
+}
+
 /** One loopback-only OpenAI Completions endpoint with explicit response gates. */
 export class LocalProviderFixture {
   constructor() {
@@ -141,10 +156,11 @@ export class LocalProviderFixture {
     this.pending.splice(this.pending.indexOf(request), 1);
     const id = `chatcmpl-fixture-${request.sequence}`;
     const model = request.body.model;
-    const delta = scripted.kind === "tool"
-      ? { role: "assistant", tool_calls: [{ index: 0, id: scripted.id, type: "function", function: { name: scripted.name, arguments: JSON.stringify(scripted.args) } }] }
+    const calls = scripted.kind === "tools" ? scripted.calls : scripted.kind === "tool" ? [scripted] : [];
+    const delta = calls.length
+      ? { role: "assistant", tool_calls: calls.map((call, index) => ({ index, id: call.id, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) } })) }
       : { role: "assistant", content: scripted.text };
-    const finishReason = scripted.kind === "tool" ? "tool_calls" : "stop";
+    const finishReason = calls.length ? "tool_calls" : "stop";
     request.response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
     request.response.write(`data: ${JSON.stringify(completionChunk(id, model, delta))}\n\n`);
     request.response.write(`data: ${JSON.stringify(completionChunk(id, model, {}, finishReason, { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }))}\n\n`);
@@ -266,5 +282,76 @@ export class PiRpcProcess {
       new Promise((resolve) => this.child.once("close", resolve)),
       new Promise((resolve) => setTimeout(() => { this.child.kill("SIGKILL"); resolve(); }, 3_000)),
     ]);
+  }
+}
+
+/** Script actual Pi turns. Scenarios own assertions; this harness owns isolation and gates. */
+export class ScriptedScenario {
+  constructor(options = {}) {
+    this.options = options;
+    this.sandbox = createSandbox();
+    this.sequence = 0;
+  }
+
+  async start() {
+    this.provider = await new LocalProviderFixture().start();
+    fs.writeFileSync(this.sandbox.path("agent", "settings.json"), JSON.stringify({
+      pi_team_bright: {
+        model_roles: { fixture: { model: "fixture/worker-scripted", thinking: "off", use: "Local scenario Worker" } },
+        default_model_role: "fixture",
+        team: { auto_sync_enabled: false, wait_seconds: 0, ...this.options.teamSettings },
+      },
+    }));
+    const carrierEnv = {
+      HOME: this.sandbox.path("home"), PI_CODING_AGENT_DIR: this.sandbox.path("agent"),
+      PATH: `${path.join(PACKAGE, "node_modules/.bin")}${path.delimiter}${process.env.PATH}`,
+      PI_TEAM_BRIGHT_SHIPPED_EXTENSION: path.join(HERE, "worker-extension.ts"),
+    };
+    this.carrier = new PrivateTmuxCarrier(this.sandbox).start(carrierEnv);
+    this.pi = await new PiRpcProcess(this.sandbox, this.provider, {
+      ...this.options.pi,
+      env: { ...carrierEnv, ...this.carrier.childEnvironment(), ...this.options.pi?.env },
+    }).start();
+    return this;
+  }
+
+  async prompt(message) {
+    this.turnStart = this.pi.records.length;
+    const response = await this.pi.command("prompt", { message });
+    assert.equal(response.success, true);
+    this.request = await this.provider.nextRequest(this.sequence).catch((error) => {
+      throw new Error(`${error.message} records=${JSON.stringify(this.pi.records.slice(-8))} stderr=${JSON.stringify(this.pi.stderr.slice(-2000))}`);
+    });
+    this.sequence = this.request.sequence;
+    return this.request;
+  }
+
+  // Answer one assistant message, then stop at the next provider request.
+  async step(...calls) {
+    assert(this.request, "Call prompt() before step()");
+    for (const call of calls) assert(this.request.body.tools?.some((tool) => tool.function?.name === call.name), `Tool not advertised: ${call.name}`);
+    await this.respond(toolCallsResponse(...calls));
+    return toolResults(this.request, calls);
+  }
+
+  async respond(scripted) {
+    this.provider.answer(this.request, scripted);
+    this.request = await this.provider.nextRequest(this.sequence);
+    this.sequence = this.request.sequence;
+    return this.request;
+  }
+
+  async finish(text = "Scenario complete.") {
+    this.provider.answer(this.request, textResponse(text));
+    await this.pi.waitForNew((event) => event.type === "agent_settled", this.turnStart);
+    this.request = undefined;
+  }
+
+  async close() {
+    await this.pi?.close();
+    this.carrier?.close();
+    await this.provider?.close();
+    if (process.env.PI_TEAM_SYNC_TEST_RETAIN === "1") console.error(`Retained isolated fixture: ${this.sandbox.root}`);
+    else this.sandbox.cleanup();
   }
 }
