@@ -222,7 +222,7 @@ describe("Team Session lifecycle boundary", () => {
     expect(extension).toContain("sessionAdapter.register()");
     expect(extension).toContain("function modelToolBranchIds");
     expect(extension).toContain('pi.on("before_provider_request"');
-    expect(extension).toContain('pi.on("turn_end"');
+    expect(extension).toContain('pi.on("message_end"');
     expect(adapter).toContain('pi.on("context"');
     expect(extension).toContain("Type.Object(");
     expect(extension).not.toMatch(/pi\.on\("(agent_start|agent_settled|turn_start|context|model_select|before_agent_start)"/);

@@ -160,10 +160,11 @@ describe("durable Coordination query equivalence", () => {
     service.setBranchContext("leader", ["base"]);
 
     const unknown = await service.readTeamSync("leader", "updates", new AbortController().signal, "unknown");
-    expect(unknown).toEqual({ kind: "indeterminate", message: "Worker run-state evidence is incomplete; no observation was published." });
-    expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime"]);
-    expect(service.pending("leader")).toBeUndefined();
+    expect(unknown).toEqual({ kind: "unsettled", head: 0, epochId: "epoch-1", workers: [{ name: "worker", reason: "run_state_unknown" }] });
+    expect(calls).toEqual(["binding", "task:list", "task:read", "delivery", "alert", "runtime", "binding"]);
+    expect(service.pending("leader")?.toolCallId).toBe("unknown");
     expect(commits).toBe(0);
+    service.discardPending("leader", "unknown");
 
     calls.length = 0;
     taskRead = "unavailable";

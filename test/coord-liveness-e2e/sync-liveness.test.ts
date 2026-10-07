@@ -10,7 +10,7 @@ import { DurableCoordinationHiddenObservation } from "../../src/adapters/durable
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../../src/coordination/observation-service";
 import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-model-tool-port";
 import { InMemoryModelToolTeamPort, exactLeaderSessionId } from "../../src/model-tool-contract/in-memory-team-port";
-import { projectToolResult } from "../../src/model-tool-contract/result-projection";
+import { decodeHistoricalTeamSyncResult, projectToolResult } from "../../src/model-tool-contract/result-projection";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
 import { commitHiddenObservationProjection, readHiddenObservationProjection } from "../../src/utils/hidden-observation";
@@ -544,11 +544,14 @@ describe("hardened coordination liveness boundaries", () => {
     expect(SYNC_NUDGE_CUSTOM_TYPE).toBe("pi-team-bright.sync-nudge");
   });
 
-  it("projects caught_up, indeterminate, and cancellation without false Task or Alert state", () => {
+  it("projects live settlement and cancellation and decodes historical indeterminate without false Task or Alert state", () => {
     const caughtUp = { kind: "caught_up", head: 3, epoch_id: "epoch-1", state_changed: false, observation_advanced: true } as const;
     const unknown = { kind: "indeterminate", message: "Worker run-state evidence is incomplete.", state_changed: false, observation_advanced: false } as const;
     expect(projectToolResult("team_sync", caughtUp)).toEqual({ kind: "caught_up", head: 3, epoch_id: "epoch-1" });
-    expect(projectToolResult("team_sync", unknown)).toEqual({ kind: "indeterminate", message: unknown.message });
+    expect(decodeHistoricalTeamSyncResult(unknown)).toBe(unknown);
+    expect(() => projectToolResult("team_sync", unknown)).toThrow();
+    const cancelled = { kind: "cancelled", message: "Wait cancelled.", state_changed: false, observation_advanced: false } as const;
+    expect(projectToolResult("team_sync", cancelled)).toEqual({ kind: "cancelled", message: cancelled.message });
     expect(projectTui({ tool: "team_sync", details: unknown, expanded: false })).toEqual(expect.arrayContaining([expect.stringContaining("Indeterminate")]));
     expect(unknown).toMatchObject({ state_changed: false, observation_advanced: false });
   });

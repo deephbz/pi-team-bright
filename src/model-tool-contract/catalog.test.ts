@@ -172,7 +172,10 @@ describe("candidate model-tool catalog", () => {
       state_changed: false,
       observation_advanced: false,
     } as const;
-    expect(Check(TeamSyncResultSchema, { kind: "snapshot_required", ...common })).toBe(true);
+    expect(Check(TeamSyncResultSchema, { kind: "snapshot_required", ...common })).toBe(false);
+    expect(Check(TeamSyncResultSchema, { kind: "indeterminate", ...common })).toBe(false);
+    expect(Check(TeamSyncResultSchema, { kind: "refused", reason: "observation_in_progress", ...common })).toBe(true);
+    expect(Check(TeamSyncResultSchema, { kind: "unsettled", head: 0, epoch_id: "epoch", state_changed: false, observation_advanced: true, workers: [{ name: "worker", reason: "run_state_unknown" }] })).toBe(true);
     expect(Check(TeamSyncResultSchema, { kind: "cancelled", ...common })).toBe(true);
     expect(Check(TeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "snapshot_required", ...common })).toBe(false);
     expect(Check(TeamSyncUnavailableResultSchema, { kind: "unavailable", reason: "cancelled", ...common })).toBe(false);

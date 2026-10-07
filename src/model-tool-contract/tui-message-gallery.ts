@@ -78,7 +78,7 @@ function sampleValue(schema: any): any {
       .filter(([key]) => required.has(key))
       .map(([key, value]) => [key, sampleValue(value)]));
   }
-  if (schema.type === "array") return [];
+  if (schema.type === "array") return Array.from({ length: schema.minItems ?? 0 }, () => sampleValue(schema.items));
   if (schema.type === "string") return sampleString(schema);
   if (schema.type === "integer" || schema.type === "number") return schema.minimum ?? 0;
   if (schema.type === "boolean") return false;
@@ -172,6 +172,32 @@ function toolScenarios(): TuiMessageGalleryScenario[] {
       reason: "version_conflict",
       message: "The supplied Task version is stale.",
       recovery: { action: "reconcile_and_retry", expected_version: "v_0123456789abcdef" },
+    }),
+  });
+  scenarios.push({
+    id: "team_sync.unsettled-workers",
+    title: "team_sync: actionable Worker evidence",
+    source: "tool",
+    resultKind: "unsettled",
+    message: projectModelToolTuiMessage("team_sync", {
+      kind: "unsettled", head: 7, epoch_id: "gallery-epoch",
+      workers: [
+        { name: "active-worker", reason: "still_active" },
+        { name: "pending-worker", reason: "actuation_pending" },
+        { name: "runtime-worker", reason: "run_state_unknown" },
+        { name: "delivery-worker", reason: "delivery_state_unknown" },
+      ],
+    }),
+  });
+  scenarios.push({
+    id: "team_sync.observation-in-progress",
+    title: "team_sync: duplicate observation refusal",
+    source: "tool",
+    resultKind: "refused",
+    message: projectModelToolTuiMessage("team_sync", {
+      kind: "refused", reason: "observation_in_progress",
+      message: "Another team_sync call in this message owns the observation. Use its result.",
+      state_changed: false, observation_advanced: false,
     }),
   });
   scenarios.push({

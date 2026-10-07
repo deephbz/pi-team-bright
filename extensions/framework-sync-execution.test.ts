@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  FRAMEWORK_SYNC_ACK_TYPE,
+  FRAMEWORK_SYNC_SUPERSESSION_TYPE,
   FRAMEWORK_SYNC_ENTRY_TYPE,
   FRAMEWORK_SYNC_MESSAGE_TYPE,
   FrameworkSyncExecutionController,
@@ -7,6 +9,8 @@ import {
   persistedFrameworkSyncForPending,
   projectFrameworkSyncContext,
   projectFrameworkSyncMessage,
+  validateFrameworkSyncRecord,
+  makeFrameworkSyncRecord,
   type FrameworkSyncExecutionRecord,
 } from "./framework-sync-execution";
 
@@ -46,6 +50,34 @@ function harness(result: unknown = update) {
 }
 
 describe("framework team_sync execution", () => {
+  it.each(["indeterminate", "snapshot_required"])("refuses retired %s in framework execution records", async (kind) => {
+    const test = harness();
+    await test.controller.execute("alpha", "command");
+    const record = test.branch[1].data as FrameworkSyncExecutionRecord;
+    const old = { kind, message: "Historical observation.", state_changed: false, observation_advanced: false };
+    record.result = old;
+    record.resultText = JSON.stringify(old);
+    expect(validateFrameworkSyncRecord(record)).toBeUndefined();
+    const context = projectFrameworkSyncContext([{ role: "custom", customType: FRAMEWORK_SYNC_MESSAGE_TYPE, details: { recordId: record.id } }], test.branch, "session-a", "/tmp/session-a.jsonl");
+    expect(context).toEqual([]);
+    expect(projectFrameworkSyncMessage({ details: { recordId: record.id, record } })).toBeUndefined();
+    expect(() => makeFrameworkSyncRecord({ ...record, result: old })).toThrow("snapshot or updates");
+  });
+
+  it("reads an acknowledgement persisted before the consuming assistant entry", async () => {
+    const test = harness();
+    await test.controller.execute("alpha", "automatic", "updates", "debt-1");
+    const record = test.branch[1].data as FrameworkSyncExecutionRecord;
+    test.pi.appendEntry(FRAMEWORK_SYNC_ACK_TYPE, { version: 1, recordId: record.id, acknowledgedEntryId: "entry-1", sessionId: "session-a", sessionFile: "/tmp/session-a.jsonl" });
+    test.branch.push({ id: "assistant", type: "message", message: { role: "assistant", stopReason: "toolUse" } });
+    const reloaded = structuredClone(test.branch);
+    expect(persistedFrameworkSyncForPending(reloaded, "session-a", "/tmp/session-a.jsonl", record.toolCallId, record.resultText)?.record.id).toBe(record.id);
+    const context = projectFrameworkSyncContext([{ role: "custom", customType: FRAMEWORK_SYNC_MESSAGE_TYPE, details: { recordId: record.id } }, { role: "assistant", content: [] }], reloaded, "session-a", "/tmp/session-a.jsonl");
+    expect(context.map(message => message.role)).toEqual(["assistant", "toolResult", "assistant"]);
+    expect(context[1].content[0].text).toBe(record.resultText);
+    await test.controller.execute("alpha", "automatic", "updates", "debt-2");
+    expect(test.branch.some(entry => entry.customType === FRAMEWORK_SYNC_SUPERSESSION_TYPE)).toBe(false);
+  });
   it("reports an empty manual read in TUI and stays silent for an empty automatic read", async () => {
     const test = harness({ kind: "quiet" });
     expect(await test.controller.execute("alpha", "command")).toBe("quiet");

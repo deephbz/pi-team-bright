@@ -11,7 +11,7 @@ const task: CanonicalTaskCard = {
   status: "open", version: "v_1",
 };
 
-function fixture(options: { tasks?: CanonicalTaskCard[]; workers?: string[]; runtime?: "active" | "settled" | "unknown"; pending?: boolean; events?: TeamEvent[]; baselineTasks?: CanonicalTaskCard[]; waitSeconds?: number; wait?: () => Promise<"hint" | "timeout">; pageSize?: number; singleScan?: boolean } = {}) {
+function fixture(options: { tasks?: CanonicalTaskCard[]; workers?: string[]; runtime?: "active" | "settled" | "unknown"; pending?: boolean; events?: TeamEvent[]; baselineTasks?: CanonicalTaskCard[]; waitSeconds?: number; wait?: () => Promise<"hint" | "timeout">; pageSize?: number; singleScan?: boolean; missingBaseline?: boolean; deliveryKnown?: boolean; inboxKnown?: boolean } = {}) {
   let tasks = options.tasks ?? [task];
   const workers = options.workers ?? ["worker"];
   let runState = options.runtime ?? "settled";
@@ -72,19 +72,19 @@ function fixture(options: { tasks?: CanonicalTaskCard[]; workers?: string[]; run
     taskStateDelivery: {
       listTaskIds: vi.fn(async () => tasks.map((item) => item.id)),
       readTasks,
-      readDeliveryEvidence: vi.fn(async () => ({ known: true, pending })),
+      readDeliveryEvidence: vi.fn(async () => ({ known: options.deliveryKnown ?? true, pending })),
     },
-    alertActuation: { readInboxEvidence: vi.fn(async () => ({ known: true, pending: false })) },
+    alertActuation: { readInboxEvidence: vi.fn(async () => ({ known: options.inboxKnown ?? true, pending: false })) },
   }, {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: (input, current) => ({ kind: "projected" as const, changes: [...new Set(input.filter((event) => event.type === "task").map((event) => event.ref.taskId))].map((id) => ({ taskId: id, changeKinds: ["progress" as const], journalEntries: [], current: current.find((item) => item.id === id)! })) }),
   }, {
-    readHidden: vi.fn(async () => ({ kind: "found" as const, projection: hidden })),
+    readHidden: vi.fn(async () => options.missingBaseline ? ({ kind: "not_found" as const, reason: "absent" as const }) : ({ kind: "found" as const, projection: hidden })),
     commitHidden,
     readEvents,
     ...(options.singleScan ? { readEventPages } : {}),
     readEventCursor: vi.fn(() => String(events.length)),
-    waitEvents: vi.fn(async () => ({ ...readEvents("team-sync-continuity", { afterCursor: "0" }), timedOut: true })),
+    waitEvents: vi.fn(async (input) => ({ ...readEvents(input.teamName, { afterCursor: input.afterCursor }), timedOut: true })),
     readFailureHints: vi.fn(() => ({ hints: [], cursor: "0", headCursor: "0" })),
   }, { waitForLivenessHint } as any);
   service.setBranchContext(sessionFile, ["base"]);
@@ -92,6 +92,111 @@ function fixture(options: { tasks?: CanonicalTaskCard[]; workers?: string[]; run
 }
 
 describe("Team synchronization continuity", () => {
+  it.each(["settled", "unknown"] as const)("publishes %s evidence immediately without a producer", async (runtime) => {
+    const fx = fixture({ runtime });
+    const result = await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "immediate");
+    expect(result.kind).toBe(runtime === "unknown" ? "unsettled" : "caught_up");
+    expect(result.kind === "unsettled" ? result.workers : undefined).toEqual(runtime === "unknown" ? [{ name: "worker", reason: "run_state_unknown" }] : undefined);
+    expect(fx.waitForLivenessHint).not.toHaveBeenCalled();
+    expect(await fx.service.acknowledge(sessionFile, "entry", ["base", "entry"])).toBe(true);
+  });
+
+  it.each([{ runtime: "settled" as const, deliveryKnown: false }, { runtime: "settled" as const, inboxKnown: false }, { runtime: "unknown" as const, deliveryKnown: false }])("names incomplete delivery and runtime evidence: %j", async (options) => {
+    const fx = fixture(options);
+    const result = await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "unknown");
+    expect(result.kind).toBe("unsettled");
+    if (result.kind !== "unsettled") throw new Error("Expected unsettled evidence");
+    expect(result.workers).toContainEqual({ name: "worker", reason: "delivery_state_unknown" });
+    expect(result.workers.some(worker => worker.reason === "run_state_unknown")).toBe(options.runtime === "unknown");
+    expect(fx.waitForLivenessHint).not.toHaveBeenCalled();
+  });
+
+  it("refuses nonadvancing native empty-page traversal without staging", async () => {
+    const events: TeamEvent[] = [{ type: "worker", cursor: "1", worker: "retired", membershipId: "old", phase: "stopped", at: "2026-09-26T00:00:00Z" }];
+    const fx = fixture({ events });
+    let reads = 0;
+    fx.readEvents.mockImplementation(() => {
+      // Bound the mutant path so a missing production guard cannot hang the test.
+      if (++reads > 3) throw new Error("Test store repeated a nonadvancing cursor");
+      return { events, cursor: "1", headCursor: "1", truncated: false, remaining: 0 };
+    });
+    await expect(fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "stuck-page")).rejects.toThrow("Team observation pagination did not advance.");
+    expect(fx.readEvents).toHaveBeenCalledTimes(2);
+    expect(fx.service.pending(sessionFile)).toBeUndefined();
+    expect(fx.commitHidden).not.toHaveBeenCalled();
+  });
+
+  it("reads beyond a raw empty page before applying liveness", async () => {
+    const events: TeamEvent[] = [
+      { type: "worker", cursor: "1", worker: "retired", membershipId: "old", phase: "stopped", at: "2026-09-26T00:00:00Z" },
+      { type: "task", cursor: "2", ref: { taskId: task.id, version: "v_1" }, change: "status", actor: "worker", at: "2026-09-26T00:00:01Z" },
+    ];
+    const fx = fixture({ events });
+    fx.readEvents.mockReturnValueOnce({ events: [], cursor: "1", headCursor: "2", truncated: true, remaining: 1 });
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "raw-empty")).toMatchObject({ kind: "updates", head: 2, taskChanges: [{ taskId: task.id }] });
+    expect(fx.service.pending(sessionFile)?.head).toBe(2);
+    expect(fx.waitForLivenessHint).not.toHaveBeenCalled();
+  });
+
+  it.each(["settled", "active"] as const)("skips native empty pages before %s liveness checks", async (runtime) => {
+    const events: TeamEvent[] = Array.from({ length: 3 }, (_, index) => ({ type: "worker", cursor: String(index + 1), worker: "retired", membershipId: "old", phase: "stopped", at: "2026-09-26T00:00:00Z" }));
+    let fx!: ReturnType<typeof fixture>;
+    fx = fixture({ runtime, events, pageSize: 1, wait: async () => { fx.setRunState("settled"); return "hint"; } });
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "empty")).toMatchObject({ kind: "caught_up", head: 3 });
+    expect(fx.waitForLivenessHint).toHaveBeenCalledTimes(runtime === "active" ? 1 : 0);
+    expect(fx.service.pending(sessionFile)?.head).toBe(3);
+  });
+
+  it("requires a full interval of unchanged pending evidence", async () => {
+    let round = 0;
+    let fx!: ReturnType<typeof fixture>;
+    fx = fixture({ pending: true, wait: async () => {
+      round++;
+      if (round === 1) { fx.setWorkerMembership("worker-2"); return "hint"; }
+      if (round === 2) return "hint";
+      return "timeout";
+    } });
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "pending-change")).toMatchObject({ kind: "unsettled", workers: [{ name: "worker", reason: "actuation_pending" }] });
+    expect(fx.waitForLivenessHint).toHaveBeenCalledTimes(3);
+  });
+
+  it("waits through changed pending evidence until actuation resolves", async () => {
+    let fx!: ReturnType<typeof fixture>;
+    fx = fixture({ pending: true, wait: async () => { fx.setPending(false); return "hint"; } });
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "resolve")).toMatchObject({ kind: "caught_up" });
+    expect(fx.waitForLivenessHint).toHaveBeenCalledOnce();
+  });
+
+  it("returns and stages a snapshot when updates have no baseline", async () => {
+    const fx = fixture({ missingBaseline: true });
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "initial")).toMatchObject({ kind: "snapshot", tasks: [{ id: task.id }] });
+    expect(fx.service.pending(sessionFile)).toMatchObject({ toolCallId: "initial", baselineCursor: null });
+  });
+
+  it("refuses a parallel call and a distinct call before presentation", async () => {
+    const fx = fixture();
+    let release!: (value: Array<{ kind: "found"; task: CanonicalTaskCard }>) => void;
+    fx.readTasks.mockImplementationOnce(async () => new Promise(resolve => { release = resolve; }));
+    const first = fx.service.readTeamSync(sessionFile, "snapshot", new AbortController().signal, "first");
+    expect(await fx.service.readTeamSync(sessionFile, "snapshot", new AbortController().signal, "second")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
+    while (!release) await Promise.resolve();
+    release([{ kind: "found", task }]);
+    await first;
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "third")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
+  });
+
+  it.each(["off_branch", "membership", "commit", "throw"])("discards presented pending on %s failure and reprojects changes", async (failure) => {
+    const fx = fixture({ baselineTasks: [] });
+    expect((await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "first")).kind).toBe("updates");
+    if (failure === "membership") fx.setLeadMembership("replacement");
+    if (failure === "commit") fx.commitHidden.mockResolvedValueOnce({ kind: "refused" } as any);
+    if (failure === "throw") {
+      fx.commitHidden.mockRejectedValueOnce(new Error("commit failed"));
+      await expect(fx.service.acknowledge(sessionFile, "entry", ["base", "entry"])).rejects.toThrow("commit failed");
+    } else expect(await fx.service.acknowledge(sessionFile, "entry", failure === "off_branch" ? ["base"] : ["base", "entry"])).toBe(false);
+    expect(fx.service.pending(sessionFile)).toBeUndefined();
+    expect(await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "retry")).toMatchObject({ kind: "updates", taskChanges: [{ taskId: task.id }] });
+  });
   it("keeps one selected wait alive across internal deadlines while the exact Worker stays active", async () => {
     let rounds = 0;
     let fx!: ReturnType<typeof fixture>;
@@ -103,20 +208,20 @@ describe("Team synchronization continuity", () => {
     expect(fx.commitHidden).not.toHaveBeenCalled();
   });
 
-  it("gives pending-only actuation one bounded interval, then returns indeterminate", async () => {
+  it("gives pending-only actuation one bounded interval, then publishes unsettled evidence", async () => {
     const fx = fixture({ runtime: "unknown", pending: true });
     const result = await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "pending");
-    expect(result.kind).toBe("indeterminate");
+    expect(result).toMatchObject({ kind: "unsettled", workers: [{ name: "worker", reason: "actuation_pending" }] });
     expect(fx.waitForLivenessHint).toHaveBeenCalledOnce();
-    expect(fx.service.pending(sessionFile)).toBeUndefined();
+    expect(fx.service.pending(sessionFile)?.toolCallId).toBe("pending");
   });
 
   it("performs only one immediate check when wait_seconds is zero", async () => {
     const fx = fixture({ runtime: "active", waitSeconds: 0 });
     const result = await fx.service.readTeamSync(sessionFile, "updates", new AbortController().signal, "zero-wait");
-    expect(result.kind).toBe("indeterminate");
+    expect(result).toMatchObject({ kind: "unsettled", workers: [{ name: "worker", reason: "still_active" }] });
     expect(fx.waitForLivenessHint).toHaveBeenCalledOnce();
-    expect(fx.service.pending(sessionFile)).toBeUndefined();
+    expect(fx.service.pending(sessionFile)?.toolCallId).toBe("zero-wait");
   });
 
   it("cancels after an internal interval without staging a cursor", async () => {

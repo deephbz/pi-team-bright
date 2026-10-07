@@ -151,13 +151,28 @@ export const TaskUpdateModelResultSchema = Type.Union([
   Type.Object({ kind: Type.Literal("unavailable"), task_id: TaskId, operation_id: CreateOperationId, reason: Type.Enum(["no_active_team", "task_authority_unavailable"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
 ]);
 
+const HistoricalSyncStatusSchema = Type.Union([
+  ...["indeterminate", "snapshot_required"].map(kind => Type.Object({
+    kind: Type.Literal(kind), message: Type.String({ minLength: 1 }),
+    state_changed: Type.Optional(Type.Literal(false)), observation_advanced: Type.Optional(Type.Literal(false)),
+    recovery: Type.Optional(Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false })),
+  }, { additionalProperties: false })),
+]);
+
+/** Read-only Session decoder. Publication continues to use the current schemas. */
+export function decodeHistoricalTeamSyncResult(value: unknown): Record<string, unknown> | undefined {
+  if (!Check(HistoricalSyncStatusSchema, value) && !Check(TeamSyncModelResultSchema, value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
 const SyncRecovery = Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false });
 export const TeamSyncModelResultSchema = Type.Union([
   Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(TeamDeltaSchema), worker_changes: Type.Array(WorkerDeltaSchema), task_changes: Type.Array(TaskDeltaSchema), alerts: Type.Array(AlertDeltaSchema), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("caught_up"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("indeterminate"), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Enum(["snapshot_required", "cancelled"]), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("unsettled"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }), workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("refused"), reason: Type.Literal("observation_in_progress"), message: Type.String({ minLength: 1 }), state_changed: Type.Literal(false), observation_advanced: Type.Literal(false) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("cancelled"), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("contract_gap"), reason: Type.Enum(["team_epoch_missing", "logical_workers_missing", "task_metadata_absent", "task_metadata_invalid", "structured_task_event_evidence_absent"]), message: Type.String({ minLength: 1 }), recovery: Type.Optional(SyncRecovery) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("team_state_unavailable"), Type.Literal("task_authority_unavailable")])),
 ]);
@@ -327,6 +342,7 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
     return rest;
   }
   if (tool === "team_sync") {
+    if (raw.kind === "refused") return raw;
     if (raw.kind === "snapshot") return {
       ...raw,
       tasks: raw.tasks.map((task: any) => ({ ...task, version: publicTaskVersion(task.version) })),
@@ -338,7 +354,7 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
         current: { ...change.current, version: publicTaskVersion(change.current.version) },
       })),
     };
-    if (raw.kind === "caught_up" || raw.kind === "indeterminate") {
+    if (raw.kind === "caught_up" || raw.kind === "unsettled") {
       const { state_changed: _stateChanged, observation_advanced: _observationAdvanced, ...rest } = raw;
       return rest;
     }

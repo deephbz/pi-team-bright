@@ -53,6 +53,29 @@ afterEach(() => {
 });
 
 describe("leader framework team synchronization", () => {
+  it.each(["valid", "absent", "branch", "text", "false", "throw", "replacement"])("resolves a captured native candidate on %s proof", async (failure) => {
+    const test = await fixture(false);
+    await test.emit("session_start", { reason: "resume" });
+    const resultText = JSON.stringify({ kind: "caught_up", head: 0, epoch_id: "epoch" });
+    test.branch.push({ id: "native-result", type: "message", message: { role: "toolResult", toolCallId: "native", content: [{ type: "text", text: resultText }] } });
+    const pending = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "getPendingObservation").mockReturnValue({ sessionId: test.sessionFile, toolCallId: "native", resultText, resultDigest: "", head: 0, epochId: test.config.epochId! });
+    const ack = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "acknowledgePendingObservationAsync").mockResolvedValue(failure !== "false");
+    if (failure === "throw") ack.mockRejectedValue(new Error("hidden commit failed"));
+    const discard = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "discardPendingObservation");
+    await test.emit("before_provider_request", { payload: failure === "absent" ? {} : { content: resultText } });
+    if (failure === "branch") test.branch[0] = { id: "replacement", type: "message" };
+    if (failure === "text") test.branch[1].message.content[0].text = "changed";
+    if (failure === "replacement") pending.mockReturnValue({ sessionId: test.sessionFile, toolCallId: "later", resultText: "later", resultDigest: "", head: 1, epochId: test.config.epochId! });
+    await test.emit("message_end", { message: { role: "assistant", stopReason: "toolUse" } });
+    if (failure === "valid") {
+      expect(ack).toHaveBeenCalledWith("session-1", "native-result", ["root", "native-result"]);
+      expect(discard).not.toHaveBeenCalled();
+    } else expect(discard).toHaveBeenCalledWith("session-1", "native");
+    if (["absent", "branch", "text", "replacement"].includes(failure)) expect(ack).not.toHaveBeenCalled();
+    await test.emit("turn_end", { message: { role: "assistant", stopReason: "toolUse" } });
+    expect(ack.mock.calls.length).toBe(["valid", "false", "throw"].includes(failure) ? 1 : 0);
+    await test.emit("session_shutdown", { reason: "quit" });
+  });
   it("runs /teamsync once without a model turn when no updates exist", async () => {
     const test = await fixture(false);
     vi.spyOn(DurableModelToolCoordinationApplication.prototype, "selectTeamSyncView").mockResolvedValue("updates");
@@ -131,7 +154,7 @@ describe("leader framework team synchronization", () => {
     await test.emit("session_shutdown", { reason: "quit" });
   });
 
-  it("acknowledges a framework result only after its matching successful provider turn", async () => {
+  it("acknowledges a framework result at assistant message_end before tool execution", async () => {
     const test = await fixture(false);
     await test.emit("session_start", { reason: "resume" });
     const record = makeFrameworkSyncRecord({ source: "command", teamName: test.name, sessionId: "session-1", sessionFile: test.sessionFile,
@@ -147,7 +170,7 @@ describe("leader framework team synchronization", () => {
     ] };
     await test.emit("before_provider_request", { payload });
     expect(ack).not.toHaveBeenCalled();
-    await test.emit("turn_end", { message: { role: "assistant", stopReason: "stop" } });
+    await test.emit("message_end", { message: { role: "assistant", stopReason: "stop" } });
     expect(ack).toHaveBeenCalledWith("session-1", "framework-entry", ["root", "framework-entry", "framework-message"]);
     await test.emit("session_shutdown", { reason: "quit" });
   });
@@ -167,6 +190,7 @@ describe("leader framework team synchronization", () => {
       { role: "assistant", tool_calls: [{ id: record.toolCallId, function: { name: "team_sync" } }] },
       { role: "tool", tool_call_id: record.toolCallId, content: record.resultText },
     ] } });
+    await test.emit("message_end", { message: { role: "assistant", stopReason: "error" } });
     await test.emit("turn_end", { message: { role: "assistant", stopReason: "error" } });
     expect(ack).not.toHaveBeenCalled();
     await test.emit("agent_settled", {});
@@ -187,12 +211,14 @@ describe("leader framework team synchronization", () => {
     test.branch.push({ id: "framework-message", type: "custom_message", customType: FRAMEWORK_SYNC_MESSAGE_TYPE, details: { recordId: record.id, record } });
     vi.spyOn(DurableModelToolCoordinationApplication.prototype, "getPendingObservation").mockReturnValue({ sessionId: test.sessionFile, toolCallId: record.toolCallId, resultText: record.resultText, resultDigest: "digest", head: 1, epochId: test.config.epochId! });
     const discard = vi.spyOn(DurableModelToolCoordinationApplication.prototype, "discardPendingObservation");
+    await test.emit("message_end", { message: { role: "assistant", stopReason: "error" } });
     await test.emit("turn_end", { message: { role: "assistant", stopReason: "error" } });
     await test.emit("agent_settled", {});
     await vi.advanceTimersByTimeAsync(0);
     expect(test.sent).toHaveLength(1);
     expect(test.sent[0].details.recordId).toBe(record.id);
     expect(discard).not.toHaveBeenCalled();
+    await test.emit("message_end", { message: { role: "assistant", stopReason: "error" } });
     await test.emit("turn_end", { message: { role: "assistant", stopReason: "error" } });
     await test.emit("agent_settled", {});
     await vi.advanceTimersByTimeAsync(0);

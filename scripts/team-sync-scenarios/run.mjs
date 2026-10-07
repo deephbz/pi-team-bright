@@ -5,8 +5,9 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { ScriptedScenario, toolCallResponse as call } from "../team-sync-continuity-e2e/harness.mjs";
 
-const expectBug = process.env.EXPECT === "bug";
-assert([undefined, "bug"].includes(process.env.EXPECT), "Use EXPECT=bug or leave EXPECT unset");
+const expectation = process.env.EXPECT ?? "contract";
+assert(["contract", "bug"].includes(expectation), "Use EXPECT=contract (default) or EXPECT=bug");
+const expectBug = expectation === "bug";
 
 async function run(id, execute, env = {}) {
   const scenario = new ScriptedScenario({ pi: {

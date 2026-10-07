@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import { taskVersionRef } from "../task-authority/task-version-ref";
-import { CoordinationObservationService } from "./observation-service";
+import { CoordinationObservationService, taskProjectionRevision } from "./observation-service";
 import type { CoordinationHiddenObservationProjection, CoordinationTaskReadOutcome } from "./queries";
 import type { TeamEvent } from "./contracts";
 
@@ -46,7 +46,7 @@ function service(input: {
     acknowledgedEntryId: "snapshot-entry",
     acknowledgedLineage: ["snapshot-entry"],
     teamEventCursor: "0",
-    authorityRevisions: { task_projection: "prior", team_events: "0" },
+    authorityRevisions: { task_projection: taskProjectionRevision(input.current), team_events: "0" },
     updatedAt: "2026-08-13T00:00:00.000Z",
   };
   const readTasks = vi.fn(input.readTasks ?? (async (_teamName: string, ids: readonly string[]) => ids.map((id) => {
@@ -78,7 +78,10 @@ function service(input: {
   }, {
     readHidden: vi.fn(async () => ({ kind: "found" as const, projection: hidden })),
     commitHidden: vi.fn(async () => ({ kind: "committed" as const, projection: hidden })),
-    readEvents: vi.fn(() => ({ events: [input.event], cursor: "1", headCursor: "1", truncated: false, remaining: 0 })),
+    readEvents: vi.fn((_team: string, options?: { afterCursor?: string }) => ({
+      events: Number(options?.afterCursor ?? "0") < 1 ? [input.event] : [],
+      cursor: "1", headCursor: "1", truncated: false, remaining: 0,
+    })),
     readEventCursor: vi.fn(() => "1"),
     waitEvents: vi.fn(),
     readFailureHints: vi.fn(() => ({ hints: [], cursor: "0", headCursor: "0" })),
@@ -102,10 +105,9 @@ describe("Coordination complete graph replacement", () => {
     const { instance, readTasks, projection } = service({ current: [current], event, complete: true });
 
     const result = await instance.readTeamSync("/tmp/lead.jsonl", "updates", new AbortController().signal, "sync");
-    if (result.kind !== "updates") throw new Error(JSON.stringify(result));
-    expect(result).toMatchObject({ kind: "updates", head: 1, taskChanges: [] });
-    expect(readTasks).toHaveBeenCalledOnce();
-    expect(readTasks).toHaveBeenCalledWith("graph-team", ["current"]);
+    expect(result).toEqual({ kind: "caught_up", head: 1, epochId: "epoch" });
+    expect(readTasks).toHaveBeenCalledTimes(2);
+    for (const call of readTasks.mock.calls) expect(call).toEqual(["graph-team", ["current"]]);
     expect(projection).toHaveBeenCalledWith([], [current]);
   });
 
@@ -122,8 +124,7 @@ describe("Coordination complete graph replacement", () => {
     const { instance, projection } = service({ current: [current], event, complete: true });
 
     const result = await instance.readTeamSync("/tmp/lead.jsonl", "updates", new AbortController().signal, "sync");
-    if (result.kind !== "updates") throw new Error(JSON.stringify(result));
-    expect(result).toMatchObject({ kind: "updates", head: 1, taskChanges: [] });
+    expect(result).toEqual({ kind: "caught_up", head: 1, epochId: "epoch" });
     expect(projection).toHaveBeenCalledWith([], [current]);
   });
 

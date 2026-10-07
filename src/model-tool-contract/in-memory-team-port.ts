@@ -79,6 +79,7 @@ export class InMemoryModelToolTeamPort implements LegacyModelToolTeamPort {
   sendAlert(...args: Parameters<LegacyModelToolTeamPort["sendAlert"]>) { return this.ports.alert.sendAlert(...args); }
   readTeamSync(...args: Parameters<LegacyModelToolTeamPort["readTeamSync"]>) { return this.ports.coordination.readTeamSync(...args); }
   setPendingObservationResult(...args: Parameters<LegacyModelToolTeamPort["setPendingObservationResult"]>) { return this.ports.coordination.setPendingObservationResult(...args); }
+  discardPendingObservation(session: ExactLeaderSessionId, toolCallId: string) { this.ports.coordination.discardPendingObservation(session, toolCallId); }
   acknowledgePendingObservation(...args: Parameters<LegacyModelToolTeamPort["acknowledgePendingObservation"]>) { return this.ports.coordination.acknowledgePendingObservation(...args); }
   setBranchContext(...args: Parameters<LegacyModelToolTeamPort["setBranchContext"]>) { return this.ports.coordination.setBranchContext(...args); }
   setLeaderSessionFile(..._args: Parameters<NonNullable<LegacyModelToolTeamPort["setLeaderSessionFile"]>>) { /* In-memory fake has no durable Session file. */ }

@@ -295,6 +295,15 @@ export const TeamSyncCaughtUpResultSchema = Type.Object({
   observation_advanced: Type.Literal(true),
 }, { additionalProperties: false });
 
+export const TeamSyncUnsettledResultSchema = Type.Object({
+  kind: Type.Literal("unsettled"),
+  head: Type.Integer({ minimum: 0 }),
+  epoch_id: Type.String({ minLength: 1 }),
+  workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }),
+  state_changed: Type.Literal(false),
+  observation_advanced: Type.Literal(true),
+}, { additionalProperties: false });
+
 export const TeamSyncIndeterminateResultSchema = Type.Object({
   kind: Type.Literal("indeterminate"),
   message: Type.String({ minLength: 1 }),
@@ -321,8 +330,8 @@ export const TeamSyncResultSchema = Type.Union([
   TeamSnapshotResultSchema,
   TeamUpdatesResultSchema,
   TeamSyncCaughtUpResultSchema,
-  TeamSyncIndeterminateResultSchema,
-  TeamSyncSnapshotRequiredResultSchema,
+  TeamSyncUnsettledResultSchema,
+  Type.Object({ kind: Type.Literal("refused"), reason: Type.Literal("observation_in_progress"), message: Type.String({ minLength: 1 }), state_changed: Type.Literal(false), observation_advanced: Type.Literal(false) }, { additionalProperties: false }),
   TeamSyncCancelledResultSchema,
   TeamSyncContractGapResultSchema,
   TeamSyncUnavailableResultSchema,
