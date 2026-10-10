@@ -19,8 +19,14 @@ It does not prove carrier death.
 
 During binding observation, check carrier liveness through the terminal
 adapter at a bounded cadence. Report `carrier_gone` separately from `timeout`.
-Check only the current launch Membership's terminal target. Carrier liveness
-never proves admission or Task progress.
+Check only the current launch Membership's terminal target. A read error or
+CLI failure leaves liveness unknown. Continue observation until decisive
+evidence or ceiling expiry. Carrier liveness never proves admission or Task
+progress.
+
+Before shutting down a refused launcher-spawned Worker, publish a failed event
+with its launch-environment Membership ID. Preserve that ID when authority
+has replaced the Membership. An old refusal cannot fail a newer launch.
 
 Worker admission waits for persistence locks without a wall-clock budget.
 The launch ceiling owns hang containment. Preserve lock ownership, heartbeat,
@@ -40,7 +46,10 @@ contention latency as failure evidence.
 Deterministic tests cover binding after ten seconds with a live carrier,
 prompt carrier loss, exact failed-event identity, ceiling expiry, override
 expiry, and admission lock contention beyond the ordinary budget. The durable
-publication test verifies exact terminal-adapter dispatch. Existing Herdr,
+publication tests verify exact terminal-adapter dispatch, recovery after
+transient probe errors, and ceiling expiry with undecidable probes. Session
+hook tests verify failed-event publication before shutdown and stale refusal
+isolation. Existing Herdr,
 admission, and compensation tests protect unchanged fences and cleanup.
 These checks do not establish a supported Worker-count capacity or a measured
 maximum contention latency.

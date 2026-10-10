@@ -85,6 +85,18 @@ describe("bounded Worker startup observation", () => {
     expect(waitForEvents).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps unknown carrier evidence from rejecting delayed authority visibility", async () => {
+    let now = 0;
+    const result = await observeWorkerStartup({ ...base, now: () => now,
+      isCarrierAlive: () => undefined,
+      waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
+      verifyAuthority: async () => now < 100 ? { sessionBound: false } : { sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } },
+      waitForRetry: async (ms) => { now += ms; },
+    });
+    expect(result.observed).toBe(true);
+    expect(now).toBe(100);
+  });
+
   it("checks carrier exit while waiting for exact authority visibility", async () => {
     let now = 0;
     const result = await observeWorkerStartup({ ...base, now: () => now,
