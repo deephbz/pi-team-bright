@@ -79,7 +79,7 @@ describe("canonical Task cutover acceptance", () => {
       mode: "read_only",
       readMany: async () => [],
       list: async () => [],
-      read: async () => authorityRecord({ title: "A".repeat(100) }, "G".repeat(1_001)),
+      read: async () => authorityRecord({ title: "A".repeat(100) }, "G".repeat(1_601)),
     });
     const result = await adapter.read("task-1");
     expect(result.kind).toBe("found");

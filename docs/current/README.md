@@ -319,8 +319,11 @@ restating executable definitions.
   semantic results entered the old generic renderer and could produce
   false human summaries. The accepted revamp now keeps raw semantic details as
   truth and derives separate validated model, collapsed TUI, expanded TUI, and
-  exact QA projections. Canonical Task-card `goal` accepts one to 1,000 TypeBox
-  string-length units across create input and returned Task cards. Canonical
+  exact QA projections. Canonical Task-card `goal` uses the shared limit in
+  [`task-limits.ts`](../../src/task-authority/task-limits.ts) across graph input,
+  runtime validation, and returned Task cards. Global
+  `pi_team_bright.task.goal_max_length` configures it; the default is 1600
+  TypeBox string-length units. Restart all Team Pi processes after an edit. Canonical
   `current_context` uses the shared standard TypeBox schema in
   [`src/utils/beads.ts`](../../src/utils/beads.ts): one to 2,000 units. Owned
   writes keep these limits. Reads tolerate external oversized display fields
