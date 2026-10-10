@@ -13,6 +13,9 @@
       }
     },
     "default_model_role": "standard-worker",
+    "task": {
+      "goal_max_length": 1600
+    },
     "team": {
       "pane_layout": {
         "leader_share": 0.6,

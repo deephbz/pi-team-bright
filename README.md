@@ -325,6 +325,20 @@ are absent. An existing explicit disable remains disabled.
 Existing Teams keep their stored policy, including an older delay. Stop and
 recreate the Team to apply a new policy.
 
+## Task goal length
+
+Set `pi_team_bright.task.goal_max_length` in global Pi `settings.json`.
+The [canonical example](docs/examples/pi-team-bright.settings.json) shows the
+setting. The default is 1600 TypeBox string-length units. Supply a positive
+safe integer. Invalid values refuse extension loading; the settings editor
+also refuses invalid saves. Project overrides are unsupported.
+
+The extension resolves this limit once when it loads. Restart all Pi processes
+in a Team after an edit so they use the same contract. The shared limit bounds
+`task_graph_apply`, runtime writes, and returned Task cards. Lowering it can
+make longer stored goals unreadable or incomplete. Preserve existing Task data
+and keep the previous limit until those Tasks finish.
+
 ## Worker model roles
 
 A model role names one execution choice and its intended use. Worker scope and

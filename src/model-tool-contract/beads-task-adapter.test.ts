@@ -598,7 +598,7 @@ describe("durable Task adapter", () => {
     const records = [
       authorityRecord(metadata("a".repeat(2_000))),
       authorityRecord(metadata("👩🏽‍🚀".repeat(2_001))),
-      authorityRecord({ ...metadata(), goal: "😀".repeat(501) }),
+      authorityRecord({ ...metadata(), goal: "😀".repeat(801) }),
       { ...authorityRecord(metadata()), task: task({ title: "😀".repeat(41) }) },
     ];
     const adapter = new BeadsTaskAdapter("candidate-team", "team-lead", completeAuthority({
@@ -829,7 +829,7 @@ describe("candidate Beads metadata and Team event evidence", () => {
       runner: { run } satisfies BdRunner,
     });
     const invalid = metadata("👩🏽‍🚀".repeat(2_001));
-    const invalidGoal = { ...metadata(), goal: "😀".repeat(501) };
+    const invalidGoal = { ...metadata(), goal: "😀".repeat(801) };
 
     await expect(store.create({
       title: "Invalid candidate",
@@ -843,7 +843,7 @@ describe("candidate Beads metadata and Team event evidence", () => {
       title: "Invalid goal",
       description: "No Beads write is allowed.",
       internalMetadata: { [TASK_METADATA_KEY]: invalidGoal },
-    })).rejects.toThrow("1,000 TypeBox string");
+    })).rejects.toThrow("1,600 TypeBox string");
     expect(run).not.toHaveBeenCalled();
   });
 

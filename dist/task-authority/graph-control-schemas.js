@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GraphTaskUpdateParametersSchema = exports.TaskGraphApplyParametersSchema = exports.GraphTaskCardSchema = exports.GraphAttemptSummarySchema = exports.GraphTaskStateSchema = exports.GraphFailureEdgeSchema = exports.GraphTaskTransitionSchema = exports.GraphVersionRefSchema = void 0;
 const typebox_1 = require("typebox");
 const task_version_ref_1 = require("./task-version-ref");
+const task_limits_1 = require("./task-limits");
 const TaskId = typebox_1.Type.String({ minLength: 1, maxLength: 128 });
 const TaskKey = typebox_1.Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" });
 const WorkerName = typebox_1.Type.String({ minLength: 1, maxLength: 64 });
@@ -61,7 +62,7 @@ exports.GraphAttemptSummarySchema = typebox_1.Type.Object({
 exports.GraphTaskCardSchema = typebox_1.Type.Object({
     id: TaskId,
     title: typebox_1.Type.String({ minLength: 1, maxLength: 80 }),
-    goal: typebox_1.Type.String({ minLength: 1, maxLength: 1_000 }),
+    goal: typebox_1.Type.String({ minLength: 1, maxLength: task_limits_1.TASK_CARD_GOAL_MAX_LENGTH }),
     assignee: WorkerName,
     needs: typebox_1.Type.Array(TaskId),
     on_goal_failed: typebox_1.Type.Optional(exports.GraphFailureEdgeSchema),
@@ -94,7 +95,7 @@ exports.GraphTaskCardSchema = typebox_1.Type.Object({
 const GraphTaskItemSchema = typebox_1.Type.Object({
     key: TaskKey,
     title: typebox_1.Type.String({ minLength: 1, maxLength: 80 }),
-    goal: typebox_1.Type.String({ minLength: 1, maxLength: 1_000, description: "Desired outcome and external success signal." }),
+    goal: typebox_1.Type.String({ minLength: 1, maxLength: task_limits_1.TASK_CARD_GOAL_MAX_LENGTH, description: "Desired outcome and external success signal." }),
     assignee: WorkerName,
     needs: typebox_1.Type.Optional(typebox_1.Type.Array(TaskKey, { uniqueItems: true })),
     on_goal_failed: typebox_1.Type.Optional(exports.GraphFailureEdgeSchema),

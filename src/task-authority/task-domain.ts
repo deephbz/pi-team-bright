@@ -1,10 +1,11 @@
 import { Type, type Static } from "typebox";
+import { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
+export { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
 import { TaskVersionRefSchema } from "./task-version-ref";
 import { GraphTaskCardSchema, type GraphTaskCard } from "./graph-control-schemas";
 
 /** Neutral Task contract. This module imports no authority or persistence code. */
 export const TASK_CARD_TITLE_MAX_LENGTH = 80;
-export const TASK_CARD_GOAL_MAX_LENGTH = 1_000;
 export const TASK_CARD_CONTEXT_MAX_LENGTH = 2_000;
 
 export const TaskCardStatusSchema = Type.Enum(["open", "in_progress", "blocked", "closed"]);

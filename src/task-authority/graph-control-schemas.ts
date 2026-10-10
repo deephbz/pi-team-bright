@@ -1,5 +1,6 @@
 import { Type, type Static } from "typebox";
 import { TaskVersionRefSchema } from "./task-version-ref";
+import { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
 
 const TaskId = Type.String({ minLength: 1, maxLength: 128 });
 const TaskKey = Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" });
@@ -63,7 +64,7 @@ export const GraphAttemptSummarySchema = Type.Object({
 export const GraphTaskCardSchema = Type.Object({
   id: TaskId,
   title: Type.String({ minLength: 1, maxLength: 80 }),
-  goal: Type.String({ minLength: 1, maxLength: 1_000 }),
+  goal: Type.String({ minLength: 1, maxLength: TASK_CARD_GOAL_MAX_LENGTH }),
   assignee: WorkerName,
   needs: Type.Array(TaskId),
   on_goal_failed: Type.Optional(GraphFailureEdgeSchema),
@@ -97,7 +98,7 @@ export const GraphTaskCardSchema = Type.Object({
 const GraphTaskItemSchema = Type.Object({
   key: TaskKey,
   title: Type.String({ minLength: 1, maxLength: 80 }),
-  goal: Type.String({ minLength: 1, maxLength: 1_000, description: "Desired outcome and external success signal." }),
+  goal: Type.String({ minLength: 1, maxLength: TASK_CARD_GOAL_MAX_LENGTH, description: "Desired outcome and external success signal." }),
   assignee: WorkerName,
   needs: Type.Optional(Type.Array(TaskKey, { uniqueItems: true })),
   on_goal_failed: Type.Optional(GraphFailureEdgeSchema),

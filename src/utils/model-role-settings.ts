@@ -5,6 +5,7 @@ import { Check, Value } from "typebox/value";
 import { THINKING_LEVELS, type ThinkingLevel, type WorkerModelBinding } from "../team-authority/contracts";
 import { MAX_AUTO_SYNC_UPDATE_THRESHOLD, MAX_SYNC_TIMER_SECONDS } from "./sync-liveness-settings";
 import { TeamPaneLayoutSchema } from "./team-pane-layout";
+import { parseTaskGoalMaxLength } from "../task-authority/task-goal-limit";
 
 /** Owns the extension settings contract. Pi owns every other settings namespace. */
 export interface ModelRole {
@@ -96,8 +97,22 @@ function nestedObject(
 function validateSharedNamespace(
   namespace: JsonRecord, source: Source, file: string, diagnostics: ModelRoleDiagnostic[],
 ): void {
-  keys(namespace, ["model_roles", "default_model_role", "worker", "team"],
+  keys(namespace, ["model_roles", "default_model_role", "worker", "team", "task"],
     ["model_profiles", "default_model_profile"], "pi_team_bright", source, file, diagnostics);
+
+  const task = nestedObject(namespace, "task", "pi_team_bright.task", source, file, diagnostics);
+  if (task) {
+    keys(task, ["goal_max_length"], [], "pi_team_bright.task", source, file, diagnostics);
+    if (has(task, "goal_max_length")) {
+      if (source === "project") diagnostic(diagnostics, source, file, "pi_team_bright.task.goal_max_length", "invalid_value",
+        "pi_team_bright.task.goal_max_length is global-only.", "This project value has no effect on the Task contract.");
+      try { parseTaskGoalMaxLength(task.goal_max_length); }
+      catch (error) {
+        diagnostic(diagnostics, source, file, "pi_team_bright.task.goal_max_length", "invalid_value",
+          (error as Error).message, "Invalid global configuration refuses extension loading.");
+      }
+    }
+  }
 
   const worker = nestedObject(namespace, "worker", "pi_team_bright.worker", source, file, diagnostics);
   if (worker) {

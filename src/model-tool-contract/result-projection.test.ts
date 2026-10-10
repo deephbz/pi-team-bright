@@ -116,7 +116,7 @@ describe("raw semantic result projections", () => {
     const task = {
       id: "task-1",
       title: "Verify",
-      goal: "g".repeat(1_000),
+      goal: "g".repeat(1_600),
       assignee: "verifier",
       needs: [],
       status: "ready" as const,
@@ -162,7 +162,7 @@ describe("raw semantic result projections", () => {
     ] };
     const projectedRead = projectToolResult("task_read", read) as any;
     expect(projectedRead.outcomes).toHaveLength(2);
-    expect(projectedRead.outcomes[0].task.goal).toHaveLength(1_000);
+    expect(projectedRead.outcomes[0].task.goal).toHaveLength(1_600);
     expect(Check(TaskReadResultSchema, read)).toBe(true);
     expect(Check(ModelResultSchemas.task_read, projectedRead)).toBe(true);
   });

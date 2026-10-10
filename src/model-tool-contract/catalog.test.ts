@@ -21,6 +21,7 @@ import {
   AlertSendParametersSchema,
   AlertSendResultSchema,
   modelToolCatalog,
+  MODEL_TOOL_LIMITS,
 } from "./catalog";
 import { TaskCardSchema } from "./task-domain";
 import { taskVersionRef } from "./task-version-ref";
@@ -111,9 +112,9 @@ describe("candidate model-tool catalog", () => {
     })).toBe(false);
   });
 
-  it("accepts Task goals through 1,000 string units across calls and Task cards", () => {
+  it("accepts Task goals through the shared limit across calls and Task cards", () => {
     const createItem = { key: "goal", title: "Goal boundary", assignee: "verifier" };
-    for (const length of [160, 161, 1_000]) {
+    for (const length of [160, 161, 1_000, MODEL_TOOL_LIMITS.maxTaskGoalChars]) {
       const goal = "g".repeat(length);
       expect(Check(TaskGraphApplyParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] }), String(length)).toBe(true);
       expect(Check(TaskCardSchema, {
@@ -126,7 +127,7 @@ describe("candidate model-tool catalog", () => {
       }), String(length)).toBe(true);
     }
 
-    const goal = "g".repeat(1_001);
+    const goal = "g".repeat(MODEL_TOOL_LIMITS.maxTaskGoalChars + 1);
     expect(Check(TaskGraphApplyParametersSchema, { operation_id: "goal-boundary", tasks: [{ ...createItem, goal }] })).toBe(false);
     expect(Check(TaskCardSchema, {
       id: "task-1",
@@ -314,7 +315,7 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("No candidate limit is placed on Team Workers, nonterminal Tasks, or journal entries.");
     expect(html).toContain("Paging is not part of this contract.");
     expect(html).toContain("<strong>80</strong>");
-    expect(html).toContain("<strong>1000</strong>");
+    expect(html).toContain(`<strong>${MODEL_TOOL_LIMITS.maxTaskGoalChars}</strong>`);
     expect(html).toContain("<strong>2000</strong>");
     expect(html).not.toContain("team_sync({ team_name, view })");
     expect(html).toContain("Parameter JSON Schema");
