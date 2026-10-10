@@ -7,7 +7,8 @@ import {
   resolveTeamFooterBinding,
   syncTeamFooter,
   teamFooterFactory,
-  latestMessageClock,
+  clearTeamFooter,
+  initializeTeamFooter,
   type TeamFooterBinding,
 } from "./team-footer";
 import * as teams from "./teams";
@@ -56,7 +57,20 @@ function context(sessionFile: string, cwd = "/tmp/footer-project", entries: any[
 }
 
 function pi() {
-  return { getThinkingLevel: vi.fn(() => "high") } as any;
+  const handlers = new Map<string, Array<(value: unknown) => void>>();
+  return {
+    getThinkingLevel: vi.fn(() => "high"),
+    setSessionName: vi.fn(),
+    events: {
+      on: (channel: string, handler: (value: unknown) => void) => {
+        handlers.set(channel, [...(handlers.get(channel) ?? []), handler]);
+        return () => {};
+      },
+      emit: vi.fn((channel: string, value: unknown) => {
+        for (const handler of handlers.get(channel) ?? []) handler(value);
+      }),
+    },
+  } as any;
 }
 
 function footerData(statuses = new Map<string, string>()) {
@@ -87,6 +101,119 @@ afterEach(() => {
 });
 
 describe("Team identity footer projection", () => {
+  it("publishes exact identity, replays it, and yields the footer to a composer", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud.jsonl");
+    const candidate = { teamName: "20261010-review", role: "reviewer", membershipId: "current" };
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    initializeTeamFooter(api);
+    await syncTeamFooter(api, ctx, candidate, () => model());
+    expect(api.setSessionName).toHaveBeenCalledWith("20261010-review/reviewer");
+    const slot = api.events.emit.mock.calls.at(-1)[1];
+    expect(slot).toMatchObject({ v: 1, key: "team.member", producer: "pi-team-bright", value: { kind: "identity", team: candidate.teamName, role: "reviewer", membershipId: "current" } });
+    api.events.emit("hc.hud.composer", { v: 1, present: true, surface: "tui-footer" });
+    expect(ctx.setFooter).toHaveBeenLastCalledWith(undefined);
+    await new Promise(resolve => setImmediate(resolve));
+    expect(api.events.emit.mock.calls.at(-1)[0]).toBe("hc.hud.slot");
+    expect(api.events.emit.mock.calls.at(-1)[1].value).toEqual(slot.value);
+    ctx.setFooter.mockClear();
+    await syncTeamFooter(api, ctx, candidate, () => model());
+    expect(ctx.setFooter).not.toHaveBeenCalled();
+    api.events.emit("hc.hud.composer", { v: 1, present: false, surface: "tui-footer" });
+    expect(ctx.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
+    clearTeamFooter(ctx, api);
+    expect(api.events.emit.mock.calls.at(-1)[1].value).toBeNull();
+    expect(ctx.setFooter).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it("rechecks exact membership on replay and retracts a replaced binding", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud-replay.jsonl");
+    const read = vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    await syncTeamFooter(api, ctx, { teamName: "team", role: "team-lead", membershipId: "current" }, () => model());
+    expect(api.setSessionName).not.toHaveBeenCalled();
+    read.mockResolvedValue({ membershipId: "replacement" } as any);
+    api.events.emit("hc.hud.composer", { v: 1, present: true, surface: "tui-footer" });
+    await new Promise(resolve => setImmediate(resolve));
+    expect(api.events.emit.mock.calls.at(-1)[1].value).toBeNull();
+  });
+
+  it("enforces the Worker name only when different, without a Session-name hook loop", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud-worker-name.jsonl");
+    ctx.sessionManager.getSessionName.mockReturnValue("Human or Rarebit title");
+    const candidate = { teamName: "team", role: "worker", membershipId: "current" };
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    api.setSessionName.mockImplementation((name: string) => ctx.sessionManager.getSessionName.mockReturnValue(name));
+    await syncTeamFooter(api, ctx, candidate, () => model());
+    expect(api.setSessionName).toHaveBeenCalledExactlyOnceWith("team/worker");
+    await syncTeamFooter(api, ctx, candidate, () => model());
+    expect(api.setSessionName).toHaveBeenCalledTimes(1);
+    ctx.sessionManager.getSessionName.mockReturnValue("Another title");
+    await syncTeamFooter(api, ctx, candidate, () => model());
+    expect(api.setSessionName).toHaveBeenCalledTimes(2);
+    expect(api.setSessionName).toHaveBeenLastCalledWith("team/worker");
+  });
+
+  it.each([undefined, "Human or Rarebit title", "Old PTB leader title"])("leaves a leader name unchanged: %s", async name => {
+    const api = pi();
+    const ctx = context("/tmp/hud-leader-name.jsonl");
+    ctx.sessionManager.getSessionName.mockReturnValue(name);
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    await syncTeamFooter(api, ctx, { teamName: "team", role: "team-lead", membershipId: "current" }, () => model());
+    expect(api.setSessionName).not.toHaveBeenCalled();
+    expect(ctx.sessionManager.getSessionName()).toBe(name);
+  });
+
+  it("retains a user Session name and publishes in non-TUI mode without wrapping", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud-rpc.jsonl");
+    ctx.mode = "rpc";
+    ctx.sessionManager.getSessionName.mockReturnValue("User label");
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    await syncTeamFooter(api, ctx, { teamName: "team", role: "team-lead", membershipId: "current" }, () => model());
+    expect(api.setSessionName).not.toHaveBeenCalled();
+    expect(api.events.emit.mock.calls.at(-1)[1].value.role).toBe("team-lead");
+    expect(ctx.setFooter.mock.calls.every(([factory]: any[]) => factory === undefined)).toBe(true);
+  });
+
+  it("keeps identity publication when a presentation label fails", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud-label-failure.jsonl");
+    api.setSessionName.mockImplementation(() => { throw new Error("unavailable"); });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    await syncTeamFooter(api, ctx, { teamName: "team", role: "worker", membershipId: "current" }, () => model());
+    expect(api.events.emit.mock.calls.at(-1)[1].value.team).toBe("team");
+  });
+
+  it("honors composer-first presence, surface scoping, and footer ownership on clear", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud-first.jsonl");
+    initializeTeamFooter(api);
+    api.events.emit("hc.hud.composer", { v: 1, present: true, surface: "tui-footer" });
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockResolvedValue({ membershipId: "current" } as any);
+    await syncTeamFooter(api, ctx, { teamName: "team", role: "team-lead", membershipId: "current" }, () => model());
+    clearTeamFooter(ctx, api);
+    expect(ctx.setFooter).not.toHaveBeenCalled();
+    api.events.emit("hc.hud.composer", { v: 1, present: false, surface: "gui" });
+    expect(ctx.setFooter).not.toHaveBeenCalled();
+    expect(api.events.emit.mock.calls.find(([channel, slot]: any[]) => channel === "hc.hud.slot" && slot.value)?.[1]).not.toHaveProperty("staleAfterMs");
+  });
+
+  it("retracts stale bindings and fences an in-flight resolve after clear", async () => {
+    const api = pi();
+    const ctx = context("/tmp/hud-stale.jsonl");
+    let finish!: (member: any) => void;
+    vi.spyOn(teams, "assertCurrentSessionBinding").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const pending = syncTeamFooter(api, ctx, { teamName: "team", role: "team-lead", membershipId: "current" }, () => model());
+    clearTeamFooter(ctx, api);
+    finish({ membershipId: "current" });
+    await expect(pending).resolves.toBeUndefined();
+    expect(api.events.emit.mock.calls.at(-1)[1].value).toBeNull();
+    expect(api.setSessionName).not.toHaveBeenCalled();
+  });
+
   it("installs a same-line label only from the current exact Session/Membership binding", async () => {
     const teamName = uniqueTeam("active");
     const sessionFile = `/tmp/${teamName}-reviewer.jsonl`;
@@ -126,8 +253,9 @@ describe("Team identity footer projection", () => {
     const statuses = new Map([["pi-tps", "TPS: 60.6 tok/s"]]);
     const component = factory({ requestRender: vi.fn() } as any, theme, footerData(statuses));
     const lines = component.render(140);
-    expect(plain(lines[0])).toContain(`[${teamName} · reviewer] /tmp/footer-project (feature/footer)`);
-    expect(theme.fg).toHaveBeenCalledWith("dim", "reviewer");
+    expect(plain(lines[0])).toContain("[reviewer] /tmp/footer-project (feature/footer)");
+    expect(plain(lines[0])).not.toContain(teamName);
+    expect(theme.fg).toHaveBeenCalledWith("dim", "[reviewer] ");
     expect(lines[1]).toContain("gpt-test");
     expect(lines[2]).toBe("TPS: 60.6 tok/s");
     component.dispose?.();
@@ -147,12 +275,12 @@ describe("Team identity footer projection", () => {
     const component = factory({ requestRender: vi.fn() } as any, theme, footerData());
 
     expect(() => component.render(140)).not.toThrow();
-    expect(plain(component.render(140)[0])).toContain("[subscription-team · team-lead]");
+    expect(plain(component.render(140)[0])).toContain("[team-lead]");
     expect(ctx.modelRegistry.isUsingOAuth).toHaveBeenCalled();
     component.dispose?.();
   });
 
-  it("keeps the lead role accent and shows the local time of the latest message", () => {
+  it("keeps the lead role accent and omits the Team and message clock", () => {
     const latest = new Date(2026, 6, 17, 9, 4, 0).toISOString();
     const older = new Date(2026, 6, 17, 8, 3, 0).toISOString();
     const binding: TeamFooterBinding = {
@@ -171,22 +299,11 @@ describe("Team identity footer projection", () => {
 
     const lines = component.render(140);
 
-    expect(plain(lines[0])).toContain("[release-team · team-lead · 09:04]");
-    expect(theme.fg).toHaveBeenCalledWith("accent", "team-lead");
-    expect(theme.fg).not.toHaveBeenCalledWith("dim", "team-lead");
+    expect(plain(lines[0])).toContain("[team-lead] ");
+    expect(plain(lines[0])).not.toContain("release-team");
+    expect(plain(lines[0])).not.toContain("09:04");
+    expect(theme.fg).toHaveBeenCalledWith("accent", "[team-lead] ");
     component.dispose?.();
-  });
-
-  it("derives message time from message entries only", () => {
-    const first = new Date(2026, 6, 17, 7, 8, 0).toISOString();
-    const last = new Date(2026, 6, 17, 11, 12, 0).toISOString();
-    expect(latestMessageClock([
-      { type: "message", timestamp: first },
-      { type: "label", timestamp: new Date(2026, 6, 17, 12, 0, 0).toISOString() },
-      { type: "message", timestamp: "invalid" },
-      { type: "custom_message", timestamp: last },
-    ])).toBe("11:12");
-    expect(latestMessageClock([])).toBeUndefined();
   });
 
   it("shows no label for standalone, fork/unbound, stale-Session, or inactive Membership candidates", async () => {

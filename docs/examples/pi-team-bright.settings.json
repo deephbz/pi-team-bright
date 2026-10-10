@@ -17,6 +17,7 @@
       "goal_max_length": 1600
     },
     "team": {
+      "date_prefix": true,
       "pane_layout": {
         "leader_share": 0.6,
         "worker_tiling": "linear"

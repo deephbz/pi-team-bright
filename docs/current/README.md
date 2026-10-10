@@ -24,6 +24,24 @@ review an opt-in `second-opinion` Worker requested by the user. The packaged
 skill and `AGENTS.md` carry the procedure; the settings example names the role.
 Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
+## Compact identity labels and HUD
+
+New Team creation uses a local date prefix by default. Global
+`pi_team_bright.team.date_prefix` disables it. Leader pane labels and terminal
+titles use `leader-<team>`; Workers use `<worker>`. PTB enforces the bound Worker
+Session name `<team>/<worker>` only when it differs. Leader and unbound Session
+names remain owned by the human or Rarebit. Binding refresh and native Session
+name events reapply terminal titles. Clear cancels pending title retries and asks
+Pi to restore its default title by re-emitting the unchanged Session name.
+Exact Session/Membership binding
+feeds `team.member` through the inline [HUD contract](../../src/utils/team-hud.ts).
+A composer owns the TUI footer while present; PTB uses a role-only wrapper
+when absent. Replay rechecks the binding and fences late results.
+[Decision 0019](../decisions/0019-compact-identity-and-hud.md) owns the intent
+and ownership rule. Focused tests cover these projections. Real-Pi HUD
+integration remains pending. The new in-process slot flow changes presentation
+composition; authority, persistence, and deployment stay unchanged.
+
 ## Delivery around compaction
 
 The [delivery gate](../../extensions/compaction-delivery-gate.ts) holds Task,

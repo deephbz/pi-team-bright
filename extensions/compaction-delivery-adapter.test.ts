@@ -13,7 +13,10 @@ function adapterHarness() {
   const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
   const eventHandlers = new Map<string, (payload: unknown) => void>();
   const pi: any = {
-    events: { on: (channel: string, handler: (payload: unknown) => void) => eventHandlers.set(channel, handler) },
+    events: {
+      on: (channel: string, handler: (payload: unknown) => void) => { eventHandlers.set(channel, handler); return () => eventHandlers.delete(channel); },
+      emit: vi.fn((channel: string, payload: unknown) => eventHandlers.get(channel)?.(payload)),
+    },
     on: (event: string, handler: (...args: any[]) => unknown) => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
     },

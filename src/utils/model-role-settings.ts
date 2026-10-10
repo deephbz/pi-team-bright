@@ -141,7 +141,7 @@ function validateSharedNamespace(
 
   const team = nestedObject(namespace, "team", "pi_team_bright.team", source, file, diagnostics);
   if (!team) return;
-  keys(team, ["pane_layout", "wait_seconds", "auto_sync_enabled", "auto_sync_delay_seconds", "auto_sync_update_threshold",
+  keys(team, ["pane_layout", "date_prefix", "wait_seconds", "auto_sync_enabled", "auto_sync_delay_seconds", "auto_sync_update_threshold",
     "nudge_enabled", "nudge_delay_seconds"], [], "pi_team_bright.team", source, file, diagnostics);
   for (const [oldKey, newKey] of [["nudge_enabled", "auto_sync_enabled"], ["nudge_delay_seconds", "auto_sync_delay_seconds"]] as const) {
     if (!has(team, oldKey)) continue;
@@ -151,9 +151,9 @@ function validateSharedNamespace(
         has(team, newKey) ? "The new value takes precedence." : "The old value remains effective for this Team epoch.");
   }
   if (source === "project") {
-    for (const key of ["wait_seconds", "auto_sync_enabled", "auto_sync_delay_seconds", "auto_sync_update_threshold", "nudge_enabled", "nudge_delay_seconds"]) {
+    for (const key of ["date_prefix", "wait_seconds", "auto_sync_enabled", "auto_sync_delay_seconds", "auto_sync_update_threshold", "nudge_enabled", "nudge_delay_seconds"]) {
       if (has(team, key)) diagnostic(diagnostics, source, file, `pi_team_bright.team.${key}`, "invalid_value",
-        `pi_team_bright.team.${key} is global-only.`, "This project value has no effect on Team sync policy.");
+        `pi_team_bright.team.${key} is global-only.`, key === "date_prefix" ? "This project value has no effect on Team naming." : "This project value has no effect on Team sync policy.");
     }
   }
   for (const key of ["wait_seconds", "auto_sync_delay_seconds", "nudge_delay_seconds"]) {
@@ -163,10 +163,10 @@ function validateSharedNamespace(
         `pi_team_bright.team.${key} must be from 0 through ${MAX_SYNC_TIMER_SECONDS} seconds.`, "The default timer is used.");
     }
   }
-  for (const key of ["auto_sync_enabled", "nudge_enabled"]) {
+  for (const key of ["date_prefix", "auto_sync_enabled", "nudge_enabled"]) {
     if (has(team, key) && typeof team[key] !== "boolean") {
       diagnostic(diagnostics, source, file, `pi_team_bright.team.${key}`, "invalid_value",
-        `pi_team_bright.team.${key} must be boolean.`, "The default auto sync policy is used when this value is selected.");
+        `pi_team_bright.team.${key} must be boolean.`, key === "date_prefix" ? "New Team creation refuses an invalid global naming policy." : "The default auto sync policy is used when this value is selected.");
     }
   }
   const threshold = team.auto_sync_update_threshold;
