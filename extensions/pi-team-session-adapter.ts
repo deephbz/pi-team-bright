@@ -28,7 +28,7 @@ import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
-import { CompactionDeliveryGate } from "./compaction-delivery-gate";
+import { CompactionDeliveryGate, DELIVERY_HOLD_CHANNEL, isDeliveryHoldSignal } from "./compaction-delivery-gate";
 import { openPtbCommandPalette } from "./ptb-command-palette";
 import {
   FRAMEWORK_SYNC_ENTRY_TYPE,
@@ -84,6 +84,7 @@ export function createPiTeamSessionAdapter(options: {
   const suppressedAutomaticDebt = new Set<string>();
   let leaderContext: any;
   let deliveryContext: any;
+  let holdWarningContext: any;
   const recipientDeliveries = new RecipientDeliveryLifecycle({
     makePair: (binding) => createDeliveryPair(binding, deliveryContext),
   });
@@ -98,6 +99,12 @@ export function createPiTeamSessionAdapter(options: {
   // Every Pi Team Bright message to the model passes this gate.
   const compactionGate = new CompactionDeliveryGate({
     onError: (error) => console.error("[pi-teams] held delivery failed after compaction:", error),
+    onExternalHoldExpired: (holder) => {
+      (holdWarningContext ?? leaderContext ?? deliveryContext)?.ui?.notify?.(
+        `PTB delivery hold from ${holder} expired after 30 minutes. Delivery protection is degraded; messages can resume when other holds clear.`,
+        "warning",
+      );
+    },
   });
   const messageSink = compactionGate.sink(pi);
   compactionGate.onOpen(() => syncNudgeConductor?.notify());
@@ -245,6 +252,7 @@ registerCommand?.("teamsync", {
   handler: runSync,
 });
 const runDoctor = async (ctx: any, requestedTeamName?: string) => {
+    holdWarningContext = ctx;
     const present = (text: string, level: "info" | "warning" | "error" = "info") => presentCommand(ctx, text, level);
     const owner = commandOwner(ctx);
     const selectedTeamName = requestedTeamName ?? owner.teamName ?? undefined;
@@ -601,6 +609,11 @@ async function refuseTeamSession(
 }
 
 function registerSessionHooks() {
+  pi.events?.on(DELIVERY_HOLD_CHANNEL, (payload) => {
+    if (!isDeliveryHoldSignal(payload)) return;
+    if (payload.active) compactionGate.beginExternal(payload.holder, payload.token);
+    else compactionGate.endExternal(payload.holder, payload.token);
+  });
   pi.on("session_before_switch", () => { frameworkSync.invalidate(); });
   pi.on("session_before_fork", () => { frameworkSync.invalidate(); });
   pi.on("session_before_tree", () => { frameworkSync.invalidate(); doctorGeneration++; });
@@ -615,6 +628,7 @@ function registerSessionHooks() {
   stopDeliveries();
   leaderRunSettled = false;
   leaderContext = ctx;
+  holdWarningContext = ctx;
   footerModel = ctx.model;
   clearTeamFooter(ctx);
 
@@ -773,7 +787,7 @@ pi.on("session_shutdown", async (event, ctx) => {
 
 pi.on("session_before_switch", () => { doctorGeneration++; });
 pi.on("session_before_fork", () => { doctorGeneration++; });
-pi.on("session_tree", () => { doctorGeneration++; });
+pi.on("session_tree", () => { compactionGate.reset(); doctorGeneration++; });
 
 pi.on("model_select", async (event) => {
   footerModel = event.model;

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
+import { DELIVERY_HOLD_CHANNEL, EXTERNAL_HOLD_LIMIT_MS } from "./compaction-delivery-gate";
 import { PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 
 /**
@@ -10,7 +11,9 @@ import { PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 function adapterHarness() {
   const handlers = new Map<string, Array<(...args: any[]) => unknown>>();
   const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+  const eventHandlers = new Map<string, (payload: unknown) => void>();
   const pi: any = {
+    events: { on: (channel: string, handler: (payload: unknown) => void) => eventHandlers.set(channel, handler) },
     on: (event: string, handler: (...args: any[]) => unknown) => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
     },
@@ -47,13 +50,57 @@ function adapterHarness() {
   };
   const doctor = () => commands.get("ptb")!.handler("doctor", ctx);
   const doctorSends = () => pi.sendMessage.mock.calls.filter(([message]: any[]) => message.customType === PTB_DOCTOR_CUSTOM_TYPE);
-  return { pi, emit, ctx, doctor, doctorSends, handlers };
+  const signal = (payload: unknown) => eventHandlers.get(DELIVERY_HOLD_CHANNEL)?.(payload);
+  return { pi, emit, ctx, doctor, doctorSends, handlers, signal };
 }
 
 const macrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("adapter compaction delivery gate", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+
+  it("honors synchronous external signals around native compaction and pickup", async () => {
+    const test = adapterHarness();
+    test.signal({ holder: "hc-auto-compact", token: "run", active: true });
+    await test.doctor();
+    expect(test.doctorSends()).toHaveLength(0);
+    await test.emit("session_before_compact");
+    await test.emit("session_compact");
+    await macrotask();
+    expect(test.doctorSends()).toHaveLength(0);
+    test.signal({ holder: "hc-auto-compact", token: "stale", active: false });
+    await macrotask();
+    expect(test.doctorSends()).toHaveLength(0);
+    test.signal({ holder: "hc-auto-compact", token: "run", active: false });
+    await macrotask();
+    expect(test.doctorSends()).toHaveLength(1);
+  });
+
+  it("warns through ctx.ui.notify on lease expiry and resumes held delivery", async () => {
+    vi.useFakeTimers();
+    const test = adapterHarness();
+    test.signal({ holder: "hc-auto-compact", token: "run", active: true });
+    await test.doctor();
+    await vi.advanceTimersByTimeAsync(EXTERNAL_HOLD_LIMIT_MS + 1);
+    expect(test.ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining("delivery hold from hc-auto-compact expired after 30 minutes"), "warning");
+    expect(test.doctorSends()).toHaveLength(1);
+  });
+
+  it("ignores malformed signals and clears external holds on Session tree change", async () => {
+    const test = adapterHarness();
+    for (const payload of [null, {}, { holder: "hc-auto-compact", token: "run", active: "true" }]) test.signal(payload);
+    await test.doctor();
+    expect(test.doctorSends()).toHaveLength(1);
+    test.signal({ holder: "hc-auto-compact", token: "run", active: true });
+    await test.doctor();
+    expect(test.doctorSends()).toHaveLength(1);
+    await test.emit("session_tree");
+    test.signal({ holder: "hc-auto-compact", token: "run", active: false });
+    await macrotask();
+    expect(test.doctorSends()).toHaveLength(1);
+    await test.doctor();
+    expect(test.doctorSends()).toHaveLength(2);
+  });
 
   it("subscribes to both compaction end events", () => {
     const test = adapterHarness();

@@ -4,14 +4,27 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
  * Pi does not queue extension messages while it compacts a Session. A
  * `triggerTurn` send during manual compaction starts a concurrent agent run,
  * and a send during automatic compaction lands beside the summary request.
- * Every Pi Team Bright message to the model passes through this gate, so no
- * delivery path can present a message while compaction runs.
+ * Every Pi Team Bright message to the model passes through this gate. Native
+ * compaction and token-keyed external delivery holds have separate leases.
+ * Delivery waits until every hold clears or expires.
  *
  * Held sends keep their order and flush after Pi finishes its compaction
  * tail. A Session change drops held sends: each delivery owner re-presents
  * from its durable record when it activates on the new Session.
  */
 export const COMPACTION_HOLD_LIMIT_MS = 15 * 60_000;
+export const EXTERNAL_HOLD_LIMIT_MS = 30 * 60_000;
+export const DELIVERY_HOLD_CHANNEL = "hc.delivery-hold";
+
+export interface DeliveryHoldSignal { holder: string; token: string; active: boolean }
+
+export function isDeliveryHoldSignal(value: unknown): value is DeliveryHoldSignal {
+  if (!value || typeof value !== "object") return false;
+  const signal = value as Partial<DeliveryHoldSignal>;
+  return typeof signal.holder === "string" && signal.holder.trim().length > 0
+    && typeof signal.token === "string" && signal.token.trim().length > 0
+    && typeof signal.active === "boolean";
+}
 
 type MessageSink = Pick<ExtensionAPI, "sendMessage" | "appendEntry">;
 
@@ -38,13 +51,47 @@ export class CompactionDeliveryGate {
   private held: Array<() => void> = [];
   private holdLimit: unknown;
   private readonly openListeners = new Set<() => void>();
+  private readonly externalHolds = new Map<string, { holder: string; timer: unknown }>();
 
-  constructor(private readonly options: { clock?: CompactionDeliveryGateClock; holdLimitMs?: number; onError?: (error: unknown) => void } = {}) {}
+  constructor(private readonly options: {
+    clock?: CompactionDeliveryGateClock;
+    holdLimitMs?: number;
+    externalHoldLimitMs?: number;
+    onExternalHoldExpired?: (holder: string, token: string) => void;
+    onError?: (error: unknown) => void;
+  } = {}) {}
 
   private get clock(): CompactionDeliveryGateClock { return this.options.clock ?? systemClock; }
 
-  /** True while compaction runs or held sends wait for their flush. */
-  get isClosed(): boolean { return this.compacting || this.flushPending; }
+  /** True while any owner holds delivery or sends wait for their flush. */
+  get isClosed(): boolean { return this.hasHold || this.flushPending; }
+
+  private get hasHold(): boolean { return this.compacting || this.externalHolds.size > 0; }
+
+  /** A repeated begin renews this token's lease without releasing delivery. */
+  beginExternal(holder: string, token: string): void {
+    const previous = this.externalHolds.get(token);
+    if (previous && previous.holder !== holder) return;
+    if (previous) this.clock.clearTimeout(previous.timer);
+    this.epoch++;
+    const hold = { holder, timer: undefined as unknown };
+    this.externalHolds.set(token, hold);
+    hold.timer = this.clock.setTimeout(() => {
+      if (this.externalHolds.get(token) !== hold) return;
+      this.externalHolds.delete(token);
+      this.scheduleFlush();
+      this.options.onExternalHoldExpired?.(holder, token);
+    }, this.options.externalHoldLimitMs ?? EXTERNAL_HOLD_LIMIT_MS);
+  }
+
+  /** Only the exact holder and token can release an external hold. */
+  endExternal(holder: string, token: string): void {
+    const hold = this.externalHolds.get(token);
+    if (!hold || hold.holder !== holder) return;
+    this.clock.clearTimeout(hold.timer);
+    this.externalHolds.delete(token);
+    this.scheduleFlush();
+  }
 
   /** Pi `session_before_compact`. */
   begin(): void {
@@ -64,17 +111,23 @@ export class CompactionDeliveryGate {
     if (!this.compacting) return;
     this.compacting = false;
     this.clearHoldLimit();
+    this.scheduleFlush();
+  }
+
+  private scheduleFlush(): void {
+    if (this.hasHold) return;
     this.flushPending = true;
-    const epoch = this.epoch;
+    const epoch = ++this.epoch;
     this.clock.defer(() => {
-      if (epoch !== this.epoch || this.compacting) return;
-      this.flushPending = false;
-      const held = this.held;
-      this.held = [];
-      for (const send of held) {
+      if (epoch !== this.epoch || this.hasHold) return;
+      while (this.held.length && epoch === this.epoch && !this.hasHold) {
+        const send = this.held.shift()!;
         try { send(); } catch (error) { this.options.onError?.(error); }
       }
-      for (const listener of this.openListeners) listener();
+      if (epoch === this.epoch && !this.hasHold) {
+        this.flushPending = false;
+        for (const listener of this.openListeners) listener();
+      }
     });
   }
 
@@ -85,6 +138,8 @@ export class CompactionDeliveryGate {
     this.flushPending = false;
     this.held = [];
     this.clearHoldLimit();
+    for (const hold of this.externalHolds.values()) this.clock.clearTimeout(hold.timer);
+    this.externalHolds.clear();
   }
 
   /** Run after held sends flush, so deferred work can retry. */
