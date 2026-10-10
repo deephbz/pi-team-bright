@@ -192,6 +192,22 @@ without complete timing show `timing unavailable`. In Timeline, `+` and `-`
 zoom time, arrows pan, and Home restores the full time span. Neither view schedules or
 changes a Task.
 
+## Delivery holds
+
+PTB holds model messages during native Pi compaction and during the
+hc-auto-compact handoff and pickup window. The hc-auto-compact extension
+signals that window through `hc.delivery-hold` on `pi.events`. PTB preserves
+send order and resumes after every hold clears. Session changes discard held
+sends; durable delivery owners can present them again for the new Session.
+
+The external hold has a 30-minute lease. Repeated begin signals renew it.
+If renewal stops, expiry removes that external hold and displays a warning.
+Delivery protection is degraded after expiry. Native compaction can still
+block delivery independently. PTB cannot protect messages from senders that
+bypass its gate. The [gate implementation](extensions/compaction-delivery-gate.ts)
+and [adapter tests](extensions/compaction-delivery-adapter.test.ts) own the
+signal contract and executable checks.
+
 ## Candid limits
 
 - **This is Team-scoped coordination.** It is not a general agent directory,

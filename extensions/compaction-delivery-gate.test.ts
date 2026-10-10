@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { CompactionDeliveryGate, type CompactionDeliveryGateClock } from "./compaction-delivery-gate";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { CompactionDeliveryGate, EXTERNAL_HOLD_LIMIT_MS, type CompactionDeliveryGateClock } from "./compaction-delivery-gate";
 
 function manualClock() {
   const deferred: Array<() => void> = [];
@@ -29,6 +29,135 @@ function harness() {
 }
 
 describe("compaction delivery gate", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("holds synchronously, renews idempotently, and ignores mismatched ends", () => {
+    const test = harness();
+    test.gate.beginExternal("hc-auto-compact", "run-1");
+    test.gate.beginExternal("hc-auto-compact", "run-1");
+    expect(test.time.timerCount()).toBe(1);
+    test.send("a");
+    test.gate.endExternal("hc-auto-compact", "wrong-token");
+    test.gate.endExternal("wrong-holder", "run-1");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual([]);
+    test.gate.endExternal("hc-auto-compact", "run-1");
+    test.gate.endExternal("hc-auto-compact", "run-1");
+    test.send("b");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual(["a", "b"]);
+    expect(test.time.timerCount()).toBe(0);
+  });
+
+  it.each(["native-first", "external-first"])("waits for both hold owners: %s", order => {
+    const test = harness();
+    test.gate.beginExternal("hc-auto-compact", "run");
+    test.gate.begin();
+    test.send("a");
+    if (order === "native-first") test.gate.end();
+    else test.gate.endExternal("hc-auto-compact", "run");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual([]);
+    if (order === "native-first") test.gate.endExternal("hc-auto-compact", "run");
+    else test.gate.end();
+    test.time.runDeferred();
+    expect(test.sent()).toEqual(["a"]);
+  });
+
+  it("keeps distinct tokens held and fences a begin before a pending flush", () => {
+    const test = harness();
+    test.gate.beginExternal("hc-auto-compact", "old");
+    test.send("a");
+    test.gate.endExternal("hc-auto-compact", "old");
+    test.gate.beginExternal("hc-auto-compact", "new");
+    test.gate.beginExternal("other", "second");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual([]);
+    test.gate.endExternal("hc-auto-compact", "new");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual([]);
+    test.gate.endExternal("other", "second");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual(["a"]);
+  });
+
+  it("renews the 30-minute lease and warns once when it expires", () => {
+    vi.useFakeTimers();
+    const onExternalHoldExpired = vi.fn();
+    const gate = new CompactionDeliveryGate({ onExternalHoldExpired });
+    const pi = { sendMessage: vi.fn(), appendEntry: vi.fn() };
+    const sink = gate.sink(pi as any);
+    gate.beginExternal("hc-auto-compact", "run");
+    sink.sendMessage({ customType: "t", content: "a", display: true });
+    vi.advanceTimersByTime(EXTERNAL_HOLD_LIMIT_MS - 1);
+    gate.beginExternal("hc-auto-compact", "run");
+    vi.advanceTimersByTime(EXTERNAL_HOLD_LIMIT_MS - 1);
+    expect(pi.sendMessage).not.toHaveBeenCalled();
+    expect(onExternalHoldExpired).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(onExternalHoldExpired).toHaveBeenCalledExactlyOnceWith("hc-auto-compact", "run");
+    vi.runAllTimers();
+    expect(pi.sendMessage).toHaveBeenCalledTimes(1);
+    expect(gate.isClosed).toBe(false);
+  });
+
+  it("does not let external expiry release an active native hold", () => {
+    vi.useFakeTimers();
+    const warning = vi.fn();
+    const gate = new CompactionDeliveryGate({ holdLimitMs: EXTERNAL_HOLD_LIMIT_MS * 2, onExternalHoldExpired: warning });
+    gate.begin();
+    gate.beginExternal("hc-auto-compact", "run");
+    vi.advanceTimersByTime(EXTERNAL_HOLD_LIMIT_MS);
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(gate.isClosed).toBe(true);
+    gate.end();
+    vi.runAllTimers();
+    expect(gate.isClosed).toBe(false);
+  });
+
+  it("keeps the external hold when the native lease expires", () => {
+    vi.useFakeTimers();
+    const gate = new CompactionDeliveryGate();
+    gate.begin();
+    gate.beginExternal("hc-auto-compact", "run");
+    vi.advanceTimersByTime(15 * 60_000 + 1);
+    expect(gate.isClosed).toBe(true);
+    gate.endExternal("hc-auto-compact", "run");
+    vi.runAllTimers();
+    expect(gate.isClosed).toBe(false);
+  });
+
+  it("stops a flush if a sender begins a new hold and keeps queued order", () => {
+    const test = harness();
+    test.pi.sendMessage.mockImplementationOnce(() => {
+      test.gate.beginExternal("hc-auto-compact", "second");
+      test.send("c");
+    });
+    test.gate.beginExternal("hc-auto-compact", "first");
+    test.send("a");
+    test.send("b");
+    test.gate.endExternal("hc-auto-compact", "first");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual(["a"]);
+    test.gate.endExternal("hc-auto-compact", "second");
+    test.time.runDeferred();
+    expect(test.sent()).toEqual(["a", "b", "c"]);
+  });
+
+  it("reset cancels external leases, stale flushes, and old-Session sends", () => {
+    const test = harness();
+    test.gate.beginExternal("hc-auto-compact", "run");
+    test.send("old");
+    test.gate.reset();
+    test.time.fireTimers();
+    test.time.runDeferred();
+    expect(test.sent()).toEqual([]);
+    expect(test.time.timerCount()).toBe(0);
+    expect(test.gate.isClosed).toBe(false);
+    test.send("new");
+    expect(test.sent()).toEqual(["new"]);
+  });
+
   it("sends directly while the Session is not compacting", () => {
     const test = harness();
     test.send("a");
