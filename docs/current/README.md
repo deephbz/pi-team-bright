@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-10-07
+Updated: 2026-10-10
 
 Published versions and their evidence live in
 [GitHub Releases](https://github.com/deephbz/pi-team-bright/releases) and the npm
@@ -177,6 +177,14 @@ restating executable definitions.
 
 ## Decisions still in force
 
+- [Decision 0018](../decisions/0018-worker-start-under-load.md) supersedes the
+  timing rules of Decisions 0012 and 0013. Launch observation checks carrier
+  liveness and exact failed events. Herdr readiness, shell-busy retries, and
+  binding observation use a five-minute hang ceiling. The binding environment
+  override still wins. Worker admission has no persistence-lock wait budget.
+  Exact binding, generation fencing, and compensation remain unchanged.
+  Architecture impact: **none**.
+
 - [Decision 0017](../decisions/0017-delegation-boundary-and-second-opinion.md)
   keeps one lead, delegates facts and keeps opinions with the lead, and makes
   the second opinion opt-in. It narrows Decision 0014's persistent-reviewer
@@ -263,7 +271,7 @@ restating executable definitions.
   uses the exact returned pane handle with official `pane rename` before
   `agent start`. A label failure records a payload-free launch stage and warning
   but does not block coordination. The extra local CLI call measured 24.72 ms
-  and does not change the separate 6,000 ms readiness bound.
+  and does not change admission evidence. Decision 0018 owns the hang ceiling.
   Other adapters retain existing behavior without this guarantee; the executable contract is
   [`TeamPanePlacement`](../../src/utils/terminal-adapter.ts).
   This changes the Pi Team Bright adapter contract, but no depicted component,
@@ -391,9 +399,9 @@ restating executable definitions.
   internal lock guard only; architecture impact: **none**.
 - Worker startup hardening removes two avoidable serial costs without weakening
   admission. Herdr uses one official interactive-ready start command with an
-  explicit 6,000 ms readiness timeout. Exact current Membership, Session, and
-  runtime-generation binding remains the commit point and keeps its separate
-  ordinary 3,000 ms observation. Configured Worker defaults use the
+  explicit hang ceiling from Decision 0018. Exact current Membership, Session,
+  and runtime-generation binding remains the commit point. Binding observation
+  checks carrier liveness and exact failed events within the same ceiling. Configured Worker defaults use the
   invocation-local model registry. `ensure_worker` no longer runs a leader Task
   scan; Session start, Task transitions, and periodic recovery own ready
   delivery. Real stable-Worker reuse measured 31/33 ms p50/p95, while normal
@@ -473,11 +481,10 @@ restating executable definitions.
 - Worker admission remains a two-phase external-actuation protocol. Herdr
   acceptance is positive actuation evidence, not Worker authority. Exact
   Membership, Session, and runtime-generation binding is the linearization
-  point. A timeout is suspicion, not proof of death; exact-target compensation
-  and generation fencing handle late or lost outcomes. Installed Herdr 0.7.5
-  lacks the accepted flag, so its exact parser rejection selects the safe legacy
-  ready wait. Do not reinterpret the fallback, timeout, pane, or process as
-  readiness.
+  point. Ceiling expiry remains suspicion. Exact-target compensation and
+  generation fencing handle late or lost outcomes. The official ready-start
+  command from Decision 0013 remains in force. Decision 0018 supersedes its
+  timing rules. Pane and process liveness never prove Worker readiness.
 - One current Membership admits one live Pi process generation. The executable
   rule is [`src/utils/runtime.ts`](../../src/utils/runtime.ts), lifecycle wiring
   is [`extensions/index.ts`](../../extensions/index.ts), and focused evidence is

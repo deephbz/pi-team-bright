@@ -11,7 +11,7 @@ function batch(cursor: string, events: TeamEvent[], timedOut = false): TeamEvent
   return { cursor, headCursor: cursor, events, truncated: false, remaining: 0, timedOut };
 }
 
-function workerEvent(cursor: string, worker: string, membershipId: string, phase: "prepared" | "session_bound"): TeamEvent {
+function workerEvent(cursor: string, worker: string, membershipId: string, phase: "prepared" | "session_bound" | "failed"): TeamEvent {
   return { type: "worker", cursor, worker, membershipId, phase, generation: phase === "session_bound" ? { membershipId, pid: 42, startedAt: 100 } : undefined, at: "2026-07-26T00:00:00.000Z" };
 }
 
@@ -23,6 +23,79 @@ const base = {
 };
 
 describe("bounded Worker startup observation", () => {
+  it("admits binding after ten seconds while the carrier stays live", async () => {
+    let now = 0;
+    const isCarrierAlive = vi.fn(() => true);
+    const result = await observeWorkerStartup({
+      ...base, now: () => now, isCarrierAlive,
+      waitForEvents: async ({ waitMs }) => {
+        now += waitMs;
+        return now >= 10_000
+          ? batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")])
+          : batch("1", [], true);
+      },
+      verifyAuthority: async () => ({ sessionBound: true, generation: { membershipId: "membership-reviewer", pid: 42, startedAt: 100 } }),
+    });
+    expect(result.observed).toBe(true);
+    expect(now).toBe(10_000);
+    expect(isCarrierAlive).toHaveBeenCalledTimes(40);
+  });
+
+  it("fails promptly when the carrier exits during observation", async () => {
+    let now = 0;
+    const result = await observeWorkerStartup({
+      ...base, now: () => now, isCarrierAlive: () => now < 750,
+      waitForEvents: async ({ waitMs }) => { now += waitMs; return batch("1", [], true); },
+      verifyAuthority: async () => ({ sessionBound: false }),
+    });
+    expect(result).toMatchObject({ observed: false, reason: "carrier_gone" });
+    expect(now).toBe(750);
+  });
+
+  it("bounds a hung live carrier at the hang ceiling", async () => {
+    let now = 0;
+    const result = await observeWorkerStartup({
+      ...base, now: () => now, isCarrierAlive: () => true,
+      waitForEvents: async ({ waitMs }) => { now += waitMs; return batch("1", [], true); },
+      verifyAuthority: async () => ({ sessionBound: false }),
+    });
+    expect(result).toMatchObject({ observed: false, reason: "timeout" });
+    expect(now).toBe(300_000);
+  });
+
+  it("honors the override while carrier polling continues", async () => {
+    let now = 0;
+    const result = await observeWorkerStartup({
+      ...base, timeoutMs: resolveWorkerStartupObservationTimeoutMs("700"), now: () => now, isCarrierAlive: () => true,
+      waitForEvents: async ({ waitMs }) => { now += waitMs; return batch("1", [], true); },
+      verifyAuthority: async () => ({ sessionBound: false }),
+    });
+    expect(result).toMatchObject({ observed: false, reason: "timeout" });
+    expect(now).toBe(700);
+  });
+
+  it("uses only failed events for the exact Worker Membership", async () => {
+    const waitForEvents = vi.fn()
+      .mockResolvedValueOnce(batch("2", [workerEvent("2", "reviewer", "old-membership", "failed")]))
+      .mockResolvedValueOnce(batch("3", [workerEvent("3", "reviewer", "membership-reviewer", "failed")]));
+    const result = await observeWorkerStartup({ ...base, isCarrierAlive: () => true, waitForEvents,
+      verifyAuthority: async () => ({ sessionBound: false }),
+    });
+    expect(result).toMatchObject({ observed: false, cursor: "3", reason: "worker_failed" });
+    expect(waitForEvents).toHaveBeenCalledTimes(2);
+  });
+
+  it("checks carrier exit while waiting for exact authority visibility", async () => {
+    let now = 0;
+    const result = await observeWorkerStartup({ ...base, now: () => now,
+      isCarrierAlive: () => now < 100,
+      waitForEvents: async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]),
+      verifyAuthority: async () => ({ sessionBound: false }),
+      waitForRetry: async (ms) => { now += ms; },
+    });
+    expect(result).toMatchObject({ observed: false, reason: "carrier_gone" });
+    expect(now).toBe(100);
+  });
   it("accepts the exact Membership binding only after durable authority verifies it", async () => {
     const waitForEvents = vi.fn(async () => batch("2", [workerEvent("2", "reviewer", "membership-reviewer", "session_bound")]));
     const result = await observeWorkerStartup({

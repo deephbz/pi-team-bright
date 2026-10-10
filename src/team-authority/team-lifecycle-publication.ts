@@ -5,7 +5,7 @@ export type WorkerStartupObservation =
     carrier: "prepared" | "session_bound";
     runtime: "not_observed";
     cursor: string;
-    reason: "timeout" | "authority_mismatch";
+    reason: "timeout" | "authority_mismatch" | "carrier_gone" | "worker_failed";
   };
 
 /**

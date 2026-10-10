@@ -1,5 +1,6 @@
 // Project: pi-teams
 import crypto from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
 import { recordLockWait } from "./trace";
@@ -193,16 +194,24 @@ function retryDelayMs(): number {
   return RETRY_MIN_DELAY_MS + Math.floor(Math.random() * (RETRY_MAX_DELAY_MS - RETRY_MIN_DELAY_MS + 1));
 }
 
+const unboundedLockWait = new AsyncLocalStorage<boolean>();
+
+/** Admission must not exit a live Worker due to lock contention. The launcher
+ * owns its hang ceiling. Async scope also covers nested persistence locks. */
+export function withUnboundedLockWait<T>(action: () => Promise<T>): Promise<T> {
+  return unboundedLockWait.run(true, action);
+}
+
 export async function withLock<T>(lockPath: string, fn: () => Promise<T>, retries: number = 50): Promise<T> {
   const lockFile = `${lockPath}.lock`;
   const owner: LockOwner = { pid: process.pid, token: crypto.randomUUID() };
   const waitStartedAt = Date.now();
   // Preserve the old public retry budget (retries * 100 ms) while polling with
   // short jitter. Twenty local contenders no longer advance one per 100 ms.
-  let waitBudgetMs = Math.max(0, retries) * LEGACY_RETRY_INTERVAL_MS;
+  let waitBudgetMs = unboundedLockWait.getStore() ? Infinity : Math.max(0, retries) * LEGACY_RETRY_INTERVAL_MS;
   let acquired = false;
 
-  if (retries > 0) {
+  if (waitBudgetMs > 0) {
     while (true) {
       if (tryAcquireVisibleLock(lockFile, owner)) {
         acquired = true;

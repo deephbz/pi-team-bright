@@ -306,7 +306,7 @@ export class WorkerLaunchBridge {
         );
         if (outcome === "stopped") {
           throw new Error(
-            `Herdr recovery for ${workerName} did not produce exact Session binding during the bounded observation. `
+            `Herdr recovery for ${workerName} did not produce exact Session binding during the bounded observation (${startup.reason}). `
             + "The exact recovery target was stopped; the Membership remains current for an exact child retry.",
           );
         }
@@ -405,7 +405,7 @@ export class WorkerLaunchBridge {
     }
     recordWorkerLaunchStage(startup.observed ? "session_bound_observed" : "session_bound_not_observed", { membershipId: member.membershipId! });
     const currentMember = !startup.observed && launch.backend === "herdr"
-      ? await this.failUnobservedHerdrPreparedLaunch(teamName, member, launch, aggregate.path)
+      ? await this.failUnobservedHerdrPreparedLaunch(teamName, member, launch, startup.reason, aggregate.path)
       : member;
     return {
       action: "created",
@@ -531,6 +531,7 @@ export class WorkerLaunchBridge {
     teamName: string,
     member: Member,
     target: PreparedLaunchTarget,
+    reason: Extract<WorkerStartupObservation, { observed: false }>["reason"],
     aggregatePath?: string,
   ): Promise<Member> {
     recordWorkerLaunchStage("compensation_started", { membershipId: member.membershipId! });
@@ -545,13 +546,13 @@ export class WorkerLaunchBridge {
       recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
       if ((error as { carrierStopConfirmed?: boolean }).carrierStopConfirmed) removeWorkerAggregate(aggregatePath);
       throw new Error(
-        `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation. `
+        `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation (${reason}). `
         + `Compensation failed: ${error instanceof Error ? error.message : String(error)}. `
         + "The Membership remains current because process shutdown could not be confirmed.",
       );
     }
     throw new Error(
-      `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation. `
+      `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation (${reason}). `
       + "The exact prepared Membership was deactivated after confirmed carrier cleanup.",
     );
   }
