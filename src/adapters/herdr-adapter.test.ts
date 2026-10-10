@@ -121,7 +121,7 @@ describe("HerdrAdapter", () => {
       "agent", "start", "team-a-worker",
       "--kind", "pi",
       "--pane", "pane-worker",
-      "--timeout", "6000",
+      "--timeout", "300000",
       "--",
       "--model", "openai/model;not-a-shell", "--tools", "task_read,task_update",
     ]);

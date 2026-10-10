@@ -2,8 +2,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { TeamEventWaitResult } from "../coordination/event-journal";
 import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "../coordination/contracts";
 
-/** Default bounded observation of exact Worker Session binding after carrier readiness. */
-export const WORKER_STARTUP_OBSERVATION_MS = 3_000;
+/** Hang ceiling, not a contention-latency failure detector. */
+export const WORKER_STARTUP_OBSERVATION_MS = 300_000;
+const CARRIER_CHECK_INTERVAL_MS = 250;
 
 export function resolveWorkerStartupObservationTimeoutMs(
   configuredWait?: string,
@@ -23,7 +24,7 @@ export type WorkerStartupObservation =
     carrier: "prepared" | "session_bound";
     runtime: "not_observed";
     cursor: string;
-    reason: "timeout" | "authority_mismatch";
+    reason: "timeout" | "authority_mismatch" | "carrier_gone" | "worker_failed";
   };
 
 export interface WorkerStartupObservationInput {
@@ -44,6 +45,8 @@ export interface WorkerStartupObservationInput {
   }) => Promise<TeamEventWaitResult>;
   /** Verify durable Membership plus exact runtime generation after the binding event. */
   verifyAuthority: () => Promise<{ sessionBound: boolean; generation?: WorkerRuntimeGenerationEvidence }>;
+  /** Terminal-adapter evidence only; it never proves Worker admission. */
+  isCarrierAlive?: () => boolean | Promise<boolean>;
   now?: () => number;
   /** Cancellable bounded authority-visibility cadence; injected for deterministic tests. */
   waitForRetry?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
@@ -69,16 +72,24 @@ export async function observeWorkerStartup(
   let cursor = input.afterCursor;
 
   while (true) {
+    if (input.isCarrierAlive && !await input.isCarrierAlive()) {
+      return { observed: false, carrier: "prepared", runtime: "not_observed", cursor, reason: "carrier_gone" };
+    }
     const remaining = Math.max(0, deadline - now());
     const batch = await input.waitForEvents({
       teamName: input.teamName,
       afterCursor: cursor,
       eventTypes: ["worker"],
       limit: 100,
-      waitMs: remaining,
+      waitMs: input.isCarrierAlive ? Math.min(remaining, CARRIER_CHECK_INTERVAL_MS) : remaining,
       ...(input.signal ? { signal: input.signal } : {}),
     });
     cursor = batch.cursor;
+
+    const failed = batch.events.some(event => event.type === "worker"
+      && event.worker === input.workerName && event.membershipId === input.membershipId
+      && event.phase === "failed");
+    if (failed) return { observed: false, carrier: "prepared", runtime: "not_observed", cursor, reason: "worker_failed" };
 
     const bound = batch.events.find((event): event is WorkerTeamEvent => event.type === "worker"
       && event.worker === input.workerName
@@ -93,12 +104,15 @@ export async function observeWorkerStartup(
         const exact = authority.sessionBound && generation?.membershipId === expected.membershipId
           && generation?.pid === expected.pid && generation?.startedAt === expected.startedAt;
         if (exact) return { observed: true, carrier: "session_bound", runtime: "observed", cursor };
+        if (input.isCarrierAlive && !await input.isCarrierAlive()) {
+          return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "carrier_gone" };
+        }
         if (now() >= deadline) return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "timeout" };
         await waitForRetry(Math.min(50, Math.max(0, deadline - now())), input.signal);
       }
     }
 
-    if (batch.timedOut || now() >= deadline) {
+    if ((!input.isCarrierAlive && batch.timedOut) || now() >= deadline) {
       const authority = await input.verifyAuthority();
       return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "timeout" };
     }

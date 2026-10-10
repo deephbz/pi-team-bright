@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { withLock } from "./lock";
+import { withLock, withUnboundedLockWait } from "./lock";
 
 describe("withLock", () => {
   const testDir = path.join(os.tmpdir(), "pi-lock-test-" + Date.now());
@@ -17,6 +17,25 @@ describe("withLock", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true });
+  });
+
+  it("keeps admission alive past the ordinary lock budget without changing other callers", async () => {
+    vi.useFakeTimers();
+    try {
+      fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, token: "live-owner" }));
+      const admitted = vi.fn(async () => "bound");
+      const pending = withUnboundedLockWait(() => withLock(lockPath, admitted));
+      const ordinary = expect(withLock(lockPath, async () => undefined, 2)).rejects.toThrow("Could not acquire lock");
+      await vi.advanceTimersByTimeAsync(10_000);
+      await ordinary;
+      expect(admitted).not.toHaveBeenCalled();
+      fs.unlinkSync(lockFile);
+      await vi.advanceTimersByTimeAsync(20);
+      await expect(pending).resolves.toBe("bound");
+      expect(admitted).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("should successfully acquire and release the lock", async () => {

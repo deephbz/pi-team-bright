@@ -1,6 +1,8 @@
 import * as runtime from "../utils/runtime";
 import * as teamEvents from "../coordination/event-journal";
 import * as teams from "../utils/teams";
+import { terminalForTeam } from "../utils/team-terminal";
+import { memberTerminalTarget } from "../utils/terminal-target";
 import {
   observeWorkerStartup,
   resolveWorkerStartupObservationTimeoutMs,
@@ -58,6 +60,16 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
       ...input,
       timeoutMs,
       waitForEvents: (options) => teamEvents.waitForTeamEvents(options),
+      isCarrierAlive: async () => {
+        const config = await teams.readConfig(input.teamName);
+        const current = await teams.currentMembership(input.teamName, input.workerName);
+        // Never inspect a replacement carrier for this launch.
+        if (current.membershipId !== input.membershipId) return false;
+        const adapter = terminalForTeam(config);
+        const target = memberTerminalTarget(current, adapter.name);
+        if (!target) return false;
+        return target.kind === "window" ? adapter.isWindowAlive(target.targetId) : adapter.isAlive(target.targetId);
+      },
       verifyAuthority: async () => {
         try {
           const current = await teams.currentMembership(input.teamName, input.workerName);

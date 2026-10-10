@@ -22,9 +22,9 @@ type HerdrEnvelope = {
 
 const FORWARDED_ENV = /^(?:PI_[A-Z0-9_]+|HTTP_PROXY|HTTPS_PROXY|WSS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|wss_proxy|all_proxy|no_proxy)$/;
 const SHELL_READY_RETRY_MS = 50;
-const SHELL_READY_TIMEOUT_MS = 5_000;
+const SHELL_READY_TIMEOUT_MS = 300_000;
 /** Official Herdr agent-start readiness bound in milliseconds. */
-const AGENT_READY_TIMEOUT_MS = 6_000;
+const AGENT_READY_TIMEOUT_MS = 300_000;
 
 interface PaneRect { x: number; y: number; width: number; height: number; }
 

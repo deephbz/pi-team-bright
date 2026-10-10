@@ -3,6 +3,7 @@ import path from "node:path";
 import * as paths from "../utils/paths";
 import * as runtime from "../utils/runtime";
 import * as teams from "../utils/teams";
+import { withUnboundedLockWait } from "../utils/lock";
 import { admitTeamSession, type SessionTerminalPlacement, type TeamIdentitySource, type TeamSessionAdmission } from "../utils/session-terminal";
 import { recordWorkerLaunchStage, withSemanticTrace } from "../utils/trace";
 import type { Member } from "./contracts";
@@ -19,7 +20,7 @@ export class TeamSessionLifecycleService {
     return withSemanticTrace(
       "worker_session_admission",
       { teamName: input.teamName, workerName: input.workerName },
-      () => this.admitWorkerWithTrace(input),
+      () => withUnboundedLockWait(() => this.admitWorkerWithTrace(input)),
     );
   }
 
