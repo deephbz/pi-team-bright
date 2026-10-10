@@ -6,6 +6,7 @@ import * as teams from "./teams";
 import * as messaging from "./messaging";
 import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
+import { observeWorkerStartup } from "./worker-startup-observation";
 import { DIRECT_MESSAGE_ACK_ENTRY_TYPE, DIRECT_MESSAGE_CUSTOM_TYPE } from "./message-delivery";
 
 type Handler = (event: unknown, ctx: SessionContext) => Promise<void>;
@@ -112,15 +113,25 @@ describe("Pi session lifecycle", () => {
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
+    vi.stubEnv("PI_TEAM_MEMBERSHIP_ID", worker.membershipId);
     const bind = vi.spyOn(teams, "bindMemberSession").mockRejectedValueOnce(new Error("injected bind failure"));
     const writeRuntime = vi.spyOn(runtime, "writeRuntimeStatus");
     const handlers = registeredHandlers();
     const first = lifecycleContext(sessionFile) as any;
-    first.shutdown = vi.fn();
+    first.shutdown = vi.fn(() => {
+      expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([
+        expect.objectContaining({ membershipId: worker.membershipId, phase: "failed" }),
+      ]);
+    });
     await handlers.get("session_start")?.({ reason: "startup" }, first);
     const runtimeAfterFailure = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
     const second = lifecycleContext(sessionFile) as any;
-    second.shutdown = vi.fn();
+    second.shutdown = vi.fn(() => {
+      expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([
+        expect.objectContaining({ membershipId: worker.membershipId, phase: "failed" }),
+        expect.objectContaining({ membershipId: worker.membershipId, phase: "failed" }),
+      ]);
+    });
     const repeatedHandlers = registeredHandlers();
     await repeatedHandlers.get("session_start")?.({ reason: "startup" }, second);
 
@@ -132,6 +143,11 @@ describe("Pi session lifecycle", () => {
     expect(bind).toHaveBeenCalledOnce();
     expect(first.shutdown).toHaveBeenCalledOnce();
     expect(second.shutdown).toHaveBeenCalledOnce();
+    await expect(observeWorkerStartup({
+      teamName, workerName: "worker", membershipId: worker.membershipId, afterCursor: "0",
+      isCarrierAlive: () => true, waitForEvents: teamEvents.waitForTeamEvents,
+      verifyAuthority: async () => ({ sessionBound: false }),
+    })).resolves.toMatchObject({ observed: false, reason: "worker_failed" });
   });
 
   it("refuses a teammate replaced while its exact Membership lease waits", async () => {
@@ -145,6 +161,7 @@ describe("Pi session lifecycle", () => {
       cwd: process.cwd(), subscriptions: [],
     };
     await teams.addMember(teamName, oldWorker);
+    vi.stubEnv("PI_TEAM_MEMBERSHIP_ID", oldWorker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     let release!: () => void;
@@ -174,6 +191,14 @@ describe("Pi session lifecycle", () => {
     });
     expect(await runtime.readRuntimeStatus(teamName, "worker")).toBeNull();
     expect(ctx.shutdown).toHaveBeenCalledOnce();
+    expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([
+      expect.objectContaining({ membershipId: oldWorker.membershipId, phase: "failed" }),
+    ]);
+    await expect(observeWorkerStartup({
+      teamName, workerName: "worker", membershipId: replacement.membershipId, afterCursor: "0", timeoutMs: 0,
+      isCarrierAlive: () => true, waitForEvents: teamEvents.waitForTeamEvents,
+      verifyAuthority: async () => ({ sessionBound: false }),
+    })).resolves.toMatchObject({ observed: false, reason: "timeout" });
   });
 
   it("never injects a synthetic inbox bootstrap on first binding or same-Session resume", async () => {

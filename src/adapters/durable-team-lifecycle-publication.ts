@@ -61,14 +61,19 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
       timeoutMs,
       waitForEvents: (options) => teamEvents.waitForTeamEvents(options),
       isCarrierAlive: async () => {
-        const config = await teams.readConfig(input.teamName);
-        const current = await teams.currentMembership(input.teamName, input.workerName);
-        // Never inspect a replacement carrier for this launch.
-        if (current.membershipId !== input.membershipId) return false;
-        const adapter = terminalForTeam(config);
-        const target = memberTerminalTarget(current, adapter.name);
-        if (!target) return false;
-        return target.kind === "window" ? adapter.isWindowAlive(target.targetId) : adapter.isAlive(target.targetId);
+        try {
+          const config = await teams.readConfig(input.teamName);
+          const current = await teams.currentMembership(input.teamName, input.workerName);
+          // Never inspect a replacement carrier for this launch.
+          if (current.membershipId !== input.membershipId) return false;
+          const adapter = terminalForTeam(config);
+          const target = memberTerminalTarget(current, adapter.name);
+          if (!target) return undefined;
+          return target.kind === "window" ? adapter.isWindowAlive(target.targetId) : adapter.isAlive(target.targetId);
+        } catch {
+          // Read errors and CLI failures cannot prove carrier absence.
+          return undefined;
+        }
       },
       verifyAuthority: async () => {
         try {

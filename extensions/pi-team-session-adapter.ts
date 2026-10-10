@@ -69,7 +69,8 @@ export function createPiTeamSessionAdapter(options: {
   const terminal = getTerminalAdapter();
   const taskGraphPane = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: taskGraphControlSource });
   let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
-  let agentName = process.env.PI_AGENT_NAME || "team-lead";
+  const envAgentName = process.env.PI_AGENT_NAME;
+  let agentName = envAgentName || "team-lead";
   const envTeamName = process.env.PI_TEAM_NAME;
   const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
   const envMembershipId = process.env.PI_TEAM_MEMBERSHIP_ID;
@@ -595,7 +596,12 @@ async function refuseTeamSession(
   shutdownCandidate = false,
 ) {
   doctorGeneration++;
-  if (!shutdownCandidate) {
+  if (identitySource === "launch_env" && envTeamName === refusedTeam
+    && envAgentName === role && role !== "team-lead" && envMembershipId) {
+    // Publish the launch identity even if authority now names a replacement.
+    // The launch observer matches exact Membership IDs before accepting failure.
+    await lifecyclePublication.recordWorkerFailed({ teamName: refusedTeam, workerName: role, membershipId: envMembershipId }).catch(() => undefined);
+  } else if (!shutdownCandidate) {
     await teamSessionLifecycleService.recordAdmissionFailure(refusedTeam, role).catch(() => undefined);
   }
   stopDeliveries();

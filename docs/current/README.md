@@ -179,7 +179,10 @@ restating executable definitions.
 
 - [Decision 0018](../decisions/0018-worker-start-under-load.md) supersedes the
   timing rules of Decisions 0012 and 0013. Launch observation checks carrier
-  liveness and exact failed events. Herdr readiness, shell-busy retries, and
+  liveness and exact failed events. Undecidable probes keep observing.
+  Refused launcher-spawned Workers publish failed events for their exact
+  launch-environment Membership before shutdown. Stale refusals cannot fail
+  a replacement Membership. Herdr readiness, shell-busy retries, and
   binding observation use a five-minute hang ceiling. The binding environment
   override still wins. Worker admission has no persistence-lock wait budget.
   Exact binding, generation fencing, and compensation remain unchanged.

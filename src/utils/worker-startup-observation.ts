@@ -45,8 +45,8 @@ export interface WorkerStartupObservationInput {
   }) => Promise<TeamEventWaitResult>;
   /** Verify durable Membership plus exact runtime generation after the binding event. */
   verifyAuthority: () => Promise<{ sessionBound: boolean; generation?: WorkerRuntimeGenerationEvidence }>;
-  /** Terminal-adapter evidence only; it never proves Worker admission. */
-  isCarrierAlive?: () => boolean | Promise<boolean>;
+  /** Terminal-adapter evidence only. Undefined means the probe cannot decide. */
+  isCarrierAlive?: () => boolean | undefined | Promise<boolean | undefined>;
   now?: () => number;
   /** Cancellable bounded authority-visibility cadence; injected for deterministic tests. */
   waitForRetry?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
@@ -72,7 +72,7 @@ export async function observeWorkerStartup(
   let cursor = input.afterCursor;
 
   while (true) {
-    if (input.isCarrierAlive && !await input.isCarrierAlive()) {
+    if (input.isCarrierAlive && await input.isCarrierAlive() === false) {
       return { observed: false, carrier: "prepared", runtime: "not_observed", cursor, reason: "carrier_gone" };
     }
     const remaining = Math.max(0, deadline - now());
@@ -104,7 +104,7 @@ export async function observeWorkerStartup(
         const exact = authority.sessionBound && generation?.membershipId === expected.membershipId
           && generation?.pid === expected.pid && generation?.startedAt === expected.startedAt;
         if (exact) return { observed: true, carrier: "session_bound", runtime: "observed", cursor };
-        if (input.isCarrierAlive && !await input.isCarrierAlive()) {
+        if (input.isCarrierAlive && await input.isCarrierAlive() === false) {
           return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "carrier_gone" };
         }
         if (now() >= deadline) return { observed: false, carrier: authority.sessionBound ? "session_bound" : "prepared", runtime: "not_observed", cursor, reason: "timeout" };
