@@ -10,7 +10,8 @@ import { TaskChangeDelivery, taskPollMs, type TaskDeliveryMembershipPort } from 
 import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding } from "../src/utils/recipient-delivery-lifecycle";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD } from "../src/utils/sync-liveness-settings";
-import { clearTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
+import { clearTeamFooter, initializeTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
+import { teamTerminalTitle } from "../src/utils/team-labels";
 import { loadWorkerResourcePolicy, materializeWorkerAggregate, ownsWorkerAggregate, projectWorkerTools, removeWorkerAggregate, type WorkerResourcePolicy } from "../src/utils/worker-resource-projection";
 import type { PiSessionCurrentWorkerMember, PiSessionTeamQueryPort } from "../src/team-authority/pi-session-team-query";
 import { placeSessionTerminal, type TeamIdentitySource, type TeamSessionAdmission } from "../src/utils/session-terminal";
@@ -94,8 +95,12 @@ export function createPiTeamSessionAdapter(options: {
   let workerActiveToolBaseline: string[] | undefined;
   const settingsWarnings = createSettingsWarningPresenter();
   let doctorGeneration = 0;
+  let titleOwned = false;
+  let titleGeneration = 0;
+  const titleTimers = new Set<ReturnType<typeof setTimeout>>();
   const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
 
+  initializeTeamFooter(pi);
   const modelToolJourney = () => getModelToolJourney();
   // Every Pi Team Bright message to the model passes this gate.
   const compactionGate = new CompactionDeliveryGate({
@@ -388,14 +393,53 @@ async function runPtbAction(command: PtbAction, ctx: any): Promise<void> {
   }
 }
 
+function releaseTeamTitle(ctx: any) {
+  titleGeneration++;
+  for (const timer of titleTimers) clearTimeout(timer);
+  titleTimers.clear();
+  if (!titleOwned) return;
+  titleOwned = false;
+  // Re-emit only the exact current name to restore Pi's default title.
+  // This chooses no new name; leader/unbound name ownership remains unchanged.
+  try { pi.setSessionName?.(ctx.sessionManager.getSessionName?.() ?? ""); }
+  catch { console.warn("[pi-teams] Pi's default terminal title could not be restored."); }
+}
+
+function clearTeamProjection(ctx: any) {
+  clearTeamFooter(ctx, pi);
+  releaseTeamTitle(ctx);
+}
+
 async function refreshTeamFooter(ctx: any) {
   if (!ctx?.ui) return undefined;
+  const generation = ++titleGeneration;
   footerModel = ctx?.model ?? footerModel;
-  return syncTeamFooter(pi, ctx, {
+  const binding = await syncTeamFooter(pi, ctx, {
     teamName,
     role: agentName,
     membershipId: currentMembershipId,
   }, () => footerModel);
+  if (generation !== titleGeneration) return undefined;
+  if (!binding) { releaseTeamTitle(ctx); return undefined; }
+  // setSessionName can replace the terminal title. Apply our label after it.
+  const label = teamTerminalTitle(binding.teamName, binding.role);
+  try {
+    ctx.ui.setTitle?.(label);
+    terminal?.setTitle(label);
+    titleOwned = true;
+  } catch { console.warn("[pi-teams] Team terminal title could not be set."); }
+  return binding;
+}
+
+function scheduleTeamTitleRefresh(ctx: any) {
+  for (const delay of [500, 2000, 5000]) {
+    const timer = setTimeout(() => {
+      titleTimers.delete(timer);
+      void refreshTeamFooter(ctx);
+    }, delay);
+    timer.unref?.();
+    titleTimers.add(timer);
+  }
 }
 
 function stopSyncNudgeConductor() {
@@ -610,7 +654,7 @@ async function refuseTeamSession(
   currentMembershipId = undefined;
   ctx?.ui?.notify?.(admission.reason, "error");
   ctx?.ui?.setStatus?.("pi-teams", shutdownCandidate ? "startup admission refused" : "terminal backend mismatch");
-  clearTeamFooter(ctx);
+  clearTeamProjection(ctx);
   if (admission.exitProcess) ctx?.shutdown?.();
 }
 
@@ -636,7 +680,8 @@ function registerSessionHooks() {
   leaderContext = ctx;
   holdWarningContext = ctx;
   footerModel = ctx.model;
-  clearTeamFooter(ctx);
+  clearTeamProjection(ctx);
+  let projectionBound = false;
 
   if (event.reason === "fork") {
     // A fork is a new Session identity, not a continuation of the source
@@ -710,18 +755,8 @@ function registerSessionHooks() {
       currentMembershipId = startup.member!.membershipId;
     }
     ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
-    if (terminal) {
-      const fullTitle = teamName ? `${teamName}: ${agentName}` : agentName;
-      const setIt = () => {
-        if ((ctx.ui as any).setTitle) (ctx.ui as any).setTitle(fullTitle);
-        terminal.setTitle(fullTitle);
-      };
-      setIt();
-      setTimeout(setIt, 500);
-      setTimeout(setIt, 2000);
-      setTimeout(setIt, 5000);
-    }
-
+    // Establish the Worker-owned Session name before any Task delivery activates.
+    projectionBound = !!await refreshTeamFooter(ctx);
     if (teamName) {
       await activateRecipientDeliveries(ctx);
     }
@@ -761,7 +796,8 @@ function registerSessionHooks() {
     leaderRunSettled = event.reason === "resume" || event.reason === "reload";
     await startSyncNudgeConductor(ctx);
   }
-  await refreshTeamFooter(ctx);
+  if (!isTeammate) projectionBound = !!await refreshTeamFooter(ctx);
+  if (projectionBound) scheduleTeamTitleRefresh(ctx);
 });
 
 pi.on("session_shutdown", async (event, ctx) => {
@@ -788,12 +824,12 @@ pi.on("session_shutdown", async (event, ctx) => {
   }
   stopDeliveries();
   taskGraphPane.shutdown();
-  clearTeamFooter(ctx);
+  clearTeamProjection(ctx);
 });
 
 pi.on("session_before_switch", () => { doctorGeneration++; });
 pi.on("session_before_fork", () => { doctorGeneration++; });
-pi.on("session_tree", () => { compactionGate.reset(); doctorGeneration++; });
+pi.on("session_tree", (_event, ctx) => { compactionGate.reset(); doctorGeneration++; clearTeamProjection(ctx); });
 
 pi.on("model_select", async (event) => {
   footerModel = event.model;
@@ -881,12 +917,13 @@ pi.on("turn_end", async (event, ctx) => {
   await recipientDeliveries.commitPresentedAfterSuccessfulTurn(stopReason);
 });
 
+pi.on("session_info_changed", async (_event, ctx) => {
+  if (titleOwned) await refreshTeamFooter(ctx);
+});
+
 pi.on("turn_start", async (_event, ctx) => {
   await refreshTeamFooter(ctx);
   if (isTeammate) {
-    const fullTitle = teamName ? `${teamName}: ${agentName}` : agentName;
-    if ((ctx.ui as any).setTitle) (ctx.ui as any).setTitle(fullTitle);
-    if (terminal) terminal.setTitle(fullTitle);
     if (teamName) {
       await writeCurrentTeammateRuntime(ctx, {
         lastHeartbeatAt: Date.now(),
@@ -958,7 +995,7 @@ pi.on("before_agent_start", async (event, ctx) => {
           stopDeliveries();
           teamName = null;
           currentMembershipId = undefined;
-          clearTeamFooter(leaderContext);
+          clearTeamProjection(leaderContext);
         }
         return result;
       },

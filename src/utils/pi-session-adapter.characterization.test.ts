@@ -17,6 +17,7 @@ import { SyncNudgeConductor } from "./sync-nudge-conductor";
 import { TaskChangeDelivery } from "./task-delivery";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
+import * as teamLabels from "./team-labels";
 
 const createdTeams: string[] = [];
 
@@ -71,12 +72,15 @@ function context(sessionFile: string) {
 }
 
 function extension(activeTools = ["foreign_extension_tool", "team_create", "team_sync"]) {
+  // Binding characterization keeps explicit fixture names; naming has its own tests.
+  vi.spyOn(teamLabels, "loadTeamDatePrefix").mockReturnValue(false);
   const handlers = new Map<string, (event: any, ctx: any) => Promise<void>>();
   const commands = new Map<string, { handler(args: string, ctx: any): Promise<void> }>();
   const registrations: string[] = [];
   const tools = new Map<string, any>();
   let active = [...activeTools];
   const setActiveTools = vi.fn((names: string[]) => { active = [...names]; });
+  const setSessionName = vi.fn();
   piTeams({
     on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
     registerCommand(name: string, command: { handler(args: string, ctx: any): Promise<void> }) { commands.set(name, command); },
@@ -84,12 +88,13 @@ function extension(activeTools = ["foreign_extension_tool", "team_create", "team
     registerMessageRenderer() {},
     sendMessage() {},
     sendUserMessage() {},
+    setSessionName,
     getThinkingLevel: () => "high",
     getActiveTools: () => active,
     getAllTools: () => registrations.map((name) => ({ name })),
     setActiveTools,
   } as never);
-  return Object.assign(handlers, { commands, registrations, tools, setActiveTools });
+  return Object.assign(handlers, { commands, registrations, tools, setActiveTools, setSessionName });
 }
 
 async function createTeam(name: string, sessionFile: string) {
@@ -568,6 +573,45 @@ describe("registered Pi Session adapter characterization", () => {
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(undefined);
   });
 
+  it("never chooses a leader Session name and releases with only the current name", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const titles: string[] = [];
+    setAdapter(terminal("fake", titles));
+    const name = teamName("leader-title");
+    const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const config = await createTeam(name, sessionFile);
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: 1 }, config.members[0].membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    const ctx = context(sessionFile);
+    const handlers = extension();
+    handlers.setSessionName.mockImplementation((label: string) => {
+      ctx.sessionManager.getSessionName.mockReturnValue(label);
+      // Pi's synchronous session_info_changed listener owns this decoration.
+      ctx.ui.setTitle(`native-default:${label}`);
+    });
+    await handlers.get("session_start")!({ reason: "resume" }, ctx);
+    expect(handlers.setSessionName).not.toHaveBeenCalled();
+    expect(ctx.sessionManager.getSessionName()).toBeUndefined();
+    expect(ctx.ui.setTitle).toHaveBeenLastCalledWith(`leader-${name}`);
+    expect(titles).toEqual([`leader-${name}`]);
+    await handlers.get("turn_start")!({}, ctx);
+    expect(ctx.ui.setTitle).toHaveBeenLastCalledWith(`leader-${name}`);
+    ctx.sessionManager.getSessionName.mockReturnValue("Human label");
+    ctx.ui.setTitle("native-default:Human label");
+    await handlers.get("session_info_changed")!({ name: "Human label" }, ctx);
+    expect(ctx.ui.setTitle).toHaveBeenLastCalledWith(`leader-${name}`);
+    expect(handlers.setSessionName).not.toHaveBeenCalled();
+    await handlers.get("session_shutdown")!({ reason: "quit" }, ctx);
+    expect(handlers.setSessionName).toHaveBeenCalledExactlyOnceWith("Human label");
+    expect(ctx.ui.setTitle).toHaveBeenLastCalledWith("native-default:Human label");
+    const compactCount = titles.length;
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(titles).toHaveLength(compactCount);
+  });
+
   it("sets and refreshes Worker UI and terminal titles on the documented timer schedule", async () => {
     vi.useFakeTimers();
     vi.stubEnv("PI_AGENT_NAME", "worker");
@@ -587,15 +631,28 @@ describe("registered Pi Session adapter characterization", () => {
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     const ctx = context(sessionFile);
     const handlers = extension();
+    const renameHooks: Promise<void>[] = [];
+    handlers.setSessionName.mockImplementation((label: string) => {
+      ctx.sessionManager.getSessionName.mockReturnValue(label);
+      renameHooks.push(handlers.get("session_info_changed")!({ name: label }, ctx));
+    });
 
     await handlers.get("session_start")!({ reason: "resume" }, ctx);
-    expect(ctx.ui.setTitle).toHaveBeenCalledWith(`${name}: worker`);
-    expect(titles).toEqual([`${name}: worker`]);
+    expect(ctx.ui.setTitle).toHaveBeenCalledWith("worker");
+    expect(titles).toEqual(["worker"]);
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(titles).toEqual([`${name}: worker`, `${name}: worker`, `${name}: worker`, `${name}: worker`]);
+    expect(titles).toEqual(["worker", "worker", "worker", "worker"]);
 
     await handlers.get("turn_start")!({}, ctx);
     expect(ctx.ui.setTitle).toHaveBeenCalledTimes(5);
     expect(titles).toHaveLength(5);
+    expect(handlers.setSessionName).toHaveBeenCalledExactlyOnceWith(`${name}/worker`);
+    expect(handlers.setSessionName.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(DirectMessageDelivery.prototype.start).mock.invocationCallOrder[0]);
+    ctx.sessionManager.getSessionName.mockReturnValue("Foreign title");
+    await handlers.get("session_info_changed")!({ name: "Foreign title" }, ctx);
+    await Promise.all(renameHooks);
+    expect(ctx.sessionManager.getSessionName()).toBe(`${name}/worker`);
+    expect(handlers.setSessionName).toHaveBeenCalledTimes(2);
+    expect(ctx.ui.setTitle).toHaveBeenLastCalledWith("worker");
   });
 });

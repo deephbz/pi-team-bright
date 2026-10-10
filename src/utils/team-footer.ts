@@ -2,11 +2,12 @@ import {
   FooterComponent,
   type ExtensionAPI,
   type ExtensionContext,
-  type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { Member } from "../team-authority/contracts";
 import { assertCurrentSessionBinding } from "./teams";
+import { TeamHudPublisher } from "./team-hud";
+import { teamSessionName } from "./team-labels";
 
 export const TEAM_FOOTER_STATUS_KEYS = ["00-pi-teams", "pi-teams"] as const;
 
@@ -48,25 +49,13 @@ export async function resolveTeamFooterBinding(
 
   try {
     const member = await assertCurrentSessionBinding(teamName, role, sessionFile);
-    if (!sameMembership(candidate, member)) return undefined;
+    if (!sameMembership(candidate, member) || ctx.sessionManager.getSessionFile() !== sessionFile) return undefined;
     return { teamName, role, membershipId: member.membershipId, sessionFile };
   } catch {
     // This is a projection only. Stale/forked/unbound Sessions display no Team
     // identity; the authoritative operation still surfaces its own error.
     return undefined;
   }
-}
-
-export function latestMessageClock(entries: readonly Pick<SessionEntry, "type" | "timestamp">[]): string | undefined {
-  let latest = Number.NEGATIVE_INFINITY;
-  for (const entry of entries) {
-    if (entry.type !== "message" && entry.type !== "custom_message") continue;
-    const timestamp = new Date(entry.timestamp).getTime();
-    if (Number.isFinite(timestamp) && timestamp > latest) latest = timestamp;
-  }
-  if (!Number.isFinite(latest)) return undefined;
-  const date = new Date(latest);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 /**
@@ -119,14 +108,8 @@ export function teamFooterFactory(
       render(width: number): string[] {
         const lines = base.render(width);
         if (lines.length === 0 || width <= 0) return lines;
-        const clock = latestMessageClock(ctx.sessionManager.getEntries());
         const roleTone = binding.role === "team-lead" ? "accent" : "dim";
-        const prefix = [
-          theme.fg("accent", `[${binding.teamName} · `),
-          theme.fg(roleTone, binding.role),
-          ...(clock ? [theme.fg("dim", ` · ${clock}`)] : []),
-          theme.fg("accent", "] "),
-        ].join("");
+        const prefix = theme.fg(roleTone, `[${binding.role}] `);
         lines[0] = truncateToWidth(prefix + lines[0], width, theme.fg("dim", "..."));
         return lines;
       },
@@ -134,26 +117,96 @@ export function teamFooterFactory(
   };
 }
 
-/** Restore Pi's footer, then install the Team prefix only for an exact binding. */
+type TeamFooterApi = Pick<ExtensionAPI, "getThinkingLevel"> & Partial<Pick<ExtensionAPI, "events" | "setSessionName">>;
+type FooterProjection = {
+  hud: TeamHudPublisher;
+  epoch: number;
+  ctx?: FooterContext;
+  binding?: TeamFooterBinding;
+  getModel?: () => ExtensionContext["model"];
+  wrapped: boolean;
+};
+const projections = new WeakMap<object, FooterProjection>();
+
+function renderFallback(pi: TeamFooterApi, state: FooterProjection): void {
+  const ui = state.ctx?.ui;
+  if (!ui) return;
+  if (state.hud.composerPresent) {
+    // The composer announces itself before installing its footer.
+    if (state.wrapped) ui.setFooter?.(undefined);
+    state.wrapped = false;
+    return;
+  }
+  if (state.ctx?.mode === "tui" && state.binding && state.getModel && ui.setFooter) {
+    ui.setFooter(teamFooterFactory(pi, state.ctx, state.binding, state.getModel));
+    state.wrapped = true;
+  } else {
+    ui.setFooter?.(undefined);
+    state.wrapped = false;
+  }
+}
+
+/** Subscribe before Session hooks so a composer-first load cannot lose presence. */
+export function initializeTeamFooter(pi: TeamFooterApi): void {
+  if (projections.has(pi)) return;
+  const state = { epoch: 0, wrapped: false } as FooterProjection;
+  state.hud = new TeamHudPublisher(pi, (present) => {
+    renderFallback(pi, state);
+    if (!present) return;
+    const { ctx, binding, epoch } = state;
+    if (!ctx || !binding) { state.hud.update(null); return; }
+    void resolveTeamFooterBinding(ctx, binding).then((current) => {
+      if (epoch !== state.epoch || state.binding !== binding || !state.hud.composerPresent) return;
+      state.binding = current;
+      state.hud.update(current ? { kind: "identity", team: current.teamName, role: current.role, membershipId: current.membershipId } : null);
+    });
+  });
+  projections.set(pi, state);
+}
+
+/** Publish exact binding identity in every mode; the wrapper is TUI fallback only. */
 export async function syncTeamFooter(
-  pi: Pick<ExtensionAPI, "getThinkingLevel">,
+  pi: TeamFooterApi,
   ctx: FooterContext,
   candidate: TeamFooterCandidate,
   getModel: () => ExtensionContext["model"],
 ): Promise<TeamFooterBinding | undefined> {
-  const ui = ctx.ui as Partial<FooterContext["ui"]>;
-  for (const key of TEAM_FOOTER_STATUS_KEYS) ui.setStatus?.(key, undefined);
-  ui.setFooter?.(undefined);
-  if (ctx.mode !== "tui") return undefined;
-
+  initializeTeamFooter(pi);
+  const state = projections.get(pi)!;
+  const epoch = ++state.epoch;
+  state.ctx = ctx;
+  state.binding = undefined;
+  state.getModel = getModel;
+  state.hud.update(null);
+  renderFallback(pi, state);
+  for (const key of TEAM_FOOTER_STATUS_KEYS) ctx.ui.setStatus?.(key, undefined);
   const binding = await resolveTeamFooterBinding(ctx, candidate);
-  if (!binding || !ui.setFooter) return undefined;
-  ui.setFooter(teamFooterFactory(pi, ctx, binding, getModel));
+  if (epoch !== state.epoch) return undefined;
+  state.binding = binding;
+  if (binding) {
+    const workerName = teamSessionName(binding.teamName, binding.role);
+    if (workerName !== undefined && ctx.sessionManager.getSessionName?.() !== workerName) {
+      try { pi.setSessionName?.(workerName); }
+      catch { console.warn("[pi-teams] Session label could not be set; exact binding is unchanged."); }
+    }
+    // Session naming emits hooks. A replaced generation cannot publish afterward.
+    if (epoch !== state.epoch) return undefined;
+    state.hud.update({ kind: "identity", team: binding.teamName, role: binding.role, membershipId: binding.membershipId });
+  }
+  renderFallback(pi, state);
   return binding;
 }
 
-export function clearTeamFooter(ctx: Pick<FooterContext, "ui">): void {
+export function clearTeamFooter(ctx: Pick<FooterContext, "ui">, pi?: TeamFooterApi): void {
   const ui = ctx.ui as Partial<FooterContext["ui"]>;
   for (const key of TEAM_FOOTER_STATUS_KEYS) ui.setStatus?.(key, undefined);
-  ui.setFooter?.(undefined);
+  const state = pi && projections.get(pi);
+  if (!state) { ui.setFooter?.(undefined); return; }
+  state.epoch++;
+  state.binding = undefined;
+  state.ctx = undefined;
+  state.getModel = undefined;
+  state.hud.update(null);
+  if (!state.hud.composerPresent) ui.setFooter?.(undefined);
+  state.wrapped = false;
 }

@@ -163,6 +163,7 @@ async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle, adapterOver
   const cwd = path.join(root, "leader-project");
   fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(cwd, { recursive: true });
+  fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false } } }));
   vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
   setAdapter({
     name: "herdr",
@@ -196,6 +197,13 @@ async function lifecycleCreateFixture(lifecycle: ModelToolLifecycle, adapterOver
 }
 
 describe("DurableModelToolTeamPort sync liveness policy", () => {
+  it("prefixes team_create names by default and honors global opt-out", async () => {
+    const prefixed = await createTeamWithPaneSettings(undefined, {});
+    expect(prefixed.createArgs[0]).toMatch(/^\d{8}-pane-settings-/);
+    expect(prefixed.result.team.name).toBe(prefixed.createArgs[0]);
+    const plain = await createTeamWithPaneSettings(undefined, { date_prefix: false });
+    expect(plain.createArgs[0]).toMatch(/^pane-settings-/);
+  });
   it("persists resolved auto-sync defaults when a new Team epoch is created", async () => {
     const { result, createArgs } = await createTeamWithPaneSettings(undefined, {});
     expect(result).toMatchObject({ kind: "created" });
@@ -244,7 +252,7 @@ describe("DurableModelToolTeamPort lifecycle callback", () => {
     const config = await teams.readConfig(name);
     expect(config.members[0].terminalTarget).toEqual({ backend: "herdr", kind: "pane", targetId: "leader-pane" });
     expect(currentTargetId).toHaveBeenCalledTimes(1);
-    expect(renamePane).toHaveBeenCalledExactlyOnceWith("leader-pane", `${name}-leader`);
+    expect(renamePane).toHaveBeenCalledExactlyOnceWith("leader-pane", `leader-${name}`);
     expect(lifecycle.teamCreated.mock.invocationCallOrder[0]).toBeLessThan(renamePane.mock.invocationCallOrder[0]);
   });
 

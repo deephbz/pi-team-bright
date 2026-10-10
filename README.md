@@ -192,6 +192,24 @@ without complete timing show `timing unavailable`. In Timeline, `+` and `-`
 zoom time, arrows pan, and Home restores the full time span. Neither view schedules or
 changes a Task.
 
+## Team identity labels and HUD
+
+New Teams use a local `YYYYMMDD-` date prefix unless the name already has one.
+Set global `pi_team_bright.team.date_prefix` to `false` to disable it. Existing
+Team names and Worker names stay unchanged. The resolved Team name must fit
+64 characters. Creation returns that canonical name; use it for later operations.
+
+A bound Worker Session name is `<team>/<worker>`. PTB restores that name on
+exact-binding sync when it differs. Equal names cause no rename event. Leader
+and unbound Session names belong to the human or Rarebit; PTB does not choose
+or change them. Names assigned by earlier PTB versions remain unchanged.
+The leader pane and terminal title show `leader-<team>`; a Worker shows `<worker>`.
+
+PTB publishes exact bound identity through the inline
+[HUD contract](src/utils/team-hud.ts). A `tui-footer` composer owns the footer
+while present. Without a composer, the PTB wrapper adds only `[<role>] ` to
+Pi's cwd line. Slot replay rechecks the binding; Session changes retract it.
+
 ## Delivery holds
 
 PTB holds model messages during native Pi compaction and during the
@@ -236,7 +254,7 @@ signal contract and executable checks.
   Bright copy violates the one-version-epoch rule and remains a documented
   installation risk. Herdr forwards the established Pi launch environment
   allowlist into Worker launches. Team creation names the recorded leader pane
-  `<team name>-leader`. A naming failure warns without blocking Team creation.
+  `leader-<team name>`. A naming failure warns without blocking Team creation.
   It names the exact pane returned by the split
   with the stable Worker name before agent startup. A presentation-label failure
   is warned and traced but does not block Worker coordination.
