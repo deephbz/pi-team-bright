@@ -374,13 +374,15 @@ describe("Team topology/lifecycle lease", () => {
       isWindowAlive: () => false,
     });
     const tools = registerExtension();
-    await expect(tools.get("team_create")!.execute(
+    const invalid = await tools.get("team_create")!.execute(
       "create-empty",
       { name: "", purpose: "invalid" },
       undefined,
       undefined,
       context("/tmp/empty-team-lead.jsonl"),
-    )).rejects.toThrow(/must not be empty/i);
+    );
+    expect(invalid.details).toMatchObject({ kind: "unavailable", reason: "team_authority_unavailable", state_changed: false });
+    expect(invalid.details.message).toMatch(/must not be empty/i);
     const unavailable = await tools.get("ensure_worker")!.execute(
       "ensure-empty",
       { name: "", scope: "x" },

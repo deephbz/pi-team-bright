@@ -19,6 +19,11 @@ fs.mkdirSync(home, { recursive: true });
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 process.env.PI_TEAMS_VITEST_HOME = home;
+const agentDir = path.join(home, ".pi", "agent");
+fs.mkdirSync(agentDir, { recursive: true });
+// Fixed-name fixtures opt out of calendar naming and never read operator settings.
+fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false } } }));
+delete process.env.PI_CODING_AGENT_DIR;
 // A test runner can itself be a live Worker process. Do not let that outer
 // Membership, launch capability, exact extension, or disposable aggregate
 // become authority or mutable state inside an isolated fixture.
