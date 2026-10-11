@@ -54,6 +54,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
   fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
     model_roles: { qa: { model: "fixture/model", thinking: "low", use: "Tool result QA Worker" } },
     default_model_role: "qa",
+    team: { date_prefix: false },
   } }));
   process.env.PI_CODING_AGENT_DIR = agentDir;
   delete process.env.PI_TEAM_NAME;

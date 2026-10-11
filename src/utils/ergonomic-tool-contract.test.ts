@@ -62,6 +62,7 @@ beforeEach(() => {
   fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
     model_roles: { fixture: { model: "fixture/model", thinking: "low", use: "Contract tests" } },
     default_model_role: "fixture",
+    team: { date_prefix: false },
     worker: { agents: { append_global: promptPath } },
   } }));
   vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
