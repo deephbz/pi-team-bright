@@ -83,8 +83,8 @@ import { assembleToolResult } from "../src/model-tool-contract/result-projection
  *   may be a shim path, so the safest relaunch command is plain `pi`
  */
 function getPiLaunchArgv(): string[] {
-  const argv1 = process.argv[1];
-  const execPath = process.execPath;
+  const argv1 = hostEnv().process.argv[1];
+  const execPath = hostEnv().process.execPath;
 
   // Regular Node install: relaunch the actual CLI script with node.
   if (argv1) {
