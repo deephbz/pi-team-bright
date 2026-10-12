@@ -17,7 +17,7 @@ vi.mock("../utils/team-pane-placement", () => ({ teamPanePlacement: () => ({ lea
 vi.mock("../utils/team-terminal", async () => {
   const { HerdrAdapter } = await import("../adapters/herdr-adapter.js");
   const terminal = new HerdrAdapter();
-  terminal.prepareSpawn = () => { expect(fixture.leased).toBe(false); fixture.splits++; return "pane"; };
+  terminal.prepareSpawnAsync = async () => { expect(fixture.leased).toBe(false); fixture.splits++; return "pane"; };
   terminal.startPrepared = () => {
     expect(fixture.leased).toBe(false);
     expect(fixture.members[0].terminalTarget?.targetId).toBe("pane");

@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import { getAdapterByName, getTerminalAdapter } from "../adapters/terminal-registry";
 import type { TeamConfig, TerminalTarget } from "../team-authority/contracts";
 import type { TerminalAdapter } from "./terminal-adapter";
@@ -35,6 +36,12 @@ export function terminalForTeam(config: TeamConfig): TerminalAdapter {
 export function currentTerminalForTeam(config: TeamConfig): TerminalAdapter {
   const terminal = terminalForTeam(config);
   if (!config.terminalBackend) return terminal;
+  if (config.terminalBackend === "herdr") {
+    const env = hostEnv().process.env;
+    if (env.HERDR_ENV !== "1" || !env.HERDR_PANE_ID || !env.HERDR_TAB_ID || !terminal.isDirectCarrier()) throw new Error("Herdr launch requires a direct pane-local Team carrier.");
+    // Bounded async placement proves the target. No synchronous server detection precedes it.
+    return terminal;
+  }
   const current = getTerminalAdapter();
   if (!current || current.name !== config.terminalBackend) {
     throw new Error(`Team ${config.name} is bound to ${config.terminalBackend}, but this Pi process is running in ${current?.name || "no detected terminal backend"}; refusing to mix terminal backends in one Team epoch.`);

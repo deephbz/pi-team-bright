@@ -69,9 +69,10 @@ export class WorkerLaunchBridge {
   async ensureWorker(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
     return withSemanticTrace("worker_launch", { teamName: request.teamName, workerName: request.workerName }, async () => {
       // The name lease serializes first Membership creation. It ends before pane creation.
+      const deadline = hostEnv().clock.now() + 9000;
       const claim = await withLock(path.join(teamDir(request.teamName), `launch-${encodeURIComponent(request.workerName)}`), () => this.claim(request));
       if (!("config" in claim)) return claim;
-      return this.launch(request, claim);
+      return this.launch(request, claim, deadline);
     });
   }
   private async claim(request: WorkerLaunchRequest): Promise<LaunchClaim | WorkerLaunchResult> {
@@ -111,7 +112,7 @@ export class WorkerLaunchBridge {
     await this.dependencies.lifecyclePublication.recordWorkerPrepared({ teamName: request.teamName, workerName: prepared.name, membershipId: prepared.membershipId! });
     return { member: prepared, config, action: "created" };
   }
-  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim): Promise<WorkerLaunchResult> {
+  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number): Promise<WorkerLaunchResult> {
     const { member, config } = claim;
     const launchId = member.launch!.launchId;
     const terminal = currentTerminalForTeam(config);
@@ -129,7 +130,7 @@ export class WorkerLaunchBridge {
         const last = options.panePlacement?.workerPaneIds.at(-1);
         terminal.setSpawnContext(last?.startsWith("iterm_") ? { lastSessionId: last.replace("iterm_", "") } : {});
       }
-      const terminalId = terminal instanceof HerdrAdapter ? terminal.prepareSpawn(options)
+      const terminalId = terminal instanceof HerdrAdapter ? await terminal.prepareSpawnAsync(options, deadline)
         : config.separateWindows ? terminal.spawnWindow(options) : terminal.spawn(options);
       target = { terminalId, isWindow: !!config.separateWindows, backend: terminal.name };
       // This CAS records the target before Herdr starts the process.
