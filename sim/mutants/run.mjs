@@ -10,6 +10,9 @@ const ids = process.argv.slice(2).length ? process.argv.slice(2) : ['M1', 'M2', 
 if (ids.some(id => !/^M[1-6]$/.test(id))) throw new Error('Use M1 through M6');
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const revision = git('rev-parse', 'HEAD');
+const label = process.env.PI_MUTANT_RUN_LABEL ?? 'gate';
+if (!/^[a-z][a-z0-9-]*$/.test(label)) throw new Error('Use a lowercase run label');
+const resultsDirectory = label === 'gate' ? 'mutants' : `mutants-${label}`;
 const scratch = fs.mkdtempSync(path.join(root, '.mutant-scratch-'));
 const run = (command, args, cwd = scratch, env = process.env) => {
   const result = spawnSync(command, args, { cwd, env, stdio: 'inherit' });
@@ -25,13 +28,13 @@ try {
   fs.symlinkSync(fs.realpathSync(path.join(root, 'node_modules')), path.join(scratch, 'node_modules'), 'dir');
   for (const id of ids) {
     const started = Date.now();
-    const output = path.join(root, 'sim/results/mutants', id);
+    const output = path.join(root, 'sim/results', resultsDirectory, id);
     fs.mkdirSync(output, { recursive: true });
     const patch = path.join(scratch, 'sim/mutants', `${id}.patch`);
     const files = [...fs.readFileSync(patch, 'utf8').matchAll(/^\+\+\+ b\/(.+)$/gm)].map(m => m[1]);
     const before = files.map(file => digest(path.join(scratch, file)));
     const test = mode => run('npx', ['--no-install', 'vitest', 'run', '--config', 'sim/mutants/gate.config.ts'], scratch,
-      { ...process.env, PI_MUTANT: id, PI_MUTANT_MODE: mode, PI_MUTANT_OUTPUT: output });
+      { ...process.env, PI_MUTANT: id, PI_MUTANT_MODE: mode, PI_MUTANT_OUTPUT: output, PI_MUTANT_RUN_LABEL: label });
     const diagnosticName = { M4: 'captures the snapshot watermark before Task hydration', M6: 'commits only native persistence and stamps the page boundary, never the journal head' }[id];
     const diagnostic = phase => {
       if (!diagnosticName) return;
