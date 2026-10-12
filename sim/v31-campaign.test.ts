@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import fc from "fast-check";
@@ -24,6 +25,8 @@ const monitors = Object.entries({ ...safety, ...liveness, ...witnesses }).flatMa
 });
 const bounds = { maxSteps: 100000, maxVirtualMs: 3600000 };
 const seed = 20261014;
+// Capture the tested source before actors enter the guarded simulated world.
+const productionRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: path.resolve(__dirname, ".."), encoding: "utf8" }).trim();
 const runs = Number(process.env.PI_SIM_CAMPAIGN_RUNS ?? 1000);
 const output = path.join(__dirname, "results", runs < 1000 ? "v31-smoke" : "v31");
 const write = (name: string, value: unknown) => { fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, name), JSON.stringify(value, null, 2) + "\n"); };
@@ -157,7 +160,7 @@ it("records v3.1 fixtures, baseline counterexamples, generated schedules and sca
   accept(shared); write(`${shared.trace.id}.trace.json`, shared.trace); write(`${shared.trace.id}.receipt.json`, shared.receipt);
   const minimized = [];
   for (const [id, original] of representatives) { console.info(`shrinking ${id} from ${original.trace.id}`); minimized.push(await minimize(original, id)); }
-  const report = { schema: "ptb-sim-v31-campaign/1", source: "synthetic", productionRevision: "1a8a3f663ab04622ee909823ae349da0f94ce245", runnerVersion: RUNNER_VERSION,
+  const report = { schema: "ptb-sim-v31-campaign/1", source: "synthetic", productionRevision, runnerVersion: RUNNER_VERSION,
     monitorIds: monitors.map(m => m.id), bounds, monitorOptions, temporalAssumptions: "E1-E4 require a fault-free 60000ms window after their trigger; generated schedules clear faults by15000ms and finish at100000ms. Verdicts from other windows need assumption review.", generated: { seed, runs, families, samples }, baselineReceipts,
     scale: { isolatedTeams: scaleTeams, workersPerTeam: scaleWorkers, sharedWorld: { teams: 3, workersPerTeam: 10 }, gap: "20x50 shared-world scheduling remains untested" }, outcomes, minimized, timings: { campaignMs, totalIncludingShrinkAndScaleMs: performance.now() - started } };
   write("campaign.json", report); fs.rmSync(path.join(output, "progress.json"), { force: true });

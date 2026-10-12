@@ -25,6 +25,13 @@ export interface TeamLifecyclePublication {
     workerName: string;
     membershipId: string;
   }): Promise<{ cursor: string }>;
+  /** Caller holds the Membership lease. Failure must prevent runtime replacement. */
+  recordWorkerGenerationExit(input: {
+    teamName: string;
+    member: import("./contracts").Member;
+    status: import("../utils/runtime").AgentRuntimeStatus;
+    terminalBackend?: string;
+  }): Promise<void>;
   recordWorkerSessionBound(input: {
     teamName: string;
     workerName: string;

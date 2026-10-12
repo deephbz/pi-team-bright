@@ -14,6 +14,7 @@ const fixture = vi.hoisted(() => ({
   writeRuntime: vi.fn(async (..._args: unknown[]) => ({})),
   bind: vi.fn(async () => fixture.current),
   publish: vi.fn(async () => ({ cursor: "1" })),
+  publishExit: vi.fn(async () => {}),
   failed: vi.fn(async () => ({ cursor: "1" })),
   update: vi.fn(async () => undefined),
   runtimePath: "/tmp/pi-team-session-boundary.json",
@@ -57,6 +58,7 @@ function publication(): TeamLifecyclePublication {
     readEventCursor: () => "0",
     recordWorkerPrepared: async () => ({ cursor: "0" }),
     recordWorkerStopped: async () => ({ cursor: "0" }),
+    recordWorkerGenerationExit: () => { fixture.events.push("generation-exit"); return fixture.publishExit(); },
     recordWorkerSessionBound: () => { fixture.events.push("session-bound"); return fixture.publish(); },
     recordWorkerFailed: () => { fixture.events.push("failed-event"); return fixture.failed(); },
     observeWorkerStartup: async () => ({ observed: false, carrier: "prepared", runtime: "not_observed", cursor: "0", reason: "timeout" }),
@@ -75,6 +77,7 @@ function reset() {
   fixture.writeRuntime.mockReset().mockResolvedValue({});
   fixture.bind.mockReset().mockImplementation(async () => fixture.current);
   fixture.publish.mockReset().mockResolvedValue({ cursor: "1" });
+  fixture.publishExit.mockReset().mockResolvedValue(undefined);
   fixture.failed.mockReset().mockResolvedValue({ cursor: "1" });
   fixture.update.mockReset().mockResolvedValue(undefined);
   try { fs.unlinkSync(fixture.runtimePath); } catch {}
@@ -165,6 +168,19 @@ describe("Team Session lifecycle boundary", () => {
     const service = new TeamSessionLifecycleService(publication());
     await expect(service.admitWorker(workerInput)).resolves.toMatchObject({ kind: "admitted", action: "claim" });
     expect(fixture.events).toEqual(["current-lookup", "lease:worker-membership", "runtime-claim", "runtime-write", "bind", "session-bound"]);
+  });
+
+  it("keeps the predecessor runtime intact until its exit append succeeds", async () => {
+    reset(); fixture.current = member("worker", workerInput.sessionFile); fixture.config.members = [fixture.current];
+    fixture.runtimeStatus = { membershipId: "worker-membership", pid: 42, startedAt: 1, osBirthToken: "old", bootId: "boot" };
+    fixture.runtimeAdmission = { kind: "admitted", action: "claim", replaces: fixture.runtimeStatus };
+    fixture.publishExit.mockRejectedValueOnce(new Error("exit append failed"));
+    const service = new TeamSessionLifecycleService(publication());
+    await expect(service.admitWorker(workerInput)).rejects.toThrow("exit append failed");
+    expect(fixture.writeRuntime).not.toHaveBeenCalled(); expect(fixture.bind).not.toHaveBeenCalled();
+    fixture.events = [];
+    await expect(service.admitWorker(workerInput)).resolves.toMatchObject({ kind: "admitted", recovered: true });
+    expect(fixture.events).toEqual(["current-lookup", "lease:worker-membership", "runtime-claim", "generation-exit", "runtime-write", "bind", "session-bound"]);
   });
 
   it("does not rewrite runtime, bind, or publish twice for an already-current Worker PID", async () => {
