@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { ActorRef } from "./trace-format";
-import { json, object, type HistoryFact, type JsonObject, type ObservationStamp, type RuntimeFact, type LaunchFact, type Json } from "./history";
+import { json, object, type HistoryFact, type JsonObject, type ObservationStamp, type RuntimeFact, type LaunchFact, type Json, type CarrierJournalFact } from "./history";
 
 /** Reads persisted PTB bytes and public Pi branches. Never calls a PTB store or projection. */
 export class HistoryObserver {
@@ -79,12 +79,24 @@ export class HistoryObserver {
       try {
         const raw = object(JSON.parse(lines[index]!));
         if (!raw || typeof raw.type !== "string") throw new Error("Journal row is not a typed object");
+        const carrierRaw = object(raw.carrier);
+        const carrier: CarrierJournalFact | undefined = carrierRaw ? {
+          ...(typeof carrierRaw.field === "string" ? { field: carrierRaw.field } : {}),
+          ...(typeof carrierRaw.to === "string" ? { to: carrierRaw.to } : {}),
+          ...(object(carrierRaw.generation) ? { generation: object(carrierRaw.generation)! } : {}),
+          ...(object(carrierRaw.cause) ? { cause: object(carrierRaw.cause)! } : {}),
+          ...(typeof carrierRaw.paneId === "string" ? { paneId: carrierRaw.paneId } : {}),
+          ...(typeof carrierRaw.suspectedHumanStop === "boolean" ? { suspectedHumanStop: carrierRaw.suspectedHumanStop } : {}),
+          ...(typeof carrierRaw.nextActionHint === "string" ? { nextActionHint: carrierRaw.nextActionHint } : {}),
+        } : undefined;
+        const cursorSeq = typeof raw.cursor === "string" && /^\d+$/.test(raw.cursor) ? Number(raw.cursor) : undefined;
+        const seq = typeof raw.seq === "number" ? raw.seq : Number.isSafeInteger(cursorSeq) ? cursorSeq : undefined;
         this.emit({ kind: "journal.append", team, path: file, line: index + 1, event: {
-          raw, type: raw.type, ...(typeof raw.cursor === "string" ? { cursor: raw.cursor } : {}),
+          raw, ...(carrier ? { carrier } : {}), ...(seq === undefined ? {} : { seq }), type: raw.type, ...(typeof raw.cursor === "string" ? { cursor: raw.cursor } : {}),
           ...(typeof raw.at === "string" ? { at: raw.at } : {}), ...(typeof raw.phase === "string" ? { phase: raw.phase } : {}),
           ...(typeof raw.cause === "string" ? { cause: raw.cause } : {}), ...(typeof raw.paneId === "string" ? { paneId: raw.paneId } : {}),
           ...(typeof raw.suspectedHumanStop === "boolean" ? { suspectedHumanStop: raw.suspectedHumanStop } : {}),
-          ...(typeof raw.seq === "number" ? { seq: raw.seq } : {}), ...(typeof raw.worker === "string" ? { worker: raw.worker } : {}),
+          ...(typeof raw.worker === "string" ? { worker: raw.worker } : {}),
           ...(typeof raw.membershipId === "string" ? { membershipId: raw.membershipId } : {}), ...(object(raw.generation) ? { generation: object(raw.generation)! } : {}),
         } });
       } catch (error) { this.emit({ kind: "disk.invalid", team, path: file, text: lines[index]!, message: (error as Error).message }); }

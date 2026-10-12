@@ -66,7 +66,8 @@ export function generatedTrace(sample: Sample, id: string): WorldTrace {
       add(at, { kind: "human.closePane", pane: "pane-1" });
       add(12000, { kind: "fault.clear", source: "pi.start" }); break;
   }
-  sync(40000);
+  if (["contended-reservation", "crash-before-record"].includes(family)) add(12000, { kind: "fault.clear", source: "herdr" });
+  sync(100000);
   return { version: 1, id, source: "synthetic", assumptions: ["S-first-worker-pane-is-pane-1"], setup: { ptbVersion: "v3.1", teams: [] }, steps };
 }
 

@@ -15,8 +15,18 @@ export interface ProcessFact { actorKey: string; generation: ProcessGeneration; 
 export interface PaneFact { paneId: string; shellPid: number; agentPid?: number }
 export interface ToolResultFact { content?: Json[]; details?: JsonObject; isError?: boolean }
 export interface ObservationStamp { team: string; epoch: string; binding: string; from: number; through: number }
+export interface CarrierJournalFact {
+  field?: string;
+  to?: string;
+  generation?: JsonObject;
+  cause?: JsonObject;
+  paneId?: string;
+  suspectedHumanStop?: boolean;
+  nextActionHint?: string;
+}
 export interface JournalFact {
   raw: JsonObject;
+  carrier?: CarrierJournalFact;
   type: string;
   cursor?: string;
   seq?: number;
