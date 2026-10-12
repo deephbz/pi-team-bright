@@ -27,7 +27,7 @@ export class HerdrFake {
   spawn(id = `pane-${++this.sequence}`, env: Record<string, string> = {}): Pane {
     this.cite("A1", "new terminal has a shell before managed agent start");
     if (this.panes.has(id)) throw new Error(`Pane already exists: ${id}`);
-    const shell = this.processes.spawn(`shell:${id}`, { command: "shell" });
+    const shell = this.processes.spawn(`shell:${id}`, { command: "shell", identity: { processKind: "shell" } });
     const pane: Pane = { id, shellPid: shell.pid, state: "unknown", env, rect: { x: 0, y: 0, width: 240, height: 80 } };
     this.panes.set(id, pane);
     this.onPane?.("pane.create", pane);
@@ -40,7 +40,10 @@ export class HerdrFake {
     if (this.agentLive(pane)) throw new Error("agent_pane_busy");
     const actorName = pane.env.PI_AGENT_NAME || name;
     const actor = pane.env.PI_TEAM_NAME ? `${pane.env.PI_TEAM_NAME}/${actorName}` : actorName;
-    const process = this.processes.spawn(actor, { parentPid: pane.shellPid });
+    const membershipId = pane.env.PI_TEAM_MEMBERSHIP_ID;
+    const process = this.processes.spawn(actor, { parentPid: pane.shellPid,
+      identity: membershipId ? { processKind: "worker_pi", membershipId } : { processKind: "other" },
+    });
     pane.agentPid = process.pid;
     pane.agentBirthToken = process.osBirthToken;
     pane.agentBootId = process.bootId;

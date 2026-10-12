@@ -1,5 +1,5 @@
-import type { HistoryEntry } from "../history";
-import { genKey, generationOf, lastAt, lastSequence, liveAt, notApplicable, ofKind, pass, violation, actorKey } from "./util";
+import type { HistoryEntry, JsonObject } from "../history";
+import { genKey, generationOf, liveAt, notApplicable, ofKind, pass, violation, actorKey } from "./util";
 import type { Verdict } from "./types";
 
 /** P1 (always): at most one admitted, current process generation per Membership. */
@@ -40,17 +40,23 @@ export function p2GoneMatchesWorldTruth(history: readonly HistoryEntry[]): Verdi
   return pass();
 }
 
-/** P3 (always): `process: live` is held only while its evidence is fresh. Needs the freshness deadline. */
-export function p3LiveIsFresh(history: readonly HistoryEntry[], options: { freshnessMs?: number } = {}): Verdict {
-  if (options.freshnessMs === undefined) return notApplicable("freshness deadline (not ruled)");
-  const claims = ofKind(history, "journal.append").filter(entry => entry.event.raw.field === "process" && entry.event.worker !== undefined);
-  if (!claims.length) return notApplicable("journal process claims");
-  for (const claim of claims) {
-    if (claim.event.raw.to !== "live") continue;
-    const deadline = claim.at + options.freshnessMs;
-    const next = claims.find(entry => entry.sequence > claim.sequence && entry.event.worker === claim.event.worker);
-    if (next && next.at > deadline) return violation(next.sequence, `${claim.event.worker} held live past its freshness deadline`);
-    if (!next && lastAt(history) > deadline) return violation(lastSequence(history), `${claim.event.worker} held live past its freshness deadline with no newer claim`);
+/** Ruled grace: a served live claim is a violation once its generation has been dead this long (virtual ms). */
+export const LIVE_GRACE_MS = 10000;
+
+/** P3 (always): a served `process: live` claim never names a generation world truth held dead for more than 10 s. */
+export function p3LiveIsFresh(history: readonly HistoryEntry[]): Verdict {
+  const claims = [
+    ...ofKind(history, "journal.append").filter(entry => entry.event.raw.field === "process" && entry.event.raw.to === "live")
+      .map(entry => ({ sequence: entry.sequence, at: entry.at, generation: entry.event.generation })),
+    ...ofKind(history, "tool.result").filter(entry => entry.result.details?.process === "live")
+      .map(entry => ({ sequence: entry.sequence, at: entry.at, generation: entry.result.details?.generation })),
+  ];
+  if (!claims.length) return notApplicable("served process: live claims");
+  for (const claim of claims.sort((a, b) => a.sequence - b.sequence)) {
+    const generation = generationOf(claim.generation);
+    if (!generation) return notApplicable("process: live claims without an exact generation (C2)");
+    const death = history.find(entry => entry.kind === "process.death" && entry.sequence < claim.sequence && genKey(entry.process.generation) === genKey(generation));
+    if (death && claim.at - death.at > LIVE_GRACE_MS) return violation(claim.sequence, `live claim for a generation dead since ${death.at} ms`);
   }
   return pass();
 }
@@ -75,14 +81,13 @@ export function p4ActMatchesWorldTruth(history: readonly HistoryEntry[]): Verdic
 
 const STOP_TOOLS = new Set(["worker_stop", "team_shutdown"]);
 
-/** P5 (always): every pane close cites a PTB stop request or a human action. */
+/** P5 (always): every PTB-origin pane close cites a PTB stop request. OS, human, setup and observer closes are not PTB acts. */
 export function p5ClosesCited(history: readonly HistoryEntry[]): Verdict {
   const closes = ofKind(history, "pane.close");
   if (!closes.length) return notApplicable("pane closures");
   for (const close of closes) {
     const origin = close.origin;
-    if (origin.kind === "human") continue;
-    if (origin.kind !== "ptb") return violation(close.sequence, `pane ${close.pane.paneId} closed by ${origin.kind} origin`);
+    if (origin.kind !== "ptb") continue;
     const cited = ofKind(history, "tool.call").some(
       call => call.sequence < close.sequence && STOP_TOOLS.has(call.name) && actorKey(call.actor) === actorKey(origin.actor),
     );
@@ -133,7 +138,33 @@ export function p7PublicationNeverWritesTasks(history: readonly HistoryEntry[]):
   return pass();
 }
 
-/** P8 (always): an eligible journal event below a stamp's cursor is represented by the branch or a snapshot. */
+/** The observation JSON that follows the first line of a page's text content (production `parseObservationContent` shape). */
+function observationPayload(content: unknown): JsonObject | undefined {
+  const text = typeof content === "string" ? content : Array.isArray(content) ? (content.find(part => part?.type === "text")?.text as string | undefined) : undefined;
+  if (typeof text !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(text.includes("\n") ? text.slice(text.indexOf("\n") + 1) : text);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as JsonObject : undefined;
+  } catch { return undefined; }
+}
+
+/** Worker names a branch page carries (snapshot `workers`, update `workerChanges`/`worker_changes` rows). */
+function pageWorkers(entry: JsonObject): Set<string> {
+  const details = observationPayload((entry.message as JsonObject | undefined)?.content ?? entry.content);
+  const names = new Set<string>();
+  for (const key of ["workers", "worker_changes", "workerChanges"]) {
+    const rows = details?.[key];
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
+      const name = row.name ?? row.worker;
+      if (typeof name === "string") names.add(name);
+    }
+  }
+  return names;
+}
+
+/** P8 (always): an eligible journal event below a stamp's cursor is represented by the branch or a snapshot. A page's own range must name each event it covers. */
 export function p8CoverageLedger(history: readonly HistoryEntry[]): Verdict {
   const stamps = ofKind(history, "lead.entry").filter(entry => entry.stamp !== undefined);
   if (!stamps.length) return notApplicable("lead observation stamps");
@@ -144,7 +175,13 @@ export function p8CoverageLedger(history: readonly HistoryEntry[]): Verdict {
     for (const event of events) {
       const seq = event.event.seq!;
       if (event.team !== team || seq <= 0 || seq > through || event.sequence > stamp.sequence) continue;
-      if (seq > from) continue;
+      if (seq > from) {
+        const worker = event.event.worker;
+        if (worker !== undefined && !pageWorkers(stamp.entry).has(worker)) {
+          return violation(stamp.sequence, `page through ${through} omits event ${seq} (${worker}); M6 class`);
+        }
+        continue;
+      }
       const earlier = stamps.some(other => other.sequence < stamp.sequence && other.stamp!.team === team && other.stamp!.from < seq && seq <= other.stamp!.through);
       const snapshot = ofKind(history, "lead.entry").some(
         other => other.sequence < stamp.sequence && other.entry.customType === "ptb.snapshot" && other.stamp?.team === team && other.stamp.through >= seq,

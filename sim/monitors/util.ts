@@ -49,6 +49,18 @@ export function liveAt(history: readonly HistoryEntry[], sequence: number): Map<
   return live;
 }
 
+/** True when a fault is active at some entry inside [from, to]. Such windows are N/A under assumption. */
+export function faultInWindow(history: readonly HistoryEntry[], from: number, to: number): boolean {
+  const active = new Set<string>();
+  for (const entry of history) {
+    if (entry.at > to) break;
+    if (entry.kind === "fault.set") active.add(entry.fault.source);
+    if (entry.kind === "fault.clear") active.delete(entry.source);
+    if (entry.at >= from && active.size) return true;
+  }
+  return false;
+}
+
 export const pass = (): Verdict => ({ status: "pass" });
 export const violation = (sequence: number, detail: string): Verdict => ({ status: "violation", sequence, detail });
 export const notApplicable = (missing: string): Verdict => ({ status: "not_applicable", missing });
