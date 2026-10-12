@@ -208,7 +208,7 @@ export const TeamDeltaSchema = Type.Object({
 export const WorkerDeltaSchema = Type.Object({
   worker: WorkerName,
   scope: Type.String({ minLength: 1 }),
-  kind: Type.Enum(["created", "connected", "stopped", "failed", "scope_changed"]),
+  kind: Type.Enum(["created", "connected", "stopped", "failed", "scope_changed", "carrier"]),
   text: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 

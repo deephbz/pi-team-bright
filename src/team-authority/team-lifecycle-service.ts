@@ -126,6 +126,7 @@ export class TeamLifecycleService {
     if (!member.membershipId) throw new Error(`Cannot stop ${member.name}: its current Membership has no stable identity.`);
     const status = await runtime.readRuntimeStatus(teamName, member.name);
     const observedGeneration = exactRuntimeGeneration(member, status);
+    if (status?.membershipId === member.membershipId && status.lastStop && ["new", "resume", "fork"].includes(status.lastStop.piReason)) return;
     if (exactBoundProcessAlreadyExited(observedGeneration)) {
       const deleted = await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration!);
       if (!deleted) throw new Error(`Cannot confirm shutdown of ${member.name}: its runtime process generation changed after exit evidence. The Membership remains current; inspect the resumed process and retry.`);
@@ -149,7 +150,11 @@ export class TeamLifecycleService {
   private async transitionCurrentMembership(teamName: string, member: Member, reason: NonNullable<Member["deactivationReason"]>, stopTerminal: boolean): Promise<{ member: Member | null }> {
     if (!member.membershipId) throw new Error(`Current Membership for ${member.name} on team ${teamName} has no membershipId.`);
     return teams.withCurrentMembershipLease(teamName, member.membershipId, async (current) => {
-      if (stopTerminal) await this.killTeammate(teamName, current);
+      if (stopTerminal) {
+        const status = await runtime.readRuntimeStatus(teamName, current.name);
+        if (status?.membershipId === current.membershipId) await runtime.writeRuntimeStatus(teamName, current.name, { stopRequested: reason === "team_shutdown" ? "team_shutdown" : "worker_stop" }, current.membershipId);
+        await this.killTeammate(teamName, current);
+      }
       return { member: await teams.deactivateMembership(teamName, member.membershipId!, reason) };
     });
   }

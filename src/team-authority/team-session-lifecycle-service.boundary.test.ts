@@ -21,6 +21,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock("../utils/paths", () => ({ leadSessionPath: () => fixture.runtimePath }));
 vi.mock("../utils/session-terminal", () => ({ admitTeamSession: () => fixture.admission }));
 vi.mock("../utils/runtime", () => ({
+  ownBirthIdentity: () => ({}),
   readRuntimeStatus: async () => fixture.runtimeStatus,
   admitRuntimeStartup: (...args: unknown[]) => { fixture.events.push("runtime-claim"); return fixture.runtimeAdmission; },
   probePidPresence: () => "occupied",

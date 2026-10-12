@@ -166,6 +166,7 @@ describe("Alert canonical authority compatibility", () => {
         },
       },
       files: [
+        "native", "!native/bin", "scripts/build-process-generation.sh",
         "extensions", "!extensions/**/*.test.ts", "skills", "src", "!src/**/*.test.ts", "!src/**/fixtures", "tsconfig.json",
         "package.json", "LICENSE", "README.md", "docs/current/README.md", "docs/reference.md",
         "docs/examples/pi-team-bright.settings.json", "dist",

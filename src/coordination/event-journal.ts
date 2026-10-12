@@ -203,7 +203,7 @@ function parseEvent(line: string, lineNumber: number): TeamEvent {
   } else if (event.type === "worker") {
     assertString(event.worker, "worker");
     assertString(event.membershipId, "membershipId");
-    if (!["prepared", "session_bound", "stopped", "failed"].includes(String(event.phase))) {
+    if (!["prepared", "session_bound", "stopped", "failed", "carrier"].includes(String(event.phase))) {
       throw new Error(`Malformed Team event journal at line ${lineNumber}: invalid worker phase.`);
     }
     if (event.generation !== undefined) {

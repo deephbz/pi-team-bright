@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { deriveCarrierView } from "./carrier-observation";
-import { nodeHostEnv, runWithHostEnv } from "../env/host-env";
-import type { Member } from "../team-authority/contracts";
+import { nodeHostEnv, runWithHostEnv } from "./env/host-env";
+import type { Member } from "./team-authority/contracts";
 
 it("a surviving shell never establishes process liveness, while shutdown is stopping intent", () => {
   const member = { name: "worker", membershipId: "m", sessionFile: "/session", terminalTarget: { backend: "herdr", kind: "pane", targetId: "p" } } as Member;

@@ -26,6 +26,7 @@ export class TeamSessionLifecycleService {
   }
 
   private async admitWorkerWithTrace(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string; expectedMembershipId?: string }): Promise<SessionStartup> {
+    const admissionStartedAt = hostEnv().clock.now();
     recordWorkerLaunchStage("worker_session_started");
     const config = await teams.readConfig(input.teamName);
     const admission = admitTeamSession(config, input.workerName, input.placement, input.identitySource);
@@ -45,13 +46,16 @@ export class TeamSessionLifecycleService {
       if (input.launchId && current.launch && current.launch.launchId !== input.launchId) {
         return { kind: "refused", reason: "Startup belongs to a superseded launchId.", exitProcess: true };
       }
-      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), hostEnv().process.pid, undefined, input.launchId);
+      const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
+      if (status?.lastStop && status.lastStop.observedAt > admissionStartedAt) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
+      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, status, hostEnv().process.pid, undefined, input.launchId);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
       }
       if (runtimeAdmission.action === "already_current") {
-        await runtime.writeRuntimeStatus(input.teamName, input.workerName, { ...runtime.ownBirthIdentity(), lastStop: undefined }, current.membershipId);
+        const identity = runtime.ownBirthIdentity();
+        if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, input.workerName, { ...identity, lastStop: undefined }, current.membershipId);
         return { kind: "admitted", action: "already_current", member: current };
       }
       const startedAt = hostEnv().clock.now();
@@ -76,7 +80,8 @@ export class TeamSessionLifecycleService {
       const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status);
       if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
       if (runtimeAdmission.action === "already_current") {
-        await runtime.writeRuntimeStatus(input.teamName, "team-lead", { ...runtime.ownBirthIdentity(), lastStop: undefined }, lead.membershipId);
+        const identity = runtime.ownBirthIdentity();
+        if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, "team-lead", { ...identity, lastStop: undefined }, lead.membershipId);
         return { kind: "admitted", action: "already_current", member: lead };
       }
       const membershipId = lead.membershipId;
@@ -93,12 +98,13 @@ export class TeamSessionLifecycleService {
   }
 
   async recordStop(input: { teamName: string; workerName: string; sessionFile: string; membershipId: string; piReason: NonNullable<runtime.AgentRuntimeStatus["lastStop"]>["piReason"]; targetSessionFile?: string }): Promise<void> {
+    const observedAt = hostEnv().clock.now();
     await teams.withCurrentSessionBinding(input.teamName, input.workerName, input.sessionFile, input.membershipId, async () => {
       const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
       if (status?.pid !== hostEnv().process.pid || status.membershipId !== input.membershipId) return;
       await runtime.writeRuntimeStatus(input.teamName, input.workerName, { lastStop: {
         piReason: input.piReason, targetSessionFile: input.targetSessionFile,
-        observedAt: hostEnv().clock.now(), suspectedHumanStop: !status.stopRequested && input.piReason !== "reload",
+        observedAt, suspectedHumanStop: !status.stopRequested && input.piReason !== "reload",
       } }, input.membershipId);
     });
   }

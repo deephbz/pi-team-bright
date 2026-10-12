@@ -4,7 +4,7 @@ import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
 import { withLock } from "../utils/lock";
 import { teamDir } from "../utils/paths";
-import { deriveCarrierView, type CarrierView } from "../coordination/carrier-observation";
+import { deriveCarrierView, type CarrierView } from "../carrier-observation";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig, TerminalTarget } from "./contracts";
 import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";

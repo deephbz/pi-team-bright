@@ -1,6 +1,6 @@
 import { hostEnv } from "../env/host-env";
 import { herdrCarrierName } from "../adapters/herdr-adapter";
-import { herdrList } from "../coordination/carrier-observation";
+import { herdrList } from "../carrier-observation";
 import { currentMembership, withCurrentMembershipLease } from "../utils/teams";
 import { readRuntimeStatus, writeRuntimeStatus } from "../utils/runtime";
 
