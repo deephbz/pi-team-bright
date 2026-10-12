@@ -1,3 +1,4 @@
+import { nodeHostEnv } from "../env/host-env";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
@@ -180,13 +181,13 @@ describe("registered Worker identity and process-admission characterization", ()
     const launchId = teams.newLaunchId();
     await teams.addMember(teamName, preparedMember(teamName, membershipId, launchId));
     const sessionFile = `/tmp/${teamName}-worker.jsonl`;
-    await runtime.writeRuntimeStatus(teamName, "worker", { pid: 47_001, startedAt: 7 }, membershipId);
+    await runtime.writeRuntimeStatus(teamName, "worker", { pid: 47_001, startedAt: 7, osBirthToken: "old", bootId: "boot" }, membershipId);
     const before = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
 
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
-    const probe = vi.spyOn(runtime, "probePidPresence").mockReturnValue("occupied");
+    const probe = vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "found", generation: { pid: 47_001, osBirthToken: "old", bootId: "boot" } });
     const refused = context(sessionFile);
     await sessionStartHandler()({ reason: "startup" }, refused);
 
@@ -198,7 +199,7 @@ describe("registered Worker identity and process-admission characterization", ()
     expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([]);
     expect(probe).toHaveBeenCalledWith(47_001);
 
-    probe.mockReturnValue("absent");
+    probe.mockImplementation(pid => pid === 47_001 ? { kind: "absent" } : { kind: "found", generation: { pid, osBirthToken: "new", bootId: "boot" } });
     const recovered = context(sessionFile);
     await sessionStartHandler()({ reason: "startup" }, recovered);
 

@@ -77,7 +77,7 @@ describe("Pi session lifecycle", () => {
       subscriptions: [],
     };
     await teams.addMember(teamName, worker);
-    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, startedAt: 1, ready: true }, worker.membershipId);
+    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1, ready: true }, worker.membershipId);
     const beforeRuntime = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
     const beforeMember = (await teams.currentMembership(teamName, "worker"));
     vi.stubEnv("PI_TEAM_NAME", teamName);

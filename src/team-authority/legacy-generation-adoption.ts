@@ -17,7 +17,7 @@ export async function adoptLegacyGeneration(teamName: string, worker: string, ex
   if (!agents?.some(row => row.name === herdrCarrierName(teamName, worker) && row.pane_id === pane && row.agent_session === member.sessionFile)) return false;
   return withCurrentMembershipLease(teamName, expectedMembershipId, async current => {
     const latest = await readRuntimeStatus(teamName, worker);
-    if (current.sessionFile !== member.sessionFile || !latest || latest.pid !== status.pid || latest.startedAt !== status.startedAt
+    if (current.sessionFile !== member.sessionFile || (current.terminalTarget?.targetId ?? current.tmuxPaneId) !== pane || !latest || latest.pid !== status.pid || latest.startedAt !== status.startedAt
       || latest.membershipId !== expectedMembershipId || latest.osBirthToken || latest.lastStop) return false;
     const after = hostEnv().process.generation(status.pid!);
     if (after.kind !== "found" || after.generation.osBirthToken !== before.generation.osBirthToken || after.generation.bootId !== before.generation.bootId) return false;

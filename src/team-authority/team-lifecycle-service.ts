@@ -28,12 +28,7 @@ function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStat
 
 function exactBoundProcessAlreadyExited(generation: runtime.RuntimeGeneration | null): boolean {
   if (!generation || generation.pid === hostEnv().process.pid) return false;
-  try {
-    hostEnv().process.kill(generation.pid, 0);
-    return false;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ESRCH";
-  }
+  return runtime.verifyRuntimeGeneration(generation) === "gone";
 }
 
 export class TeamLifecycleService {

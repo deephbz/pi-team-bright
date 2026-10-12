@@ -163,7 +163,7 @@ describe("registered Pi Session adapter characterization", () => {
       joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
     });
     const member = await teams.currentMembership(name, "worker");
-    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1 }, member.membershipId);
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
     const order: string[] = [];
     const claim = vi.spyOn(runtime, "writeRuntimeStatus");
     const bind = vi.spyOn(teams, "bindMemberSession");

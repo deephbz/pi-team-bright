@@ -381,7 +381,9 @@ export class HerdrAdapter implements TerminalAdapter {
       throw new Error("Herdr pane split response did not include pane.pane_id.");
     }
 
-    try { this.renamePane(paneId, options.name); } catch { /* Presentation never controls launch. */ }
+    try { this.renamePane(paneId, options.name); } catch (error) {
+      console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
+    }
     return paneId;
   }
 
@@ -396,7 +398,8 @@ export class HerdrAdapter implements TerminalAdapter {
       if (envelope.error || result.status !== 0) {
         // A readiness timeout can follow successful actuation. Only explicit pre-actuation refusal is decisive.
         const fact = envelope.error ? errorText(envelope.error) : result.stderr;
-        return { state: /busy|invalid|not found|unsupported/i.test(fact) ? "refused" : "unknown", fact };
+        const code = envelope.error && typeof envelope.error === "object" ? (envelope.error as Record<string, unknown>).code : undefined;
+        return { state: ["agent_pane_busy", "pane_not_found", "invalid_params", "unsupported_agent_kind"].includes(String(code)) ? "refused" : "unknown", fact };
       }
       assertReadyStart(resultRecord(envelope), carrierName, paneId);
       return { state: "started", fact: "agent_start_accepted" };

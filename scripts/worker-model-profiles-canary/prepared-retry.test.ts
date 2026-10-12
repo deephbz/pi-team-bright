@@ -1,3 +1,5 @@
+import { nodeHostEnv } from "../../src/env/host-env";
+import { writeRuntimeStatus } from "../../src/utils/runtime";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +93,9 @@ describe("model role prepared retry", () => {
       cwd: process.cwd(),
       modelProfile: { alias: "review", provider: "fixture", model: "review-model", thinking: "high" },
     });
+    vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+    await writeRuntimeStatus(name, "review", { pid: 12345, startedAt: 1, osBirthToken: "old", bootId: "boot" }, first.membershipId);
+    await bridge.completeLaunch(name, first.membershipId, first.member.launch!.launchId, { state: "refused", fact: "decisive current launch refusal" });
     await bridge.ensureWorker({ teamName: name, workerName: "review", scope: "Review profile", cwd: process.cwd() });
     expect(argv.slice(0, 2)).toEqual([["fixture/review-model", "high"], ["fixture/review-model", "high"]]);
 
