@@ -1,9 +1,10 @@
-import { herdrCarrierName } from "../adapters/herdr-adapter";
-import { hostEnv, type TimerHandle } from "../env/host-env";
-import type { Member } from "../team-authority/contracts";
-import { readRuntimeStatus, runtimeGeneration, verifyRuntimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "../utils/runtime";
-import { readConfig } from "../utils/teams";
-import { appendTeamEvent, readTeamEvents } from "./event-journal";
+import fs from "node:fs";
+import { herdrCarrierName } from "./adapters/herdr-adapter";
+import { hostEnv, type TimerHandle } from "./env/host-env";
+import type { Member, TeamConfig } from "./team-authority/contracts";
+import { readRuntimeStatus, runtimeGeneration, verifyRuntimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "./utils/runtime";
+import { configPath } from "./utils/paths";
+import { appendTeamEvent, readTeamEvents } from "./coordination/event-journal";
 
 export type LaunchState = "none" | "requested" | "started" | "refused" | "unknown";
 export type ProcessState = "live" | "stopping" | "gone" | "unknown";
@@ -84,7 +85,9 @@ export class CarrierObserver {
     return this.inFlight;
   }
   private async collect(): Promise<void> {
-    const config = await readConfig(this.teamName);
+    // The atomic Team file is a read-only snapshot. Observation never waits on a producer lease.
+    const config = JSON.parse(fs.readFileSync(configPath(this.teamName), "utf8")) as TeamConfig;
+    if (!Array.isArray(config.members) || !config.members.every(m => m && typeof m.name === "string")) return;
     const now = hostEnv().clock.now();
     const [agents, panes] = config.terminalBackend === "herdr" ? await Promise.all([herdrList("agent"), herdrList("pane")]) : [undefined, undefined];
     if (this.stopped) return;
@@ -134,7 +137,7 @@ export class CarrierObserver {
     const carrier: CarrierEvent = { membership: view.membership, launchId: view.launchId, generation: view.generation, field, from, to, cause,
       observedAt: hostEnv().clock.now(), paneId: view.paneId, suspectedHumanStop,
       nextActionHint: suspectedHumanStop || field === "blocked" || to === "stopping" ? "ask_human" : to === "gone" || to === "refused" ? "ensure_worker" : "wait" };
-    await appendTeamEvent(this.teamName, { type: "worker", worker: view.worker, membershipId: view.membership, phase: "stopped", carrier });
+    await appendTeamEvent(this.teamName, { type: "worker", worker: view.worker, membershipId: view.membership, phase: "carrier", carrier });
     this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`);
   }
 }

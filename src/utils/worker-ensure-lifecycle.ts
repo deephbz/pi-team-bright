@@ -14,8 +14,8 @@ export type WorkerCarrierInvalidReason =
 
 /** Team-owned terminal adapter evidence for the recorded carrier target. */
 export type WorkerCarrierObservation = "live" | "missing" | {
-  launch: import("../coordination/carrier-observation").LaunchState;
-  process: import("../coordination/carrier-observation").ProcessState;
+  launch: import("../carrier-observation").LaunchState;
+  process: import("../carrier-observation").ProcessState;
   lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork" } | "none" | "quit" | "reload" | "new" | "resume" | "fork";
 };
 

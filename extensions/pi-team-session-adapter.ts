@@ -1,5 +1,5 @@
 import { adoptLegacyGeneration } from "../src/team-authority/legacy-generation-adoption";
-import { CarrierObserver } from "../src/coordination/carrier-observation";
+import { CarrierObserver } from "../src/carrier-observation";
 import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
@@ -284,7 +284,7 @@ const runDoctor = async (ctx: any, requestedTeamName?: string) => {
     if (selectedTeamName) {
       const observer = selectedTeamName === owner.teamName && carrierObserver ? carrierObserver : new CarrierObserver(selectedTeamName);
       await observer.refresh().catch(() => undefined);
-      content += `\n\nCarrierView (current observations):\n${JSON.stringify([...observer.views.values()], null, 2)}`;
+      content = `CarrierView (current observations):\n${JSON.stringify([...observer.views.values()], null, 2)}\n\n${content}`;
     }
     if (!owner.isCurrent()) {
       present("Doctor request cancelled because the Session or Team changed. Run /ptb doctor again.", "warning");

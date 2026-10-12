@@ -26,7 +26,7 @@ function isAbort(error: unknown): boolean { return error instanceof Error && err
 function currentTeam(config: CoordinationLeaderBindingEvidence): CoordinationTeamCurrent { return { name: config.teamName, purpose: config.purpose ?? "", lifecycle: "active" }; }
 function latestMember(config: CoordinationLeaderBindingEvidence, workerName: string) { return [...config.members].reverse().find((member) => member.name === workerName && member.isActive !== false); }
 function workerCarrier(member: ReturnType<typeof latestMember>): CoordinationWorkerCurrent["carrier"] { return !member ? "absent" : member.sessionFile ? "connected" : member.pendingLaunchId ? "starting" : "absent"; }
-function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "created" | "connected" | "stopped" | "failed" { return event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase; }
+function workerEventChange(event: Extract<TeamEvent, { type: "worker" }>): "created" | "connected" | "stopped" | "failed" | "carrier" { return event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase; }
 
 export interface CoordinationObservationContext {
   /** Exact leader cwd from the context that owns launch and trust resolution. */
@@ -640,7 +640,7 @@ export class CoordinationObservationService {
   private async projectUpdates(bound: BoundTeam, events: TeamEvent[], observation: CoordinationHiddenObservationProjection, taskProjection?: CanonicalTaskCard[], taskRevisionChanged = false, taskWarnings: TaskCardWarning[] = [], externallyChangedTaskIds: readonly string[] = []): Promise<Extract<CoordinationSyncResult, { kind: "updates" | "contract_gap" | "unavailable" }>> {
     const taskResult = taskProjection ? { kind: "tasks" as const, tasks: taskProjection, warnings: taskWarnings } : await this.readTaskProjection(bound.teamName);
     if (taskResult.kind !== "tasks") return taskResult;
-    const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed"; text: string }> = [];
+    const workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed" | "carrier"; text: string }> = [];
     for (const event of events) {
       if (event.type !== "worker") continue;
       const logical = bound.config.logicalWorkers?.find((worker) => worker.name === event.worker);
