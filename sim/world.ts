@@ -203,7 +203,7 @@ export class SimWorld {
     if (binary === "herdr" && args[0] === "agent" && args[1] === "start") {
       const fault = this.faults.get("herdr.start");
       if (fault?.mode === "timeout") this.scheduler.advance(300000); // S-sync-block baseline readiness wait.
-      if (fault) return { status: 1, stdout: JSON.stringify({ error: { code: fault.mode === "refused" ? "start_refused" : "timeout", message: "injected start fault" } }), stderr: "" };
+      if (fault) return { status: 1, stdout: JSON.stringify({ error: { code: fault.mode === "refused" ? "start_refused" : fault.mode, message: "injected start fault" } }), stderr: "" };
     }
     return this.exec.runSync(command, args);
   }

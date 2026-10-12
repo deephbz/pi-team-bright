@@ -73,7 +73,7 @@ export type WorldStep =
  */
 export type Fault =
   | { source: "herdr"; mode: "unavailable" | "slow" | "partial_list"; delayMs?: number }
-  | { source: "herdr.start"; mode: "refused" | "timeout" }
+  | { source: "herdr.start"; mode: "refused" | "invalid_params" | "timeout" }
   | { source: "pi.start"; mode: "hang" | "exit_before_ready" }
   | { source: "generation"; mode: "unavailable" | "slow"; delayMs?: number }
   | { source: "journal"; mode: "commit_then_error" }
