@@ -25,7 +25,7 @@ const birth = (at: number, actor: string, pid: number, token = "tok-a", bootId =
 ];
 const death = (at: number, actor: string, pid: number, token = "tok-a"): Step => [
   at,
-  { kind: "process.death", process: { actorKey: `${team}/${actor}`, generation: gen(pid, token), command: "pi" } },
+  { kind: "process.death", process: { actorKey: `${team}/${actor}`, generation: gen(pid, token), command: "pi", processKind: "worker_pi", membershipId: "m1" } },
 ];
 const row = (at: number, extra: JsonObject, origin?: HistoryOrigin, worker = "w1"): Step => [
   at,
@@ -38,10 +38,10 @@ const ensureResult = (at: number, callId: string, effect: string): Step => [
   at,
   { kind: "tool.result", actor: lead, callId, name: "ensure_worker", result: { details: { effect } } },
 ];
-const stamp = (at: number, from: number, through: number, entryId = `e-${from}-${through}`): Step => [
+const stamp = (at: number, from: number, through: number, entryId = `e-${from}-${through}`, workers: string[] = ["w1"]): Step => [
   at,
   {
-    kind: "lead.entry", actor: lead, sessionId: "s1", entryId, entry: { customType: "ptb.team-update" },
+    kind: "lead.entry", actor: lead, sessionId: "s1", entryId, entry: { customType: "ptb.team-update", content: `ptb.team-update: team_sync snapshot.\n${JSON.stringify({ kind: "snapshot", workers: workers.map(name => ({ name })) })}` },
     stamp: { team, epoch: "ep", binding: "b", from, through },
   },
 ];
@@ -69,13 +69,13 @@ describe("P2 gone claims match world truth", () => {
   });
 });
 
-describe("P3 live claims stay fresh", () => {
-  const options = { freshnessMs: 1000 };
-  it("passes when the next claim arrives inside the deadline", () => {
-    expect(p3LiveIsFresh(h(row(0, { field: "process", to: "live" }), row(100, { field: "process", to: "gone" })), options)).toEqual({ status: "pass" });
+describe("P3 served live claims never name a generation dead over 10 s", () => {
+  const live = (at: number) => row(at, { field: "process", to: "live", generation: gen(10) });
+  it("passes when the claimed generation died within the 10 s grace", () => {
+    expect(p3LiveIsFresh(h(death(0, "w1", 10), live(5000)))).toEqual({ status: "pass" });
   });
-  it("violates when the live claim outlives its deadline", () => {
-    expect(p3LiveIsFresh(h(row(0, { field: "process", to: "live" }), row(5000, { field: "process", to: "gone" })), options)).toMatchObject({ status: "violation" });
+  it("violates when the claimed generation has been dead for more than 10 s", () => {
+    expect(p3LiveIsFresh(h(death(0, "w1", 10), live(11000)))).toMatchObject({ status: "violation" });
   });
 });
 
@@ -96,6 +96,10 @@ describe("P5 pane closes are cited", () => {
   });
   it("violates when PTB closes with no stop request", () => {
     expect(p5ClosesCited(h(close))).toMatchObject({ status: "violation" });
+  });
+  it("does not judge an OS-origin close, which is not a PTB act", () => {
+    const osClose: Step = [10, { kind: "pane.close", pane: { paneId: "p1", shellPid: 10 } }, { kind: "os", input: 0 }];
+    expect(p5ClosesCited(h(osClose))).toEqual({ status: "pass" });
   });
 });
 
@@ -133,6 +137,17 @@ describe("P8 coverage ledger", () => {
   it("violates when an event below the page start is never represented", () => {
     expect(p8CoverageLedger(h(row(0, { seq: 1 }), stamp(10, 1, 2)))).toMatchObject({ status: "violation" });
   });
+  it("violates when a page through its stamp omits a journaled event (M6)", () => {
+    expect(p8CoverageLedger(h(row(0, { seq: 1 }), row(1, { seq: 2 }, undefined, "w2"), stamp(10, 0, 2)))).toMatchObject({ status: "violation" });
+  });
+  it("passes the M4 control: snapshot through 0, then the Worker creation update through 2", () => {
+    const control = h(row(0, { seq: 1 }, undefined, "w-race"), row(1, { seq: 2 }, undefined, "w-race"), stamp(10, 0, 0, "snapshot", []), stamp(20, 0, 2, "update", ["w-race"]));
+    expect(p8CoverageLedger(control)).toEqual({ status: "pass" });
+  });
+  it("violates the M4 scratch: a snapshot stamped through 2 without the Worker creation changes", () => {
+    const mutant = h(row(0, { seq: 1 }, undefined, "w-race"), row(1, { seq: 2 }, undefined, "w-race"), stamp(10, 0, 2, "snapshot", []));
+    expect(p8CoverageLedger(mutant)).toMatchObject({ status: "violation" });
+  });
 });
 
 describe("P9 no duplicate page", () => {
@@ -154,23 +169,32 @@ describe("P10 journal matches world truth", () => {
   });
 });
 
-describe("E1 exits reach the carrier view", () => {
+describe("E1 bound Worker exits are named ended", () => {
   const options = { deadlineMs: 1000 };
-  it("passes when the exit reaches the journal inside the deadline", () => {
-    expect(e1ExitReachesCarrierView(h(death(0, "w1", 10), row(100, { field: "process", to: "gone" })), options)).toEqual({ status: "pass" });
+  const gone = (at: number) => row(at, { field: "process", to: "gone", generation: gen(10) });
+  it("passes when a journal event names the exited generation inside the deadline", () => {
+    expect(e1ExitReachesCarrierView(h(death(0, "w1", 10), gone(100)), options)).toEqual({ status: "pass" });
   });
-  it("violates when the exit never reaches the journal", () => {
+  it("violates when no event names the exit and the deadline passes", () => {
     expect(e1ExitReachesCarrierView(h(death(0, "w1", 10), filler(5000)), options)).toMatchObject({ status: "violation" });
+  });
+  it("is N/A under assumption when a fault covers the window", () => {
+    const fault: Step = [0, { kind: "fault.set", fault: { source: "herdr", mode: "unavailable" } }];
+    expect(e1ExitReachesCarrierView(h(death(0, "w1", 10), fault, filler(5000)), options)).toMatchObject({ status: "not_applicable" });
   });
 });
 
-describe("E2 events reach the branch", () => {
+describe("E2 events reach the branch after lead idle", () => {
   const options = { latencyMs: 1000 };
-  it("passes when a stamp covers the event inside the latency bound", () => {
-    expect(e2EventReachesBranch(h(row(0, { seq: 1 }), stamp(500, 0, 1)), options)).toEqual({ status: "pass" });
+  const idle = (at: number): Step => [at, { kind: "world.input", input: 0, step: { kind: "agent.settled", who: lead } }];
+  it("passes when a stamp covers the event inside the latency bound of lead idle", () => {
+    expect(e2EventReachesBranch(h(row(0, { seq: 1 }), idle(0), stamp(500, 0, 1)), options)).toEqual({ status: "pass" });
   });
-  it("violates when no stamp covers the event", () => {
-    expect(e2EventReachesBranch(h(row(0, { seq: 1 }), filler(5000)), options)).toMatchObject({ status: "violation" });
+  it("violates when no stamp covers the event after lead idle", () => {
+    expect(e2EventReachesBranch(h(row(0, { seq: 1 }), idle(0), filler(5000)), options)).toMatchObject({ status: "violation" });
+  });
+  it("is N/A when the lead never becomes idle in the window", () => {
+    expect(e2EventReachesBranch(h(row(0, { seq: 1 }), filler(5000)), options)).toMatchObject({ status: "not_applicable" });
   });
 });
 
