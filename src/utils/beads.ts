@@ -1,4 +1,4 @@
-import { hostEnv, type TimerHandle } from "../env/host-env";
+import { hostEnv, nodeHostEnv, type TimerHandle } from "../env/host-env";
 import { execFile, spawn } from "node:child_process";
 import { Type } from "typebox";
 import fs from "node:fs";
@@ -229,6 +229,7 @@ export class ExecBdRunner implements BdRunner {
   constructor(private readonly executable: () => string = resolveBdExecutable) {}
 
   async run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult> {
+    if (hostEnv() !== nodeHostEnv) throw new Error("Legacy Beads subprocesses are unavailable in simulation.");
     const startedAt = hostEnv().clock.now();
     try {
       const executable = this.executable();

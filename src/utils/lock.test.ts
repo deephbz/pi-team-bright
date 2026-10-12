@@ -47,6 +47,53 @@ describe("withLock", () => {
     expect(fs.existsSync(lockFile)).toBe(false);
   });
 
+  it.each(["visible", "recovery"])("rolls back the new %s owner on metadata failure", async kind => {
+    const target = kind === "visible" ? lockFile : `${lockFile}.recovery`;
+    if (kind === "recovery") {
+      fs.writeFileSync(lockFile, "2147483647");
+      const stale = new Date(Date.now() - 31_000);
+      fs.utimesSync(lockFile, stale, stale);
+    }
+    const failure = Object.assign(new Error("metadata failed"), { code: "EIO" });
+    const utimes = vi.spyOn(fs, "utimesSync").mockImplementation(() => { throw failure; });
+    const callback = vi.fn(async () => "acquired");
+    await expect(withLock(lockPath, callback, 2)).rejects.toBe(failure);
+    expect(callback).not.toHaveBeenCalled();
+    expect(fs.existsSync(target)).toBe(false);
+    if (kind === "recovery") expect(fs.readFileSync(lockFile, "utf8")).toBe("2147483647");
+    utimes.mockRestore();
+    await expect(withLock(lockPath, callback, 2)).resolves.toBe("acquired");
+    expect(fs.existsSync(lockFile)).toBe(false);
+    expect(fs.existsSync(`${lockFile}.recovery`)).toBe(false);
+  });
+
+  it.each(["visible", "recovery"])("preserves a successor %s owner after metadata failure", async kind => {
+    const target = kind === "visible" ? lockFile : `${lockFile}.recovery`;
+    if (kind === "recovery") {
+      fs.writeFileSync(lockFile, "2147483647");
+      const stale = new Date(Date.now() - 31_000);
+      fs.utimesSync(lockFile, stale, stale);
+    }
+    const successor = { pid: process.pid, token: "successor" };
+    const failure = new Error("metadata failed after replacement");
+    vi.spyOn(fs, "utimesSync").mockImplementation(file => {
+      expect(file).toBe(target);
+      fs.writeFileSync(target, JSON.stringify(successor));
+      throw failure;
+    });
+    const callback = vi.fn(async () => {});
+    await expect(withLock(lockPath, callback, 2)).rejects.toBe(failure);
+    expect(callback).not.toHaveBeenCalled();
+    expect(JSON.parse(fs.readFileSync(target, "utf8"))).toEqual(successor);
+  });
+
+  it("does not mistake metadata EEXIST for exclusive-create contention", async () => {
+    const failure = Object.assign(new Error("metadata EEXIST"), { code: "EEXIST" });
+    vi.spyOn(fs, "utimesSync").mockImplementation(() => { throw failure; });
+    await expect(withLock(lockPath, async () => {}, 2)).rejects.toBe(failure);
+    expect(fs.existsSync(lockFile)).toBe(false);
+  });
+
   it("should fail to acquire lock if already held", async () => {
     // Manually create lock file
     fs.writeFileSync(lockFile, "9999");
