@@ -23,9 +23,9 @@ export class SimActor {
   private callSequence = 0;
   private initialized = false;
 
-  constructor(readonly world: SimWorld, readonly id: string, variables: Record<string, string> = {}) {
+  constructor(readonly world: SimWorld, readonly id: string, variables: Record<string, string> = {}, resumeFile?: string) {
     const env = world.envs.get(id) ?? world.createActor(id, variables);
-    this.session = createSimSession(env, world.workspace.home);
+    this.session = createSimSession(env, world.workspace.home, resumeFile);
     world.evidence.push(assumptionEvidence("A5", "Pi branch keeps raw entries after compaction"));
     const record = (kind: string, value?: unknown) => world.record(id, kind, value);
     this.context = {

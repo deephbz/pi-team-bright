@@ -45,6 +45,8 @@ vi.mock("../utils/teams", () => ({
 }));
 vi.mock("../utils/runtime", () => ({
   readRuntimeStatus: async () => fixture.runtime,
+  writeRuntimeStatus: async (_team: string, _name: string, updates: any) => Object.assign(fixture.runtime, updates),
+  verifyRuntimeGeneration: () => "unknown",
   runtimeGeneration: (status: any) => status?.generation ?? null,
   deleteRuntimeStatus: fixture.deleteRuntime,
   restoreRuntimeStatus: fixture.restoreRuntime,
@@ -119,6 +121,14 @@ function reset() {
 }
 
 describe("Team lifecycle service boundary", () => {
+  it.each(["new", "resume", "fork"])("deactivates a %s-switched Membership without closing its pane", async piReason => {
+    reset(); fixture.config.members = [member("worker")]; fixture.paneAlive = true;
+    fixture.runtime = { membershipId: "worker-membership", lastStop: { piReason } };
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+    expect(await service.stopWorker("team", "worker")).toEqual({ kind: "stopped", worker: "worker" });
+    expect(fixture.deactivate).toEqual(["worker"]); expect(fixture.kill).not.toHaveBeenCalled(); expect(fixture.killWindow).not.toHaveBeenCalled();
+  });
+
   it("queries the injected guard inside topology lock and before a Membership lease", async () => {
     reset();
     fixture.config.members = [member("worker")];
