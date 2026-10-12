@@ -5,7 +5,7 @@ import { assumptionEvidence } from "./assumptions";
 import { SimWorld } from "./world";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/2";
+export const RUNNER_VERSION = "sim-c1/3";
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */
@@ -65,6 +65,13 @@ export class WorldReplay {
     }
   }
   async apply(step: WorldStep, index: number): Promise<void> {
+    const kind = step.kind.startsWith("os.") || step.kind.startsWith("fault.") || step.kind.startsWith("herdr.") ? "os" : "human";
+    return this.world.withOrigin({ kind, input: index }, () => {
+      this.world.record({ kind: "world.input", input: index, step });
+      return this.applyInput(step, index);
+    });
+  }
+  private async applyInput(step: WorldStep, index: number): Promise<void> {
     const world = this.world;
     switch (step.kind) {
       case "pi.start": {
@@ -119,13 +126,14 @@ export class WorldReplay {
       }
       case "os.pidReuse": world.processes.reuse(actorKey(step.dead), step.newcomer); break;
       case "os.reboot":
+        for (const pane of [...world.herdr.panes.keys()]) world.herdr.close(pane);
         for (const process of world.processes.history) if (process.alive) world.killPid(process.pid);
-        world.processes.reboot(); world.herdr.panes.clear(); break;
+        world.processes.reboot(); break;
       case "human.closePane": world.herdr.close(step.pane); break;
       case "human.typeInPane":
         if (!world.herdr.panes.has(step.pane)) throw new Error(`Unknown pane: ${step.pane}`);
         // Input is terminal data. Process effects need explicit OS inputs; no shell interpreter runs.
-        world.record("terminal", "input", { pane: step.pane, text: step.text });
+        world.record({ kind: "terminal.input", pane: step.pane, text: step.text });
         break;
       case "herdr.agentState": {
         const pane = world.herdr.panes.get(step.pane);
@@ -134,14 +142,14 @@ export class WorldReplay {
         break;
       }
       case "herdr.restart": world.herdr.available = true; world.herdr.partialList = undefined; break;
-      case "fault.set": this.fault(step.fault); break;
+      case "fault.set": this.fault(step.fault); world.record({ kind: "fault.set", fault: step.fault }); break;
       case "fault.clear":
         world.faults.delete(step.source);
+        world.record({ kind: "fault.clear", source: step.source });
         if (step.source === "herdr") { world.herdr.available = true; world.herdr.partialList = undefined; }
         break;
       default: { const exhaustive: never = step; throw new Error(`Unsupported world step ${exhaustive}`); }
     }
-    world.record("world", step.kind, step);
   }
   async run(trace: WorldTrace, bounds: ReplayReceipt["bounds"] = { maxSteps: 10000, maxVirtualMs: 3600000 }): Promise<void> {
     if (trace.version !== WORLD_TRACE_VERSION) throw new Error("Unsupported WorldTrace version");
@@ -176,6 +184,7 @@ export class WorldReplay {
       if (!await this.world.scheduler.step(true)) throw new Error("Replay has an unfinished operation without a scheduled completion");
     }
     check();
+    this.world.observer.sample();
     this.world.assertClean();
     this.world.entropy.assertReplayComplete();
   }
