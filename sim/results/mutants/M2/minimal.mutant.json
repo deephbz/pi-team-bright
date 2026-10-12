@@ -1,0 +1,89 @@
+{
+  "traceId": "m2-gate-witness",
+  "seed": 42,
+  "stopped": null,
+  "results": {
+    "P1": {
+      "status": "pass"
+    },
+    "P2": {
+      "status": "not_applicable",
+      "missing": "journal process: gone claims"
+    },
+    "P3": {
+      "status": "not_applicable",
+      "missing": "journal process claims"
+    },
+    "P4": {
+      "status": "pass"
+    },
+    "P5": {
+      "status": "not_applicable",
+      "missing": "pane closures"
+    },
+    "P6": {
+      "status": "pass"
+    },
+    "P7": {
+      "status": "not_applicable",
+      "missing": "journal appends with PTB tool call ids"
+    },
+    "P8": {
+      "status": "not_applicable",
+      "missing": "lead observation stamps"
+    },
+    "P9": {
+      "status": "not_applicable",
+      "missing": "lead observation stamps"
+    },
+    "P10": {
+      "status": "not_applicable",
+      "missing": "journal carrier events with paneId, generation, cause or suspectedHumanStop"
+    },
+    "E1": {
+      "status": "not_applicable",
+      "missing": "worker process exits"
+    },
+    "E2": {
+      "status": "pass"
+    },
+    "E3": {
+      "status": "pass"
+    },
+    "E4": {
+      "status": "not_applicable",
+      "missing": "journal activity: blocked transitions (C2)"
+    },
+    "E5": {
+      "status": "pass"
+    },
+    "S1": {
+      "status": "absent"
+    },
+    "S2": {
+      "status": "absent"
+    },
+    "S3": {
+      "status": "absent"
+    },
+    "S4": {
+      "status": "absent"
+    },
+    "S5": {
+      "status": "not_applicable",
+      "missing": "ptb.team-update branch entries"
+    },
+    "S6": {
+      "status": "not_applicable",
+      "missing": "journal suspectedHumanStop fields (P10)"
+    },
+    "retry": {
+      "status": "violation",
+      "sequence": 160,
+      "detail": "decisive no-start refusal did not permit retry"
+    }
+  },
+  "attempts": 16,
+  "criterion": "fixed point under single-step deletion and timestamp reduction to predecessor, preserving target violation and completed replay; control checked separately",
+  "replayVerified": true
+}

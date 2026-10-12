@@ -1,0 +1,11 @@
+--- a/src/coordination/observation-service.ts
++++ b/src/coordination/observation-service.ts
+@@ -187,7 +187,7 @@
+       const changes = projected.changes;
+       if (changes.length || workerChanges.length || teamChanges.length) {
+         selected?.(page, pages.slice(index + 1));
+-        return { kind: "updates", teamChanges, workerChanges, taskChanges: changes, alerts: [], head: Number(page.cursor), epochId: bound.config.epochId, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
++        return { kind: "updates", teamChanges, workerChanges, taskChanges: changes, alerts: [], head: Number(this.store.readEventCursor(bound.teamName)), epochId: bound.config.epochId, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
+       }
+     }
+     // Empty projections can still contain stale Task or retired Worker events.
