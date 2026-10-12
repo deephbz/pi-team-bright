@@ -64,6 +64,7 @@ export class SimWorld {
     this.observer = new HistoryObserver(home, fact => this.record(fact, { kind: "observer" }));
     this.processes.onChange = (kind, process) => this.record({ kind, process: {
       actorKey: process.actor, command: process.command, parentPid: process.parentPid,
+      ...(process.processKind === "worker_pi" ? { processKind: process.processKind, membershipId: process.membershipId } : { processKind: process.processKind }),
       generation: { pid: process.pid, bootId: process.bootId, osBirthToken: process.osBirthToken },
     } });
     this.herdr.onPane = (kind, pane) => this.record({ kind, pane: { paneId: pane.id, shellPid: pane.shellPid, agentPid: pane.agentPid } });
@@ -75,7 +76,11 @@ export class SimWorld {
   }
   createActor(actor: string, variables: Record<string, string> = {}): HostEnv {
     if (this.envs.has(actor)) throw new Error(`Actor environment already exists: ${actor}`);
-    const process = this.processes.actor(actor) ?? this.processes.spawn(actor);
+    const membershipId = variables.PI_TEAM_MEMBERSHIP_ID;
+    const process = this.processes.actor(actor) ?? this.processes.spawn(actor, { identity:
+      membershipId ? { processKind: "worker_pi", membershipId }
+        : { processKind: variables.PI_AGENT_NAME === "team-lead" ? "lead_pi" : "other" },
+    });
     this.generations.set(actor, process);
     const env: HostEnv = {
       clock: this.scheduler.clock(actor, callback => process.alive ? this.enter(actor, callback) : undefined),

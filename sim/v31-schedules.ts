@@ -1,12 +1,14 @@
 import type { ActorRef, WorldStep, WorldTrace } from "./trace-format";
+import { hydrationRaceTrace } from "./hydration-race";
 
-export const families = ["pid-reuse", "herdr-loss", "reload-storm", "compaction", "contended-reservation", "source-ttl", "delayed-source", "append-ambiguity", "human-stop", "crash-before-record"] as const;
+export const families = ["pid-reuse", "herdr-loss", "reload-storm", "compaction", "contended-reservation", "source-ttl", "delayed-source", "append-ambiguity", "human-stop", "crash-before-record", "snapshot-hydration"] as const;
 export interface Sample { family: number; seed: number; gap: number; repeats: number }
 const lead: ActorRef = { team: "team-1", actor: "lead" };
 const worker: ActorRef = { team: "team-1", actor: "w1" };
 
 /** World inputs target real tools; no PTB state is authored or consulted. */
 export function generatedTrace(sample: Sample, id: string): WorldTrace {
+  if (families[sample.family] === "snapshot-hydration") return { ...hydrationRaceTrace(1 + sample.gap % 50), id };
   const steps: WorldTrace["steps"] = [];
   const add = (at: number, step: WorldStep) => steps.push({ at, step });
   const ensure = (at: number) => add(at, { kind: "tool.call", who: lead, tool: "ensure_worker", args: { name: "w1", scope: "Synthetic campaign worker" } });
