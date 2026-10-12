@@ -84,10 +84,23 @@ scheduler choices also log enabled operations. Invalid receipts and exhausted
 tapes fail. Promise jobs drain for 64 checkpoints between queue choices.
 Instruction-level process interleaving and host-crash durability are unclaimed.
 
-Nonempty pre-existing Team setup, cross-Session forks, process restart/recovery,
-arbitrary shell execution and nonempty Beads task operations remain unsupported.
-Worker module graphs preload from actor coordinates and literal ensure_worker
-names. Human input is opaque terminal text. Full P/M/E campaigns are unclaimed.
+`migration.v31.test.ts` builds a legacy store through real baseline tools at
+`14d92fdc2c7cf0b21f6853ba495d828350901e03`. It extracts production sources into
+ignored `dist/sim-migration-baseline`; it excludes baseline tests. Git must contain
+that revision, and `tar` must be available. The test preloads separate legacy and
+current extension graphs. One world retains the filesystem, processes, panes and
+native Session branches across lead-first reloads. Three in-progress Tasks and
+exactly 50 baseline journal events precede migration. Assertions cover snapshot
+watermarking without replay, token re-admission, Session and Attempt continuity,
+carrier reuse, no pane closure, and a stopped-epoch fallback with new Worker
+Sessions. An ongoing lead turn stays ongoing across reload; this keeps the first
+explicit sync ahead of the idle automatic publisher. Human-action attention
+excludes `wait` hints.
+
+The trace runner still rejects nonempty declarative Team setup. Cross-Session
+forks, arbitrary shell execution and nonempty Beads task operations remain
+unsupported. Worker module graphs preload from actor coordinates and literal
+ensure_worker names. Human input is opaque terminal text. Full P/M/E campaigns are unclaimed.
 
 ## Oracle history
 
