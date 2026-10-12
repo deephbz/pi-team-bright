@@ -5,7 +5,7 @@ import { assumptionEvidence } from "./assumptions";
 import { SimWorld } from "./world";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/3";
+export const RUNNER_VERSION = "sim-c1/4";
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */
@@ -31,21 +31,27 @@ export class WorldReplay {
   readonly sessionRefs = new Map<string, string>();
   private readonly factories = new Map<string, Awaited<ReturnType<typeof loadActorExtension>>>();
   constructor(readonly world: SimWorld) {
-    world.herdr.onStart = pane => {
+    world.herdr.onStart = (pane, argv) => {
       const who = { team: pane.env.PI_TEAM_NAME || "team", actor: pane.env.PI_AGENT_NAME || pane.name! };
       const generation = world.processes.current(pane.agentPid!);
       world.scheduler.enqueue(`pi.boot:${actorKey(who)}`, () => {
         if (!generation?.alive || world.faults.get("pi.start")?.mode === "hang") return;
-        const actor = this.addActor(who, { ...pane.env, HERDR_PANE_ID: pane.id });
+        const resumeIndex = argv.indexOf("--session");
+        const actor = this.addActor(who, { ...pane.env, HERDR_PANE_ID: pane.id }, resumeIndex >= 0 ? argv[resumeIndex + 1] : undefined);
         if (world.faults.get("pi.start")?.mode === "exit_before_ready") { world.killPid(world.envs.get(actor.id)!.process.pid); return; }
         return actor.emit("session_start", { reason: "startup" });
       });
     };
   }
-  addActor(who: ActorRef, variables: Record<string, string> = {}): SimActor {
+  addActor(who: ActorRef, variables: Record<string, string> = {}, resumeFile?: string): SimActor {
     const id = actorKey(who);
-    if (this.actors.has(id)) throw new Error(`Actor already loaded: ${id}`);
-    const actor = new SimActor(this.world, id, { ...(who.actor === "lead" ? {} : { PI_TEAM_NAME: who.team }), PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor, ...variables });
+    if (this.actors.has(id)) {
+      const old = this.world.envs.get(id)!;
+      if (this.world.processes.exists(old.process.pid)) throw new Error(`Actor already loaded: ${id}`);
+      // A dead carrier releases its environment. The replacement opens the exact Session.
+      this.world.envs.delete(id);
+    }
+    const actor = new SimActor(this.world, id, { ...(who.actor === "lead" ? {} : { PI_TEAM_NAME: who.team }), PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor, ...variables }, resumeFile);
     const factory = this.factories.get(id);
     if (!factory) throw new Error(`Actor module graph was not prepared: ${id}`);
     actor.initialize(factory);
@@ -83,7 +89,12 @@ export class WorldReplay {
         break;
       }
       case "tool.call": this.results.set(index, await this.actor(step.who).tool(step.tool, resolveResultRefs(step.args, this.results) as Record<string, unknown>)); break;
-      case "turn.end": await this.actor(step.who).emit("turn_end", { message: { role: "assistant", stopReason: step.outcome === "settled" ? "stop" : step.outcome }, toolResults: [] }); break;
+      case "turn.end": {
+        const actor = this.actor(step.who);
+        await actor.emit("context", { messages: actor.session.buildSessionContext().messages });
+        await actor.emit("turn_end", { message: { role: "assistant", stopReason: step.outcome === "settled" ? "stop" : step.outcome }, toolResults: [] });
+        break;
+      }
       case "agent.settled": await this.actor(step.who).settle(); break;
       case "human.escape": case "human.interrupt": await this.actor(step.who).emit("turn_end", { message: { role: "assistant", stopReason: "aborted" }, toolResults: [] }); break;
       case "pi.compact": {

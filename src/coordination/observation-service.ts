@@ -176,12 +176,18 @@ export class CoordinationObservationService {
       const workerChanges: Extract<CoordinationSyncResult, { kind: "updates" }>["workerChanges"] = page.events.flatMap(event => {
         if (event.type !== "worker") return [];
         const worker = bound.config.logicalWorkers!.find(worker => worker.name === event.worker);
-        return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: `Worker ${worker.name} ${event.phase.replaceAll("_", " ")}.` }] : [];
+        const c = event.carrier;
+        const taskIds = worker ? this.projection.projectNonterminalTaskIds(tasks.tasks, worker.name) : [];
+        return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: c
+          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; nonterminalTaskIds=${taskIds.join(",") || "none"}.`
+          : `Worker ${worker.name}: ${event.phase === "failed" ? "startup admission refused" : event.phase.replaceAll("_", " ")}.` }] : [];
       });
+      const teamChanges = page.events.flatMap(event => event.type === "alert" && event.alertId.startsWith("herdr-observation:") && event.from === "team-lead" && event.to === "team-lead"
+        ? [{ kind: "lifecycle" as const, text: event.text }] : []);
       const changes = projected.changes;
-      if (changes.length || workerChanges.length) {
+      if (changes.length || workerChanges.length || teamChanges.length) {
         selected?.(page, pages.slice(index + 1));
-        return { kind: "updates", teamChanges: [], workerChanges, taskChanges: changes, alerts: [], head: Number(page.cursor), epochId: bound.config.epochId, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
+        return { kind: "updates", teamChanges, workerChanges, taskChanges: changes, alerts: [], head: Number(page.cursor), epochId: bound.config.epochId, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
       }
     }
     // Empty projections can still contain stale Task or retired Worker events.

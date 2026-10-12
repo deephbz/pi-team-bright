@@ -3,7 +3,7 @@ import type { Theme } from "@earendil-works/pi-coding-agent";
 import { createTuiReviewTheme } from "./tui-review-theme";
 
 export type TuiMessageTone = "success" | "warning" | "error" | "info";
-export type TuiMessageProvenance = "tool-result" | "task-delivery" | "direct-delivery" | "sync-nudge" | "doctor" | "gallery";
+export type TuiMessageProvenance = "tool-result" | "task-delivery" | "direct-delivery" | "sync-nudge" | "doctor" | "carrier" | "gallery";
 
 /** Owns transcript presentation only. Domain results and delivery records remain authoritative. */
 export interface PiTeamBrightTuiMessage {
@@ -40,7 +40,7 @@ export function messageHeader(type: string): string {
     team_create: "Team", ensure_worker: "Worker", task_graph_apply: "Task graph", task_create: "Task graph",
     task_read: "Task read", task_update: "Task update", team_sync: "Team sync", task_link: "Task link",
     alert_send: "Alert", worker_stop: "Worker stop", team_shutdown: "Team shutdown",
-    "task-change": "Task change", "direct-message": "Alert", "sync-nudge": "Team sync", doctor: "Doctor",
+    "task-change": "Task change", "direct-message": "Alert", "sync-nudge": "Team sync", doctor: "Doctor", "worker-recovery": "Worker recovery", status: "Status",
   };
   return `PTB · ${names[type] ?? type.replace(/[-_]/g, " ")}`;
 }

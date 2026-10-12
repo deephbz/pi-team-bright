@@ -3,7 +3,7 @@ import { ModelResultSchemas, projectToolResult, type ProjectedTool } from "./res
 import { projectModelToolTuiMessage, projectToolTuiMessage } from "./tui-projection";
 import { projectionLines, renderProjectionWithTheme, type PiTeamBrightTuiMessage } from "./tui-message-projection";
 import { createTuiReviewTheme, type TuiReviewThemeName } from "./tui-review-theme";
-import { projectDirectMessage, projectDoctorMessage, projectSyncNudgeMessage, projectTaskChangeMessage } from "./custom-message-projection";
+import { projectWorkerRecoveryMessage, projectStatusEntry, projectDirectMessage, projectDoctorMessage, projectSyncNudgeMessage, projectTaskChangeMessage } from "./custom-message-projection";
 import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nudge";
 import { TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE } from "../utils/task-delivery";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
@@ -265,6 +265,8 @@ function customScenarios(): TuiMessageGalleryScenario[] {
     { id: "custom.direct-message", title: "Direct coordination delivery", source: "custom", customTypes: [DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE], message: projectDirectMessage({ content: directContent, details: { messageIds: ["alert-1"] } }) },
     { id: "custom.sync-nudge", title: "Team synchronization nudge", source: "custom", customTypes: [SYNC_NUDGE_CUSTOM_TYPE], message: projectSyncNudgeMessage({ details: nudge })! },
     { id: "custom.team-update", title: "Team update", source: "custom", customTypes: [TEAM_UPDATE_TYPE], message: teamUpdate },
+    { id: "custom.worker-recovery", title: "Exact Worker Session recovery", source: "custom", customTypes: ["ptb.worker-recovery"], message: projectWorkerRecoveryMessage({ content: "Your exact Worker Session resumed. Continue the current Attempt for task-1. Use task_read for current authority. Recovery changed no Task state." })! },
+    { id: "entry.status", title: "Carrier status inspection", source: "custom", customTypes: [], message: projectStatusEntry({ lines: ["Team review: active", "worker: process gone; pane pane-1; lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=task-1."] })! },
     { id: "custom.doctor", title: "Team doctor repair context", source: "custom", customTypes: [PTB_DOCTOR_CUSTOM_TYPE], message: doctorMessage },
     { id: "custom.task-change-malformed", title: "Malformed Task delivery projection", source: "diagnostic", message: projectTaskChangeMessage({ content: "not JSON", details: { deliveryIds: ["delivery-bad"] } }) },
     { id: "custom.direct-message-malformed", title: "Malformed coordination projection", source: "diagnostic", message: projectDirectMessage({ content: "not JSON", details: { messageIds: ["alert-bad"] } }) },

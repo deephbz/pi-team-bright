@@ -78,6 +78,13 @@ function service(input: {
 }
 
 describe("Coordination complete graph replacement", () => {
+  it("surfaces a Herdr observation outage as a Team change without direct-alert duplication", async () => {
+    const event: TeamEvent = { type: "alert", cursor: "1", at: "2026-08-13T00:00:00.000Z", alertId: "herdr-observation:outage-1", from: "team-lead", to: "team-lead", kind: "attention", text: "Herdr observation unavailable. Process verification continues." };
+    const { instance } = service({ current: [], event, complete: true });
+    await expect(instance.readTeamSync("/tmp/lead.jsonl", "updates", new AbortController().signal, "sync")).resolves.toMatchObject({
+      kind: "updates", teamChanges: [{ kind: "lifecycle", text: event.text }], alerts: [], head: 1,
+    });
+  });
   it("advances across a removed historical Task event without hydrating the removed ID", async () => {
     const current = task("current");
     const removedVersion = taskVersionRef("removed-version");

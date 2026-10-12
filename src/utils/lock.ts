@@ -206,6 +206,20 @@ function retryDelayMs(): number {
 }
 
 const unboundedLockWait = new AsyncLocalStorage<boolean>();
+const lockDeadline = new AsyncLocalStorage<{ at: number; signal?: AbortSignal }>();
+
+export class LockDeadlineError extends Error {
+  constructor() { super("receipt_deadline_expired"); }
+}
+
+/** One operation deadline covers nested authority locks. Late callbacks fail before mutation. */
+export function withLockDeadline<T>(deadline: number, action: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  return lockDeadline.run({ at: deadline, signal }, action);
+}
+export function assertLockDeadline(): void {
+  const deadline = lockDeadline.getStore();
+  if (deadline && (deadline.signal?.aborted || hostEnv().clock.now() >= deadline.at)) throw new LockDeadlineError();
+}
 
 /** Admission must not exit a live Worker due to lock contention. The launcher
  * owns its hang ceiling. Async scope also covers nested persistence locks. */
@@ -219,29 +233,33 @@ export async function withLock<T>(lockPath: string, fn: () => Promise<T>, retrie
   const waitStartedAt = hostEnv().clock.now();
   // Preserve the old public retry budget (retries * 100 ms) while polling with
   // short jitter. Twenty local contenders no longer advance one per 100 ms.
-  let waitBudgetMs = unboundedLockWait.getStore() ? Infinity : Math.max(0, retries) * LEGACY_RETRY_INTERVAL_MS;
+  const deadline = lockDeadline.getStore()?.at;
+  let waitBudgetMs = deadline !== undefined ? Math.max(0, deadline - waitStartedAt)
+    : unboundedLockWait.getStore() ? Infinity : Math.max(0, retries) * LEGACY_RETRY_INTERVAL_MS;
   let acquired = false;
 
   if (waitBudgetMs > 0) {
     while (true) {
+      assertLockDeadline();
       if (tryAcquireVisibleLock(lockFile, owner)) {
         acquired = true;
         break;
       }
       if (waitBudgetMs <= 0) break;
-      const delay = Math.min(retryDelayMs(), waitBudgetMs);
+      const delay = Math.min(retryDelayMs(), waitBudgetMs, deadline === undefined ? Infinity : deadline - hostEnv().clock.now());
       await new Promise<void>((resolve) => hostEnv().clock.setTimeout(resolve, delay));
       waitBudgetMs -= delay;
     }
   }
 
   recordLockWait(hostEnv().clock.now() - waitStartedAt);
-  if (!acquired) throw new Error("Could not acquire lock");
+  if (!acquired) { assertLockDeadline(); throw new Error("Could not acquire lock"); }
 
   const heartbeatTimer = hostEnv().clock.setInterval(() => heartbeat(lockFile, owner), HEARTBEAT_INTERVAL_MS);
   if ("unref" in heartbeatTimer) heartbeatTimer.unref();
 
   try {
+    assertLockDeadline();
     return await fn();
   } finally {
     hostEnv().clock.clearInterval(heartbeatTimer);

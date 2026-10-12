@@ -12,9 +12,11 @@ import type { TeamLifecyclePublication } from "./team-lifecycle-publication";
 
 export type SessionStartup =
   | { kind: "refused"; reason: string; exitProcess: boolean }
-  | { kind: "admitted"; action: "claim" | "already_current"; member: Member };
+  | { kind: "admitted"; action: "claim" | "already_current"; member: Member; recovered?: boolean };
 
 export class TeamSessionLifecycleService {
+  // Orders hook entry even when the wall clock ties or a lease delays persistence.
+  private stopSequence = 0;
   constructor(private readonly lifecyclePublication: TeamLifecyclePublication) {}
 
   async admitWorker(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string; expectedMembershipId?: string }): Promise<SessionStartup> {
@@ -26,6 +28,8 @@ export class TeamSessionLifecycleService {
   }
 
   private async admitWorkerWithTrace(input: { teamName: string; workerName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; launchId?: string; expectedMembershipId?: string }): Promise<SessionStartup> {
+    const stopSequence = this.stopSequence;
+    const stopAtEntry = JSON.stringify((await runtime.readRuntimeStatus(input.teamName, input.workerName))?.lastStop);
     recordWorkerLaunchStage("worker_session_started");
     const config = await teams.readConfig(input.teamName);
     const admission = admitTeamSession(config, input.workerName, input.placement, input.identitySource);
@@ -42,24 +46,35 @@ export class TeamSessionLifecycleService {
           return { kind: "refused", reason: `Worker ${input.workerName} started for a Membership that is no longer current.`, exitProcess: true };
         }
       }
-      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), hostEnv().process.pid, runtime.probePidPresence, input.launchId);
+      if (input.launchId && current.launch && current.launch.launchId !== input.launchId) {
+        return { kind: "refused", reason: "Startup belongs to a superseded launchId.", exitProcess: true };
+      }
+      const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
+      if (this.stopSequence !== stopSequence || JSON.stringify(status?.lastStop) !== stopAtEntry) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
+      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, status, hostEnv().process.pid, undefined, input.launchId);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
       }
-      if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: current };
+      if (runtimeAdmission.action === "already_current") {
+        const identity = runtime.ownBirthIdentity();
+        if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, input.workerName, { ...identity, lastStop: undefined }, current.membershipId);
+        return { kind: "admitted", action: "already_current", member: current };
+      }
       const startedAt = hostEnv().clock.now();
-      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined, lastStop: undefined, stopRequested: undefined }, current.membershipId);
       recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });
-      const bound = await teams.bindMemberSession(input.teamName, input.workerName, input.sessionFile, input.launchId, admission.update ?? {}, current.membershipId);
+      const bound = await teams.bindMemberSession(input.teamName, input.workerName, input.sessionFile, current.sessionFile ? undefined : input.launchId, admission.update ?? {}, current.membershipId);
       recordWorkerLaunchStage("session_bound_persisted", { membershipId: bound.membershipId! });
       await this.lifecyclePublication.recordWorkerSessionBound({ teamName: input.teamName, workerName: input.workerName, membershipId: bound.membershipId!, generation: { membershipId: bound.membershipId!, pid: hostEnv().process.pid, startedAt } });
       recordWorkerLaunchStage("session_bound_published", { membershipId: bound.membershipId! });
-      return { kind: "admitted", action: "claim", member: bound };
+      return { kind: "admitted", action: "claim", member: bound, ...(current.sessionFile && runtimeAdmission.replaces ? { recovered: true } : {}) };
     });
   }
 
   async admitLead(input: { teamName: string; sessionFile: string; placement: SessionTerminalPlacement; identitySource: TeamIdentitySource; allowFirstRuntimeGeneration?: boolean }): Promise<SessionStartup> {
+    const stopSequence = this.stopSequence;
+    const stopAtEntry = JSON.stringify((await runtime.readRuntimeStatus(input.teamName, "team-lead"))?.lastStop);
     const config = await teams.readConfig(input.teamName);
     const admission = admitTeamSession(config, "team-lead", input.placement, input.identitySource);
     if (admission.kind === "refused") return admission;
@@ -67,19 +82,38 @@ export class TeamSessionLifecycleService {
     if (!lead.membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
     return teams.withCurrentMembershipLease(input.teamName, lead.membershipId, async (lead) => {
       const status = await runtime.readRuntimeStatus(input.teamName, "team-lead");
+      if (this.stopSequence !== stopSequence || JSON.stringify(status?.lastStop) !== stopAtEntry) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
       const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status);
       if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
-      if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: lead };
+      if (runtimeAdmission.action === "already_current") {
+        const identity = runtime.ownBirthIdentity();
+        if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, "team-lead", { ...identity, lastStop: undefined }, lead.membershipId);
+        return { kind: "admitted", action: "already_current", member: lead };
+      }
       const membershipId = lead.membershipId;
       if (!membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
       const startedAt = hostEnv().clock.now();
-      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, startedAt }, membershipId);
+      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastStop: undefined, stopRequested: undefined }, membershipId);
       if (admission.update) await teams.updateMembership(input.teamName, membershipId, admission.update);
       const recordPath = paths.leadSessionPath(input.teamName);
       const dir = path.dirname(recordPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(recordPath, JSON.stringify({ pid: hostEnv().process.pid, sessionFile: input.sessionFile, startedAt }));
       return { kind: "admitted", action: "claim", member: lead };
+    });
+  }
+
+  async recordStop(input: { teamName: string; workerName: string; sessionFile: string; membershipId: string; piReason: NonNullable<runtime.AgentRuntimeStatus["lastStop"]>["piReason"]; targetSessionFile?: string }): Promise<void> {
+    this.stopSequence++;
+    const stopId = hostEnv().random.uuid();
+    const observedAt = hostEnv().clock.now();
+    await teams.withCurrentSessionBinding(input.teamName, input.workerName, input.sessionFile, input.membershipId, async () => {
+      const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
+      if (status?.pid !== hostEnv().process.pid || status.membershipId !== input.membershipId) return;
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { lastStop: {
+        stopId, piReason: input.piReason, targetSessionFile: input.targetSessionFile,
+        observedAt, suspectedHumanStop: !status.stopRequested && input.piReason !== "reload",
+      } }, input.membershipId);
     });
   }
 

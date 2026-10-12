@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { HerdrAdapter, herdrCarrierName } from "./herdr-adapter";
 import { nodeHostEnv } from "../env/host-env";
 import * as terminalAdapter from "../utils/terminal-adapter";
@@ -31,11 +31,12 @@ const readyStart = (paneId: string, name: string) => success({
 
 describe("HerdrAdapter", () => {
   let adapter: HerdrAdapter;
-  let exec: ReturnType<typeof vi.spyOn>;
+  let exec: MockInstance<typeof terminalAdapter.execCommand>;
 
   beforeEach(() => {
     adapter = new HerdrAdapter();
     exec = vi.spyOn(terminalAdapter, "execCommand");
+    vi.spyOn(nodeHostEnv.exec, "run").mockImplementation(async (command, args) => ({ kind: "exited", ...terminalAdapter.execCommand(command, [...args]) }));
     vi.stubEnv("HERDR_ENV", "1");
     vi.stubEnv("HERDR_TAB_ID", "tab-origin");
     vi.stubEnv("HERDR_PANE_ID", "pane-origin");
@@ -602,7 +603,8 @@ describe("HerdrAdapter", () => {
     expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["split"]));
   });
 
-  it("retries the transient split-to-shell readiness race before starting Pi", () => {
+  it("returns a receipt before retrying a warming shell on the same pane", async () => {
+    vi.useFakeTimers();
     const sleep = vi.spyOn(nodeHostEnv.clock, "sleepSync").mockImplementation(() => {});
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
@@ -616,12 +618,53 @@ describe("HerdrAdapter", () => {
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
     })).toBe("pane-worker");
+    expect(exec).toHaveBeenCalledTimes(5);
+    expect(sleep).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(50);
     expect(exec).toHaveBeenCalledTimes(6);
-    expect(exec.mock.calls[4]).toEqual(exec.mock.calls[5]);
-    expect(sleep).toHaveBeenCalledExactlyOnceWith(50);
+    expect(exec.mock.calls[5][1]).toEqual(exec.mock.calls[4][1]);
+    vi.useRealTimers();
   });
 
-  it("requires the official interactive-ready response without a compatibility retry", () => {
+  it("prepares asynchronously with bounded calls and preserves an ambiguous split", async () => {
+    const run = vi.mocked(nodeHostEnv.exec.run);
+    run.mockImplementation(async (_command, args, options) => {
+      expect(options?.timeoutMs).toBeGreaterThan(0);
+      expect(options?.timeoutMs).toBeLessThanOrEqual(2000);
+      if (args[1] === "layout") return { kind: "exited", ...leaderLayout("pane-origin", 100) };
+      if (args[1] === "get") return { kind: "exited", ...success({ pane: { pane_id: "pane-origin" } }) };
+      return { kind: "timeout", afterMs: options.timeoutMs };
+    });
+    await expect(adapter.prepareSpawnAsync({ name: "worker", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] } })).rejects.toThrow("herdr_split_timeout");
+    expect(exec).not.toHaveBeenCalled();
+    expect(run.mock.calls.filter(([, args]) => args[1] === "split")).toHaveLength(1);
+    expect(run.mock.calls.some(([, args]) => args[1] === "close" || args[1] === "start")).toBe(false);
+  });
+
+  it("retries only decisive busy on the same pane and never retries ambiguous start", async () => {
+    vi.useFakeTimers();
+    try {
+      const run = vi.mocked(nodeHostEnv.exec.run);
+      run.mockResolvedValueOnce({ kind: "exited", ...failure("agent_pane_busy", "shell warming") })
+        .mockResolvedValueOnce({ kind: "exited", ...readyStart("pane-worker", "worker") });
+      const options = { name: "worker", cwd: "/repo", argv: ["pi"], env: { PI_TEAM_LAUNCH_ID: "launch-fixed" } };
+      const started = adapter.startPrepared("pane-worker", options);
+      await vi.advanceTimersByTimeAsync(50);
+      await expect(started).resolves.toMatchObject({ state: "started" });
+      expect(run.mock.calls[0]).toEqual(run.mock.calls[1]);
+      run.mockClear().mockResolvedValue({ kind: "timeout", afterMs: 2000 });
+      await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "unknown", fact: "timeout" });
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(run).toHaveBeenCalledOnce();
+      run.mockClear().mockResolvedValue({ kind: "exited", ...failure("agent_pane_busy", "shell warming") });
+      const refused = adapter.startPrepared("pane-worker", options);
+      await vi.advanceTimersByTimeAsync(5000);
+      await expect(refused).resolves.toMatchObject({ state: "refused" });
+      expect(run.mock.calls.every(call => JSON.stringify(call) === JSON.stringify(run.mock.calls[0]))).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("keeps the pane when interactive recognition is unavailable", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
@@ -632,15 +675,15 @@ describe("HerdrAdapter", () => {
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
 
-    expect(() => adapter.spawn({
+    expect(adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toThrow(/interactive recognized Pi agent worker/i);
+    })).toBe("pane-worker");
     expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
   });
 
-  it("closes the exact pane when ready start reports a contradictory detected kind", () => {
+  it("keeps the pane when ready start reports a contradictory detected kind", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
@@ -651,15 +694,15 @@ describe("HerdrAdapter", () => {
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
 
-    expect(() => adapter.spawn({
+    expect(adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toThrow(/interactive recognized Pi agent worker/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    })).toBe("pane-worker");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
     expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
   });
 
-  it("closes the exact pane for malformed ready argv or target evidence", () => {
+  it("keeps the exact pane for malformed ready argv or target evidence", () => {
     const spawn = () => adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
@@ -673,8 +716,8 @@ describe("HerdrAdapter", () => {
         pane_id: "pane-worker", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(spawn).toThrow(/canonical Pi argv/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    expect(spawn()).toBe("pane-worker");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
 
     exec.mockReset();
     exec
@@ -686,8 +729,8 @@ describe("HerdrAdapter", () => {
         pane_id: "wrong-pane", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(spawn).toThrow(/exact managed target worker in pane pane-worker-2/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker-2"]);
+    expect(spawn()).toBe("pane-worker-2");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
   });
 
   it("rejects legacy shell commands and malformed or incomplete start envelopes", () => {
@@ -718,12 +761,11 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(failure("agent_start_failed", "agent unavailable"))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(() => adapter.spawn({
+    expect(adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    }))
-      .toThrow(/agent_start_failed: agent unavailable/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    })).toBe("pane-worker");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
     expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
   });
 

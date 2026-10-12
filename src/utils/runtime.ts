@@ -26,6 +26,8 @@ export interface AgentRuntimeStatus {
   agentName: string;
   membershipId?: string;
   pid?: number;
+  osBirthToken?: string;
+  bootId?: string;
   startedAt?: number;
   lastHeartbeatAt?: number;
   lastInboxReadAt?: number;
@@ -33,6 +35,8 @@ export interface AgentRuntimeStatus {
   /** Exact Pi 0.83 agent lifecycle evidence for the current generation. */
   runState?: "active" | "settled";
   lastError?: RuntimeError;
+  lastStop?: { stopId?: string; piReason: "quit" | "reload" | "new" | "resume" | "fork"; targetSessionFile?: string; observedAt: number; suspectedHumanStop: boolean };
+  stopRequested?: "worker_stop" | "team_shutdown" | "compensation";
 }
 
 /** Exact ephemeral process generation within one durable Membership. */
@@ -40,6 +44,22 @@ export interface RuntimeGeneration {
   membershipId: string;
   pid: number;
   startedAt: number;
+  osBirthToken?: string;
+  bootId?: string;
+}
+
+/** Tokenless legacy records fail closed until their own process re-admits. */
+export function verifyRuntimeGeneration(status: Pick<AgentRuntimeStatus, "pid" | "osBirthToken" | "bootId"> | null, observed?: import("../env/host-env").GenerationProbe): "live" | "gone" | "unknown" {
+  if (!status?.pid || !status.osBirthToken || !status.bootId) return "unknown";
+  const probe = observed ?? hostEnv().process.generation(status.pid);
+  if (probe.kind === "absent") return "gone";
+  if (probe.kind === "unknown") return "unknown";
+  return probe.generation.osBirthToken === status.osBirthToken && probe.generation.bootId === status.bootId ? "live" : "gone";
+}
+
+export function ownBirthIdentity(): { osBirthToken?: string; bootId?: string } {
+  const probe = hostEnv().process.generation(hostEnv().process.pid);
+  return probe.kind === "found" ? { osBirthToken: probe.generation.osBirthToken, bootId: probe.generation.bootId } : {};
 }
 
 export function runtimeGeneration(status: AgentRuntimeStatus | null): RuntimeGeneration | null {
@@ -54,6 +74,7 @@ export function runtimeGeneration(status: AgentRuntimeStatus | null): RuntimeGen
     membershipId: status.membershipId,
     pid: status.pid!,
     startedAt: status.startedAt!,
+    ...(status.osBirthToken ? { osBirthToken: status.osBirthToken, bootId: status.bootId } : {}),
   };
 }
 
@@ -84,7 +105,7 @@ export function probePidPresence(pid: number): "absent" | "occupied" {
 export function preflightRuntimeRecovery(
   member: Pick<Member, "name" | "membershipId" | "sessionFile" | "pendingLaunchId">,
   status: AgentRuntimeStatus | null,
-  probe: (pid: number) => "absent" | "occupied" = probePidPresence,
+  probe?: (pid: number) => "absent" | "occupied",
   launchId?: string,
 ): RuntimeRecoveryPreflight {
   if (!member.membershipId) return { kind: "refused", reason: `Current Membership for ${member.name} has no stable identity.` };
@@ -99,7 +120,7 @@ export function preflightRuntimeRecovery(
   if (generation.membershipId !== member.membershipId) {
     return { kind: "refused", reason: `Runtime evidence for ${member.name} belongs to another Membership.` };
   }
-  if (probe(generation.pid) === "absent") return { kind: "ready", replaces: generation };
+  if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status) === "gone") return { kind: "ready", replaces: generation };
   return { kind: "refused", reason: `${member.sessionFile ? "Current" : "Prepared"} Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
 }
 
@@ -112,7 +133,7 @@ export function admitRuntimeStartup(
   sessionFile: string,
   status: AgentRuntimeStatus | null,
   pid: number = hostEnv().process.pid,
-  probe: (pid: number) => "absent" | "occupied" = probePidPresence,
+  probe?: (pid: number) => "absent" | "occupied",
   launchId?: string,
 ): RuntimeStartupAdmission {
   if (!member.membershipId) return { kind: "refused", reason: `Current Membership for ${member.name} has no stable identity.` };
@@ -130,7 +151,7 @@ export function admitRuntimeStartup(
     // A prepared Membership has no completed Session binding. A same-PID
     // record can only be a prior claim whose bind failed, not an idempotent
     // Session re-entry. Keep it fenced until exact exit evidence exists.
-    if (probe(generation.pid) === "absent") return { kind: "admitted", action: "claim", replaces: generation };
+    if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status) === "gone") return { kind: "admitted", action: "claim", replaces: generation };
     return { kind: "refused", reason: `Prepared Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
   }
   if (member.sessionFile !== sessionFile) {
@@ -140,8 +161,8 @@ export function admitRuntimeStartup(
   if (!generation || generation.membershipId !== member.membershipId) {
     return { kind: "refused", reason: `Runtime evidence for already Session-bound ${member.name} is missing, malformed, or belongs to another Membership.` };
   }
-  if (generation.pid === pid) return { kind: "admitted", action: "already_current" };
-  if (probe(generation.pid) === "absent") return { kind: "admitted", action: "claim", replaces: generation };
+  if (generation.pid === pid && (!status?.osBirthToken || verifyRuntimeGeneration(status) === "live" || probe)) return { kind: "admitted", action: "already_current" };
+  if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status) === "gone") return { kind: "admitted", action: "claim", replaces: generation };
   return { kind: "refused", reason: `Current Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
 }
 

@@ -16,6 +16,7 @@ import {
 } from "../utils/team-pane-layout";
 import { recordWorkerLaunchStage } from "../utils/trace";
 
+type HerdrQuery = (args: string[]) => Record<string, unknown>;
 type HerdrEnvelope = {
   result?: unknown;
   error?: { code?: unknown; message?: unknown };
@@ -23,7 +24,7 @@ type HerdrEnvelope = {
 
 const FORWARDED_ENV = /^(?:PI_[A-Z0-9_]+|HTTP_PROXY|HTTPS_PROXY|WSS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|wss_proxy|all_proxy|no_proxy)$/;
 const SHELL_READY_RETRY_MS = 50;
-const SHELL_READY_TIMEOUT_MS = 300_000;
+const SHELL_READY_TIMEOUT_MS = 5_000;
 /** Official Herdr agent-start readiness bound in milliseconds. */
 const AGENT_READY_TIMEOUT_MS = 300_000;
 
@@ -165,8 +166,8 @@ export class HerdrAdapter implements TerminalAdapter {
     return resultRecord(envelope);
   }
 
-  private paneRecord(paneId: string): Record<string, unknown> {
-    const pane = this.invoke(["pane", "get", paneId]).pane;
+  private paneRecord(paneId: string, query: HerdrQuery = this.invoke.bind(this)): Record<string, unknown> {
+    const pane = query(["pane", "get", paneId]).pane;
     if (!pane || typeof pane !== "object" || Array.isArray(pane)
       || (pane as Record<string, unknown>).pane_id !== paneId) {
       throw new Error(`Herdr pane ${paneId} is not an exact usable target.`);
@@ -174,8 +175,8 @@ export class HerdrAdapter implements TerminalAdapter {
     return pane as Record<string, unknown>;
   }
 
-  private paneLayout(leaderPaneId: string): { record: Record<string, unknown>; panes: Record<string, unknown>[] } {
-    const layout = this.invoke(["pane", "layout", "--pane", leaderPaneId]).layout;
+  private paneLayout(leaderPaneId: string, query: HerdrQuery = this.invoke.bind(this)): { record: Record<string, unknown>; panes: Record<string, unknown>[] } {
+    const layout = query(["pane", "layout", "--pane", leaderPaneId]).layout;
     if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
       throw new Error(`Herdr leader pane ${leaderPaneId} returned no layout; refusing Worker spawn.`);
     }
@@ -205,13 +206,13 @@ export class HerdrAdapter implements TerminalAdapter {
     return { x, y, width, height };
   }
 
-  private assertWorkerRegion(leaderPaneId: string, workerPaneId: string): void {
-    const leader = this.paneRecord(leaderPaneId);
-    const worker = this.paneRecord(workerPaneId);
+  private assertWorkerRegion(leaderPaneId: string, workerPaneId: string, query: HerdrQuery): void {
+    const leader = this.paneRecord(leaderPaneId, query);
+    const worker = this.paneRecord(workerPaneId, query);
     if (leader.tab_id !== worker.tab_id || leader.workspace_id !== worker.workspace_id) {
       throw new Error(`Herdr Team Worker pane ${workerPaneId} is not in the leader tab; refusing to split it.`);
     }
-    const { record, panes } = this.paneLayout(leaderPaneId);
+    const { record, panes } = this.paneLayout(leaderPaneId, query);
     if (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id) {
       throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove its exact tab; refusing Worker spawn.`);
     }
@@ -234,13 +235,14 @@ export class HerdrAdapter implements TerminalAdapter {
     leaderPaneId: string,
     leaderShare: number,
     enforceMinimum = false,
-    leaderIdentity?: Record<string, unknown>,
+    leaderIdentity: Record<string, unknown> | undefined,
+    query: HerdrQuery,
   ): string {
     const leader = enforceMinimum ? leaderIdentity : undefined;
     if (leader && (typeof leader.tab_id !== "string" || !leader.tab_id || typeof leader.workspace_id !== "string" || !leader.workspace_id)) {
       throw new Error(`Herdr leader pane ${leaderPaneId} has no exact tab or workspace identity; refusing Worker spawn.`);
     }
-    const { record, panes } = this.paneLayout(leaderPaneId);
+    const { record, panes } = this.paneLayout(leaderPaneId, query);
     if (leader && (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id)) {
       throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove its exact tab; refusing Worker spawn.`);
     }
@@ -269,14 +271,14 @@ export class HerdrAdapter implements TerminalAdapter {
   }
 
   /** Choose the largest viable registered Worker pane from the live Herdr layout. */
-  private adaptiveSplit(leaderPaneId: string, workerPaneIds: readonly string[], columnsPerRow: number): { targetPaneId: string; direction: "right" | "down" } {
-    const leader = this.paneRecord(leaderPaneId);
+  private adaptiveSplit(leaderPaneId: string, workerPaneIds: readonly string[], columnsPerRow: number, query: HerdrQuery): { targetPaneId: string; direction: "right" | "down" } {
+    const leader = this.paneRecord(leaderPaneId, query);
     if (typeof leader.tab_id !== "string" || !leader.tab_id || typeof leader.workspace_id !== "string" || !leader.workspace_id) {
       throw new Error(`Herdr leader pane ${leaderPaneId} has no exact tab or workspace identity; refusing Worker spawn.`);
     }
     const registered = workerPaneIds.flatMap((paneId) => {
       try {
-        return [{ paneId, pane: this.paneRecord(paneId) }];
+        return [{ paneId, pane: this.paneRecord(paneId, query) }];
       } catch (error) {
         if (isPaneNotFound(error)) return [];
         throw error;
@@ -288,7 +290,7 @@ export class HerdrAdapter implements TerminalAdapter {
     const eligibleRegistered = registered.filter(({ pane }) =>
       leader.tab_id === pane.tab_id && leader.workspace_id === pane.workspace_id,
     );
-    const { record, panes } = this.paneLayout(leaderPaneId);
+    const { record, panes } = this.paneLayout(leaderPaneId, query);
     if (record.tab_id !== leader.tab_id || record.workspace_id !== leader.workspace_id) {
       throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove its exact tab; refusing Worker spawn.`);
     }
@@ -324,6 +326,13 @@ export class HerdrAdapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
+    const paneId = this.prepareSpawn(options);
+    void this.startPrepared(paneId, options);
+    return paneId;
+  }
+
+  /** Create location only. The caller records it before it starts Pi. */
+  private splitArgs(options: SpawnOptions, query: HerdrQuery): string[] {
     if (!options.argv) throw new Error("Herdr spawn requires structured argv; legacy command strings are unsupported.");
     if (!options.panePlacement) throw new Error("Herdr Worker spawn requires exact Team pane placement.");
     validateSpawnOptions(options);
@@ -342,30 +351,33 @@ export class HerdrAdapter implements TerminalAdapter {
     }
     let adaptiveTarget: { targetPaneId: string; direction: "right" | "down" } | undefined;
     if (workerCount > 0 && adaptive) {
-      adaptiveTarget = this.adaptiveSplit(leaderPaneId, workerPaneIds, paneLayout.columns_per_row ?? DEFAULT_COLUMNS_PER_ROW);
+      adaptiveTarget = this.adaptiveSplit(leaderPaneId, workerPaneIds, paneLayout.columns_per_row ?? DEFAULT_COLUMNS_PER_ROW, query);
     }
     const targetPaneId = workerCount === 0 ? leaderPaneId : adaptiveTarget?.targetPaneId ?? workerPaneIds.at(-1)!;
     const direction = workerCount === 0 ? "right" : adaptiveTarget?.direction ?? "down";
     const firstWorkerLeaderShare = workerCount === 0
       ? (() => {
-        const leaderRecord = this.paneRecord(targetPaneId);
-        return this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share, adaptive, leaderRecord);
+        const leaderRecord = this.paneRecord(targetPaneId, query);
+        return this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share, adaptive, leaderRecord, query);
       })()
       : undefined;
-    if (workerCount > 0 && !adaptive) this.assertWorkerRegion(leaderPaneId, targetPaneId);
+    if (workerCount > 0 && !adaptive) this.assertWorkerRegion(leaderPaneId, targetPaneId, query);
 
     const envArgs = Object.entries(options.env)
       .filter(([key, value]) => FORWARDED_ENV.test(key) && !value.includes("\0"))
       .flatMap(([key, value]) => ["--env", `${key}=${value}`]);
-    const argv = spawnArgv(options);
-    const split = this.invoke([
+    return [
       "pane", "split", "--pane", targetPaneId,
       "--direction", direction,
       "--ratio", workerCount > 0 ? "0.5" : firstWorkerLeaderShare!,
       "--cwd", options.cwd,
       ...envArgs,
       "--no-focus",
-    ]);
+    ];
+  }
+
+  prepareSpawn(options: SpawnOptions): string {
+    const split = this.invoke(this.splitArgs(options, this.invoke.bind(this)));
     const pane = split.pane;
     const paneId = pane && typeof pane === "object" && !Array.isArray(pane)
       ? (pane as Record<string, unknown>).pane_id
@@ -374,52 +386,74 @@ export class HerdrAdapter implements TerminalAdapter {
       throw new Error("Herdr pane split response did not include pane.pane_id.");
     }
 
-    try {
-      // The split response is the authority for the new pane. Name that exact
-      // pane before agent startup so display identity never depends on title
-      // inference or mutation inside Herdr's readiness window. Presentation
-      // failure must not prevent the Worker from starting.
-      try {
-        this.renamePane(paneId, options.name);
-        recordWorkerLaunchStage("carrier_label_applied");
-      } catch (error) {
-        recordWorkerLaunchStage("carrier_label_not_applied");
-        console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
-      }
-
-      // Herdr agent names are live carrier identity, not stable Worker identity.
-      // Qualify them by Team so a reused Worker name cannot collide with a
-      // stale or concurrent agent in another Team.
-      const carrierName = herdrCarrierName(options.env.PI_TEAM_NAME, options.name);
-      const startArgs = [
-        "agent", "start", carrierName,
-        "--kind", "pi",
-        "--pane", paneId,
-        "--timeout", String(AGENT_READY_TIMEOUT_MS),
-        "--",
-        ...piAgentArgs(argv),
-      ];
-      const deadline = hostEnv().clock.now() + SHELL_READY_TIMEOUT_MS;
-      while (true) {
-        try {
-          assertReadyStart(this.invoke(startArgs), carrierName, paneId);
-          break;
-        } catch (error) {
-          if (!isAgentPaneBusy(error) || hostEnv().clock.now() >= deadline) throw error;
-          // Pane split can return before the new shell reaches its prompt.
-          // Retry only Herdr's explicit transient busy state.
-          hostEnv().clock.sleepSync(SHELL_READY_RETRY_MS);
-        }
-      }
-    } catch (error) {
-      try {
-        this.invoke(["pane", "close", paneId]);
-      } catch {
-        // The primary agent-start failure remains the actionable error.
-      }
-      throw error;
+    try { this.renamePane(paneId, options.name); } catch (error) {
+      console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
     }
     return paneId;
+  }
+
+  private async invokeAsync(args: string[], deadline: number): Promise<Record<string, unknown>> {
+    const timeoutMs = Math.min(2000, deadline - hostEnv().clock.now());
+    if (timeoutMs <= 0) throw new Error("herdr_preparation_budget_expired");
+    const result = await hostEnv().exec.run("herdr", args, { timeoutMs });
+    if (result.kind !== "exited") throw new Error(`herdr_${args[1]}_${result.kind}`);
+    const envelope = parseEnvelope(result.stdout);
+    if (envelope.error) throw new Error(errorText(envelope.error));
+    if (result.status !== 0) throw new Error(`herdr_${args[1]}_exit:${result.status}`);
+    return resultRecord(envelope);
+  }
+
+  /** Snapshot placement asynchronously; geometry uses the same algorithm as legacy callers. */
+  async prepareSpawnAsync(options: SpawnOptions, deadline = hostEnv().clock.now() + 9000): Promise<string> {
+    if (!options.panePlacement) throw new Error("Herdr Worker spawn requires exact Team pane placement.");
+    const { leaderPaneId, workerPaneIds } = options.panePlacement;
+    const queries = [["pane", "layout", "--pane", leaderPaneId], ...[leaderPaneId, ...workerPaneIds].map(id => ["pane", "get", id])];
+    const snapshot = new Map<string, Record<string, unknown> | Error>(await Promise.all(queries.map(async args => {
+      try { return [JSON.stringify(args), await this.invokeAsync(args, deadline)] as const; }
+      catch (error) { return [JSON.stringify(args), error instanceof Error ? error : new Error(String(error))] as const; }
+    })));
+    const splitArgs = this.splitArgs(options, args => {
+      const value = snapshot.get(JSON.stringify(args));
+      if (value instanceof Error) throw value;
+      if (!value) throw new Error("Herdr placement snapshot is incomplete.");
+      return value;
+    });
+    const split = await this.invokeAsync(splitArgs, deadline);
+    const paneId = (split.pane as Record<string, unknown> | undefined)?.pane_id;
+    if (typeof paneId !== "string" || !paneId) throw new Error("Herdr pane split response did not include pane.pane_id.");
+    // Naming failure cannot discard a created target or authorize another split.
+    try { await this.invokeAsync(["pane", "rename", paneId, options.name], deadline); } catch (error) {
+      console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return paneId;
+  }
+
+  async startPrepared(paneId: string, options: SpawnOptions): Promise<{ state: "started" | "refused" | "unknown"; fact: string }> {
+    const deadline = hostEnv().clock.now() + SHELL_READY_TIMEOUT_MS;
+    for (;;) {
+      const result = await this.startOnce(paneId, options);
+      if (result.state !== "refused" || !result.fact.startsWith("agent_pane_busy:") || hostEnv().clock.now() >= deadline) return result;
+      await new Promise<void>(resolve => hostEnv().clock.setTimeout(resolve, SHELL_READY_RETRY_MS));
+    }
+  }
+
+  private async startOnce(paneId: string, options: SpawnOptions): Promise<{ state: "started" | "refused" | "unknown"; fact: string }> {
+    const carrierName = herdrCarrierName(options.env.PI_TEAM_NAME, options.name);
+    const result = await hostEnv().exec.run("herdr", ["agent", "start", carrierName, "--kind", "pi", "--pane", paneId,
+      "--timeout", String(AGENT_READY_TIMEOUT_MS), "--", ...piAgentArgs(spawnArgv(options))], { timeoutMs: AGENT_READY_TIMEOUT_MS + 1000 });
+    if (result.kind === "timeout" || result.kind === "aborted") return { state: "unknown", fact: result.kind };
+    if (result.kind === "spawn_failed") return { state: "refused", fact: `spawn_failed:${result.code}` };
+    try {
+      const envelope = parseEnvelope(result.stdout);
+      if (envelope.error || result.status !== 0) {
+        // A readiness timeout can follow successful actuation. Only explicit pre-actuation refusal is decisive.
+        const fact = envelope.error ? errorText(envelope.error) : result.stderr;
+        const code = envelope.error && typeof envelope.error === "object" ? (envelope.error as Record<string, unknown>).code : undefined;
+        return { state: ["agent_pane_busy", "pane_not_found", "invalid_params", "unsupported_agent_kind"].includes(String(code)) ? "refused" : "unknown", fact };
+      }
+      assertReadyStart(resultRecord(envelope), carrierName, paneId);
+      return { state: "started", fact: "agent_start_accepted" };
+    } catch { return { state: "unknown", fact: "malformed_start_reply" }; }
   }
 
   kill(paneId: string): void {

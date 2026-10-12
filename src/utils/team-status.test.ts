@@ -135,7 +135,9 @@ describe("Pi extension command integration", () => {
     vi.stubEnv("PI_TEAM_NAME", teamName);
 
     let command: RegisteredCommand | undefined;
+    const appendEntry = vi.fn();
     piTeams({
+      appendEntry,
       registerTool() {},
       registerCommand(name: string, definition: RegisteredCommand) {
         if (name === "pi-team-bright") command = definition;
@@ -151,6 +153,7 @@ describe("Pi extension command integration", () => {
       sessionManager: { getSessionFile: () => sessionFile },
       ui: { notify },
     });
+    expect(appendEntry).toHaveBeenCalledWith("ptb.status", { lines: [expect.stringContaining(`Pi Team Bright · ${teamName}`)] });
     expect(notify).toHaveBeenCalledOnce();
     expect(notify.mock.calls[0][0]).toContain(`Pi Team Bright · ${teamName} · active`);
     expect(notify.mock.calls[0][0]).toContain(`Team workspace: ${paths.teamDir(teamName)}`);

@@ -21,8 +21,8 @@ function withSessionPrimitives<T>(env: HostEnv, action: () => T): T {
 }
 
 /** Real Pi branch and compaction algorithms; A5's recorded probe bounds apply. */
-export function createSimSession(env: HostEnv, cwd: string): SessionManager {
-  const session = withSessionPrimitives(env, () => SessionManager.inMemory(cwd, { id: env.random.uuid() }));
+export function createSimSession(env: HostEnv, cwd: string, resumeFile?: string): SessionManager {
+  const session = withSessionPrimitives(env, () => resumeFile ? SessionManager.open(resumeFile) : SessionManager.inMemory(cwd, { id: env.random.uuid() }));
   const sessionFile = () => path.join(cwd, ".pi", "sessions", `${session.getSessionId()}.jsonl`);
   const persist = () => {
     fs.mkdirSync(path.dirname(sessionFile()), { recursive: true });

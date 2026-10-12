@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { CarrierObserver } from "../carrier-observation";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
@@ -81,11 +82,13 @@ function extension(activeTools = ["foreign_extension_tool", "team_create", "team
   let active = [...activeTools];
   const setActiveTools = vi.fn((names: string[]) => { active = [...names]; });
   const setSessionName = vi.fn();
+  const appendEntry = vi.fn();
   piTeams({
     on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
     registerCommand(name: string, command: { handler(args: string, ctx: any): Promise<void> }) { commands.set(name, command); },
     registerTool(tool: { name: string }) { registrations.push(tool.name); tools.set(tool.name, tool); },
     registerMessageRenderer() {},
+    appendEntry,
     sendMessage() {},
     sendUserMessage() {},
     setSessionName,
@@ -94,7 +97,7 @@ function extension(activeTools = ["foreign_extension_tool", "team_create", "team
     getAllTools: () => registrations.map((name) => ({ name })),
     setActiveTools,
   } as never);
-  return Object.assign(handlers, { commands, registrations, tools, setActiveTools, setSessionName });
+  return Object.assign(handlers, { commands, registrations, tools, setActiveTools, setSessionName, appendEntry });
 }
 
 async function createTeam(name: string, sessionFile: string) {
@@ -163,7 +166,7 @@ describe("registered Pi Session adapter characterization", () => {
       joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
     });
     const member = await teams.currentMembership(name, "worker");
-    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1 }, member.membershipId);
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
     const order: string[] = [];
     const claim = vi.spyOn(runtime, "writeRuntimeStatus");
     const bind = vi.spyOn(teams, "bindMemberSession");
@@ -307,7 +310,7 @@ describe("registered Pi Session adapter characterization", () => {
     const footerText = component.render(140).join("\n");
     component.dispose();
     await harness.commands.get("pi-team-bright")!.handler("status", ctx);
-    const statusText = ctx.ui.notify.mock.calls.at(-1)?.[0] as string;
+    const statusText = harness.appendEntry.mock.calls.find(call => call[0] === "ptb.status")?.[1].lines.join("\n") as string;
 
     expect(statusText).toContain("Task authority: beads · degraded");
     expect(statusText).toContain(`Beads workspace: ${taskWorkspace}`);
@@ -318,6 +321,37 @@ describe("registered Pi Session adapter characterization", () => {
     }
     expect(ctx.ui.setFooter.mock.calls.map((call: unknown[]) => call[0])).toContain(undefined);
     expect(ctx.ui.setFooter).toHaveBeenLastCalledWith(expect.any(Function));
+  });
+
+  it("presents one durable status and remembers a batched adoption decline in the exact Session", async () => {
+    vi.stubEnv("PI_AGENT_NAME", ""); vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("batched-status"); const sessionFile = `/tmp/${name}-lead.jsonl`;
+    const config = await createTeam(name, sessionFile);
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: 1 }, config.members[0].membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(CarrierObserver.prototype, "start").mockImplementation(() => {});
+    vi.spyOn(CarrierObserver.prototype, "refresh").mockResolvedValue(undefined);
+    vi.spyOn(CarrierObserver.prototype, "views", "get").mockReturnValue(new Map(["one", "two", "stopped"].map(worker => [worker, {
+      worker, membership: worker, generation: { pid: 42, startedAt: 1, membershipId: worker }, process: "unknown", launch: "none", terminal: "present", activity: "unknown", paneId: `pane-${worker}`, evidence: [],
+      ...(worker === "stopped" ? { lastStop: { piReason: "quit", observedAt: 1, suspectedHumanStop: true } } : {}),
+    }])) as any);
+    const ctx = context(sessionFile); ctx.ui.confirm = vi.fn().mockResolvedValue(false);
+    const harness = extension(); await harness.get("session_start")!({ reason: "resume" }, ctx);
+    ctx.ui.notify.mockClear();
+    await harness.commands.get("pi-team-bright")!.handler("status", ctx);
+    await harness.commands.get("pi-team-bright")!.handler("status", ctx);
+    expect(ctx.ui.confirm).toHaveBeenCalledOnce();
+    expect(ctx.ui.confirm.mock.calls[0][1]).toContain("one: pane pane-one");
+    expect(ctx.ui.confirm.mock.calls[0][1]).toContain("two: pane pane-two");
+    expect(ctx.ui.confirm.mock.calls[0][1]).not.toContain("stopped");
+    const entries = harness.appendEntry.mock.calls.filter(call => call[0] === "ptb.status");
+    expect(entries).toHaveLength(2); expect(entries[0][1].lines).toHaveLength(4);
+    expect(entries[0][1].lines[3]).toContain("lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=");
+    expect(ctx.ui.notify).not.toHaveBeenCalled();
+    ctx.sessionManager.getSessionFile.mockReturnValue("/tmp/other-lead.jsonl");
+    await harness.commands.get("pi-team-bright")!.handler("status", ctx);
+    expect(ctx.ui.confirm).toHaveBeenCalledOnce();
   });
 
   it("suppresses stale fork identity through the registered Session hook", async () => {
