@@ -1,4 +1,33 @@
 import type { WorldTrace } from "../trace-format";
+import fs from "node:fs";
+import path from "node:path";
+import { Check } from "typebox/value";
+import type { TSchema } from "typebox";
+import { modelToolCatalog, GraphTaskUpdateParametersSchema } from "../../src/model-tool-contract/catalog";
+import { WorkerAlertSendParametersSchema, WorkerTaskReadParametersSchema } from "../../src/model-tool-contract/worker-parameters";
+
+const knownAssumptions = new Set([
+  ...fs.readdirSync(path.resolve(__dirname, "../fixtures/probes")).filter(f => f.endsWith(".json")).map(f => f.slice(0, -5)),
+  ...Array.from(fs.readFileSync(path.resolve(__dirname, "../README.md"), "utf8").matchAll(/^\| (S-[\w-]+) \|/gm), match => match[1]),
+]);
+const resultRefSchema = { type: "object", properties: { $fromStep: { type: "integer", minimum: 0 }, path: { type: "string" } }, required: ["$fromStep", "path"], additionalProperties: false };
+/** References defer value checks until replay; literal siblings keep their live constraints. */
+function withRefs(schema: any): any {
+  const copy = { ...schema };
+  if (copy.properties) copy.properties = Object.fromEntries(Object.entries(copy.properties).map(([key, value]) => [key, withRefs(value)]));
+  if (copy.items) copy.items = withRefs(copy.items);
+  for (const key of ["anyOf", "oneOf", "allOf"]) if (copy[key]) copy[key] = copy[key].map(withRefs);
+  return { anyOf: [copy, resultRefSchema] };
+}
+const toolSchemas = new Map<string, TSchema>(modelToolCatalog.tools.map(tool => [tool.name, withRefs(tool.parameters) as TSchema]));
+const workerSchemas = new Map<string, TSchema>(Object.entries({
+  task_read: WorkerTaskReadParametersSchema, task_update: GraphTaskUpdateParametersSchema, alert_send: WorkerAlertSendParametersSchema,
+}).map(([name, schema]) => [name, withRefs(schema) as TSchema]));
+function toolArgumentsValid(who: unknown, name: unknown, args: unknown): boolean {
+  if (!object(who) || typeof name !== "string") return false;
+  const schema = (who.actor === "lead" ? toolSchemas : workerSchemas).get(name);
+  return !!schema && Check(schema, args);
+}
 
 const object = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const ref = (x: unknown) => typeof x === "string" && x.length > 0;
@@ -16,12 +45,12 @@ function argumentsValid(value: unknown, index: number): boolean {
 
 /** Runtime boundary for JSON fixtures and extracted traces. Reject extra fields. */
 export function validateWorldTrace(value: unknown): asserts value is WorldTrace {
-  const fail = () => { throw new Error("Invalid WorldTrace"); };
+  const fail = (detail = "") => { throw new Error(`Invalid WorldTrace${detail ? `: ${detail}` : ""}`); };
   if (!object(value)) return fail();
   if (!exact(value, ["version", "id", "source", "provenance", "assumptions", "setup", "steps"])
     || value.version !== 1 || !ref(value.id) || !oneOf(value.source, ["synthetic", "empirical"])
     || (value.provenance !== undefined && !ref(value.provenance))
-    || !Array.isArray(value.assumptions) || !value.assumptions.every(ref)
+    || !Array.isArray(value.assumptions) || !value.assumptions.every(id => ref(id) && knownAssumptions.has(id as string))
     || !object(value.setup) || !exact(value.setup, ["ptbVersion", "teams"])
     || !oneOf(value.setup.ptbVersion, ["baseline", "v3.1"]) || !Array.isArray(value.setup.teams)
     || !value.setup.teams.every(t => object(t) && exact(t, ["team", "workers"]) && ref(t.team) && Array.isArray(t.workers) && t.workers.every(ref))
@@ -36,7 +65,9 @@ export function validateWorldTrace(value: unknown): asserts value is WorldTrace 
     let valid = false;
     switch (s.kind) {
       case "pi.start": fields = ["who", "session", "reason"]; valid = actor(s.who) && ref(s.session) && oneOf(s.reason, ["startup", "resume", "reload"]); break;
-      case "tool.call": fields = ["who", "tool", "args"]; valid = actor(s.who) && ref(s.tool) && object(s.args) && argumentsValid(s.args, index); break;
+      case "tool.call": fields = ["who", "tool", "args"]; valid = actor(s.who) && ref(s.tool) && object(s.args) && argumentsValid(s.args, index)
+        // Empirical arguments are historical evidence. Redaction can destroy live patterns.
+        && (value.source === "empirical" || toolArgumentsValid(s.who, s.tool, s.args)); break;
       case "turn.end": fields = ["who", "outcome"]; valid = actor(s.who) && oneOf(s.outcome, ["settled", "aborted", "error"]); break;
       case "agent.settled": case "human.escape": case "human.interrupt": case "pi.compact": fields = ["who"]; valid = actor(s.who); break;
       case "pi.tree": fields = ["who", "targetEntry"]; valid = actor(s.who) && ref(s.targetEntry); break;
@@ -59,6 +90,6 @@ export function validateWorldTrace(value: unknown): asserts value is WorldTrace 
       }
       case "fault.clear": fields = ["source"]; valid = oneOf(s.source, ["herdr", "herdr.start", "pi.start", "generation", "bd"]); break;
     }
-    if (!valid || !exact(s, ["kind", ...fields])) return fail();
+    if (!valid || !exact(s, ["kind", ...fields])) return fail(`step ${index} (${String(s.kind)}${s.tool ? ` ${s.tool}` : ""})`);
   }
 }

@@ -24,6 +24,12 @@ it("validates every hand-written fixture against WorldTrace and rejects malforme
     expect(value.source).toBe("synthetic");
     expect(ids.has(value.id)).toBe(false);
     ids.add(value.id);
+    expect(() => validateWorldTrace({ ...value, assumptions: ["A-unknown"] })).toThrow();
+    expect(() => validateWorldTrace({ ...value, assumptions: ["S-undeclared"] })).toThrow();
+    const invalidTool = (tool: string, args: unknown) => ({ ...value, steps: [{ at: 0, step: { kind: "tool.call", who: { team: "team-1", actor: "lead" }, tool, args } }] });
+    expect(() => validateWorldTrace(invalidTool("team_create", { name: "team-1" }))).toThrow();
+    expect(() => validateWorldTrace(invalidTool("team_sync", { view: "updates", cursor: "stale" }))).toThrow();
+    expect(() => validateWorldTrace(invalidTool("task_update", { task_id: "task-1", operation_id: "op-1", expected_version: "invalid", transition: "claim" }))).toThrow();
     expect(() => validateWorldTrace({ ...value, steps: [{ at: 0, step: { kind: "pi.shutdown", who: { team: "team-1", actor: "w1" }, reason: "stopped" } }] })).toThrow();
     expect(() => validateWorldTrace({ ...value, steps: [{ at: -1, step: { kind: "os.reboot" } }] })).toThrow();
     expect(() => validateWorldTrace({ ...value, steps: [{ at: 1, step: { kind: "os.reboot" } }, { at: 0, step: { kind: "os.reboot" } }] })).toThrow();
@@ -31,6 +37,30 @@ it("validates every hand-written fixture against WorldTrace and rejects malforme
     expect(() => validateWorldTrace({ ...value, steps: [{ at: 0, step: { kind: "tool.call", who: { team: "team-1", actor: "lead" }, tool: "task_read", args: { task_id: { $fromStep: 0, path: "id" } } } }] })).toThrow();
     expect(() => validateWorldTrace({ ...value, steps: [{ at: 0, step: { kind: "fault.set", fault: { source: "pi.start", mode: "slow" } } }] })).toThrow();
   }
+});
+
+it("validates literal siblings while deferring backward result-reference values", () => {
+  const trace = { version: 1, id: "refs", source: "synthetic", assumptions: [], setup: { ptbVersion: "baseline", teams: [] }, steps: [
+    { at: 0, step: { kind: "tool.call", who: { team: "team-1", actor: "lead" }, tool: "task_read", args: { task_ids: ["task-1"] } } },
+    { at: 0, step: { kind: "tool.call", who: { team: "team-1", actor: "lead" }, tool: "task_update", args: { task_id: "task-1", operation_id: "op-1", expected_version: { $fromStep: 0, path: "task.version" }, transition: "claim" } } },
+  ] };
+  expect(() => validateWorldTrace(trace)).not.toThrow();
+  trace.steps[1].step.args.transition = "invalid";
+  expect(() => validateWorldTrace(trace)).toThrow();
+});
+
+it("uses each role's live argument schema", () => {
+  const validate = (actor: string, tool: string, args: Record<string, unknown>) => validateWorldTrace({
+    version: 1, id: "roles", source: "synthetic", assumptions: [], setup: { ptbVersion: "baseline", teams: [] },
+    steps: [{ at: 0, step: { kind: "tool.call", who: { team: "team-1", actor }, tool, args } }],
+  });
+  expect(() => validate("w1", "task_read", { task_id: "task-1" })).not.toThrow();
+  expect(() => validate("w1", "task_read", { task_ids: ["task-1"] })).toThrow();
+  expect(() => validate("lead", "task_read", { task_id: "task-1" })).toThrow();
+  expect(() => validate("lead", "task_read", { task_ids: ["task-1"] })).not.toThrow();
+  expect(() => validate("w1", "alert_send", { kind: "attention", text: "Synthetic alert" })).not.toThrow();
+  expect(() => validate("w1", "alert_send", { kind: "announcement", text: "Synthetic alert" })).toThrow();
+  expect(() => validate("w1", "team_create", { name: "team-1", purpose: "Synthetic purpose" })).toThrow();
 });
 
 describe("source projection", () => {
