@@ -1,3 +1,4 @@
+import { parseObservationContent } from "./observation-content";
 import { taskProjectionRevision } from "./task-projection-revision";
 import type { CanonicalTaskCard } from "../task-authority/task-domain";
 
@@ -33,7 +34,7 @@ export function observationStamp(value: unknown): ObservationStamp | undefined {
 function contentResult(content: unknown): any {
   try {
     const text = typeof content === "string" ? content : Array.isArray(content) ? content.find(part => part.type === "text")?.text : undefined;
-    return text ? JSON.parse(text) : undefined;
+    return text ? parseObservationContent(text) : undefined;
   } catch { return undefined; }
 }
 /** Only the authorized reader supplies scope. Copied entries cannot bind a fork. */

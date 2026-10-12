@@ -13,17 +13,24 @@ import { waitForLivenessHint } from "../src/utils/sync-liveness";
 import { observeWorkerStartup } from "../src/utils/worker-startup-observation";
 import { appendTeamEvent, waitForTeamEvents } from "../src/coordination/event-journal";
 import { teamDir } from "../src/utils/paths";
+import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
+import { TmuxAdapter } from "../src/adapters/tmux-adapter";
+import { ExecBdRunner } from "../src/utils/beads";
+import { runHook } from "../src/utils/hooks";
+import { readMembershipObservation } from "../src/team-authority/membership-observation-reader";
 
 // Each exception pins its access count. Remove or lower it when routing an
 // access through HostEnv; new exceptions require an explicit reason.
 const allowlist: Record<string, { count: number; reason: string }> = {
   "src/env/process-generation.ts": { count: 5, reason: "The production generation capability reads procfs or the native macOS helper." },
-  "src/env/host-env.ts": { count: 22, reason: "The production capability implementation owns Node primitives." },
-  "src/adapters/iterm2-adapter.ts": { count: 1, reason: "AppleScript needs stdin input; HostExec exposes only command and argv." },
-  "src/adapters/tmux-adapter.ts": { count: 1, reason: "Legacy shell-based session probe retains execSync error semantics." },
+  "src/env/host-env.ts": { count: 25, reason: "The production capability implementation owns Node primitives." },
+  "src/adapters/iterm2-adapter.ts": { count: 1, reason: "AppleScript needs stdin input; entry fails closed for simulated actors." },
+  "src/adapters/tmux-adapter.ts": { count: 1, reason: "Legacy shell probe retains execSync errors; entry fails closed for simulated actors." },
   "src/cli/render-model-tool-contract.ts": { count: 1, reason: "Offline documentation generation runs git with an explicit cwd." },
-  "src/utils/beads.ts": { count: 2, reason: "Legacy Beads uses asynchronous child streams, cwd, and process-group cleanup." },
-  "src/utils/hooks.ts": { count: 1, reason: "User hooks use asynchronous execFile with a custom environment." },
+  "src/utils/beads.ts": { count: 2, reason: "Legacy Beads needs streams, cwd and process groups; entry fails closed for simulated actors." },
+  "src/utils/hooks.ts": { count: 1, reason: "User hooks need a custom environment; entry fails closed for simulated actors." },
+  "src/coordination/event-journal.ts": { count: 1, reason: "Coalesced scans preserve native microtask ordering and actor context; HostClock.yield is a later event-loop turn." },
+  "src/cli/ptb-palette-gallery.ts": { count: 1, reason: "Interactive gallery redraw preserves native microtask ordering; this offline CLI is outside simulation." },
   "src/utils/trace.ts": { count: 3, reason: "Monotonic diagnostic durations retain performance.now; HostClock is wall time." },
 };
 
@@ -59,12 +66,12 @@ function directAccesses(text: string): string[] {
     const name = canonical(node);
     if ((ts.isNewExpression(node) || ts.isCallExpression(node)) && canonical(node.expression) === "Date" && !node.arguments?.length) hits.push("Date clock");
     if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node) || ts.isIdentifier(node)) {
-      if (/^(?:Date\.now|Math\.random|crypto\.(?:randomUUID|randomBytes)|process\.(?:pid|env|kill|exit|cwd|platform)|fs\.watch|performance\.now|Atomics\.wait|child_process\.(?:spawnSync|spawn|execFile|execFileSync|execSync|exec|fork)|timers(?:\/promises)?\.(?:setTimeout|setInterval|clearTimeout|clearInterval))$/.test(name)) {
+      if (/^(?:Date\.now|Math\.random|crypto\.(?:randomUUID|randomBytes)|process\.(?:pid|env|kill|exit|cwd|platform|argv|execPath)|fs\.watch|performance\.now|Atomics\.wait|child_process\.(?:spawnSync|spawn|execFile|execFileSync|execSync|exec|fork)|timers(?:\/promises)?\.(?:setTimeout|setInterval|clearTimeout|clearInterval|setImmediate))$/.test(name)) {
         hits.push(name);
         return;
       }
     }
-    if (ts.isCallExpression(node) && /^(?:setTimeout|setInterval|clearTimeout|clearInterval)$/.test(canonical(node.expression))) hits.push(canonical(node.expression));
+    if (ts.isCallExpression(node) && /^(?:setTimeout|setInterval|clearTimeout|clearInterval|setImmediate|queueMicrotask)$/.test(canonical(node.expression))) hits.push(canonical(node.expression));
     ts.forEachChild(node, visit);
   }
   visit(source);
@@ -97,10 +104,11 @@ function actor(pid = 7101) {
         signal?.addEventListener("abort", onAbort, { once: true });
       }),
       sleepSync: ms => { now += ms; },
+      yield: vi.fn(async () => {}),
     },
     random: { uuid: () => `${pid}-${++sequence}`, float: () => 0, bytes: length => Buffer.alloc(length, pid % 256) },
     process: {
-      pid, platform: "linux", cwd: () => "/fixture", env: { PI_AGENT_NAME: `worker-${pid}`, TMUX: "fixture", TMUX_PANE: `%${pid}` },
+      pid, platform: "linux", argv: ["/fixture/node", "/fixture/pi.mjs"], execPath: "/fixture/node", cwd: () => "/fixture", env: { PI_AGENT_NAME: `worker-${pid}`, TMUX: "fixture", TMUX_PANE: `%${pid}` },
       pidExists: other => other === pid,
       kill: vi.fn((other: number) => { if (other !== pid) throw Object.assign(new Error("absent"), { code: "ESRCH" }); }),
       generation: () => ({ kind: "unknown", reason: "fixture" }),
@@ -174,6 +182,15 @@ describe("host capability seam", () => {
     `)).toEqual(["crypto.randomUUID", "fs.watch", "setTimeout", "process.env", "Date clock", "Date.now"]);
   });
 
+  it("finds launch identity and event-loop scheduling, including aliases", () => {
+    expect(directAccesses(`
+      import { setImmediate as defer } from 'node:timers';
+      import { argv as args } from 'node:process';
+      process.argv; process['execPath']; args;
+      setImmediate(() => {}); globalThis.queueMicrotask(() => {}); defer(() => {});
+    `)).toEqual(["process.argv", "process.execPath", "process.argv", "setImmediate", "queueMicrotask", "timers.setImmediate"]);
+  });
+
   it("keeps concurrent actors isolated after modules were already imported", async () => {
     const a = actor(7101); const b = actor(7102);
     const observe = (env: HostEnv) => runWithHostEnv(env, async () => {
@@ -194,12 +211,61 @@ describe("host capability seam", () => {
     try {
       expect(() => newMembershipId()).toThrow("outside a simulated actor");
       expect(() => execCommand("fixture", [])).toThrow("outside a simulated actor");
+      expect(() => runWithHostEnv(nodeHostEnv, () => execCommand("fixture", []))).toThrow("outside a simulated actor");
       await runWithHostEnv(a.env, async () => {
         await Promise.resolve();
         expect(newMembershipId()).toBe("membership_7101-1");
       });
     } finally { release(); }
     expect(hostEnv()).toBe(nodeHostEnv);
+  });
+
+  it.each(["actor", "actorless", "native"] as const)("refuses legacy subprocess entry in %s simulation context", async context => {
+    const a = actor(); const release = enterSimulation();
+    const iterm = new Iterm2Adapter(); const tmux = new TmuxAdapter();
+    const executable = vi.fn(() => { throw new Error("must not resolve executable"); });
+    const bd = new ExecBdRunner(executable);
+    const spawn = { name: "fixture", cwd: "/fixture", env: {} };
+    const syncEntries = [
+      () => tmux.isAlive("%fixture"),
+      () => iterm.spawn(spawn), () => iterm.kill("fixture"), () => iterm.isAlive("fixture"),
+      () => iterm.setTitle("fixture"), () => iterm.spawnWindow(spawn),
+      () => iterm.setWindowTitle("fixture", "title"), () => iterm.killWindow("fixture"), () => iterm.isWindowAlive("fixture"),
+    ];
+    const invoke = <T,>(fn: () => T): T => context === "actorless" ? fn() : runWithHostEnv(context === "native" ? nodeHostEnv : a.env, fn);
+    const message = context === "actor" ? /unavailable in simulation/ : /outside a simulated actor/;
+    try {
+      for (const entry of syncEntries) expect(() => invoke(entry)).toThrow(message);
+      await expect(invoke(() => runHook("fixture", "fixture", {}))).rejects.toThrow(message);
+      await expect(invoke(() => bd.run([], { cwd: "/fixture", timeoutMs: 10 }))).rejects.toThrow(message);
+      expect(executable).not.toHaveBeenCalled();
+      expect(a.env.exec.runSync).not.toHaveBeenCalled();
+      expect(a.env.exec.run).not.toHaveBeenCalled();
+    } finally { release(); }
+  });
+
+  it("reads launch identity from the calling actor", () => {
+    // Exercise the private launch helper without installing the extension lifecycle.
+    const source = ts.createSourceFile("index.ts", fs.readFileSync("extensions/index.ts", "utf8"), ts.ScriptTarget.Latest, true);
+    const helper = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "getPiLaunchArgv");
+    expect(helper).toBeDefined();
+    const js = ts.transpile(helper!.getText(source), { target: ts.ScriptTarget.ES2022 });
+    const launch = new Function("hostEnv", "path", `${js}; return getPiLaunchArgv;`)(hostEnv, path) as () => string[];
+    const a = actor(); const b = actor(7102);
+    b.env.process = { ...b.env.process, argv: ["/fixture/pi"], execPath: "/fixture/pi" };
+    expect(runWithHostEnv(a.env, launch)).toEqual(["node", "/fixture/pi.mjs"]);
+    expect(runWithHostEnv(b.env, launch)).toEqual(["/fixture/pi"]);
+  });
+
+  it("yields team and member reads through the actor clock", async () => {
+    const a = actor(); const root = fs.mkdtempSync(path.join(os.tmpdir(), "host-seam-read-"));
+    fs.mkdirSync(path.join(root, "fixture"));
+    fs.writeFileSync(path.join(root, "fixture", "config.json"), JSON.stringify({ name: "fixture", members: [{}] }));
+    try {
+      const result = await runWithHostEnv(a.env, () => readMembershipObservation({ teamsRoot: root }));
+      expect(a.env.clock.yield).toHaveBeenCalledTimes(2);
+      expect(result.teams[0].diagnoses).toEqual(["membership_malformed"]);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 
   it("does not reuse one actor's detected terminal in another actor", () => {

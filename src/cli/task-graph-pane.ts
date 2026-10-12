@@ -8,8 +8,8 @@ import { TaskGraphPaneComponent } from "../task-graph-view/component";
 import { parseTaskGraphLimit, parseTaskGraphViewSourceJson, type TaskGraphViewSource } from "../task-graph-view/source";
 
 function argument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+  const index = hostEnv().process.argv.indexOf(name);
+  return index >= 0 ? hostEnv().process.argv[index + 1] : undefined;
 }
 
 const sourcePath = argument("--source");
