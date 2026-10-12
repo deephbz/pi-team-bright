@@ -50,7 +50,7 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
 }
 
 /** One in-flight bounded read per source. Invalid or partial responses never prove absence. */
-async function herdrList(source: "agent" | "pane"): Promise<Record<string, unknown>[] | undefined> {
+export async function herdrList(source: "agent" | "pane"): Promise<Record<string, unknown>[] | undefined> {
   const result = await hostEnv().exec.run("herdr", [source, "list"], { timeoutMs: 2000 });
   if (result.kind !== "exited" || result.status !== 0) return undefined;
   try {
