@@ -1,0 +1,52 @@
+{
+  "assumption": "herdr agent list omits non-agent terminals.",
+  "verdict": "holds",
+  "command": [
+    "herdr workspace create --no-focus --cwd <SANDBOX>/project",
+    "herdr pane process-info --pane wCZ:p1",
+    "herdr agent list"
+  ],
+  "observed": {
+    "environment": {
+      "date": "2026-10-12T15:40:30.372Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v25.6.0",
+      "pi": "0.83.0",
+      "base": "a992f086017b8924c5c448456573c16452ca655d",
+      "herdr": "herdr 0.9.3"
+    },
+    "paneId": "wCZ:p1",
+    "workspaceId": "wCZ",
+    "shell": {
+      "process_info": {
+        "foreground_process_group_id": 63284,
+        "foreground_processes": [
+          {
+            "argv": [
+              "-zsh"
+            ],
+            "argv0": "zsh",
+            "cmdline": "-zsh",
+            "cwd": "<SANDBOX>/project",
+            "name": "zsh",
+            "pid": 63284
+          }
+        ],
+        "pane_id": "wCZ:p1",
+        "shell_pid": 63284
+      },
+      "type": "pane_process_info"
+    },
+    "list": {
+      "type": "agent_list",
+      "totalAgentCount": 26,
+      "agents": []
+    },
+    "cleanup": {
+      "workspaceId": "wCZ",
+      "workspaceGone": true,
+      "ownedPanesClosed": true
+    }
+  }
+}
