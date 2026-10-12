@@ -95,7 +95,7 @@ export function reconstruct(input: TeamInput): Extraction {
   const coverage = { sessionRows: 0, eventRows: input.events.length, runtimeRows: input.runtime.length,
     taskSnapshots: input.taskState.length, duplicateEntries: 0, untimedRows: 0 };
   const steps: { time: number; step: WorldStep; order: number }[] = [];
-  const assumptions = new Set(["A-extraction-partial-observation", "A-session-window-from-team-config", "A-redacted-tool-arguments"]);
+  const assumptions = new Set(["S-extraction-partial-observation", "S-session-window-from-team-config", "S-redacted-tool-arguments"]);
   const start = time(input.config.createdAt) ?? 0;
   const matchesTeam = (name: unknown) => typeof name === "string" && typeof input.config.name === "string"
     && (name === input.config.name || name === input.config.name.replace(/^\d{8}-/, ""));
@@ -152,7 +152,7 @@ export function reconstruct(input: TeamInput): Extraction {
         .filter((t): t is number => t !== undefined && t >= windowStart).reduce((a, b) => Math.min(a, b), Infinity);
       if (Number.isFinite(first)) {
         add(first, { kind: "pi.start", who, session: opaque.ref(session.identity, "session"), reason: "startup" });
-        assumptions.add("A-lead-start-at-first-observation");
+        assumptions.add("S-lead-start-at-first-observation");
       }
     }
     let leftTeam = false;
@@ -189,7 +189,7 @@ export function reconstruct(input: TeamInput): Extraction {
           const outcome = message.stopReason === "stop" ? "settled" : message.stopReason;
           add(at, { kind: "turn.end", who, outcome });
           if (outcome === "aborted") incidents.Escape.candidate++;
-          assumptions.add("A-assistant-stop-is-turn-end");
+          assumptions.add("S-assistant-stop-is-turn-end");
         }
       }
       if (leftTeam) continue;
@@ -216,12 +216,12 @@ export function reconstruct(input: TeamInput): Extraction {
           break;
         case "compaction":
           add(at, { kind: "pi.compact", who });
-          assumptions.add("A-compaction-record-is-action");
+          assumptions.add("S-compaction-record-is-action");
           break;
         case "branch_summary":
           if (typeof row.parentId === "string") {
             add(at, { kind: "pi.tree", who, targetEntry: opaque.ref(row.parentId, "entry") });
-            assumptions.add("A-branch-summary-parent-is-tree-target");
+            assumptions.add("S-branch-summary-parent-is-tree-target");
           }
           break;
         case "session_fork":
@@ -252,7 +252,7 @@ export function reconstruct(input: TeamInput): Extraction {
   const timed = steps.map(item => ({ at: item.time - origin, step: item.step }));
   const createsTeam = steps.some(item => item.step.kind === "tool.call" && item.step.tool === "team_create");
   const workers = [...new Set(input.sessions.filter(s => !s.lead).map(s => opaque.ref(s.actor, "w")))];
-  if (!createsTeam) assumptions.add("A-initial-workers-from-session-bindings");
+  if (!createsTeam) assumptions.add("S-initial-workers-from-session-bindings");
   const digest = createHash("sha256").update(input.provenance).digest("hex");
   const trace: WorldTrace = { version: 1, id: `trace-${digest.slice(0, 24)}`, source: "empirical",
     provenance: input.provenance, assumptions: [...assumptions].sort(),

@@ -10,8 +10,8 @@ import {
 } from "../task-graph-view/gallery-config";
 
 function argument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+  const index = hostEnv().process.argv.indexOf(name);
+  return index >= 0 ? hostEnv().process.argv[index + 1] : undefined;
 }
 
 function positiveInteger(value: string | undefined, fallback: number): number {
@@ -19,14 +19,14 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
+if (hostEnv().process.argv.includes("--help") || hostEnv().process.argv.includes("-h")) {
   process.stdout.write("Usage: task-dag-islands-gallery [--config FILE] [--view dag|timeline] [--plain] [--width N] [--rows N] [--ansi]\n");
   process.stdout.write("Mock, fixed-clock review of the production Task DAG and Timeline. Press v to switch views in the TUI.\n");
   hostEnv().process.exit(0);
 }
 
 const viewArgument = argument("--view");
-if (process.argv.includes("--view") && viewArgument !== "dag" && viewArgument !== "timeline") {
+if (hostEnv().process.argv.includes("--view") && viewArgument !== "dag" && viewArgument !== "timeline") {
   process.stderr.write("--view must be dag or timeline.\n");
   hostEnv().process.exit(2);
 }
@@ -41,14 +41,14 @@ try {
   hostEnv().process.exit(2);
 }
 
-const plain = process.argv.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
+const plain = hostEnv().process.argv.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
 if (plain) {
   const width = positiveInteger(argument("--width"), 120);
   const rows = positiveInteger(argument("--rows"), 42);
   const component = createTaskDagIslandsGalleryComponent(config!, {
     rows: () => rows,
     requestRender: () => undefined,
-    color: process.argv.includes("--ansi"),
+    color: hostEnv().process.argv.includes("--ansi"),
     width,
     view: initialView,
   });

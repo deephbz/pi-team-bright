@@ -1,0 +1,225 @@
+{
+  "runnerVersion": "sim-c1/2",
+  "productionRevision": "14d92fd",
+  "schemaMoveRevision": "5ccac61",
+  "scope": "Pre-C2/C3 bounded baseline campaign; unsupported fixtures are gaps, not verified properties",
+  "generator": {
+    "seed": 20261012,
+    "numRuns": 12,
+    "samples": [
+      {
+        "seed": 62226,
+        "killAt": 32,
+        "gap": 16
+      },
+      {
+        "seed": 88589,
+        "killAt": 45,
+        "gap": 16
+      },
+      {
+        "seed": 11,
+        "killAt": 3,
+        "gap": 4
+      },
+      {
+        "seed": 16,
+        "killAt": 18,
+        "gap": 4
+      },
+      {
+        "seed": 99997,
+        "killAt": 7,
+        "gap": 18
+      },
+      {
+        "seed": 1,
+        "killAt": 3,
+        "gap": 1
+      },
+      {
+        "seed": 99994,
+        "killAt": 4,
+        "gap": 1
+      },
+      {
+        "seed": 2,
+        "killAt": 7,
+        "gap": 13
+      },
+      {
+        "seed": 99986,
+        "killAt": 48,
+        "gap": 19
+      },
+      {
+        "seed": 74153,
+        "killAt": 46,
+        "gap": 20
+      },
+      {
+        "seed": 99984,
+        "killAt": 28,
+        "gap": 16
+      },
+      {
+        "seed": 24387,
+        "killAt": 20,
+        "gap": 14
+      }
+    ]
+  },
+  "fixtures": [
+    {
+      "id": "synthetic-bound-pi-dead",
+      "seed": 42,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "synthetic-clock-gap",
+      "seed": 42,
+      "status": "unsupported",
+      "error": "Replay bound exceeded"
+    },
+    {
+      "id": "synthetic-cursor-replay",
+      "seed": 42,
+      "status": "replayed",
+      "operations": 31,
+      "deadPiReuse": false
+    },
+    {
+      "id": "synthetic-escape",
+      "seed": 42,
+      "status": "replayed",
+      "operations": 79,
+      "deadPiReuse": false
+    },
+    {
+      "id": "synthetic-never-starts",
+      "seed": 42,
+      "status": "replayed",
+      "operations": 1295,
+      "deadPiReuse": false
+    },
+    {
+      "id": "synthetic-pane-loss",
+      "seed": 42,
+      "status": "unsupported",
+      "error": "No such process"
+    },
+    {
+      "id": "synthetic-pid-reuse",
+      "seed": 42,
+      "status": "replayed",
+      "operations": 68,
+      "deadPiReuse": true
+    },
+    {
+      "id": "synthetic-restart",
+      "seed": 42,
+      "status": "unsupported",
+      "error": "Unmodeled bd command: show"
+    },
+    {
+      "id": "synthetic-shutdown-resume",
+      "seed": 42,
+      "status": "unsupported",
+      "error": "Actor is not live: team-1/lead"
+    },
+    {
+      "id": "synthetic-stale-binding",
+      "seed": 42,
+      "status": "unsupported",
+      "error": "Pi cross-Session fork allocation is not modeled yet"
+    }
+  ],
+  "generated": [
+    {
+      "id": "generated-dead-pi-0",
+      "seed": 62226,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-1",
+      "seed": 88589,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-2",
+      "seed": 11,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-3",
+      "seed": 16,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-4",
+      "seed": 99997,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-5",
+      "seed": 1,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-6",
+      "seed": 99994,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-7",
+      "seed": 2,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-8",
+      "seed": 99986,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-9",
+      "seed": 74153,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-10",
+      "seed": 99984,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    },
+    {
+      "id": "generated-dead-pi-11",
+      "seed": 24387,
+      "status": "replayed",
+      "operations": 67,
+      "deadPiReuse": true
+    }
+  ]
+}

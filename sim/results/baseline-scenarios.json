@@ -1,0 +1,67 @@
+{
+  "runnerVersion": "sim-c1/2",
+  "productionRevision": "14d92fd",
+  "verification": "sim/baseline.test.ts",
+  "source": "synthetic",
+  "inputValidation": "Fixtures repaired in place with required purpose and registered assumptions; synthetic tool arguments checked against live schemas",
+  "worldConfiguration": {
+    "clockEpochMs": 1700000000000,
+    "model": "synthetic/model",
+    "modelRole": "sim-worker",
+    "thinking": "off",
+    "teamDatePrefix": false,
+    "legacyBeads": "Scheduled empty-store init/where/list wire fake; real PTB provisioning and store adapters",
+    "terminalInput": "Opaque text is recorded; process effects require explicit OS steps"
+  },
+  "scenarios": [
+    {
+      "fixture": "sim/fixtures/traces/never-starts.json",
+      "traceId": "synthetic-never-starts",
+      "seed": 0,
+      "firstEnsure": {
+        "elapsedVirtualMs": 300000,
+        "kind": "unavailable",
+        "reason": "carrier_unavailable",
+        "effect": "Prepared Membership deactivated after confirmed carrier cleanup"
+      },
+      "retry": {
+        "elapsedVirtualMs": 250,
+        "kind": "worker_ensured",
+        "effect": "created",
+        "carrier": "connected",
+        "realWorkerSessionStarted": true
+      },
+      "finding": "Baseline receipt waits for the 300-second readiness bound. This is an E5 witness."
+    },
+    {
+      "fixture": "sim/fixtures/traces/bound-pi-dead.json",
+      "traceId": "synthetic-bound-pi-dead",
+      "seed": 42,
+      "atVirtualMs": 4,
+      "ensure": {
+        "kind": "worker_ensured",
+        "effect": "reused",
+        "carrier": "connected"
+      },
+      "worldTruth": {
+        "workerProcessAlive": false,
+        "paneShellAlive": true,
+        "herdrAgentLive": false
+      },
+      "replayedTwice": {
+        "decisionsIdentical": true,
+        "enabledOperationsIdentical": true,
+        "choiceLogIdentical": true,
+        "sessionBranchesIdentical": true,
+        "worldTruthIdentical": true
+      },
+      "finding": "Baseline reuses a dead Pi through the surviving shell. This is a P4 witness. The first pending ensure also returns connected at 250ms after the Pi exit."
+    }
+  ],
+  "probeScope": {
+    "A1-A6": "Backed by committed Pi 0.83.0 / Herdr 0.9.3 fixtures within each recorded scope",
+    "A8": "Advisory: inconclusive",
+    "A7-A9": "A7 and A9 have no passing host probe",
+    "extraModelLimits": ["Pane geometry and pane-close process-tree semantics are advisory", "Empty Beads init/where/list wire conforms to owned bd 1.1.0 in sim/bd-wire.external.test.ts; other commands unsupported", "No full P/M/E property campaign is claimed"]
+  }
+}

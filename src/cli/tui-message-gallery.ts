@@ -11,12 +11,12 @@ import { TuiMessageGalleryComponent } from "../model-tool-contract/tui-message-g
 import type { TuiReviewThemeName } from "../model-tool-contract/tui-review-theme";
 
 function argument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+  const index = hostEnv().process.argv.indexOf(name);
+  return index >= 0 ? hostEnv().process.argv[index + 1] : undefined;
 }
 
 const scenarios = tuiMessageGallery();
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
+if (hostEnv().process.argv.includes("--help") || hostEnv().process.argv.includes("-h")) {
   process.stdout.write([
     "Usage: qa:tui-messages:gallery [--scenario ID] [--expanded] [--theme dark|light] [--width COLUMNS] [--format plain|ansi|json]",
     "Review Pi Team Bright tool results and custom message projections one at a time.",
@@ -27,7 +27,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   ].join("\n"));
 } else {
   const requestedFormat = argument("--format") as TuiMessageGalleryFormat | undefined;
-  const expanded = process.argv.includes("--expanded");
+  const expanded = hostEnv().process.argv.includes("--expanded");
   const scenarioId = argument("--scenario");
   const requestedTheme = argument("--theme") as TuiReviewThemeName | undefined;
   const widthValue = Number(argument("--width") ?? 100);
@@ -37,7 +37,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
     process.stderr.write("--format must be plain, ansi, or json.\n");
     hostEnv().process.exit(2);
   }
-  if (process.argv.includes("--scenario") && (!scenarioId || !scenarios.some((scenario) => scenario.id === scenarioId))) {
+  if (hostEnv().process.argv.includes("--scenario") && (!scenarioId || !scenarios.some((scenario) => scenario.id === scenarioId))) {
     process.stderr.write("Unknown --scenario. Use --help to list scenario IDs.\n");
     hostEnv().process.exit(2);
   }

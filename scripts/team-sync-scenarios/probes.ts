@@ -1,9 +1,10 @@
-// Scenario-only extension. It injects proof loss and exercises historical rendering.
+// Scenario-only context loss, static compaction, and historical rendering.
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createToolResultRenderer } from "../../src/model-tool-contract/tui-projection";
 
 export default function probes(pi: ExtensionAPI) {
+  pi.on("session_before_compact", event => ({ compaction: { summary: "Scenario compacted. Request a Team snapshot for current state.", firstKeptEntryId: event.preparation.firstKeptEntryId, tokensBefore: event.preparation.tokensBefore } }));
   pi.registerTool({
     name: "scenario_sequential", label: "Scenario sequential gate", description: "Force Pi sequential execution for this message.",
     executionMode: "sequential", parameters: Type.Object({}),
@@ -14,7 +15,7 @@ export default function probes(pi: ExtensionAPI) {
     pi.on("context", (event) => {
       removedCallId ??= event.messages.find((message) => message.role === "toolResult" && message.toolName === "team_sync")?.toolCallId;
       return { messages: event.messages.map((message) => message.role === "toolResult" && message.toolCallId === removedCallId
-        ? { ...message, content: [{ type: "text" as const, text: "Scenario removed observation before provider proof." }] }
+        ? { ...message, content: [{ type: "text" as const, text: "Scenario removed observation from model context." }] }
         : message) };
     });
   }

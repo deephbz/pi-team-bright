@@ -50,6 +50,7 @@ import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
 import { TEAM_UPDATE_TYPE, projectTeamUpdateMessage } from "./team-update";
 
 import { GraphTaskUpdateParametersSchema, TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
+import { WorkerAlertSendParametersSchema, WorkerTaskReadParametersSchema } from "../src/model-tool-contract/worker-parameters";
 import { transitionLegacyGraphTask } from "../src/model-tool-contract/legacy-graph-task-transition-adapter";
 import {
   DurableModelToolAlertApplication,
@@ -76,8 +77,8 @@ import { assembleToolResult } from "../src/model-tool-contract/result-projection
  *   may be a shim path, so the safest relaunch command is plain `pi`
  */
 function getPiLaunchArgv(): string[] {
-  const argv1 = process.argv[1];
-  const execPath = process.execPath;
+  const argv1 = hostEnv().process.argv[1];
+  const execPath = hostEnv().process.execPath;
 
   // Regular Node install: relaunch the actual CLI script with node.
   if (argv1) {
@@ -309,12 +310,6 @@ export default function (pi: ExtensionAPI) {
   }
 
   function alertToolProjection() {
-    const workerFields = {
-      kind: StringEnum(["clarification", "attention"]),
-      text: Type.String(),
-      task_id: Type.Optional(Type.String()),
-      task_version: Type.Optional(TaskVersionRefSchema),
-    };
     const leaderFields = {
       team_name: Type.String(),
       kind: StringEnum(["clarification", "attention", "announcement"]),
@@ -327,7 +322,7 @@ export default function (pi: ExtensionAPI) {
         ? "Send exceptional clarification or attention to team-lead. Alerts never assign or complete work; update the Task when durable intent changes."
         : "Send exceptional clarification, attention, or a Team announcement. Alerts never assign or complete work; update the Task when durable intent changes.",
       parameters: (sessionAdapter?.isTeammate() ?? initialIsTeammate)
-        ? Type.Object(workerFields)
+        ? WorkerAlertSendParametersSchema
         : Type.Object({
             ...leaderFields,
             to: Type.String({ description: "Current Worker name, team-lead, or * for an announcement" }),
@@ -381,9 +376,7 @@ export default function (pi: ExtensionAPI) {
       name: "task_read",
       label: "Read Task",
       description: "Read current Task cards by ID from the active Team.",
-      parameters: Type.Object({
-        task_id: Type.String({ minLength: 1 }),
-      }, { additionalProperties: false }),
+      parameters: WorkerTaskReadParametersSchema,
       async execute(_toolCallId, params: { task_id: string }, _signal, _onUpdate, ctx) {
         const binding = await sessionAdapter.resolveCurrentWorkerContext(ctx);
         if (graphTaskOrchestration.hasGraph(binding.teamName)) {

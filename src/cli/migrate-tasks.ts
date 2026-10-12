@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import path from "node:path";
 import { migrateTeamTasks } from "../utils/task-migration";
 
@@ -5,7 +6,7 @@ function usage(): never {
   throw new Error("Usage: npm run migrate:tasks -- <team-name> <absolute-beads-workspace> [report-path]");
 }
 
-const [, , teamName, workspace, reportPath] = process.argv;
+const [, , teamName, workspace, reportPath] = hostEnv().process.argv;
 if (!teamName || !workspace || !path.isAbsolute(workspace)) usage();
 
 async function main(): Promise<void> {

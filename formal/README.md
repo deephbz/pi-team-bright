@@ -1,7 +1,7 @@
 # Bounded formal checks
 
 These TLA+ models check bounded safety arguments for Task-first hardening.
-`SyncPresentation` also checks conditional wait termination. TLC
+`SyncPresentation` is retired under [`retired/`](retired/); the active runner excludes its obsolete ACK/wait protocol. Its results below are historical evidence. TLC
 explores every reachable state in each stated finite instance. The models do
 not prove that TypeScript refines them. Deterministic code traces and runtime
 checks are separate evidence.
@@ -45,8 +45,8 @@ revisions as changed coordinates.
 
 ## Checked results
 
-The checked source bundle uses the four `.tla` files, their `.cfg` files,
-and `scripts/formal-check.sh`. All 22 cases completed through the runner on
+The historical source bundle used four `.tla` files, their `.cfg` files,
+and `scripts/formal-check.sh`. All 22 cases completed through that runner on
 2026-10-07 with the current pinned jar. The first three models reproduced the
 counts recorded on 2026-09-26 with the earlier jar. Each passing search ended with an empty queue. “Depth” is TLC's
 reported complete state-graph depth for a passing instance. Fault and witness
@@ -63,8 +63,8 @@ To reproduce one instance directly with the pinned jar:
 
 ```sh
 java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
-  -deadlock -noGenerateSpecTE -metadir /tmp/sync-presentation-states \
-  -config formal/SyncPresentation.cfg formal/SyncPresentation.tla
+  -deadlock -noGenerateSpecTE -metadir /tmp/publication-observation-states \
+  -config formal/PublicationObservation.cfg formal/PublicationObservation.tla
 ```
 
 Use each mutant config below with the same command to reproduce its trace.

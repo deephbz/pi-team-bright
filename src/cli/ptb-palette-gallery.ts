@@ -13,8 +13,8 @@ import { buildPtbPaletteItems } from "../../extensions/ptb-palette-items";
 
 /** Render the production palette against fixed mock settings for review. */
 function argument(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
+  const index = hostEnv().process.argv.indexOf(name);
+  return index >= 0 ? hostEnv().process.argv[index + 1] : undefined;
 }
 
 function positiveInteger(value: string | undefined, fallback: number): number {
@@ -46,7 +46,7 @@ const mockNamespace = {
   },
 };
 
-if (process.argv.includes("--help") || process.argv.includes("-h")) {
+if (hostEnv().process.argv.includes("--help") || hostEnv().process.argv.includes("-h")) {
   process.stdout.write([
     "Usage: ptb-palette-gallery [--tab Actions|Models|Team|Workers] [--plain] [--width N] [--rows N] [--ansi]",
     "Review the production /ptb palette with fixed mock settings. No Team or settings operation runs.",
@@ -57,7 +57,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 }
 
 const requestedTab = argument("--tab");
-if (process.argv.includes("--tab") && !PTB_PALETTE_TABS.includes(requestedTab as PtbPaletteTab)) {
+if (hostEnv().process.argv.includes("--tab") && !PTB_PALETTE_TABS.includes(requestedTab as PtbPaletteTab)) {
   process.stderr.write(`--tab must be ${PTB_PALETTE_TABS.join(", ")}.\n`);
   hostEnv().process.exit(2);
 }
@@ -79,8 +79,8 @@ const galleryTheme = (ansi: boolean) => ({
 const subtitle = "Mock Team: demo-team · team-lead · no live Team changes";
 const scope = "Editing global example values · changes affect only future Teams and Workers";
 
-if (process.argv.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY) {
-  const theme = galleryTheme(process.argv.includes("--ansi"));
+if (hostEnv().process.argv.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY) {
+  const theme = galleryTheme(hostEnv().process.argv.includes("--ansi"));
   const component = createPtbPaletteComponent({ items, isCurrent: () => true, initialTab, subtitle, scope }, {
     requestRender: () => undefined,
     terminalRows: () => rows,

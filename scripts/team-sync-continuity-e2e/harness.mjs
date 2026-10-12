@@ -97,7 +97,8 @@ export function toolResults(request, calls) {
   return calls.map((call) => {
     const message = request.body.messages.findLast((item) => item.role === "tool" && item.tool_call_id === call.id);
     assert(message, `Missing tool result for ${call.name} (${call.id})`);
-    return JSON.parse(message.content);
+    const text = message.content;
+    return JSON.parse(text.startsWith("team_sync ") ? text.slice(text.indexOf("\n") + 1) : text);
   });
 }
 
@@ -296,6 +297,7 @@ export class ScriptedScenario {
   async start() {
     this.provider = await new LocalProviderFixture().start();
     fs.writeFileSync(this.sandbox.path("agent", "settings.json"), JSON.stringify({
+      compaction: { enabled: false, keepRecentTokens: 16, reserveTokens: 1000 },
       pi_team_bright: {
         model_roles: { fixture: { model: "fixture/worker-scripted", thinking: "off", use: "Local scenario Worker" } },
         default_model_role: "fixture",

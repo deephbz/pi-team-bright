@@ -1,3 +1,4 @@
+import { persistPortObservation } from "../../test/support/branch-observation";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -15,7 +16,7 @@ describe("ModelToolJourneyPort", () => {
       alert: { sendAlert: vi.fn().mockResolvedValue("alert") },
       coordination: {
         readSnapshot: vi.fn(), readTeamSync: vi.fn().mockResolvedValue("coordination"),
-        setPendingObservationResult: vi.fn(), acknowledgePendingObservation: vi.fn(), setBranchContext: vi.fn(),
+        setPendingObservationResult: vi.fn(), setBranchContext: vi.fn(),
       },
     };
     const journey = new ModelToolJourneyFacade(ports.team, ports.task, ports.alert, ports.coordination);
@@ -43,7 +44,7 @@ describe("ModelToolJourneyPort", () => {
     expect(ports.alert).not.toBe(ports.coordination);
   });
 
-  it("keeps the flat wrapper equal to named ports across pending acknowledgement and updates", async () => {
+  it("keeps the flat wrapper equal to named ports across native persistence and updates", async () => {
     const legacy = new InMemoryModelToolTeamPort();
     const named = createInMemoryModelToolJourney();
     const leader = exactLeaderSessionId("019fc274-f97e-7910-b6b6-579a20b3b1d0");
@@ -62,9 +63,8 @@ describe("ModelToolJourneyPort", () => {
     expect(namedSnapshot).toEqual(legacySnapshot);
     legacy.setBranchContext(leader, ["snapshot"]);
     named.ports.coordination.setBranchContext(leader, ["snapshot"]);
-    expect(named.ports.coordination.acknowledgePendingObservation(leader, "snapshot", ["snapshot"])).toBe(
-      legacy.acknowledgePendingObservation(leader, "snapshot", ["snapshot"]),
-    );
+    persistPortObservation(named.ports.coordination, leader, "snapshot");
+    persistPortObservation(legacy, leader, "snapshot");
 
     const update = { taskId: legacyTask.task.id, operationId: "update", expectedVersion: legacyTask.task.version as `v_${string}`, currentContext: "Updated." };
     await legacy.updateTasks(leader, [update]);
@@ -80,7 +80,6 @@ describe("ModelToolJourneyPort", () => {
     const leader = exactLeaderSessionId("019fc274-f97e-7910-b6b6-579a20b3b1d0");
     legacy.setLeaderSessionFile?.(leader, "/tmp/leader.jsonl");
     legacy.setLeaderLaunchContext?.(leader, { cwd: "/tmp", projectTrusted: true });
-    await expect(legacy.acknowledgePendingObservationAsync?.(leader, "entry", ["entry"])).resolves.toBe(false);
     await expect(legacy.readSyncNudgeDebt?.(leader, ["entry"])).resolves.toEqual({ kind: "none" });
     expect(legacy.getPendingObservation?.(leader)).toBeUndefined();
   });
