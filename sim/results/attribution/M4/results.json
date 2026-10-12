@@ -1,0 +1,102 @@
+{
+  "monitorOptions": {
+    "E1": {
+      "deadlineMs": 60000
+    }
+  },
+  "outcomes": [
+    {
+      "id": "P5",
+      "replayVerified": true,
+      "P5": {
+        "status": "violation",
+        "sequence": 14,
+        "detail": "pane pane:team-1/lead closed by os origin"
+      },
+      "P8": {
+        "status": "not_applicable",
+        "missing": "lead observation stamps"
+      },
+      "E1": {
+        "status": "not_applicable",
+        "missing": "worker process exits"
+      }
+    },
+    {
+      "id": "E1",
+      "replayVerified": true,
+      "P5": {
+        "status": "not_applicable",
+        "missing": "pane closures"
+      },
+      "P8": {
+        "status": "pass"
+      },
+      "E1": {
+        "status": "violation",
+        "sequence": 217,
+        "detail": "exit of w1 did not reach the carrier view within 60000 ms"
+      }
+    },
+    {
+      "id": "M4-old",
+      "replayVerified": true,
+      "P5": {
+        "status": "not_applicable",
+        "missing": "pane closures"
+      },
+      "P8": {
+        "status": "pass"
+      },
+      "E1": {
+        "status": "not_applicable",
+        "missing": "worker process exits"
+      }
+    },
+    {
+      "id": "hydration-1",
+      "replayVerified": true,
+      "P5": {
+        "status": "not_applicable",
+        "missing": "pane closures"
+      },
+      "P8": {
+        "status": "pass"
+      },
+      "E1": {
+        "status": "not_applicable",
+        "missing": "worker process exits"
+      }
+    },
+    {
+      "id": "hydration-25",
+      "replayVerified": true,
+      "P5": {
+        "status": "not_applicable",
+        "missing": "pane closures"
+      },
+      "P8": {
+        "status": "pass"
+      },
+      "E1": {
+        "status": "not_applicable",
+        "missing": "worker process exits"
+      }
+    },
+    {
+      "id": "hydration-50",
+      "replayVerified": true,
+      "P5": {
+        "status": "not_applicable",
+        "missing": "pane closures"
+      },
+      "P8": {
+        "status": "pass"
+      },
+      "E1": {
+        "status": "not_applicable",
+        "missing": "worker process exits"
+      }
+    }
+  ]
+}

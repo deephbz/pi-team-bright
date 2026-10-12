@@ -1,0 +1,37 @@
+{
+  "sourceRevision": "970ca0d8067e78b9a15f5c60fdb60b3de5ba90bb",
+  "patchSha256": "28098bd9cbc8687cedb903f37ff1dee3197f3e8b9f64f8e373341baea8734e1e",
+  "scope": "Simulator race regression; existing P8 verdict remains pass for control and mutant",
+  "assertions": [
+    {
+      "title": "creates a Worker after the snapshot watermark and before Task hydration completes",
+      "status": "failed"
+    }
+  ],
+  "rows": [
+    {
+      "id": "hydration-1",
+      "controlSnapshotThrough": 0,
+      "mutantSnapshotThrough": 2,
+      "snapshotWorkers": [],
+      "controlNext": "updates",
+      "mutantNext": "unsettled"
+    },
+    {
+      "id": "hydration-25",
+      "controlSnapshotThrough": 0,
+      "mutantSnapshotThrough": 2,
+      "snapshotWorkers": [],
+      "controlNext": "updates",
+      "mutantNext": "unsettled"
+    },
+    {
+      "id": "hydration-50",
+      "controlSnapshotThrough": 0,
+      "mutantSnapshotThrough": 2,
+      "snapshotWorkers": [],
+      "controlNext": "updates",
+      "mutantNext": "unsettled"
+    }
+  ]
+}
