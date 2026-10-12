@@ -60,8 +60,8 @@ export interface InMemoryModelToolTeamDebugState { revision: number; bindings: A
 import { createInMemoryModelToolJourney } from "./in-memory-model-tool-journey";
 
 /**
- * Legacy flat adapter. It owns no state and keeps the old default behavior.
- * Tests that need authority behavior use createInMemoryModelToolJourney().
+ * Flat fixture adapter. Authority fakes feed the production Coordination reader.
+ * Tests that need named authorities use createInMemoryModelToolJourney().
  */
 export class InMemoryModelToolTeamPort implements LegacyModelToolTeamPort {
   private readonly fixture = createInMemoryModelToolJourney();
@@ -80,12 +80,11 @@ export class InMemoryModelToolTeamPort implements LegacyModelToolTeamPort {
   readTeamSync(...args: Parameters<LegacyModelToolTeamPort["readTeamSync"]>) { return this.ports.coordination.readTeamSync(...args); }
   setPendingObservationResult(...args: Parameters<LegacyModelToolTeamPort["setPendingObservationResult"]>) { return this.ports.coordination.setPendingObservationResult(...args); }
   discardPendingObservation(session: ExactLeaderSessionId, toolCallId: string) { this.ports.coordination.discardPendingObservation(session, toolCallId); }
-  acknowledgePendingObservation(...args: Parameters<NonNullable<LegacyModelToolTeamPort["acknowledgePendingObservation"]>>) { return this.ports.coordination.acknowledgePendingObservation(...args); }
   setBranchContext(...args: Parameters<LegacyModelToolTeamPort["setBranchContext"]>) { return this.ports.coordination.setBranchContext(...args); }
+  setBranchEntries(...args: Parameters<typeof this.ports.coordination.setBranchEntries>) { return this.ports.coordination.setBranchEntries(...args); }
   setLeaderSessionFile(..._args: Parameters<NonNullable<LegacyModelToolTeamPort["setLeaderSessionFile"]>>) { /* In-memory fake has no durable Session file. */ }
   setLeaderLaunchContext(..._args: Parameters<NonNullable<LegacyModelToolTeamPort["setLeaderLaunchContext"]>>) { /* In-memory fake has no Worker launch boundary. */ }
-  acknowledgePendingObservationAsync(...args: Parameters<NonNullable<LegacyModelToolTeamPort["acknowledgePendingObservationAsync"]>>) { return Promise.resolve(this.ports.coordination.acknowledgePendingObservation(...args)); }
-  readSyncNudgeDebt(..._args: Parameters<NonNullable<LegacyModelToolTeamPort["readSyncNudgeDebt"]>>) { return Promise.resolve({ kind: "none" } as import("../utils/sync-nudge-conductor").SyncNudgeDebt); }
+  readSyncNudgeDebt(...args: Parameters<NonNullable<LegacyModelToolTeamPort["readSyncNudgeDebt"]>>) { return this.ports.coordination.readSyncNudgeDebt(...args); }
   getPendingObservation(...args: [ExactLeaderSessionId]) { return this.ports.coordination.getPendingObservation(...args); }
   readDebugRevision() { return this.fixture.debug.readRevision(); }
   readDebugState(): InMemoryModelToolTeamDebugState { return this.fixture.debug.readState(); }

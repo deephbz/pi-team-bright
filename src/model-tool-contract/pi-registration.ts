@@ -1,3 +1,4 @@
+import { observationPageLine } from "../coordination/observation-content";
 import { hostEnv } from "../env/host-env";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { captureQualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
@@ -148,7 +149,7 @@ export function registerModelToolJourney(
       const assembled = assembleToolResult("team_sync", result);
       const pending = journeyPort.coordination.getPendingObservation?.(session);
       return pending?.toolCallId === _toolCallId && pending.observation
-        ? { ...assembled, details: { ...assembled.details, observation: pending.observation } }
+        ? { ...assembled, content: assembled.content.map(part => part.type === "text" ? { ...part, text: `${observationPageLine(result.kind, pending.observation!)}\n${part.text}` } : part), details: { ...assembled.details, observation: pending.observation } }
         : assembled;
     },
   };

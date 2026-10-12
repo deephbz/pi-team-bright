@@ -53,24 +53,6 @@ function branchIds(ctx: ExtensionContext): string[] {
   return ctx.sessionManager.getBranch().map((entry) => entry.id);
 }
 
-function containsExact(value: unknown, target: string): boolean {
-  if (value === target) return true;
-  if (Array.isArray(value)) return value.some((item) => containsExact(item, target));
-  if (value && typeof value === "object") return Object.values(value).some((item) => containsExact(item, target));
-  return false;
-}
-
-function persistedToolResult(ctx: ExtensionContext, toolCallId: string, resultText: string): string | undefined {
-  const entry = ctx.sessionManager.getBranch().find((candidate) => {
-    if (candidate.type !== "message") return false;
-    const message = candidate.message;
-    return message.role === "toolResult"
-      && message.toolCallId === toolCallId
-      && message.content.some((part) => part.type === "text" && part.text === resultText);
-  });
-  return entry?.id;
-}
-
 writeRecord("catalog", {
   tools: [
     {
@@ -116,18 +98,12 @@ export default function modelToolCanaryExtension(pi: ExtensionAPI): void {
 
   pi.on("before_provider_request", (event, ctx) => {
     const sessionId = ctx.sessionManager.getSessionId();
-    const ids = branchIds(ctx);
-    journey.port.setBranchContext(exactLeaderSessionId(sessionId), ids);
+    journey.port.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
     const pending = journey.port.getPendingObservation?.(exactLeaderSessionId(sessionId));
-    let acknowledged = false;
-    if (pending && containsExact(event.payload, pending.resultText)) {
-      const entryId = persistedToolResult(ctx, pending.toolCallId, pending.resultText);
-      if (entryId) acknowledged = journey.port.acknowledgePendingObservation(exactLeaderSessionId(sessionId), entryId, ids);
-    }
     writeRecord("before_provider_request", {
       ...sessionEvidence(ctx),
       payload: event.payload,
-      observationAcknowledged: acknowledged,
+      observationReserved: !!pending,
     });
   });
 
