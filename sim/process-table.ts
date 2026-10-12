@@ -1,6 +1,8 @@
 import type { GenerationProbe, ProcessGeneration } from "../src/env/host-env";
 
-export interface SimProcess extends ProcessGeneration { actor: string; alive: boolean; parentPid?: number; command: string }
+import type { ProcessIdentity } from "./history";
+
+export type SimProcess = ProcessGeneration & ProcessIdentity & { actor: string; alive: boolean; parentPid?: number; command: string };
 
 /** A7: birth tokens distinguish reused pids. Host probe support remains advisory. */
 export class ProcessTable {
@@ -11,11 +13,11 @@ export class ProcessTable {
   readonly history: SimProcess[] = [];
   onChange?: (kind: "process.birth" | "process.death", process: SimProcess) => void;
 
-  spawn(actor: string, options: { pid?: number; parentPid?: number; command?: string } = {}): SimProcess {
+  spawn(actor: string, options: { pid?: number; parentPid?: number; command?: string; identity?: ProcessIdentity } = {}): SimProcess {
     if (this.actor(actor)?.alive) throw new Error(`Actor already live: ${actor}`);
     const pid = options.pid ?? ++this.pid;
     if (this.exists(pid)) throw new Error(`PID already live: ${pid}`);
-    const process: SimProcess = { actor, pid, bootId: this.bootId, osBirthToken: String(++this.birth), alive: true, parentPid: options.parentPid, command: options.command ?? "pi" };
+    const process: SimProcess = { ...(options.identity ?? { processKind: "other" }), actor, pid, bootId: this.bootId, osBirthToken: String(++this.birth), alive: true, parentPid: options.parentPid, command: options.command ?? "pi" };
     this.history.push(process);
     this.onChange?.("process.birth", process);
     return process;

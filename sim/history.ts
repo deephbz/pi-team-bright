@@ -11,7 +11,12 @@ export type HistoryOrigin =
   | { kind: "ptb"; actor: ActorRef; toolCallId?: string; execCallId?: string }
   | { kind: "human" | "os"; input: number }
   | { kind: "setup" | "observer" };
-export interface ProcessFact { actorKey: string; generation: ProcessGeneration; command: string; parentPid?: number }
+export type ProcessIdentity =
+  | { processKind: "worker_pi"; membershipId: string }
+  | { processKind: "lead_pi" | "shell" | "other"; membershipId?: never };
+/** Missing classification identifies legacy history. Launch identity does not prove admission. */
+export type ProcessFact = { actorKey: string; generation: ProcessGeneration; command: string; parentPid?: number }
+  & (ProcessIdentity | { processKind?: undefined; membershipId?: undefined });
 export interface PaneFact { paneId: string; shellPid: number; agentPid?: number }
 export interface ToolResultFact { content?: Json[]; details?: JsonObject; isError?: boolean }
 export interface ObservationStamp { team: string; epoch: string; binding: string; from: number; through: number }
