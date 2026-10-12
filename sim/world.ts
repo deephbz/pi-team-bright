@@ -59,7 +59,7 @@ export class SimWorld {
       clock: this.scheduler.clock(actor, callback => process.alive ? this.enter(actor, callback) : undefined),
       random: this.entropy,
       process: {
-        pid: process.pid,
+        pid: process.pid, argv: ["node", "/synthetic/pi.js"], execPath: "/synthetic/node",
         platform: "linux",
         cwd: () => this.workspace.home,
         env: {

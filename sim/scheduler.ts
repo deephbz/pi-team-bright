@@ -92,6 +92,7 @@ export class Scheduler {
     const clear = (handle: TimerHandle | undefined) => { if (handle) this.cancel((handle as unknown as { id: number }).id); };
     return {
       now: () => this.now,
+      yield: () => new Promise<void>(resolve => { schedule(resolve, 0); }),
       setTimeout: (callback, ms) => schedule(callback, ms), clearTimeout: clear,
       setInterval: (callback, ms) => schedule(callback, Math.max(1, ms), Math.max(1, ms)), clearInterval: clear,
       sleepSync: ms => { this.advance(ms); }, // S-sync-block: no other actor runs during this call.

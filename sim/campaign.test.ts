@@ -20,8 +20,16 @@ async function run(trace: WorldTrace, seed: number): Promise<Outcome> {
       && (event.value as any).result.details.effect === "reused" && (event.value as any).result.details.worker.carrier === "connected");
     return { id: trace.id, seed, status: "replayed", operations: first.decisions.length, deadPiReuse: deadWorker && reused };
   } catch (error) {
-    if (error instanceof Error && error.name === "AssertionError") throw error;
-    return { id: trace.id, seed, status: "unsupported", error: error instanceof Error ? error.message : String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    const knownGaps: Record<string, string> = {
+      "synthetic-clock-gap": "Replay bound exceeded",
+      "synthetic-pane-loss": "No such process",
+      "synthetic-restart": "Unmodeled bd command: show",
+      "synthetic-shutdown-resume": "Actor is not live: team-1/lead",
+      "synthetic-stale-binding": "Pi cross-Session fork allocation is not modeled yet",
+    };
+    if (message !== knownGaps[trace.id]) throw error;
+    return { id: trace.id, seed, status: "unsupported", error: message };
   }
 }
 
