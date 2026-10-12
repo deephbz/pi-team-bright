@@ -16,8 +16,8 @@ export type InMemoryTaskState = { readonly [taskStateBrand]: true; readonly byTe
 export type InMemoryAlertState = { readonly [alertStateBrand]: true; nextAlert: number; deliveries: InMemoryAlertDelivery[] };
 export type InMemorySupportRevisionClock = { revision: number };
 export const inMemorySupportRevisionClock = (): InMemorySupportRevisionClock => ({ revision: 0 });
-export type InMemoryCoordinationState = { readonly [coordinationStateBrand]: true; revision: number; events: InMemoryEvent[]; baselines: Map<ExactLeaderSessionId, { head: number; entryId: string; epochId: string }>; pending: Map<ExactLeaderSessionId, PendingObservation & { result: TeamSyncPortResult }>; branches: Map<ExactLeaderSessionId, string[]>; waiters: Set<{ sessionId: ExactLeaderSessionId; resolve: (value: TeamSyncPortResult) => void; signal: AbortSignal; abort: () => void; toolCallId: string }> ; failPublications: { task: number; alert: number } };
+export type InMemoryCoordinationState = { readonly [coordinationStateBrand]: true; failPublications: { task: number; alert: number } };
 export function inMemoryTeamState(): InMemoryTeamState { return { teams: new Map(), names: new Map(), bindings: new Map(), next: 1 } as InMemoryTeamState; }
 export function inMemoryTaskState(): InMemoryTaskState { return { byTeam: new Map(), nextTask: 1, nextJournal: 1 } as InMemoryTaskState; }
 export function inMemoryAlertState(): InMemoryAlertState { return { nextAlert: 1, deliveries: [] } as unknown as InMemoryAlertState; }
-export function inMemoryCoordinationState(): InMemoryCoordinationState { return { revision: 0, events: [], baselines: new Map(), pending: new Map(), branches: new Map(), waiters: new Set(), failPublications: { task: 0, alert: 0 } } as unknown as InMemoryCoordinationState; }
+export function inMemoryCoordinationState(): InMemoryCoordinationState { return { failPublications: { task: 0, alert: 0 } } as unknown as InMemoryCoordinationState; }
