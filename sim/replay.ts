@@ -5,7 +5,7 @@ import { assumptionEvidence } from "./assumptions";
 import { SimWorld } from "./world";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/3";
+export const RUNNER_VERSION = "sim-c1/4";
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */

@@ -20,10 +20,10 @@ it("wakes an exact recovered Session for its ACKed in-progress Task without a ne
     { at: 3001, step: { kind: "pi.shutdown", who: lead, reason: "quit" } },
   ] };
   const replay = await replayTrace(trace, { seed: 42 });
-  const messages = replay.history.filter(e => e.kind === "pi.message").map(e => e.value as any);
+  const messages = replay.history.filter(e => e.kind === "pi.message");
   expect(messages.filter(e => e.message.customType === "ptb.worker-recovery")).toHaveLength(1);
-  expect(messages.find(e => e.message.customType === "ptb.worker-recovery").options.triggerTurn).toBe(true);
-  const updates = replay.history.filter(e => e.kind === "tool.result" && (e.value as any).name === "task_update").map(e => (e.value as any).result.details);
+  expect(messages.find(e => e.message.customType === "ptb.worker-recovery")?.options?.triggerTurn).toBe(true);
+  const updates = replay.history.filter(e => e.kind === "tool.result").filter(e => e.name === "task_update").map(e => e.result.details as any);
   expect(updates.map(e => e.kind)).toEqual(["updated", "updated"]);
   expect(updates[1].task.current_attempt.id).toBe(updates[0].task.current_attempt.id);
   expect(updates[1].task.attempts_started).toBe(1);
