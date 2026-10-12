@@ -32,12 +32,23 @@ try {
     const before = files.map(file => digest(path.join(scratch, file)));
     const test = mode => run('npx', ['--no-install', 'vitest', 'run', '--config', 'sim/mutants/gate.config.ts'], scratch,
       { ...process.env, PI_MUTANT: id, PI_MUTANT_MODE: mode, PI_MUTANT_OUTPUT: output });
-    test('control');
+    const diagnosticName = { M4: 'captures the snapshot watermark before Task hydration', M6: 'commits only native persistence and stamps the page boundary, never the journal head' }[id];
+    const diagnostic = phase => {
+      if (!diagnosticName) return;
+      const report = path.join(scratch, 'diagnostic.json');
+      const result = spawnSync('npx', ['--no-install', 'vitest', 'run', 'src/coordination/sync-continuity.test.ts', '-t', diagnosticName, '--reporter=json', '--outputFile', report], { cwd: scratch, encoding: 'utf8' });
+      if (![0, 1].includes(result.status) || !fs.existsSync(report)) throw new Error('Diagnostic did not complete');
+      const raw = JSON.parse(fs.readFileSync(report, 'utf8'));
+      const assertions = raw.testResults.flatMap(s => s.assertionResults).filter(a => a.status !== 'pending').map(a => ({ title: a.title, status: a.status }));
+      if (!assertions.length) throw new Error('Diagnostic selected no assertions');
+      fs.writeFileSync(path.join(output, `${phase}.diagnostic.json`), JSON.stringify({ scope: 'Existing unit assertion; not the simulator gate oracle', exitCode: result.status, assertions }, null, 2) + '\n');
+    };
+    test('control'); diagnostic('control');
     let applied = false;
     try {
       run('git', ['apply', '--check', patch]); run('git', ['apply', patch]); applied = true;
       run('npx', ['--no-install', 'tsc', '--noEmit']);
-      test('campaign');
+      test('campaign'); diagnostic('mutant');
     } finally {
       if (applied) run('git', ['apply', '-R', patch]);
       files.forEach((file, i) => { if (digest(path.join(scratch, file)) !== before[i]) throw new Error(`Revert failed: ${file}`); });
