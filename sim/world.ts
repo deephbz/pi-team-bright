@@ -7,6 +7,8 @@ import { Scheduler } from "./scheduler";
 import { ProcessTable } from "./process-table";
 import { ExecRouter, HerdrFake } from "./herdr";
 import { HostGuard } from "./host-guard";
+import { emptyBdWire } from "./bd-wire";
+import { assumptionEvidence, type FakeEvidence } from "./assumptions";
 
 export class ActorExit extends Error {
   constructor(readonly actor: string, readonly code: number) { super(`Actor ${actor} exited (${code})`); }
@@ -28,6 +30,7 @@ export class SimWorld {
   private readonly release: () => void;
   private disposed = false;
   readonly history: Array<{ at: number; actor: string; kind: string; value?: unknown }> = [];
+  readonly evidence: FakeEvidence[] = [assumptionEvidence("A7", "PID reuse changes the birth token"), assumptionEvidence("A9", "Real filesystem atomic rename; host-crash durability is unclaimed")];
   private readonly watches = new Set<WatchRegistration>();
 
   constructor(seed: number, options: { tape?: readonly number[]; replay?: readonly Choice[]; scheduleChoices?: readonly number[] } = {}) {
@@ -42,10 +45,11 @@ export class SimWorld {
     this.workspace = { root: home, home, tmp: path.join(home, "tmp"), cleanup: wipe };
     fs.mkdirSync(this.workspace.tmp, { recursive: true });
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
-    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false } } }));
+    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false }, model_roles: { "sim-worker": { model: "synthetic/model", thinking: "off", use: "Deterministic simulation" } }, default_model_role: "sim-worker" } }));
     this.entropy = new Entropy(seed, options.tape, options.replay, options.scheduleChoices);
     this.scheduler = new Scheduler(this.entropy);
     this.guard = new HostGuard(this.workspace.root, file => this.notifyFile(file));
+    this.exec.register("bd", emptyBdWire);
   }
   createActor(actor: string, variables: Record<string, string> = {}): HostEnv {
     if (this.envs.has(actor)) throw new Error(`Actor environment already exists: ${actor}`);
@@ -78,6 +82,14 @@ export class SimWorld {
       watch: { watchDirectory: (directory, listener) => this.watch(actor, directory, listener) },
     };
     this.envs.set(actor, env);
+    const paneId = env.process.env.HERDR_PANE_ID!;
+    const pane = this.herdr.panes.get(paneId) ?? this.herdr.spawn(paneId);
+    process.parentPid = pane.shellPid;
+    pane.agentPid = process.pid;
+    pane.agentBootId = process.bootId;
+    pane.agentBirthToken = process.osBirthToken;
+    pane.name = env.process.env.PI_AGENT_NAME;
+    pane.state = "idle";
     return env;
   }
   enter<T>(actor: string, action: () => T): T {
@@ -119,14 +131,18 @@ export class SimWorld {
   record(actor: string, kind: string, value?: unknown): void { this.history.push({ at: this.scheduler.now, actor, kind, value }); }
   async drain(options?: Parameters<Scheduler["drain"]>[0]): Promise<number> {
     const count = await this.scheduler.drain(options);
-    this.guard.assertClean();
+    this.assertClean();
     return count;
+  }
+  assertClean(): void {
+    this.guard.assertClean();
+    if (this.exec.failures.length) throw new Error("Unmodeled host behavior", { cause: this.exec.failures[0] });
   }
   private execute(command: string, args: readonly string[]) {
     const binary = path.basename(command);
     if (binary === "herdr" && this.faults.get("herdr")?.mode === "slow") this.scheduler.advance(100); // S-sync-block
     if (binary === "bd" && this.faults.get("bd")?.mode === "unavailable") return { status: 127, stdout: "", stderr: "bd unavailable" };
-    if (binary === "bd" && this.faults.get("bd")?.mode === "slow") throw new Error("Healthy bd wire behavior is not modeled");
+    if (binary === "bd" && this.faults.get("bd")?.mode === "slow") this.scheduler.advance(100); // S-sync-block
     if (binary === "herdr" && args[0] === "agent" && args[1] === "start") {
       const fault = this.faults.get("herdr.start");
       if (fault?.mode === "timeout") this.scheduler.advance(300000); // S-sync-block baseline readiness wait.
@@ -159,7 +175,8 @@ export class SimWorld {
             return;
           }
           // Slow async calls delay completion without freezing other actors.
-          const slow = path.basename(command) === "herdr" && this.faults.get("herdr")?.mode === "slow";
+          const binary = path.basename(command);
+          const slow = (binary === "herdr" || binary === "bd") && this.faults.get(binary)?.mode === "slow";
           effect = { kind: "exited", ...(slow ? this.exec.runSync(command, args) : this.execute(command, args)) };
           const delay = slow ? 100 : 0;
           this.enqueue(actor, "exec.completion", () => finish(effect!), delay);

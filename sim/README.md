@@ -1,91 +1,107 @@
 # Deterministic simulator
 
-Stage: consolidation. Scope: C1. Production base:
-`a992f086017b8924c5c448456573c16452ca655d`. Shared contracts are merged from
-`7a361cc` on `v31-integration`. The simulator does not replace PTB authority,
-launch, lease, or delivery algorithms.
+Stage: consolidation. Scope: C1 verification support. Production dependency:
+`14d92fd` (C0 host seam). The simulator runs real PTB authority algorithms.
+Architecture impact: none to production contracts.
 
-```
-WorldTrace + ReplayReceipt -> WorldReplay -> real extension tools/events
-                                         -> SimWorld -> one Scheduler
-                                                     -> Entropy choice log
-                                                     -> shared real HOME
-                                                     -> process / Herdr fake
+```text
+WorldTrace + ReplayReceipt -> real extension tools/events
+                          -> SimWorld -> single Scheduler -> Entropy log
+                                      -> isolated real HOME
+                                      -> process / Herdr / bd wire fakes
 ```
 
-Run `npx vitest run sim --reporter=verbose`. The focused lane has 19 tests.
-`core.test.ts` replays a synthetic trace twice, then replays its full choice log
-and its scheduler receipt. It compares decisions, enabled sets, history, and
-assumption use. A single queue-only trial measured 21.78 ms per 1,000 operations.
-This excludes setup, Session allocation, and real extension work.
-The package lane passed: 152 test files, 2,103 tests; 2 files and 3 tests skipped.
+Run `npx vitest run sim --reporter=verbose` and `npm run typecheck`.
+Run the owned bd differential check separately:
+`npx vitest run --config vitest.exhaustive.config.ts sim/bd-wire.external.test.ts`.
+Run the bounded campaign with
+`npx vitest run --config vitest.exhaustive.config.ts sim/campaign.test.ts`.
+Set `PI_SIM_RECORD_CAMPAIGN=1` to write `results/current-campaign.json`.
+No provider or real Herdr process runs in these lanes.
 
 ## Runtime boundary
 
 - `SimWorld` requires the HOME isolated by `test/setup.ts` before imports.
-  Worlds run one at a time. Each world wipes that isolated tree. Module-time
-  HOME paths therefore remain inside the world.
-- `SimActor` invokes real `extensions/index.ts` tools and hooks through
-  `runWithHostEnv`. `actor-loader.ts` loads a fresh PTB module graph per actor
-  through Vitest. All graphs share the real host dispatcher. Native module
-  loading completes before the operation queue starts.
-- Real Pi SessionManager owns branch and compaction behavior. The wrapper
-  injects Session ids, entry UUIDs, and timestamps. Streaming follow-ups enter
-  the operation queue.
-- Timer, watcher, exec, and actor callbacks capture their actor generation.
-  Exit drops queued callbacks and pending waits. PID reuse does not restore an
-  old agent name. `enterSimulation()` rejects host access outside an actor.
-- Async exec has separate arrival, effect, and completion operations. Timeout
-  and abort do not prove that no effect occurred. `sleepSync` advances virtual
-  time without running another actor, under `S-sync-block`.
+  Worlds run serially per test process. Each world wipes that isolated tree.
+- `SimActor` loads real `extensions/index.ts` in a fresh module graph per actor.
+  Every graph shares the actual host dispatcher. Loading precedes scheduling.
+- Real in-memory Pi SessionManager owns branch behavior. The wrapper injects
+  Session ids, entry UUIDs and time. A JSONL mirror supplies the durable Session
+  file required by Team creation. Streaming follow-ups use the operation queue.
+- Timer, watcher, exec and actor callbacks bind their actor generation.
+  Death drops callbacks and pending waits. PID reuse cannot restore an agent.
+- Async exec separates arrival, effect and completion. Timeout or abort leaves
+  the effect unknown. Sync operations block other actors under `S-sync-block`.
+- Real synchronous filesystem operations are atomic inside one queued callback.
+  Guards reject real timers, subprocesses, async fs, filesystem escape, symlink
+  escape and unowned descriptors. Swallowed violations still fail the world.
+- The actor loader replaces only `ExecBdRunner.run`. Scheduled bd wire supports
+  empty-store init/where/list. Provisioning, BeadsTaskStore and Team authority
+  remain real. Other bd commands fail closed. The differential lane compares
+  normalized outputs and authority fingerprints against owned bd 1.1.0.
+  It normalizes workspace paths and generated database/project identities.
 
-## C0 integration gate
+## Evidence and limits
 
-The real-extension factory test passes for lead and Worker projections. On the
-baseline it explicitly supplies bootstrap process role variables. C0 must remove
-that test stub and enable guarded Session startup and full public-tool replay.
-The baseline still calls real timers, time, randomness, and subprocesses.
-A guarded `pi.start` probe failed with `Host escape: Real subprocess: spawnSync`.
-No full launch or observation property is claimed by the core replay milestone.
+`baseline.test.ts` replays the repaired synthetic fixtures directly. Scenario 1
+waits 300000 virtual ms, cleans the failed carrier, then admits a real Worker
+on retry. Scenario 2 reproduces a dead Pi reported as reused/connected while its
+shell survives. Replaying scenario 2 compares receipts, choices, enabled sets,
+history, Session branches and process truth exactly. See
+`results/baseline-scenarios.json` for the scoped findings.
 
-`host-calls.base.json` lists 331 direct-host candidates by file, line, and
-primitive on the production base. Generate a current inventory with
-`npx ts-node sim/host-call-audit.ts`. Candidates do not prove reachability.
-High-priority blockers are:
+The pre-C2/C3 campaign in `results/baseline-campaign.json` replayed five of ten
+synthetic fixtures twice. Five stopped at explicit simulator gaps. All twelve
+fast-check timing/seed variants replayed twice and reproduced dead-Pi reuse.
+The generated campaign covers that failure class only. It does not establish
+all P/M/E properties. The campaign takes about 34 seconds and runs in the
+exhaustive lane.
 
-- `extensions/index.ts`: process role/env, argv, execPath, cwd, wall time.
-- `extensions/pi-team-session-adapter.ts`: process env/cwd, Date, timers, watch.
-- `src/utils/lock.ts`: process pid/kill, Date, UUID, random, timeout.
-- `src/utils/terminal-adapter.ts`: direct `spawnSync`.
-- `src/adapters/herdr-adapter.ts`: environment, Date, blocking `Atomics.wait`.
-- Runtime, Team, and journal/publication modules: time, UUID, process identity,
-  and timers. The inventory lists each candidate.
+A1–A6 cite probe fixtures for Pi 0.83.0 and Herdr 0.9.3. They establish only the
+recorded paths and bounds. A8 is inconclusive; A7 and A9 remain unprobed.
+Pane geometry and pane-close process-tree effects remain advisory.
 
-C0 owns production changes. C1 changes only `sim/`.
+The queue benchmark excludes module loading and real fs. Baseline tests also
+print per-1000-operation wall time with both costs included. These are single
+trials, not throughput guarantees.
 
-## Bounds and gaps
+`host-calls.base.json` records 331 direct-host candidates on the original base
+`a992f086017b8924c5c448456573c16452ca655d`. Regenerate an inventory with
+`npx ts-node sim/host-call-audit.ts`. C0's executable residual allowlist lives in
+`test/host-env-seam.test.ts`. The bd transport override covers its reachable
+legacy spawn exception. Diagnostic duration measurements remain nondeterministic
+and are not decision inputs.
 
-- Every entropy choice logs its bound. Scheduler choices also log the enabled
-  set. fast-check generates the seed tape. Supplied tapes can be shrunk.
-  Exhausted tapes, invalid receipt coordinates, and changed choice logs fail.
-- Promise jobs drain for 64 checkpoints between queue choices. Unscheduled
-  async filesystem work fails. Synchronous filesystem effects are atomic inside
-  the current operation. Instruction-level process interleaving is unclaimed.
-- Guards reject real timers, subprocesses, path escape, symlink escape, and
-  unowned descriptors. A swallowed violation still fails the next world drain.
-  Module loading and fixture setup run outside this guard. A9 host-crash
-  durability is unclaimed. Do not retain copied builtin functions before guard
-  installation; Node live builtin exports are synchronized at installation.
-- Herdr behaviors cite A1, A2, A6, and A8. Process birth tokens cite A7. Pi
-  shutdown, follow-ups, and branch behavior cite A3, A4, and A5. These assumptions
-  remain advisory until the probe lane supplies passing evidence. Process-info
-  envelopes and pane geometry still need probe comparison.
-- Nonempty pre-existing Team setup needs a public-tool bootstrap trace. The
-  runner fails rather than creating PTB authority by hand. Cross-Session forks,
-  arbitrary shell input, healthy Beads wire behavior, and process restart with
-  Session recovery remain explicit gaps. Unsupported inputs fail.
-- Workers launched by a trace must have actor coordinates somewhere in that
-  trace so the runner can preload their isolated module graph. No provider,
-  real-Herdr, or P/M/E campaign gate is claimed here.
+Entropy tapes contain 65536 fast-check draws. Every choice logs its bound;
+scheduler choices also log enabled operations. Invalid receipts and exhausted
+tapes fail. Promise jobs drain for 64 checkpoints between queue choices.
+Instruction-level process interleaving and host-crash durability are unclaimed.
 
-Architecture impact: none to production contracts. This is verification support.
+Nonempty pre-existing Team setup, cross-Session forks, process restart/recovery,
+arbitrary shell execution and nonempty Beads task operations remain unsupported.
+Worker module graphs preload from actor coordinates and literal ensure_worker
+names. Human input is opaque terminal text. Full P/M/E campaigns are unclaimed.
+
+## Trace validation and simulator assumption registry
+
+The fixture validator accepts only probe ids present in `fixtures/probes` or
+S-* ids in this table. Presence does not imply a passing probe. Synthetic tool
+arguments use live public schemas. Backward result references defer their value
+checks until replay. Empirical arguments remain historical, redacted evidence;
+they receive structural validation only. Invalid historical calls are never
+silently repaired. Replay checks resolved arguments before execution.
+
+| Id | Meaning and limit |
+| --- | --- |
+| S-sync-block | A synchronous wait advances virtual time while all other actors freeze. |
+| S-first-worker-pane-is-pane-1 | Fresh synthetic worlds allocate pane ids in creation order. |
+| S-delayed-call-retains-original-membership | Delayed calls retain their original actor coordinates. |
+| S-sync-cursor-owned-by-session | Repeated updates use the real Session-owned cursor; traces supply no cursor argument. |
+| S-extraction-partial-observation | Source logs do not describe every world event. |
+| S-session-window-from-team-config | Team config bounds the extractor's Session window. |
+| S-redacted-tool-arguments | Redaction preserves joins but can destroy live argument patterns. |
+| S-lead-start-at-first-observation | The extractor projects lead startup at its first observation. |
+| S-assistant-stop-is-turn-end | An observed assistant stop projects a settled turn. |
+| S-compaction-record-is-action | A compaction record projects a compaction input. |
+| S-branch-summary-parent-is-tree-target | The branch-summary parent projects a tree target. |
+| S-initial-workers-from-session-bindings | Existing Worker setup derives from recorded Session bindings. |

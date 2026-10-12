@@ -1,9 +1,12 @@
 import { EventEmitter } from "node:events";
+import { Check } from "typebox/value";
+import type { TSchema } from "typebox";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "../extensions/index";
 import type { RegisteredToolLike } from "../test/support/external-harness";
 import { createSimSession } from "./session";
 import { SimWorld } from "./world";
+import { assumptionEvidence } from "./assumptions";
 
 type Handler = (event: any, context: any) => unknown;
 
@@ -23,9 +26,11 @@ export class SimActor {
   constructor(readonly world: SimWorld, readonly id: string, variables: Record<string, string> = {}) {
     const env = world.envs.get(id) ?? world.createActor(id, variables);
     this.session = createSimSession(env, world.workspace.home);
+    world.evidence.push(assumptionEvidence("A5", "Pi branch keeps raw entries after compaction"));
     const record = (kind: string, value?: unknown) => world.record(id, kind, value);
     this.context = {
       cwd: world.workspace.home, mode: "tui", hasUI: true,
+      modelRegistry: { getAvailable: () => [{ provider: "synthetic", id: "model" }] },
       isIdle: () => this.idle, isProjectTrusted: () => true,
       sessionManager: this.session,
       shutdown: () => world.enqueue(id, "pi.shutdown.request", () => this.emit("session_shutdown", { reason: "quit" })),
@@ -52,7 +57,7 @@ export class SimActor {
           this.session.appendCustomMessageEntry(message.customType, message.content, message.display ?? false, message.details);
           record("pi.message", { message, options });
         };
-        // A4: follow-ups wait for the active model turn. The probe lane owns validation.
+        world.evidence.push(assumptionEvidence("A4", "Streaming follow-up enters the branch after turn release"));
         if (!this.idle && options?.deliverAs === "followUp") this.queuedMessages.push(append);
         else append();
       },
@@ -76,6 +81,8 @@ export class SimActor {
   async tool(name: string, args: Record<string, unknown>): Promise<unknown> {
     const tool = this.tools.get(name);
     if (!tool) throw new Error(`Unregistered tool ${name} on ${this.id}`);
+    const parameters = (tool as RegisteredToolLike & { parameters?: TSchema }).parameters;
+    if (parameters && !Check(parameters, args)) throw new Error(`Invalid tool arguments: ${name}`);
     this.idle = false;
     const callId = `${this.id}-call-${++this.callSequence}`;
     await this.emit("tool_call", { toolName: name, toolCallId: callId, input: args });

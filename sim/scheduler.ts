@@ -31,6 +31,7 @@ export class Scheduler {
   enabled(): string[] {
     return [...this.queue.values()].filter(op => op.due <= this.now).map(op => `${op.id}:${op.label}`);
   }
+  pendingCount(): number { return this.pending.size; }
   nextDue(): number | undefined {
     return this.queue.size ? Math.min(...[...this.queue.values()].map(op => op.due)) : undefined;
   }
@@ -84,11 +85,11 @@ export class Scheduler {
   }
 
   clock(actor: string, enter: (callback: () => void) => void): HostClock {
-    const schedule = (callback: () => void, ms: number, interval?: number) => this.enqueue(
+    const schedule = (callback: () => void, ms: number, interval?: number) => ({ id: this.enqueue(
       interval === undefined ? "timer.timeout" : "timer.interval", () => enter(callback),
       { actor, delay: Math.max(0, ms), interval },
-    ) as unknown as TimerHandle;
-    const clear = (handle: TimerHandle | undefined) => this.cancel(handle as unknown as number);
+    ), unref() {} }) as unknown as TimerHandle;
+    const clear = (handle: TimerHandle | undefined) => { if (handle) this.cancel((handle as unknown as { id: number }).id); };
     return {
       now: () => this.now,
       setTimeout: (callback, ms) => schedule(callback, ms), clearTimeout: clear,

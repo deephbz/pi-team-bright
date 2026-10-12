@@ -8,7 +8,7 @@ import timerPromises from "node:timers/promises";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 
-interface Scope { root: string; canonicalRoot: string; violations: string[]; changed: (file: string) => void; fds: Set<number> }
+interface Scope { root: string; canonicalRoot: string; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Set<number> }
 const active = new AsyncLocalStorage<Scope>();
 const real = { exists: fs.existsSync, realpath: fs.realpathSync, lstat: fs.lstatSync };
 let users = 0;
@@ -16,7 +16,9 @@ let undo: Array<() => void> = [];
 
 function fail(scope: Scope, message: string): never {
   scope.violations.push(message);
-  throw new Error(message);
+  const error = new Error(message);
+  scope.failures.push(error);
+  throw error;
 }
 function inside(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
@@ -30,7 +32,7 @@ function checkPath(scope: Scope, input: unknown): string {
   const name = input instanceof URL ? fileURLToPath(input) : Buffer.isBuffer(input) ? input.toString() : input;
   if (typeof name !== "string") return fail(scope, "Unsupported filesystem path");
   const target = path.resolve(name);
-  if (!inside(scope.root, target)) return fail(scope, "Filesystem access outside world root");
+  if (!inside(scope.root, target) && !inside(scope.canonicalRoot, target)) return fail(scope, "Filesystem access outside world root");
   let ancestor = target;
   while (!real.exists(ancestor)) {
     // A dangling symlink must not become a future escape.
@@ -97,17 +99,18 @@ function install(): void {
 /** Guards runtime actor work. Module loading and world setup happen before entering this boundary. */
 export class HostGuard {
   readonly violations: string[] = [];
+  private readonly failures: Error[] = [];
   private readonly scope: Scope;
   private disposed = false;
   constructor(root: string, changed: (file: string) => void) {
-    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, changed, fds: new Set() };
+    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Set() };
     if (users++ === 0) install();
   }
   run<T>(action: () => T): T {
     if (this.disposed) throw new Error("World is disposed");
     return active.run(this.scope, action);
   }
-  assertClean(): void { if (this.violations.length) throw new Error(`Host escape: ${this.violations.join("; ")}`); }
+  assertClean(): void { if (this.violations.length) throw new Error(`Host escape: ${this.violations.join("; ")}`, { cause: this.failures[0] }); }
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
