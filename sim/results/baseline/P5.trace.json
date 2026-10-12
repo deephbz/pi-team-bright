@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "id": "baseline-p5-minimal",
+  "source": "synthetic",
+  "assumptions": [
+    "S-sync-block"
+  ],
+  "setup": {
+    "ptbVersion": "baseline",
+    "teams": []
+  },
+  "steps": [
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "session": "session-1",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_create",
+        "args": {
+          "name": "team-1",
+          "purpose": "Synthetic lifecycle verification"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "fault.set",
+        "fault": {
+          "source": "pi.start",
+          "mode": "hang"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w1",
+          "scope": "text-1"
+        }
+      }
+    }
+  ]
+}
