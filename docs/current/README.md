@@ -236,6 +236,10 @@ restating executable definitions.
   unchanged; healthy polling retries the current source difference. A transient
   observation lost before append is not durable. There are no hidden observation
   checkpoints. Journal failure does not delay the source projection.
+  Worker admission publishes a verified predecessor exit before it replaces that
+  generation's runtime record. It holds the Membership lease through both steps.
+  Polling and admission use the same accepted journal baseline. An exit-publication
+  failure preserves the predecessor record and prevents replacement.
   One ten-second receipt deadline covers claim, nested leases, Herdr preparation,
   and target CAS. Expiry returns attention and prevents late startup. Prepared
   targets reconcile asynchronously under the exact Membership and launch ID.

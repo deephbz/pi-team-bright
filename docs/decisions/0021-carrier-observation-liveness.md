@@ -62,7 +62,11 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    the accepted baseline unchanged. Healthy polling retries the current source
    difference. A transient observation lost before append is not durable.
    Publication rereads the journal under the Membership lease and fences the exact
-   generation and terminal target.
+   generation and terminal target. Worker admission publishes verified predecessor
+   death before it overwrites that runtime generation. It holds the same lease
+   through both steps and uses the same publication baseline as polling. A failed
+   exit append prevents replacement and preserves the predecessor record for retry.
+   This closes the death/recovery race without publishing a stale generation.
 6. **Samples expire.** Each observation source owns its sample time. A sample
    expires to `unknown` after six seconds, including when collection fails. A stalled
    read stays single-flight.
@@ -105,6 +109,7 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
 Executable evidence: [`carrier-observer.v31.test.ts`](../../src/carrier-observer.v31.test.ts),
 [`carrier-observer.property.test.ts`](../../src/carrier-observer.property.test.ts),
 [`carrier-observation.test.ts`](../../src/carrier-observation.test.ts),
+[`v31-receipts.test.ts`](../../sim/v31-receipts.test.ts),
 [`process-generation.test.ts`](../../src/env/process-generation.test.ts), and
 [`process-generation.native.test.ts`](../../src/env/process-generation.native.test.ts).
 The verification list in [Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md#verification)
