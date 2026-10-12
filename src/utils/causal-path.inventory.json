@@ -60,7 +60,7 @@
       "primaryAnchor": "src/utils/causal-path-characterization.test.ts",
       "supportingAnchors": [
         {
-          "path": "src/utils/hidden-observation.test.ts",
+          "path": "src/coordination/sync-continuity.test.ts",
           "proofLimit": "Exercises hidden observation records directly rather than registered team_sync and Pi persistence hooks."
         },
         {

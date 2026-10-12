@@ -8,11 +8,7 @@ import { createSyncNudgeRecord, SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nud
 import { TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE } from "../utils/task-delivery";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
 import { PTB_DOCTOR_CUSTOM_TYPE } from "../utils/ptb-doctor-command";
-import {
-  FRAMEWORK_SYNC_MESSAGE_TYPE,
-  projectFrameworkSyncMessage,
-  type FrameworkSyncExecutionRecord,
-} from "../../extensions/framework-sync-execution";
+import { TEAM_UPDATE_TYPE, projectTeamUpdateMessage } from "../../extensions/team-update";
 
 export const DISPLAYED_TOOL_TYPES = [
   "team_create",
@@ -258,24 +254,8 @@ function customScenarios(): TuiMessageGalleryScenario[] {
     presentedAt: "2026-08-14T12:00:01.000Z",
     policyVersion: "1",
   });
-  const frameworkRecord: FrameworkSyncExecutionRecord = {
-    version: 1,
-    provenance: "pi-team-bright/framework",
-    id: "framework-sync-gallery-1",
-    source: "automatic",
-    teamName: "release-team",
-    sessionId: "lead-session-1",
-    sessionFile: "/example/lead-session.jsonl",
-    branchLineage: ["root"],
-    toolName: "team_sync",
-    toolCallId: "framework-team-sync-gallery-1",
-    arguments: { view: "updates" },
-    result: populatedUpdates,
-    resultText: JSON.stringify(projectToolResult("team_sync", populatedUpdates)),
-    recordedAt: Date.parse("2026-09-27T00:00:00.000Z"),
-  };
-  const frameworkMessage = projectFrameworkSyncMessage({ details: { recordId: frameworkRecord.id, record: frameworkRecord } });
-  if (!frameworkMessage) throw new Error("The framework synchronization gallery fixture is invalid.");
+  const teamUpdate = projectTeamUpdateMessage({ content: JSON.stringify(projectToolResult("team_sync", populatedUpdates)) });
+  if (!teamUpdate) throw new Error("The Team update gallery fixture is invalid.");
   const doctorMessage = projectDoctorMessage({
     content: "# Team doctor repair guide\nInspect the Team config and graph authority before repair.\n\nInvocation metadata (observations, not authority):\n{\"team\":{\"config_state\":\"parseable_unverified\"}}",
     details: { source: "gallery-fixture" },
@@ -284,7 +264,7 @@ function customScenarios(): TuiMessageGalleryScenario[] {
     { id: "custom.task-change", title: "Task assignment delivery", source: "custom", customTypes: [TASK_CHANGE_CUSTOM_TYPE, LEGACY_TASK_CHANGE_CUSTOM_TYPE], message: projectTaskChangeMessage({ content: taskContent, details: { deliveryIds: ["delivery-1"] } }) },
     { id: "custom.direct-message", title: "Direct coordination delivery", source: "custom", customTypes: [DIRECT_MESSAGE_CUSTOM_TYPE, LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE], message: projectDirectMessage({ content: directContent, details: { messageIds: ["alert-1"] } }) },
     { id: "custom.sync-nudge", title: "Team synchronization nudge", source: "custom", customTypes: [SYNC_NUDGE_CUSTOM_TYPE], message: projectSyncNudgeMessage({ details: nudge })! },
-    { id: "custom.framework-sync", title: "Framework team_sync result", source: "custom", customTypes: [FRAMEWORK_SYNC_MESSAGE_TYPE], message: frameworkMessage },
+    { id: "custom.team-update", title: "Team update", source: "custom", customTypes: [TEAM_UPDATE_TYPE], message: teamUpdate },
     { id: "custom.doctor", title: "Team doctor repair context", source: "custom", customTypes: [PTB_DOCTOR_CUSTOM_TYPE], message: doctorMessage },
     { id: "custom.task-change-malformed", title: "Malformed Task delivery projection", source: "diagnostic", message: projectTaskChangeMessage({ content: "not JSON", details: { deliveryIds: ["delivery-bad"] } }) },
     { id: "custom.direct-message-malformed", title: "Malformed coordination projection", source: "diagnostic", message: projectDirectMessage({ content: "not JSON", details: { messageIds: ["alert-bad"] } }) },

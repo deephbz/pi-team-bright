@@ -14,8 +14,7 @@ export class DurableModelToolCoordinationApplication implements ModelToolCoordin
   discardPendingObservation(id: ExactLeaderSessionId, call: string): void { this.service.discardPending(this.bindings.sessionFile(id) ?? id, call); }
   async readSyncNudgeDebt(id: ExactLeaderSessionId, lineage: string[]): Promise<SyncNudgeDebt> { const file = this.bindings.sessionFile(id); return file ? this.service.readSyncNudgeDebt(file, lineage) : { kind: "none" }; }
   setPendingObservationResult(id: ExactLeaderSessionId, result: unknown): void { this.service.setPendingResult(this.bindings.sessionFile(id) ?? id, result); }
-  acknowledgePendingObservation(_id: ExactLeaderSessionId, _entry: string, _branch: string[]): boolean { return false; }
-  acknowledgePendingObservationAsync(id: ExactLeaderSessionId, entry: string, branch: string[]): Promise<boolean> { return this.service.acknowledge(this.bindings.sessionFile(id) ?? id, entry, branch); }
+  setBranchEntries(id: ExactLeaderSessionId, entries: import("../coordination/branch-observation").BranchEntry[]): void { this.service.setBranchEntries(this.bindings.sessionFile(id) ?? id, entries); }
   setBranchContext(id: ExactLeaderSessionId, branch: string[]): void { this.service.setBranchContext(this.bindings.sessionFile(id) ?? id, branch); }
-  getPendingObservation(id: ExactLeaderSessionId): PendingObservation | undefined { const pending = this.service.pending(this.bindings.sessionFile(id) ?? id); return pending ? { sessionId: pending.sessionId, toolCallId: pending.toolCallId, resultText: pending.resultText, resultDigest: pending.resultDigest, head: pending.head, epochId: pending.epochId, baselineCursor: pending.baselineCursor, baselineAcknowledgedEntryId: pending.baselineAcknowledgedEntryId } : undefined; }
+  getPendingObservation(id: ExactLeaderSessionId): PendingObservation | undefined { const pending = this.service.pending(this.bindings.sessionFile(id) ?? id); return pending ? { sessionId: pending.sessionId, toolCallId: pending.toolCallId, resultText: pending.resultText, resultDigest: pending.resultDigest, head: pending.head, epochId: pending.epochId, observation: pending.observation } : undefined; }
 }

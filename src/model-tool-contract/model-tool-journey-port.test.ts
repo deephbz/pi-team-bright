@@ -98,8 +98,8 @@ describe("ModelToolJourneyPort", () => {
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
     expect(extension).toContain("new DurableModelToolBindings()");
     expect(extension).toContain("new ModelToolJourneyFacade(");
-    expect(extension).toContain("modelToolJourney.port.coordination.setBranchContext");
-    expect(extension).toContain("modelToolJourney.port.coordination.acknowledgePendingObservation");
+    expect(extension).toContain("modelToolJourney.port.coordination.setBranchEntries");
+    expect(extension).not.toContain("acknowledgePendingObservation");
   });
 
   it("keeps shared contracts neutral and wrapper dependencies inward", () => {
