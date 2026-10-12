@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -69,19 +70,19 @@ export function createPiTeamSessionAdapter(options: {
   const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
   const terminal = getTerminalAdapter();
   const taskGraphPane = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: taskGraphControlSource });
-  let isTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
-  const envAgentName = process.env.PI_AGENT_NAME;
+  let isTeammate = !!hostEnv().process.env.PI_AGENT_NAME && hostEnv().process.env.PI_AGENT_NAME !== "team-lead";
+  const envAgentName = hostEnv().process.env.PI_AGENT_NAME;
   let agentName = envAgentName || "team-lead";
-  const envTeamName = process.env.PI_TEAM_NAME;
-  const envLaunchId = process.env.PI_AGENT_LAUNCH_ID;
-  const envMembershipId = process.env.PI_TEAM_MEMBERSHIP_ID;
+  const envTeamName = hostEnv().process.env.PI_TEAM_NAME;
+  const envLaunchId = hostEnv().process.env.PI_AGENT_LAUNCH_ID;
+  const envMembershipId = hostEnv().process.env.PI_TEAM_MEMBERSHIP_ID;
   let teamName: string | null = envTeamName || teamQuery.findLeadTeamForSession();
   let currentMembershipId: string | undefined;
   let syncNudgeConductor: SyncNudgeConductor | null = null;
   let stopSyncNudgeMonitor: (() => void) | null = null;
   let leaderRunSettled = false;
   let failedFrameworkSync: { record: NonNullable<ReturnType<typeof persistedFrameworkSyncForPending>>["record"]; reason: "error" | "aborted" } | undefined;
-  let frameworkRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  let frameworkRetryTimer: TimerHandle | undefined;
   const frameworkRetryCount = new Map<string, number>();
   const suppressedAutomaticDebt = new Set<string>();
   let leaderContext: any;
@@ -97,8 +98,8 @@ export function createPiTeamSessionAdapter(options: {
   let doctorGeneration = 0;
   let titleOwned = false;
   let titleGeneration = 0;
-  const titleTimers = new Set<ReturnType<typeof setTimeout>>();
-  const identitySource: TeamIdentitySource = process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
+  const titleTimers = new Set<TimerHandle>();
+  const identitySource: TeamIdentitySource = hostEnv().process.env.PI_AGENT_NAME ? "launch_env" : "resumed_session";
 
   initializeTeamFooter(pi);
   const modelToolJourney = () => getModelToolJourney();
@@ -155,7 +156,7 @@ export function createPiTeamSessionAdapter(options: {
 
 function configureWorkerResources(ctx: any): void {
   if (!isTeammate) return;
-  const cwd = ctx.cwd ?? process.cwd();
+  const cwd = ctx.cwd ?? hostEnv().process.cwd();
   workerResourcePolicy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) === true });
   // Capture this once, before this extension projects settings. Reload always
   // derives from it so removing settings restores Pi's active-tool baseline.
@@ -182,7 +183,7 @@ function commandOwner(ctx: any) {
     role: agentName,
     membershipId: currentMembershipId,
     isTeammate,
-    cwd: ctx.cwd ?? process.cwd(),
+    cwd: ctx.cwd ?? hostEnv().process.cwd(),
     projectTrusted: projectTrust(ctx) === true,
   };
   const isCurrent = () => owner.generation === doctorGeneration
@@ -191,7 +192,7 @@ function commandOwner(ctx: any) {
     && owner.leafId === ctx.sessionManager?.getLeafId?.()
     && owner.teamName === teamName && owner.role === agentName
     && owner.membershipId === currentMembershipId && owner.isTeammate === isTeammate
-    && owner.cwd === (ctx.cwd ?? process.cwd()) && owner.projectTrusted === (projectTrust(ctx) === true);
+    && owner.cwd === (ctx.cwd ?? hostEnv().process.cwd()) && owner.projectTrusted === (projectTrust(ctx) === true);
   return { ...owner, isCurrent };
 }
 
@@ -236,7 +237,7 @@ const runSync = async (_args: string, ctx: any) => {
     }
     const owner = commandOwner(ctx);
     if (ctx?.isIdle?.() !== false) leaderRunSettled = true;
-    if (frameworkRetryTimer) { clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
+    if (frameworkRetryTimer) { hostEnv().clock.clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     const sessionFile = ctx?.sessionManager?.getSessionFile?.();
     const branch = modelToolBranchIds(ctx);
@@ -265,7 +266,7 @@ const runDoctor = async (ctx: any, requestedTeamName?: string) => {
     let content: string;
     try {
       content = await collectPtbDoctorContext({
-        requestedAt: new Date().toISOString(),
+        requestedAt: new Date(hostEnv().clock.now()).toISOString(),
         selectedTeamName,
         boundTeamName: owner.teamName ?? undefined,
         role: owner.role,
@@ -316,7 +317,7 @@ const runGraph = async (args: string, ctx: any) => {
       const result = await taskGraphPane.toggle({
         teamName: owner.teamName,
         actor: owner.role,
-        cwd: ctx.cwd ?? process.cwd(),
+        cwd: ctx.cwd ?? hostEnv().process.cwd(),
         limitText: args,
       });
       if (!owner.isCurrent()) return;
@@ -395,7 +396,7 @@ async function runPtbAction(command: PtbAction, ctx: any): Promise<void> {
 
 function releaseTeamTitle(ctx: any) {
   titleGeneration++;
-  for (const timer of titleTimers) clearTimeout(timer);
+  for (const timer of titleTimers) hostEnv().clock.clearTimeout(timer);
   titleTimers.clear();
   if (!titleOwned) return;
   titleOwned = false;
@@ -433,18 +434,18 @@ async function refreshTeamFooter(ctx: any) {
 
 function scheduleTeamTitleRefresh(ctx: any) {
   for (const delay of [500, 2000, 5000]) {
-    const timer = setTimeout(() => {
+    const timer = hostEnv().clock.setTimeout(() => {
       titleTimers.delete(timer);
       void refreshTeamFooter(ctx);
     }, delay);
-    timer.unref?.();
+    if ("unref" in timer) timer.unref();
     titleTimers.add(timer);
   }
 }
 
 function stopSyncNudgeConductor() {
   frameworkSync.invalidate();
-  if (frameworkRetryTimer) { clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
+  if (frameworkRetryTimer) { hostEnv().clock.clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
   failedFrameworkSync = undefined;
   frameworkRetryCount.clear();
   suppressedAutomaticDebt.clear();
@@ -491,7 +492,7 @@ async function startSyncNudgeConductor(ctx: any) {
       || (!!sessionId && !!modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)));
   };
   syncNudgeConductor = new SyncNudgeConductor({
-    clock: { setTimeout: (callback, ms) => setTimeout(callback, ms), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
+    clock: { setTimeout: (callback, ms) => hostEnv().clock.setTimeout(callback, ms), clearTimeout: (handle) => hostEnv().clock.clearTimeout(handle as TimerHandle) },
     delayMs,
     updateThreshold: policy?.autoSyncUpdateThreshold ?? DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD,
     readDebt: debt,
@@ -518,14 +519,14 @@ async function startSyncNudgeConductor(ctx: any) {
   });
   const eventDirectory = path.join(paths.teamDir(teamName), "events");
   fs.mkdirSync(eventDirectory, { recursive: true });
-  const watcher = fs.watch(eventDirectory, (_event, filename) => {
+  const watcher = hostEnv().watch.watchDirectory(eventDirectory, (filename) => {
     if (typeof filename === "string" && filename === "team-events.jsonl") syncNudgeConductor?.notify();
   });
-  watcher.on("error", () => syncNudgeConductor?.notify());
-  const interval = setInterval(() => syncNudgeConductor?.notify(), Math.max(5_000, Math.min(30_000, Math.max(100, delayMs))));
-  interval.unref?.();
+  watcher.onError(() => syncNudgeConductor?.notify());
+  const interval = hostEnv().clock.setInterval(() => syncNudgeConductor?.notify(), Math.max(5_000, Math.min(30_000, Math.max(100, delayMs))));
+  if ("unref" in interval) interval.unref();
   syncNudgeConductor.start();
-  stopSyncNudgeMonitor = () => { watcher.close(); clearInterval(interval); };
+  stopSyncNudgeMonitor = () => { watcher.close(); hostEnv().clock.clearInterval(interval); };
 }
 
 function stopDeliveries() {
@@ -735,7 +736,7 @@ function registerSessionHooks() {
           teamName,
           workerName: agentName,
           sessionFile: piSessionFile,
-          placement: placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
+          placement: placeSessionTerminal(teamConfig, terminal, hostEnv().process.env.TMUX_PANE),
           identitySource,
           launchId: envLaunchId,
           expectedMembershipId: envMembershipId,
@@ -771,7 +772,7 @@ function registerSessionHooks() {
         runtimeAdmission = await teamSessionLifecycleService.admitLead({
           teamName,
           sessionFile: piSessionFile,
-          placement: placeSessionTerminal(teamConfig, terminal, process.env.TMUX_PANE),
+          placement: placeSessionTerminal(teamConfig, terminal, hostEnv().process.env.TMUX_PANE),
           identitySource,
         });
       } catch (error) {
@@ -808,9 +809,9 @@ pi.on("session_shutdown", async (event, ctx) => {
     // Pi captures active tools after this hook and replaces this extension
     // closure. Restore the immutable baseline before that capture.
     if (workerActiveToolBaseline) pi.setActiveTools?.(workerActiveToolBaseline);
-    const aggregate = process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
+    const aggregate = hostEnv().process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE;
     if (aggregate && ownsWorkerAggregate(aggregate)) {
-      const cwd = ctx.cwd ?? process.cwd();
+      const cwd = ctx.cwd ?? hostEnv().process.cwd();
       const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: projectTrust(ctx) === true });
       // Keep the fixed CLI path, but overwrite it atomically even if both
       // entries disappeared. Pi reload then sees native global/ancestor/project content.
@@ -818,9 +819,9 @@ pi.on("session_shutdown", async (event, ctx) => {
     } else if (aggregate) {
       ctx.ui?.notify?.("Pi Team Bright Worker aggregate path is not package-owned; reload refresh skipped.", "warning");
     }
-  } else if (isTeammate && process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE) {
+  } else if (isTeammate && hostEnv().process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE) {
     // Best effort only: this disposable file is never orchestration authority.
-    removeWorkerAggregate(process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
+    removeWorkerAggregate(hostEnv().process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
   }
   stopDeliveries();
   taskGraphPane.shutdown();
@@ -850,13 +851,13 @@ pi.on("agent_start", async (_event, ctx) => {
   leaderRunSettled = false;
   syncNudgeConductor?.notify();
   if (isTeammate && teamName) {
-    await writeCurrentTeammateRuntime(ctx, { runState: "active", lastHeartbeatAt: Date.now() });
+    await writeCurrentTeammateRuntime(ctx, { runState: "active", lastHeartbeatAt: hostEnv().clock.now() });
   }
 });
 
 pi.on("agent_settled", async (_event, ctx) => {
   if (isTeammate && teamName) {
-    await writeCurrentTeammateRuntime(ctx, { runState: "settled", lastHeartbeatAt: Date.now() });
+    await writeCurrentTeammateRuntime(ctx, { runState: "settled", lastHeartbeatAt: hostEnv().clock.now() });
   } else {
     leaderRunSettled = true;
     const failed = failedFrameworkSync;
@@ -869,7 +870,7 @@ pi.on("agent_settled", async (_event, ctx) => {
         const attempts = frameworkRetryCount.get(retryKey) ?? 0;
         if (failed.reason === "error" && failed.record.source === "automatic" && attempts < 1) {
           frameworkRetryCount.set(retryKey, attempts + 1);
-          frameworkRetryTimer = setTimeout(async () => {
+          frameworkRetryTimer = hostEnv().clock.setTimeout(async () => {
             frameworkRetryTimer = undefined;
             if (!await frameworkSync.rePresent(failed.record)) {
               modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), failed.record.toolCallId);
@@ -910,7 +911,7 @@ pi.on("turn_end", async (event, ctx) => {
   if (isTeammate && teamName) {
     await writeCurrentTeammateRuntime(ctx, {
       ready: true,
-      lastHeartbeatAt: Date.now(),
+      lastHeartbeatAt: hostEnv().clock.now(),
       lastError: undefined,
     });
   }
@@ -926,7 +927,7 @@ pi.on("turn_start", async (_event, ctx) => {
   if (isTeammate) {
     if (teamName) {
       await writeCurrentTeammateRuntime(ctx, {
-        lastHeartbeatAt: Date.now(),
+        lastHeartbeatAt: hostEnv().clock.now(),
       });
     }
   }
@@ -936,7 +937,7 @@ pi.on("before_agent_start", async (event, ctx) => {
   if (isTeammate) {
     if (teamName) {
       await writeCurrentTeammateRuntime(ctx, {
-        lastHeartbeatAt: Date.now(),
+        lastHeartbeatAt: hostEnv().clock.now(),
       });
     }
 

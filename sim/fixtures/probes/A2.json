@@ -1,0 +1,537 @@
+{
+  "assumption": "Herdr drops the Team agent name when Pi exits; the pane keeps its shell.",
+  "verdict": "holds",
+  "command": [
+    "herdr agent start <probe-name> --kind pi --pane <owned-pane> -- <isolated flags>",
+    "/quit; Ctrl-D; SIGTERM (separate Pi processes)",
+    "herdr agent list; herdr pane get <owned-pane>; herdr pane process-info --pane <owned-pane>"
+  ],
+  "observed": {
+    "environment": {
+      "date": "2026-10-12T15:40:30.372Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v25.6.0",
+      "pi": "0.83.0",
+      "base": "a992f086017b8924c5c448456573c16452ca655d",
+      "herdr": "herdr 0.9.3"
+    },
+    "paneId": "wCZ:p1",
+    "workspaceId": "wCZ",
+    "scope": "Named Pi occupant uses the same Herdr agent-start surface as PTB. No Team was created or joined; PTB authority lifecycle is not tested.",
+    "checks": [
+      {
+        "method": "/quit",
+        "pid": 63484,
+        "processGone": true,
+        "events": [
+          {
+            "at": 1791819632610,
+            "pid": 63484,
+            "event": "session_start",
+            "reason": "startup"
+          },
+          {
+            "at": 1791819635462,
+            "pid": 63484,
+            "event": "session_shutdown",
+            "type": "session_shutdown",
+            "reason": "quit"
+          },
+          {
+            "at": 1791819635463,
+            "pid": 63484,
+            "event": "process_exit",
+            "code": 0
+          }
+        ],
+        "before": {
+          "start": {
+            "agent": {
+              "agent": "pi",
+              "agent_status": "idle",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "interactive_ready": true,
+              "name": "probe-mv5f58i4",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "state_change_seq": 2069,
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "argv": [
+              "pi",
+              "--no-extensions",
+              "-e",
+              "<REPO>/scripts/probes/pi-extension.ts",
+              "--no-skills",
+              "--no-prompt-templates",
+              "--no-themes",
+              "--no-context-files",
+              "--no-builtin-tools",
+              "--no-approve",
+              "--session-dir",
+              "<SANDBOX>/sessions"
+            ],
+            "type": "agent_started"
+          },
+          "agent": {
+            "agent": {
+              "agent": "pi",
+              "agent_status": "idle",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "interactive_ready": true,
+              "name": "probe-mv5f58i4",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "state_change_seq": 2069,
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "type": "agent_info"
+          },
+          "list": {
+            "type": "agent_list",
+            "totalAgentCount": 27,
+            "agents": [
+              {
+                "agent": "pi",
+                "agent_status": "idle",
+                "cwd": "<SANDBOX>/project",
+                "focused": false,
+                "foreground_cwd": "<SANDBOX>/project",
+                "interactive_ready": true,
+                "name": "probe-mv5f58i4",
+                "pane_id": "wCZ:p1",
+                "revision": 1,
+                "state_change_seq": 2069,
+                "tab_id": "wCZ:t1",
+                "terminal_id": "term_65da6849a1775179",
+                "terminal_title": "π - project",
+                "terminal_title_stripped": "π - project",
+                "workspace_id": "wCZ"
+              }
+            ]
+          },
+          "processInfo": {
+            "process_info": {
+              "foreground_process_group_id": 63484,
+              "foreground_processes": [
+                {
+                  "argv0": "pi",
+                  "cwd": "<SANDBOX>/project",
+                  "name": "node",
+                  "pid": 63484
+                }
+              ],
+              "pane_id": "wCZ:p1",
+              "shell_pid": 63284
+            },
+            "type": "pane_process_info"
+          }
+        },
+        "after": {
+          "list": {
+            "type": "agent_list",
+            "totalAgentCount": 26,
+            "agents": []
+          },
+          "pane": {
+            "pane": {
+              "agent_status": "unknown",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "scroll": {
+                "max_offset_from_bottom": 0,
+                "offset_from_bottom": 0,
+                "viewport_rows": 75
+              },
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "type": "pane_info"
+          },
+          "processInfo": {
+            "process_info": {
+              "foreground_process_group_id": 63284,
+              "foreground_processes": [
+                {
+                  "argv": [
+                    "-zsh"
+                  ],
+                  "argv0": "zsh",
+                  "cmdline": "-zsh",
+                  "cwd": "<SANDBOX>/project",
+                  "name": "zsh",
+                  "pid": 63284
+                }
+              ],
+              "pane_id": "wCZ:p1",
+              "shell_pid": 63284
+            },
+            "type": "pane_process_info"
+          }
+        }
+      },
+      {
+        "method": "Ctrl-D",
+        "pid": 64325,
+        "processGone": true,
+        "events": [
+          {
+            "at": 1791819636398,
+            "pid": 64325,
+            "event": "session_start",
+            "reason": "startup"
+          },
+          {
+            "at": 1791819639827,
+            "pid": 64325,
+            "event": "session_shutdown",
+            "type": "session_shutdown",
+            "reason": "quit"
+          },
+          {
+            "at": 1791819639828,
+            "pid": 64325,
+            "event": "process_exit",
+            "code": 0
+          }
+        ],
+        "before": {
+          "start": {
+            "agent": {
+              "agent": "pi",
+              "agent_status": "idle",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "interactive_ready": true,
+              "name": "probe-mv5f58i4",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "state_change_seq": 2072,
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "argv": [
+              "pi",
+              "--no-extensions",
+              "-e",
+              "<REPO>/scripts/probes/pi-extension.ts",
+              "--no-skills",
+              "--no-prompt-templates",
+              "--no-themes",
+              "--no-context-files",
+              "--no-builtin-tools",
+              "--no-approve",
+              "--session-dir",
+              "<SANDBOX>/sessions"
+            ],
+            "type": "agent_started"
+          },
+          "agent": {
+            "agent": {
+              "agent": "pi",
+              "agent_status": "idle",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "interactive_ready": true,
+              "name": "probe-mv5f58i4",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "state_change_seq": 2072,
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "type": "agent_info"
+          },
+          "list": {
+            "type": "agent_list",
+            "totalAgentCount": 27,
+            "agents": [
+              {
+                "agent": "pi",
+                "agent_status": "idle",
+                "cwd": "<SANDBOX>/project",
+                "focused": false,
+                "foreground_cwd": "<SANDBOX>/project",
+                "interactive_ready": true,
+                "name": "probe-mv5f58i4",
+                "pane_id": "wCZ:p1",
+                "revision": 1,
+                "state_change_seq": 2072,
+                "tab_id": "wCZ:t1",
+                "terminal_id": "term_65da6849a1775179",
+                "terminal_title": "π - project",
+                "terminal_title_stripped": "π - project",
+                "workspace_id": "wCZ"
+              }
+            ]
+          },
+          "processInfo": {
+            "process_info": {
+              "foreground_process_group_id": 64325,
+              "foreground_processes": [
+                {
+                  "argv0": "pi",
+                  "cwd": "<SANDBOX>/project",
+                  "name": "node",
+                  "pid": 64325
+                }
+              ],
+              "pane_id": "wCZ:p1",
+              "shell_pid": 63284
+            },
+            "type": "pane_process_info"
+          }
+        },
+        "after": {
+          "list": {
+            "type": "agent_list",
+            "totalAgentCount": 26,
+            "agents": []
+          },
+          "pane": {
+            "pane": {
+              "agent_status": "unknown",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "scroll": {
+                "max_offset_from_bottom": 0,
+                "offset_from_bottom": 0,
+                "viewport_rows": 75
+              },
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "type": "pane_info"
+          },
+          "processInfo": {
+            "process_info": {
+              "foreground_process_group_id": 63284,
+              "foreground_processes": [
+                {
+                  "argv": [
+                    "-zsh"
+                  ],
+                  "argv0": "zsh",
+                  "cmdline": "-zsh",
+                  "cwd": "<SANDBOX>/project",
+                  "name": "zsh",
+                  "pid": 63284
+                }
+              ],
+              "pane_id": "wCZ:p1",
+              "shell_pid": 63284
+            },
+            "type": "pane_process_info"
+          }
+        }
+      },
+      {
+        "method": "SIGTERM",
+        "pid": 64906,
+        "processGone": true,
+        "events": [
+          {
+            "at": 1791819640759,
+            "pid": 64906,
+            "event": "session_start",
+            "reason": "startup"
+          },
+          {
+            "at": 1791819644178,
+            "pid": 64906,
+            "event": "session_shutdown",
+            "type": "session_shutdown",
+            "reason": "quit"
+          },
+          {
+            "at": 1791819644230,
+            "pid": 64906,
+            "event": "process_exit",
+            "code": 0
+          }
+        ],
+        "before": {
+          "start": {
+            "agent": {
+              "agent": "pi",
+              "agent_status": "idle",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "interactive_ready": true,
+              "name": "probe-mv5f58i4",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "state_change_seq": 2074,
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "argv": [
+              "pi",
+              "--no-extensions",
+              "-e",
+              "<REPO>/scripts/probes/pi-extension.ts",
+              "--no-skills",
+              "--no-prompt-templates",
+              "--no-themes",
+              "--no-context-files",
+              "--no-builtin-tools",
+              "--no-approve",
+              "--session-dir",
+              "<SANDBOX>/sessions"
+            ],
+            "type": "agent_started"
+          },
+          "agent": {
+            "agent": {
+              "agent": "pi",
+              "agent_status": "idle",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "interactive_ready": true,
+              "name": "probe-mv5f58i4",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "state_change_seq": 2074,
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "type": "agent_info"
+          },
+          "list": {
+            "type": "agent_list",
+            "totalAgentCount": 27,
+            "agents": [
+              {
+                "agent": "pi",
+                "agent_status": "idle",
+                "cwd": "<SANDBOX>/project",
+                "focused": false,
+                "foreground_cwd": "<SANDBOX>/project",
+                "interactive_ready": true,
+                "name": "probe-mv5f58i4",
+                "pane_id": "wCZ:p1",
+                "revision": 1,
+                "state_change_seq": 2074,
+                "tab_id": "wCZ:t1",
+                "terminal_id": "term_65da6849a1775179",
+                "terminal_title": "π - project",
+                "terminal_title_stripped": "π - project",
+                "workspace_id": "wCZ"
+              }
+            ]
+          },
+          "processInfo": {
+            "process_info": {
+              "foreground_process_group_id": 64906,
+              "foreground_processes": [
+                {
+                  "argv0": "pi",
+                  "cwd": "<SANDBOX>/project",
+                  "name": "node",
+                  "pid": 64906
+                }
+              ],
+              "pane_id": "wCZ:p1",
+              "shell_pid": 63284
+            },
+            "type": "pane_process_info"
+          }
+        },
+        "after": {
+          "list": {
+            "type": "agent_list",
+            "totalAgentCount": 26,
+            "agents": []
+          },
+          "pane": {
+            "pane": {
+              "agent_status": "unknown",
+              "cwd": "<SANDBOX>/project",
+              "focused": false,
+              "foreground_cwd": "<SANDBOX>/project",
+              "pane_id": "wCZ:p1",
+              "revision": 1,
+              "scroll": {
+                "max_offset_from_bottom": 18,
+                "offset_from_bottom": 0,
+                "viewport_rows": 75
+              },
+              "tab_id": "wCZ:t1",
+              "terminal_id": "term_65da6849a1775179",
+              "terminal_title": "π - project",
+              "terminal_title_stripped": "π - project",
+              "workspace_id": "wCZ"
+            },
+            "type": "pane_info"
+          },
+          "processInfo": {
+            "process_info": {
+              "foreground_process_group_id": 63284,
+              "foreground_processes": [
+                {
+                  "argv": [
+                    "-zsh"
+                  ],
+                  "argv0": "zsh",
+                  "cmdline": "-zsh",
+                  "cwd": "<SANDBOX>/project",
+                  "name": "zsh",
+                  "pid": 63284
+                }
+              ],
+              "pane_id": "wCZ:p1",
+              "shell_pid": 63284
+            },
+            "type": "pane_process_info"
+          }
+        }
+      }
+    ],
+    "cleanup": {
+      "workspaceId": "wCZ",
+      "workspaceGone": true,
+      "ownedPanesClosed": true
+    }
+  }
+}

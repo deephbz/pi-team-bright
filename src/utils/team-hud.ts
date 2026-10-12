@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Inline hc-hud/1 identity contract. PTB has no dependency on the composer package. */
@@ -23,7 +24,7 @@ type HudApi = Partial<Pick<ExtensionAPI, "events">>;
 export class TeamHudPublisher {
   private value: TeamHudIdentity | null = null;
   private present = false;
-  private asOf = Date.now();
+  private asOf = hostEnv().clock.now();
 
   constructor(private readonly pi: HudApi, onPresence: (present: boolean) => void) {
     pi.events?.on(HUD_COMPOSER_CHANNEL, (payload: unknown) => {
@@ -39,7 +40,7 @@ export class TeamHudPublisher {
 
   update(value: TeamHudIdentity | null): void {
     this.value = value;
-    this.asOf = Date.now();
+    this.asOf = hostEnv().clock.now();
     this.publish();
   }
 

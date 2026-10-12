@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -20,7 +21,7 @@ export interface SyncLivenessSettings {
 
 type RecordValue = Record<string, unknown>;
 const isRecord = (value: unknown): value is RecordValue => !!value && typeof value === "object" && !Array.isArray(value);
-const activeAgentDir = () => process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
+const activeAgentDir = () => hostEnv().process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
 
 function readJson(file: string, diagnostics: string[]): RecordValue | undefined {
   try {

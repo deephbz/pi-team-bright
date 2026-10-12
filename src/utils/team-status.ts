@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
@@ -113,7 +114,7 @@ export async function diagnoseTeam(teamName: string, options: DiagnoseTeamOption
 
   return {
     schema: "pi-teams-status/1",
-    generatedAt: (options.now ?? (() => new Date()))().toISOString(),
+    generatedAt: (options.now ?? (() => new Date(hostEnv().clock.now())))().toISOString(),
     team: {
       name: config.name,
       lifecycle: currentMembers.length > 0 ? "active" : "stopped",

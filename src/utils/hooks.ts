@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
@@ -15,7 +16,7 @@ const execFileAsync = promisify(execFile);
  * @returns true if the hook doesn't exist or executes successfully; false otherwise.
  */
 export async function runHook(teamName: string, hookName: string, payload: any): Promise<boolean> {
-  const hookPath = path.join(process.cwd(), ".pi", "team-hooks", `${hookName}.sh`);
+  const hookPath = path.join(hostEnv().process.cwd(), ".pi", "team-hooks", `${hookName}.sh`);
 
   if (!fs.existsSync(hookPath)) {
     return true;
@@ -25,7 +26,7 @@ export async function runHook(teamName: string, hookName: string, payload: any):
     const payloadStr = JSON.stringify(payload);
     // Use execFile: More secure (no shell interpolation) and asynchronous
     await execFileAsync(hookPath, [payloadStr], {
-      env: { ...process.env, PI_TEAM: teamName },
+      env: { ...hostEnv().process.env, PI_TEAM: teamName },
     });
     return true;
   } catch (error) {

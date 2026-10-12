@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 /**
  * WezTerm Terminal Adapter
  *
@@ -46,7 +47,7 @@ export class WezTermAdapter implements TerminalAdapter {
   }
 
   detect(): boolean {
-    if (!process.env.WEZTERM_PANE || process.env.TMUX || process.env.ZELLIJ) {
+    if (!hostEnv().process.env.WEZTERM_PANE || hostEnv().process.env.TMUX || hostEnv().process.env.ZELLIJ) {
       return false;
     }
     return this.findWeztermBinary() !== null;
@@ -64,7 +65,7 @@ export class WezTermAdapter implements TerminalAdapter {
 
     try {
       const allPanes = JSON.parse(result.stdout);
-      const currentPaneId = parseInt(process.env.WEZTERM_PANE || "0", 10);
+      const currentPaneId = parseInt(hostEnv().process.env.WEZTERM_PANE || "0", 10);
       
       // Find the tab of the current pane
       const currentPane = allPanes.find((p: any) => p.pane_id === currentPaneId);
@@ -90,7 +91,7 @@ export class WezTermAdapter implements TerminalAdapter {
 
     let weztermArgs: string[];
 
-    if (process.platform === "win32") {
+    if (hostEnv().process.platform === "win32") {
       // Windows: Use PowerShell with double quotes (works when WezTerm wraps in single quotes)
       const psCommand = powershellCommand(options);
       // Use 'powershell' (built-in) instead of 'pwsh' (PowerShell Core, may not be installed)
@@ -102,7 +103,7 @@ export class WezTermAdapter implements TerminalAdapter {
           "--cwd", options.cwd, "--", ...cmdArgs
         ];
       } else {
-        const currentPaneId = parseInt(process.env.WEZTERM_PANE || "0", 10);
+        const currentPaneId = parseInt(hostEnv().process.env.WEZTERM_PANE || "0", 10);
         const sidebarPanes = panes
           .filter(p => p.pane_id !== currentPaneId)
           .sort((a, b) => b.cursor_y - a.cursor_y);
@@ -124,7 +125,7 @@ export class WezTermAdapter implements TerminalAdapter {
           "--cwd", options.cwd, "--", ...cmdArgs
         ];
       } else {
-        const currentPaneId = parseInt(process.env.WEZTERM_PANE || "0", 10);
+        const currentPaneId = parseInt(hostEnv().process.env.WEZTERM_PANE || "0", 10);
         const sidebarPanes = panes
           .filter(p => p.pane_id !== currentPaneId)
           .sort((a, b) => b.cursor_y - a.cursor_y);
@@ -210,7 +211,7 @@ export class WezTermAdapter implements TerminalAdapter {
 
     let spawnArgs: string[];
 
-    if (process.platform === "win32") {
+    if (hostEnv().process.platform === "win32") {
       // Windows: Use PowerShell with double quotes (works when WezTerm wraps in single quotes)
       const psCommand = powershellCommand(options);
       

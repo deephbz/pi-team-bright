@@ -1,0 +1,501 @@
+{
+  "assumption": "getBranch() keeps raw entries after compaction.",
+  "verdict": "holds",
+  "command": "isolated Pi RPC compact; extension supplies static summary; compare getBranch() before/after and active context",
+  "observed": {
+    "environment": {
+      "date": "2026-10-12T15:42:00.409Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v25.6.0",
+      "pi": "0.83.0",
+      "base": "a992f086017b8924c5c448456573c16452ca655d"
+    },
+    "compact": {
+      "id": "fixture-5",
+      "type": "response",
+      "command": "compact",
+      "success": true,
+      "data": {
+        "summary": "PROBE_STATIC_SUMMARY",
+        "firstKeptEntryId": "07986196",
+        "tokensBefore": 2,
+        "estimatedTokensAfter": 21
+      }
+    },
+    "before": {
+      "at": 1791819722071,
+      "pid": 78196,
+      "event": "before_compact",
+      "branch": [
+        {
+          "type": "model_change",
+          "id": "6e650064",
+          "parentId": null,
+          "timestamp": "2026-10-12T15:42:01.913Z",
+          "provider": "fixture",
+          "modelId": "scripted"
+        },
+        {
+          "type": "thinking_level_change",
+          "id": "6435bee7",
+          "parentId": "6e650064",
+          "timestamp": "2026-10-12T15:42:01.913Z",
+          "thinkingLevel": "off"
+        },
+        {
+          "type": "message",
+          "id": "9bbbc1dc",
+          "parentId": "6435bee7",
+          "timestamp": "2026-10-12T15:42:01.935Z",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_OLD_SENTINEL old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context "
+              }
+            ],
+            "timestamp": 1791819721933
+          }
+        },
+        {
+          "type": "message",
+          "id": "07986196",
+          "parentId": "9bbbc1dc",
+          "timestamp": "2026-10-12T15:42:02.047Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_STREAM_DELTA"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819721986,
+            "responseId": "probe-stream",
+            "rawStopReason": "stop"
+          }
+        },
+        {
+          "type": "custom_message",
+          "customType": "probe-followup",
+          "content": "PROBE_FOLLOWUP_SENTINEL",
+          "display": false,
+          "id": "b587b9e3",
+          "parentId": "07986196",
+          "timestamp": "2026-10-12T15:42:02.047Z"
+        },
+        {
+          "type": "message",
+          "id": "f0a8c181",
+          "parentId": "b587b9e3",
+          "timestamp": "2026-10-12T15:42:02.059Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_FOLLOWUP_REPLY"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 1,
+              "output": 1,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 2,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819722048,
+            "responseId": "chatcmpl-fixture-2",
+            "rawStopReason": "stop"
+          }
+        }
+      ],
+      "contextEntries": [
+        {
+          "type": "model_change",
+          "id": "6e650064",
+          "parentId": null,
+          "timestamp": "2026-10-12T15:42:01.913Z",
+          "provider": "fixture",
+          "modelId": "scripted"
+        },
+        {
+          "type": "thinking_level_change",
+          "id": "6435bee7",
+          "parentId": "6e650064",
+          "timestamp": "2026-10-12T15:42:01.913Z",
+          "thinkingLevel": "off"
+        },
+        {
+          "type": "message",
+          "id": "9bbbc1dc",
+          "parentId": "6435bee7",
+          "timestamp": "2026-10-12T15:42:01.935Z",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_OLD_SENTINEL old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context "
+              }
+            ],
+            "timestamp": 1791819721933
+          }
+        },
+        {
+          "type": "message",
+          "id": "07986196",
+          "parentId": "9bbbc1dc",
+          "timestamp": "2026-10-12T15:42:02.047Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_STREAM_DELTA"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819721986,
+            "responseId": "probe-stream",
+            "rawStopReason": "stop"
+          }
+        },
+        {
+          "type": "custom_message",
+          "customType": "probe-followup",
+          "content": "PROBE_FOLLOWUP_SENTINEL",
+          "display": false,
+          "id": "b587b9e3",
+          "parentId": "07986196",
+          "timestamp": "2026-10-12T15:42:02.047Z"
+        },
+        {
+          "type": "message",
+          "id": "f0a8c181",
+          "parentId": "b587b9e3",
+          "timestamp": "2026-10-12T15:42:02.059Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_FOLLOWUP_REPLY"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 1,
+              "output": 1,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 2,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819722048,
+            "responseId": "chatcmpl-fixture-2",
+            "rawStopReason": "stop"
+          }
+        }
+      ]
+    },
+    "after": {
+      "at": 1791819722072,
+      "pid": 78196,
+      "event": "after_compact",
+      "compactionEntry": {
+        "type": "compaction",
+        "id": "1bc01228",
+        "parentId": "f0a8c181",
+        "timestamp": "2026-10-12T15:42:02.072Z",
+        "summary": "PROBE_STATIC_SUMMARY",
+        "firstKeptEntryId": "07986196",
+        "tokensBefore": 2,
+        "fromHook": true
+      },
+      "branch": [
+        {
+          "type": "model_change",
+          "id": "6e650064",
+          "parentId": null,
+          "timestamp": "2026-10-12T15:42:01.913Z",
+          "provider": "fixture",
+          "modelId": "scripted"
+        },
+        {
+          "type": "thinking_level_change",
+          "id": "6435bee7",
+          "parentId": "6e650064",
+          "timestamp": "2026-10-12T15:42:01.913Z",
+          "thinkingLevel": "off"
+        },
+        {
+          "type": "message",
+          "id": "9bbbc1dc",
+          "parentId": "6435bee7",
+          "timestamp": "2026-10-12T15:42:01.935Z",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_OLD_SENTINEL old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context old context "
+              }
+            ],
+            "timestamp": 1791819721933
+          }
+        },
+        {
+          "type": "message",
+          "id": "07986196",
+          "parentId": "9bbbc1dc",
+          "timestamp": "2026-10-12T15:42:02.047Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_STREAM_DELTA"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819721986,
+            "responseId": "probe-stream",
+            "rawStopReason": "stop"
+          }
+        },
+        {
+          "type": "custom_message",
+          "customType": "probe-followup",
+          "content": "PROBE_FOLLOWUP_SENTINEL",
+          "display": false,
+          "id": "b587b9e3",
+          "parentId": "07986196",
+          "timestamp": "2026-10-12T15:42:02.047Z"
+        },
+        {
+          "type": "message",
+          "id": "f0a8c181",
+          "parentId": "b587b9e3",
+          "timestamp": "2026-10-12T15:42:02.059Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_FOLLOWUP_REPLY"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 1,
+              "output": 1,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 2,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819722048,
+            "responseId": "chatcmpl-fixture-2",
+            "rawStopReason": "stop"
+          }
+        },
+        {
+          "type": "compaction",
+          "id": "1bc01228",
+          "parentId": "f0a8c181",
+          "timestamp": "2026-10-12T15:42:02.072Z",
+          "summary": "PROBE_STATIC_SUMMARY",
+          "firstKeptEntryId": "07986196",
+          "tokensBefore": 2,
+          "fromHook": true
+        }
+      ],
+      "contextEntries": [
+        {
+          "type": "compaction",
+          "id": "1bc01228",
+          "parentId": "f0a8c181",
+          "timestamp": "2026-10-12T15:42:02.072Z",
+          "summary": "PROBE_STATIC_SUMMARY",
+          "firstKeptEntryId": "07986196",
+          "tokensBefore": 2,
+          "fromHook": true
+        },
+        {
+          "type": "message",
+          "id": "07986196",
+          "parentId": "9bbbc1dc",
+          "timestamp": "2026-10-12T15:42:02.047Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_STREAM_DELTA"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 0,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819721986,
+            "responseId": "probe-stream",
+            "rawStopReason": "stop"
+          }
+        },
+        {
+          "type": "custom_message",
+          "customType": "probe-followup",
+          "content": "PROBE_FOLLOWUP_SENTINEL",
+          "display": false,
+          "id": "b587b9e3",
+          "parentId": "07986196",
+          "timestamp": "2026-10-12T15:42:02.047Z"
+        },
+        {
+          "type": "message",
+          "id": "f0a8c181",
+          "parentId": "b587b9e3",
+          "timestamp": "2026-10-12T15:42:02.059Z",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "PROBE_FOLLOWUP_REPLY"
+              }
+            ],
+            "api": "openai-completions",
+            "provider": "fixture",
+            "model": "scripted",
+            "usage": {
+              "input": 1,
+              "output": 1,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 2,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1791819722048,
+            "responseId": "chatcmpl-fixture-2",
+            "rawStopReason": "stop"
+          }
+        }
+      ]
+    },
+    "rawEntriesRetainedExactly": true,
+    "hasCompaction": true,
+    "contextPruned": true,
+    "providerRequests": 2,
+    "scope": "Real AgentSession compaction and extension hooks; static summary avoids a model call."
+  }
+}

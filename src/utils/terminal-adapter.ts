@@ -5,7 +5,7 @@
  * to provide a unified API for spawning, managing, and terminating panes.
  */
 
-import { spawnSync } from "node:child_process";
+import { hostEnv } from "../env/host-env";
 
 /**
  * Options for spawning a new terminal pane or window
@@ -152,12 +152,7 @@ export interface TerminalAdapter {
  * Base helper for adapters to execute commands synchronously.
  */
 export function execCommand(command: string, args: string[]): { stdout: string; stderr: string; status: number | null } {
-  const result = spawnSync(command, args, { encoding: "utf-8" });
-  return {
-    stdout: result.stdout?.toString() ?? "",
-    stderr: result.stderr?.toString() ?? "",
-    status: result.status,
-  };
+  return hostEnv().exec.runSync(command, args);
 }
 
 export function shellQuote(value: string): string {

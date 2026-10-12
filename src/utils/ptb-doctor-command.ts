@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import packageJson from "../../package.json";
@@ -85,7 +86,7 @@ export async function collectPtbDoctorContext(coordinates: PtbDoctorCoordinates)
     },
   };
   const formatted = () => {
-    metadata.sampled_at = new Date().toISOString();
+    metadata.sampled_at = new Date(hostEnv().clock.now()).toISOString();
     return `${guide}\n\nInvocation metadata (observations, not authority):\n${JSON.stringify(metadata, null, 2)}`;
   };
   if (selected) {
