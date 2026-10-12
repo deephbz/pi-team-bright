@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hostEnv } from "../env/host-env";
 import path from "node:path";
 import { ProcessTerminal, matchesKey } from "@earendil-works/pi-tui";
 import { createMainScreenTui } from "./main-screen-tui";
@@ -21,13 +22,13 @@ function positiveInteger(value: string | undefined, fallback: number): number {
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.stdout.write("Usage: task-dag-islands-gallery [--config FILE] [--view dag|timeline] [--plain] [--width N] [--rows N] [--ansi]\n");
   process.stdout.write("Mock, fixed-clock review of the production Task DAG and Timeline. Press v to switch views in the TUI.\n");
-  process.exit(0);
+  hostEnv().process.exit(0);
 }
 
 const viewArgument = argument("--view");
 if (process.argv.includes("--view") && viewArgument !== "dag" && viewArgument !== "timeline") {
   process.stderr.write("--view must be dag or timeline.\n");
-  process.exit(2);
+  hostEnv().process.exit(2);
 }
 const initialView: TaskGraphGalleryView = viewArgument === "timeline" ? "timeline" : "dag";
 
@@ -37,7 +38,7 @@ try {
   config = loadTaskDagIslandsGalleryConfig(configPath);
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exit(2);
+  hostEnv().process.exit(2);
 }
 
 const plain = process.argv.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;

@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import { createHash } from "node:crypto";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 
@@ -345,7 +346,7 @@ export class GraphTaskController {
   private readonly receipts: Map<string, StoredReceipt>;
   private commandRecordedAt?: string;
 
-  constructor(snapshot?: GraphControlSnapshot, private readonly clock: () => Date = () => new Date()) {
+  constructor(snapshot?: GraphControlSnapshot, private readonly clock: () => Date = () => new Date(hostEnv().clock.now())) {
     if (snapshot && snapshot.schema !== "pi-team-bright-graph-control/1") {
       throw new GraphControlRefusal("invalid_graph", `Unsupported snapshot schema ${String(snapshot.schema)}.`);
     }

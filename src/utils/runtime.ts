@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
@@ -69,7 +70,7 @@ export type RuntimeRecoveryPreflight =
 /** ESRCH is the only bounded proof that a recorded PID is absent. */
 export function probePidPresence(pid: number): "absent" | "occupied" {
   try {
-    process.kill(pid, 0);
+    hostEnv().process.kill(pid, 0);
     return "occupied";
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ESRCH" ? "absent" : "occupied";
@@ -110,7 +111,7 @@ export function admitRuntimeStartup(
   member: Pick<Member, "name" | "membershipId" | "sessionFile" | "pendingLaunchId">,
   sessionFile: string,
   status: AgentRuntimeStatus | null,
-  pid: number = process.pid,
+  pid: number = hostEnv().process.pid,
   probe: (pid: number) => "absent" | "occupied" = probePidPresence,
   launchId?: string,
 ): RuntimeStartupAdmission {
@@ -187,7 +188,7 @@ export async function writeRuntimeStatus(
 
     // Readers deliberately do not join producer locks. Publish a complete,
     // restrictive replacement so they observe either generation, never JSON mid-write.
-    const temporary = path.join(dir, `.${path.basename(p)}.${process.pid}.${Date.now()}.tmp`);
+    const temporary = path.join(dir, `.${path.basename(p)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
     let fd: number | undefined;
     try {
       fd = fs.openSync(temporary, "wx", 0o600);
@@ -259,7 +260,7 @@ export async function restoreRuntimeStatus(
         return false;
       }
     }
-    const temporary = path.join(dir, `.${path.basename(p)}.${process.pid}.${Date.now()}.tmp`);
+    const temporary = path.join(dir, `.${path.basename(p)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
     try {
       fs.writeFileSync(temporary, JSON.stringify(status, null, 2), { mode: 0o600 });
       fs.renameSync(temporary, p);
@@ -304,7 +305,7 @@ export async function deleteRuntimeStatus(
  */
 export async function cleanupStaleRuntimeFiles(
   teamName: string,
-  now: number = Date.now()
+  now: number = hostEnv().clock.now()
 ): Promise<number> {
   const runtimeDir = path.join(teamDir(teamName), "runtime");
   if (!fs.existsSync(runtimeDir)) return 0;
@@ -349,6 +350,6 @@ export async function cleanupStaleRuntimeFiles(
 export function createRuntimeError(error: unknown): RuntimeError {
   return {
     message: error instanceof Error ? error.message : String(error),
-    timestamp: Date.now(),
+    timestamp: hostEnv().clock.now(),
   };
 }

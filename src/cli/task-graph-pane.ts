@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hostEnv, type TimerHandle } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { ProcessTerminal } from "@earendil-works/pi-tui";
@@ -29,13 +30,13 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
   });
   tui.addChild(component);
   tui.setFocus(component);
-  const elapsedTicker = setInterval(() => tui.requestRender(), 30_000);
-  elapsedTicker.unref?.();
+  const elapsedTicker = hostEnv().clock.setInterval(() => tui.requestRender(), 30_000);
+  if ("unref" in elapsedTicker) elapsedTicker.unref();
 
-  let debounce: ReturnType<typeof setTimeout> | undefined;
+  let debounce: TimerHandle | undefined;
   const refresh = () => {
-    if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(() => {
+    if (debounce) hostEnv().clock.clearTimeout(debounce);
+    debounce = hostEnv().clock.setTimeout(() => {
       try {
         const next = readSource();
         if (next.source_revision !== source.source_revision) {
@@ -46,9 +47,9 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
         process.stderr.write(`Task graph refresh refused: ${error instanceof Error ? error.message : String(error)}\n`);
       }
     }, 25);
-    debounce.unref?.();
+    if ("unref" in debounce) debounce.unref();
   };
-  const watcher = fs.watch(path.dirname(sourcePath), (_event, filename) => {
+  const watcher = hostEnv().watch.watchDirectory(path.dirname(sourcePath), (filename) => {
     if (!filename || filename.toString() === path.basename(sourcePath)) refresh();
   });
 
@@ -56,8 +57,8 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
   const stop = async (code = 0) => {
     if (stopping) return;
     stopping = true;
-    if (debounce) clearTimeout(debounce);
-    clearInterval(elapsedTicker);
+    if (debounce) hostEnv().clock.clearTimeout(debounce);
+    hostEnv().clock.clearInterval(elapsedTicker);
     watcher.close();
     tui.stop();
     await terminal.drainInput(100, 20).catch(() => undefined);
@@ -70,8 +71,8 @@ if (!sourcePath || !path.isAbsolute(sourcePath)) {
     process.stderr.write(`Task graph pane failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
     void stop(1);
   });
-  watcher.on("error", (error) => {
-    process.stderr.write(`Task graph source watch failed: ${error.message}\n`);
+  watcher.onError((error) => {
+    process.stderr.write(`Task graph source watch failed: ${error instanceof Error ? error.message : String(error)}\n`);
   });
 
   terminal.setTitle(`Task graph: ${source.team_name}`);

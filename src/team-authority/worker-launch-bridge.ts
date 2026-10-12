@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
@@ -231,7 +232,7 @@ export class WorkerLaunchBridge {
       const thinking = exactSessionResume ? undefined : existingMember.modelProfile?.thinking ?? existingMember.thinking;
       const baseArgv = this.dependencies.buildWorkerArgv(model, thinking, aggregate.path, aggregate.projectTrusted);
       const env: Record<string, string> = {
-        ...process.env,
+        ...hostEnv().process.env,
         ...request.launchEnvironment,
         PI_TEAM_NAME: teamName,
         PI_AGENT_NAME: workerName,
@@ -347,7 +348,7 @@ export class WorkerLaunchBridge {
       agentType: "teammate",
       model: chosen.model,
       modelProfile: chosen.binding,
-      joinedAt: Date.now(),
+      joinedAt: hostEnv().clock.now(),
       cwd,
       subscriptions: [],
       isActive: true,
@@ -374,7 +375,7 @@ export class WorkerLaunchBridge {
 
     const piCmd = this.dependencies.buildWorkerArgv(chosen.model, chosen.binding?.thinking ?? request.thinking, aggregate.path, aggregate.projectTrusted);
     const env: Record<string, string> = {
-      ...process.env,
+      ...hostEnv().process.env,
       ...request.launchEnvironment,
       PI_TEAM_NAME: teamName,
       PI_AGENT_NAME: workerName,

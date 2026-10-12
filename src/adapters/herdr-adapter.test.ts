@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HerdrAdapter, herdrCarrierName } from "./herdr-adapter";
+import { nodeHostEnv } from "../env/host-env";
 import * as terminalAdapter from "../utils/terminal-adapter";
 
 const success = (result: unknown) => ({
@@ -602,6 +603,7 @@ describe("HerdrAdapter", () => {
   });
 
   it("retries the transient split-to-shell readiness race before starting Pi", () => {
+    const sleep = vi.spyOn(nodeHostEnv.clock, "sleepSync").mockImplementation(() => {});
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin", 100))
@@ -616,6 +618,7 @@ describe("HerdrAdapter", () => {
     })).toBe("pane-worker");
     expect(exec).toHaveBeenCalledTimes(6);
     expect(exec.mock.calls[4]).toEqual(exec.mock.calls[5]);
+    expect(sleep).toHaveBeenCalledExactlyOnceWith(50);
   });
 
   it("requires the official interactive-ready response without a compatibility retry", () => {

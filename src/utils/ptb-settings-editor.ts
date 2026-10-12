@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -89,7 +90,7 @@ export function readPtbSettingsDocument(input: {
   if (input.scope === "project" && !input.projectTrusted) {
     throw new PtbSettingsEditorError("untrusted_project", "Project settings require a trusted Pi project.");
   }
-  const globalFile = path.join(path.resolve(input.agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent")), "settings.json");
+  const globalFile = path.join(path.resolve(input.agentDir ?? hostEnv().process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent")), "settings.json");
   const file = input.scope === "global" ? globalFile : path.join(path.resolve(input.cwd), ".pi", "settings.json");
   const observed = readSettingsFile(file);
   return {

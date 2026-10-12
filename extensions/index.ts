@@ -1,3 +1,4 @@
+import { hostEnv } from "../src/env/host-env";
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type, type TSchema } from "typebox";
 import { StringEnum } from "@earendil-works/pi-ai";
@@ -142,7 +143,7 @@ export function inspectAgentSessionCleanup(
     reason: "Age alone cannot prove a Pi-core agent session is orphaned; no folders were deleted.",
   };
   if (!fs.existsSync(agentTeamsDir)) return report;
-  const now = Date.now();
+  const now = hostEnv().clock.now();
 
   for (const dir of fs.readdirSync(agentTeamsDir)) {
     const sessionDir = path.join(agentTeamsDir, dir);
@@ -189,7 +190,7 @@ export default function (pi: ExtensionAPI) {
   const workerToolNames = new Set(["task_read", "task_update", "alert_send"]);
   // `team-lead` is a reserved leader identity, even when explicitly supplied
   // through the Worker launch environment.
-  const initialIsTeammate = !!process.env.PI_AGENT_NAME && process.env.PI_AGENT_NAME !== "team-lead";
+  const initialIsTeammate = !!hostEnv().process.env.PI_AGENT_NAME && hostEnv().process.env.PI_AGENT_NAME !== "team-lead";
   let sessionAdapter!: ReturnType<typeof createPiTeamSessionAdapter>;
   const workerToolDefinitions = new Map<string, ToolDefinition<any, any>>();
   let alertToolRegistration: { description: string; parameters: unknown } | undefined;
@@ -229,7 +230,7 @@ export default function (pi: ExtensionAPI) {
   function workerAggregate(cwd: string, ctx: any): WorkerAggregate {
     const resources = resolveWorkerLaunchResources({
       cwd,
-      leaderCwd: ctx.cwd ?? process.cwd(),
+      leaderCwd: ctx.cwd ?? hostEnv().process.cwd(),
       leaderProjectTrusted: projectTrust(ctx),
     });
     return { path: resources.aggregatePath, projectTrusted: resources.projectTrusted, modelRoleSettings: resources.policy.modelRoleSettings };
@@ -276,7 +277,7 @@ export default function (pi: ExtensionAPI) {
       const argv = buildPiArgv(getPiLaunchArgv(), model, thinking);
       // A Worker loads the exact Pi Team Bright source while retaining normal
       // unrelated extension and Skill discovery.
-      argv.push("-e", process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION || __filename);
+      argv.push("-e", hostEnv().process.env.PI_TEAM_BRIGHT_SHIPPED_EXTENSION || __filename);
       return buildPiArgv(argv, undefined, undefined, aggregatePath, projectTrusted);
     },
     // The launch adapter reads saved trust when no leader context is available.

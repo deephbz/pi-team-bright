@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 /**
  * Zellij Terminal Adapter
  * 
@@ -16,7 +17,7 @@ export class ZellijAdapter implements TerminalAdapter {
 
   detect(): boolean {
     // Zellij is available if ZELLIJ env is set and not in tmux
-    return !!process.env.ZELLIJ && !process.env.TMUX;
+    return !!hostEnv().process.env.ZELLIJ && !hostEnv().process.env.TMUX;
   }
 
   spawn(options: SpawnOptions): string {

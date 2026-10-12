@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hostEnv } from "../env/host-env";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { matchesKey, ProcessTerminal } from "@earendil-works/pi-tui";
 import { createMainScreenTui } from "./main-screen-tui";
@@ -21,7 +22,7 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     process.stderr.write("Width and rows must be positive integers.\n");
-    process.exit(2);
+    hostEnv().process.exit(2);
   }
   return parsed;
 }
@@ -52,13 +53,13 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
     "Interactive: Tab/Shift+Tab sections · arrows rows · Enter/Space preview selection · Esc or q quit",
     "",
   ].join("\n"));
-  process.exit(0);
+  hostEnv().process.exit(0);
 }
 
 const requestedTab = argument("--tab");
 if (process.argv.includes("--tab") && !PTB_PALETTE_TABS.includes(requestedTab as PtbPaletteTab)) {
   process.stderr.write(`--tab must be ${PTB_PALETTE_TABS.join(", ")}.\n`);
-  process.exit(2);
+  hostEnv().process.exit(2);
 }
 const initialTab = (requestedTab ?? "Actions") as PtbPaletteTab;
 const width = positiveInteger(argument("--width"), 80);
