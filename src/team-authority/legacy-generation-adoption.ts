@@ -13,7 +13,7 @@ export async function adoptLegacyGeneration(teamName: string, worker: string, ex
   if (!status?.pid || status.osBirthToken || status.lastStop || status.membershipId !== expectedMembershipId) return false;
   const before = hostEnv().process.generation(status.pid);
   if (before.kind !== "found") return false;
-  const agents = await herdrList("agent");
+  const agents = await herdrList("agent").catch(() => undefined);
   const pane = member.terminalTarget?.targetId ?? member.tmuxPaneId;
   if (!agents?.some(row => row.name === herdrCarrierName(teamName, worker) && row.pane_id === pane && herdrPiSessionPath(row.agent_session) === member.sessionFile)) return false;
   return withCurrentMembershipLease(teamName, expectedMembershipId, async current => {
