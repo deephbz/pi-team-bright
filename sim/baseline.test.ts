@@ -6,8 +6,8 @@ import { replayTrace } from "./replay";
 import type { WorldTrace } from "./trace-format";
 
 function results(replay: Awaited<ReturnType<typeof replayTrace>>, name: string) {
-  return replay.history.filter(event => event.kind === "tool.result" && (event.value as any).name === name)
-    .map(event => ({ at: event.at, details: (event.value as any).result.details }));
+  return replay.history.flatMap(event => event.kind === "tool.result" && event.name === name
+    ? [{ at: event.at, details: event.result.details as any }] : []);
 }
 
 it("v3.1 scenario 1 returns within ten virtual seconds and keeps an ambiguous launch and pane", async () => {

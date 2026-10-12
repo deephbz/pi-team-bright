@@ -1,7 +1,7 @@
 # Deterministic simulator
 
 Stage: consolidation. Scope: C1 verification support. Baseline production:
-`14d92fd` (C0 host seam). Integration dependency: `21c2cb5` (C3 and C0 follow-up).
+`14d92fd` (C0 host seam). Integration dependency: `0aa8a85` (C3 and C0 follow-ups).
 C2 is not present at that tip. The simulator runs real PTB authority algorithms.
 Architecture impact: none to production contracts.
 
@@ -64,11 +64,11 @@ Pane geometry and pane-close process-tree effects remain advisory.
 
 The queue benchmark excludes module loading and real fs. Baseline tests also
 print per-1000-operation wall time with both costs included. The last focused
-integration trial measured 69.51 ms per 1000 queue operations; scenario 1
-measured 5286.05 ms and scenario 2 measured 6229.12 ms with setup and real fs.
+integration trial measured 25.39 ms per 1000 queue operations; scenario 1
+measured 1801.00 ms and scenario 2 measured 4021.55 ms with setup and real fs.
 These are single trials under concurrent host load, not throughput guarantees.
 
-The integrated default lane passed 1212 tests with 530 expected failures and
+The integrated default lane passed 1225 tests with 530 expected failures and
 three skips. Both exhaustive simulator tests passed. Typecheck passed.
 Expected failures in other lanes do not prove the v3.1 properties.
 
@@ -88,6 +88,48 @@ Nonempty pre-existing Team setup, cross-Session forks, process restart/recovery,
 arbitrary shell execution and nonempty Beads task operations remain unsupported.
 Worker module graphs preload from actor coordinates and literal ensure_worker
 names. Human input is opaque terminal text. Full P/M/E campaigns are unclaimed.
+
+## Oracle history
+
+`history.ts` owns version 1 of the observable history. Runner `sim-c1/3`
+returns it in `history`. Every entry has `version`, `sequence`, virtual `at`,
+and `origin`. Actor coordinates use `ActorRef`. Origins distinguish human,
+OS, PTB actor, setup, and observation. PTB origins can carry tool and exec call
+ids. They do not claim to cite PTB's decision evidence.
+
+- `process.birth/death` and `pane.create/close` capture immediate world truth.
+  Process facts include exact boot/birth generations. Pane closure retains its
+  human or PTB origin. `fault.set/clear` and `world.input` retain source inputs.
+- `exec.call/result/effect` expose wire calls, bounded outcomes, and actual
+  effects. `tool.call/result/error` expose the public PTB boundary. Calls use
+  stable ids. A process death can leave an outstanding call without a result;
+  history never fabricates a returned receipt.
+- `step.begin/end` bracket each selected queue operation. After its promise
+  checkpoint, `HistoryObserver` reads changed files under the world Team root.
+  It emits `journal.append/reset`, `durable.runtime/launch/team/record`, and
+  `disk.invalid`. Member-held launch fields retain `source: member` and a
+  `#members/` location. Separate launch files retain `source: file`.
+- `lead.branch` records the current public Pi branch ids. `lead.entry` retains
+  each new entry, Team-update observation stamps, and tool-result call ids.
+  No PTB store, pending observation map, or in-memory authority is inspected.
+  UI, Pi messages, and terminal input have separate typed entries.
+
+Disk entries carry raw JSON plus typed wire fields. Missing legacy fields stay
+absent. Sampling order is not disk write order. `at` is the observation time;
+a journal's own timestamp remains in `event.at` and `event.raw`. Several writes
+inside one queue operation can collapse into one durable snapshot. Journal
+lines remain individually visible. Branch entries come from public Pi
+SessionManager reads. Host-crash and instruction-level write interleaving
+remain outside this model.
+
+`history.test.ts` checks both owner scenarios, call pairing, exact process
+generations, PTB cleanup origin, disk observations, and branch-stamped sync
+results. It also allows real automatic Team updates to run after idle and
+checks their branch stamps. A separate test writes false process claims to
+disk and verifies that history preserves them independently of world truth.
+C2 generation freshness and reservation fields are absent on production base
+`0aa8a85`; the observer does not infer them. E5's independent monitor bound is
+10000 virtual ms, as ruled in the implementation plan.
 
 ## Trace validation and simulator assumption registry
 

@@ -7,6 +7,7 @@ import type { RegisteredToolLike } from "../test/support/external-harness";
 import { createSimSession } from "./session";
 import { SimWorld } from "./world";
 import { assumptionEvidence } from "./assumptions";
+import { actorRef, json, type JsonObject, type ToolResultFact } from "./history";
 
 type Handler = (event: any, context: any) => unknown;
 
@@ -27,7 +28,8 @@ export class SimActor {
     const env = world.envs.get(id) ?? world.createActor(id, variables);
     this.session = createSimSession(env, world.workspace.home, resumeFile);
     world.evidence.push(assumptionEvidence("A5", "Pi branch keeps raw entries after compaction"));
-    const record = (kind: string, value?: unknown) => world.record(id, kind, value);
+    const who = actorRef(id);
+    if (who.actor === "lead") world.observer.leads.set(id, { actor: who, read: () => ({ sessionId: this.session.getSessionId(), entries: this.session.getBranch() }) });
     this.context = {
       cwd: world.workspace.home, mode: "tui", hasUI: true,
       modelRegistry: { getAvailable: () => [{ provider: "synthetic", id: "model" }] },
@@ -35,7 +37,7 @@ export class SimActor {
       sessionManager: this.session,
       shutdown: () => world.enqueue(id, "pi.shutdown.request", () => this.emit("session_shutdown", { reason: "quit" })),
       ui: {
-        notify: (message: string, level: string) => record("ui.notify", { message, level }),
+        notify: (message: string, level: string) => world.record({ kind: "ui.notify", actor: who, message, level }),
         setStatus() {}, setFooter() {}, setTitle() {}, setWidget() {},
       },
     };
@@ -55,13 +57,13 @@ export class SimActor {
       sendMessage: (message: any, options?: { deliverAs?: string; triggerTurn?: boolean }) => {
         const append = () => {
           this.session.appendCustomMessageEntry(message.customType, message.content, message.display ?? false, message.details);
-          record("pi.message", { message, options });
+          world.record({ kind: "pi.message", actor: who, message: json(message) as JsonObject, ...(options ? { options: json(options) as JsonObject } : {}) });
         };
         world.evidence.push(assumptionEvidence("A4", "Streaming follow-up enters the branch after turn release"));
         if (!this.idle && options?.deliverAs === "followUp") this.queuedMessages.push(append);
         else append();
       },
-      sendUserMessage: (content: string) => record("pi.userMessage", content),
+      sendUserMessage: (content: string) => world.record({ kind: "pi.userMessage", actor: who, content }),
       events: { on: events.on.bind(events), off: events.off.bind(events), emit: events.emit.bind(events) },
     } as unknown as ExtensionAPI;
   }
@@ -85,12 +87,20 @@ export class SimActor {
     if (parameters && !Check(parameters, args)) throw new Error(`Invalid tool arguments: ${name}`);
     this.idle = false;
     const callId = `${this.id}-call-${++this.callSequence}`;
-    await this.emit("tool_call", { toolName: name, toolCallId: callId, input: args });
-    const result = await this.world.enter(this.id, () => tool.execute(callId, args, new AbortController().signal, undefined, this.context));
-    this.session.appendMessage({ role: "toolResult", toolCallId: callId, toolName: name, content: result.content ?? [], details: result.details, isError: result.isError ?? false, timestamp: this.world.scheduler.now } as any);
-    this.world.record(this.id, "tool.result", { name, result });
-    await this.emit("tool_result", { toolName: name, toolCallId: callId, input: args, ...result });
-    return result;
+    return this.world.withOrigin({ kind: "ptb", actor: actorRef(this.id), toolCallId: callId }, async () => {
+      this.world.record({ kind: "tool.call", actor: actorRef(this.id), callId, name, args: json(args) as JsonObject });
+      try {
+        await this.emit("tool_call", { toolName: name, toolCallId: callId, input: args });
+        const result = await this.world.enter(this.id, () => tool.execute(callId, args, new AbortController().signal, undefined, this.context));
+        this.session.appendMessage({ role: "toolResult", toolCallId: callId, toolName: name, content: result.content ?? [], details: result.details, isError: result.isError ?? false, timestamp: this.world.scheduler.now } as any);
+        this.world.record({ kind: "tool.result", actor: actorRef(this.id), callId, name, result: json(result) as ToolResultFact });
+        await this.emit("tool_result", { toolName: name, toolCallId: callId, input: args, ...result });
+        return result;
+      } catch (error) {
+        this.world.record({ kind: "tool.error", actor: actorRef(this.id), callId, name, message: (error as Error).message });
+        throw error;
+      }
+    });
   }
   async settle(): Promise<void> {
     this.idle = true;
