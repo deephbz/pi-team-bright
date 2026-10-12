@@ -8,7 +8,7 @@ import timerPromises from "node:timers/promises";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 
-interface Scope { root: string; canonicalRoot: string; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Set<number> }
+interface Scope { root: string; canonicalRoot: string; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Map<number, string>; afterFsync: (file: string) => void }
 const active = new AsyncLocalStorage<Scope>();
 const real = { exists: fs.existsSync, realpath: fs.realpathSync, lstat: fs.lstatSync };
 let users = 0;
@@ -76,7 +76,7 @@ function install(): void {
       const scope = active.getStore();
       const checked = scope ? indices.map(index => checkPath(scope, args[index])) : [];
       const result = original.apply(this, args);
-      if (scope && name === "openSync") scope.fds.add(result);
+      if (scope && name === "openSync") scope.fds.set(result, checked[0]!);
       if (scope && mutations.has(name)) for (const file of checked) if (file) scope.changed(file);
       return result;
     });
@@ -87,6 +87,7 @@ function install(): void {
       const scope = active.getStore();
       if (scope) checkPath(scope, args[0]);
       const result = original.apply(this, args);
+      if (scope && name === "fsyncSync") scope.afterFsync(scope.fds.get(args[0])!);
       if (scope && name === "closeSync") scope.fds.delete(args[0]);
       return result;
     });
@@ -102,8 +103,8 @@ export class HostGuard {
   private readonly failures: Error[] = [];
   private readonly scope: Scope;
   private disposed = false;
-  constructor(root: string, changed: (file: string) => void) {
-    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Set() };
+  constructor(root: string, changed: (file: string) => void, afterFsync: (file: string) => void = () => {}) {
+    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Map(), afterFsync };
     if (users++ === 0) install();
   }
   run<T>(action: () => T): T {

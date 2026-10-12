@@ -72,10 +72,11 @@ export type WorldStep =
  * `herdr.start` refused or timed out, or `pi.start` hang.
  */
 export type Fault =
-  | { source: "herdr"; mode: "unavailable" | "slow" | "partial_list" }
+  | { source: "herdr"; mode: "unavailable" | "slow" | "partial_list"; delayMs?: number }
   | { source: "herdr.start"; mode: "refused" | "timeout" }
   | { source: "pi.start"; mode: "hang" | "exit_before_ready" }
-  | { source: "generation"; mode: "unavailable" }
+  | { source: "generation"; mode: "unavailable" | "slow"; delayMs?: number }
+  | { source: "journal"; mode: "commit_then_error" }
   | { source: "bd"; mode: "unavailable" | "slow" };
 
 export interface TimedStep {

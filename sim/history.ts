@@ -57,6 +57,7 @@ export type HistoryFact =
   | { kind: "pane.create"; pane: PaneFact }
   | { kind: "pane.close"; pane: PaneFact }
   | { kind: "fault.set"; fault: Fault }
+  | { kind: "fault.effect"; source: Fault["source"]; detail: string }
   | { kind: "fault.clear"; source: Fault["source"] }
   | { kind: "exec.call"; actor: ActorRef; callId: string; mode: "sync" | "async"; command: string; args: string[]; timeoutMs?: number }
   | { kind: "exec.result"; actor: ActorRef; callId: string; outcome: ExecOutcome | { kind: "threw"; message: string } }

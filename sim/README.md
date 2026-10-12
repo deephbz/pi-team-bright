@@ -131,6 +131,20 @@ C2 generation freshness and reservation fields are absent on production base
 `0aa8a85`; the observer does not infer them. E5's independent monitor bound is
 10000 virtual ms, as ruled in the implementation plan.
 
+## v3.1 campaign support
+
+`v31-campaign.config.ts` selects the campaign driver. The default is 1000
+fast-check samples. `v31-schedules.ts` owns the synthetic schedule families.
+The campaign reports missing oracle inputs separately from passing properties.
+
+Runner `sim-c1/5` adds delayed Herdr and generation-source completion and a
+journal `commit_then_error` fault. The latter throws after the real journal
+file descriptor completes `fsyncSync`; accepted bytes remain readable. Delayed
+generation reads return the captured sample, so later death or PID reuse can
+interleave with publication. `campaign-faults.test.ts` checks those boundaries
+and replacement after PID reuse. The simulator identifies each actor's captured
+generation independently from occupancy of its old numeric PID.
+
 ## Trace validation and simulator assumption registry
 
 The fixture validator accepts only probe ids present in `fixtures/probes` or
