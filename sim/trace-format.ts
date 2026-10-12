@@ -12,6 +12,7 @@
  * - `empirical`: reconstructed from real Team stores and Session logs. Stays
  *   outside the public repository. Every name, path, pane id, pid and text is
  *   replaced by a stable opaque token before the trace leaves the extractor.
+ *   Tool arguments and typed text are sanitized recursively.
  */
 
 export const WORLD_TRACE_VERSION = 1 as const;
@@ -22,43 +23,88 @@ export type Ref = string;
 export type PiShutdownReason = "quit" | "reload" | "new" | "resume" | "fork";
 export type TurnOutcome = "settled" | "aborted" | "error";
 
+/** Actor coordinates. A lead and its Workers share one Team ref. */
+export interface ActorRef {
+  team: Ref;
+  /** `lead` or a Worker ref such as `w1`. */
+  actor: Ref;
+}
+
+/**
+ * A tool argument may cite an earlier observable result instead of a literal,
+ * e.g. the Task version returned by step 12. Replay resolves the reference;
+ * it never refreshes a stale literal, so version conflicts stay reproducible.
+ */
+export interface ResultRef {
+  $fromStep: number;
+  path: string;
+}
+
 export type WorldStep =
   // Operator and model actions through the public PTB tool surface.
-  | { kind: "lead.start"; session: Ref; reason: "startup" | "resume" | "reload" }
-  | { kind: "lead.tool"; tool: string; args: Record<string, unknown> }
-  | { kind: "worker.tool"; worker: Ref; tool: string; args: Record<string, unknown> }
-  | { kind: "turn.end"; actor: Ref; outcome: TurnOutcome }
-  | { kind: "agent.settled"; actor: Ref }
+  | { kind: "pi.start"; who: ActorRef; session: Ref; reason: "startup" | "resume" | "reload" }
+  | { kind: "tool.call"; who: ActorRef; tool: string; args: Record<string, unknown | ResultRef> }
+  | { kind: "turn.end"; who: ActorRef; outcome: TurnOutcome }
+  | { kind: "agent.settled"; who: ActorRef }
+  // Pi Session navigation. Each names the destination Session explicitly.
+  | { kind: "pi.compact"; who: ActorRef }
+  | { kind: "pi.tree"; who: ActorRef; targetEntry: Ref }
+  | { kind: "pi.fork"; who: ActorRef; fromEntry: Ref; newSession: Ref }
+  | { kind: "pi.newSession"; who: ActorRef; newSession: Ref }
+  | { kind: "pi.shutdown"; who: ActorRef; reason: PiShutdownReason }
   // Human actions on the terminal or the Pi UI.
-  | { kind: "human.escape"; actor: Ref }
-  | { kind: "human.interrupt"; actor: Ref } // Ctrl-C at the Pi prompt
+  | { kind: "human.escape"; who: ActorRef }
+  | { kind: "human.interrupt"; who: ActorRef } // Ctrl-C at the Pi prompt
   | { kind: "human.closePane"; pane: Ref }
   | { kind: "human.typeInPane"; pane: Ref; text: string }
-  | { kind: "pi.shutdown"; actor: Ref; reason: PiShutdownReason }
   // OS and terminal events.
-  | { kind: "os.kill"; actor: Ref; signal: "SIGTERM" | "SIGKILL" | "SIGHUP" }
-  | { kind: "os.pidReuse"; deadActor: Ref; newcomer: Ref }
+  | { kind: "os.kill"; who: ActorRef; signal: "SIGTERM" | "SIGKILL" | "SIGHUP" }
+  | { kind: "os.pidReuse"; dead: ActorRef; newcomer: Ref }
   | { kind: "os.reboot" }
   | { kind: "herdr.agentState"; pane: Ref; state: "idle" | "working" | "blocked" | "done" | "unknown" }
   | { kind: "herdr.restart" }
-  // Time. Only the clock moves; no step may read it as liveness evidence.
-  | { kind: "clock.advance"; ms: number };
+  // Source faults. Each lasts until the matching `fault.clear`.
+  | { kind: "fault.set"; source: "herdr" | "generation" | "bd"; mode: "unavailable" | "partial" | "slow" }
+  | { kind: "fault.clear"; source: "herdr" | "generation" | "bd" };
 
 export interface TimedStep {
-  /** Virtual milliseconds since the trace start. Non-decreasing. */
+  /**
+   * Virtual milliseconds since the trace start. Non-decreasing. Before a step
+   * runs, the runner advances the clock to `at` and drains due timers in the
+   * order the scheduler chooses. No step may read elapsed time as liveness.
+   */
   at: number;
   step: WorldStep;
 }
 
+/** Initial world. Empty `teams` means a fresh host. */
+export interface WorldSetup {
+  ptbVersion: "baseline" | "v3.1";
+  teams: Array<{ team: Ref; workers: Ref[] }>;
+}
+
+/** World inputs only. Contains no scheduler decisions. */
 export interface WorldTrace {
   version: typeof WORLD_TRACE_VERSION;
   id: string;
   source: "synthetic" | "empirical";
   /** Empirical: digest of the source material. Never a path. */
   provenance?: string;
-  /** Simulator assumption ids this trace depends on, e.g. "A-pi-admission-order". */
+  /** Simulator assumption ids this trace depends on, e.g. "A2", "S-sync-block". */
   assumptions: string[];
-  /** Scheduler seed for the interleaving of runnable operations between steps. */
-  seed: number;
+  setup: WorldSetup;
   steps: TimedStep[];
+}
+
+/**
+ * One replay of a trace. Replaying the same trace with the same receipt must
+ * reproduce the same decisions and enabled operations.
+ */
+export interface ReplayReceipt {
+  traceId: string;
+  runnerVersion: string;
+  seed: number;
+  /** Index chosen among the enabled operations at each scheduler step. */
+  choices: number[];
+  bounds: { maxSteps: number; maxVirtualMs: number };
 }

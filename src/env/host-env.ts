@@ -9,19 +9,31 @@
  * unchanged against a simulated clock, process table and terminal.
  *
  * The filesystem is deliberately absent. Every actor on one host shares the
- * real `~/.pi` tree, and the simulator gives each world an isolated temp HOME.
- * Crash-torn writes are out of scope; atomic writes use rename.
+ * real `~/.pi` tree. A simulated world uses the process HOME that the test
+ * runner isolates before any import, runs worlds one at a time and wipes the
+ * tree between worlds. The simulator guards fs calls fail-closed to that
+ * tree. File timestamps never serve as time evidence; code compares only
+ * `clock.now()` values. Crash-torn writes are out of scope; atomic writes use
+ * rename. One Node loop serializes synchronous fs sequences that separate
+ * processes could interleave; that limit is stated, not modelled.
  *
  * Rules for this interface:
  * - Each member is an OS primitive or an external authority's wire surface.
  *   No PTB algorithm lives behind it.
  * - Synchronous members stay synchronous. A simulated implementation answers
  *   from world state at call time and may advance only the caller's clock.
+ *   Other actors make no progress during a synchronous block (assumption
+ *   `S-sync-block`), so baseline blocking waits model their worst case.
+ * - A simulated implementation runs every callback (timer, watcher, exec
+ *   completion, Pi hook) inside the registering actor's context and drops it
+ *   if that actor generation has exited.
+ * - While a simulation is active, `hostEnv()` outside an actor throws.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { setTimeout as sleepNode } from "node:timers/promises";
 
 export type TimerHandle = { readonly __timer: unique symbol } | ReturnType<typeof setTimeout>;
 
@@ -32,6 +44,10 @@ export interface HostClock {
   clearTimeout(handle: TimerHandle | undefined): void;
   setInterval(callback: () => void, ms: number): TimerHandle;
   clearInterval(handle: TimerHandle | undefined): void;
+  /** Non-blocking delay. Rejects with an AbortError when `signal` aborts. */
+  sleep(ms: number, signal?: AbortSignal): Promise<void>;
+  /** Blocking delay (today: Atomics.wait). Blocks the whole actor. */
+  sleepSync(ms: number): void;
 }
 
 export interface HostRandom {
@@ -61,6 +77,8 @@ export interface HostProcess {
   readonly pid: number;
   /** This actor's environment variables. Never read `process.env` directly. */
   readonly env: Readonly<Record<string, string | undefined>>;
+  readonly platform: NodeJS.Platform;
+  cwd(): string;
   /** `kill(pid, 0)` semantics: true when the pid exists or EPERM. */
   pidExists(pid: number): boolean;
   kill(pid: number, signal: NodeJS.Signals | number): void;
@@ -76,9 +94,21 @@ export interface ExecResult {
   status: number | null;
 }
 
+/**
+ * Outcome of one bounded command. `timeout` and `aborted` leave the command's
+ * effect unknown: the caller must not infer that it did not happen.
+ */
+export type ExecOutcome =
+  | ({ kind: "exited" } & ExecResult)
+  | { kind: "spawn_failed"; code: string; message: string }
+  | { kind: "timeout"; afterMs: number }
+  | { kind: "aborted" };
+
 export interface HostExec {
-  /** Blocking command execution, e.g. the Herdr CLI. */
+  /** Blocking command execution, e.g. the Herdr CLI. Baseline only. */
   runSync(command: string, args: readonly string[]): ExecResult;
+  /** Bounded async command execution. Arrival, effect and completion are separate world events. */
+  run(command: string, args: readonly string[], options: { timeoutMs: number; signal?: AbortSignal }): Promise<ExecOutcome>;
 }
 
 export interface HostWatcher {
@@ -98,6 +128,30 @@ export interface HostEnv {
   watch: HostWatch;
 }
 
+function runNode(command: string, args: readonly string[], options: { timeoutMs: number; signal?: AbortSignal }): Promise<ExecOutcome> {
+  return new Promise((resolve) => {
+    if (options.signal?.aborted) return resolve({ kind: "aborted" });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const child = spawn(command, [...args], { stdio: ["ignore", "pipe", "pipe"] });
+    const finish = (outcome: ExecOutcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
+      resolve(outcome);
+    };
+    const onAbort = () => { child.kill("SIGTERM"); finish({ kind: "aborted" }); };
+    const timer = setTimeout(() => { child.kill("SIGTERM"); finish({ kind: "timeout", afterMs: options.timeoutMs }); }, options.timeoutMs);
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    child.stdout.setEncoding("utf-8").on("data", (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding("utf-8").on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error: NodeJS.ErrnoException) => finish({ kind: "spawn_failed", code: error.code ?? "unknown", message: error.message }));
+    child.on("close", (status) => finish({ kind: "exited", stdout, stderr, status }));
+  });
+}
+
 function unsupportedGeneration(): GenerationProbe {
   return { kind: "unknown", reason: "generation_verifier_unavailable" };
 }
@@ -109,6 +163,8 @@ export const nodeHostEnv: HostEnv = {
     clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
     setInterval: (callback, ms) => setInterval(callback, ms),
     clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+    sleep: (ms, signal) => sleepNode(ms, undefined, { signal }),
+    sleepSync: (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.max(0, ms)); },
   },
   random: {
     uuid: () => crypto.randomUUID(),
@@ -118,6 +174,8 @@ export const nodeHostEnv: HostEnv = {
   process: {
     get pid() { return process.pid; },
     get env() { return process.env; },
+    get platform() { return process.platform; },
+    cwd: () => process.cwd(),
     pidExists: (pid) => {
       try {
         process.kill(pid, 0);
@@ -135,6 +193,7 @@ export const nodeHostEnv: HostEnv = {
       const result = spawnSync(command, [...args], { encoding: "utf-8" });
       return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status };
     },
+    run: (command, args, options) => runNode(command, args, options),
   },
   watch: {
     watchDirectory: (directory, listener) => {
@@ -145,10 +204,21 @@ export const nodeHostEnv: HostEnv = {
 };
 
 const actorEnv = new AsyncLocalStorage<HostEnv>();
+let simulationActive = false;
 
 /** The current actor's host capabilities. */
 export function hostEnv(): HostEnv {
-  return actorEnv.getStore() ?? nodeHostEnv;
+  const env = actorEnv.getStore();
+  if (env) return env;
+  if (simulationActive) throw new Error("Host access outside a simulated actor.");
+  return nodeHostEnv;
+}
+
+/** Make host access outside an actor fail closed until the returned release runs. */
+export function enterSimulation(): () => void {
+  if (simulationActive) throw new Error("A simulation is already active in this process.");
+  simulationActive = true;
+  return () => { simulationActive = false; };
 }
 
 /** Run `action` and all its async continuations as one simulated actor. */
