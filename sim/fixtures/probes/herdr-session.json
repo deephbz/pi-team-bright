@@ -1,0 +1,9 @@
+{
+  "agent": "pi",
+  "agent_session": {
+    "source": "herdr:pi",
+    "agent": "pi",
+    "kind": "path",
+    "value": "/sessions/worker.jsonl"
+  }
+}

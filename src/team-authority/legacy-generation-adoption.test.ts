@@ -8,7 +8,7 @@ import { adoptLegacyGeneration } from "./legacy-generation-adoption";
 beforeEach(() => {
   f.member = { membershipId: "m", sessionFile: "/session", terminalTarget: { targetId: "pane" } };
   f.status = { membershipId: "m", pid: 42, startedAt: 100 };
-  f.rows = [{ name: "team-worker", pane_id: "pane", agent_session: "/session" }];
+  f.rows = [{ name: "team-worker", pane_id: "pane", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" } }];
   f.beforeLease = undefined; f.write.mockReset();
 });
 const adopt = (generation = vi.fn(() => ({ kind: "found" as const, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } }))) => runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, generation } }, () => adoptLegacyGeneration("team", "worker", "m"));
@@ -26,9 +26,9 @@ it.each(["session", "pane", "stop", "generation"])("refuses adoption when %s cha
   expect(await adopt()).toBe(false); expect(f.write).not.toHaveBeenCalled();
 });
 it("refuses a mismatched Herdr Session or reused PID", async () => {
-  f.rows[0].agent_session = "/other";
+  f.rows[0].agent_session.value = "/other";
   expect(await adopt()).toBe(false);
-  f.rows[0].agent_session = "/session";
+  f.rows[0].agent_session.value = "/session";
   const probe = vi.fn().mockReturnValueOnce({ kind: "found", generation: { pid: 42, osBirthToken: "old", bootId: "boot" } }).mockReturnValue({ kind: "found", generation: { pid: 42, osBirthToken: "new", bootId: "boot" } });
   expect(await adopt(probe)).toBe(false); expect(f.write).not.toHaveBeenCalled();
 });

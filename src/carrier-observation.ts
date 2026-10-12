@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { herdrPiSessionPath } from "./adapters/herdr-session";
 import { herdrCarrierName } from "./adapters/herdr-adapter";
 import { hostEnv, type TimerHandle, type GenerationProbe } from "./env/host-env";
 import type { Member, TeamConfig } from "./team-authority/contracts";
@@ -129,7 +130,7 @@ export class CarrierObserver {
       view.evidence[0].lastGoodAt = this.lastGood.get(`generation:${view.membership}`);
       const prior = this.views.get(view.membership);
       if (panes && view.paneId) view.terminal = panes.some(row => row.pane_id === view.paneId) ? "present" : "absent";
-      const agent = agents?.find(row => row.name === herdrCarrierName(this.teamName, member.name) && row.pane_id === view.paneId && row.agent_session === member.sessionFile);
+      const agent = agents?.find(row => row.name === herdrCarrierName(this.teamName, member.name) && row.pane_id === view.paneId && herdrPiSessionPath(row.agent_session) === member.sessionFile);
       if (agent && ["working", "idle", "blocked"].includes(String(agent.agent_status))) view.activity = agent.agent_status as CarrierView["activity"];
       view.evidence.push({ source: "herdr_panes", fact: view.terminal, observedAt: now, lastGoodAt: this.lastGood.get("herdr_panes") }, { source: "herdr_agents", fact: view.activity, observedAt: now, lastGoodAt: this.lastGood.get("herdr_agents") });
       const reloading = view.lastStop?.piReason === "reload" || (prior?.lastStop?.piReason === "reload" && view.process === "live");

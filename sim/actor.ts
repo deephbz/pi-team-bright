@@ -27,6 +27,8 @@ export class SimActor {
   constructor(readonly world: SimWorld, readonly id: string, variables: Record<string, string> = {}, resumeFile?: string) {
     const env = world.envs.get(id) ?? world.createActor(id, variables);
     this.session = createSimSession(env, world.workspace.home, resumeFile);
+    const pane = world.herdr.panes.get(env.process.env.HERDR_PANE_ID!);
+    if (pane) pane.sessionFile = this.session.getSessionFile();
     world.evidence.push(assumptionEvidence("A5", "Pi branch keeps raw entries after compaction"));
     const who = actorRef(id);
     if (who.actor === "lead") world.observer.leads.set(id, { actor: who, read: () => ({ sessionId: this.session.getSessionId(), entries: this.session.getBranch() }) });
