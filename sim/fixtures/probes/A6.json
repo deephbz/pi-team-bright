@@ -1,0 +1,33 @@
+{
+  "assumption": "herdr agent start errors when the pane disappears.",
+  "verdict": "holds",
+  "command": "herdr pane close wCZ:p1; herdr agent start <probe-name> --kind pi --pane wCZ:p1 --timeout 1000",
+  "observed": {
+    "environment": {
+      "date": "2026-10-12T15:40:30.372Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v25.6.0",
+      "pi": "0.83.0",
+      "base": "a992f086017b8924c5c448456573c16452ca655d",
+      "herdr": "herdr 0.9.3"
+    },
+    "paneId": "wCZ:p1",
+    "error": {
+      "exitCode": 1,
+      "response": {
+        "error": {
+          "code": "agent_pane_not_found",
+          "message": "agent target pane wCZ:p1 not found"
+        },
+        "id": "cli:agent:start"
+      }
+    },
+    "scope": "Start after confirmed close; this does not test disappearance during an in-flight start.",
+    "cleanup": {
+      "workspaceId": "wCZ",
+      "workspaceGone": true,
+      "ownedPanesClosed": true
+    }
+  }
+}
