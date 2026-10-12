@@ -324,6 +324,13 @@ export class HerdrAdapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
+    const paneId = this.prepareSpawn(options);
+    void this.startPrepared(paneId, options);
+    return paneId;
+  }
+
+  /** Create location only. The caller records it before it starts Pi. */
+  prepareSpawn(options: SpawnOptions): string {
     if (!options.argv) throw new Error("Herdr spawn requires structured argv; legacy command strings are unsupported.");
     if (!options.panePlacement) throw new Error("Herdr Worker spawn requires exact Team pane placement.");
     validateSpawnOptions(options);
@@ -374,52 +381,26 @@ export class HerdrAdapter implements TerminalAdapter {
       throw new Error("Herdr pane split response did not include pane.pane_id.");
     }
 
-    try {
-      // The split response is the authority for the new pane. Name that exact
-      // pane before agent startup so display identity never depends on title
-      // inference or mutation inside Herdr's readiness window. Presentation
-      // failure must not prevent the Worker from starting.
-      try {
-        this.renamePane(paneId, options.name);
-        recordWorkerLaunchStage("carrier_label_applied");
-      } catch (error) {
-        recordWorkerLaunchStage("carrier_label_not_applied");
-        console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
-      }
-
-      // Herdr agent names are live carrier identity, not stable Worker identity.
-      // Qualify them by Team so a reused Worker name cannot collide with a
-      // stale or concurrent agent in another Team.
-      const carrierName = herdrCarrierName(options.env.PI_TEAM_NAME, options.name);
-      const startArgs = [
-        "agent", "start", carrierName,
-        "--kind", "pi",
-        "--pane", paneId,
-        "--timeout", String(AGENT_READY_TIMEOUT_MS),
-        "--",
-        ...piAgentArgs(argv),
-      ];
-      const deadline = hostEnv().clock.now() + SHELL_READY_TIMEOUT_MS;
-      while (true) {
-        try {
-          assertReadyStart(this.invoke(startArgs), carrierName, paneId);
-          break;
-        } catch (error) {
-          if (!isAgentPaneBusy(error) || hostEnv().clock.now() >= deadline) throw error;
-          // Pane split can return before the new shell reaches its prompt.
-          // Retry only Herdr's explicit transient busy state.
-          hostEnv().clock.sleepSync(SHELL_READY_RETRY_MS);
-        }
-      }
-    } catch (error) {
-      try {
-        this.invoke(["pane", "close", paneId]);
-      } catch {
-        // The primary agent-start failure remains the actionable error.
-      }
-      throw error;
-    }
+    try { this.renamePane(paneId, options.name); } catch { /* Presentation never controls launch. */ }
     return paneId;
+  }
+
+  async startPrepared(paneId: string, options: SpawnOptions): Promise<{ state: "started" | "refused" | "unknown"; fact: string }> {
+    const carrierName = herdrCarrierName(options.env.PI_TEAM_NAME, options.name);
+    const result = await hostEnv().exec.run("herdr", ["agent", "start", carrierName, "--kind", "pi", "--pane", paneId,
+      "--timeout", String(AGENT_READY_TIMEOUT_MS), "--", ...piAgentArgs(spawnArgv(options))], { timeoutMs: AGENT_READY_TIMEOUT_MS + 1000 });
+    if (result.kind === "timeout" || result.kind === "aborted") return { state: "unknown", fact: result.kind };
+    if (result.kind === "spawn_failed") return { state: "refused", fact: `spawn_failed:${result.code}` };
+    try {
+      const envelope = parseEnvelope(result.stdout);
+      if (envelope.error || result.status !== 0) {
+        // A readiness timeout can follow successful actuation. Only explicit pre-actuation refusal is decisive.
+        const fact = envelope.error ? errorText(envelope.error) : result.stderr;
+        return { state: /busy|invalid|not found|unsupported/i.test(fact) ? "refused" : "unknown", fact };
+      }
+      assertReadyStart(resultRecord(envelope), carrierName, paneId);
+      return { state: "started", fact: "agent_start_accepted" };
+    } catch { return { state: "unknown", fact: "malformed_start_reply" }; }
   }
 
   kill(paneId: string): void {

@@ -3,6 +3,7 @@ import { Type, type Static, type TSchema } from "typebox";
 import {
   AlertSendResultSchema,
   EnsureWorkerResultSchema,
+  WorkerAttentionSchema, WorkerLaunchReceiptFields,
   TaskCreateResultSchema,
   TaskReadResultSchema,
   TaskUpdateResultSchema,
@@ -74,7 +75,8 @@ export const TeamCreateModelResultSchema = Type.Union([
 ]);
 
 export const EnsureWorkerModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("worker_ensured"), effect: Type.Enum(["created", "reused", "reconnected"]), worker: Type.Object({ name: WorkerName, carrier: Type.Enum(["starting", "connected", "absent"]), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false }) }, { additionalProperties: false }),
+  WorkerAttentionSchema,
+  Type.Object({ kind: Type.Literal("worker_ensured"), effect: Type.Enum(["created", "reused", "reconnected", "recovered"]), ...WorkerLaunchReceiptFields, worker: Type.Object({ name: WorkerName, carrier: Type.Enum(["starting", "connected", "absent"]), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("refused"), reason: Type.Enum(["name_scope_conflict", "invalid_model_role", "legacy_team_model_default", "model_conflict"]), existing_worker: Type.Optional(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), valid_model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), message: Type.Optional(Type.String()) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("carrier_unavailable"), Type.Literal("team_authority_unavailable")])),
 ]);
@@ -361,7 +363,8 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
   }
   if (tool === "team_create" && raw.kind === "team_created") return { kind: raw.kind, team: { name: raw.team.name, lifecycle: raw.team.lifecycle }, model_roles: raw.model_roles, ...(raw.default_model_role ? { default_model_role: raw.default_model_role } : {}) };
   if (tool === "ensure_worker") {
-    if (raw.kind === "worker_ensured") return { kind: raw.kind, effect: raw.effect, worker: { name: raw.worker.name, carrier: raw.worker.carrier, ...(raw.worker.model_role ? { model_role: raw.worker.model_role } : {}) } };
+    if (raw.kind === "attention") return raw;
+    if (raw.kind === "worker_ensured") return { kind: raw.kind, effect: raw.effect, ...(raw.launchId ? { launchId: raw.launchId } : {}), ...(raw.launch ? { launch: raw.launch } : {}), ...(raw.recoveryMode ? { recoveryMode: raw.recoveryMode } : {}), ...(raw.lastStop ? { lastStop: raw.lastStop } : {}), worker: { name: raw.worker.name, carrier: raw.worker.carrier, ...(raw.worker.model_role ? { model_role: raw.worker.model_role } : {}) } };
     if (raw.kind === "refused") return { kind: raw.kind, reason: raw.reason, ...(raw.existing_worker ? { existing_worker: raw.existing_worker } : {}), ...(raw.valid_model_roles ? { valid_model_roles: raw.valid_model_roles } : {}), ...(raw.message ? { message: raw.message } : {}) };
   }
   if (tool === "alert_send" && raw.kind === "alert_sent") return {

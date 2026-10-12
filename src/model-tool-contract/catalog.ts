@@ -353,11 +353,19 @@ const EnsuredWorker = Type.Object({
   model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
 
+export const WorkerLaunchReceiptFields = {
+  launchId: Type.Optional(Type.String()), launch: Type.Optional(Type.String()), recoveryMode: Type.Optional(Type.String()),
+  lastStop: Type.Optional(Type.Object({ piReason: Type.Enum(["quit", "reload", "new", "resume", "fork"]), observedAt: Type.Number(), suspectedHumanStop: Type.Boolean(), targetSessionFile: Type.Optional(Type.String()) }, { additionalProperties: false })),
+};
+export const WorkerAttentionSchema = Type.Object({ kind: Type.Literal("attention"), worker: WorkerName,
+  reason: Type.String(), nextActionHint: Type.Enum(["wait", "ask_human"]), ...WorkerLaunchReceiptFields }, { additionalProperties: false });
 export const EnsureWorkerResultSchema = Type.Union([
+  WorkerAttentionSchema,
   Type.Object({
     kind: Type.Literal("worker_ensured"),
-    effect: Type.Enum(["created", "reused", "reconnected"]),
+    effect: Type.Enum(["created", "reused", "reconnected", "recovered"]),
     worker: EnsuredWorker,
+    ...WorkerLaunchReceiptFields,
   }, { additionalProperties: false }),
   Type.Object({
     kind: Type.Literal("refused"),
