@@ -1,0 +1,12 @@
+--- a/src/team-authority/worker-launch-bridge.ts
++++ b/src/team-authority/worker-launch-bridge.ts
+@@ -114,6 +114,9 @@
+         const status = await runtime.readRuntimeStatus(request.teamName, member.name);
+         assertLockDeadline();
+         const view = deriveCarrierView(current, status);
++        if (current.sessionFile && current.terminalTarget && currentTerminalForTeam(config).isAlive(current.terminalTarget.targetId)) {
++          return { action: "reused", member: current, membershipId: current.membershipId!, target: memberTerminalTarget(current, config.terminalBackend), lastStop: view.lastStop };
++        }
+         const plan = planWorkerEnsure(normalizeWorkerCarrier(current), view);
+         // Even a bound dead prior generation cannot bypass an in-flight recovery.
+         const pending = current.launch && (current.launch.state === "requested" || current.launch.state === "started" || current.launch.state === "unknown")

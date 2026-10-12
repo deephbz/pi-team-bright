@@ -82,7 +82,7 @@ export function validateWorldTrace(value: unknown): asserts value is WorldTrace 
       case "herdr.agentState": fields = ["pane", "state"]; valid = ref(s.pane) && oneOf(s.state, ["idle", "working", "blocked", "done", "unknown"]); break;
       case "fault.set": {
         fields = ["fault"];
-        const modes: Record<string, string[]> = { herdr: ["unavailable", "slow", "partial_list"], "herdr.start": ["refused", "timeout"],
+        const modes: Record<string, string[]> = { herdr: ["unavailable", "slow", "partial_list"], "herdr.start": ["refused", "invalid_params", "timeout"],
           "pi.start": ["hang", "exit_before_ready"], generation: ["unavailable", "slow"], journal: ["commit_then_error"], bd: ["unavailable", "slow"] };
         valid = object(s.fault) && exact(s.fault, ["source", "mode", "delayMs"]) && typeof s.fault.source === "string"
           && Object.hasOwn(modes, s.fault.source) && oneOf(s.fault.mode, modes[s.fault.source])

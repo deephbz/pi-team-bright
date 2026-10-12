@@ -1,0 +1,11 @@
+--- a/src/team-authority/worker-launch-bridge.ts
++++ b/src/team-authority/worker-launch-bridge.ts
+@@ -80,7 +80,7 @@
+         assertLockDeadline();
+         if (!("config" in claim)) return this.inspectAttention(request, claim);
+         observed.member = claim.member;
+-        return this.launch(request, claim, deadline, paneId => { observed.paneId = paneId; });
++        return teams.withCurrentMembershipLease(request.teamName, claim.member.membershipId!, () => this.launch(request, claim, deadline, paneId => { observed.paneId = paneId; }));
+       }, receipt.signal);
+       let timer: TimerHandle | undefined;
+       try {

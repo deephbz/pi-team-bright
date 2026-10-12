@@ -1,0 +1,16 @@
+--- a/src/coordination/observation-service.ts
++++ b/src/coordination/observation-service.ts
+@@ -152,12 +152,12 @@
+   private async observe(bound: BoundTeam, view: "snapshot" | "updates", baseline: BranchObservation | undefined, context?: CoordinationObservationContext, automatic = false, selected?: (page: Page, later: Page[]) => void): Promise<CoordinationSyncNowResult> {
+     if (view === "snapshot" || !baseline) {
+       // Capture the journal boundary before any Task authority hydration.
+-      const head = Number(this.store.readEventCursor(bound.teamName));
+       const hydratedBound = await this.boundTeam(bound.sessionFile);
+       if (!hydratedBound || hydratedBound.teamName !== bound.teamName || hydratedBound.config.epochId !== bound.config.epochId || hydratedBound.membershipId !== bound.membershipId) {
+         return { kind: "unavailable", reason: "no_active_team", message: "The leader binding changed during snapshot hydration." };
+       }
+       const snapshot = await this.snapshot(hydratedBound, context);
++      const head = Number(this.store.readEventCursor(bound.teamName));
+       if (snapshot.kind === "no_active_team") return { kind: "unavailable", reason: "no_active_team", message: "No active Team." };
+       if (snapshot.kind !== "snapshot") return snapshot;
+       if (automatic && !snapshot.tasks.length && !snapshot.workers.length && !baseline?.taskIds.length) return { kind: "quiet" };
