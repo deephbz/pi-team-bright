@@ -1,4 +1,7 @@
 import fs from "node:fs";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { HISTORY_VERSION, actorRef, type HistoryEntry, type HistoryFact, type HistoryOrigin } from "./history";
+import { HistoryObserver } from "./history-observer";
 import path from "node:path";
 import { enterSimulation, runWithHostEnv, type ExecOutcome, type HostEnv, type HostWatcher } from "../src/env/host-env";
 import type { Fault } from "./trace-format";
@@ -29,7 +32,10 @@ export class SimWorld {
   private readonly generations = new Map<string, ReturnType<ProcessTable["spawn"]>>();
   private readonly release: () => void;
   private disposed = false;
-  readonly history: Array<{ at: number; actor: string; kind: string; value?: unknown }> = [];
+  readonly history: HistoryEntry[] = [];
+  readonly observer: HistoryObserver;
+  private readonly origins = new AsyncLocalStorage<HistoryOrigin>();
+  private execSequence = 0;
   readonly evidence: FakeEvidence[] = [assumptionEvidence("A7", "PID reuse changes the birth token"), assumptionEvidence("A9", "Real filesystem atomic rename; host-crash durability is unclaimed")];
   private readonly watches = new Set<WatchRegistration>();
 
@@ -50,6 +56,17 @@ export class SimWorld {
     this.scheduler = new Scheduler(this.entropy);
     this.guard = new HostGuard(this.workspace.root, file => this.notifyFile(file));
     this.exec.register("bd", emptyBdWire);
+    this.observer = new HistoryObserver(home, fact => this.record(fact, { kind: "observer" }));
+    this.processes.onChange = (kind, process) => this.record({ kind, process: {
+      actorKey: process.actor, command: process.command, parentPid: process.parentPid,
+      generation: { pid: process.pid, bootId: process.bootId, osBirthToken: process.osBirthToken },
+    } });
+    this.herdr.onPane = (kind, pane) => this.record({ kind, pane: { paneId: pane.id, shellPid: pane.shellPid, agentPid: pane.agentPid } });
+    this.scheduler.onBoundary = (phase, operation) => {
+      if (phase === "end") this.observer.sample();
+      this.record({ kind: phase === "begin" ? "step.begin" : "step.end", operationId: operation.id, label: operation.label,
+        ...(operation.actor ? { actor: actorRef(operation.actor) } : {}) }, { kind: "observer" });
+    };
   }
   createActor(actor: string, variables: Record<string, string> = {}): HostEnv {
     if (this.envs.has(actor)) throw new Error(`Actor environment already exists: ${actor}`);
@@ -76,7 +93,19 @@ export class SimWorld {
         exit: code => { this.killPid(process.pid); throw new ActorExit(actor, code); },
       },
       exec: {
-        runSync: (command, args) => this.execute(command, args),
+        runSync: (command, args) => {
+          const callId = this.execCall(actor, "sync", command, args);
+          return this.withOrigin({ kind: "ptb", actor: actorRef(actor), ...this.callOrigin(), execCallId: callId }, () => {
+            try {
+              const result = this.execute(command, args);
+              this.record({ kind: "exec.result", actor: actorRef(actor), callId, outcome: { kind: "exited", ...result } });
+              return result;
+            } catch (error) {
+              this.record({ kind: "exec.result", actor: actorRef(actor), callId, outcome: { kind: "threw", message: (error as Error).message } });
+              throw error;
+            }
+          });
+        },
         run: (command, args, options) => this.runCommand(actor, command, args, options),
       },
       watch: { watchDirectory: (directory, listener) => this.watch(actor, directory, listener) },
@@ -96,13 +125,16 @@ export class SimWorld {
     const env = this.envs.get(actor);
     const process = this.processes.actor(actor);
     if (!env || !process?.alive || process !== this.generations.get(actor)) throw new Error(`Actor is not live: ${actor}`);
-    return runWithHostEnv(env, () => this.guard.run(action));
+    const origin = this.origins.getStore();
+    return this.withOrigin(origin?.kind === "ptb" && origin.actor.team === actorRef(actor).team && origin.actor.actor === actorRef(actor).actor
+      ? origin : { kind: "ptb", actor: actorRef(actor) }, () => runWithHostEnv(env, () => this.guard.run(action)));
   }
   enqueue(actor: string, label: string, action: () => unknown, delay = 0): number {
     const generation = this.generations.get(actor);
+    const origin = this.origins.getStore() ?? { kind: "ptb" as const, actor: actorRef(actor) };
     return this.scheduler.enqueue(label, () => {
       if (!generation?.alive || this.generations.get(actor) !== generation) return;
-      return this.enter(actor, action);
+      return this.withOrigin(origin, () => this.enter(actor, action));
     }, { actor, delay });
   }
   killPid(pid: number): void {
@@ -128,9 +160,22 @@ export class SimWorld {
   failWatches(error: unknown): void {
     for (const watch of this.watches) if (!watch.closed) this.enqueue(watch.actor, "watch.error", () => { if (!watch.closed) for (const listener of watch.errors) listener(error); });
   }
-  record(actor: string, kind: string, value?: unknown): void { this.history.push({ at: this.scheduler.now, actor, kind, value }); }
+  withOrigin<T>(origin: HistoryOrigin, action: () => T): T { return this.origins.run(origin, action); }
+  private callOrigin(): { toolCallId?: string } {
+    const origin = this.origins.getStore();
+    return origin?.kind === "ptb" && origin.toolCallId ? { toolCallId: origin.toolCallId } : {};
+  }
+  record(fact: HistoryFact, origin = this.origins.getStore() ?? { kind: "setup" as const }): void {
+    this.history.push(structuredClone({ ...fact, version: HISTORY_VERSION, sequence: this.history.length + 1, at: this.scheduler.now, origin }));
+  }
+  private execCall(actor: string, mode: "sync" | "async", command: string, args: readonly string[], timeoutMs?: number): string {
+    const callId = `exec-${++this.execSequence}`;
+    this.record({ kind: "exec.call", actor: actorRef(actor), callId, mode, command, args: [...args], ...(timeoutMs === undefined ? {} : { timeoutMs }) });
+    return callId;
+  }
   async drain(options?: Parameters<Scheduler["drain"]>[0]): Promise<number> {
     const count = await this.scheduler.drain(options);
+    this.observer.sample();
     this.assertClean();
     return count;
   }
@@ -152,8 +197,12 @@ export class SimWorld {
   }
   private runCommand(actor: string, command: string, args: readonly string[], options: { timeoutMs: number; signal?: AbortSignal }): Promise<ExecOutcome> {
     if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 0) throw new Error("Invalid exec timeout");
-    return new Promise(resolve => {
-      if (options.signal?.aborted) { resolve({ kind: "aborted" }); return; }
+    const callId = this.execCall(actor, "async", command, args, options.timeoutMs);
+    return this.withOrigin({ kind: "ptb", actor: actorRef(actor), ...this.callOrigin(), execCallId: callId }, () => new Promise(resolve => {
+      if (options.signal?.aborted) {
+        this.record({ kind: "exec.result", actor: actorRef(actor), callId, outcome: { kind: "aborted" } });
+        resolve({ kind: "aborted" }); return;
+      }
       let settled = false;
       let effect: ExecOutcome | undefined;
       const finish = (outcome: ExecOutcome) => {
@@ -161,6 +210,7 @@ export class SimWorld {
         settled = true;
         this.scheduler.cancel(timeout);
         options.signal?.removeEventListener("abort", abort);
+        this.record({ kind: "exec.result", actor: actorRef(actor), callId, outcome });
         resolve(outcome);
       };
       const abort = () => { this.enqueue(actor, "exec.abort", () => finish({ kind: "aborted" })); };
@@ -168,21 +218,36 @@ export class SimWorld {
       options.signal?.addEventListener("abort", abort, { once: true });
       this.enqueue(actor, "exec.arrival", () => {
         this.enqueue(actor, "exec.effect", () => {
-          // The effect may precede a timeout or abort. Neither outcome proves no effect.
-          const startTimeout = path.basename(command) === "herdr" && args[0] === "agent" && args[1] === "start" && this.faults.get("herdr.start")?.mode === "timeout";
-          if (startTimeout) {
-            if (this.entropy.choose("fault.start.timeout.effect", 2) === 1) this.exec.runSync(command, args);
-            return;
+          try {
+            // The effect may precede a timeout or abort. Neither outcome proves no effect.
+            const startTimeout = path.basename(command) === "herdr" && args[0] === "agent" && args[1] === "start" && this.faults.get("herdr.start")?.mode === "timeout";
+            if (startTimeout) {
+              if (this.entropy.choose("fault.start.timeout.effect", 2) === 1) {
+                const result = this.exec.runSync(command, args);
+                this.record({ kind: "exec.effect", actor: actorRef(actor), callId, result });
+              }
+              return;
+            }
+            // Slow async calls delay completion without freezing other actors.
+            const binary = path.basename(command);
+            const slow = (binary === "herdr" || binary === "bd") && this.faults.get(binary)?.mode === "slow";
+            const result = slow ? this.exec.runSync(command, args) : this.execute(command, args);
+            effect = { kind: "exited", ...result };
+            this.record({ kind: "exec.effect", actor: actorRef(actor), callId, result });
+            const delay = slow ? 100 : 0;
+            this.enqueue(actor, "exec.completion", () => finish(effect!), delay);
+          } catch (error) {
+            if (!settled) {
+              settled = true;
+              this.scheduler.cancel(timeout);
+              options.signal?.removeEventListener("abort", abort);
+              this.record({ kind: "exec.result", actor: actorRef(actor), callId, outcome: { kind: "threw", message: (error as Error).message } });
+            }
+            throw error;
           }
-          // Slow async calls delay completion without freezing other actors.
-          const binary = path.basename(command);
-          const slow = (binary === "herdr" || binary === "bd") && this.faults.get(binary)?.mode === "slow";
-          effect = { kind: "exited", ...(slow ? this.exec.runSync(command, args) : this.execute(command, args)) };
-          const delay = slow ? 100 : 0;
-          this.enqueue(actor, "exec.completion", () => finish(effect!), delay);
         });
       });
-    });
+    }));
   }
   dispose(): void {
     if (this.disposed) return;
