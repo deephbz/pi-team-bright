@@ -1,7 +1,8 @@
 # Deterministic simulator
 
-Stage: consolidation. Scope: C1 verification support. Production dependency:
-`14d92fd` (C0 host seam). The simulator runs real PTB authority algorithms.
+Stage: consolidation. Scope: C1 verification support. Baseline production:
+`14d92fd` (C0 host seam). Integration dependency: `21c2cb5` (C3 and C0 follow-up).
+C2 is not present at that tip. The simulator runs real PTB authority algorithms.
 Architecture impact: none to production contracts.
 
 ```text
@@ -62,8 +63,14 @@ recorded paths and bounds. A8 is inconclusive; A7 and A9 remain unprobed.
 Pane geometry and pane-close process-tree effects remain advisory.
 
 The queue benchmark excludes module loading and real fs. Baseline tests also
-print per-1000-operation wall time with both costs included. These are single
-trials, not throughput guarantees.
+print per-1000-operation wall time with both costs included. The last focused
+integration trial measured 69.51 ms per 1000 queue operations; scenario 1
+measured 5286.05 ms and scenario 2 measured 6229.12 ms with setup and real fs.
+These are single trials under concurrent host load, not throughput guarantees.
+
+The integrated default lane passed 1212 tests with 530 expected failures and
+three skips. Both exhaustive simulator tests passed. Typecheck passed.
+Expected failures in other lanes do not prove the v3.1 properties.
 
 `host-calls.base.json` records 331 direct-host candidates on the original base
 `a992f086017b8924c5c448456573c16452ca655d`. Regenerate an inventory with
