@@ -83,12 +83,14 @@ export function validateWorldTrace(value: unknown): asserts value is WorldTrace 
       case "fault.set": {
         fields = ["fault"];
         const modes: Record<string, string[]> = { herdr: ["unavailable", "slow", "partial_list"], "herdr.start": ["refused", "timeout"],
-          "pi.start": ["hang", "exit_before_ready"], generation: ["unavailable"], bd: ["unavailable", "slow"] };
-        valid = object(s.fault) && exact(s.fault, ["source", "mode"]) && typeof s.fault.source === "string"
-          && Object.hasOwn(modes, s.fault.source) && oneOf(s.fault.mode, modes[s.fault.source]);
+          "pi.start": ["hang", "exit_before_ready"], generation: ["unavailable", "slow"], journal: ["commit_then_error"], bd: ["unavailable", "slow"] };
+        valid = object(s.fault) && exact(s.fault, ["source", "mode", "delayMs"]) && typeof s.fault.source === "string"
+          && Object.hasOwn(modes, s.fault.source) && oneOf(s.fault.mode, modes[s.fault.source])
+          && (s.fault.delayMs === undefined || (["herdr", "generation"].includes(s.fault.source) && s.fault.mode === "slow"
+            && typeof s.fault.delayMs === "number" && Number.isFinite(s.fault.delayMs) && s.fault.delayMs >= 0));
         break;
       }
-      case "fault.clear": fields = ["source"]; valid = oneOf(s.source, ["herdr", "herdr.start", "pi.start", "generation", "bd"]); break;
+      case "fault.clear": fields = ["source"]; valid = oneOf(s.source, ["herdr", "herdr.start", "pi.start", "generation", "journal", "bd"]); break;
     }
     if (!valid || !exact(s, ["kind", ...fields])) return fail(`step ${index} (${String(s.kind)}${s.tool ? ` ${s.tool}` : ""})`);
   }

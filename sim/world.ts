@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { HISTORY_VERSION, actorRef, type HistoryEntry, type HistoryFact, type HistoryOrigin } from "./history";
 import { HistoryObserver } from "./history-observer";
 import path from "node:path";
-import { enterSimulation, runWithHostEnv, type ExecOutcome, type HostEnv, type HostWatcher } from "../src/env/host-env";
+import { enterSimulation, runWithHostEnv, type ExecOutcome, type HostEnv, type HostWatcher, type GenerationProbe } from "../src/env/host-env";
 import type { Fault } from "./trace-format";
 import { Entropy, type Choice } from "./entropy";
 import { Scheduler } from "./scheduler";
@@ -54,7 +54,12 @@ export class SimWorld {
     fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false }, model_roles: { "sim-worker": { model: "synthetic/model", thinking: "off", use: "Deterministic simulation" } }, default_model_role: "sim-worker" } }));
     this.entropy = new Entropy(seed, options.tape, options.replay, options.scheduleChoices);
     this.scheduler = new Scheduler(this.entropy);
-    this.guard = new HostGuard(this.workspace.root, file => this.notifyFile(file));
+    this.guard = new HostGuard(this.workspace.root, file => this.notifyFile(file), file => {
+      if (path.basename(file) === "team-events.jsonl" && this.faults.get("journal")?.mode === "commit_then_error") {
+        this.record({ kind: "fault.effect", source: "journal", detail: "fsync committed journal bytes before injected EIO" });
+        throw Object.assign(new Error("Injected journal commit-then-error"), { code: "EIO" });
+      }
+    });
     this.exec.register("bd", emptyBdWire);
     this.observer = new HistoryObserver(home, fact => this.record(fact, { kind: "observer" }));
     this.processes.onChange = (kind, process) => this.record({ kind, process: {
@@ -88,7 +93,13 @@ export class SimWorld {
           ...variables,
         },
         pidExists: pid => this.processes.exists(pid),
-        generation: pid => this.faults.has("generation") ? { kind: "unknown", reason: "injected_generation_unavailable" } : this.processes.generation(pid),
+        generation: pid => this.faults.get("generation")?.mode === "unavailable" ? { kind: "unknown", reason: "injected_generation_unavailable" } : this.processes.generation(pid),
+        generations: pids => {
+          const samples = new Map<number, GenerationProbe>(pids.map(pid => [pid, env.process.generation(pid)]));
+          const fault = this.faults.get("generation");
+          if (fault?.source !== "generation" || fault.mode !== "slow") return Promise.resolve(samples);
+          return new Promise(resolve => this.enqueue(actor, "generation.completion", () => resolve(samples), fault.delayMs ?? 100));
+        },
         kill: (pid, signal) => { if (signal !== 0) this.killPid(pid); else if (!this.processes.exists(pid)) throw Object.assign(new Error("No such process"), { code: "ESRCH" }); },
         exit: code => { this.killPid(process.pid); throw new ActorExit(actor, code); },
       },
@@ -121,6 +132,7 @@ export class SimWorld {
     pane.state = "idle";
     return env;
   }
+  actorGenerationIsLive(actor: string): boolean { return this.generations.get(actor)?.alive === true; }
   enter<T>(actor: string, action: () => T): T {
     const env = this.envs.get(actor);
     const process = this.processes.actor(actor);
@@ -234,7 +246,8 @@ export class SimWorld {
             const result = slow ? this.exec.runSync(command, args) : this.execute(command, args);
             effect = { kind: "exited", ...result };
             this.record({ kind: "exec.effect", actor: actorRef(actor), callId, result });
-            const delay = slow ? 100 : 0;
+            const herdrFault = this.faults.get("herdr");
+            const delay = slow ? (binary === "herdr" && herdrFault?.source === "herdr" ? herdrFault.delayMs ?? 100 : 100) : 0;
             this.enqueue(actor, "exec.completion", () => finish(effect!), delay);
           } catch (error) {
             if (!settled) {

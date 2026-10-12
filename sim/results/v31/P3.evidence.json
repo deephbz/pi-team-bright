@@ -1,0 +1,201 @@
+[
+  {
+    "at": 1700000000000,
+    "sequence": 3,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "team-1/lead",
+      "command": "pi",
+      "generation": {
+        "pid": 101,
+        "bootId": "boot-1",
+        "osBirthToken": "1"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 4,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "shell:pane:team-1/lead",
+      "command": "shell",
+      "generation": {
+        "pid": 102,
+        "bootId": "boot-1",
+        "osBirthToken": "2"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 58,
+    "kind": "tool.result",
+    "tool": "team_create",
+    "result": {
+      "kind": "team_created"
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 85,
+    "kind": "journal.append",
+    "cursor": "1",
+    "phase": "prepared"
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 117,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "shell:pane-1",
+      "command": "shell",
+      "generation": {
+        "pid": 103,
+        "bootId": "boot-1",
+        "osBirthToken": "3"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 133,
+    "kind": "tool.result",
+    "tool": "ensure_worker",
+    "result": {
+      "kind": "worker_ensured",
+      "effect": "created"
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 142,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 103,
+      "generation": {
+        "pid": 104,
+        "bootId": "boot-1",
+        "osBirthToken": "4"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 152,
+    "kind": "journal.append",
+    "cursor": "2",
+    "phase": "session_bound"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 239,
+    "kind": "journal.append",
+    "cursor": "3",
+    "carrier": {
+      "field": "binding",
+      "to": "bound",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 104,
+        "startedAt": 1700000000000,
+        "osBirthToken": "4",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "membership",
+        "fact": "bound"
+      },
+      "paneId": "pane-1",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 240,
+    "kind": "journal.append",
+    "cursor": "4",
+    "carrier": {
+      "field": "launch",
+      "to": "started",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 104,
+        "startedAt": 1700000000000,
+        "osBirthToken": "4",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "launch",
+        "fact": "agent_start_accepted"
+      },
+      "paneId": "pane-1",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 241,
+    "kind": "journal.append",
+    "cursor": "5",
+    "carrier": {
+      "field": "process",
+      "to": "live",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 104,
+        "startedAt": 1700000000000,
+        "osBirthToken": "4",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "process_generation",
+        "fact": "live"
+      },
+      "paneId": "pane-1",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 242,
+    "kind": "journal.append",
+    "cursor": "6",
+    "carrier": {
+      "field": "terminal",
+      "to": "present",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 104,
+        "startedAt": 1700000000000,
+        "osBirthToken": "4",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "herdr_panes",
+        "fact": "present"
+      },
+      "paneId": "pane-1",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000100000,
+    "sequence": 1026,
+    "kind": "tool.result",
+    "tool": "team_sync",
+    "result": {
+      "kind": "snapshot"
+    }
+  }
+]

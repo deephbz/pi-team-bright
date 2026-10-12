@@ -5,7 +5,7 @@ import { assumptionEvidence } from "./assumptions";
 import { SimWorld } from "./world";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/4";
+export const RUNNER_VERSION = "sim-c1/5";
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */
@@ -46,8 +46,7 @@ export class WorldReplay {
   addActor(who: ActorRef, variables: Record<string, string> = {}, resumeFile?: string): SimActor {
     const id = actorKey(who);
     if (this.actors.has(id)) {
-      const old = this.world.envs.get(id)!;
-      if (this.world.processes.exists(old.process.pid)) throw new Error(`Actor already loaded: ${id}`);
+      if (this.world.actorGenerationIsLive(id)) throw new Error(`Actor already loaded: ${id}`);
       // A dead carrier releases its environment. The replacement opens the exact Session.
       this.world.envs.delete(id);
     }

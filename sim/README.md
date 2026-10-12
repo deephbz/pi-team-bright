@@ -1,9 +1,14 @@
 # Deterministic simulator
 
-Stage: consolidation. Scope: C1 verification support. Baseline production:
-`14d92fd` (C0 host seam). Integration dependency: `0aa8a85` (C3 and C0 follow-ups).
-C2 is not present at that tip. The simulator runs real PTB authority algorithms.
+Stage: consolidation. Scope: C1 verification support. Current campaign
+production is `1a8a3f6` (C0, C2, and C3). Baseline production was `14d92fd`.
+The simulator runs real PTB authority algorithms.
 Architecture impact: none to production contracts.
+
+The [v3.1 result journal](../docs/journal/2026-10-13-sim-v31-results.md) records
+1000 generated runs, scale shards, all six witnesses, minimized findings, and
+remaining oracle limits. `results/v31/campaign.json` is the machine result.
+Earlier baseline and integration measurements below describe earlier trials.
 
 ```text
 WorldTrace + ReplayReceipt -> real extension tools/events
@@ -91,7 +96,7 @@ names. Human input is opaque terminal text. Full P/M/E campaigns are unclaimed.
 
 ## Oracle history
 
-`history.ts` owns version 1 of the observable history. Runner `sim-c1/3`
+`history.ts` owns version 1 of the observable history. Runner `sim-c1/5`
 returns it in `history`. Every entry has `version`, `sequence`, virtual `at`,
 and `origin`. Actor coordinates use `ActorRef`. Origins distinguish human,
 OS, PTB actor, setup, and observation. PTB origins can carry tool and exec call
@@ -130,6 +135,27 @@ disk and verifies that history preserves them independently of world truth.
 C2 generation freshness and reservation fields are absent on production base
 `0aa8a85`; the observer does not infer them. E5's independent monitor bound is
 10000 virtual ms, as ruled in the implementation plan.
+
+## v3.1 campaign support
+
+`v31-campaign.config.ts` selects the campaign driver. The default is 1000
+fast-check samples. `v31-schedules.ts` owns the synthetic schedule families.
+The campaign reports missing oracle inputs separately from passing properties.
+The lead authorized typed normalization of nested carrier journal fields and
+numeric cursor order. Canonical raw bytes stay unchanged. Only the monitor
+accessor changed; verdict logic remains independent. Explicit temporal bounds
+and assumption classifications are recorded in the result.
+
+Use `npx vitest run --config vitest.exhaustive.config.ts sim/v31-receipts.test.ts`
+to verify the persisted counterexamples without rerunning the campaign.
+
+Runner `sim-c1/5` adds delayed Herdr and generation-source completion and a
+journal `commit_then_error` fault. The latter throws after the real journal
+file descriptor completes `fsyncSync`; accepted bytes remain readable. Delayed
+generation reads return the captured sample, so later death or PID reuse can
+interleave with publication. `campaign-faults.test.ts` checks those boundaries
+and replacement after PID reuse. The simulator identifies each actor's captured
+generation independently from occupancy of its old numeric PID.
 
 ## Trace validation and simulator assumption registry
 
