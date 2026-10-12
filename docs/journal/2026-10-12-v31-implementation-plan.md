@@ -29,7 +29,7 @@ v31-integration
 
 Then: simulator against current code (mutant baseline) → merge C2/C3 →
 simulator against v3.1 (P1–P10, E1–E5, S1–S6, M1–M6) → empirical and
-generated trace campaigns → migration check under atomic reload → docs,
+generated trace campaigns → migration check (live reload, lead first) → docs,
 decisions, diagram.
 
 ## Shared contracts (lead-owned)
@@ -44,9 +44,10 @@ the first contract draft; all six findings adopted):
 
 1. Filesystem. The world root is the per-process HOME that the test runner
    isolates before any import. Worlds run one at a time and wipe the tree
-   between runs. The simulator guards fs calls fail-closed to that tree. Code
-   compares only `clock.now()` values; file timestamps are never time
-   evidence. One Node loop serializes synchronous fs sequences that separate
+   between runs. The simulator guards fs calls fail-closed to that tree. The
+   only file timestamp read as time is the lock-file mtime, and `lock.ts`
+   writes it from `clock.now()` (millisecond precision). A failed metadata
+   write after exclusive create removes only that exact new owner. One Node loop serializes synchronous fs sequences that separate
    processes could interleave. That limit is stated, not modelled; the lock
    protocol keeps its own multiprocess tests and TLA+ fence.
 2. Execution. `HostExec.run` is bounded and async, with `exited`,
@@ -74,22 +75,34 @@ the five rules of the proposal; the owner may reverse any of them.
 
 | Gap | Case | Ruling |
 | --- | --- | --- |
-| G1 | bound, lastStop `new`, `resume` or `fork` | `attention` (`session_switched`). The process left this Worker Session. No reuse, no spawn. |
-| G2 | bound, lastStop `reload`, process `live` | `reuse`. Reload keeps the generation; the reloaded hook re-admits it. |
+| G1 | bound, lastStop `new`, `resume` or `fork` | `attention` (`session_switched`). The process left this Worker Session. No reuse, no spawn. `worker_stop` on such a Worker deactivates the Membership and keeps the pane, because a human now uses it. |
+| G2 | bound, lastStop `reload`, process `live` | Before re-admission: `attention` (`reload_pending`, hint `wait`). The same Session and exact generation re-admitting after that stop clears it; an older re-admission never clears a newer stop. Then the bound + live row gives `reuse`. |
 | G2 | bound, lastStop `quit`, process `live` | `attention` (`stopping`). Never spawn while the generation lives. |
-| G3 | unbound, launch `none` | `create`. |
-| G4 | unbound, launch `refused`, process `live`, `stopping` or `unknown` | `attention`. A candidate generation may still bind; unknown fails closed. |
+| G3 | unbound, launch `none` | `create` only when no candidate exists: process `gone` or none and no pending launch id. Otherwise `attention` as G4. |
+| G4 | unbound, launch `refused`, process `live` or `stopping` | `attention` (`candidate_live`, hint `wait`, pane id). |
+| G4 | unbound, launch `refused`, process `unknown` | `attention` (`verifier_unknown`, hint `ask_human`, pane id). |
 | G5 | unbound, lastStop not `none` | Ignore lastStop; the launch row decides. |
 | G6 | prepared row text "Herdr unknown" | Read as launch `unknown`. The plan never reads the terminal. |
 | G7 | action vocabulary | Add `attention` with `reason` and `nextActionHint`. |
 | G8 | carrier absent / invalid | `create` / `refuse` as today. |
 | G9 | bound rows | Ignore launch state. |
-| G10 | prior refusal evidence | Equals launch `refused`. |
+| G10 | prior refusal evidence | Equals launch `refused` only with decisive no-start evidence for the current launch id. A timeout, a stale refusal or a missing Herdr row stays `unknown`. |
 
-Reload rules from the product review: a Worker `/reload` journals no carrier
-event unless `stopping` outlasts the hung-reload threshold, and the reloaded
-process re-admits its own generation with a birth token. A Team reload
-therefore leaves zero `unknown` Workers and zero replayed journal events.
+Reload rules from the product review, scoped by the systems review: a Worker
+`/reload` journals no carrier event unless `stopping` outlasts the hung-reload
+threshold, and the reloaded process re-admits its own generation with a birth
+token. Zero `unknown` Workers and zero replayed events hold for healthy
+reloads with a supported verifier, a successful re-admission and a preserved
+branch. Real death and pane loss during a reload still journal.
+
+## Migration of existing Teams
+
+Preferred: live reload, lead first, then each Worker. The new lead reads
+token-less Worker records as `unknown` and never spawns over them; each
+Worker's reload re-admits it with a token and keeps its Session context. The
+lead's first `team_sync` returns a snapshot with a watermark, so no journal
+replay occurs. Fallback: a stopped-epoch upgrade. It discards every Worker
+Session, so it serves only when a live reload fails.
 
 ## Data boundary
 
