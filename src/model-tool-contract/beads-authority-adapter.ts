@@ -1,6 +1,6 @@
+import { hostEnv } from "../env/host-env";
 // Project: pi-teams
 import path from "node:path";
-import crypto from "node:crypto";
 import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
 import type { TaskAuthorityRecord } from "../utils/beads";
 import {
@@ -52,7 +52,7 @@ export interface ResolvedTaskAuthority {
   fingerprint: BeadsAuthorityFingerprint;
 }
 
-export function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = process.env): string | undefined {
+export function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = hostEnv().process.env): string | undefined {
   const workspace = env[BEADS_WORKSPACE_ENV]?.trim();
   if (!workspace) return undefined;
   if (!path.isAbsolute(workspace)) throw new Error(`${BEADS_WORKSPACE_ENV} must be an absolute path: ${workspace}`);
@@ -64,7 +64,7 @@ export async function resolveTeamTaskAuthority(teamName: string): Promise<Resolv
   if (teamExists(teamName)) {
     const existing = await readConfig(teamName);
     if (existing.taskBackend !== "beads" || !existing.taskWorkspace) {
-      const target = process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
+      const target = hostEnv().process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
       throw new Error(`Team ${teamName} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${teamName} ${target}`);
     }
     if (!existing.taskAuthorityId || !existing.taskAuthorityFingerprint) {
@@ -90,7 +90,7 @@ export async function resolveTeamTaskAuthority(teamName: string): Promise<Resolv
   const store = new BeadsTaskStore({ teamName, workspace, authorityFingerprint: fingerprint, requireExpectedVersion: true });
   await store.assertWorkspaceRoot();
   await store.list();
-  return { workspace, authorityId: `task_authority_${crypto.randomUUID()}`, fingerprint };
+  return { workspace, authorityId: `task_authority_${hostEnv().random.uuid()}`, fingerprint };
 }
 
 function storeForConfig(config: TeamConfig): BeadsTaskStore {
@@ -300,7 +300,7 @@ function assigneeTransitionOperation(
   publicationPort: TaskMutationPublicationPort,
   taskCardProjector?: (record: TaskAuthorityRecordEnvelope) => TaskCard | { kind: "contract_gap"; message: string },
 ) {
-  const operationId = `task_owner_transition_${crypto.randomUUID()}`;
+  const operationId = `task_owner_transition_${hostEnv().random.uuid()}`;
   return {
     operationId,
     writeOption: {

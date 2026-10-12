@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -9,7 +10,7 @@ import {
   type ContractReviewProvenance,
 } from "../model-tool-contract/render-review-html";
 
-const root = process.cwd();
+const root = hostEnv().process.cwd();
 const designRelative = modelToolCatalog.sourceDocument;
 const catalogRelative = "src/model-tool-contract/catalog.ts";
 const outputRelative = "docs/generated/model-tool-contract-review.html";

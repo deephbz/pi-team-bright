@@ -1,5 +1,5 @@
+import { hostEnv } from "../env/host-env";
 import path from "node:path";
-import crypto from "node:crypto";
 import type { TaskAuthorityProvisioningPort, TaskAuthorityProvisioningSnapshot } from "../task-authority/contracts";
 import {
   BeadsTaskStore,
@@ -24,7 +24,7 @@ function immutableSnapshot(
   });
 }
 
-function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = process.env): string | undefined {
+function configuredBeadsWorkspace(env: NodeJS.ProcessEnv = hostEnv().process.env): string | undefined {
   const workspace = env[BEADS_WORKSPACE_ENV]?.trim();
   if (!workspace) return undefined;
   if (!path.isAbsolute(workspace)) throw new Error(`${BEADS_WORKSPACE_ENV} must be an absolute path: ${workspace}`);
@@ -37,7 +37,7 @@ export class DurableTaskAuthorityProvisioning implements TaskAuthorityProvisioni
     if (teamExists(teamName)) {
       const existing = await readConfig(teamName);
       if (existing.taskBackend !== "beads" || !existing.taskWorkspace) {
-        const target = process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
+        const target = hostEnv().process.env[BEADS_WORKSPACE_ENV]?.trim() || "<absolute-beads-workspace>";
         throw new Error(`Team ${teamName} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${teamName} ${target}`);
       }
       if (!existing.taskAuthorityId || !existing.taskAuthorityFingerprint) {
@@ -63,6 +63,6 @@ export class DurableTaskAuthorityProvisioning implements TaskAuthorityProvisioni
     const store = new BeadsTaskStore({ teamName, workspace, authorityFingerprint: fingerprint, requireExpectedVersion: true });
     await store.assertWorkspaceRoot();
     await store.list();
-    return immutableSnapshot(workspace, `task_authority_${crypto.randomUUID()}`, fingerprint);
+    return immutableSnapshot(workspace, `task_authority_${hostEnv().random.uuid()}`, fingerprint);
   }
 }

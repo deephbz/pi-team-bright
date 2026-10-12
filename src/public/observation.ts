@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import packageJson from "../../package.json";
 import { readMembershipObservation, type MembershipObservationDiagnosisCode, type MembershipObservationEvidence, type TeamObservationDiagnosisCode } from "../team-authority/membership-observation-reader";
 
@@ -69,7 +70,7 @@ export async function readObservationSnapshot(options: ReadObservationOptions = 
   const read = await readMembershipObservation(options);
   const teams = read.teams.map(team => ({ teamName: team.teamName, memberships: team.memberships.map(member => projectMember(team.teamName, member)), issues: team.diagnoses.map(code => teamIssue(code, team.teamName)) }));
   const issues: ObservationIssue[] = read.diagnoses.map(diagnosis => "teamName" in diagnosis ? teamIssue(diagnosis.code, diagnosis.teamName) : { code: diagnosis.code, scope: "snapshot" });
-  const snapshot: TeamObservationSnapshot = { schema: OBSERVATION_SCHEMA, generatedAt: new Date().toISOString(), producerVersion: options.producerVersion ?? OBSERVATION_PRODUCER_VERSION, availability: "available", teams, issues };
+  const snapshot: TeamObservationSnapshot = { schema: OBSERVATION_SCHEMA, generatedAt: new Date(hostEnv().clock.now()).toISOString(), producerVersion: options.producerVersion ?? OBSERVATION_PRODUCER_VERSION, availability: "available", teams, issues };
   if (snapshot.issues.length || snapshot.teams.some(team => team.issues.length || team.memberships.some(member => member.issues.length))) snapshot.availability = snapshot.teams.length ? "partial" : "unavailable";
   return snapshot;
 }

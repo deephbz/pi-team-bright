@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { hostEnv } from "../env/host-env";
 import { ProcessTerminal } from "@earendil-works/pi-tui";
 import { createMainScreenTui } from "./main-screen-tui";
 import {
@@ -34,15 +35,15 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
   if (requestedFormat && !["plain", "ansi", "json"].includes(requestedFormat)) {
     process.stderr.write("--format must be plain, ansi, or json.\n");
-    process.exit(2);
+    hostEnv().process.exit(2);
   }
   if (process.argv.includes("--scenario") && (!scenarioId || !scenarios.some((scenario) => scenario.id === scenarioId))) {
     process.stderr.write("Unknown --scenario. Use --help to list scenario IDs.\n");
-    process.exit(2);
+    hostEnv().process.exit(2);
   }
   if (requestedTheme && !["dark", "light"].includes(requestedTheme)) {
     process.stderr.write("--theme must be dark or light.\n");
-    process.exit(2);
+    hostEnv().process.exit(2);
   }
 
   if (requestedFormat || !process.stdin.isTTY || !process.stdout.isTTY) {
@@ -59,7 +60,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
       requestRender: () => tui.requestRender(true),
       quit: () => {
         tui.stop();
-        process.exit(0);
+        hostEnv().process.exit(0);
       },
     });
     tui.addChild(gallery);

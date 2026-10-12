@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -210,15 +211,15 @@ export function teamExists(teamName: string) {
 }
 
 export function newMembershipId(): string {
-  return `membership_${crypto.randomUUID()}`;
+  return `membership_${hostEnv().random.uuid()}`;
 }
 
 export function newLaunchId(): string {
-  return `launch_${crypto.randomUUID()}`;
+  return `launch_${hostEnv().random.uuid()}`;
 }
 
 export function newTeamEpochId(): string {
-  return `team_epoch_${crypto.randomUUID()}`;
+  return `team_epoch_${hostEnv().random.uuid()}`;
 }
 
 /** 600 lock attempts at 100 ms each: bounded to one minute. */
@@ -388,9 +389,9 @@ export async function createTeam(
     agentId: leadAgentId,
     name: "team-lead",
     agentType: "lead",
-    joinedAt: Date.now(),
+    joinedAt: hostEnv().clock.now(),
     ...(terminalBinding?.leadTarget ? { terminalTarget: structuredClone(terminalBinding.leadTarget) } : {}),
-    cwd: process.cwd(),
+    cwd: hostEnv().process.cwd(),
     subscriptions: [],
     isActive: true,
     ...(sessionId ? { sessionFile: sessionId } : {}),
@@ -399,7 +400,7 @@ export async function createTeam(
   const config: TeamConfig = {
     name,
     description,
-    createdAt: Date.now(),
+    createdAt: hostEnv().clock.now(),
     leadAgentId,
     leadSessionId: sessionId,
     epochId: newTeamEpochId(),
@@ -454,7 +455,7 @@ export function writeConfigAtomic(p: string, config: TeamConfig): void {
   if (existing && !existing.isFile()) throw new Error(`Cannot replace TeamConfig ${p}: the existing path is not a regular file.`);
 
   const existingMode = existing ? existing.mode & 0o7777 : 0o600;
-  const tempPath = path.join(dir, `.${path.basename(p)}.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString("hex")}.tmp`);
+  const tempPath = path.join(dir, `.${path.basename(p)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.${hostEnv().random.bytes(6).toString("hex")}.tmp`);
   let fd: number | undefined;
   try {
     // Start restrictive even when the eventual replacement must retain a
@@ -941,7 +942,7 @@ export async function bindMemberSession(
       }
       member.sessionFile = sessionFile;
       member.pendingLaunchId = undefined;
-      member.launchConsumedAt = new Date().toISOString();
+      member.launchConsumedAt = new Date(hostEnv().clock.now()).toISOString();
     }
     if (updates.terminalTarget) {
       assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
@@ -1015,7 +1016,7 @@ export async function deactivateMember(
     const member = config.members.find((candidate) => candidate.name === agentName && candidate.isActive !== false);
     if (!member) return null;
     member.isActive = false;
-    member.deactivatedAt = new Date().toISOString();
+    member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
     member.deactivationReason = reason;
     writeConfigAtomic(p, config);
     return structuredClone(member);
@@ -1034,7 +1035,7 @@ export async function deactivateMembership(
     const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
     if (!member) return null;
     member.isActive = false;
-    member.deactivatedAt = new Date().toISOString();
+    member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
     member.deactivationReason = reason;
     writeConfigAtomic(p, config);
     return structuredClone(member);
@@ -1050,7 +1051,7 @@ export async function deactivateCurrentMembers(
     const config = readConfigRaw(p);
     const current = config.members.filter((member) => member.isActive !== false);
     const staleBindings = config.members.filter((member) => member.isActive === false && !!(member.terminalTarget || member.tmuxPaneId || member.windowId));
-    const at = new Date().toISOString();
+    const at = new Date(hostEnv().clock.now()).toISOString();
     for (const member of current) {
       member.isActive = false;
       member.deactivatedAt = at;
@@ -1116,7 +1117,7 @@ export async function configureBeadsTaskBackend(
     }
     config.taskBackend = "beads";
     config.taskWorkspace = taskWorkspace;
-    config.taskAuthorityId ||= `task_authority_${crypto.randomUUID()}`;
+    config.taskAuthorityId ||= `task_authority_${hostEnv().random.uuid()}`;
     config.taskAuthorityFingerprint = taskAuthorityFingerprint;
     config.taskCutover = taskCutover;
     writeConfigAtomic(p, config);

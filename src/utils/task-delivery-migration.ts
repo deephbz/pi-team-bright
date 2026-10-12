@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { taskVersionRef } from "../task-authority/task-version-ref";
@@ -84,7 +85,7 @@ function cardAtVersion(card: TaskCard, version: `v_${string}`): TaskCard {
 }
 
 function writeTextAtomic(file: string, text: string): void {
-  const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  const temp = `${file}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`;
   fs.writeFileSync(temp, text, { mode: 0o600 });
   fs.renameSync(temp, file);
 }

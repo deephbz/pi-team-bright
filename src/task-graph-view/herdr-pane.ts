@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -52,7 +53,7 @@ function validateOrigin(origin: TaskGraphPaneOrigin, host: TaskGraphPaneHost): H
 }
 
 function atomicWrite(target: string, source: TaskGraphViewSource): void {
-  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
+  const temp = path.join(path.dirname(target), `.${path.basename(target)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
   fs.writeFileSync(temp, `${JSON.stringify(parseTaskGraphViewSource(source))}\n`, { flag: "wx", mode: 0o600 });
   fs.renameSync(temp, target);
 }
@@ -199,7 +200,7 @@ function paneFrom(value: unknown, expectedPaneId: string): HerdrPaneCoordinate {
 /** Thin installed-CLI port. Every target is explicit and every split is no-focus. */
 export class HerdrCliTaskGraphPaneHost implements TaskGraphPaneHost {
   constructor(
-    private readonly binary = process.env.HERDR_BIN_PATH || "herdr",
+    private readonly binary = hostEnv().process.env.HERDR_BIN_PATH || "herdr",
     private readonly execute = execCommand,
   ) {}
 
@@ -259,8 +260,8 @@ export class HerdrCliTaskGraphPaneHost implements TaskGraphPaneHost {
 }
 
 export function taskGraphPaneOriginFromEnvironment(cwd: string): TaskGraphPaneOrigin {
-  if (process.env.HERDR_ENV !== "1") throw new Error("Task graph side panes require HERDR_ENV=1.");
-  const paneId = process.env.HERDR_PANE_ID?.trim();
+  if (hostEnv().process.env.HERDR_ENV !== "1") throw new Error("Task graph side panes require HERDR_ENV=1.");
+  const paneId = hostEnv().process.env.HERDR_PANE_ID?.trim();
   if (!paneId) throw new Error("Task graph side panes require an exact HERDR_PANE_ID coordinate.");
   return { paneId, cwd: path.resolve(cwd) };
 }

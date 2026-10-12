@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -60,7 +61,7 @@ type ParsedSource = {
 
 const isRecord = (value: unknown): value is JsonRecord => value !== null && typeof value === "object" && !Array.isArray(value);
 const has = (record: JsonRecord, key: string) => Object.hasOwn(record, key);
-const activeAgentDir = () => process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
+const activeAgentDir = () => hostEnv().process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
 const roleNamePattern = /^[A-Za-z0-9_-]{1,64}$/;
 const modelReferencePattern = /^[^/\s]+\/[^\s]+$/;
 

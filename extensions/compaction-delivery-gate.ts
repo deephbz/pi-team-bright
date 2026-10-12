@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /**
@@ -35,13 +36,13 @@ export interface CompactionDeliveryGateClock {
 }
 
 const systemClock: CompactionDeliveryGateClock = {
-  defer: (callback) => { setTimeout(callback, 0); },
+  defer: (callback) => { hostEnv().clock.setTimeout(callback, 0); },
   setTimeout: (callback, ms) => {
-    const handle = setTimeout(callback, ms);
-    handle.unref?.();
+    const handle = hostEnv().clock.setTimeout(callback, ms);
+    if ("unref" in handle) handle.unref();
     return handle;
   },
-  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  clearTimeout: (handle) => hostEnv().clock.clearTimeout(handle as TimerHandle),
 };
 
 export class CompactionDeliveryGate {

@@ -5,6 +5,7 @@
  * the current environment.
  */
 
+import { hostEnv, type HostEnv } from "../env/host-env";
 import { TerminalAdapter } from "../utils/terminal-adapter";
 import { HerdrAdapter } from "./herdr-adapter";
 import { TmuxAdapter } from "./tmux-adapter";
@@ -26,22 +27,31 @@ import { WindowsAdapter } from "./windows-adapter";
  * 6. WezTerm - if WEZTERM_PANE env is set and not in tmux/zellij/cmux
  * 7. Windows - if platform is win32 and not in tmux/zellij/cmux/iTerm2/WezTerm
  */
-const adapters: TerminalAdapter[] = [
-  // Herdr can intentionally carry nested TMUX variables, so pane-local Herdr
-  // identity must win before tmux detection.
-  new HerdrAdapter(),
-  new TmuxAdapter(),
-  new ZellijAdapter(),
-  new CmuxAdapter(),
-  new Iterm2Adapter(),
-  new WezTermAdapter(),
-  new WindowsAdapter(),
-];
+const actorAdapters = new WeakMap<HostEnv, TerminalAdapter[]>();
+
+function adapters(): TerminalAdapter[] {
+  const env = hostEnv();
+  const existing = actorAdapters.get(env);
+  if (existing) return existing;
+  const created: TerminalAdapter[] = [
+    // Herdr can intentionally carry nested TMUX variables, so pane-local Herdr
+    // identity must win before tmux detection.
+    new HerdrAdapter(),
+    new TmuxAdapter(),
+    new ZellijAdapter(),
+    new CmuxAdapter(),
+    new Iterm2Adapter(),
+    new WezTermAdapter(),
+    new WindowsAdapter(),
+  ];
+  actorAdapters.set(env, created);
+  return created;
+}
 
 /**
- * Cached detected adapter
+ * Cached detected adapter per actor
  */
-let cachedAdapter: TerminalAdapter | null = null;
+const cachedAdapters = new WeakMap<HostEnv, TerminalAdapter>();
 
 /**
  * Detect and return the appropriate terminal adapter for the current environment.
@@ -53,13 +63,13 @@ let cachedAdapter: TerminalAdapter | null = null;
  * @returns The detected terminal adapter, or null if none detected
  */
 export function getTerminalAdapter(): TerminalAdapter | null {
-  if (cachedAdapter) {
-    return cachedAdapter;
-  }
+  const env = hostEnv();
+  const cachedAdapter = cachedAdapters.get(env);
+  if (cachedAdapter) return cachedAdapter;
 
-  for (const adapter of adapters) {
+  for (const adapter of adapters()) {
     if (adapter.detect()) {
-      cachedAdapter = adapter;
+      cachedAdapters.set(env, adapter);
       return adapter;
     }
   }
@@ -74,8 +84,9 @@ export function getTerminalAdapter(): TerminalAdapter | null {
  * @returns The adapter instance, or undefined if not found
  */
 export function getAdapterByName(name: string): TerminalAdapter | undefined {
+  const cachedAdapter = cachedAdapters.get(hostEnv());
   if (cachedAdapter?.name === name) return cachedAdapter;
-  return adapters.find(a => a.name === name);
+  return adapters().find(a => a.name === name);
 }
 
 /**
@@ -84,21 +95,21 @@ export function getAdapterByName(name: string): TerminalAdapter | undefined {
  * @returns Array of all registered adapters
  */
 export function getAllAdapters(): TerminalAdapter[] {
-  return [...adapters];
+  return [...adapters()];
 }
 
 /**
  * Clear the cached adapter (useful for testing or environment changes)
  */
 export function clearAdapterCache(): void {
-  cachedAdapter = null;
+  cachedAdapters.delete(hostEnv());
 }
 
 /**
  * Set a specific adapter (useful for testing or forced selection)
  */
 export function setAdapter(adapter: TerminalAdapter): void {
-  cachedAdapter = adapter;
+  cachedAdapters.set(hostEnv(), adapter);
 }
 
 /**

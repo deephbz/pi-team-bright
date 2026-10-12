@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import dagre from "@dagrejs/dagre";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
@@ -570,7 +571,7 @@ export function layoutTaskGraph(
         centerY,
         nodeWidth,
         visible.joinTaskIds.has(position.node.id),
-        options.now ?? Date.now(),
+        options.now ?? hostEnv().clock.now(),
         failureBySource.get(position.node.id),
       );
       nodeBoxes.push({

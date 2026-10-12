@@ -70,8 +70,8 @@ describe("Membership observation reader", () => {
     const production = fs.readdirSync(src, { recursive: true }).filter((entry): entry is string => typeof entry === "string" && entry.endsWith(".ts") && !entry.endsWith(".test.ts"));
     for (const relative of production.filter(relative => !relative.startsWith("public/"))) expect(fs.readFileSync(path.join(src, relative), "utf8")).not.toMatch(/from ["'][^"']*public\/observation["']/);
     const observationSource = fs.readFileSync(path.join(src, "public/observation.ts"), "utf8");
-    expect([...observationSource.matchAll(/^import .*? from "([^"]+)";/gm)].map(match => match[1])).toEqual(["../../package.json", "../team-authority/membership-observation-reader"]);
+    expect([...observationSource.matchAll(/^import .*? from "([^"]+)";/gm)].map(match => match[1])).toEqual(["../env/host-env", "../../package.json", "../team-authority/membership-observation-reader"]);
     const readerSource = fs.readFileSync(path.join(src, "team-authority/membership-observation-reader.ts"), "utf8");
-    expect([...readerSource.matchAll(/^import .*? from "([^"]+)";/gm)].map(match => match[1])).toEqual(["node:fs", "node:os", "node:path"]);
+    expect([...readerSource.matchAll(/^import .*? from "([^"]+)";/gm)].map(match => match[1])).toEqual(["../env/host-env", "node:fs", "node:os", "node:path"]);
   });
 });

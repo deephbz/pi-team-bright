@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -272,7 +273,7 @@ function collectMismatches(legacy: LegacyTaskAuthorityRecord, actual: TaskAuthor
 }
 
 function appendMarker(markerPath: string, event: Record<string, unknown>): void {
-  fs.appendFileSync(markerPath, `${JSON.stringify({ at: new Date().toISOString(), ...event })}\n`);
+  fs.appendFileSync(markerPath, `${JSON.stringify({ at: new Date(hostEnv().clock.now()).toISOString(), ...event })}\n`);
 }
 
 function reportFile(report: MigrationReport, reportPath?: string): void {
@@ -355,7 +356,7 @@ async function migrateTeamTasksUnlocked(options: MigrateTaskOptions): Promise<Mi
   const markerPath = options.markerPath || paths.markerPath;
   const operatorOverridePath = options.operatorOverridePath || paths.overridePath;
   fs.mkdirSync(sourceDir, { recursive: true });
-  const now = options.now || (() => new Date());
+  const now = options.now || (() => new Date(hostEnv().clock.now()));
   const config = await readConfig(teamName);
   const activeMarker = readLatestCutoverMarker(markerPath);
   const inventory = fs.existsSync(inventoryPath)
