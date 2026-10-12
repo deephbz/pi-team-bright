@@ -1,0 +1,22 @@
+--- a/src/team-authority/worker-launch-bridge.ts
++++ b/src/team-authority/worker-launch-bridge.ts
+@@ -68,7 +68,7 @@
+   }
+   async ensureWorker(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
+     return withSemanticTrace("worker_launch", { teamName: request.teamName, workerName: request.workerName }, async () => {
+-      const deadline = hostEnv().clock.now() + 10000;
++      const deadline = hostEnv().clock.now() + 310000;
+       const receipt = new AbortController();
+       const observed: { member?: Member; paneId?: string } = {};
+       const expired = (): WorkerLaunchResult => ({ action: "attention", member: observed.member, membershipId: observed.member?.membershipId,
+@@ -80,7 +80,9 @@
+         assertLockDeadline();
+         if (!("config" in claim)) return this.inspectAttention(request, claim);
+         observed.member = claim.member;
+-        return this.launch(request, claim, deadline, paneId => { observed.paneId = paneId; });
++        const result = await this.launch(request, claim, deadline, paneId => { observed.paneId = paneId; });
++        await this.observeLaunchedWorker(request.teamName, request.workerName, claim.member.membershipId!, "0", receipt.signal, 300000);
++        return result;
+       }, receipt.signal);
+       let timer: TimerHandle | undefined;
+       try {

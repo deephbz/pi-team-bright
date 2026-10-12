@@ -1,4 +1,5 @@
 node_modules
+.mutant-scratch-*/
 native/bin/
 .DS_Store
 .pi
