@@ -1,5 +1,5 @@
+import { hostEnv } from "../env/host-env";
 // Project: pi-teams
-import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
@@ -62,7 +62,7 @@ function ownerMatches(file: string, owner: LockOwner): boolean {
 function processIsAlive(pid: number | undefined): boolean {
   if (!pid) return false;
   try {
-    process.kill(pid, 0);
+    hostEnv().process.kill(pid, 0);
     return true;
   } catch (error: any) {
     return error?.code === "EPERM";
@@ -73,6 +73,8 @@ function createOwnerFile(file: string, owner: LockOwner): boolean {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, ownerText(owner), { flag: "wx", mode: 0o600 });
+    const now = new Date(hostEnv().clock.now());
+    fs.utimesSync(file, now, now);
     return true;
   } catch (error: any) {
     if (error?.code === "EEXIST") return false;
@@ -82,7 +84,7 @@ function createOwnerFile(file: string, owner: LockOwner): boolean {
 
 function lockAgeMs(file: string): number | null {
   try {
-    return Date.now() - fs.statSync(file).mtimeMs;
+    return hostEnv().clock.now() - fs.statSync(file).mtimeMs;
   } catch {
     return null;
   }
@@ -106,7 +108,7 @@ function abandonedRecoveryError(claimFile: string): Error {
  */
 function recoverStaleVisibleLock(lockFile: string, observedOwner: LockOwner, contender: LockOwner): boolean {
   const claimFile = `${lockFile}.recovery`;
-  const claimOwner: LockOwner = { pid: process.pid, token: crypto.randomUUID() };
+  const claimOwner: LockOwner = { pid: hostEnv().process.pid, token: hostEnv().random.uuid() };
 
   if (!createOwnerFile(claimFile, claimOwner)) {
     const claimAge = lockAgeMs(claimFile);
@@ -175,7 +177,7 @@ function tryAcquireVisibleLock(lockFile: string, owner: LockOwner): boolean {
 function heartbeat(lockFile: string, owner: LockOwner): void {
   if (!ownerMatches(lockFile, owner)) return;
   try {
-    const now = new Date();
+    const now = new Date(hostEnv().clock.now());
     fs.utimesSync(lockFile, now, now);
   } catch {
     // Owner-checked cleanup remains authoritative.
@@ -191,7 +193,7 @@ function releaseVisibleLock(lockFile: string, owner: LockOwner): void {
 }
 
 function retryDelayMs(): number {
-  return RETRY_MIN_DELAY_MS + Math.floor(Math.random() * (RETRY_MAX_DELAY_MS - RETRY_MIN_DELAY_MS + 1));
+  return RETRY_MIN_DELAY_MS + Math.floor(hostEnv().random.float() * (RETRY_MAX_DELAY_MS - RETRY_MIN_DELAY_MS + 1));
 }
 
 const unboundedLockWait = new AsyncLocalStorage<boolean>();
@@ -204,8 +206,8 @@ export function withUnboundedLockWait<T>(action: () => Promise<T>): Promise<T> {
 
 export async function withLock<T>(lockPath: string, fn: () => Promise<T>, retries: number = 50): Promise<T> {
   const lockFile = `${lockPath}.lock`;
-  const owner: LockOwner = { pid: process.pid, token: crypto.randomUUID() };
-  const waitStartedAt = Date.now();
+  const owner: LockOwner = { pid: hostEnv().process.pid, token: hostEnv().random.uuid() };
+  const waitStartedAt = hostEnv().clock.now();
   // Preserve the old public retry budget (retries * 100 ms) while polling with
   // short jitter. Twenty local contenders no longer advance one per 100 ms.
   let waitBudgetMs = unboundedLockWait.getStore() ? Infinity : Math.max(0, retries) * LEGACY_RETRY_INTERVAL_MS;
@@ -219,21 +221,21 @@ export async function withLock<T>(lockPath: string, fn: () => Promise<T>, retrie
       }
       if (waitBudgetMs <= 0) break;
       const delay = Math.min(retryDelayMs(), waitBudgetMs);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise<void>((resolve) => hostEnv().clock.setTimeout(resolve, delay));
       waitBudgetMs -= delay;
     }
   }
 
-  recordLockWait(Date.now() - waitStartedAt);
+  recordLockWait(hostEnv().clock.now() - waitStartedAt);
   if (!acquired) throw new Error("Could not acquire lock");
 
-  const heartbeatTimer = setInterval(() => heartbeat(lockFile, owner), HEARTBEAT_INTERVAL_MS);
-  heartbeatTimer.unref?.();
+  const heartbeatTimer = hostEnv().clock.setInterval(() => heartbeat(lockFile, owner), HEARTBEAT_INTERVAL_MS);
+  if ("unref" in heartbeatTimer) heartbeatTimer.unref();
 
   try {
     return await fn();
   } finally {
-    clearInterval(heartbeatTimer);
+    hostEnv().clock.clearInterval(heartbeatTimer);
     releaseVisibleLock(lockFile, owner);
   }
 }

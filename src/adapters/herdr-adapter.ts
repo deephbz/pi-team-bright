@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import {
   TerminalAdapter,
   SpawnOptions,
@@ -29,15 +30,14 @@ const AGENT_READY_TIMEOUT_MS = 300_000;
 interface PaneRect { x: number; y: number; width: number; height: number; }
 
 /** Herdr applies a right-split ratio to the existing (leader) pane. */
-const retryWait = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
 
 function currentHerdrPane(): string | null {
-  const paneId = process.env.HERDR_PANE_ID?.trim();
+  const paneId = hostEnv().process.env.HERDR_PANE_ID?.trim();
   return paneId || null;
 }
 
 function currentHerdrTab(): string | null {
-  const tabId = process.env.HERDR_TAB_ID?.trim();
+  const tabId = hostEnv().process.env.HERDR_TAB_ID?.trim();
   return tabId || null;
 }
 
@@ -135,11 +135,11 @@ export class HerdrAdapter implements TerminalAdapter {
    * surface discovery but does not make tmux a valid carrier for a Herdr Team.
    */
   isDirectCarrier(): boolean {
-    return !process.env.TMUX && !process.env.TMUX_PANE;
+    return !hostEnv().process.env.TMUX && !hostEnv().process.env.TMUX_PANE;
   }
 
   detect(): boolean {
-    if (process.env.HERDR_ENV !== "1" || !currentHerdrPane() || !currentHerdrTab()) return false;
+    if (hostEnv().process.env.HERDR_ENV !== "1" || !currentHerdrPane() || !currentHerdrTab()) return false;
     try {
       return execCommand("herdr", ["status", "server"]).status === 0;
     } catch {
@@ -399,16 +399,16 @@ export class HerdrAdapter implements TerminalAdapter {
         "--",
         ...piAgentArgs(argv),
       ];
-      const deadline = Date.now() + SHELL_READY_TIMEOUT_MS;
+      const deadline = hostEnv().clock.now() + SHELL_READY_TIMEOUT_MS;
       while (true) {
         try {
           assertReadyStart(this.invoke(startArgs), carrierName, paneId);
           break;
         } catch (error) {
-          if (!isAgentPaneBusy(error) || Date.now() >= deadline) throw error;
+          if (!isAgentPaneBusy(error) || hostEnv().clock.now() >= deadline) throw error;
           // Pane split can return before the new shell reaches its prompt.
           // Retry only Herdr's explicit transient busy state.
-          Atomics.wait(retryWait, 0, 0, SHELL_READY_RETRY_MS);
+          hostEnv().clock.sleepSync(SHELL_READY_RETRY_MS);
         }
       }
     } catch (error) {

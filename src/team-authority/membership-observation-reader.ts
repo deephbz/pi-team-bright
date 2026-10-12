@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -39,7 +40,7 @@ function parseObject(file: string): unknown { return JSON.parse(fs.readFileSync(
 function configIsUsable(value: unknown): value is { name: string; members: unknown[] } { return !!value && typeof value === "object" && validString((value as Record<string, unknown>).name) && Array.isArray((value as Record<string, unknown>).members); }
 function memberIsUsable(member: unknown): member is Record<string, unknown> { return !!member && typeof member === "object" && validString((member as Record<string, unknown>).membershipId) && safeName((member as Record<string, unknown>).name) && ((member as Record<string, unknown>).agentType === "lead" || (member as Record<string, unknown>).agentType === "teammate") && !!iso((member as Record<string, unknown>).joinedAt); }
 function generation(runtime: RuntimeEvidence | null): { membershipId: unknown; pid: number; startedAt: unknown } | undefined { const pid = runtime?.pid; const startedAt = runtime?.startedAt; return runtime && !!runtime.membershipId && typeof pid === "number" && Number.isSafeInteger(pid) && pid > 1 && typeof startedAt === "number" && Number.isFinite(startedAt) && startedAt > 0 ? { membershipId: runtime.membershipId, pid, startedAt } : undefined; }
-function expired(options: ReadMembershipObservationOptions, deadline: number): SnapshotObservationDiagnosisCode | undefined { return options.signal?.aborted ? "projection_aborted" : Date.now() >= deadline ? "projection_deadline_exceeded" : undefined; }
+function expired(options: ReadMembershipObservationOptions, deadline: number): SnapshotObservationDiagnosisCode | undefined { return options.signal?.aborted ? "projection_aborted" : hostEnv().clock.now() >= deadline ? "projection_deadline_exceeded" : undefined; }
 
 function projectMember(teamName: string, candidate: Candidate, duplicateIds: Set<string>, ambiguousBindings: Set<string>): MembershipObservationEvidence {
   const { member, runtime, runtimeState } = candidate; const diagnoses: MembershipObservationDiagnosisCode[] = [];
@@ -95,7 +96,7 @@ async function readTeam(directory: string, directoryName: string, options: ReadM
 
 /** Read lock-free recorded Membership evidence. This module never writes Team or runtime records. */
 export async function readMembershipObservation(options: ReadMembershipObservationOptions = {}): Promise<MembershipObservationRead> {
-  const teamsRoot = options.teamsRoot ?? path.join(os.homedir(), ".pi", "teams"); const deadline = Date.now() + Math.max(0, options.deadlineMs ?? 1_000); const result: MembershipObservationRead = { teams: [], diagnoses: [] };
+  const teamsRoot = options.teamsRoot ?? path.join(os.homedir(), ".pi", "teams"); const deadline = hostEnv().clock.now() + Math.max(0, options.deadlineMs ?? 1_000); const result: MembershipObservationRead = { teams: [], diagnoses: [] };
   const initialStop = expired(options, deadline); if (initialStop) { result.diagnoses.push({ code: initialStop }); return result; }
   let entries: string[]; try { entries = fs.readdirSync(teamsRoot); } catch { result.diagnoses.push({ code: "teams_root_unavailable" }); return result; }
   for (const name of entries.sort()) {

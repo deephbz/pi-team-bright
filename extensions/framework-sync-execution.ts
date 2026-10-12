@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { hostEnv } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { projectModelToolTuiMessage } from "../src/model-tool-contract/tui-projection";
 import { decodeHistoricalTeamSyncResult, projectToolResult } from "../src/model-tool-contract/result-projection";
@@ -67,13 +67,13 @@ export function makeFrameworkSyncRecord(input: Omit<FrameworkSyncExecutionRecord
   const record: FrameworkSyncExecutionRecord = {
     version: 1,
     provenance: "pi-team-bright/framework",
-    id: randomUUID(),
+    id: hostEnv().random.uuid(),
     ...input,
     branchLineage: [...input.branchLineage],
     toolName: "team_sync",
     arguments: { ...input.arguments },
     resultText: JSON.stringify(projectToolResult("team_sync", input.result)),
-    recordedAt: Date.now(),
+    recordedAt: hostEnv().clock.now(),
   };
   if (!validateFrameworkSyncRecord(record)) throw new Error("Framework team_sync result failed its public contract.");
   return record;
@@ -264,7 +264,7 @@ export class FrameworkSyncExecutionController {
     if (!start) return "skipped";
     const generation = this.generation;
     this.running = true;
-    const toolCallId = `framework-team-sync-${randomUUID()}`;
+    const toolCallId = `framework-team-sync-${hostEnv().random.uuid()}`;
     const signal = new AbortController();
     this.currentAbort = signal;
     const sameSession = () => {

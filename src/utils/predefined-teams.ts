@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -425,11 +426,11 @@ export function saveTeamTemplate(
 ): SaveTeamTemplateResult {
   // Determine output paths based on scope
   const agentsDir = options.scope === "project"
-    ? path.join(options.projectDir || process.cwd(), ".pi", "agents")
+    ? path.join(options.projectDir || hostEnv().process.cwd(), ".pi", "agents")
     : path.join(os.homedir(), ".pi", "agent", "agents");
 
   const teamsYamlPath = options.scope === "project"
-    ? path.join(options.projectDir || process.cwd(), ".pi", "teams.yaml")
+    ? path.join(options.projectDir || hostEnv().process.cwd(), ".pi", "teams.yaml")
     : path.join(os.homedir(), ".pi", "teams.yaml");
 
   const dryRun = options.dryRun ?? false;

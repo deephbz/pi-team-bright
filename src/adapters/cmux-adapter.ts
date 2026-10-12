@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 /**
  * CMUX Terminal Adapter
  * 
@@ -26,10 +27,10 @@ export class CmuxAdapter implements TerminalAdapter {
   detect(): boolean {
     // Defensive: Don't detect cmux if we're inside tmux or Zellij
     // This prevents false positives in nested terminal scenarios
-    if (process.env.TMUX || process.env.ZELLIJ) {
+    if (hostEnv().process.env.TMUX || hostEnv().process.env.ZELLIJ) {
       return false;
     }
-    return !!process.env.CMUX_SOCKET_PATH || !!process.env.CMUX_WORKSPACE_ID;
+    return !!hostEnv().process.env.CMUX_SOCKET_PATH || !!hostEnv().process.env.CMUX_WORKSPACE_ID;
   }
 
   /**

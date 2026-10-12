@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { syncNudgeRecordPath } from "./paths";
@@ -50,7 +51,7 @@ export function reserveSyncNudge(record: SyncNudgeRecord): void {
 }
 
 /** Promote only after the exact custom message exists in the durable Session branch. */
-export function presentSyncNudge(record: SyncNudgeRecord, presentedAt = new Date().toISOString()): SyncNudgeRecord {
+export function presentSyncNudge(record: SyncNudgeRecord, presentedAt = new Date(hostEnv().clock.now()).toISOString()): SyncNudgeRecord {
   const presented = createSyncNudgeRecord({ ...record, kind: "presented", presentedAt });
   appendSyncNudgeRecord(presented);
   return presented;

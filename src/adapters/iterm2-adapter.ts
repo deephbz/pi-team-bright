@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 /**
  * iTerm2 Terminal Adapter
  *
@@ -30,7 +31,7 @@ export class Iterm2Adapter implements TerminalAdapter {
   private cachedOwnSessionId: string | null | undefined = undefined;
 
   detect(): boolean {
-    return process.env.TERM_PROGRAM === "iTerm.app" && !process.env.TMUX && !process.env.ZELLIJ;
+    return hostEnv().process.env.TERM_PROGRAM === "iTerm.app" && !hostEnv().process.env.TMUX && !hostEnv().process.env.ZELLIJ;
   }
 
   /**
@@ -177,7 +178,7 @@ end tell`;
 
     // If we're a teammate but haven't found our session ID yet (race condition
     // during startup), skip the rename to avoid overwriting an unrelated tab.
-    if (process.env.PI_AGENT_NAME) {
+    if (hostEnv().process.env.PI_AGENT_NAME) {
       return;
     }
 
@@ -202,8 +203,8 @@ end tell`;
     // Return cached value if we've already found it
     if (this.cachedOwnSessionId != null) return this.cachedOwnSessionId;
 
-    const agentName = process.env.PI_AGENT_NAME;
-    const teamName = process.env.PI_TEAM_NAME;
+    const agentName = hostEnv().process.env.PI_AGENT_NAME;
+    const teamName = hostEnv().process.env.PI_TEAM_NAME;
     if (!agentName || !teamName) return null;
 
     try {

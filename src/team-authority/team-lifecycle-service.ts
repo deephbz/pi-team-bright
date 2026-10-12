@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import * as paths from "../utils/paths";
 import * as runtime from "../utils/runtime";
 import * as teams from "../utils/teams";
@@ -26,9 +27,9 @@ function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStat
 }
 
 function exactBoundProcessAlreadyExited(generation: runtime.RuntimeGeneration | null): boolean {
-  if (!generation || generation.pid === process.pid) return false;
+  if (!generation || generation.pid === hostEnv().process.pid) return false;
   try {
-    process.kill(generation.pid, 0);
+    hostEnv().process.kill(generation.pid, 0);
     return false;
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === "ESRCH";

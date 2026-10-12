@@ -1,7 +1,7 @@
+import { hostEnv } from "../env/host-env";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { randomUUID } from "node:crypto";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
 import { ProjectTrustStore, type ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { THINKING_LEVELS, type ThinkingLevel } from "../team-authority/contracts";
@@ -48,7 +48,7 @@ function worker(root?: JsonRecord): JsonRecord | undefined {
 }
 
 function activeAgentDir(): string {
-  return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
+  return hostEnv().process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent");
 }
 
 export type QualifiedAvailableModelKeys = AvailableModelRoles;
@@ -237,8 +237,8 @@ export function materializeWorkerAggregate(input: {
   const root = aggregateDirectory();
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   fs.chmodSync(root, 0o700);
-  const target = input.target ?? path.join(root, `${randomUUID()}.md`);
-  const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${randomUUID()}.tmp`);
+  const target = input.target ?? path.join(root, `${hostEnv().random.uuid()}.md`);
+  const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${hostEnv().random.uuid()}.tmp`);
   try {
     fs.writeFileSync(temporary, `${sections.join("\n\n")}\n`, { mode: 0o600 });
     fs.renameSync(temporary, target);

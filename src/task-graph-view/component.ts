@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import {
   Key,
   matchesKey,
@@ -112,7 +113,7 @@ export class TaskGraphPaneComponent implements Component {
     this.direction = options.initialDirection ?? "TB";
     this.terminalRows = options.terminalRows;
     this.request = options.requestRender;
-    this.now = options.now ?? Date.now;
+    this.now = options.now ?? (() => hostEnv().clock.now());
     this.color = options.color !== false;
   }
 
