@@ -1,18 +1,16 @@
-import type { SimProcess } from "../process-table";
+export type { HistoryEntry } from "../history";
 
-/** One entry as `SimWorld.record` writes it. `value` is untyped in the simulator. */
-export interface HistoryEntry {
-  at: number;
-  actor: string;
-  kind: string;
-  value?: unknown;
-}
+/**
+ * Verdict for a `always` or `eventually` property. `not_applicable` names the
+ * missing input. It is never a pass.
+ */
+export type Verdict =
+  | { status: "pass" }
+  | { status: "violation"; sequence: number; detail: string }
+  | { status: "not_applicable"; missing: string };
 
-/** World truth available from a replay: the process table history and the history log. */
-export interface WorldTruth {
-  history: readonly HistoryEntry[];
-  processes: readonly SimProcess[];
-}
-
-/** A coverage witness for a `sometimes` property (S1–S6). Absence fails the campaign. */
-export type Witness<T> = { present: true; evidence: T } | { present: false };
+/** Verdict for a `sometimes` witness (S1–S6). `absent` fails the campaign. */
+export type WitnessVerdict =
+  | { status: "witnessed"; sequence: number; detail: string }
+  | { status: "absent" }
+  | { status: "not_applicable"; missing: string };
