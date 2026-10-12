@@ -2,7 +2,8 @@ import fs from "node:fs";
 import { herdrPiSessionPath } from "./adapters/herdr-session";
 import { herdrCarrierName } from "./adapters/herdr-adapter";
 import { hostEnv, type TimerHandle, type GenerationProbe } from "./env/host-env";
-import type { Member, TeamConfig } from "./team-authority/contracts";
+import { memberTerminalTarget } from "./utils/terminal-target";
+import type { Member, TeamConfig, TerminalTarget } from "./team-authority/contracts";
 import { readRuntimeStatus, runtimeGeneration, verifyRuntimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "./utils/runtime";
 import { configPath } from "./utils/paths";
 import { withCurrentMembershipLease } from "./utils/teams";
@@ -25,18 +26,20 @@ export interface CarrierView {
   activity: "working" | "idle" | "blocked" | "unknown";
   lastStop?: AgentRuntimeStatus["lastStop"];
   paneId?: string;
+  terminalTarget?: TerminalTarget;
   evidence: Array<{ source: string; fact: string; observedAt: number; lastGoodAt?: number; expiresAt?: number }>;
 }
 export interface CarrierEvent {
   membership: string;
   launchId?: string;
   generation?: RuntimeGeneration;
-  field: "binding" | "launch" | "process" | "terminal" | "blocked";
+  field: "binding" | "launch" | "process" | "terminal" | "activity" | "blocked";
   from: string;
   to: string;
   cause: { source: string; fact: string };
   observedAt: number;
   paneId?: string;
+  terminalTarget?: TerminalTarget;
   suspectedHumanStop: boolean;
   nextActionHint: NextActionHint;
 }
@@ -51,7 +54,7 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
     generation: runtimeGeneration(exact) ?? undefined, binding: member.sessionFile ? "bound" : "unbound", sessionFile: member.sessionFile,
     launch: member.launch?.state ?? (member.pendingLaunchId ? "unknown" : "none"), process,
     terminal: "unknown", activity: "unknown", lastStop: exact?.lastStop,
-    paneId: member.terminalTarget?.targetId ?? member.tmuxPaneId,
+    paneId: member.terminalTarget?.targetId ?? member.tmuxPaneId, terminalTarget: member.terminalTarget,
     evidence: [{ source: "process_generation", fact: processFact, observedAt: now },
       { source: "launch", fact: member.launch?.fact ?? (member.launch?.state ?? "none"), observedAt: member.launch?.observedAt ?? member.launch?.requestedAt ?? now },
       ...(exact?.lastStop ? [{ source: "session_shutdown", fact: exact.lastStop.piReason, observedAt: exact.lastStop.observedAt }] : [])] };
@@ -81,6 +84,13 @@ export function launchIsStalled(member: Member, agents: readonly Record<string, 
     && paneId && agents && !agents.some(row => row.pane_id === paneId));
 }
 type SourceSample<T> = { value?: T; observedAt: number; fact?: string };
+
+/** Coordinates isolate independent carrier histories. Legacy pane-only events stay unscoped. */
+function publicationKey(view: Pick<CarrierView, "membership" | "generation" | "launchId" | "terminalTarget">, field: CarrierEvent["field"]): string {
+  const g = view.generation, t = view.terminalTarget;
+  return JSON.stringify([view.membership, g && [g.membershipId, g.pid, g.startedAt, g.osBirthToken, g.bootId], view.launchId,
+    field, t && [t.backend, t.kind, t.targetId]]);
+}
 
 export class CarrierObserver {
   private readonly projection = new Map<string, CarrierView>();
@@ -119,8 +129,6 @@ export class CarrierObserver {
   private journalCursor = "0";
   private taskCursors = new Map<string, string>();
   private lastEvents = new Map<string, WorkerTeamEvent>();
-  // Silent initial states seed this baseline. Subsequent changes advance only on accepted append.
-  private published = new Map<string, string>();
   private journal = false;
   private blocked = new Map<string, { since: number; emitted: boolean; attempt: string }>();
   constructor(private readonly teamName: string, private readonly notify: (text: string) => void = () => {}) {}
@@ -139,7 +147,8 @@ export class CarrierObserver {
     // The atomic Team file is a read-only snapshot. Observation never waits on a producer lease.
     const config = JSON.parse(fs.readFileSync(configPath(this.teamName), "utf8")) as TeamConfig;
     if (!Array.isArray(config.members) || !config.members.every(m => m && typeof m.name === "string")) return;
-    const members = config.members.filter(m => m.agentType === "teammate" && m.isActive !== false);
+    const members = config.members.filter(m => m.agentType === "teammate" && m.isActive !== false)
+      .map(m => ({ ...m, terminalTarget: memberTerminalTarget(m, config.terminalBackend) }));
     const statuses = new Map(await Promise.all(members.map(async member => [member.name, await readRuntimeStatus(this.teamName, member.name)] as const)));
     const pids = [...statuses.values()].flatMap(status => status?.pid ? [status.pid] : []);
     const priorViews = new Map([...this.views].map(([key, value]) => [key, structuredClone(value)]));
@@ -174,17 +183,7 @@ export class CarrierObserver {
       await appendTeamEvent(this.teamName, { type: "alert", alertId: `herdr-observation:${hostEnv().random.uuid()}`, from: "team-lead", to: "team-lead", kind: "attention", text }).catch(() => undefined);
     }
     this.outage = unavailable;
-    for (;;) {
-      let page;
-      try { page = readTeamEvents(this.teamName, { afterCursor: this.journalCursor, limit: 100 }); }
-      catch { break; } // Journal failure cannot suppress independent source truth.
-      for (const event of page.events) {
-        if (event.type === "task") this.taskCursors.set(event.actor, event.cursor);
-        if (event.type === "worker" && event.carrier) this.lastEvents.set(`${event.membershipId}:${event.carrier.field}`, event);
-      }
-      this.journalCursor = page.cursor;
-      if (!page.truncated) break;
-    }
+    try { this.readPublications(); } catch { /* Source projection does not depend on journal availability. */ }
     for (const member of members) {
       if (this.stopped) return;
       const status = statuses.get(member.name) ?? null;
@@ -192,7 +191,6 @@ export class CarrierObserver {
       const view = deriveCarrierView(member, status, generationSample.observedAt, probe);
       if (probe && probe.kind !== "unknown") this.lastGood.set(`generation:${view.membership}`, generationSample.observedAt);
       view.evidence[0].lastGoodAt = this.lastGood.get(`generation:${view.membership}`);
-      const prior = priorViews.get(view.membership);
       if (panes && view.paneId) view.terminal = panes.some(row => row.pane_id === view.paneId) ? "present" : "absent";
       const agent = agents?.find(row => row.name === herdrCarrierName(this.teamName, member.name) && row.pane_id === view.paneId && herdrPiSessionPath(row.agent_session) === member.sessionFile);
       if (agent && ["working", "idle", "blocked"].includes(String(agent.agent_status))) view.activity = agent.agent_status as CarrierView["activity"];
@@ -200,65 +198,89 @@ export class CarrierObserver {
       for (const item of view.evidence) if (item.source === "process_generation" || item.source.startsWith("herdr_")) item.expiresAt = item.observedAt + CARRIER_SAMPLE_TTL_MS;
       this.projection.set(view.membership, view);
       this.expire();
-      const samePriorGeneration = !prior || JSON.stringify(prior.generation) === JSON.stringify(view.generation);
-      const reloading = samePriorGeneration && (view.process === "live" || view.process === "stopping")
-        && (view.lastStop?.piReason === "reload" || (prior?.lastStop?.piReason === "reload" && view.process === "live"));
-      for (const field of ["binding", "launch", "process", "terminal"] as const) {
-        const historical = this.lastEvents.get(`${view.membership}:${field}`)?.carrier;
-        const sameGeneration = JSON.stringify(historical?.generation) === JSON.stringify(view.generation);
-        const key = JSON.stringify([view.membership, view.generation, view.launchId, field]);
-        const before = historical && historical.launchId === view.launchId && sameGeneration ? historical.to : this.published.get(key);
-        if (view[field] === before || (field === "terminal" && view.terminal !== "absent")) continue;
-        if (reloading && field === "process") continue;
-        if (before === undefined && (!prior || !samePriorGeneration) && ["none", "unknown", "bound", "live"].includes(view[field])) {
-          this.published.set(key, view[field]);
-          continue;
-        }
-        if (await this.publish(view, field, before ?? "unknown", view[field], status)) this.published.set(key, view[field]);
+      let accepted = true;
+      for (const field of ["binding", "launch", "process", "terminal", "activity"] as const) {
+        if ((this.lastEvents.get(publicationKey(view, field))?.carrier?.to ?? "unknown") === view[field]) continue;
+        if (!await this.publish(view, field, view[field], status)) { accepted = false; break; }
       }
-      if (samePriorGeneration && view.process === "stopping" && view.lastStop?.piReason === "reload" && now - view.lastStop.observedAt >= 15000) {
-        // The transition is suppressed during a normal reload. Emit only once after the hang bound.
-        const recorded = this.lastEvents.get(`${view.membership}:process`)?.carrier;
-        if (!(recorded?.cause.fact === "reload_hung" && recorded.observedAt >= view.lastStop.observedAt + 15000)) await this.publish(view, "process", "live", "stopping", status, "reload_hung");
+      if (!accepted) continue;
+      if (view.process === "stopping" && view.lastStop?.piReason === "reload" && now - view.lastStop.observedAt >= 15000) {
+        await this.publish(view, "process", "stopping", status, "reload_hung");
         view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
       }
       if (view.binding === "unbound" && launchIsStalled(member, agents, now)) {
-        const recorded = this.lastEvents.get(`${view.membership}:launch`)?.carrier;
-        if (recorded?.cause.fact !== "launch_stalled" || recorded.launchId !== view.launchId) await this.publish(view, "launch", view.launch, view.launch, status, "launch_stalled");
+        await this.publish(view, "launch", view.launch, status, "launch_stalled");
       }
       const attempt = this.taskCursors.get(member.name) ?? "0";
-      const block = this.blocked.get(view.membership);
-      if (!block || block.attempt !== attempt) this.blocked.set(view.membership, { since: now, emitted: Number(this.lastEvents.get(`${view.membership}:blocked`)?.cursor ?? 0) > Number(attempt), attempt });
-      const currentBlock = this.blocked.get(view.membership)!;
+      const blockKey = publicationKey(view, "blocked");
+      const block = this.blocked.get(blockKey);
+      if (!block || block.attempt !== attempt) this.blocked.set(blockKey, { since: now, emitted: false, attempt });
+      const currentBlock = this.blocked.get(blockKey)!;
       if (view.activity !== "blocked") currentBlock.since = now;
       else if (!currentBlock.emitted && now - currentBlock.since >= 3000) {
-        currentBlock.emitted = await this.publish(view, "blocked", "unknown", "blocked", status);
+        currentBlock.emitted = await this.publish(view, "blocked", "blocked", status);
       }
       this.projection.set(view.membership, view);
     }
   }
-  private async publish(view: CarrierView, field: CarrierEvent["field"], from: string, to: string, status: AgentRuntimeStatus | null, attentionFact?: string): Promise<boolean> {
+  private readPublications(): void {
+    for (;;) {
+      const page = readTeamEvents(this.teamName, { afterCursor: this.journalCursor, limit: 100 });
+      for (const event of page.events) {
+        if (event.type === "task") this.taskCursors.set(event.actor, event.cursor);
+        if (event.type === "worker" && event.carrier) this.lastEvents.set(publicationKey(event.carrier, event.carrier.field), event);
+      }
+      this.journalCursor = page.cursor;
+      if (!page.truncated) return;
+    }
+  }
+  private async publish(view: CarrierView, field: CarrierEvent["field"], to: string, status: AgentRuntimeStatus | null, attentionFact?: string): Promise<boolean> {
     if (!this.journal || this.stopped) return false;
-    const suspectedHumanStop = !status?.stopRequested && (!!view.lastStop?.suspectedHumanStop || view.terminal === "absent");
-    const source = field === "terminal" ? "herdr_panes" : field === "blocked" ? "herdr_agents" : field === "process" ? "process_generation" : field === "launch" ? "launch" : "membership";
-    const evidence = view.evidence.find(item => item.source === source);
-    const cause = field === "process" && view.lastStop && to === "stopping"
-      ? { source: "session_shutdown", fact: view.lastStop.piReason }
-      : { source, fact: evidence?.fact ?? to };
-    if (attentionFact) cause.fact = attentionFact;
-    const carrier: CarrierEvent = { membership: view.membership, launchId: view.launchId, generation: view.generation, field, from, to, cause,
-      observedAt: attentionFact ? hostEnv().clock.now() : cause.source === "session_shutdown" ? view.lastStop!.observedAt : evidence?.observedAt ?? hostEnv().clock.now(), paneId: view.paneId, suspectedHumanStop,
-      nextActionHint: attentionFact || suspectedHumanStop || field === "blocked" || to === "stopping" ? "ask_human" : to === "gone" || to === "refused" ? "ensure_worker" : "wait" };
-    // External reads can finish after a successor admits. Fence publication, not source latency.
+    // Reconcile journal and source coordinates under the same Membership lease as append.
+    // No observation checkpoint or unaccepted value can become a publication baseline.
     return withCurrentMembershipLease(this.teamName, view.membership, async member => {
       const current = await readRuntimeStatus(this.teamName, view.worker);
-      if (this.stopped || member.sessionFile !== view.sessionFile || (member.launch?.launchId ?? member.pendingLaunchId) !== view.launchId
-        || JSON.stringify(runtimeGeneration(current) ?? undefined) !== JSON.stringify(view.generation)
+      const coordinates = { membership: member.membershipId ?? "", launchId: member.launch?.launchId ?? member.pendingLaunchId,
+        generation: runtimeGeneration(current) ?? undefined, terminalTarget: memberTerminalTarget(member, view.terminalTarget?.backend) };
+      const key = publicationKey(view, field);
+      if (this.stopped || member.sessionFile !== view.sessionFile || publicationKey(coordinates, field) !== key
         || JSON.stringify(current?.lastStop) !== JSON.stringify(status?.lastStop)
         || current?.stopRequested !== status?.stopRequested) return false;
-      const event = await appendTeamEvent(this.teamName, { type: "worker", worker: view.worker, membershipId: view.membership, phase: "carrier", carrier }) as WorkerTeamEvent;
-      this.lastEvents.set(`${view.membership}:${field}`, event);
-      try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`); } catch { /* Accepted publication does not depend on UI delivery. */ }
+      this.readPublications(); // Fail closed if the accepted baseline cannot be read.
+      const recorded = this.lastEvents.get(key);
+      const before = recorded?.carrier;
+      const from = before?.to ?? "unknown";
+      if (attentionFact === "reload_hung") {
+        if (before?.cause.fact === attentionFact && before.observedAt >= view.lastStop!.observedAt + 15000) return true;
+      } else if (attentionFact === "launch_stalled") {
+        if (before?.cause.fact === attentionFact) return true;
+      } else if (field === "blocked") {
+        if (Number(recorded?.cursor ?? 0) > Number(this.taskCursors.get(view.worker) ?? "0")) return true;
+      } else {
+        if (from === to) return true;
+        // The only suppressed pair is normal reload in these exact generation coordinates.
+        // Re-admission clears lastStop; the accepted live baseline then needs no change.
+        if (field === "process" && ["live", "stopping"].includes(from) && ["live", "stopping"].includes(to)
+          && view.lastStop?.piReason === "reload") return true;
+      }
+      const quiet = field === "activity" || (field === "terminal" && to !== "absent");
+      const suspectedHumanStop = !quiet && !status?.stopRequested && (!!view.lastStop?.suspectedHumanStop || view.terminal === "absent");
+      const source = field === "terminal" ? "herdr_panes" : field === "blocked" || field === "activity" ? "herdr_agents" : field === "process" ? "process_generation" : field === "launch" ? "launch" : "membership";
+      const evidence = view.evidence.find(item => item.source === source);
+      const cause = field === "process" && view.lastStop && to === "stopping"
+        ? { source: "session_shutdown", fact: view.lastStop.piReason }
+        : { source, fact: evidence?.fact ?? to };
+      if (attentionFact) cause.fact = attentionFact;
+      const carrier: CarrierEvent = { membership: view.membership, launchId: view.launchId, generation: view.generation, field, from, to, cause,
+        observedAt: attentionFact ? hostEnv().clock.now() : cause.source === "session_shutdown" ? view.lastStop!.observedAt : evidence?.observedAt ?? hostEnv().clock.now(),
+        paneId: view.paneId, terminalTarget: view.terminalTarget, suspectedHumanStop,
+        nextActionHint: quiet ? "wait" : attentionFact || suspectedHumanStop || field === "blocked" || to === "stopping" ? "ask_human" : to === "gone" || to === "refused" ? "ensure_worker" : "wait" };
+      await appendTeamEvent(this.teamName, { type: "worker", worker: view.worker, membershipId: view.membership, phase: "carrier", carrier });
+      // Consume the receipt through the ordered journal on the next publication. This prevents
+      // an older unread event from replacing the accepted value just appended here.
+      if (carrier.nextActionHint !== "wait") {
+        try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`); } catch { /* UI delivery cannot undo append. */ }
+      }
       return true;
     }).catch(() => false);
   }

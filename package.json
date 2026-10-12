@@ -120,6 +120,7 @@
     "@earendil-works/pi-coding-agent": "0.83.0",
     "@earendil-works/pi-tui": "0.83.0",
     "@types/node": "^25.3.0",
+    "fast-check": "^4.3.0",
     "vitest": "^4.1.10"
   }
 }

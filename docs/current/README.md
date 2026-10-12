@@ -218,14 +218,24 @@ restating executable definitions.
   A live shell never proves a live Worker. Unknown evidence fails closed.
   Launch claims a durable ID before external effects and returns a receipt
   without waiting for readiness. Elapsed time and start errors keep the pane.
-  Same-generation reload re-admission stays silent while the process is live
-  or stopping. Verified death always journals. Local shutdown intent survives
-  verifier failure; an exact stop-ID check fences older admission work.
+  The same-generation `live`/`stopping` reload pair stays silent while durable
+  `lastStop` says `reload`. Verified death always journals. Local shutdown intent
+  survives verifier failure; an exact stop-ID check fences older admission work.
   Session switches require attention; stopping that Membership keeps its pane.
   Each observation source owns its sample time. Samples expire to unknown after
   six seconds, including collection failure. A stalled read remains single-flight.
-  Publication uses a separate accepted baseline. Failed appends retry under the
-  exact generation fence without delaying the source projection.
+  The visible event journal is the sole publication baseline, including after
+  observer restart. Coordinates are Membership, generation, launch ID, field,
+  and terminal target (backend, kind, ID). Each coordinate starts at `unknown`.
+  Binding, launch, process, terminal, and activity changes journal in sample order.
+  Terminal present/unknown and activity changes use `wait` without a human toast.
+  Debounced blocked attention remains separate. Legacy pane-only events do not
+  establish a baseline for a typed terminal target.
+  Publication rereads the journal under the Membership lease and fences the exact
+  generation and terminal target. Failed appends leave the accepted baseline
+  unchanged; healthy polling retries the current source difference. A transient
+  observation lost before append is not durable. There are no hidden observation
+  checkpoints. Journal failure does not delay the source projection.
   One ten-second receipt deadline covers claim, nested leases, Herdr preparation,
   and target CAS. Expiry returns attention and prevents late startup. Prepared
   targets reconcile asynchronously under the exact Membership and launch ID.
