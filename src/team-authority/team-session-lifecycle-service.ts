@@ -47,7 +47,10 @@ export class TeamSessionLifecycleService {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
       }
-      if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: current };
+      if (runtimeAdmission.action === "already_current") {
+        await runtime.writeRuntimeStatus(input.teamName, input.workerName, { ...runtime.ownBirthIdentity(), lastStop: undefined }, current.membershipId);
+        return { kind: "admitted", action: "already_current", member: current };
+      }
       const startedAt = hostEnv().clock.now();
       await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
       recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });
@@ -69,7 +72,10 @@ export class TeamSessionLifecycleService {
       const status = await runtime.readRuntimeStatus(input.teamName, "team-lead");
       const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status);
       if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
-      if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: lead };
+      if (runtimeAdmission.action === "already_current") {
+        await runtime.writeRuntimeStatus(input.teamName, "team-lead", { ...runtime.ownBirthIdentity(), lastStop: undefined }, lead.membershipId);
+        return { kind: "admitted", action: "already_current", member: lead };
+      }
       const membershipId = lead.membershipId;
       if (!membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
       const startedAt = hostEnv().clock.now();
@@ -80,6 +86,17 @@ export class TeamSessionLifecycleService {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(recordPath, JSON.stringify({ pid: hostEnv().process.pid, sessionFile: input.sessionFile, startedAt }));
       return { kind: "admitted", action: "claim", member: lead };
+    });
+  }
+
+  async recordStop(input: { teamName: string; workerName: string; sessionFile: string; membershipId: string; piReason: NonNullable<runtime.AgentRuntimeStatus["lastStop"]>["piReason"]; targetSessionFile?: string }): Promise<void> {
+    await teams.withCurrentSessionBinding(input.teamName, input.workerName, input.sessionFile, input.membershipId, async () => {
+      const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
+      if (status?.pid !== hostEnv().process.pid || status.membershipId !== input.membershipId) return;
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { lastStop: {
+        piReason: input.piReason, targetSessionFile: input.targetSessionFile,
+        observedAt: hostEnv().clock.now(), suspectedHumanStop: !status.stopRequested && input.piReason !== "reload",
+      } }, input.membershipId);
     });
   }
 

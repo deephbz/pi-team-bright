@@ -802,6 +802,12 @@ function registerSessionHooks() {
 });
 
 pi.on("session_shutdown", async (event, ctx) => {
+  const sessionFile = ctx.sessionManager.getSessionFile();
+  if (teamName && currentMembershipId && sessionFile) {
+    await teamSessionLifecycleService.recordStop({ teamName, workerName: agentName, sessionFile,
+      membershipId: currentMembershipId, piReason: event.reason, targetSessionFile: event.targetSessionFile,
+    }).catch(() => undefined);
+  }
   compactionGate.reset();
   settingsWarnings.clear(ctx);
   doctorGeneration++;

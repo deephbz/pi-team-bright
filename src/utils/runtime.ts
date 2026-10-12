@@ -35,6 +35,8 @@ export interface AgentRuntimeStatus {
   /** Exact Pi 0.83 agent lifecycle evidence for the current generation. */
   runState?: "active" | "settled";
   lastError?: RuntimeError;
+  lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork"; targetSessionFile?: string; observedAt: number; suspectedHumanStop: boolean };
+  stopRequested?: "worker_stop" | "team_shutdown" | "compensation";
 }
 
 /** Exact ephemeral process generation within one durable Membership. */
