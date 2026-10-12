@@ -67,6 +67,30 @@ the first contract draft; all six findings adopted):
    Team is tested only if a reload barrier and its partial-failure path are
    defined.
 
+## Lead rulings on planWorkerEnsure gaps
+
+`ensure-table` (prop-author) found ten gaps in the v3.1 table. Rulings follow
+the five rules of the proposal; the owner may reverse any of them.
+
+| Gap | Case | Ruling |
+| --- | --- | --- |
+| G1 | bound, lastStop `new`, `resume` or `fork` | `attention` (`session_switched`). The process left this Worker Session. No reuse, no spawn. |
+| G2 | bound, lastStop `reload`, process `live` | `reuse`. Reload keeps the generation; the reloaded hook re-admits it. |
+| G2 | bound, lastStop `quit`, process `live` | `attention` (`stopping`). Never spawn while the generation lives. |
+| G3 | unbound, launch `none` | `create`. |
+| G4 | unbound, launch `refused`, process `live`, `stopping` or `unknown` | `attention`. A candidate generation may still bind; unknown fails closed. |
+| G5 | unbound, lastStop not `none` | Ignore lastStop; the launch row decides. |
+| G6 | prepared row text "Herdr unknown" | Read as launch `unknown`. The plan never reads the terminal. |
+| G7 | action vocabulary | Add `attention` with `reason` and `nextActionHint`. |
+| G8 | carrier absent / invalid | `create` / `refuse` as today. |
+| G9 | bound rows | Ignore launch state. |
+| G10 | prior refusal evidence | Equals launch `refused`. |
+
+Reload rules from the product review: a Worker `/reload` journals no carrier
+event unless `stopping` outlasts the hung-reload threshold, and the reloaded
+process re-admits its own generation with a birth token. A Team reload
+therefore leaves zero `unknown` Workers and zero replayed journal events.
+
 ## Data boundary
 
 The PTB repository is public. Real-derived traces stay in
