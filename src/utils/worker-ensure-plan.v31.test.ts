@@ -1,5 +1,5 @@
 /**
- * Exhaustive v3.1 planWorkerEnsure table, with the lead rulings applied.
+ * Exhaustive v3.1 planWorkerEnsure table, with the tightened lead rulings applied.
  *
  * Written from the spec, not from production code:
  *   - docs/journal/2026-10-12-state-ownership-and-liveness-proposal.md
@@ -8,51 +8,61 @@
  *     (mutants M1: shell-based isAlive drives reuse; M2: prepared + live shell
  *     refuses retry after a decisive refusal)
  *   - docs/journal/2026-10-12-v31-implementation-plan.md
- *     ("Lead rulings on planWorkerEnsure gaps", G1–G10)
+ *     ("Lead rulings on planWorkerEnsure gaps", tightened: G1, G2, G3, G4, G10)
  *
- * Plan input: binding × launch × process × lastStop = 2 × 5 × 4 × 6 = 240 combinations.
- * Every combination is now defined. Terminal (pane / shell) is not a plan input;
- * the spec says planWorkerEnsure never reads it. Today's function takes only a shell
- * probe, so each combination runs with both shell probe values (live, missing): 480
- * cases. The absent and invalid carrier cases (G8) are separate: 4 carriers × 2 shells.
+ * Plan input: binding × launch × process × lastStop = 240 combinations, plus
+ * `readmitted` for lastStop `reload` (2 values, 40 base inputs): 280 inputs.
+ * Terminal (pane / shell) is not a plan input; the spec says planWorkerEnsure never
+ * reads it. Today's function takes only a shell probe, so each input runs with both
+ * shell probe values (live, missing): 560 cases. Also: 5 G10 evidence cases and 4 G8
+ * carriers, each × 2 shells.
  *
- * Rulings applied (G-number → rows):
- *   G1  bound, lastStop new|resume|fork → attention, reason session_switched (all process, launch)
- *   G2  bound, lastStop reload, process live → reuse
- *   G2  bound, lastStop quit, process live → attention, reason stopping
- *   G3  unbound, launch none → create (all process, lastStop)
- *   G4  unbound, launch refused, process live|stopping|unknown → attention
+ * Rulings applied:
+ *   G1  bound, lastStop new|resume|fork → attention, reason session_switched (no hint ruled)
+ *   G2  bound, lastStop reload, process live, not re-admitted → attention, reason
+ *       reload_pending, hint wait. Re-admitted → reuse.
+ *   G2  bound, lastStop quit, process live → attention, reason stopping (no hint ruled)
+ *   G3  unbound, launch none, process gone → create (no candidate).
+ *       With a candidate: process live|stopping → candidate_live (G4 rule);
+ *       process unknown → verifier_unknown (G4 rule).
+ *   G4  unbound, launch refused, process live|stopping → attention, reason candidate_live,
+ *       hint wait
+ *   G4  unbound, launch refused, process unknown → attention, reason verifier_unknown,
+ *       hint ask_human
  *   G5  unbound: lastStop ignored; the launch row decides
  *   G6  "Herdr unknown" in the prepared row is launch unknown; terminal never read
- *   G7  action vocabulary adds attention (reason, nextActionHint) and refuse(reason)
+ *   G7  action vocabulary: attention (reason, nextActionHint); refuse (reason)
  *   G8  absent → create; invalid carrier → refuse with today's reason
  *   G9  bound: launch ignored
- *   G10 prior refusal evidence = launch refused
+ *   G10 launch refused only from decisive refusal evidence for the current launch id.
+ *       stale refusal, timeout and missing Herdr row give launch unknown.
  *
- * Adapter: today's planWorkerEnsure(carrier, observation) has no launch, process, or
- * lastStop input. The adapter maps the binding to a bound carrier, or to a prepared
- * carrier when launch is not none. Launch none is an unbound carrier with no pending
- * launch, which today's code normalizes as invalid. The shell probe is the observation.
+ * Adapter: today's planWorkerEnsure(carrier, observation) has no launch, process,
+ * lastStop, or readmitted input. The adapter maps the binding to a bound carrier, or
+ * to a prepared carrier when launch is not none. Launch none is an unbound carrier
+ * with no pending launch, which today's code normalizes as invalid. The shell probe
+ * is the observation.
  * Attribution of disagreeing cases:
- *   - M2: unbound, launch refused, shell live. Today refuses (`unbound_live`); the
- *     spec retries when process is gone and attends otherwise.
+ *   - M2: unbound, launch refused, shell live. Today refuses (`unbound_live`).
  *   - M1: other bound and prepared disagreements. Today's decision follows the shell
- *     probe, not the process verifier.
- *   - unattributed: unbound, launch none. Today refuses; the G3 ruling says create.
- *     Neither M1 nor M2 describes this, so it is labelled as such. The lead decides.
+ *     probe, not the process verifier or re-admission.
+ *   - unattributed: unbound, launch none. Today refuses; the G3 ruling says create or
+ *     attention. Neither M1 nor M2 describes this, so it is labelled as such.
  * A disagreeing case is it.fails. The title names its mutant. When production agrees,
  * the it.fails turns red and the marker must be removed.
  *
- * Remaining gaps. No ruling decides these, so they are asserted only where stated:
- *   R1  nextActionHint is in the attention vocabulary (G7), but no ruling says which
- *       hint each attention row carries. Hints are not asserted.
- *   R2  attention reason: G1 and G2 rulings give reasons. The other attention rows
- *       (bound stopping|unknown, G4, prepared requested|started|unknown) have no
- *       ruled reason. Only kind is asserted for them.
- *   R3  G3 "create" with process live|stopping|unknown conflicts with rule 5
- *       ("unknown never authorizes a spawn"). Encoded as ruled; flagged for the lead.
- *   R4  G3 with launch none: today refuses (`missing_session_and_pending_launch`).
- *       Whether the ruling means "no membership at all" is not stated.
+ * Remaining gaps, not decided by any ruling. Only what is stated is asserted:
+ *   R1  Hints for G1 and G2-quit attention, and for the attention rows without a
+ *       ruling (bound stopping|unknown; prepared requested|started|unknown). Not asserted.
+ *   R2  Reasons for those same attention rows. Not asserted.
+ *   R3  readmitted applies only to bound + reload + live. Its effect on reload with
+ *       gone, stopping or unknown is not ruled. Those rows use the process rules.
+ *       "An older re-admission never clears a newer stop" needs a stop sequence, which
+ *       the input does not carry; it is not modelled.
+ *   R4  G3 says "process gone or none". v3.1 process has no `none`, so only gone is
+ *       tested.
+ *   R5  G10 classification is a spec function in this file. No production classifier
+ *       exists for it to test against.
  */
 import { describe, expect, it } from "vitest";
 import type { Member } from "./models";
@@ -69,22 +79,34 @@ const LAUNCHES = ["none", "requested", "started", "refused", "unknown"] as const
 const PROCESSES = ["live", "stopping", "gone", "unknown"] as const;
 const LAST_STOPS = ["none", "quit", "reload", "new", "resume", "fork"] as const;
 const SHELLS = ["live", "missing"] as const;
+const REFUSAL_EVIDENCE = [
+  "decisive_current_launch",
+  "stale_other_launch",
+  "timeout",
+  "missing_herdr_row",
+] as const;
 
 type V31Binding = (typeof BINDINGS)[number];
 type V31Launch = (typeof LAUNCHES)[number];
 type V31Process = (typeof PROCESSES)[number];
 type V31LastStop = (typeof LAST_STOPS)[number];
 type ShellProbe = (typeof SHELLS)[number];
+export type RefusalEvidence = (typeof REFUSAL_EVIDENCE)[number];
 
-/** v3.1 plan input. `terminal` is deliberately absent (see header). */
+/**
+ * v3.1 plan input. `terminal` is deliberately absent (see header).
+ * `readmitted` is set only when lastStop is `reload`: whether the exact generation has
+ * re-admitted after that stop.
+ */
 export interface V31PlanInput {
   binding: V31Binding;
   launch: V31Launch;
   process: V31Process;
   lastStop: V31LastStop;
+  readmitted?: boolean;
 }
 
-/** Expected action in the v3.1 vocabulary (G7). `attention` and `refuse` carry a reason. */
+/** Expected action in the v3.1 vocabulary (G7). */
 export type V31Expected =
   | { kind: "create" }
   | { kind: "reuse" }
@@ -112,16 +134,25 @@ const member = (overrides: Partial<Member> = {}): Member => ({
   ...overrides,
 });
 
-/** Spec table with the lead rulings applied. Every v3.1 input has exactly one expected action. */
+/** G10: launch refused only from decisive refusal evidence for the current launch id. */
+export function classifyLaunchRefusal(evidence: RefusalEvidence): "refused" | "unknown" {
+  return evidence === "decisive_current_launch" ? "refused" : "unknown";
+}
+
+/** Spec table with the tightened lead rulings applied. Every v3.1 input has one expected action. */
 export function specRow(input: V31PlanInput): { expected: V31Expected; row: string } {
   if (input.binding === "bound") {
     // G1: the process left this Worker Session. No reuse, no spawn.
     if (input.lastStop === "new" || input.lastStop === "resume" || input.lastStop === "fork") {
       return { expected: { kind: "attention", reason: "session_switched" }, row: "bound / lastStop new|resume|fork (G1)" };
     }
-    // G2: reload keeps the generation; quit never spawns while the generation lives.
+    // G2: reload is held until re-admission. Only then does the bound + live row reuse.
     if (input.process === "live" && input.lastStop === "reload") {
-      return { expected: { kind: "reuse" }, row: "bound / live / lastStop reload (G2)" };
+      if (input.readmitted) return { expected: { kind: "reuse" }, row: "bound / live / reload, re-admitted (G2)" };
+      return {
+        expected: { kind: "attention", reason: "reload_pending", nextActionHint: "wait" },
+        row: "bound / live / reload, before re-admission (G2)",
+      };
     }
     if (input.process === "live" && input.lastStop === "quit") {
       return { expected: { kind: "attention", reason: "stopping" }, row: "bound / live / lastStop quit (G2)" };
@@ -130,10 +161,7 @@ export function specRow(input: V31PlanInput): { expected: V31Expected; row: stri
       case "live":
         return { expected: { kind: "reuse" }, row: "bound / process live" };
       case "gone":
-        return {
-          expected: { kind: "recover", mode: "exact_session_resume" },
-          row: "bound / process gone",
-        };
+        return { expected: { kind: "recover", mode: "exact_session_resume" }, row: "bound / process gone" };
       case "stopping":
       case "unknown":
         return { expected: { kind: "attention" }, row: "bound / process stopping|unknown" };
@@ -143,8 +171,18 @@ export function specRow(input: V31PlanInput): { expected: V31Expected; row: stri
   // G5: lastStop is ignored for unbound carriers. G9: launch is ignored for bound ones.
   switch (input.launch) {
     case "none":
-      // G3
-      return { expected: { kind: "create" }, row: "unbound / launch none (G3)" };
+      // G3: create only with no candidate. Otherwise the G4 rows apply.
+      if (input.process === "gone") return { expected: { kind: "create" }, row: "unbound / launch none / gone (G3)" };
+      if (input.process === "unknown") {
+        return {
+          expected: { kind: "attention", reason: "verifier_unknown", nextActionHint: "ask_human" },
+          row: "unbound / launch none / candidate, verifier unknown (G3 → G4)",
+        };
+      }
+      return {
+        expected: { kind: "attention", reason: "candidate_live", nextActionHint: "wait" },
+        row: "unbound / launch none / candidate live or stopping (G3 → G4)",
+      };
     case "refused":
       if (input.process === "gone") {
         return {
@@ -152,8 +190,16 @@ export function specRow(input: V31PlanInput): { expected: V31Expected; row: stri
           row: "prepared / launch refused / process gone",
         };
       }
-      // G4
-      return { expected: { kind: "attention" }, row: "prepared / launch refused / process live|stopping|unknown (G4)" };
+      if (input.process === "unknown") {
+        return {
+          expected: { kind: "attention", reason: "verifier_unknown", nextActionHint: "ask_human" },
+          row: "prepared / launch refused / process unknown (G4)",
+        };
+      }
+      return {
+        expected: { kind: "attention", reason: "candidate_live", nextActionHint: "wait" },
+        row: "prepared / launch refused / process live|stopping (G4)",
+      };
     case "requested":
     case "started":
     case "unknown":
@@ -219,12 +265,20 @@ export function enumerateInputs(): V31PlanInput[] {
   for (const binding of BINDINGS)
     for (const launch of LAUNCHES)
       for (const process of PROCESSES)
-        for (const lastStop of LAST_STOPS) inputs.push({ binding, launch, process, lastStop });
+        for (const lastStop of LAST_STOPS) {
+          if (lastStop === "reload") {
+            inputs.push({ binding, launch, process, lastStop, readmitted: false });
+            inputs.push({ binding, launch, process, lastStop, readmitted: true });
+          } else {
+            inputs.push({ binding, launch, process, lastStop });
+          }
+        }
   return inputs;
 }
 
 const label = (input: V31PlanInput) =>
-  `binding=${input.binding} launch=${input.launch} process=${input.process} lastStop=${input.lastStop}`;
+  `binding=${input.binding} launch=${input.launch} process=${input.process} lastStop=${input.lastStop}` +
+  (input.readmitted === undefined ? "" : ` readmitted=${input.readmitted}`);
 
 /**
  * Rows named by the product review. Each row's test title carries the scenario, so
@@ -255,8 +309,8 @@ describe("v3.1 planWorkerEnsure table (exhaustive)", () => {
   const inputs = enumerateInputs();
 
   it("enumerates every v3.1 plan input, each with one expected action", () => {
-    expect(inputs).toHaveLength(240);
-    expect(inputs.map((input) => specRow(input).expected)).toHaveLength(240);
+    expect(inputs).toHaveLength(280);
+    expect(inputs.map((input) => specRow(input).expected)).toHaveLength(280);
   });
 
   for (const input of inputs) {
@@ -269,6 +323,20 @@ describe("v3.1 planWorkerEnsure table (exhaustive)", () => {
       );
     }
   }
+
+  describe("G10 refusal evidence", () => {
+    for (const evidence of REFUSAL_EVIDENCE) {
+      const launch = classifyLaunchRefusal(evidence);
+      const input: V31PlanInput = { binding: "unbound", launch, process: "gone", lastStop: "none" };
+      for (const shell of SHELLS) {
+        registerCase(
+          `[G10 ${evidence}] launch=${launch} process=gone shell=${shell} — spec row "${specRow(input).row}"`,
+          mutantFor(input, shell),
+          () => expect(runToday(input, shell)).toMatchObject(specRow(input).expected),
+        );
+      }
+    }
+  });
 
   describe("G8 absent and invalid carriers", () => {
     for (const carrier of CARRIER_CASES) {
