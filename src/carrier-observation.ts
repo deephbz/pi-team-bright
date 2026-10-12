@@ -113,6 +113,8 @@ export class CarrierObserver {
   private journalCursor = "0";
   private taskCursors = new Map<string, string>();
   private lastEvents = new Map<string, WorkerTeamEvent>();
+  // Silent initial states seed this baseline. Subsequent changes advance only on accepted append.
+  private published = new Map<string, string>();
   private journal = false;
   private blocked = new Map<string, { since: number; emitted: boolean; attempt: string }>();
   constructor(private readonly teamName: string, private readonly notify: (text: string) => void = () => {}) {}
@@ -198,16 +200,20 @@ export class CarrierObserver {
       for (const field of ["binding", "launch", "process", "terminal"] as const) {
         const historical = this.lastEvents.get(`${view.membership}:${field}`)?.carrier;
         const sameGeneration = JSON.stringify(historical?.generation) === JSON.stringify(view.generation);
-        const before = prior?.[field] ?? (historical?.launchId === view.launchId && sameGeneration ? historical?.to : undefined);
+        const key = JSON.stringify([view.membership, view.generation, view.launchId, field]);
+        const before = historical?.launchId === view.launchId && sameGeneration ? historical.to : this.published.get(key);
         if (view[field] === before || (field === "terminal" && view.terminal !== "absent")) continue;
         if (reloading && field === "process") continue;
-        if (!prior && ["none", "unknown", "bound", "live"].includes(view[field])) continue;
-        await this.publish(view, field, before ?? "unknown", view[field], status);
+        if (before === undefined && (!prior || !samePriorGeneration) && ["none", "unknown", "bound", "live"].includes(view[field])) {
+          this.published.set(key, view[field]);
+          continue;
+        }
+        if (await this.publish(view, field, before ?? "unknown", view[field], status)) this.published.set(key, view[field]);
       }
       if (samePriorGeneration && view.process === "stopping" && view.lastStop?.piReason === "reload" && now - view.lastStop.observedAt >= 15000) {
         // The transition is suppressed during a normal reload. Emit only once after the hang bound.
         const recorded = this.lastEvents.get(`${view.membership}:process`)?.carrier;
-        if (!prior?.evidence.some(e => e.fact === "reload_hung") && !(recorded?.cause.fact === "reload_hung" && recorded.observedAt >= view.lastStop.observedAt + 15000)) await this.publish(view, "process", "live", "stopping", status, "reload_hung");
+        if (!(recorded?.cause.fact === "reload_hung" && recorded.observedAt >= view.lastStop.observedAt + 15000)) await this.publish(view, "process", "live", "stopping", status, "reload_hung");
         view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
       }
       if (view.binding === "unbound" && ["requested", "started", "unknown"].includes(view.launch)
@@ -221,14 +227,13 @@ export class CarrierObserver {
       const currentBlock = this.blocked.get(view.membership)!;
       if (view.activity !== "blocked") currentBlock.since = now;
       else if (!currentBlock.emitted && now - currentBlock.since >= 3000) {
-        await this.publish(view, "blocked", "unknown", "blocked", status);
-        currentBlock.emitted = true;
+        currentBlock.emitted = await this.publish(view, "blocked", "unknown", "blocked", status);
       }
       this.projection.set(view.membership, view);
     }
   }
-  private async publish(view: CarrierView, field: CarrierEvent["field"], from: string, to: string, status: AgentRuntimeStatus | null, attentionFact?: string): Promise<void> {
-    if (!this.journal || this.stopped) return;
+  private async publish(view: CarrierView, field: CarrierEvent["field"], from: string, to: string, status: AgentRuntimeStatus | null, attentionFact?: string): Promise<boolean> {
+    if (!this.journal || this.stopped) return false;
     const suspectedHumanStop = !status?.stopRequested && (!!view.lastStop?.suspectedHumanStop || view.terminal === "absent");
     const source = field === "terminal" ? "herdr_panes" : field === "blocked" ? "herdr_agents" : field === "process" ? "process_generation" : field === "launch" ? "launch" : "membership";
     const evidence = view.evidence.find(item => item.source === source);
@@ -240,15 +245,16 @@ export class CarrierObserver {
       observedAt: attentionFact ? hostEnv().clock.now() : cause.source === "session_shutdown" ? view.lastStop!.observedAt : evidence?.observedAt ?? hostEnv().clock.now(), paneId: view.paneId, suspectedHumanStop,
       nextActionHint: attentionFact || suspectedHumanStop || field === "blocked" || to === "stopping" ? "ask_human" : to === "gone" || to === "refused" ? "ensure_worker" : "wait" };
     // External reads can finish after a successor admits. Fence publication, not source latency.
-    await withCurrentMembershipLease(this.teamName, view.membership, async member => {
+    return withCurrentMembershipLease(this.teamName, view.membership, async member => {
       const current = await readRuntimeStatus(this.teamName, view.worker);
       if (this.stopped || member.sessionFile !== view.sessionFile || (member.launch?.launchId ?? member.pendingLaunchId) !== view.launchId
         || JSON.stringify(runtimeGeneration(current) ?? undefined) !== JSON.stringify(view.generation)
         || JSON.stringify(current?.lastStop) !== JSON.stringify(status?.lastStop)
-        || current?.stopRequested !== status?.stopRequested) return;
+        || current?.stopRequested !== status?.stopRequested) return false;
       const event = await appendTeamEvent(this.teamName, { type: "worker", worker: view.worker, membershipId: view.membership, phase: "carrier", carrier }) as WorkerTeamEvent;
       this.lastEvents.set(`${view.membership}:${field}`, event);
-      this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`);
-    }).catch(() => undefined);
+      try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`); } catch { /* Accepted publication does not depend on UI delivery. */ }
+      return true;
+    }).catch(() => false);
   }
 }
