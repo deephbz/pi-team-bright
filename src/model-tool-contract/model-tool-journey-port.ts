@@ -55,10 +55,8 @@ export interface ModelToolCoordinationApplicationPort {
   selectTeamSyncView?(leaderSessionId: ExactLeaderSessionId, branchLineage: string[]): Promise<"snapshot" | "updates">;
   discardPendingObservation?(leaderSessionId: ExactLeaderSessionId, toolCallId: string): void;
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void;
-  acknowledgePendingObservation?(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): boolean;
   setBranchContext(leaderSessionId: ExactLeaderSessionId, branchIds: string[]): void;
   setBranchEntries?(leaderSessionId: ExactLeaderSessionId, entries: import("../coordination/branch-observation").BranchEntry[]): void;
-  acknowledgePendingObservationAsync?(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): Promise<boolean>;
   readSyncNudgeDebt?(leaderSessionId: ExactLeaderSessionId, branchLineage: string[]): Promise<SyncNudgeDebt>;
   getPendingObservation?(leaderSessionId: ExactLeaderSessionId): PendingObservation | undefined;
 }

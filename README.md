@@ -127,7 +127,9 @@ start turns. Use `/ptb sync` for an immediate check. An empty check displays
 
 The selected native Session branch owns the cursor. Persisted `ptb.team-update`
 messages and stamped `team_sync` results advance it. Provider success does not
-control delivery. A failed send releases its reservation within 30 seconds.
+control delivery. Each result names its event page and next action. A failed
+send releases its reservation within 30 seconds. Automatic send failure pauses
+retries until the branch changes. Run `/ptb sync` to retry manually.
 Updates without a branch cursor return a snapshot at the current journal
 watermark; they do not replay the journal from zero. Compaction preserves the
 cursor. Request a snapshot after compaction to restore current Task context.

@@ -153,7 +153,11 @@ export class CoordinationObservationService {
     if (view === "snapshot" || !baseline) {
       // Capture the journal boundary before any Task authority hydration.
       const head = Number(this.store.readEventCursor(bound.teamName));
-      const snapshot = await this.snapshot(bound, context);
+      const hydratedBound = await this.boundTeam(bound.sessionFile);
+      if (!hydratedBound || hydratedBound.teamName !== bound.teamName || hydratedBound.config.epochId !== bound.config.epochId || hydratedBound.membershipId !== bound.membershipId) {
+        return { kind: "unavailable", reason: "no_active_team", message: "The leader binding changed during snapshot hydration." };
+      }
+      const snapshot = await this.snapshot(hydratedBound, context);
       if (snapshot.kind === "no_active_team") return { kind: "unavailable", reason: "no_active_team", message: "No active Team." };
       if (snapshot.kind !== "snapshot") return snapshot;
       if (automatic && !snapshot.tasks.length && !snapshot.workers.length && !baseline?.taskIds.length) return { kind: "quiet" };
@@ -174,16 +178,17 @@ export class CoordinationObservationService {
         const worker = bound.config.logicalWorkers!.find(worker => worker.name === event.worker);
         return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: `Worker ${worker.name} ${event.phase.replaceAll("_", " ")}.` }] : [];
       });
-      // Eventless authority changes remain visible, including complete removals.
       const changes = projected.changes;
-      if (page.events.length === 0 && revisionChanged) {
-        if (!tasks.tasks.length) return this.observe(bound, "snapshot", baseline, context, false);
-        changes.push(...tasks.tasks.map(task => ({ taskId: task.id, changeKinds: ["progress" as const], journalEntries: [], current: task })));
-      }
       if (changes.length || workerChanges.length) {
         selected?.(page, pages.slice(index + 1));
         return { kind: "updates", teamChanges: [], workerChanges, taskChanges: changes, alerts: [], head: Number(page.cursor), epochId: bound.config.epochId, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
       }
+    }
+    // Empty projections can still contain stale Task or retired Worker events.
+    // Reconcile authority after the entire scan, independent of raw event count.
+    if (revisionChanged) {
+      if (!tasks.tasks.length) return this.observe(bound, "snapshot", baseline, context, false);
+      return { kind: "updates", teamChanges: [], workerChanges: [], taskChanges: tasks.tasks.map(task => ({ taskId: task.id, changeKinds: ["progress" as const], journalEntries: [], current: task })), alerts: [], head: Number(pages.at(-1)!.cursor), epochId: bound.config.epochId, ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
     }
     if (automatic) return { kind: "quiet" };
     const observations = await this.workerRunObservations(bound);
