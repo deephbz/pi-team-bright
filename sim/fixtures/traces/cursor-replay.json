@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "id": "synthetic-cursor-replay",
+  "source": "synthetic",
+  "assumptions": ["A-historical-explicit-sync-cursor"],
+  "setup": { "ptbVersion": "baseline", "teams": [] },
+  "steps": [
+    { "at": 0, "step": { "kind": "pi.start", "who": { "team": "team-1", "actor": "lead" }, "session": "session-1", "reason": "startup" } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "team_create", "args": { "name": "team-1" } } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "team_sync", "args": { "view": "snapshot" } } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "team_sync", "args": { "view": "updates", "cursor": { "$fromStep": 2, "path": "cursor" } } } },
+    { "at": 0, "step": { "kind": "turn.end", "who": { "team": "team-1", "actor": "lead" }, "outcome": "aborted" } },
+    { "at": 0, "step": { "kind": "pi.shutdown", "who": { "team": "team-1", "actor": "lead" }, "reason": "reload" } },
+    { "at": 0, "step": { "kind": "pi.start", "who": { "team": "team-1", "actor": "lead" }, "session": "session-1", "reason": "reload" } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "team_sync", "args": { "view": "updates", "cursor": { "$fromStep": 2, "path": "cursor" } } } },
+    { "at": 0, "step": { "kind": "turn.end", "who": { "team": "team-1", "actor": "lead" }, "outcome": "settled" } }
+  ]
+}
