@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-10-10
+Updated: 2026-10-12
 
 Published versions and their evidence live in
 [GitHub Releases](https://github.com/deephbz/pi-team-bright/releases) and the npm
@@ -80,16 +80,25 @@ The [canonical example](../examples/pi-team-bright.settings.json) is the setup
 entry point. The [work record](../projects/model-role-settings.md) tracks the
 base, scope, verification, and remaining work.
 
-## v0.19.0: synchronization continuity
+## Branch-held Team observation
 
-The owner authorized framework-driven synchronization. The
-[decision](../decisions/0016-framework-team-synchronization.md) separates Team
-observation, Worker activity, delivery, and acknowledgement. The
-[work record](../projects/team-sync-continuity.md) tracks five verification rounds.
-Implementation and five verification rounds are complete. Real Pi 0.87.1
-leader, Worker, and TUI checks passed, including provider failure, abort, and
-process-reload recovery.
-Live settings and parent adoption remain unchanged.
+Accepted Proposal A supersedes the delivery mechanics of
+[Decision 0016](../decisions/0016-framework-team-synchronization.md). The lead's
+selected native Session branch owns delivery position. The adapter publishes
+`ptb.team-update` only while idle. Native persistence commits presentation;
+provider success has no role. `team_sync` returns immediately. A missing branch
+cursor selects a snapshot, which captures its journal watermark before Task
+hydration. Task-authority revision reconciliation and batch scheduling remain.
+
+An in-memory reservation prevents competing reads of one page. Persistence,
+branch or binding change, or a bounded failure timer releases it. Compaction
+does not undo delivery; a snapshot restores model context. Forked entries do
+not bind the new Session. Hidden-observation stores and provider ACKs are removed.
+
+Architecture impact: **changed** inside PTB's observation persistence boundary.
+The HyperCarrier diagram keeps PTB internals opaque. Focused branch, publisher,
+and registered-tool tests cover the contract. Real-provider validation remains
+pending. Live settings and parent adoption remain unchanged.
 
 ## v0.19.0: Task timeline view
 
@@ -159,8 +168,8 @@ evidence remains in the repository history rather than the npm artifact.
 
 Pi Team Bright turns one Pi Session into the lead of a Team of stable Workers,
 with Task-first teams visible in terminal panes. A Task plus its assignee is
-the only executable work contract. `team_sync` is the event-driven observation
-and wait boundary. Typed Alerts are exceptional clarification, attention, or
+the only executable work contract. `team_sync` reads available Team changes.
+The lead ends its turn to wait for `ptb.team-update`. Typed Alerts are exceptional clarification, attention, or
 announcement; they never assign, advance, block, or complete work.
 
 The product deliberately excludes a general agent directory, cross-Team
@@ -180,7 +189,7 @@ variables do not.
 | Machine result schema | Raw catalog unions and model projection schemas in [`src/model-tool-contract/result-projection.ts`](../../src/model-tool-contract/result-projection.ts) |
 | Team epoch, logical Worker, Membership, Task, Alert, and event types | [`src/utils/models.ts`](../../src/utils/models.ts) |
 | Team authority, exact Session binding, and logical Worker persistence | [`src/utils/teams.ts`](../../src/utils/teams.ts) |
-| Branch-safe hidden coordination position | [`src/utils/hidden-observation.ts`](../../src/utils/hidden-observation.ts) |
+| Branch-held observation position | [`src/coordination/branch-observation.ts`](../../src/coordination/branch-observation.ts) |
 | Read-only Membership observation protocol | [`src/public/observation.ts`](../../src/public/observation.ts), exported as `@hypercarrier/pi-team-bright/observation`; [`src/team-authority/membership-observation-reader.ts`](../../src/team-authority/membership-observation-reader.ts) is its private read-only decoder |
 | Canonical Task card and opaque TaskVersionRef | [`src/task-authority/task-domain.ts`](../../src/task-authority/task-domain.ts) and [`src/task-authority/task-version-ref.ts`](../../src/task-authority/task-version-ref.ts) |
 | Task authority, reads, mutation semantics, and legacy Beads translation | [`src/task-authority/graph-control.ts`](../../src/task-authority/graph-control.ts) owns graph revisions, Attempts, derived state, bounded failure traversal, replay, and recovery. [`durable-graph-task-authority.ts`](../../src/adapters/durable-graph-task-authority.ts) owns the Team snapshot, and [`graph-orchestration.ts`](../../src/task-authority/graph-orchestration.ts) owns publication and ready delivery. [`src/task-authority/contracts.ts`](../../src/task-authority/contracts.ts), the durable read adapters, and the Beads adapters remain the legacy pre-graph path. [`durable-task-mutation-publication.ts`](../../src/adapters/durable-task-mutation-publication.ts) is the shared Coordination and delivery bridge. |
@@ -305,8 +314,8 @@ restating executable definitions.
   persist an opaque epoch identity and stable logical Worker name/scope records
   separately from replaceable Membership, Session, process, and terminal
   carriers. The
-  model-tool surface keeps its exact-Session branch position as locked derived
-  coordination state; it never becomes Team or Task authority. Since `0.17.0-rc.3`,
+  model-tool surface derives its cursor from the authorized Session branch;
+  it never becomes Team or Task authority. Since `0.17.0-rc.3`,
   `ensure_worker.separate_window` is deliberately absent:
   durable Team configuration exclusively owns placement policy. A launch receipt
   may report exact bounded startup observation, but never Worker readiness or
@@ -448,22 +457,12 @@ restating executable definitions.
   `test:full` and package verification. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
-- `team_sync({view:"updates"})` now has normal liveness outcomes. It returns
-  `caught_up` when the exact leader is caught up and no current Worker producer
-  requires a wait. It returns `unsettled` with actionable Worker reasons when
-  activity or incomplete evidence prevents proven settlement. A zero wait does
-  one immediate recheck. Missing baselines return snapshots. Native sync skips
-  empty pages. Successful assistant `message_end` resolves the pre-request
-  pending slot through acknowledgement or exact-call discard. Historical result
-  decoding preserves old Session entries. Internal probes keep `indeterminate`.
-  The executable anchors are [`sync-continuity.test.ts`](../../src/coordination/sync-continuity.test.ts)
-  and [`sync-nudge-extension.test.ts`](../../src/utils/sync-nudge-extension.test.ts).
-  Architecture impact: **none** at the HyperCarrier boundary; the diagram keeps
-  Pi Team Bright internals opaque. Pi `>=0.83` is required for exact `agent_start` and
-  `agent_settled` evidence. Global `pi_team_bright.team.wait_seconds` controls
-  the internal recheck interval. The released reminder mechanism is superseded
-  by the unreleased synchronization-continuity change above. Historical nudge
-  records remain presentation evidence, never Task state or observation advance.
+- `team_sync({view:"updates"})` returns `caught_up` for current quiescence and
+  `unsettled` for activity or missing evidence. Both return immediately. Native
+  `team_sync` result details and automatic update messages stamp the page they
+  present. The branch reader ignores entries without a stamp. The executable
+  anchors are [`sync-continuity.test.ts`](../../src/coordination/sync-continuity.test.ts)
+  and [`team-update.test.ts`](../../extensions/team-update.test.ts).
 - Task mutation publication now crosses a consumer-owned port. The durable
   adapter preserves Beads commit, Membership-lease release, acting-Session
   suppression, serial event, failed-hint, recipient delivery, inline recovery,
@@ -529,8 +528,8 @@ context or the executable contract sources.
   acknowledgement leases, ordering, replacement refusal, and replay parity.
   Independent acceptance and re-verification passed focused checks, typecheck,
   public/persistence diffs, and source fences; no aggregate ran. Stopped
-  migration remains separate. Pi Session Team-query and Coordination hidden-
-  observation ports are accepted. Task/Team reverse dependencies and
+  migration remains separate. Pi Session Team-query ports remain accepted. Native branch observation
+  supersedes the Coordination hidden-observation port. Task/Team reverse dependencies and
   Coordination runtime, event, and nudge-actuation seams remain open. The maintained [subsystem audit](../projects/semantic-hardening/subsystem-boundary-audit.md)
   and machine [dependency map](../projects/semantic-hardening/subsystem-dependency-map.json)
   own current structural evidence.

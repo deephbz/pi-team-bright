@@ -69,7 +69,7 @@ export class TaskGraphPaneController {
   constructor(
     private readonly host: TaskGraphPaneHost,
     private readonly cliPath: string,
-    private readonly nodePath = process.execPath,
+    private readonly nodePath = hostEnv().process.execPath,
   ) {}
 
   get isOpen(): boolean {

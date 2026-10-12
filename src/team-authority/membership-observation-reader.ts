@@ -29,7 +29,7 @@ type RuntimeEvidence = { membershipId?: unknown; pid?: unknown; startedAt?: unkn
 type Candidate = { member: Record<string, unknown>; runtime: RuntimeEvidence | null; runtimeState: RuntimeState };
 const TEAM_CONFIG_FILENAME = "config.json";
 const RUNTIME_DIRECTORY = "runtime";
-const yieldRead = () => new Promise<void>(resolve => setImmediate(resolve));
+const yieldRead = () => hostEnv().clock.yield();
 
 function iso(value: unknown): string | undefined { const time = typeof value === "number" ? value : typeof value === "string" ? Date.parse(value) : NaN; try { return Number.isFinite(time) && time > 0 ? new Date(time).toISOString() : undefined; } catch { return undefined; } }
 function validString(value: unknown): value is string { return typeof value === "string" && value.length > 0; }

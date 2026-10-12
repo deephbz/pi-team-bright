@@ -1,8 +1,9 @@
+import { snapshotEntry } from "../../test/support/branch-observation";
 import { describe, expect, it, vi } from "vitest";
 import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import { taskVersionRef } from "../task-authority/task-version-ref";
 import { CoordinationObservationService, taskProjectionRevision } from "./observation-service";
-import type { CoordinationHiddenObservationProjection, CoordinationTaskReadOutcome } from "./queries";
+import type { CoordinationTaskReadOutcome } from "./queries";
 import type { TeamEvent } from "./contracts";
 
 function task(id: string, versionSeed = id): CanonicalTaskCard {
@@ -39,16 +40,6 @@ function service(input: {
       }))
       : []),
   }));
-  const hidden: CoordinationHiddenObservationProjection = {
-    schema: "pi-teams-hidden-observation/1",
-    teamEpochId: "epoch",
-    exactSessionId: "/tmp/lead.jsonl",
-    acknowledgedEntryId: "snapshot-entry",
-    acknowledgedLineage: ["snapshot-entry"],
-    teamEventCursor: "0",
-    authorityRevisions: { task_projection: taskProjectionRevision(input.current), team_events: "0" },
-    updatedAt: "2026-08-13T00:00:00.000Z",
-  };
   const readTasks = vi.fn(input.readTasks ?? (async (_teamName: string, ids: readonly string[]) => ids.map((id) => {
     const current = input.current.find((candidate) => candidate.id === id);
     return current ? { kind: "found" as const, task: current } : undefined;
@@ -61,7 +52,7 @@ function service(input: {
         epochId: "epoch",
         sessionFile: "/tmp/lead.jsonl",
         purpose: "fixture",
-        members: [],
+        members: [{ name: "team-lead", agentType: "lead", membershipId: "lead", sessionFile: "/tmp/lead.jsonl", isActive: true }],
         logicalWorkers: [],
       })),
     },
@@ -76,17 +67,13 @@ function service(input: {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: projection,
   }, {
-    readHidden: vi.fn(async () => ({ kind: "found" as const, projection: hidden })),
-    commitHidden: vi.fn(async () => ({ kind: "committed" as const, projection: hidden })),
     readEvents: vi.fn((_team: string, options?: { afterCursor?: string }) => ({
       events: Number(options?.afterCursor ?? "0") < 1 ? [input.event] : [],
       cursor: "1", headCursor: "1", truncated: false, remaining: 0,
     })),
     readEventCursor: vi.fn(() => "1"),
-    waitEvents: vi.fn(),
-    readFailureHints: vi.fn(() => ({ hints: [], cursor: "0", headCursor: "0" })),
   });
-  instance.setBranchContext("/tmp/lead.jsonl", ["snapshot-entry"]);
+  instance.setBranchEntries("/tmp/lead.jsonl", [snapshotEntry("snapshot-entry", "graph-team", "epoch", "lead", input.current)]);
   return { instance, readTasks, projection };
 }
 
@@ -106,7 +93,7 @@ describe("Coordination complete graph replacement", () => {
 
     const result = await instance.readTeamSync("/tmp/lead.jsonl", "updates", new AbortController().signal, "sync");
     expect(result).toEqual({ kind: "caught_up", head: 1, epochId: "epoch" });
-    expect(readTasks).toHaveBeenCalledTimes(2);
+    expect(readTasks).toHaveBeenCalledTimes(1);
     for (const call of readTasks.mock.calls) expect(call).toEqual(["graph-team", ["current"]]);
     expect(projection).toHaveBeenCalledWith([], [current]);
   });

@@ -14,21 +14,19 @@ const prepared = (view: "snapshot" | "updates", updateCount: number, scopeKey = 
     : { kind: "updates", epochId: "epoch-1", head: 3, teamChanges: [], workerChanges: [{ worker: "worker", scope: marker, kind: "created", text: marker }], taskChanges: [], alerts: [] },
 });
 function service(hidden: unknown = { kind: "missing" }, projection: unknown = prepared("snapshot", 1)) {
-  const readHidden = vi.fn().mockResolvedValue(hidden);
+  const selectTeamSyncView = vi.fn().mockResolvedValue((hidden as any)?.kind === "found" ? "updates" : "snapshot");
   const peekTeamSync = vi.fn().mockResolvedValue(projection);
-  return { debt: new CoordinationNudgeDebtService({ peekTeamSync } as any, { readHidden } as any), readHidden, peekTeamSync };
+  return { debt: new CoordinationNudgeDebtService({ peekTeamSync, selectTeamSyncView } as any), selectTeamSyncView, peekTeamSync };
 }
 
 describe("Coordination nudge debt from canonical observation", () => {
-  it("selects snapshot or updates from the exact hidden baseline and forwards full lineage", async () => {
+  it("selects snapshot or updates from the native branch baseline and forwards full lineage", async () => {
     const initial = service();
     await expect(initial.debt.read(bound() as any, ["root", "branch"])).resolves.toMatchObject({
       kind: "eligible", requestedView: "snapshot", scopeKey: "scope-1", updateCount: 1,
       leaderMembershipId: "lead-1", branchLineage: ["root", "branch"], branchId: "branch",
     });
-    expect(initial.readHidden).toHaveBeenCalledWith("debt-test", {
-      teamEpochId: "epoch-1", exactSessionId: "/sessions/lead", branchLineage: ["root", "branch"],
-    });
+    expect(initial.selectTeamSyncView).toHaveBeenCalledWith("/sessions/lead", ["root", "branch"]);
     expect(initial.peekTeamSync).toHaveBeenCalledWith("/sessions/lead", "snapshot", ["root", "branch"]);
     const updates = service(found, prepared("updates", 2));
     await expect(updates.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "eligible", requestedView: "updates", updateCount: 2 });
@@ -68,7 +66,7 @@ describe("Coordination nudge debt from canonical observation", () => {
     const probe = vi.fn()
       .mockResolvedValueOnce(prepared("updates", 1, "scope-1", "one"))
       .mockResolvedValueOnce(prepared("updates", 2, "scope-1", "two"));
-    const debt = new CoordinationNudgeDebtService({ peekTeamSync: probe } as any, { readHidden: async () => found } as any);
+    const debt = new CoordinationNudgeDebtService({ peekTeamSync: probe, selectTeamSyncView: async () => "updates" } as any);
     const first = await debt.read(bound() as any, ["root"]);
     const second = await debt.read(bound() as any, ["root"]);
     expect(first.kind).toBe("eligible"); expect(second.kind).toBe("eligible");
@@ -78,9 +76,9 @@ describe("Coordination nudge debt from canonical observation", () => {
     expect(second.updateCount).toBe(2);
   });
 
-  it("suppresses mismatched views and unavailable observations", async () => {
+  it("accepts authority-reconciliation snapshots and suppresses unavailable observations", async () => {
     const mismatch = service(found, prepared("snapshot", 1));
-    await expect(mismatch.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "indeterminate" });
+    await expect(mismatch.debt.read(bound() as any, ["root"])).resolves.toMatchObject({ kind: "eligible", requestedView: "snapshot" });
     const unavailable = service(found, { kind: "unavailable", message: "Task store offline" });
     await expect(unavailable.debt.read(bound() as any, ["root"])).resolves.toEqual({ kind: "unavailable", message: "Task store offline" });
     const rejected = service(found);
