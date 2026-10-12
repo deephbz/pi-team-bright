@@ -137,13 +137,19 @@ export function registerModelToolJourney(
     parameters: TeamSyncParametersSchema,
     executionMode: "sequential",
     async execute(_toolCallId, parameters, _signal, _onUpdate, ctx) {
+      const session = leaderSessionId(ctx);
+      journeyPort.coordination.setBranchEntries?.(session, ctx.sessionManager.getBranch());
       const result = await executors.teamSync(
-        leaderSessionId(ctx),
+        session,
         parameters,
         _signal,
         _toolCallId,
       );
-      return assembleToolResult("team_sync", result);
+      const assembled = assembleToolResult("team_sync", result);
+      const pending = journeyPort.coordination.getPendingObservation?.(session);
+      return pending?.toolCallId === _toolCallId && pending.observation
+        ? { ...assembled, details: { ...assembled.details, observation: pending.observation } }
+        : assembled;
     },
   };
   pi.registerTool(teamSyncTool);

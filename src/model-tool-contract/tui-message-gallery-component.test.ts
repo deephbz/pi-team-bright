@@ -8,7 +8,7 @@ const plain = (lines: string[]): string => lines.join("\n").replace(/\u001b\[[0-
 describe("TUI message gallery component", () => {
   it("navigates actual scenarios, toggles detail, scrolls, and quits", () => {
     const scenarios = tuiMessageGallery();
-    const initialScenarioId = "custom.framework-sync";
+    const initialScenarioId = "custom.team-update";
     const selected = scenarios.findIndex((scenario) => scenario.id === initialScenarioId);
     expect(selected).toBeGreaterThan(0);
     let rows = 8;

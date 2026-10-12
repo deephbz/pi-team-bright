@@ -1,3 +1,4 @@
+import { snapshotEntry } from "../support/branch-observation";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -174,17 +175,10 @@ describe("authority commit and publication windows", () => {
     const taskEvents = readTeamEvents(teamName).events.filter(event => event.type === "task");
     expect(taskEvents.at(-1)?.ref.version).toBe(older.tasks[0].version);
     const leadSession = path.join(teamDir(teamName), "lead.jsonl");
-    const hidden = {
-      schema: "pi-teams-hidden-observation/1" as const,
-      teamEpochId: `epoch-overlap`, exactSessionId: leadSession,
-      acknowledgedEntryId: "snapshot-entry", acknowledgedLineage: ["snapshot-entry"],
-      teamEventCursor: "0", authorityRevisions: { team_events: "0", task_projection: "prior" },
-      updatedAt: "2026-09-26T00:00:00.000Z",
-    };
     const observation = new CoordinationObservationService({
       teamRuntime: {
         readRuntime: async () => null,
-        readLeaderBinding: async () => ({ teamName, epochId: "epoch-overlap", sessionFile: leadSession, members: [], logicalWorkers: [] }),
+        readLeaderBinding: async () => ({ teamName, epochId: "epoch-overlap", sessionFile: leadSession, members: [{ name: "team-lead", agentType: "lead", membershipId: "lead", sessionFile: leadSession }], logicalWorkers: [] }),
       },
       taskStateDelivery: {
         completeTaskSet: () => true,
@@ -200,14 +194,10 @@ describe("authority commit and publication windows", () => {
       },
       alertActuation: { readInboxEvidence: async () => ({ known: true, pending: false }) },
     }, { projectNonterminalTaskIds, projectTaskChanges }, {
-      readHidden: async () => ({ kind: "found", projection: hidden }),
-      commitHidden: async () => ({ kind: "committed", projection: hidden }),
       readEvents: (name, options) => readTeamEvents(name, options),
       readEventCursor: () => String(taskEvents.length),
-      waitEvents: vi.fn(),
-      readFailureHints: () => ({ hints: [], cursor: "0", headCursor: "0" }),
     });
-    observation.setBranchContext(leadSession, ["snapshot-entry"]);
+    observation.setBranchEntries(leadSession, [snapshotEntry("snapshot-entry", teamName, "epoch-overlap", "lead")]);
     const updates = await observation.readTeamSync(leadSession, "updates", new AbortController().signal, "sync");
     expect(updates.kind).toBe("updates");
     if (updates.kind !== "updates") return;

@@ -11,7 +11,6 @@ import {
 } from "../../test/support/external-harness";
 import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { readBeadsAuthorityFingerprint } from "./beads";
-import { readHiddenObservationProjection } from "./hidden-observation";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
@@ -208,15 +207,15 @@ async function acknowledgeSync(harness: Harness, ctx: TestContext, callId: strin
     timestamp: new Date().toISOString(),
     message: {
       role: "toolResult",
+      toolName: "team_sync",
+      details: result.details,
       toolCallId: callId,
       content: result.content,
       isError: false,
       timestamp: Date.now(),
     },
   });
-  await harness.emit("before_provider_request", {
-    payload: { persistedResult: result.content[0].text },
-  }, ctx);
+
   await harness.emit("message_end", { message: { role: "assistant", stopReason: "stop" } }, ctx);
   await harness.emit("turn_end", { message: { role: "assistant", stopReason: "stop" } }, ctx);
 }
