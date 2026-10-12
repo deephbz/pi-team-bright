@@ -1,22 +1,40 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { nodeHostEnv, runWithHostEnv } from "./env/host-env";
-const f = vi.hoisted(() => ({ now: 1000, events: [] as any[], status: {} as any, member: {} as any, blocked: false, outage: false, configFailure: false, journalFailure: false, beforeLease: undefined as undefined | (() => void) }));
+const f = vi.hoisted(() => ({ now: 1000, events: [] as any[], status: {} as any, member: {} as any, blocked: false, outage: false, configFailure: false, journalFailure: false, appendFailures: 0, leaseFailures: 0, beforeLease: undefined as undefined | (() => void) }));
 vi.mock("node:fs", () => ({ default: { readFileSync: () => { if (f.configFailure) throw new Error("config unavailable"); return JSON.stringify({ terminalBackend: "herdr", members: [f.member] }); } } }));
-vi.mock("./utils/teams", () => ({ withCurrentMembershipLease: async (_: string, id: string, fn: any) => { f.beforeLease?.(); return fn(f.member); } }));
+vi.mock("./utils/teams", () => ({ withCurrentMembershipLease: async (_: string, id: string, fn: any) => { if (f.leaseFailures > 0) { f.leaseFailures--; throw new Error("lease unavailable"); } f.beforeLease?.(); return fn(f.member); } }));
 vi.mock("./utils/runtime", async importOriginal => ({ ...await importOriginal<any>(), readRuntimeStatus: async () => structuredClone(f.status) }));
 vi.mock("./coordination/event-journal", () => ({
   readTeamEvents: (_: string, options: any) => { if (f.journalFailure) throw new Error("journal unavailable"); return { events: f.events.filter(e => Number(e.cursor) > Number(options.afterCursor)), cursor: String(f.events.length), truncated: false }; },
-  appendTeamEvent: async (_: string, event: any) => { const saved = { ...event, cursor: String(f.events.length + 1) }; f.events.push(saved); return saved; },
+  appendTeamEvent: async (_: string, event: any) => { if (f.appendFailures > 0) { f.appendFailures--; throw new Error("EIO"); } const saved = { ...event, cursor: String(f.events.length + 1) }; f.events.push(saved); return saved; },
 }));
 import { CarrierObserver } from "./carrier-observation";
 const env = () => ({ ...nodeHostEnv, clock: { ...nodeHostEnv.clock, now: () => f.now, setTimeout: (() => 0) as any, clearTimeout: () => {} }, process: { ...nodeHostEnv.process,
   generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid, { kind: "found" as const, generation: { pid, osBirthToken: "birth", bootId: "boot" } }])),
 }, exec: { ...nodeHostEnv.exec, run: vi.fn(async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "", stdout: JSON.stringify(f.outage ? { error: "offline" } : { result: args[0] === "agent" ? { agents: [{ pane_id: "pane", name: "team-worker", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" }, agent_status: f.blocked ? "blocked" : "idle" }] } : { panes: [{ pane_id: "pane" }] } }) })) } });
 beforeEach(() => {
-  f.now = 1000; f.events = []; f.blocked = false; f.outage = false; f.configFailure = false; f.journalFailure = false; f.beforeLease = undefined;
+  f.now = 1000; f.events = []; f.blocked = false; f.outage = false; f.configFailure = false; f.journalFailure = false; f.appendFailures = 0; f.leaseFailures = 0; f.beforeLease = undefined;
   f.member = { name: "worker", agentType: "teammate", membershipId: "m", sessionFile: "/session", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" } };
   f.status = { membershipId: "m", pid: 42, startedAt: 10, osBirthToken: "birth", bootId: "boot" };
 });
+it.each(["appendFailures", "leaseFailures"] as const)("retries a lost carrier event after %s without changing fresh source truth", async failure => {
+  const host = env();
+  await runWithHostEnv(host, async () => {
+    const observer = await running(); f[failure] = 1;
+    host.process.generations = (async (pids: readonly number[]) => new Map(pids.map(pid => [pid, { kind: "absent" }]))) as any;
+    await observer.refresh(); expect(observer.views.get("m")?.process).toBe("gone"); expect(f.events).toEqual([]);
+    f.now += 100; await observer.refresh(); await observer.refresh();
+    expect(f.events.filter(e => e.carrier?.field === "process")).toHaveLength(1);
+    expect(f.events[0].carrier).toMatchObject({ from: "live", to: "gone" }); observer.stop();
+  });
+});
+it("discards an unpublished predecessor death when a successor admits", async () => runWithHostEnv(env(), async () => {
+  const observer = await running(); f.status.osBirthToken = "dead"; f.appendFailures = 1;
+  await observer.refresh(); expect(f.events).toEqual([]);
+  f.status.osBirthToken = "birth"; f.status.startedAt = 20;
+  await observer.refresh(); await observer.refresh();
+  expect(observer.views.get("m")?.process).toBe("live"); expect(f.events).toEqual([]); observer.stop();
+}));
 it.each([1000, 20000])("journals verified reload death at %i ms, never false stopping", async delay => runWithHostEnv(env(), async () => {
   const observer = await running();
   f.status.lastStop = { piReason: "reload", observedAt: f.now, suspectedHumanStop: false };
