@@ -31,6 +31,9 @@ export class Scheduler {
   enabled(): string[] {
     return [...this.queue.values()].filter(op => op.due <= this.now).map(op => `${op.id}:${op.label}`);
   }
+  nextDue(): number | undefined {
+    return this.queue.size ? Math.min(...[...this.queue.values()].map(op => op.due)) : undefined;
+  }
   advance(ms: number): void {
     if (!Number.isFinite(ms) || ms < 0) throw new Error("Clock must advance by a finite nonnegative duration");
     this.now += ms;
@@ -61,7 +64,10 @@ export class Scheduler {
       if (result && typeof (result as Promise<unknown>).then === "function") {
         const pending = Promise.resolve(result);
         this.pending.set(pending, op.actor);
-        pending.then(() => this.pending.delete(pending), error => { this.pending.delete(pending); this.errors.push(error); });
+        pending.then(() => this.pending.delete(pending), error => {
+          const active = this.pending.delete(pending);
+          if (active) this.errors.push(error);
+        });
       }
     } catch (error) { this.errors.push(error); }
     await this.checkpoint();
@@ -87,6 +93,20 @@ export class Scheduler {
       now: () => this.now,
       setTimeout: (callback, ms) => schedule(callback, ms), clearTimeout: clear,
       setInterval: (callback, ms) => schedule(callback, Math.max(1, ms), Math.max(1, ms)), clearInterval: clear,
+      sleepSync: ms => { this.advance(ms); }, // S-sync-block: no other actor runs during this call.
+      sleep: (ms, signal) => new Promise<void>((resolve, reject) => {
+        const error = () => Object.assign(new Error("Sleep aborted"), { name: "AbortError" });
+        if (signal?.aborted) { reject(error()); return; }
+        const handle = schedule(() => { signal?.removeEventListener("abort", abort); resolve(); }, ms);
+        const abort = () => {
+          this.enqueue("sleep.abort", () => enter(() => {
+            clear(handle);
+            signal?.removeEventListener("abort", abort);
+            reject(error());
+          }), { actor });
+        };
+        signal?.addEventListener("abort", abort, { once: true });
+      }),
     };
   }
 }

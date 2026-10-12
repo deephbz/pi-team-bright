@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { runWithHostEnv, type HostEnv, type HostWatcher } from "../src/env/host-env";
-import { createIsolatedWorkspace } from "../test/support/external-harness";
+import { enterSimulation, runWithHostEnv, type ExecOutcome, type HostEnv, type HostWatcher } from "../src/env/host-env";
+import type { Fault } from "./trace-format";
 import { Entropy, type Choice } from "./entropy";
 import { Scheduler } from "./scheduler";
 import { ProcessTable } from "./process-table";
@@ -15,30 +15,49 @@ interface WatchRegistration { actor: string; directory: string; closed: boolean;
 
 /** A world owns one shared real tree, one host boot, and one operation queue. */
 export class SimWorld {
-  readonly workspace = createIsolatedWorkspace("ptb-sim-");
+  readonly workspace: { root: string; home: string; tmp: string; cleanup: () => void };
   readonly entropy: Entropy;
   readonly scheduler: Scheduler;
   readonly processes = new ProcessTable();
-  readonly herdr = new HerdrFake(this.processes);
+  readonly herdr = new HerdrFake(this.processes, pid => this.killPid(pid));
   readonly exec = new ExecRouter(this.herdr);
   readonly guard: HostGuard;
   readonly envs = new Map<string, HostEnv>();
+  readonly faults = new Map<Fault["source"], Fault>();
+  private readonly generations = new Map<string, ReturnType<ProcessTable["spawn"]>>();
+  private readonly release: () => void;
+  private disposed = false;
   readonly history: Array<{ at: number; actor: string; kind: string; value?: unknown }> = [];
   private readonly watches = new Set<WatchRegistration>();
 
-  constructor(seed: number, options: { tape?: readonly number[]; replay?: readonly Choice[] } = {}) {
-    this.entropy = new Entropy(seed, options.tape, options.replay);
+  constructor(seed: number, options: { tape?: readonly number[]; replay?: readonly Choice[]; scheduleChoices?: readonly number[] } = {}) {
+    const home = process.env.PI_TEAMS_VITEST_HOME;
+    const parent = process.env.PI_TEAMS_VITEST_ROOT;
+    if (!home || !parent || process.env.HOME !== home || !path.resolve(home).startsWith(`${path.resolve(parent)}${path.sep}`)) {
+      throw new Error("Simulation requires the pre-import isolated HOME from test/setup.ts");
+    }
+    this.release = enterSimulation();
+    const wipe = () => { for (const entry of fs.readdirSync(home)) fs.rmSync(path.join(home, entry), { recursive: true, force: true }); };
+    wipe();
+    this.workspace = { root: home, home, tmp: path.join(home, "tmp"), cleanup: wipe };
+    fs.mkdirSync(this.workspace.tmp, { recursive: true });
+    fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
+    fs.writeFileSync(path.join(home, ".pi", "agent", "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false } } }));
+    this.entropy = new Entropy(seed, options.tape, options.replay, options.scheduleChoices);
     this.scheduler = new Scheduler(this.entropy);
     this.guard = new HostGuard(this.workspace.root, file => this.notifyFile(file));
   }
   createActor(actor: string, variables: Record<string, string> = {}): HostEnv {
     if (this.envs.has(actor)) throw new Error(`Actor environment already exists: ${actor}`);
     const process = this.processes.actor(actor) ?? this.processes.spawn(actor);
+    this.generations.set(actor, process);
     const env: HostEnv = {
-      clock: this.scheduler.clock(actor, callback => { this.enter(actor, callback); }),
+      clock: this.scheduler.clock(actor, callback => process.alive ? this.enter(actor, callback) : undefined),
       random: this.entropy,
       process: {
         pid: process.pid,
+        platform: "linux",
+        cwd: () => this.workspace.home,
         env: {
           HOME: this.workspace.home, USERPROFILE: this.workspace.home, TMPDIR: this.workspace.tmp,
           PI_CODING_AGENT_DIR: path.join(this.workspace.home, ".pi", "agent"),
@@ -48,11 +67,14 @@ export class SimWorld {
           ...variables,
         },
         pidExists: pid => this.processes.exists(pid),
-        generation: pid => this.processes.generation(pid),
+        generation: pid => this.faults.has("generation") ? { kind: "unknown", reason: "injected_generation_unavailable" } : this.processes.generation(pid),
         kill: (pid, signal) => { if (signal !== 0) this.killPid(pid); else if (!this.processes.exists(pid)) throw Object.assign(new Error("No such process"), { code: "ESRCH" }); },
         exit: code => { this.killPid(process.pid); throw new ActorExit(actor, code); },
       },
-      exec: this.exec,
+      exec: {
+        runSync: (command, args) => this.execute(command, args),
+        run: (command, args, options) => this.runCommand(actor, command, args, options),
+      },
       watch: { watchDirectory: (directory, listener) => this.watch(actor, directory, listener) },
     };
     this.envs.set(actor, env);
@@ -61,12 +83,13 @@ export class SimWorld {
   enter<T>(actor: string, action: () => T): T {
     const env = this.envs.get(actor);
     const process = this.processes.actor(actor);
-    if (!env || !process?.alive || process.pid !== env.process.pid) throw new Error(`Actor is not live: ${actor}`);
+    if (!env || !process?.alive || process !== this.generations.get(actor)) throw new Error(`Actor is not live: ${actor}`);
     return runWithHostEnv(env, () => this.guard.run(action));
   }
   enqueue(actor: string, label: string, action: () => unknown, delay = 0): number {
+    const generation = this.generations.get(actor);
     return this.scheduler.enqueue(label, () => {
-      if (!this.processes.actor(actor)?.alive) return;
+      if (!generation?.alive || this.generations.get(actor) !== generation) return;
       return this.enter(actor, action);
     }, { actor, delay });
   }
@@ -87,7 +110,7 @@ export class SimWorld {
   }
   notifyFile(file: string): void {
     for (const watch of this.watches) if (!watch.closed && watch.directory === path.dirname(file)) {
-      this.enqueue(watch.actor, `watch:${path.basename(file)}`, () => { if (!watch.closed) watch.listener(path.basename(file)); });
+      this.enqueue(watch.actor, `watch:${path.basename(file)}`, () => { if (!watch.closed) return watch.listener(path.basename(file)); });
     }
   }
   failWatches(error: unknown): void {
@@ -99,5 +122,54 @@ export class SimWorld {
     this.guard.assertClean();
     return count;
   }
-  dispose(): void { this.guard.dispose(); this.workspace.cleanup(); }
+  private execute(command: string, args: readonly string[]) {
+    const binary = path.basename(command);
+    if (binary === "herdr" && this.faults.get("herdr")?.mode === "slow") this.scheduler.advance(100); // S-sync-block
+    if (binary === "bd" && this.faults.get("bd")?.mode === "unavailable") return { status: 127, stdout: "", stderr: "bd unavailable" };
+    if (binary === "bd" && this.faults.get("bd")?.mode === "slow") throw new Error("Healthy bd wire behavior is not modeled");
+    if (binary === "herdr" && args[0] === "agent" && args[1] === "start") {
+      const fault = this.faults.get("herdr.start");
+      if (fault?.mode === "timeout") this.scheduler.advance(300000); // S-sync-block baseline readiness wait.
+      if (fault) return { status: 1, stdout: JSON.stringify({ error: { code: fault.mode === "refused" ? "start_refused" : "timeout", message: "injected start fault" } }), stderr: "" };
+    }
+    return this.exec.runSync(command, args);
+  }
+  private runCommand(actor: string, command: string, args: readonly string[], options: { timeoutMs: number; signal?: AbortSignal }): Promise<ExecOutcome> {
+    if (!Number.isFinite(options.timeoutMs) || options.timeoutMs < 0) throw new Error("Invalid exec timeout");
+    return new Promise(resolve => {
+      if (options.signal?.aborted) { resolve({ kind: "aborted" }); return; }
+      let settled = false;
+      let effect: ExecOutcome | undefined;
+      const finish = (outcome: ExecOutcome) => {
+        if (settled) return;
+        settled = true;
+        this.scheduler.cancel(timeout);
+        options.signal?.removeEventListener("abort", abort);
+        resolve(outcome);
+      };
+      const abort = () => { this.enqueue(actor, "exec.abort", () => finish({ kind: "aborted" })); };
+      const timeout = this.enqueue(actor, "exec.timeout", () => finish({ kind: "timeout", afterMs: options.timeoutMs }), options.timeoutMs);
+      options.signal?.addEventListener("abort", abort, { once: true });
+      this.enqueue(actor, "exec.arrival", () => {
+        this.enqueue(actor, "exec.effect", () => {
+          // The effect may precede a timeout or abort. Neither outcome proves no effect.
+          const startTimeout = path.basename(command) === "herdr" && args[0] === "agent" && args[1] === "start" && this.faults.get("herdr.start")?.mode === "timeout";
+          if (startTimeout) {
+            if (this.entropy.choose("fault.start.timeout.effect", 2) === 1) this.exec.runSync(command, args);
+            return;
+          }
+          // Slow async calls delay completion without freezing other actors.
+          const slow = path.basename(command) === "herdr" && this.faults.get("herdr")?.mode === "slow";
+          effect = { kind: "exited", ...(slow ? this.exec.runSync(command, args) : this.execute(command, args)) };
+          const delay = slow ? 100 : 0;
+          this.enqueue(actor, "exec.completion", () => finish(effect!), delay);
+        });
+      });
+    });
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.guard.dispose(); this.workspace.cleanup(); this.release();
+  }
 }

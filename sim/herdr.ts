@@ -19,7 +19,7 @@ export class HerdrFake {
   private sequence = 0;
   onStart?: (pane: Pane, argv: string[]) => void;
 
-  constructor(readonly processes: ProcessTable) {}
+  constructor(readonly processes: ProcessTable, private readonly stopProcess = (pid: number) => processes.kill(pid)) {}
   private cite(assumption: AssumptionId, behavior: string): void { this.evidence.push({ assumption, behavior }); }
 
   spawn(id = `pane-${++this.sequence}`, env: Record<string, string> = {}): Pane {
@@ -35,7 +35,8 @@ export class HerdrFake {
     const pane = this.panes.get(paneId);
     if (!pane) throw new Error("pane_not_found");
     if (this.agentLive(pane)) throw new Error("agent_pane_busy");
-    const actor = pane.env.PI_AGENT_NAME || name;
+    const actorName = pane.env.PI_AGENT_NAME || name;
+    const actor = pane.env.PI_TEAM_NAME ? `${pane.env.PI_TEAM_NAME}/${actorName}` : actorName;
     const process = this.processes.spawn(actor, { parentPid: pane.shellPid });
     pane.agentPid = process.pid;
     pane.agentBirthToken = process.osBirthToken;
@@ -49,8 +50,8 @@ export class HerdrFake {
     this.cite("A2", "pane closure kills its shell and agent");
     const pane = this.panes.get(id);
     if (!pane) return;
-    if (this.agentLive(pane)) this.processes.kill(pane.agentPid!);
-    if (this.processes.exists(pane.shellPid)) this.processes.kill(pane.shellPid);
+    if (this.agentLive(pane)) this.stopProcess(pane.agentPid!);
+    if (this.processes.exists(pane.shellPid)) this.stopProcess(pane.shellPid);
     this.panes.delete(id);
   }
   list(): unknown[] {
