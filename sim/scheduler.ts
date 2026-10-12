@@ -8,6 +8,7 @@ export interface Decision { at: number; enabled: string[]; selected: string }
 export class Scheduler {
   now = 1_700_000_000_000;
   readonly decisions: Decision[] = [];
+  onBoundary?: (phase: "begin" | "end", operation: { id: number; label: string; actor?: string }) => void;
   private nextId = 0;
   private readonly queue = new Map<number, Operation>();
   private readonly pending = new Map<Promise<unknown>, string | undefined>();
@@ -60,6 +61,7 @@ export class Scheduler {
     this.queue.delete(id);
     if (op.interval !== undefined) this.queue.set(id, { ...op, due: this.now + op.interval });
     this.decisions.push({ at: this.now, enabled, selected });
+    this.onBoundary?.("begin", op);
     try {
       const result = op.run();
       if (result && typeof (result as Promise<unknown>).then === "function") {
@@ -71,7 +73,8 @@ export class Scheduler {
         });
       }
     } catch (error) { this.errors.push(error); }
-    await this.checkpoint();
+    try { await this.checkpoint(); }
+    finally { this.onBoundary?.("end", op); }
     return true;
   }
 
