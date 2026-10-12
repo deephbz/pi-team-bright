@@ -22,7 +22,7 @@ v31-integration
  ├─ v31-props    C1  exhaustive planWorkerEnsure table, monitors, properties
  ├─ v31-probes   C1  fake-drift probes A1–A6, A8 (fixtures)
  ├─ v31-traces   C6  empirical trace extractor and synthetic fixtures
- ├─ v31-cursor   C3  Proposal A: branch-held cursor, ACK removal
+ ├─ v31-cursor   C3  Proposal A: branch-held cursor, ACK removal (rebases onto C0)
  └─ v31-liveness C2  Proposal B: generation verifier, launch fence,
                      Carrier Observation   (starts after C0 merges)
 ```
@@ -39,11 +39,33 @@ decisions, diagram.
   capabilities through every await.
 - `sim/trace-format.ts`: world traces hold world inputs only.
 
-Amendment to the verification note: the simulated world uses the real
-filesystem under an isolated per-world temp HOME. All actors on one host share
-`~/.pi`, so a shared real tree is the truthful model. Host access outside that
-tree, and any real timer, fails the run. Crash-torn writes stay out of scope
-until A9.
+Amendments after the systems review (`second-opinion-impl-plan`, REJECT of
+the first contract draft; all six findings adopted):
+
+1. Filesystem. The world root is the per-process HOME that the test runner
+   isolates before any import. Worlds run one at a time and wipe the tree
+   between runs. The simulator guards fs calls fail-closed to that tree. Code
+   compares only `clock.now()` values; file timestamps are never time
+   evidence. One Node loop serializes synchronous fs sequences that separate
+   processes could interleave. That limit is stated, not modelled; the lock
+   protocol keeps its own multiprocess tests and TLA+ fence.
+2. Execution. `HostExec.run` is bounded and async, with `exited`,
+   `spawn_failed`, `timeout` and `aborted` outcomes. `timeout` and `aborted`
+   leave the effect unknown. Baseline blocking waits use `runSync` and
+   `sleepSync`; other actors make no progress during the block
+   (assumption `S-sync-block`). The baseline claim is narrowed to that model.
+3. Callbacks. Simulated timers, watchers, exec completions and Pi hooks run in
+   the registering actor's context and drop after that actor generation exits.
+   `enterSimulation()` makes host access outside an actor throw.
+4. Traces. Steps carry actor coordinates, semantic Pi navigation and source
+   faults. Tool arguments may cite earlier results. A replay receipt holds the
+   scheduler choices separately from the input trace.
+5. Seam inventory. `cwd`, `platform`, `sleep` and `sleepSync` join the seam.
+   Production generation wiring is a C2 integration gate.
+6. Order. C2 stacks on merged C0; C3 rebases onto C0 after it merges.
+   Migration defaults to a stopped-epoch upgrade. A live reload of a running
+   Team is tested only if a reload barrier and its partial-failure path are
+   defined.
 
 ## Data boundary
 
