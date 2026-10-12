@@ -42,6 +42,9 @@ export class TeamSessionLifecycleService {
           return { kind: "refused", reason: `Worker ${input.workerName} started for a Membership that is no longer current.`, exitProcess: true };
         }
       }
+      if (input.launchId && current.launch && current.launch.launchId !== input.launchId) {
+        return { kind: "refused", reason: "Startup belongs to a superseded launchId.", exitProcess: true };
+      }
       const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), hostEnv().process.pid, undefined, input.launchId);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });

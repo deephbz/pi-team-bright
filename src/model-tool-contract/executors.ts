@@ -178,7 +178,9 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
       if (outcome.kind === "unavailable") {
         return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
       }
-      return { kind: "worker_ensured", effect: outcome.kind === "created" ? "created" : "reused", worker: publicWorker(outcome.worker) };
+      const receipt = { ...(outcome.launchId ? { launchId: outcome.launchId } : {}), ...(outcome.launch ? { launch: outcome.launch } : {}), ...(outcome.lastStop ? { lastStop: outcome.lastStop } : {}) };
+      if (outcome.kind === "attention") return { kind: "attention", worker: outcome.worker.name, reason: outcome.reason, nextActionHint: outcome.nextActionHint, ...receipt };
+      return { kind: "worker_ensured", effect: outcome.kind, worker: publicWorker(outcome.worker), ...receipt, ...(outcome.recoveryMode ? { recoveryMode: outcome.recoveryMode } : {}) };
     },
 
     async taskCreate(leaderSessionId, parameters) {
