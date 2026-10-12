@@ -4,7 +4,20 @@ import type { Verdict, WitnessVerdict } from "./types";
 export type Entry<K extends HistoryFact["kind"]> = Extract<HistoryEntry, { kind: K }>;
 
 export function ofKind<K extends HistoryFact["kind"]>(history: readonly HistoryEntry[], kind: K): Entry<K>[] {
-  return history.filter((entry): entry is Entry<K> => entry.kind === kind);
+  return history.filter(entry => entry.kind === kind).map((entry: HistoryEntry) => {
+    if (entry.kind !== "journal.append" || !entry.event.carrier) return entry;
+    const carrier = entry.event.carrier;
+    // Compatibility accessor for monitor vocabulary. Canonical history keeps raw bytes unchanged.
+    // Production calls a blocked-attention publication `blocked`; E4 calls it `attention`.
+    const field = carrier.field === "blocked" ? "attention" : carrier.field;
+    return { ...entry, event: { ...entry.event,
+      ...(carrier.generation ? { generation: carrier.generation } : {}),
+      ...(carrier.paneId === undefined ? {} : { paneId: carrier.paneId }),
+      ...(carrier.suspectedHumanStop === undefined ? {} : { suspectedHumanStop: carrier.suspectedHumanStop }),
+      ...(typeof carrier.cause?.source === "string" ? { cause: carrier.cause.source } : {}),
+      raw: { ...entry.event.raw, ...(field === undefined ? {} : { field }), ...(carrier.to === undefined ? {} : { to: carrier.to }) },
+    } };
+  }) as Entry<K>[];
 }
 
 export interface Generation {

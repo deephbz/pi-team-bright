@@ -1,0 +1,88 @@
+[
+  {
+    "at": 1700000000000,
+    "sequence": 3,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "team-1/lead",
+      "command": "pi",
+      "generation": {
+        "pid": 101,
+        "bootId": "boot-1",
+        "osBirthToken": "1"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 4,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "shell:pane:team-1/lead",
+      "command": "shell",
+      "generation": {
+        "pid": 102,
+        "bootId": "boot-1",
+        "osBirthToken": "2"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 58,
+    "kind": "tool.result",
+    "tool": "team_create",
+    "result": {
+      "kind": "team_created"
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 89,
+    "kind": "journal.append",
+    "cursor": "1",
+    "phase": "prepared"
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 116,
+    "kind": "tool.result",
+    "tool": "ensure_worker",
+    "result": {
+      "kind": "worker_ensured",
+      "effect": "created"
+    }
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 143,
+    "kind": "journal.append",
+    "cursor": "2"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 144,
+    "kind": "journal.append",
+    "cursor": "3",
+    "carrier": {
+      "field": "binding",
+      "to": "unbound",
+      "cause": {
+        "source": "membership",
+        "fact": "unbound"
+      },
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000100000,
+    "sequence": 780,
+    "kind": "tool.result",
+    "tool": "team_sync",
+    "result": {
+      "kind": "snapshot"
+    }
+  }
+]
