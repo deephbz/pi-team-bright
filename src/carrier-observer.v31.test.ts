@@ -48,6 +48,28 @@ it("keeps process sample time independent from delayed Herdr reads", async () =>
     expect(observer.views.get("m")?.evidence[0].observedAt).toBe(1000);
   });
 });
+it("times out a stalled verifier without starting a duplicate flight", async () => {
+  const host = env();
+  const timers = new Map<number, () => void>(); let id = 0;
+  host.clock.setTimeout = ((callback: () => void) => { timers.set(++id, callback); return id; }) as any;
+  host.clock.clearTimeout = ((key: number) => { timers.delete(key); }) as any;
+  const verifier = vi.fn(() => new Promise<Map<number, any>>(() => {}));
+  host.process.generations = verifier;
+  await runWithHostEnv(host, async () => {
+    const observer = new CarrierObserver("team");
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const refresh = observer.refresh();
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+      f.now += 2000;
+      for (const callback of [...timers.values()]) callback();
+      await refresh;
+      expect(observer.views.get("m")?.process).toBe("unknown");
+      expect(observer.views.get("m")?.evidence.find(e => e.source === "process_generation")?.fact).toContain("process_generation_timeout");
+      expect(observer.views.get("m")?.terminal).toBe("present");
+    }
+    expect(verifier).toHaveBeenCalledOnce();
+  });
+});
 it("lets a current PTB stop request outrank earlier human suspicion and keeps launch cause", async () => runWithHostEnv(env(), async () => {
   f.status.osBirthToken = "dead"; f.status.stopRequested = "worker_stop";
   f.status.lastStop = { piReason: "quit", observedAt: 1, suspectedHumanStop: true };
@@ -92,7 +114,9 @@ it("discards a process observation after a successor admits", async () => runWit
   const observer = await running(); expect(f.events).toEqual([]); observer.stop();
 }));
 it("reports one attention per Herdr outage while process truth stays live", async () => runWithHostEnv(env(), async () => {
-  f.outage = true; const observer = await running(); await observer.refresh();
+  f.outage = true; const notify = vi.fn(); const observer = new CarrierObserver("team", notify); observer.start(); await observer.refresh(); await observer.refresh();
+  expect(notify).toHaveBeenCalledOnce();
+  expect(f.events.find(e => e.type === "alert").alertId).toMatch(/^herdr-observation:/);
   expect(f.events.filter(e => e.type === "alert")).toHaveLength(1);
   expect(observer.views.get("m")?.process).toBe("live");
   f.outage = false; await observer.refresh(); f.outage = true; await observer.refresh();
