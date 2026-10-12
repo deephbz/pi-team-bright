@@ -7,6 +7,7 @@ export type { AssumptionId, FakeEvidence } from "./assumptions";
 export interface Pane {
   id: string; shellPid: number; agentPid?: number; agentBirthToken?: string; agentBootId?: string; name?: string;
   state: "idle" | "working" | "blocked" | "done" | "unknown";
+  sessionFile?: string;
   env: Record<string, string>; rect: { x: number; y: number; width: number; height: number };
 }
 
@@ -70,7 +71,7 @@ export class HerdrFake {
     return !!process && process.osBirthToken === pane.agentBirthToken && process.bootId === pane.agentBootId;
   }
   private agent(p: Pane) {
-    return { name: p.name, pane_id: p.id, terminal_id: `terminal:${p.id}`, tab_id: "tab-1", workspace_id: "workspace-1", agent: "pi", interactive_ready: true, agent_status: p.state };
+    return { name: p.name, pane_id: p.id, terminal_id: `terminal:${p.id}`, tab_id: "tab-1", workspace_id: "workspace-1", agent: "pi", interactive_ready: true, agent_status: p.state, agent_session: p.sessionFile ? { source: "herdr:pi", agent: "pi", kind: "path", value: p.sessionFile } : null };
   }
   private wirePane(p: Pane) {
     return { pane_id: p.id, tab_id: "tab-1", workspace_id: "workspace-1", terminal_id: `terminal:${p.id}`, rect: p.rect };

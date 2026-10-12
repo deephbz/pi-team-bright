@@ -1,3 +1,4 @@
+import { herdrPiSessionPath } from "../adapters/herdr-session";
 import { hostEnv } from "../env/host-env";
 import { herdrCarrierName } from "../adapters/herdr-adapter";
 import { herdrList } from "../carrier-observation";
@@ -14,7 +15,7 @@ export async function adoptLegacyGeneration(teamName: string, worker: string, ex
   if (before.kind !== "found") return false;
   const agents = await herdrList("agent");
   const pane = member.terminalTarget?.targetId ?? member.tmuxPaneId;
-  if (!agents?.some(row => row.name === herdrCarrierName(teamName, worker) && row.pane_id === pane && row.agent_session === member.sessionFile)) return false;
+  if (!agents?.some(row => row.name === herdrCarrierName(teamName, worker) && row.pane_id === pane && herdrPiSessionPath(row.agent_session) === member.sessionFile)) return false;
   return withCurrentMembershipLease(teamName, expectedMembershipId, async current => {
     const latest = await readRuntimeStatus(teamName, worker);
     if (current.sessionFile !== member.sessionFile || (current.terminalTarget?.targetId ?? current.tmuxPaneId) !== pane || !latest || latest.pid !== status.pid || latest.startedAt !== status.startedAt
