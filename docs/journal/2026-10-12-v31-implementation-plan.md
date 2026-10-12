@@ -87,6 +87,8 @@ the five rules of the proposal; the owner may reverse any of them.
 | G8 | carrier absent / invalid | `create` / `refuse` as today. |
 | G9 | bound rows | Ignore launch state. |
 | G10 | prior refusal evidence | Equals launch `refused` only with decisive no-start evidence for the current launch id. A timeout, a stale refusal or a missing Herdr row stays `unknown`. |
+| G11 | bound, token-less legacy generation | `attention` reason `legacy_unverified`, hint `ask_human`. The text names both exits: reload that Worker's Pi, which re-admits it with a token, or adopt it in `/ptb status`. Never spawn. Added 2026-10-13 after the migration test showed `unknown`/`wait` with no exit. |
+| G12 | superseded generation | When a new generation binds a Membership, the journal states the end of the old generation: a `process: gone` row for it, or a replacement row that names it with its verifier result. This holds even when the observer never sampled the old generation as dead. Added 2026-10-13 from oracle finding PD-1 (E1). |
 
 Reload rules from the product review, scoped by the systems review: a Worker
 `/reload` journals no carrier event unless `stopping` outlasts the hung-reload
