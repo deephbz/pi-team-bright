@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "id": "m5-gate-witness",
+  "source": "synthetic",
+  "assumptions": [
+    "S-first-worker-pane-is-pane-1"
+  ],
+  "setup": {
+    "ptbVersion": "v3.1",
+    "teams": []
+  },
+  "steps": [
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "session": "session-1",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_create",
+        "args": {
+          "name": "team-1",
+          "purpose": "Synthetic v3.1 campaign"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "fault.set",
+        "fault": {
+          "source": "pi.start",
+          "mode": "hang"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w1",
+          "scope": "Synthetic campaign worker"
+        }
+      }
+    }
+  ]
+}
