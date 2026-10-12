@@ -1,0 +1,107 @@
+{
+  "assumption": "Pi emits session_shutdown(quit) before process exit.",
+  "verdict": "holds",
+  "command": [
+    "isolated real Pi -e scripts/probes/pi-extension.ts",
+    "/quit",
+    "Ctrl-D",
+    "kill -TERM <owned-Pi-pid>"
+  ],
+  "observed": {
+    "environment": {
+      "date": "2026-10-12T15:40:30.372Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "node": "v25.6.0",
+      "pi": "0.83.0",
+      "base": "a992f086017b8924c5c448456573c16452ca655d",
+      "herdr": "herdr 0.9.3"
+    },
+    "checks": [
+      {
+        "method": "/quit",
+        "pid": 63484,
+        "processGone": true,
+        "events": [
+          {
+            "at": 1791819632610,
+            "pid": 63484,
+            "event": "session_start",
+            "reason": "startup"
+          },
+          {
+            "at": 1791819635462,
+            "pid": 63484,
+            "event": "session_shutdown",
+            "type": "session_shutdown",
+            "reason": "quit"
+          },
+          {
+            "at": 1791819635463,
+            "pid": 63484,
+            "event": "process_exit",
+            "code": 0
+          }
+        ]
+      },
+      {
+        "method": "Ctrl-D",
+        "pid": 64325,
+        "processGone": true,
+        "events": [
+          {
+            "at": 1791819636398,
+            "pid": 64325,
+            "event": "session_start",
+            "reason": "startup"
+          },
+          {
+            "at": 1791819639827,
+            "pid": 64325,
+            "event": "session_shutdown",
+            "type": "session_shutdown",
+            "reason": "quit"
+          },
+          {
+            "at": 1791819639828,
+            "pid": 64325,
+            "event": "process_exit",
+            "code": 0
+          }
+        ]
+      },
+      {
+        "method": "SIGTERM",
+        "pid": 64906,
+        "processGone": true,
+        "events": [
+          {
+            "at": 1791819640759,
+            "pid": 64906,
+            "event": "session_start",
+            "reason": "startup"
+          },
+          {
+            "at": 1791819644178,
+            "pid": 64906,
+            "event": "session_shutdown",
+            "type": "session_shutdown",
+            "reason": "quit"
+          },
+          {
+            "at": 1791819644230,
+            "pid": 64906,
+            "event": "process_exit",
+            "code": 0
+          }
+        ]
+      }
+    ],
+    "anchor": "Synchronous extension event log orders session_shutdown and process exit; parent independently checks PID disappearance.",
+    "cleanup": {
+      "workspaceId": "wCZ",
+      "workspaceGone": true,
+      "ownedPanesClosed": true
+    }
+  }
+}
