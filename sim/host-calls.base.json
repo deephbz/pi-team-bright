@@ -1,0 +1,1657 @@
+[
+  {
+    "file": "extensions/compaction-delivery-gate.ts",
+    "line": 38,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "extensions/compaction-delivery-gate.ts",
+    "line": 40,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "extensions/compaction-delivery-gate.ts",
+    "line": 44,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "extensions/framework-sync-execution.ts",
+    "line": 70,
+    "primitive": "randomUUID"
+  },
+  {
+    "file": "extensions/framework-sync-execution.ts",
+    "line": 76,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/framework-sync-execution.ts",
+    "line": 267,
+    "primitive": "randomUUID"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 85,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 86,
+    "primitive": "process.execPath"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 134,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 145,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 192,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 192,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 232,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/index.ts",
+    "line": 279,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 72,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 72,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 73,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 75,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 76,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 77,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 101,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 158,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 185,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 194,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 239,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 268,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 319,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 398,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 436,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 447,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 494,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 494,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 521,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 525,
+    "primitive": "setInterval"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 528,
+    "primitive": "clearInterval"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 738,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 774,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 811,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 813,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 821,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 823,
+    "primitive": "process.env"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 853,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 859,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 872,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 913,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 929,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/pi-team-session-adapter.ts",
+    "line": 939,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "extensions/settings-warning.ts",
+    "line": 32,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "extensions/settings-warning.ts",
+    "line": 85,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/adapters/cmux-adapter.ts",
+    "line": 29,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/cmux-adapter.ts",
+    "line": 29,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/cmux-adapter.ts",
+    "line": 32,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/cmux-adapter.ts",
+    "line": 32,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/durable-task-authority-provisioning.ts",
+    "line": 27,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/durable-task-authority-provisioning.ts",
+    "line": 40,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/durable-task-authority-provisioning.ts",
+    "line": 66,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/adapters/durable-task-authority-read-team.ts",
+    "line": 10,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/durable-task-mutation-publication.ts",
+    "line": 115,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/adapters/durable-task-mutation-publication.ts",
+    "line": 168,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/adapters/durable-task-mutation-publication.ts",
+    "line": 194,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/adapters/durable-team-lifecycle-publication.ts",
+    "line": 56,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 35,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 40,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 138,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 138,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 142,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 402,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 408,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/adapters/herdr-adapter.ts",
+    "line": 411,
+    "primitive": "Atomics.wait"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 33,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 33,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 33,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 40,
+    "primitive": "spawnSync"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 180,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 205,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/iterm2-adapter.ts",
+    "line": 206,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/tmux-adapter.ts",
+    "line": 20,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/tmux-adapter.ts",
+    "line": 24,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/tmux-adapter.ts",
+    "line": 117,
+    "primitive": "execSync"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 49,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 49,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 49,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 67,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 93,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 105,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 127,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/wezterm-adapter.ts",
+    "line": 213,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 45,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 61,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 108,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 114,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 114,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 114,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 191,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/adapters/windows-adapter.ts",
+    "line": 264,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/adapters/zellij-adapter.ts",
+    "line": 19,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/adapters/zellij-adapter.ts",
+    "line": 19,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/alert-authority/alerts.ts",
+    "line": 106,
+    "primitive": "randomUUID"
+  },
+  {
+    "file": "src/alert-authority/direct-delivery.ts",
+    "line": 54,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/alert-authority/direct-delivery.ts",
+    "line": 198,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/alert-authority/direct-delivery.ts",
+    "line": 301,
+    "primitive": "setInterval"
+  },
+  {
+    "file": "src/alert-authority/direct-delivery.ts",
+    "line": 317,
+    "primitive": "clearInterval"
+  },
+  {
+    "file": "src/alert-authority/direct-delivery.ts",
+    "line": 318,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/alert-authority/direct-delivery.ts",
+    "line": 387,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/alert-authority/inbox-delivery.ts",
+    "line": 44,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/alert-authority/inbox-delivery.ts",
+    "line": 48,
+    "primitive": "randomUUID"
+  },
+  {
+    "file": "src/cli/migrate-task-delivery.ts",
+    "line": 11,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/migrate-tasks.ts",
+    "line": 8,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 15,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 16,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 24,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 48,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 48,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 55,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 59,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 61,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 81,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/ptb-palette-gallery.ts",
+    "line": 82,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/render-model-tool-contract.ts",
+    "line": 12,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/cli/render-model-tool-contract.ts",
+    "line": 54,
+    "primitive": "execFileSync"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 12,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 13,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 21,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 21,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 24,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 28,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 30,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 40,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 43,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-dag-islands-gallery.ts",
+    "line": 50,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 10,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 11,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 32,
+    "primitive": "setInterval"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 37,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 38,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 51,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 59,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/cli/task-graph-pane.ts",
+    "line": 60,
+    "primitive": "clearInterval"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 13,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 14,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 18,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 18,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 29,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 37,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 39,
+    "primitive": "process.argv"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 41,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 45,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/cli/tui-message-gallery.ts",
+    "line": 62,
+    "primitive": "process.exit"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 282,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 282,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 283,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 301,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 455,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 481,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/coordination/event-journal.ts",
+    "line": 486,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/coordination/observation-service.ts",
+    "line": 94,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/model-tool-contract/beads-authority-adapter.ts",
+    "line": 55,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/model-tool-contract/beads-authority-adapter.ts",
+    "line": 67,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/model-tool-contract/beads-authority-adapter.ts",
+    "line": 93,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/model-tool-contract/beads-authority-adapter.ts",
+    "line": 303,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/model-tool-contract/beads-task-adapter.ts",
+    "line": 640,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/model-tool-contract/durable-model-tool-team-application.ts",
+    "line": 42,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/model-tool-contract/durable-model-tool-team-application.ts",
+    "line": 71,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/model-tool-contract/in-memory-authority-ports.ts",
+    "line": 147,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/model-tool-contract/pi-registration.ts",
+    "line": 98,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/public/observation.ts",
+    "line": 72,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/task-authority/graph-control.ts",
+    "line": 348,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/task-authority/task-goal-limit.ts",
+    "line": 19,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/task-authority/task-goal-limit.ts",
+    "line": 19,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 55,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 55,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 71,
+    "primitive": "process.execPath"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 95,
+    "primitive": "os.tmpdir"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 202,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 262,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/task-graph-view/herdr-pane.ts",
+    "line": 263,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/task-graph-view/integration.ts",
+    "line": 69,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/task-graph-view/integration.ts",
+    "line": 70,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/task-graph-view/integration.ts",
+    "line": 115,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/task-graph-view/integration.ts",
+    "line": 145,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/task-graph-view/layout.ts",
+    "line": 573,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/team-authority/membership-observation-reader.ts",
+    "line": 31,
+    "primitive": "setImmediate"
+  },
+  {
+    "file": "src/team-authority/membership-observation-reader.ts",
+    "line": 42,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/team-authority/membership-observation-reader.ts",
+    "line": 98,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/team-authority/membership-observation-reader.ts",
+    "line": 98,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/team-authority/team-lifecycle-service.ts",
+    "line": 29,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/team-authority/team-lifecycle-service.ts",
+    "line": 31,
+    "primitive": "process.kill"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 44,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 50,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 51,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 55,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 74,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 75,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/team-authority/team-session-lifecycle-service.ts",
+    "line": 80,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/team-authority/worker-launch-bridge.ts",
+    "line": 234,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/team-authority/worker-launch-bridge.ts",
+    "line": 350,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/team-authority/worker-launch-bridge.ts",
+    "line": 377,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/team-authority/worker-launch-bridge.ts",
+    "line": 445,
+    "primitive": "spawn"
+  },
+  {
+    "file": "src/utils/atomic-json.ts",
+    "line": 25,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/atomic-json.ts",
+    "line": 25,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/atomic-json.ts",
+    "line": 25,
+    "primitive": "crypto.randomBytes"
+  },
+  {
+    "file": "src/utils/automatic-summary-policy.ts",
+    "line": 53,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 189,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 192,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 195,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 198,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 231,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 235,
+    "primitive": "spawn"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 237,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 249,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 250,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 256,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 260,
+    "primitive": "process.platform"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 263,
+    "primitive": "execFile"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 269,
+    "primitive": "process.kill"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 292,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 294,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 296,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 297,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 326,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 328,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 476,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 476,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 685,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 689,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 692,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/beads.ts",
+    "line": 981,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/graph-revision-retirement.ts",
+    "line": 155,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/hidden-observation.ts",
+    "line": 147,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/hidden-observation.ts",
+    "line": 147,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/hidden-observation.ts",
+    "line": 147,
+    "primitive": "crypto.randomBytes"
+  },
+  {
+    "file": "src/utils/hidden-observation.ts",
+    "line": 263,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/hooks.ts",
+    "line": 18,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/utils/hooks.ts",
+    "line": 28,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 65,
+    "primitive": "process.kill"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 85,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 109,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 109,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 178,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 194,
+    "primitive": "Math.random"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 207,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 207,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 208,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 222,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 227,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 230,
+    "primitive": "setInterval"
+  },
+  {
+    "file": "src/utils/lock.ts",
+    "line": 236,
+    "primitive": "clearInterval"
+  },
+  {
+    "file": "src/utils/model-role-settings.ts",
+    "line": 63,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/model-role-settings.ts",
+    "line": 63,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/paths.ts",
+    "line": 5,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 196,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 235,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 236,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 428,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 429,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 432,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/utils/predefined-teams.ts",
+    "line": 433,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/ptb-doctor-command.ts",
+    "line": 67,
+    "primitive": "fs.promises"
+  },
+  {
+    "file": "src/utils/ptb-doctor-command.ts",
+    "line": 88,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/ptb-settings-editor.ts",
+    "line": 92,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/ptb-settings-editor.ts",
+    "line": 92,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 72,
+    "primitive": "process.kill"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 113,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 190,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 190,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 262,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 262,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 307,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/runtime.ts",
+    "line": 352,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/sync-liveness-settings.ts",
+    "line": 23,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/sync-liveness-settings.ts",
+    "line": 23,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/sync-liveness.ts",
+    "line": 107,
+    "primitive": "clearTimeout"
+  },
+  {
+    "file": "src/utils/sync-liveness.ts",
+    "line": 108,
+    "primitive": "clearInterval"
+  },
+  {
+    "file": "src/utils/sync-liveness.ts",
+    "line": 142,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/utils/sync-liveness.ts",
+    "line": 151,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/utils/sync-liveness.ts",
+    "line": 157,
+    "primitive": "setTimeout"
+  },
+  {
+    "file": "src/utils/sync-liveness.ts",
+    "line": 166,
+    "primitive": "setInterval"
+  },
+  {
+    "file": "src/utils/sync-nudge.ts",
+    "line": 53,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery-migration.ts",
+    "line": 87,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/task-delivery-migration.ts",
+    "line": 87,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 216,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 292,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 437,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 872,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 951,
+    "primitive": "fs.watch"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1018,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1022,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1034,
+    "primitive": "watchFile"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1035,
+    "primitive": "setInterval"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1063,
+    "primitive": "clearInterval"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1131,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1135,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-delivery.ts",
+    "line": 1179,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-migration.ts",
+    "line": 275,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/task-migration.ts",
+    "line": 358,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/team-hud.ts",
+    "line": 26,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/team-hud.ts",
+    "line": 42,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/team-labels.ts",
+    "line": 6,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/team-labels.ts",
+    "line": 6,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/team-labels.ts",
+    "line": 19,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/team-pane-layout.ts",
+    "line": 67,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/team-pane-layout.ts",
+    "line": 67,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/team-status.ts",
+    "line": 116,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 213,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 217,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 221,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 391,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 393,
+    "primitive": "process.cwd"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 402,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 457,
+    "primitive": "process.pid"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 457,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 457,
+    "primitive": "crypto.randomBytes"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 944,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 1018,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 1037,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 1053,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/teams.ts",
+    "line": 1119,
+    "primitive": "crypto.randomUUID"
+  },
+  {
+    "file": "src/utils/terminal-adapter.ts",
+    "line": 155,
+    "primitive": "spawnSync"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 65,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 98,
+    "primitive": "performance.now"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 109,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 113,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 114,
+    "primitive": "performance.now"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 133,
+    "primitive": "new Date()"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 136,
+    "primitive": "Date.now"
+  },
+  {
+    "file": "src/utils/trace.ts",
+    "line": 142,
+    "primitive": "performance.now"
+  },
+  {
+    "file": "src/utils/worker-resource-projection.ts",
+    "line": 29,
+    "primitive": "os.tmpdir"
+  },
+  {
+    "file": "src/utils/worker-resource-projection.ts",
+    "line": 51,
+    "primitive": "process.env"
+  },
+  {
+    "file": "src/utils/worker-resource-projection.ts",
+    "line": 51,
+    "primitive": "os.homedir"
+  },
+  {
+    "file": "src/utils/worker-resource-projection.ts",
+    "line": 240,
+    "primitive": "randomUUID"
+  },
+  {
+    "file": "src/utils/worker-resource-projection.ts",
+    "line": 241,
+    "primitive": "randomUUID"
+  }
+]
