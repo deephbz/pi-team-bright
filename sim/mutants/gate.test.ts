@@ -60,7 +60,7 @@ function targeted(): WorldTrace[] {
   const who = { team: "team-1", actor: "lead" };
   const paged: WorldTrace = { ...base, id: "mutant-multiple-pages", steps: [...boot, ensure,
     { at: 100, step: { kind: "tool.call", who, tool: "team_sync", args: { view: "snapshot" } } },
-    ...Array.from({ length: 20 }, (_, i): WorldTrace["steps"][number] => ({ at: 101 + i,
+    ...Array.from({ length: 30 }, (_, i): WorldTrace["steps"][number] => ({ at: 101 + i,
       step: { kind: "tool.call", who, tool: "ensure_worker", args: { name: `extra-${i}`, scope: "Fill multiple journal pages" } } })),
     { ...sync, at: 200 }, { ...sync, at: 201 }] };
   return [
@@ -85,6 +85,7 @@ it("records the mutant campaign and exact replay; a survivor is a finding", asyn
     const trace = read("minimal.trace.json") as WorldTrace;
     const result = await execute(trace, read("minimal.receipt.json").seed);
     write("minimal.control.json", summary(result));
+    write("control.evidence.json", evidence(result.history));
     return;
   }
   const traces = [...targeted()];
@@ -138,13 +139,17 @@ it("records the mutant campaign and exact replay; a survivor is a finding", asyn
   write("minimal.trace.json", representative.trace); write("minimal.receipt.json", representative.receipt);
   write("minimal.mutant.json", { ...summary(representative), attempts, criterion: attempts ? "fixed point under single-step deletion and timestamp reduction to predecessor, preserving target violation and completed replay; control checked separately" : "targeted witness; no killing trace found", replayVerified: true });
   // Keep only semantic evidence. Host paths and volatile Session files stay out of Git.
-  write("evidence.json", representative.history.flatMap<any>(e => {
+  write("evidence.json", evidence(representative.history));
+});
+
+function evidence(history: readonly HistoryEntry[]) {
+  return history.flatMap<any>(e => {
     if (e.kind === "tool.result") return [{ sequence: e.sequence, at: e.at, kind: e.kind, name: e.name, effect: e.result.details?.effect, reason: e.result.details?.reason,
-      head: e.result.details?.head, workerChanges: (e.result.details?.workerChanges as any[])?.map(w => w.worker), tasks: (e.result.details?.tasks as any[])?.map(t => t.id) }];
+      head: e.result.details?.head, workerChanges: (e.result.details?.worker_changes as any[])?.map(w => w.worker), tasks: (e.result.details?.tasks as any[])?.map(t => t.id) }];
     if (e.kind === "journal.append") return [{ sequence: e.sequence, at: e.at, kind: e.kind, cursor: e.event.cursor, type: e.event.type, worker: e.event.worker, phase: e.event.phase }];
     if (e.kind === "durable.launch") return [{ sequence: e.sequence, at: e.at, kind: e.kind, record: e.record ? { membershipId: e.record.membershipId, pendingLaunchId: e.record.pendingLaunchId, launch: e.record.raw.launch } : null }];
     if (e.kind === "lead.entry" && e.stamp) return [{ sequence: e.sequence, at: e.at, kind: e.kind, stamp: e.stamp }];
     if (e.kind === "process.birth" || e.kind === "process.death") return [{ sequence: e.sequence, at: e.at, kind: e.kind, process: e.process }];
     return [];
-  }));
-});
+  });
+}
