@@ -1,9 +1,10 @@
 # Decision 0013: Use the official Herdr ready-start command
 
 Date: 2026-08-19
-Status: accepted
+Status: accepted; launch waiting amended by [Decision 0021](0021-carrier-observation-liveness.md) on 2026-10-13
 Architecture impact: none
 Supersedes: decision 0012 rules 3, 4, and 8 only
+Amended by: Decision 0021. The lead no longer waits for Pi readiness; the official start command runs as a bounded asynchronous RPC after the launch receipt.
 
 ## Decision
 

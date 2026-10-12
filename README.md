@@ -57,6 +57,8 @@ ends.
 
 `ensure_worker` returns `attention` when carrier evidence requires a decision.
 Follow its reason and next-action hint; unknown evidence never permits a new spawn.
+A launch returns a receipt at once, and the lead does not wait for Pi to start. A
+live pane or shell never proves a live Worker.
 `worker_ensured.recovered` reports recovery of the exact Worker Session and current
 Attempt. Inspect `lastStop` and ask the human before recovery when
 `suspectedHumanStop` is true. `/ptb status` shows carrier, stop, and nonterminal Task
@@ -339,7 +341,7 @@ contract.
 
 Set the optional Team policy under `pi_team_bright.team` in global
 `settings.json` or a trusted project's `.pi/settings.json`. Pane layout values
-use trusted-project precedence. Sync liveness values are global only. The
+use trusted-project precedence. Sync timing values are global only. The
 [canonical settings example](docs/examples/pi-team-bright.settings.json) contains
 Team, Worker, and model-role settings.
 
@@ -353,7 +355,8 @@ pane backends support `linear` only. Adaptive placement uses
 Set optional `worker_limit` in `pane_layout` to cap current registered Workers;
 omitting it keeps the historical unlimited behavior. The resolved policy is
 stored in `TeamConfig`, so later settings changes do not move a live Team.
-`wait_seconds` remains a liveness policy setting; it does not delay `team_sync`.
+`wait_seconds` is a retained sync timing value; it does not delay `team_sync`.
+Worker liveness comes from the process-generation verifier, not from a sync wait.
 Automatic synchronization defaults to enabled and flushes after 20 seconds or
 three unseen projected changes. Several events
 for one Task can count as one change. Configure

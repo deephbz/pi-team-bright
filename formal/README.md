@@ -34,7 +34,7 @@ every case with the new jar before you update the pin.
 | `GraphAttempt` | A→B success dependency; one semantic A revision; four bounded A Attempt labels; B failure requests at most two repairs. A running or achieved B uses the currently accepted A Attempt (`AcceptedLineage`). Repair traversals stay within two (`RepairBound`). | `src/task-authority/graph-control.ts`: semantic lineage and reverse closure in `applyGraph`; failure-edge traversal and supersession in `complete`; prerequisite Attempt capture and activation key in `derive`. |
 | `MembershipFence` | One Worker; two opaque Membership labels; two opaque Session labels; one held lease; at most two writes. A held lease matches the exact current pair (`LeaseExact`). A write cannot cross replacement (`NoStaleWrite`). | `src/utils/teams.ts`: `withCurrentSessionBinding` holds the exact Membership mutation lease, checks current Session binding, and runs the write inside the lease. |
 | `PublicationObservation` | Two changed Task coordinates and two authority commits. Retirement fence, Task events, delivery queue, and staged observation cursor are independent state. It includes retirement failure, crash/reopen, current exact replay, superseded retry, and complete or partial Task reads. Published events follow a commit; delivery uses current authority at its check point; a successful current replay has a Task event; a superseded retry does not attempt old retirement; staging follows a complete read. | `src/task-authority/graph-orchestration.ts`: authority mutation, retirement, publication warnings, and current-coordinate replay query; `src/utils/graph-revision-retirement.ts`: current coordinates read from committed graph authority; `src/utils/task-delivery.ts`: currentness checks; `src/coordination/observation-service.ts`: complete projection before page-cursor staging. |
-| `SyncPresentation` | Contract revision 2: one exact leader Session, two turns, four result labels, native or framework initial staging, and all subsets of active/pending/runtime-unknown/delivery-unknown Worker evidence. Successful message end resolves the captured pending candidate before tools run. A later candidate survives. Parallel and sequential duplicates refuse; the same call replays. C4 distinguishes `unsettled` from `caught_up`. C8 traverses up to two empty or visible pages. Pending conflicts and empty updates are wasted results. | `extensions/index.ts`: provider request, assistant message end, and turn end hooks; `src/coordination/observation-service.ts`: staging, acknowledgement, and concurrent observation; `src/utils/sync-liveness.ts`: Worker evidence. |
+| `SyncPresentation` (retired; historical provider-ACK model) | Contract revision 2: one exact leader Session, two turns, four result labels, native or framework initial staging, and all subsets of active/pending/runtime-unknown/delivery-unknown Worker evidence. Successful message end resolves the captured pending candidate before tools run. A later candidate survives. Parallel and sequential duplicates refuse; the same call replays. C4 distinguishes `unsettled` from `caught_up`. C8 traverses up to two empty or visible pages. Pending conflicts and empty updates are wasted results. | `extensions/index.ts`: provider request, assistant message end, and turn end hooks; `src/coordination/observation-service.ts`: staging, acknowledgement, and concurrent observation; `src/utils/sync-liveness.ts`: Worker evidence. |
 
 The Graph Attempt labels start at 1. Zero means no B input. Revision numbers
 and labels are finite model coordinates. They do not define ordering or global
@@ -57,17 +57,19 @@ runs stop at the first counterexample, so their state counts are partial.
 | `GraphAttempt` | 53 / 36 | 16 | Complete; no invariant error |
 | `MembershipFence` | 81 / 24 | 6 | Complete; no invariant error |
 | `PublicationObservation` | 23,825 / 6,267 | 14 | Complete; no invariant error |
-| `SyncPresentation` | 418,304 / 140,380 | 18 | Revision 2 complete; no invariant or temporal property error |
+| `SyncPresentation` (retired, historical) | 418,304 / 140,380 | 18 | Revision 2 complete; no invariant or temporal property error |
 
 To reproduce one instance directly with the pinned jar:
 
 ```sh
-java -XX:+UseParallelGC -cp /tmp/tla2tools.jar tlc2.TLC \
-  -deadlock -noGenerateSpecTE -metadir /tmp/publication-observation-states \
+java -XX:+UseParallelGC -cp /path/to/tla2tools.jar tlc2.TLC \
+  -deadlock -noGenerateSpecTE -metadir publication-observation-states \
   -config formal/PublicationObservation.cfg formal/PublicationObservation.tla
 ```
 
 Use each mutant config below with the same command to reproduce its trace.
+
+Rows whose names start with `SyncPresentation` describe the retired provider-acknowledgement model. They are historical evidence and make no current claim.
 
 The fault configurations replace one guard or outcome. They reached these
 specific counterexamples:
@@ -90,7 +92,7 @@ specific counterexamples:
 | `SyncPresentation.sequential-duplicate` | Provider request → completed assistant message → first sync stages `caught_up` → sequential second call reports a pending conflict | `SequentialRefusal` |
 | `SyncPresentation.native-empty-page` | Provider request → completed assistant message → sync reads an empty native page → returns empty updates | `NoEmptyUpdates` |
 
-All six sync mutant runs exited with code 12. Their searches are partial.
+Retired, historical: all six provider-ACK sync mutant runs exited with code 12. Their searches are partial.
 
 | Sync mutant | Generated / distinct | Depth |
 | --- | ---: | ---: |
@@ -116,7 +118,7 @@ deadlock checking is disabled because terminal states are valid. A blocked
 Task can wait indefinitely. The repair budget is a cap, not a guarantee that
 repair starts or succeeds.
 
-`SyncPresentation` uses weak fairness of local `Next` scheduling. Worker evidence
+Retired `SyncPresentation` (historical) uses weak fairness of local `Next` scheduling. Worker evidence
 can resolve during a wait, and resolution restarts the quiet interval. A journal
 change can end the wait. The finite abstraction permits only removal of Worker
 evidence during each wait. It does not model repeated evidence churn. Under
@@ -124,7 +126,7 @@ these limits, a wait without an active Worker eventually returns. A wait-zero
 call also eventually returns. An active Worker with a positive wait can block
 indefinitely. No fairness assumption requires that Worker to settle.
 
-The sync model treats evidence classes as abstract Workers. It checks reason
+The retired sync model (historical; [Decision 0020](../docs/decisions/0020-branch-held-team-cursor.md) removes provider acknowledgement) treats evidence classes as abstract Workers. It checks reason
 sets, not Worker names or multiplicity. Proof is valid, absent, or rejected.
 Acknowledgement succeeds, returns false, or throws. A discard leaves committed
 observation unchanged. The invariant protects a candidate staged after the
