@@ -1,9 +1,25 @@
 # Decision 0018: Preserve Worker launch behavior under load
 
 Date: 2026-10-10
-Status: accepted
+Status: accepted; amended by [Decision 0021](0021-carrier-observation-liveness.md) on 2026-10-13
 Architecture impact: none
 Supersedes: timing rules in decisions 0012 and 0013
+
+## Amendment (Decision 0021)
+
+Decision 0021 changes the following rules in this record:
+
+- Elapsed time never closes a pane or deactivates a Membership. A ceiling expiry
+  produces attention, not carrier death.
+- Carrier liveness no longer comes from the terminal adapter. The rule "check
+  carrier liveness through the terminal adapter" and the "fail promptly on
+  carrier loss" trigger are superseded. Process liveness comes from the OS
+  generation verifier. A pane shows terminal presence only.
+- Launch no longer blocks on Herdr readiness. `ensure_worker` returns a receipt
+  at once, and the bounded start RPC runs asynchronously.
+
+The 300,000 ms ceiling, exact Membership and launch-ID fences, and the lock
+rules still apply. The text below is the original 0018 record.
 
 ## Decision
 

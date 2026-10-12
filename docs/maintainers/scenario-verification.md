@@ -22,7 +22,7 @@ npx vitest run src/coordination/sync-continuity.test.ts extensions/team-update.t
   automatic-send suppression. Manual `/ptb sync` remains available.
 - [`in-memory-authority-ports.test.ts`](../../src/model-tool-contract/in-memory-authority-ports.test.ts)
   composes the production Coordination service with in-memory authority and
-  journal primitives. It has no separate ACK or blocking-wait protocol.
+  journal primitives. It exercises the production service only.
 
 Run `npm test` on the final tree. Run the out-of-fast-lane boundary checks
 explicitly when changing observation or publication:
@@ -35,7 +35,7 @@ npx vitest run --config vitest.full.config.ts test/coord-liveness-e2e/sync-liven
 [`MembershipFence`](../../formal/MembershipFence.tla) retain their bounded
 claims. Run `npm run verify:formal` with the pinned jar described in
 [`formal/README.md`](../../formal/README.md). `SyncPresentation` is retired
-under `formal/retired/`; its provider ACK and blocking waits are obsolete.
+under `formal/retired/`; its provider-acknowledgement model is obsolete and makes no current claim.
 Formal checks do not prove Pi hook or queue timing.
 
 ## Real-Pi checks
@@ -55,7 +55,7 @@ terminal server or uses remote credentials.
 | Scenario | Prediction and boundary |
 | --- | --- |
 | S1 | A native snapshot stamps its page. The next assistant turn returns `caught_up`. Actual Pi compaction retains the raw cursor, and a new snapshot restores current context. |
-| S3 | `/ptb sync` persists `ptb.team-update` with a page line. The exact content reaches the provider. The next model sync succeeds without a synthetic call or provider ACK. |
+| S3 | `/ptb sync` persists `ptb.team-update` with a page line. The exact content reaches the provider. The next model sync succeeds without a synthetic call. |
 | S5 | A test context hook removes one persisted result from model input. Its native cursor remains delivered. The next updates call returns `caught_up`; an explicit snapshot restores context. |
 | S6 | A historical unstamped result renders collapsed and expanded. Session reload preserves its model-visible bytes. Historical readability does not authorize an old cursor. |
 
