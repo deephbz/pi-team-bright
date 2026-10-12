@@ -10,6 +10,6 @@
     "resolveJsonModule": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*", "extensions/**/*"],
+  "include": ["src/**/*", "extensions/**/*", "sim/**/*"],
   "exclude": ["node_modules", "dist"]
 }
