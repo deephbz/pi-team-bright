@@ -342,6 +342,9 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
     return rest;
   }
   if (tool === "team_sync") {
+    // Native Session coordinates stay in machine details, outside model context.
+    const { observation: _observation, ...presented } = raw;
+    raw = presented;
     if (raw.kind === "refused") return raw;
     if (raw.kind === "snapshot") return {
       ...raw,

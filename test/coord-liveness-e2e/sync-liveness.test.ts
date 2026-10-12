@@ -5,15 +5,13 @@ import path from "node:path";
 import piTeams from "../../extensions/index";
 import { createDurableCoordinationQueries } from "../../src/adapters/durable-coordination-queries";
 import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "../../src/model-tool-contract/beads-task-adapter";
-import { createDurableCoordinationNudgeStore } from "../../src/adapters/durable-coordination-nudge-store";
-import { DurableCoordinationHiddenObservation } from "../../src/adapters/durable-coordination-hidden-observation";
+import { snapshotEntry } from "../support/branch-observation";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../../src/coordination/observation-service";
 import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-model-tool-port";
-import { InMemoryModelToolTeamPort, exactLeaderSessionId } from "../../src/model-tool-contract/in-memory-team-port";
+import { exactLeaderSessionId } from "../../src/model-tool-contract/in-memory-team-port";
 import { decodeHistoricalTeamSyncResult, projectToolResult } from "../../src/model-tool-contract/result-projection";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
-import { commitHiddenObservationProjection, readHiddenObservationProjection } from "../../src/utils/hidden-observation";
 import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../../src/utils/sync-nudge-conductor";
 import {
@@ -139,13 +137,12 @@ async function durableFixture(policy: TeamConfigSyncLiveness = { waitSeconds: 12
   const name = teamName("durable");
   const sessionFile = path.join(paths.teamDir(name), "leader-session.jsonl");
   const queries = createDurableCoordinationQueries(readFactory);
-  const hidden = new DurableCoordinationHiddenObservation();
   const port = new DurableModelToolTeamPort(
     { ensureWorker: vi.fn() } as any,
     { stopWorker: vi.fn(), shutdownTeam: vi.fn() },
     readFactory,
     undefined,
-    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)),
+    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore()),
   );
   readPort.listTaskIds.mockResolvedValue([]);
   readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
@@ -390,15 +387,12 @@ describe("hardened coordination liveness boundaries", () => {
     waiting.then(() => undefined, () => undefined);
   });
 
-  it("returns caught_up through the model projection and persists its pending acknowledgement", async () => {
-    const port = new InMemoryModelToolTeamPort();
-    const session = exactLeaderSessionId("in-memory-leader");
-    await port.createTeam(session, { name: teamName("in-memory"), purpose: "Liveness" });
-    port.setBranchContext(session, ["snapshot-entry"]);
+  it("returns caught_up through the model projection and persists its native cursor", async () => {
+    const { port, session, name, config } = await durableFixture();
     const snapshot = await port.readTeamSync(session, "snapshot", new AbortController().signal, "snapshot-call");
     expect(snapshot).toMatchObject({ kind: "snapshot" });
     expect(port.getPendingObservation(session)).toBeDefined();
-    expect(port.acknowledgePendingObservation(session, "snapshot-entry", ["snapshot-entry"])).toBe(true);
+    port.setBranchEntries(session, [{ id: "root", type: "unknown" }, { id: "branch", type: "unknown" }, snapshotEntry("snapshot-entry", name, config.epochId!, config.members.find(member => member.name === "team-lead")!.membershipId!, [], port.getPendingObservation(session)!.head)]);
     expect(port.getPendingObservation(session)).toBeUndefined();
 
     const projected = projectToolResult("team_sync", { kind: "caught_up", head: 4, epoch_id: "epoch-1", state_changed: false, observation_advanced: true });
@@ -418,11 +412,7 @@ describe("hardened coordination liveness boundaries", () => {
   it("uses a post-settle Task/event change and an eventless revision as separate rules", async () => {
     const fixture = await durableFixture();
     const branch = ["root", "branch"];
-    const baseline = await commitHiddenObservationProjection(fixture.name, {
-      teamEpochId: fixture.config.epochId!, exactSessionId: fixture.sessionFile, branchLineage: branch,
-      acknowledgedEntryId: "branch", teamEventCursor: "0", authorityRevisions: { task_projection: "old" },
-    });
-    expect(baseline.kind).toBe("committed");
+    fixture.port.setBranchEntries(fixture.session, [{ id: "root", type: "unknown" }, snapshotEntry("branch", fixture.name, fixture.config.epochId!, fixture.config.members.find(member => member.name === "team-lead")!.membershipId!)]);
 
     // An old revision coordinate alone does not create a canonical unseen Task.
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({ kind: "none" });
@@ -437,7 +427,7 @@ describe("hardened coordination liveness boundaries", () => {
     expect(postSettle).toMatchObject({ kind: "eligible", requestedView: "updates", updateCount: 1 });
   });
 
-  it("requires a snapshot nudge when the exact branch has no hidden baseline", async () => {
+  it("requires a snapshot nudge when the exact branch has no native cursor", async () => {
     const fixture = await durableFixture();
     const debt = await fixture.port.readSyncNudgeDebt(fixture.session, ["root", "branch"]);
     expect(debt).toMatchObject({ kind: "eligible", requestedView: "snapshot", branchLineage: ["root", "branch"], leaderSessionId: fixture.sessionFile });
@@ -446,10 +436,7 @@ describe("hardened coordination liveness boundaries", () => {
   it("schedules a bounded first page when later canonical external Task evidence exists", async () => {
     const fixture = await durableFixture();
     const branch = ["root", "branch"];
-    expect(await commitHiddenObservationProjection(fixture.name, {
-      teamEpochId: fixture.config.epochId!, exactSessionId: fixture.sessionFile, branchLineage: branch,
-      acknowledgedEntryId: "branch", teamEventCursor: "0", authorityRevisions: { task_projection: "current" },
-    })).toMatchObject({ kind: "committed" });
+    fixture.port.setBranchEntries(fixture.session, [{ id: "root", type: "unknown" }, snapshotEntry("branch", fixture.name, fixture.config.epochId!, fixture.config.members.find(member => member.name === "team-lead")!.membershipId!)]);
     readPort.listTaskIds.mockResolvedValue(["task-1"]);
     readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([taskEnvelope()]);
     readPort.readTaskAuthorityRecordEnvelope.mockResolvedValue(taskEnvelope());
@@ -472,8 +459,9 @@ describe("hardened coordination liveness boundaries", () => {
     const fixture = await durableFixture();
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, ["branch"])).resolves.toMatchObject({ kind: "eligible", branchLineage: ["branch"] });
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, ["root", "branch", "branch"])).resolves.toMatchObject({ kind: "none" });
-    const mismatch = await readHiddenObservationProjection(fixture.name, { teamEpochId: fixture.config.epochId!, exactSessionId: "wrong-session", branchLineage: ["root", "branch"] });
-    expect(mismatch).toMatchObject({ kind: "coordinate_mismatch", reason: "lead_session_mismatch" });
+    const wrongSession = exactLeaderSessionId("wrong-session");
+    fixture.port.setLeaderSessionFile(wrongSession, "wrong-session.jsonl");
+    await expect(fixture.port.readSyncNudgeDebt(wrongSession, ["root", "branch"])).resolves.toMatchObject({ kind: "none" });
   });
 
   it("arms after resume-idle settlement, suppresses while busy, and supports snapshot debt", async () => {

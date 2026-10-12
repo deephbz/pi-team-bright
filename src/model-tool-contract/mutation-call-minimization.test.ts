@@ -9,8 +9,6 @@ import { createPublishingBeadsTaskAdapterFactory, projectNonterminalTaskIds, pro
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
 import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
-import { createDurableCoordinationNudgeStore } from "../adapters/durable-coordination-nudge-store";
-import { DurableCoordinationHiddenObservation } from "../adapters/durable-coordination-hidden-observation";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../coordination/observation-service";
 
 const createdTeams: string[] = [];
@@ -44,8 +42,7 @@ async function durablePort(suffix: string): Promise<{ name: string; port: Durabl
   createdTeams.push(name);
   await teams.createTeam(name, sessionFile, "lead-agent", "Mutation call minimization.", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
   const queries = createDurableCoordinationQueries(taskAdapterFactory);
-  const hidden = new DurableCoordinationHiddenObservation();
-  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, undefined, taskAdapterFactory, undefined, new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore(hidden), undefined, createDurableCoordinationNudgeStore(hidden)));
+  const port = new DurableModelToolTeamPort({ ensureWorker: vi.fn() } as any, undefined, taskAdapterFactory, undefined, new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore()));
   const session = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(session, sessionFile);
   return { name, port, session };
