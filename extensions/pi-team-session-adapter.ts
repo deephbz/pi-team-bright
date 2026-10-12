@@ -32,14 +32,7 @@ import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
 import { CompactionDeliveryGate, DELIVERY_HOLD_CHANNEL, isDeliveryHoldSignal } from "./compaction-delivery-gate";
 import { openPtbCommandPalette } from "./ptb-command-palette";
-import {
-  FRAMEWORK_SYNC_ENTRY_TYPE,
-  FRAMEWORK_SYNC_MESSAGE_TYPE,
-  FrameworkSyncExecutionController,
-  persistedFrameworkSyncForPending,
-  projectFrameworkSyncContext,
-  validateFrameworkSyncRecord,
-} from "./framework-sync-execution";
+import { TeamUpdateController } from "./team-update";
 
 export interface PiTeamSessionAdapter {
   readonly modelToolLifecycle: ModelToolLifecycle;
@@ -81,10 +74,6 @@ export function createPiTeamSessionAdapter(options: {
   let syncNudgeConductor: SyncNudgeConductor | null = null;
   let stopSyncNudgeMonitor: (() => void) | null = null;
   let leaderRunSettled = false;
-  let failedFrameworkSync: { record: NonNullable<ReturnType<typeof persistedFrameworkSyncForPending>>["record"]; reason: "error" | "aborted" } | undefined;
-  let frameworkRetryTimer: TimerHandle | undefined;
-  const frameworkRetryCount = new Map<string, number>();
-  const suppressedAutomaticDebt = new Set<string>();
   let leaderContext: any;
   let deliveryContext: any;
   let holdWarningContext: any;
@@ -115,7 +104,7 @@ export function createPiTeamSessionAdapter(options: {
   });
   const messageSink = compactionGate.sink(pi);
   compactionGate.onOpen(() => syncNudgeConductor?.notify());
-  const frameworkSync = new FrameworkSyncExecutionController({
+  const frameworkSync = new TeamUpdateController({
     pi: messageSink,
     current: () => {
       const ctx = leaderContext;
@@ -138,11 +127,12 @@ export function createPiTeamSessionAdapter(options: {
         ? { epochId: config.epochId, membershipId } : undefined;
     },
     pendingObservation: (sessionId) => modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)),
-    setBranchContext: (sessionId, branch) => modelToolJourney()!.port.coordination.setBranchContext(exactLeaderSessionId(sessionId), branch),
+    setBranchEntries: (sessionId, branch) => modelToolJourney()!.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), branch),
     clearPending: (sessionId, toolCallId) => modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), toolCallId),
     isBusy: (ownToolCallId) => {
       const ctx = leaderContext;
       const sessionId = ctx?.sessionManager?.getSessionId?.();
+      if (sessionId) modelToolJourney()?.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
       const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
       return !leaderRunSettled || compactionGate.isClosed || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
         || (!!pending && pending.toolCallId !== ownToolCallId);
@@ -237,18 +227,12 @@ const runSync = async (_args: string, ctx: any) => {
     }
     const owner = commandOwner(ctx);
     if (ctx?.isIdle?.() !== false) leaderRunSettled = true;
-    if (frameworkRetryTimer) { hostEnv().clock.clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     const sessionFile = ctx?.sessionManager?.getSessionFile?.();
     const branch = modelToolBranchIds(ctx);
     if (!sessionId || !sessionFile || !branch.length) return;
-    const pending = modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId));
-    const prior = pending ? persistedFrameworkSyncForPending(ctx.sessionManager.getBranch(), sessionId, sessionFile, pending.toolCallId, pending.resultText) : undefined;
+    modelToolJourney()?.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
     if (!owner.isCurrent()) return;
-    if (prior) {
-      const presented = await frameworkSync.rePresent(prior.record);
-      if (!owner.isCurrent() || presented) return;
-    }
     const view = await modelToolJourney()?.port.coordination.selectTeamSyncView?.(exactLeaderSessionId(sessionId), branch) ?? "updates";
     if (!owner.isCurrent() || ctx.sessionManager.getSessionId() !== sessionId || ctx.sessionManager.getSessionFile() !== sessionFile
       || modelToolBranchIds(ctx).some((id: string, index: number) => id !== branch[index]) || modelToolBranchIds(ctx).length !== branch.length) return;
@@ -445,24 +429,10 @@ function scheduleTeamTitleRefresh(ctx: any) {
 
 function stopSyncNudgeConductor() {
   frameworkSync.invalidate();
-  if (frameworkRetryTimer) { hostEnv().clock.clearTimeout(frameworkRetryTimer); frameworkRetryTimer = undefined; }
-  failedFrameworkSync = undefined;
-  frameworkRetryCount.clear();
-  suppressedAutomaticDebt.clear();
   syncNudgeConductor?.stop();
   syncNudgeConductor = null;
   stopSyncNudgeMonitor?.();
   stopSyncNudgeMonitor = null;
-}
-
-function frameworkSyncDelivered(ctx: any, debtKey: string): boolean {
-  const branch = ctx?.sessionManager?.getBranch?.() ?? [];
-  return branch.some((entry: any, index: number) => {
-    if (entry.type !== "custom" || entry.customType !== FRAMEWORK_SYNC_ENTRY_TYPE) return false;
-    const record = validateFrameworkSyncRecord(entry.data);
-    if (!record || record.debtKey !== debtKey || record.sessionId !== ctx.sessionManager.getSessionId() || record.sessionFile !== ctx.sessionManager.getSessionFile()) return false;
-    return branch.slice(index + 1).some((later: any) => later.type === "custom_message" && later.customType === FRAMEWORK_SYNC_MESSAGE_TYPE && later.details?.recordId === record.id);
-  });
 }
 
 async function startSyncNudgeConductor(ctx: any) {
@@ -483,10 +453,12 @@ async function startSyncNudgeConductor(ctx: any) {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
     const branch = modelToolBranchIds(ctx);
     if (!sessionId || branch.length === 0) return { kind: "none" };
+    modelToolJourney()!.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
     return modelToolJourney()!.port.coordination.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
   };
   const busy = (): boolean => {
     const sessionId = ctx?.sessionManager?.getSessionId?.();
+    if (sessionId) modelToolJourney()?.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
     return !leaderRunSettled || compactionGate.isClosed || ctx?.isIdle?.() === false || !!ctx?.hasPendingMessages?.()
       || frameworkSync.isRunning
       || (!!sessionId && !!modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)));
@@ -498,7 +470,7 @@ async function startSyncNudgeConductor(ctx: any) {
     readDebt: debt,
     isSettled: () => leaderRunSettled,
     isBusy: busy,
-    alreadyPresented: (debtKey) => suppressedAutomaticDebt.has(debtKey) || frameworkSyncDelivered(ctx, debtKey),
+    alreadyPresented: () => false,
     present: async (candidate) => {
       const sessionFile = ctx?.sessionManager?.getSessionFile?.();
       const sessionId = ctx?.sessionManager?.getSessionId?.();
@@ -512,8 +484,7 @@ async function startSyncNudgeConductor(ctx: any) {
       })) return false;
       const latest = await modelToolJourney()!.port.coordination.readSyncNudgeDebt!(exactLeaderSessionId(sessionId), branch);
       if (latest.kind !== "eligible" || latest.debtKey !== candidate.debtKey || latest.scopeKey !== candidate.scopeKey || latest.branchId !== candidate.branchId || latest.leaderMembershipId !== candidate.leaderMembershipId || latest.branchLineage.length !== candidate.branchLineage.length || latest.branchLineage.some((value: string, index: number) => value !== candidate.branchLineage[index]) || busy()) return false;
-      const result = await frameworkSync.execute(teamName!, "automatic", candidate.requestedView, candidate.debtKey);
-      if (result === "quiet" || result === "failed") suppressedAutomaticDebt.add(candidate.debtKey);
+      const result = await frameworkSync.execute(teamName!, "automatic", candidate.requestedView);
       return result === "published";
     },
   });
@@ -840,11 +811,7 @@ pi.on("context", async (event, ctx) => {
   await recipientDeliveries.observeContext(event.messages);
   if (isTeammate) return;
   const sessionId = ctx?.sessionManager?.getSessionId?.();
-  const sessionFile = ctx?.sessionManager?.getSessionFile?.();
-  const branch = ctx?.sessionManager?.getBranch?.();
-  if (!sessionId || !sessionFile || !Array.isArray(branch)) return;
-  const messages = projectFrameworkSyncContext(event.messages, branch, sessionId, sessionFile);
-  if (messages !== event.messages && messages.some((message) => message.role === "toolResult" && String(message.toolCallId).startsWith("framework-team-sync-"))) return { messages };
+  if (sessionId) modelToolJourney()?.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
 });
 
 pi.on("agent_start", async (_event, ctx) => {
@@ -860,33 +827,8 @@ pi.on("agent_settled", async (_event, ctx) => {
     await writeCurrentTeammateRuntime(ctx, { runState: "settled", lastHeartbeatAt: hostEnv().clock.now() });
   } else {
     leaderRunSettled = true;
-    const failed = failedFrameworkSync;
-    failedFrameworkSync = undefined;
-    if (failed) {
-      const sessionId = ctx?.sessionManager?.getSessionId?.();
-      const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
-      if (pending?.toolCallId === failed.record.toolCallId) {
-        const retryKey = failed.record.debtKey ?? failed.record.id;
-        const attempts = frameworkRetryCount.get(retryKey) ?? 0;
-        if (failed.reason === "error" && failed.record.source === "automatic" && attempts < 1) {
-          frameworkRetryCount.set(retryKey, attempts + 1);
-          frameworkRetryTimer = hostEnv().clock.setTimeout(async () => {
-            frameworkRetryTimer = undefined;
-            if (!await frameworkSync.rePresent(failed.record)) {
-              modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), failed.record.toolCallId);
-              ctx.ui?.notify?.("Automatic Team synchronization could not resume. Run /teamsync to retry.", "warning");
-            }
-          }, 0);
-        } else {
-          modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), failed.record.toolCallId);
-          ctx.ui?.notify?.(failed.reason === "aborted"
-            ? "Team synchronization was cancelled. Run /teamsync to retry."
-            : failed.record.source === "command"
-              ? "Team synchronization failed. Run /teamsync to retry."
-              : "Automatic Team synchronization stopped after one retry. Run /teamsync to retry.", "warning");
-        }
-      }
-    }
+    const sessionId = ctx?.sessionManager?.getSessionId?.();
+    if (sessionId) modelToolJourney()?.port.coordination.setBranchEntries?.(exactLeaderSessionId(sessionId), ctx.sessionManager.getBranch());
     syncNudgeConductor?.notify();
   }
 });
@@ -894,15 +836,6 @@ pi.on("agent_settled", async (_event, ctx) => {
 pi.on("turn_end", async (event, ctx) => {
   const stopReason = event.message?.role === "assistant" ? event.message.stopReason : undefined;
   if (stopReason === "error" || stopReason === "aborted") {
-    if (!isTeammate) {
-      const sessionId = ctx?.sessionManager?.getSessionId?.();
-      const sessionFile = ctx?.sessionManager?.getSessionFile?.();
-      const pending = sessionId ? modelToolJourney()?.port.coordination.getPendingObservation?.(exactLeaderSessionId(sessionId)) : undefined;
-      const prior = sessionId && sessionFile && pending
-        ? persistedFrameworkSyncForPending(ctx.sessionManager.getBranch(), sessionId, sessionFile, pending.toolCallId, pending.resultText) : undefined;
-      if (prior) failedFrameworkSync = { record: prior.record, reason: stopReason };
-      else if (sessionId && pending) modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), pending.toolCallId);
-    }
     if (isTeammate && teamName && currentMembershipId) {
       await lifecyclePublication.recordWorkerFailed({ teamName, workerName: agentName, membershipId: currentMembershipId }).catch(() => undefined);
     }

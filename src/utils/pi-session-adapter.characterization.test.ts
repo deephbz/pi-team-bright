@@ -142,7 +142,6 @@ describe("registered Pi Session adapter characterization", () => {
 
     await harness.get("session_start")!({ reason: "resume" }, ctx);
     await harness.get("tool_call")!({ toolName: "team_sync" }, ctx);
-    await harness.get("before_provider_request")!({ payload: [] }, ctx);
 
     const workerTools = ["task_read", "task_update", "alert_send"];
     const leaderOnlyTools = ["team_create", "ensure_worker", "task_create", "team_sync", "worker_stop", "team_shutdown", "task_link"];

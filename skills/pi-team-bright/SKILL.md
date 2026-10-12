@@ -129,25 +129,26 @@ increase useful learning within the same budget.
 
 ## Lead: supervise and finish the request
 
-Use `team_sync` updates for progress and waiting. Updates return a snapshot
-when an observation baseline is missing. Mutation receipts already report post-state;
-read again only when required meaning is missing, stale, or conflicting.
+Use `team_sync` updates to read available changes. It returns immediately and
+uses a snapshot when the current branch has no observation baseline. Mutation
+receipts already report post-state; read again only when meaning is missing,
+stale, or conflicting. After compaction, use a snapshot to restore Team context.
 
-Use `team_sync({view:"updates"})` to wait while Workers can progress. The runtime
-keeps one wait open across internal rechecks. After a lead reply, automatic sync
-resumes the lead for a new batch of Team changes. Do not use sleep or repeated
-empty sync calls to keep orchestration alive. `/teamsync` performs one immediate
-human-requested check. An empty check does not start a model turn.
+Wait by ending your turn. Your last message names what you wait for. A
+`ptb.team-update` resumes the lead when a new batch is available. Do not use
+sleep or repeated empty sync calls to keep orchestration alive.
 
 Handle returned changes and continue toward the requested outcome. Assigned
 nonterminal Tasks can remain when all Workers are idle; use their current records
 to decide what can proceed or what requires intervention.
 
-`caught_up` means no new change is available and no current Worker producer
-requires a wait. It does not mean every Task succeeded. `unsettled` lists Workers
-whose activity or missing evidence needs attention. Use its reasons and current
-Task records to identify a blocker or recovery need. A duplicate sync in one
-message returns `refused`; use the other call's result. Read selected Tasks with `task_read` when needed.
+`caught_up` means no new change is available and current Workers are quiescent.
+It does not mean every Task succeeded. `unsettled` lists Workers whose activity
+or missing evidence needs attention. Use its reasons and current Task records
+to identify a blocker or recovery need. `observation_in_progress` means another
+observation owns the page; end the turn and use its result. Read selected Tasks
+with `task_read` when needed. Tell the human the pane ID when a Worker is
+`blocked`. Ask the human before relaunch after a suspected human stop.
 Use terminal evidence for exceptional diagnosis, not as Task progress. State the
 blocker and next actor when no actor can progress. Explicit owner pause or stop
 instructions remain authoritative.

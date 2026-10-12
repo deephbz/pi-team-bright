@@ -113,30 +113,26 @@ perspective matters. Before `worker_stop`, resolve every nonterminal assigned
 Task and reconcile once more. Never infer Team shutdown from completed Tasks,
 an empty ready front, or idle time.
 
-Use `team_sync({view:"updates"})` when the lead needs to wait for Worker results.
-The framework keeps that wait open while a current Worker is active. Internal
-wait deadlines trigger a new evidence check without another model call.
-`caught_up` reports no new change and no current Worker producer that requires
-a wait. Unfinished Tasks can still need action. `unsettled` lists Workers whose
-activity, pending actuation, or missing evidence needs attention. A zero wait
-returns `unsettled` after one immediate recheck if a Worker remains active.
-Updates without a baseline return a snapshot. A duplicate sync in one message
-is refused; use the other call's result.
+Use `team_sync({view:"updates"})` for one immediate Team observation. End the
+turn to wait for Worker results. `caught_up` reports no new change. Unfinished
+Tasks can still need action. `unsettled` lists Workers with activity, pending
+actuation, or missing evidence. Concurrent observations return
+`observation_in_progress`; use the active observation's result.
 
-The framework also collects unseen changes when the lead finishes a reply.
-Automatic sync batches them by a maximum delay or an update-count threshold.
-A new batch resumes the settled leader once. Empty checks and unfinished Tasks
-alone do not start turns. Use `/ptb sync` for one immediate check: changes arrive
-as a framework-executed `team_sync` result; an empty check displays “No updates”
-in the TUI without a model turn. Native Session history records framework origin;
-the provider context receives the corresponding tool call and exact tool result.
-The observation cursor advances after a successful provider turn. An automatic
-delivery gets one retry after provider failure. Repeated failure pauses delivery
-for that batch and shows a warning. Use `/ptb sync` after recovery. Cancelling
-a turn also leaves that batch available for a manual check.
+The framework batches unseen changes by a maximum delay or update-count
+threshold. It publishes `ptb.team-update` only while the lead is idle. A new batch
+resumes the settled leader once. Empty checks and unfinished Tasks alone do not
+start turns. Use `/ptb sync` for an immediate check. An empty check displays
+“No updates” without a model turn.
+
+The selected native Session branch owns the cursor. Persisted `ptb.team-update`
+messages and stamped `team_sync` results advance it. Provider success does not
+control delivery. A failed send releases its reservation within 30 seconds.
+Updates without a branch cursor return a snapshot at the current journal
+watermark; they do not replay the journal from zero. Compaction preserves the
+cursor. Request a snapshot after compaction to restore current Task context.
 Update delivery uses bounded event pages. The first observation on a branch
-still sends a complete Team snapshot; a large Team can require substantial
-model context.
+sends a complete Team snapshot; a large Team can require substantial model context.
 
 If no actor can progress, name the blocker and next actor. Task completion does
 not stop the Team or its future update monitoring.
@@ -347,9 +343,9 @@ pane backends support `linear` only. Adaptive placement uses
 Set optional `worker_limit` in `pane_layout` to cap current registered Workers;
 omitting it keeps the historical unlimited behavior. The resolved policy is
 stored in `TeamConfig`, so later settings changes do not move a live Team.
-`wait_seconds` defaults to `120` and controls the internal
-liveness recheck interval. Automatic synchronization defaults to enabled and
-flushes after 20 seconds or three unseen projected changes. Several events
+`wait_seconds` remains a liveness policy setting; it does not delay `team_sync`.
+Automatic synchronization defaults to enabled and flushes after 20 seconds or
+three unseen projected changes. Several events
 for one Task can count as one change. Configure
 `auto_sync_enabled`, `auto_sync_delay_seconds`, and
 `auto_sync_update_threshold` in the global Team settings. Invalid values use
@@ -506,7 +502,7 @@ observations do not become accidental authority:
 | **Delivery** | Presentation of a Task change or Alert to one exact Session. A delivery receipt never changes Task state. |
 | **Runtime observation** | Bounded evidence that an exact Membership process generation was observed. It does not prove readiness or progress. |
 | **Terminal surface** | An adapter-owned pane or window carrying a Worker process. It is replaceable and is neither Worker identity nor work state. |
-| **Events and `team_sync`** | The projection, cursor, and wait boundary that wakes the lead. Events report changes; Team and Task authorities still own current state. |
+| **Events and `team_sync`** | The projection and branch cursor boundary that wakes the lead. Events report changes; Team and Task authorities still own current state. |
 
 Terminal surfaces may be replaced while the stable Worker and its assigned Task
 remain the coordination concepts the operator reasons about. Exact schemas,
