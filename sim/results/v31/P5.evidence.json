@@ -6,6 +6,7 @@
     "process": {
       "actorKey": "team-1/lead",
       "command": "pi",
+      "processKind": "lead_pi",
       "generation": {
         "pid": 101,
         "bootId": "boot-1",
@@ -20,6 +21,7 @@
     "process": {
       "actorKey": "shell:pane:team-1/lead",
       "command": "shell",
+      "processKind": "shell",
       "generation": {
         "pid": 102,
         "bootId": "boot-1",
@@ -35,6 +37,7 @@
       "actorKey": "team-1/lead",
       "command": "pi",
       "parentPid": 102,
+      "processKind": "lead_pi",
       "generation": {
         "pid": 101,
         "bootId": "boot-1",
@@ -49,6 +52,7 @@
     "process": {
       "actorKey": "shell:pane:team-1/lead",
       "command": "shell",
+      "processKind": "shell",
       "generation": {
         "pid": 102,
         "bootId": "boot-1",

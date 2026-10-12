@@ -8,7 +8,7 @@ import { e1ExitReachesCarrierView, e2EventReachesBranch, e3LaunchCompletesOrRepo
 import { s6SuspectedHumanStopWitness } from "./witnesses";
 
 const generation = { pid: 104, bootId: "boot-1", osBirthToken: "birth-1" };
-const processFact = { actorKey: "team-1/w1", command: "pi", generation };
+const processFact = { actorKey: "team-1/w1", command: "pi", generation, processKind: "worker_pi" as const, membershipId: "member-1" };
 function journal(carriers: JsonObject[], before: HistoryFact[] = [], after: HistoryFact[] = [], endAt = 100) {
   const world = new SimWorld(42);
   try {
@@ -34,8 +34,9 @@ it("P2 reads a real nested process claim without changing raw bytes", () => {
   expect(p2GoneMatchesWorldTruth(history).status).toBe("violation");
   expect(JSON.stringify(history)).toBe(original);
 });
-it("P3 reads the nested live field", () => {
-  expect(p3LiveIsFresh(journal([{ field: "process", to: "live" }], [], [], 10001), { freshnessMs: 10000 }).status).toBe("violation");
+it("P3 reads the nested live field against world death", () => {
+  const idle = Array.from({ length: 4 }, () => ({ field: "activity", to: "idle" }));
+  expect(p3LiveIsFresh(journal([...idle, { field: "process", to: "live" }], [{ kind: "process.death", process: processFact }])).status).toBe("violation");
 });
 it("P8 derives event order from the persisted cursor", () => {
   const stamp = { team: "team-1", epoch: "epoch-1", binding: "binding-1", from: 1, through: 2 };
@@ -52,7 +53,7 @@ it("E1 reads the nested process transition after world death", () => {
 });
 it("E2 covers a persisted cursor event by a branch stamp", () => {
   const stamp = { team: "team-1", epoch: "epoch-1", binding: "binding-1", from: 0, through: 1 };
-  expect(e2EventReachesBranch(journal([{ field: "process", to: "gone" }], [], [{ kind: "lead.entry", actor: { team: "team-1", actor: "lead" }, sessionId: "s1", entryId: "e1", entry: {}, stamp }]), { latencyMs: 60000 }).status).toBe("pass");
+  expect(e2EventReachesBranch(journal([{ field: "process", to: "gone" }], [], [{ kind: "world.input", input: 0, step: { kind: "agent.settled", who: { team: "team-1", actor: "lead" } } }, { kind: "lead.entry", actor: { team: "team-1", actor: "lead" }, sessionId: "s1", entryId: "e1", entry: {}, stamp }]), { latencyMs: 60000 }).status).toBe("pass");
 });
 it("E3 reads a nested launch result", () => {
   expect(e3LaunchCompletesOrReportsUnknown(journal([{ field: "launch", to: "started" }], [{ kind: "durable.launch", team: "team-1", path: "launch", source: "member", record: { raw: {}, membershipId: "member-1", pendingLaunchId: "launch-1" } }]), { boundMs: 60000 }).status).toBe("pass");

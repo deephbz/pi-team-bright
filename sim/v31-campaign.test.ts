@@ -15,7 +15,7 @@ import { families, generatedTrace, scaleTrace, type Sample } from "./v31-schedul
 
 type Result = Verdict | WitnessVerdict;
 const monitorOptions: Record<string, Record<string, number>> = {
-  P3: { freshnessMs: 10000 }, E1: { deadlineMs: 60000 }, E2: { latencyMs: 60000 },
+  E1: { deadlineMs: 60000 }, E2: { latencyMs: 60000 },
   E3: { boundMs: 60000 }, E4: { thresholdMs: 60000 }, E5: { boundMs: 10000 },
 };
 const monitors = Object.entries({ ...safety, ...liveness, ...witnesses }).flatMap(([name, run]) => {
