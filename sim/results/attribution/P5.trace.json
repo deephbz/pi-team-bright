@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "v31-p5-minimal",
+  "source": "synthetic",
+  "assumptions": [],
+  "setup": {
+    "ptbVersion": "v3.1",
+    "teams": []
+  },
+  "steps": [
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "session": "session-1",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "os.reboot"
+      }
+    }
+  ]
+}
