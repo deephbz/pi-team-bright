@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
+import { spawnSync } from "node:child_process";
 import fc from "fast-check";
 import { hostEnv } from "../src/env/host-env";
 import { Entropy } from "./entropy";
@@ -13,12 +14,12 @@ import { replayTrace } from "./replay";
 import type { WorldTrace } from "./trace-format";
 
 const trace: WorldTrace = {
-  version: 1, id: "synthetic-pid-reuse", source: "synthetic", assumptions: ["A1", "A2", "A7"], seed: 731,
+  version: 1, id: "synthetic-pid-reuse", source: "synthetic", assumptions: ["A1", "A2", "A7"], setup: { ptbVersion: "baseline", teams: [] },
   steps: [
     { at: 0, step: { kind: "herdr.agentState", pane: "pane-worker", state: "working" } },
-    { at: 5, step: { kind: "os.kill", actor: "w1", signal: "SIGKILL" } },
-    { at: 5, step: { kind: "os.pidReuse", deadActor: "w1", newcomer: "unrelated" } },
-    { at: 10, step: { kind: "clock.advance", ms: 5 } },
+    { at: 5, step: { kind: "os.kill", who: { team: "team", actor: "w1" }, signal: "SIGKILL" } },
+    { at: 5, step: { kind: "os.pidReuse", dead: { team: "team", actor: "w1" }, newcomer: "unrelated" } },
+    { at: 10, step: { kind: "herdr.restart" } },
     { at: 20, step: { kind: "human.closePane", pane: "pane-worker" } },
   ],
 };
@@ -27,7 +28,7 @@ function prepare(world: SimWorld): void {
   world.createActor("lead");
   world.herdr.spawn("pane-worker");
   world.herdr.onStart = undefined;
-  world.herdr.start("pane-worker", "w1");
+  world.herdr.start("pane-worker", "team/w1");
   world.enter("lead", () => {
     hostEnv().clock.setTimeout(() => world.record("lead", "sample", world.herdr.list()), 5);
     hostEnv().clock.setTimeout(() => world.record("lead", "sample", world.herdr.list()), 5);
@@ -41,6 +42,7 @@ describe("single-queue deterministic world", () => {
     const second = await replayTrace(trace, { setup });
     expect(second).toEqual(first);
     expect(await replayTrace(trace, { setup, choices: first.choices })).toEqual(first);
+    expect(await replayTrace(trace, { setup, receipt: first.receipt })).toEqual(first);
     expect(first.decisions.some(decision => decision.enabled.length > 1)).toBe(true);
   });
 
@@ -116,8 +118,10 @@ describe("single-queue deterministic world", () => {
     try {
       world.createActor("lead");
       const observed: Array<string | null> = [];
+      let close!: () => void;
       world.enter("lead", () => {
         const watch = hostEnv().watch.watchDirectory(world.workspace.home, file => observed.push(file));
+        close = () => watch.close();
         fs.writeFileSync(path.join(world.workspace.home, "draft"), "one");
         fs.renameSync(path.join(world.workspace.home, "draft"), path.join(world.workspace.home, "published"));
         watch.onError(error => observed.push(String(error)));
@@ -125,6 +129,11 @@ describe("single-queue deterministic world", () => {
       expect(observed).toEqual([]);
       await world.drain();
       expect(observed).toContain("published");
+      const count = observed.length;
+      world.enter("lead", () => fs.writeFileSync(path.join(world.workspace.home, "closed"), "two"));
+      close();
+      await world.drain();
+      expect(observed).toHaveLength(count);
       expect(fs.readFileSync(path.join(world.workspace.home, "published"), "utf8")).toBe("one");
     } finally { world.dispose(); }
   });
@@ -136,6 +145,7 @@ describe("single-queue deterministic world", () => {
       fs.symlinkSync(path.dirname(world.workspace.root), path.join(world.workspace.home, "escape"));
       world.enter("lead", () => {
         expect(() => setTimeout(() => {}, 1)).toThrow("Real timer");
+        expect(() => spawnSync("__ptb_sim_forbidden__", [])).toThrow("Real subprocess");
         expect(() => fs.readFileSync(path.join(world.workspace.root, "..", "outside"))).toThrow("outside world root");
         expect(() => fs.readdirSync(path.join(world.workspace.home, "escape"))).toThrow("symlink escapes");
         expect(() => fs.readSync(0, Buffer.alloc(1), 0, 1, 0)).toThrow("Unowned");

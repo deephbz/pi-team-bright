@@ -1,18 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import { SimActor } from "./actor";
 import { SimWorld } from "./world";
+import { loadActorExtension } from "./actor-loader";
 
 /** These bootstrap env stubs characterize the pre-C0 factory. C0 removes that need. */
 describe("real extension actor harness", () => {
-  it.skip("loads independent lead and Worker tool projections (blocked on C0 HOME path integration)", () => {
+  it("loads independent lead and Worker tool projections", async () => {
     const world = new SimWorld(1);
     try {
       vi.stubEnv("PI_AGENT_NAME", "team-lead");
       const lead = new SimActor(world, "lead");
-      lead.initialize();
+      lead.initialize(await loadActorExtension());
       vi.stubEnv("PI_AGENT_NAME", "w1");
       const worker = new SimActor(world, "w1", { PI_TEAM_NAME: "synthetic-team" });
-      worker.initialize();
+      worker.initialize(await loadActorExtension());
       expect([...lead.tools.keys()]).toContain("ensure_worker");
       expect([...worker.tools.keys()].sort()).toEqual(["alert_send", "task_read", "task_update"]);
       expect(lead.handlers.get("session_start")?.length).toBeGreaterThan(0);

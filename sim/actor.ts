@@ -61,9 +61,9 @@ export class SimActor {
     } as unknown as ExtensionAPI;
   }
 
-  initialize(): void {
+  initialize(factory: (pi: ExtensionAPI) => void = extension): void {
     if (this.initialized) throw new Error(`Extension already initialized: ${this.id}`);
-    this.world.enter(this.id, () => extension(this.api));
+    this.world.enter(this.id, () => factory(this.api));
     this.initialized = true;
   }
   async emit(event: string, payload: unknown = {}): Promise<unknown[]> {

@@ -13,8 +13,9 @@ export class Entropy {
   readonly choices: Choice[] = [];
   private readonly tape: readonly number[];
   private cursor = 0;
+  private scheduleCursor = 0;
 
-  constructor(readonly seed: number, tape?: readonly number[], private readonly replay?: readonly Choice[]) {
+  constructor(readonly seed: number, tape?: readonly number[], private readonly replay?: readonly Choice[], private readonly scheduleReplay?: readonly number[]) {
     this.tape = tape ?? fc.sample(fc.integer({ min: 0, max: 0x7fffffff }), { seed, numRuns: 65536 });
   }
 
@@ -25,7 +26,9 @@ export class Entropy {
     const expected = this.replay?.[index];
     if (this.replay && !expected) throw new Error(`Replay exhausted at ${label}`);
     if (!this.replay && raw === undefined) throw new Error(`Entropy tape exhausted at ${label}`);
-    const value = expected?.value ?? ((raw! % bound) + bound) % bound;
+    const scheduled = label === "schedule" && this.scheduleReplay ? this.scheduleReplay[this.scheduleCursor++] : undefined;
+    if (label === "schedule" && this.scheduleReplay && scheduled === undefined) throw new Error("Scheduler receipt exhausted");
+    const value = expected?.value ?? scheduled ?? ((raw! % bound) + bound) % bound;
     const choice: Choice = { index, label, bound, value, ...(enabled ? { enabled: [...enabled] } : {}) };
     if (!Number.isSafeInteger(value) || value < 0 || value >= bound || (expected && JSON.stringify(expected) !== JSON.stringify(choice))) {
       throw new Error(`Replay diverged at choice ${index}: ${label}`);
@@ -36,6 +39,7 @@ export class Entropy {
 
   assertReplayComplete(): void {
     if (this.replay && this.cursor !== this.replay.length) throw new Error("Replay left unused choices");
+    if (this.scheduleReplay && this.scheduleCursor !== this.scheduleReplay.length) throw new Error("Replay left unused scheduler choices");
   }
 
   float(): number { return this.choose("random.float", 0x80000000) / 0x80000000; }
