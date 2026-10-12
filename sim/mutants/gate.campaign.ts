@@ -116,17 +116,17 @@ it("records the mutant campaign and exact replay; a survivor is a finding", asyn
         const trace = structuredClone(representative.trace); trace.steps.splice(i, 1);
         attempts++;
         const candidate = await execute(trace, representative.receipt.seed);
-        if (failure(candidate)) { representative = candidate; changed = true; break; }
+        if (failure(candidate)) { representative = candidate; changed = true; i--; }
       }
-      if (changed) continue;
       for (let i = 0; i < representative.trace.steps.length; i++) {
         const at = i ? representative.trace.steps[i - 1]!.at : 0;
         if (representative.trace.steps[i]!.at <= at) continue;
         const trace = structuredClone(representative.trace); trace.steps[i]!.at = at;
         attempts++;
         const candidate = await execute(trace, representative.receipt.seed);
-        if (failure(candidate)) { representative = candidate; changed = true; break; }
+        if (failure(candidate)) { representative = candidate; changed = true; }
       }
+      console.info(`${mutant} shrink: ${attempts} candidates, ${representative.trace.steps.length} steps`);
     }
   } else {
     // A surviving mutant keeps a completed targeted witness and its replay receipt.
