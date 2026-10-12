@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -64,7 +65,7 @@ function settingsPaneLayout(file: string, source: TeamPaneLayoutSource): unknown
 }
 
 function agentDirectory(agentDir?: string): string {
-  return agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+  return agentDir ?? hostEnv().process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
 }
 
 /** Read only the global policy and, when trusted, the nearest project policy. */

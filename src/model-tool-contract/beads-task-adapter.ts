@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import type { TaskAuthorityRecordEnvelope, TaskMetadata, CreateTaskInput, TaskAuthorityRecord } from "../utils/beads";
 import {
   BeadsError,
@@ -637,7 +638,7 @@ export class BeadsTaskAdapter {
         message: "The Task authority does not expose the conditional update capability.",
       };
     }
-    const at = new Date().toISOString();
+    const at = new Date(hostEnv().clock.now()).toISOString();
     const journalEntries = (input.journalEntries ?? []).map((entry, index) => ({
       id: `journal-${input.taskId}-${input.operationId}-${index + 1}`,
       at,

@@ -1,9 +1,10 @@
+import { hostEnv } from "../env/host-env";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
 /** Global-only naming policy for new Teams. Existing names remain unchanged. */
-export function loadTeamDatePrefix(agentDir = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent")): boolean {
+export function loadTeamDatePrefix(agentDir = hostEnv().process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent")): boolean {
   let root: any;
   try { root = JSON.parse(fs.readFileSync(path.join(agentDir, "settings.json"), "utf8")); }
   catch (error) {
@@ -16,7 +17,7 @@ export function loadTeamDatePrefix(agentDir = process.env.PI_CODING_AGENT_DIR ||
   return value;
 }
 
-export function datePrefixedTeamName(name: string, enabled: boolean, date = new Date()): string {
+export function datePrefixedTeamName(name: string, enabled: boolean, date = new Date(hostEnv().clock.now())): string {
   if (!enabled || /^\d{8}-/.test(name)) return name;
   const prefix = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
   const resolved = `${prefix}-${name}`;

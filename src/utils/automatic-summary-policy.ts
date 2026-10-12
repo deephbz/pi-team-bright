@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { resolveCurrentTeammateSessionBinding } from "./teams";
@@ -50,7 +51,7 @@ export async function answerAutomaticSummaryPolicyQuery(
   rawQuery: unknown,
   {
     resolveBinding = resolveCurrentTeammateSessionBinding,
-    now = () => Date.now(),
+    now = () => hostEnv().clock.now(),
   } = {},
 ): Promise<void> {
   const query = policyQuery(rawQuery);

@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import * as runtime from "../utils/runtime";
 import * as teamEvents from "../coordination/event-journal";
 import * as teams from "../utils/teams";
@@ -53,7 +54,7 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
     signal?: AbortSignal;
   }): Promise<WorkerStartupObservation> {
     const timeoutMs = resolveWorkerStartupObservationTimeoutMs(
-      process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS,
+      hostEnv().process.env.PI_TEAMS_WORKER_STARTUP_WAIT_MS,
       input.defaultTimeoutMs,
     );
     return observeWorkerStartup({

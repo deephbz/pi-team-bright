@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -22,7 +22,7 @@ export function writeJsonAtomic(file: string, value: unknown): void {
   const existing = fs.existsSync(file) ? fs.statSync(file) : undefined;
   if (existing && !existing.isFile()) throw new Error(`Cannot replace ${file}: existing path is not a regular file.`);
   const mode = existing ? existing.mode & 0o7777 : 0o600;
-  const temp = path.join(directory, `.${path.basename(file)}.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString("hex")}.tmp`);
+  const temp = path.join(directory, `.${path.basename(file)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.${hostEnv().random.bytes(6).toString("hex")}.tmp`);
   let fd: number | undefined;
   try {
     fd = fs.openSync(temp, "wx", 0o600);

@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle, type HostWatcher } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { teamDir } from "./paths";
@@ -94,18 +95,19 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
   const eventDirectory = path.join(teamDir(options.teamName), "events");
   fs.mkdirSync(runtimeDirectory, { recursive: true });
   fs.mkdirSync(eventDirectory, { recursive: true });
+  const clock = hostEnv().clock;
   return new Promise((resolve, reject) => {
     let settled = false;
     let scanning = false;
     let pending: "hint" | "authority" | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let interval: ReturnType<typeof setInterval> | undefined;
-    const watchers: fs.FSWatcher[] = [];
+    let timer: TimerHandle | undefined;
+    let interval: TimerHandle | undefined;
+    const watchers: HostWatcher[] = [];
     const finish = (result?: "hint" | "timeout", error?: unknown) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
-      if (interval) clearInterval(interval);
+      if (timer) clock.clearTimeout(timer);
+      if (interval) clock.clearInterval(interval);
       for (const watcher of watchers) watcher.close();
       options.signal?.removeEventListener("abort", onAbort);
       if (error) reject(error); else resolve(result!);
@@ -139,23 +141,23 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
       finish(undefined, error);
     };
     const eventJournal = "team-events.jsonl";
-    const runtimeWatcher = fs.watch(runtimeDirectory, (_event, filename) => {
+    const runtimeWatcher = hostEnv().watch.watchDirectory(runtimeDirectory, (filename) => {
       // Atomic runtime replacement reports the final status filename. Null,
       // empty, and non-string names are not actionable: macOS can emit them
       // for unrelated directory activity and create a rescan feedback loop.
       // The periodic authority scan remains the bounded fallback.
       if (typeof filename === "string" && filename.endsWith(".json")) requestScan("hint");
     });
-    runtimeWatcher.on("error", (error) => finish(undefined, error));
+    runtimeWatcher.onError((error) => finish(undefined, error));
     watchers.push(runtimeWatcher);
-    const eventWatcher = fs.watch(eventDirectory, (_event, filename) => {
+    const eventWatcher = hostEnv().watch.watchDirectory(eventDirectory, (filename) => {
       if (typeof filename === "string" && filename === eventJournal) requestScan("hint");
     });
-    eventWatcher.on("error", (error) => finish(undefined, error));
+    eventWatcher.onError((error) => finish(undefined, error));
     watchers.push(eventWatcher);
     options.signal?.addEventListener("abort", onAbort, { once: true });
-    timer = setTimeout(() => finish("timeout"), options.waitMs);
-    timer.unref?.();
+    timer = clock.setTimeout(() => finish("timeout"), options.waitMs);
+    if ("unref" in timer) timer.unref();
     // A Task authority may commit without an event append. While a positive
     // Worker producer exists, this bounded recheck covers that hint class.
     const authorityCheckMs = options.authorityCheckMs ?? 5_000;
@@ -163,8 +165,8 @@ export async function waitForLivenessHint(options: LivenessWaitOptions): Promise
       finish(undefined, new Error("authorityCheckMs must be a positive finite number."));
       return;
     }
-    interval = setInterval(() => requestScan("authority"), Math.min(authorityCheckMs, Math.max(25, options.waitMs)));
-    interval.unref?.();
+    interval = clock.setInterval(() => requestScan("authority"), Math.min(authorityCheckMs, Math.max(25, options.waitMs)));
+    if ("unref" in interval) interval.unref();
     // This closes the registration race. The observation service performs the
     // final complete authority read after this waiter settles.
     requestScan("authority");

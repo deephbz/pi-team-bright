@@ -1,3 +1,4 @@
+import { hostEnv } from "../src/env/host-env";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { captureQualifiedAvailableModelKeys } from "../src/utils/worker-resource-projection";
 import { piTeamBrightSettingsExamplePath } from "../src/utils/package-example-path";
@@ -29,7 +30,7 @@ const clean = (value: string, limit = MAX_LINE) => {
 };
 
 function diagnosticsFor(ctx: WarningContext, trusted: boolean): ModelRoleDiagnostic[] {
-  const settings = loadModelRoleSettings({ cwd: ctx.cwd ?? process.cwd(), projectTrusted: trusted });
+  const settings = loadModelRoleSettings({ cwd: ctx.cwd ?? hostEnv().process.cwd(), projectTrusted: trusted });
   const available = captureQualifiedAvailableModelKeys(ctx.modelRegistry);
   return [...settings.diagnostics, ...validateModelRoleCatalog(settings, available)];
 }
@@ -82,7 +83,7 @@ export function createSettingsWarningPresenter(options: {
     refresh(ctx: WarningContext, trusted: boolean, showForSession: boolean): void {
       const issues = showForSession ? inspect(ctx, trusted) : [];
       lastIssues = issues;
-      const scope = `${ctx.cwd ?? process.cwd()}\0${trusted}`;
+      const scope = `${ctx.cwd ?? hostEnv().process.cwd()}\0${trusted}`;
       const signature = JSON.stringify(issues.map(({ source, file, path, code, message, consequence }) =>
         [source, file, path, code, message, consequence]));
       if (!issues.length) {

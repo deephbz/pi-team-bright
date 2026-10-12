@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle, type HostWatcher } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
@@ -36,9 +37,9 @@ export interface TaskGraphPaneServiceOptions {
 /** Bind read-only Task authority and event freshness to one process-owned pane. */
 export class TaskGraphPaneService {
   private readonly controller: TaskGraphPaneController;
-  private watchers: fs.FSWatcher[] = [];
-  private authorityWatcher?: fs.FSWatcher;
-  private debounce?: ReturnType<typeof setTimeout>;
+  private watchers: HostWatcher[] = [];
+  private authorityWatcher?: HostWatcher;
+  private debounce?: TimerHandle;
   private current?: { teamName: string; actor: string };
   private refreshInFlight = false;
   private refreshAgain = false;
@@ -66,9 +67,9 @@ export class TaskGraphPaneService {
   }
 
   private notifyRefresh(): void {
-    if (this.debounce) clearTimeout(this.debounce);
-    this.debounce = setTimeout(() => void this.refresh(), 25);
-    this.debounce.unref?.();
+    if (this.debounce) hostEnv().clock.clearTimeout(this.debounce);
+    this.debounce = hostEnv().clock.setTimeout(() => void this.refresh(), 25);
+    if ("unref" in this.debounce) this.debounce.unref();
   }
 
   private async refresh(): Promise<void> {
@@ -104,7 +105,7 @@ export class TaskGraphPaneService {
     target: string,
     createDirectory: boolean,
     onBroadEvent?: () => void,
-  ): fs.FSWatcher | undefined {
+  ): HostWatcher | undefined {
     const targetDirectory = path.resolve(path.dirname(target));
     if (createDirectory) fs.mkdirSync(targetDirectory, { recursive: true });
     const directory = createDirectory
@@ -112,14 +113,14 @@ export class TaskGraphPaneService {
       : this.nearestExistingDirectory(targetDirectory);
     if (!directory) return undefined;
     const watchesExactParent = directory === targetDirectory;
-    const watcher = fs.watch(directory, (_event, filename) => {
+    const watcher = hostEnv().watch.watchDirectory(directory, (filename) => {
       if (watchesExactParent && filename && filename.toString() !== path.basename(target)) return;
       this.notifyRefresh();
       // A broad ancestor event can mean that the authority parent appeared.
       // Move the watch closer without ever creating authority storage.
       if (!watchesExactParent) onBroadEvent?.();
     });
-    watcher.on("error", () => this.notifyRefresh());
+    watcher.onError(() => this.notifyRefresh());
     return watcher;
   }
 
@@ -142,7 +143,7 @@ export class TaskGraphPaneService {
   }
 
   private stopWatch(): void {
-    if (this.debounce) clearTimeout(this.debounce);
+    if (this.debounce) hostEnv().clock.clearTimeout(this.debounce);
     this.debounce = undefined;
     this.authorityWatcher?.close();
     this.authorityWatcher = undefined;

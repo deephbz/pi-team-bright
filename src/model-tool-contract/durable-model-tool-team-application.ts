@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import { getTerminalAdapter } from "../adapters/terminal-registry";
 import * as paths from "../utils/paths";
 import { datePrefixedTeamName, loadTeamDatePrefix, teamTerminalTitle } from "../utils/team-labels";
@@ -39,7 +40,7 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
     if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the model-tool Worker." };
     let paneLayout: TeamPaneLayout; let syncLiveness: TeamConfig["syncLiveness"];
     let modelRoles: Array<{ name: string; use: string }> = []; let defaultModelRole: string | undefined;
-    try { const context = this.bindings.launchContext(id); const leaderCwd = context?.cwd ?? process.cwd(); const settings = loadTeamPaneLayoutSettings({ cwd: leaderCwd, projectTrusted: context?.projectTrusted ?? true }); paneLayout = resolveTeamPaneLayout({ explicit: input.pane_layout, project: settings.project, global: settings.global, backend: terminal.name }); const workerPolicy = loadWorkerResourcePolicy({ cwd: leaderCwd, projectTrusted: context?.projectTrusted === true }); modelRoles = compactModelRoles(workerPolicy.modelRoleSettings); defaultModelRole = workerPolicy.modelRoleSettings.defaultRole; const policy = loadSyncLivenessSettings(); syncLiveness = { waitSeconds: policy.waitSeconds, autoSyncEnabled: policy.autoSyncEnabled, autoSyncDelaySeconds: policy.autoSyncDelaySeconds, autoSyncUpdateThreshold: policy.autoSyncUpdateThreshold, policyVersion: policy.policyVersion, ...(policy.diagnostics.length ? { diagnostics: policy.diagnostics } : {}) }; } catch (error) { return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) }; }
+    try { const context = this.bindings.launchContext(id); const leaderCwd = context?.cwd ?? hostEnv().process.cwd(); const settings = loadTeamPaneLayoutSettings({ cwd: leaderCwd, projectTrusted: context?.projectTrusted ?? true }); paneLayout = resolveTeamPaneLayout({ explicit: input.pane_layout, project: settings.project, global: settings.global, backend: terminal.name }); const workerPolicy = loadWorkerResourcePolicy({ cwd: leaderCwd, projectTrusted: context?.projectTrusted === true }); modelRoles = compactModelRoles(workerPolicy.modelRoleSettings); defaultModelRole = workerPolicy.modelRoleSettings.defaultRole; const policy = loadSyncLivenessSettings(); syncLiveness = { waitSeconds: policy.waitSeconds, autoSyncEnabled: policy.autoSyncEnabled, autoSyncDelaySeconds: policy.autoSyncDelaySeconds, autoSyncUpdateThreshold: policy.autoSyncUpdateThreshold, policyVersion: policy.policyVersion, ...(policy.diagnostics.length ? { diagnostics: policy.diagnostics } : {}) }; } catch (error) { return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) }; }
     let authority; try { authority = await this.taskAuthority?.resolve(teamName); } catch (error) { return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) }; }
     if (!authority) return { kind: "unavailable", reason: "task_authority_unavailable", message: "The Team Task authority resolver is not attached to this port." };
     try {
@@ -68,7 +69,7 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
   }
   async ensureWorker(id: ExactLeaderSessionId, input: { name: string; scope: string; model_role?: string }, execution?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult> {
     const bound = await this.bindings.boundTeam(id); if (!bound) return { kind: "no_active_team" }; if (!this.launchBridge) return { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool Worker launch bridge is not attached to this port." };
-    const context = this.bindings.launchContext(id); const cwd = context?.cwd ?? process.cwd();
+    const context = this.bindings.launchContext(id); const cwd = context?.cwd ?? hostEnv().process.cwd();
     const policy = loadWorkerResourcePolicy({ cwd, projectTrusted: context?.projectTrusted === true });
     const aggregate = { projectTrusted: context?.projectTrusted === true, modelRoleSettings: policy.modelRoleSettings };
     const priorLogical = await teams.readLogicalWorker(bound.teamName, input.name);

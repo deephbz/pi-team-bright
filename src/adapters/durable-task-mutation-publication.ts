@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import {
   completeOwnerTransitionIntent,
   enqueueTaskChangeForRecipient,
@@ -112,7 +113,7 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
           taskVersion: task.version as TaskVersionRef,
           recipients: [worker],
           changeKind: "assigned",
-          recordedAt: new Date().toISOString(),
+          recordedAt: new Date(hostEnv().clock.now()).toISOString(),
           reason: "enqueue-failed",
           taskProjection: task,
         });
@@ -165,7 +166,7 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
           taskId: input.after.id,
           taskVersion: publicationVersion,
           actor: actorName,
-          at: new Date().toISOString(),
+          at: new Date(hostEnv().clock.now()).toISOString(),
         });
       } catch (hintError) {
         const warning = `Task ${input.after.id} committed but failed-event hint persistence also failed: ${hintError instanceof Error ? hintError.message : String(hintError)}`;
@@ -191,7 +192,7 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
             taskVersion: publicationVersion,
             recipients: [target.recipient],
             changeKind: target.kind,
-            recordedAt: new Date().toISOString(),
+            recordedAt: new Date(hostEnv().clock.now()).toISOString(),
             reason: "enqueue-failed",
             taskProjection: input.taskCard,
           });
