@@ -9,10 +9,12 @@ GitHub Releases are the release history; don't add a root changelog.
    PR, bump `version` in `package.json` and `package-lock.json`, and add
    `docs/release/v<version>-release-notes.md`. The workflow uses that file as
    the GitHub Release body.
-2. Run the privacy scan on the release commit:
-   `git-privacy-scan --ref HEAD history`. Findings in commits before
-   `privacy.baseline` are known; any later finding blocks the release. Never
-   print a detected value.
+2. Run the privacy gate on the release commit. The pre-push hook runs the same
+   scan:
+   `git-privacy-scan --ref HEAD --base "$(git config privacy.baseline)" range`.
+   Any finding blocks the release. A `history` scan also reports known
+   findings before the baseline, so it cannot serve as the gate. Never print a
+   detected value.
 3. Tag and push: `git tag -a v<version> -m v<version>` then
    `git push origin v<version>`.
 
