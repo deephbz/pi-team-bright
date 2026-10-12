@@ -1,3 +1,4 @@
+import { persistPortObservation } from "../../test/support/branch-observation";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -13,38 +14,37 @@ describe("isolated in-memory authority fakes", () => {
     await ports.team.createTeam(session, { name: "pending-team", purpose: "Expose presentation debt" });
     const first = await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "first");
     expect(first.kind).toBe("snapshot");
-    expect(await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "first")).toEqual(first);
+    expect(await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "first")).toMatchObject({ kind: "refused" });
     expect(await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "second")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
     expect(ports.coordination.getPendingObservation?.(session)?.toolCallId).toBe("first");
-    expect(ports.coordination.acknowledgePendingObservation(session, "entry", ["entry"])).toBe(true);
+    persistPortObservation(ports.coordination, session, "entry");
     expect((await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "second")).kind).toBe("snapshot");
   });
-  it("mirrors snapshot fallback, parallel refusal, same-call replay, and exact-call discard", async () => {
+  it("mirrors snapshot fallback, parallel refusal, same-call refusal, and exact-call discard", async () => {
     const { ports } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });
     const first = ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "first");
     expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "parallel")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
     const snapshot = await first;
     expect(snapshot.kind).toBe("snapshot");
-    expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "first")).toEqual(snapshot);
+    expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "first")).toMatchObject({ kind: "refused" });
     expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "sequential")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
     ports.coordination.discardPendingObservation(session, "wrong-call");
     expect(ports.coordination.getPendingObservation(session)?.toolCallId).toBe("first");
-    expect(ports.coordination.acknowledgePendingObservation(session, "off-branch", [])).toBe(false);
+    ports.coordination.discardPendingObservation(session, "first");
     expect(ports.coordination.getPendingObservation(session)).toBeUndefined();
     expect((await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "retry")).kind).toBe("snapshot");
   });
 
-  it("refuses another call while a waiter is live and preserves publication wakeup", async () => {
+  it("returns immediately and observes a later Worker on the next native read", async () => {
     const { ports } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });
     await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "snapshot");
-    ports.coordination.setBranchContext(session, ["snapshot"]);
-    expect(ports.coordination.acknowledgePendingObservation(session, "snapshot", ["snapshot"])).toBe(true);
-    const waiting = ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "waiter");
-    expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "duplicate")).toMatchObject({ kind: "refused", reason: "observation_in_progress" });
+    const branch = persistPortObservation(ports.coordination, session, "snapshot");
+    expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "empty")).toMatchObject({ kind: "caught_up" });
+    persistPortObservation(ports.coordination, session, "empty", branch);
     await ports.team.ensureWorker(session, { name: "worker", scope: "scope" });
-    expect(await waiting).toMatchObject({ kind: "updates", workerChanges: [{ worker: "worker" }] });
+    expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "next")).toMatchObject({ kind: "updates", workerChanges: [{ worker: "worker" }] });
   });
   it("refuses model role selection instead of creating an unassigned fake Worker", async () => {
     const { ports } = createInMemoryModelToolJourney();
@@ -65,15 +65,12 @@ describe("isolated in-memory authority fakes", () => {
     const snapshot = await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "snapshot");
     expect(snapshot.kind).toBe("snapshot");
     ports.coordination.setBranchContext(session, ["entry"]);
-    expect(ports.coordination.acknowledgePendingObservation(session, "entry", ["entry"])).toBe(true);
+    persistPortObservation(ports.coordination, session, "entry");
     ports.coordination.failNextPublication("task");
     await expect(ports.task.updateTasks(session, [{ taskId: created.task.id, operationId: "update", expectedVersion: created.task.version as TaskVersionRef, currentContext: "Committed before publication." }])).resolves.toMatchObject({ kind: "batch", outcomes: [{ kind: "updated", task: { current_context: "Committed before publication." } }] });
     const read = await ports.task.readTasks(session, [created.task.id]);
     expect(read).toMatchObject({ kind: "read", tasks: [{ current_context: "Committed before publication." }] });
-    const controller = new AbortController();
-    const waiting = ports.coordination.readTeamSync(session, "updates", controller.signal, "updates");
-    controller.abort();
-    await expect(waiting).resolves.toMatchObject({ kind: "cancelled" });
+    await expect(ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "updates")).resolves.toMatchObject({ kind: "updates", taskChanges: [{ current: { current_context: "Committed before publication." } }] });
   });
 
   it("returns replayable durable-style create warnings after Task publication failure", async () => {
@@ -94,30 +91,26 @@ describe("isolated in-memory authority fakes", () => {
     await ports.team.ensureWorker(session, { name: "worker", scope: "scope" });
     await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "snapshot");
     ports.coordination.setBranchContext(session, ["snapshot"]);
-    expect(ports.coordination.acknowledgePendingObservation(session, "snapshot", ["snapshot"])).toBe(true);
+    persistPortObservation(ports.coordination, session, "snapshot");
     const revision = debug.readRevision();
     ports.coordination.failNextPublication("alert");
     await expect(ports.alert.sendAlert(session, { target: { kind: "worker", name: "worker" }, kind: "attention", text: "review" })).resolves.toEqual({ kind: "unavailable", reason: "team_authority_unavailable", message: "Injected alert publication failure." });
     expect(ports.alert.readAcceptedDeliveries()).toMatchObject([{ id: "alert-3", recipients: ["worker"], text: "review" }]);
     expect(debug.readRevision()).toBe(revision + 1);
     expect(ports.coordination.getPendingObservation?.(session)).toBeUndefined();
-    const controller = new AbortController();
-    const waiting = ports.coordination.readTeamSync(session, "updates", controller.signal, "failure-updates");
-    controller.abort();
-    await expect(waiting).resolves.toMatchObject({ kind: "cancelled" });
+    await expect(ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "failure-updates")).resolves.toMatchObject({ kind: "caught_up" });
     await expect(ports.alert.sendAlert(session, { target: { kind: "worker", name: "worker" }, kind: "attention", text: "retry" })).resolves.toMatchObject({ kind: "sent", alertId: "alert-5" });
   });
 
-  it("publishes accepted Alert evidence and wakes an updates waiter", async () => {
+  it("retains accepted Alert delivery without a fabricated observation wakeup", async () => {
     const { ports } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });
     await ports.team.ensureWorker(session, { name: "worker", scope: "scope" });
     await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "snapshot");
-    ports.coordination.setBranchContext(session, ["snapshot"]);
-    expect(ports.coordination.acknowledgePendingObservation(session, "snapshot", ["snapshot"])).toBe(true);
-    const waiting = ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "updates");
+    persistPortObservation(ports.coordination, session, "snapshot");
     await ports.alert.sendAlert(session, { target: { kind: "worker", name: "worker" }, kind: "attention", text: "review" });
-    await expect(waiting).resolves.toMatchObject({ kind: "updates" });
+    expect(ports.alert.readAcceptedDeliveries()).toHaveLength(1);
+    expect(await ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "next")).toMatchObject({ kind: "caught_up" });
   });
 
   it("keeps fake state opaque and composes only narrow lazy ports", () => {
