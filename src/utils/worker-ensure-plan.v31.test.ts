@@ -93,6 +93,7 @@ export type V31Expected =
 /** Today's output, mapped one-to-one from WorkerEnsurePlan. */
 export type TodayAction =
   | { kind: "create" }
+  | { kind: "attention" }
   | { kind: "reuse" }
   | { kind: "recover"; mode: WorkerRecoveryMode }
   | { kind: "refuse"; reason: string };
@@ -162,11 +163,13 @@ export function runToday(input: V31PlanInput, shell: ShellProbe): TodayAction {
     input.binding === "bound"
       ? normalizeWorkerCarrier(member({ sessionFile: "/sessions/worker.jsonl", pendingLaunchId: undefined }))
       : normalizeWorkerCarrier(member({ pendingLaunchId: "launch-1" }));
-  return toTodayAction(planWorkerEnsure(carrier, shell));
+  return toTodayAction(planWorkerEnsure(carrier, input));
 }
 
 function toTodayAction(plan: WorkerEnsurePlan): TodayAction {
   switch (plan.action) {
+    case "attention":
+      return { kind: "attention" };
     case "create":
       return { kind: "create" };
     case "reuse":
@@ -237,7 +240,7 @@ describe("v3.1 planWorkerEnsure table (exhaustive)", () => {
       if (agrees) {
         it(title, check);
       } else {
-        it.fails(`[${mutantFor(input, shell)}] ${title}`, check);
+        it(`[${mutantFor(input, shell)}] ${title}`, check);
       }
     }
   }

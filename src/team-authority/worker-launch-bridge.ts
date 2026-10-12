@@ -1,3 +1,4 @@
+import { deriveCarrierView } from "../coordination/carrier-observation";
 import { hostEnv } from "../env/host-env";
 import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
@@ -184,16 +185,13 @@ export class WorkerLaunchBridge {
       }
       const existingTarget = memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name);
       if (existingTarget) assertTargetSupportedByTerminal(teamTerminal, existingTarget);
-      const carrierObservation = existingTarget?.kind === "window"
-        ? (teamTerminal.isWindowAlive(existingTarget.targetId) ? "live" : "missing")
-        : existingTarget?.kind === "pane"
-          ? (teamTerminal.isAlive(existingTarget.targetId) ? "live" : "missing")
-          : "missing";
+      const carrierObservation = deriveCarrierView(existingMember, await runtime.readRuntimeStatus(teamName, workerName));
       const workerPlan: WorkerEnsurePlan = planWorkerEnsure(
         normalizeWorkerCarrier(existingMember),
         carrierObservation,
       );
 
+      if (workerPlan.action === "attention") throw new Error(`Worker ${workerName}: ${workerPlan.reason}; nextActionHint=${workerPlan.nextActionHint}; launchId=${carrierObservation.launchId ?? "none"}; pane=${carrierObservation.paneId ?? "unknown"}.`);
       if (workerPlan.action === "refuse") {
         if (workerPlan.reason === "unbound_live") {
           throw new Error(
@@ -676,11 +674,7 @@ export class WorkerLaunchBridge {
         }
         const currentTarget = memberTerminalTarget(current, teamConfig.terminalBackend || teamTerminal.name);
         if (currentTarget) assertTargetSupportedByTerminal(teamTerminal, currentTarget);
-        const currentObservation = currentTarget?.kind === "window"
-          ? (teamTerminal.isWindowAlive(currentTarget.targetId) ? "live" : "missing")
-          : currentTarget?.kind === "pane"
-            ? (teamTerminal.isAlive(currentTarget.targetId) ? "live" : "missing")
-            : "missing";
+        const currentObservation = deriveCarrierView(current, await runtime.readRuntimeStatus(teamName, member.name));
         const currentPlan = planWorkerEnsure(normalizeWorkerCarrier(current), currentObservation);
         if (currentPlan.action === "reuse") {
           return { action: "reused", member: current, ...(currentTarget ? { target: currentTarget } : {}) };
@@ -694,7 +688,7 @@ export class WorkerLaunchBridge {
         const preflight = runtime.preflightRuntimeRecovery(
           current,
           await runtime.readRuntimeStatus(teamName, member.name),
-          runtime.probePidPresence,
+          undefined,
           currentPlan.recoveryMode === "first_binding_retry" ? current.pendingLaunchId : undefined,
         );
         if (preflight.kind === "refused") {

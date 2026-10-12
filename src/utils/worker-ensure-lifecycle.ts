@@ -13,9 +13,13 @@ export type WorkerCarrierInvalidReason =
   | "missing_session_and_pending_launch";
 
 /** Team-owned terminal adapter evidence for the recorded carrier target. */
-export type WorkerCarrierObservation = "live" | "missing";
+export type WorkerCarrierObservation = "live" | "missing" | {
+  launch: import("../coordination/carrier-observation").LaunchState;
+  process: import("../coordination/carrier-observation").ProcessState;
+  lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork" } | "none" | "quit" | "reload" | "new" | "resume" | "fork";
+};
 
-export type WorkerEnsureAction = "create" | "reuse" | "recover" | "refuse";
+export type WorkerEnsureAction = "create" | "reuse" | "recover" | "refuse" | "attention";
 export type WorkerRecoveryMode = "first_binding_retry" | "exact_session_resume";
 export type PreparedWorkerCarrier = Extract<WorkerCarrierState, { kind: "prepared" }>;
 export type BoundWorkerCarrier = Extract<WorkerCarrierState, { kind: "bound" }>;
@@ -24,6 +28,7 @@ export type WorkerUsableCarrier = BoundWorkerCarrier;
 
 export type WorkerEnsurePlan =
   | { action: "create" }
+  | { action: "attention"; carrier: PreparedWorkerCarrier | BoundWorkerCarrier; reason: string; nextActionHint: "wait" | "ask_human" }
   | { action: "reuse"; carrier: WorkerUsableCarrier }
   | { action: "recover"; carrier: PreparedWorkerCarrier; recoveryMode: "first_binding_retry" }
   | { action: "recover"; carrier: BoundWorkerCarrier; recoveryMode: "exact_session_resume" }
@@ -54,20 +59,25 @@ export function normalizeWorkerCarrier(member: Member | undefined): WorkerCarrie
 }
 
 /** Pure exhaustive Worker lifecycle decision; effects execute outside this module. */
-export function planWorkerEnsure(carrier: WorkerCarrierState, observation: WorkerCarrierObservation): WorkerEnsurePlan {
+export function planWorkerEnsure(carrier: WorkerCarrierState, observation: WorkerCarrierObservation | "live" | "missing"): WorkerEnsurePlan {
+  // Historical shell-only callers cannot establish generation identity.
+  const evidence: Exclude<WorkerCarrierObservation, string> = typeof observation === "string" ? { launch: "unknown", process: "unknown" } : observation;
+  const lastStop = typeof evidence.lastStop === "object" ? evidence.lastStop.piReason : evidence.lastStop;
+  const attention = (carrier: PreparedWorkerCarrier | BoundWorkerCarrier, reason: string, nextActionHint: "wait" | "ask_human" = "wait"): WorkerEnsurePlan => ({ action: "attention", carrier, reason, nextActionHint });
   switch (carrier.kind) {
     case "absent":
       return { action: "create" };
     case "invalid":
       return { action: "refuse", carrier, reason: carrier.reason };
     case "prepared":
-      // A pane or shell proves only terminal presence. Until exact Session
-      // binding, reusing it would turn a hung launch into durable capacity.
-      if (observation === "live") return { action: "refuse", carrier, reason: "unbound_live" };
-      return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
+      if (evidence.launch === "none") return { action: "create" };
+      if (evidence.launch === "refused" && evidence.process === "gone") return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
+      return attention(carrier, evidence.launch === "refused" ? evidence.process : `launch_${evidence.launch}`);
     case "bound":
-      if (observation === "live") return { action: "reuse", carrier };
-      return { action: "recover", carrier, recoveryMode: "exact_session_resume" };
+      if (lastStop === "new" || lastStop === "resume" || lastStop === "fork") return attention(carrier, "session_switched", "ask_human");
+      if (evidence.process === "gone") return { action: "recover", carrier, recoveryMode: "exact_session_resume" };
+      if (evidence.process === "live" && lastStop !== "quit") return { action: "reuse", carrier };
+      return attention(carrier, evidence.process === "live" ? "stopping" : evidence.process, evidence.process === "stopping" || lastStop === "quit" ? "ask_human" : "wait");
     default:
       return assertNever(carrier);
   }
