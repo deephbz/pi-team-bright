@@ -29,6 +29,7 @@
  *   if that actor generation has exited.
  * - While a simulation is active, `hostEnv()` outside an actor throws.
  */
+import { probeProcessGeneration } from "./process-generation";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -152,10 +153,6 @@ function runNode(command: string, args: readonly string[], options: { timeoutMs:
   });
 }
 
-function unsupportedGeneration(): GenerationProbe {
-  return { kind: "unknown", reason: "generation_verifier_unavailable" };
-}
-
 export const nodeHostEnv: HostEnv = {
   clock: {
     now: () => Date.now(),
@@ -185,7 +182,7 @@ export const nodeHostEnv: HostEnv = {
       }
     },
     kill: (pid, signal) => { process.kill(pid, signal); },
-    generation: unsupportedGeneration,
+    generation: probeProcessGeneration,
     exit: (code) => process.exit(code),
   },
   exec: {

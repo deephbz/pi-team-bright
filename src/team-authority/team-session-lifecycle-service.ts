@@ -42,14 +42,14 @@ export class TeamSessionLifecycleService {
           return { kind: "refused", reason: `Worker ${input.workerName} started for a Membership that is no longer current.`, exitProcess: true };
         }
       }
-      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), hostEnv().process.pid, runtime.probePidPresence, input.launchId);
+      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), hostEnv().process.pid, undefined, input.launchId);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
       }
       if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: current };
       const startedAt = hostEnv().clock.now();
-      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
       recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });
       const bound = await teams.bindMemberSession(input.teamName, input.workerName, input.sessionFile, input.launchId, admission.update ?? {}, current.membershipId);
       recordWorkerLaunchStage("session_bound_persisted", { membershipId: bound.membershipId! });
@@ -73,7 +73,7 @@ export class TeamSessionLifecycleService {
       const membershipId = lead.membershipId;
       if (!membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
       const startedAt = hostEnv().clock.now();
-      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, startedAt }, membershipId);
+      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt }, membershipId);
       if (admission.update) await teams.updateMembership(input.teamName, membershipId, admission.update);
       const recordPath = paths.leadSessionPath(input.teamName);
       const dir = path.dirname(recordPath);
