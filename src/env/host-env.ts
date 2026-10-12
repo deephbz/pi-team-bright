@@ -48,6 +48,8 @@ export interface HostClock {
   sleep(ms: number, signal?: AbortSignal): Promise<void>;
   /** Blocking delay (today: Atomics.wait). Blocks the whole actor. */
   sleepSync(ms: number): void;
+  /** Resume in a later event-loop turn. */
+  yield(): Promise<void>;
 }
 
 export interface HostRandom {
@@ -78,6 +80,8 @@ export interface HostProcess {
   /** This actor's environment variables. Never read `process.env` directly. */
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly platform: NodeJS.Platform;
+  readonly argv: readonly string[];
+  readonly execPath: string;
   cwd(): string;
   /** `kill(pid, 0)` semantics: true when the pid exists or EPERM. */
   pidExists(pid: number): boolean;
@@ -165,6 +169,7 @@ export const nodeHostEnv: HostEnv = {
     clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
     sleep: (ms, signal) => sleepNode(ms, undefined, { signal }),
     sleepSync: (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.max(0, ms)); },
+    yield: () => new Promise<void>((resolve) => setImmediate(resolve)),
   },
   random: {
     uuid: () => crypto.randomUUID(),
@@ -175,6 +180,8 @@ export const nodeHostEnv: HostEnv = {
     get pid() { return process.pid; },
     get env() { return process.env; },
     get platform() { return process.platform; },
+    get argv() { return process.argv; },
+    get execPath() { return process.execPath; },
     cwd: () => process.cwd(),
     pidExists: (pid) => {
       try {
@@ -209,8 +216,8 @@ let simulationActive = false;
 /** The current actor's host capabilities. */
 export function hostEnv(): HostEnv {
   const env = actorEnv.getStore();
+  if (simulationActive && (!env || env === nodeHostEnv)) throw new Error("Host access outside a simulated actor.");
   if (env) return env;
-  if (simulationActive) throw new Error("Host access outside a simulated actor.");
   return nodeHostEnv;
 }
 

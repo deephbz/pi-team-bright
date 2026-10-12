@@ -1,4 +1,4 @@
-import { hostEnv } from "../env/host-env";
+import { hostEnv, nodeHostEnv } from "../env/host-env";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
@@ -16,6 +16,7 @@ const execFileAsync = promisify(execFile);
  * @returns true if the hook doesn't exist or executes successfully; false otherwise.
  */
 export async function runHook(teamName: string, hookName: string, payload: any): Promise<boolean> {
+  if (hostEnv() !== nodeHostEnv) throw new Error("Legacy hook subprocesses are unavailable in simulation.");
   const hookPath = path.join(hostEnv().process.cwd(), ".pi", "team-hooks", `${hookName}.sh`);
 
   if (!fs.existsSync(hookPath)) {
