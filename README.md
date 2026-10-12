@@ -55,6 +55,14 @@ snapshot and updates through `team_sync` → inspect goal evidence → resolve
 Tasks. Stop Workers or shut down the Team only when their lifecycle boundary
 ends.
 
+`ensure_worker` returns `attention` when carrier evidence requires a decision.
+Follow its reason and next-action hint; unknown evidence never permits a new spawn.
+`worker_ensured.recovered` reports recovery of the exact Worker Session and current
+Attempt. Inspect `lastStop` and ask the human before recovery when
+`suspectedHumanStop` is true. `/ptb status` shows carrier, stop, and nonterminal Task
+evidence in one transcript entry. It offers one confirmation for legacy generation
+adoption and remembers a decline for the current Session runtime.
+
 Configure a model role and its default using the [canonical settings example](docs/examples/pi-team-bright.settings.json). A minimal agent-led run looks like this:
 
 ```js

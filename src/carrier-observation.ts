@@ -163,7 +163,7 @@ export class CarrierObserver {
     if (unavailable && !this.outage && this.journal) {
       const text = "Herdr observation unavailable. Process verification continues. Wait for reconnect before placement or recovery.";
       this.notify(text);
-      await appendTeamEvent(this.teamName, { type: "alert", alertId: hostEnv().random.uuid(), from: "team-lead", to: "team-lead", kind: "attention", text }).catch(() => undefined);
+      await appendTeamEvent(this.teamName, { type: "alert", alertId: `herdr-observation:${hostEnv().random.uuid()}`, from: "team-lead", to: "team-lead", kind: "attention", text }).catch(() => undefined);
     }
     this.outage = unavailable;
     for (;;) {

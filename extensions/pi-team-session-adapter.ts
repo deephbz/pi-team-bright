@@ -328,6 +328,7 @@ registerCommand?.("pi-team-graph", {
   handler: runGraph,
 });
 
+const declinedAdoptionSessions = new Set<string>();
 const runStatus = async (ctx: any) => {
     const present = (text: string, level: "info" | "warning" | "error" = "info") => {
       if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
@@ -350,19 +351,33 @@ const runStatus = async (ctx: any) => {
     try {
       const report = await diagnoseTeam(owner.teamName, { role: owner.role, sessionBinding, sessionDetail });
       if (!owner.isCurrent()) return;
-      present(formatTeamStatus(report), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
+      const lines = [formatTeamStatus(report)];
       if (owner.role === "team-lead" && sessionBinding === "current") {
         const observer = carrierObserver ?? new CarrierObserver(owner.teamName);
         await observer.refresh();
-        for (const view of observer.views.values()) {
-          present(`${view.worker}: process ${view.process}; launch ${view.launch}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}.`);
-          if (view.generation && !view.generation.osBirthToken && !view.lastStop && ctx.hasUI !== false && ctx.ui?.confirm) {
-            const accepted = await ctx.ui.confirm("Adopt legacy Worker generation?", `Verify and record the current OS birth token for ${view.worker} in pane ${view.paneId ?? "unknown"}? This requires a matching Herdr Session.`);
+        const tasks = taskGraphControlSource?.hasGraph(owner.teamName) ? (await taskGraphControlSource.trace(owner.teamName)).tasks : undefined;
+        if (!owner.isCurrent()) return;
+        const views = [...observer.views.values()];
+        for (const view of views) {
+          const taskIds = tasks?.filter(task => task.assignee === view.worker && !["goal_achieved", "goal_failed", "cancelled"].includes(task.state.kind)).map(task => task.id);
+          lines.push(`${view.worker}: process ${view.process}; launch ${view.launch}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.`);
+        }
+        const declineKey = JSON.stringify([owner.teamName, owner.membershipId, sessionFile]);
+        const candidates = views.filter(view => view.generation && !view.generation.osBirthToken && !view.lastStop);
+        if (candidates.length && !declinedAdoptionSessions.has(declineKey) && ctx.hasUI !== false && ctx.ui?.confirm) {
+          const accepted = await ctx.ui.confirm("Adopt legacy Worker generations?", `Verify and record OS birth tokens for these Workers? Each requires an exact matching Herdr Session.\n${candidates.map(view => `${view.worker}: pane ${view.paneId ?? "unknown"}`).join("\n")}`);
+          if (!owner.isCurrent()) return;
+          if (!accepted) declinedAdoptionSessions.add(declineKey);
+          else for (const view of candidates) {
+            const adopted = await adoptLegacyGeneration(owner.teamName, view.worker, view.membership);
             if (!owner.isCurrent()) return;
-            if (accepted) present(await adoptLegacyGeneration(owner.teamName, view.worker, view.membership) ? `${view.worker}: generation adopted.` : `${view.worker}: adoption refused; evidence changed or is unavailable.`, "warning");
+            lines.push(adopted ? `${view.worker}: generation adopted; run status to refresh.` : `${view.worker}: adoption refused; evidence changed or is unavailable.`);
           }
         }
       }
+      if (!owner.isCurrent()) return;
+      messageSink.appendEntry("ptb.status", { lines });
+      if (ctx.mode !== "tui") present(lines.join("\n"), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
     } catch (error) {
       if (owner.isCurrent()) present(`Pi Team Bright status failed for ${owner.teamName}. ${error instanceof Error ? error.message : String(error)}`, "error");
     }

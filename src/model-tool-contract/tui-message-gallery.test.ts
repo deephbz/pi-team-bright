@@ -14,6 +14,7 @@ import {
   createToolCallRenderer,
   createToolResultRenderer,
   projectToolTuiMessage,
+  projectModelToolTuiMessage,
 } from "./tui-projection";
 import {
   createCustomMessageRenderer,
@@ -190,10 +191,21 @@ describe("TUI message gallery", () => {
     expect(parseExpandedDetail(projectionLines(projection, { expanded: true }))).toEqual(raw);
   });
 
+  it("shows four carrier changes in the collapsed sync and keeps the rest expandable", () => {
+    const changes = Array.from({ length: 5 }, (_, i) => ({ worker: `worker-${i}`, kind: "carrier", text: `Worker worker-${i}: process gone; pane pane-${i}; nextActionHint=ask_human.` }));
+    const message = projectModelToolTuiMessage("team_sync", { kind: "updates", team_changes: [{ kind: "lifecycle", text: "Herdr observation unavailable." }], worker_changes: changes, task_changes: [], alerts: [] });
+    expect(message.body).toContain("Herdr observation unavailable.");
+    expect(message.body).toContain(changes[3].text);
+    expect(message.body).not.toContain(changes[4].text);
+    expect(message.expandedLines?.join("\n")).toContain(changes[4].text);
+  });
+
   it("registers all tool headers plus current and historical custom identities", () => {
     const renderers = new Map<string, (...args: any[]) => any>();
     const tools = new Map<string, any>();
+    const entries = new Map<string, (...args: any[]) => any>();
     piTeamBright({
+      registerEntryRenderer(type: string, renderer: (...args: any[]) => any) { entries.set(type, renderer); },
       registerTool(tool: any) { tools.set(tool.name, tool); },
       registerMessageRenderer(type: string, renderer: (...args: any[]) => any) { renderers.set(type, renderer); },
       on() {},
@@ -211,8 +223,10 @@ describe("TUI message gallery", () => {
       SYNC_NUDGE_CUSTOM_TYPE,
       TEAM_UPDATE_TYPE,
       TASK_CHANGE_CUSTOM_TYPE,
+      "ptb.worker-recovery",
     ].sort());
 
+    expect([...entries.keys()]).toEqual(["ptb.status"]);
     const customScenes = tuiMessageGallery().filter((scenario) => scenario.source === "custom");
     const scenesByRegisteredType = new Map(customScenes.flatMap((scenario) =>
       (scenario.customTypes ?? []).map((type) => [type, scenario] as const)));
