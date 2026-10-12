@@ -1,8 +1,9 @@
 import { Type, type Static } from "typebox";
 import { TaskVersionRefSchema } from "./task-version-ref";
 import { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
+import { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_TITLE_MAX_LENGTH, TASK_ID_MAX_LENGTH } from "./task-field-limits";
 
-const TaskId = Type.String({ minLength: 1, maxLength: 128 });
+const TaskId = Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH });
 const TaskKey = Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" });
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const OperationId = Type.String({ minLength: 1, maxLength: 128 });
@@ -63,14 +64,14 @@ export const GraphAttemptSummarySchema = Type.Object({
 /** Canonical graph-native Task card used by tools, delivery, and Coordination. */
 export const GraphTaskCardSchema = Type.Object({
   id: TaskId,
-  title: Type.String({ minLength: 1, maxLength: 80 }),
+  title: Type.String({ minLength: 1, maxLength: TASK_CARD_TITLE_MAX_LENGTH }),
   goal: Type.String({ minLength: 1, maxLength: TASK_CARD_GOAL_MAX_LENGTH }),
   assignee: WorkerName,
   needs: Type.Array(TaskId),
   on_goal_failed: Type.Optional(GraphFailureEdgeSchema),
   status: Type.Enum(["dependency_waiting", "ready", "in_progress", "blocked", "goal_failed", "goal_achieved", "cancelled"]),
   state: GraphTaskStateSchema,
-  current_context: Type.String({ minLength: 1, maxLength: 2_000 }),
+  current_context: Type.String({ minLength: 1, maxLength: TASK_CARD_CONTEXT_MAX_LENGTH }),
   version: TaskVersionRefSchema,
   activation_key: Type.Optional(Type.String({ minLength: 1 })),
   accepted_attempt_id: Type.Optional(Type.String({ minLength: 1 })),
@@ -97,7 +98,7 @@ export const GraphTaskCardSchema = Type.Object({
 
 const GraphTaskItemSchema = Type.Object({
   key: TaskKey,
-  title: Type.String({ minLength: 1, maxLength: 80 }),
+  title: Type.String({ minLength: 1, maxLength: TASK_CARD_TITLE_MAX_LENGTH }),
   goal: Type.String({ minLength: 1, maxLength: TASK_CARD_GOAL_MAX_LENGTH, description: "Desired outcome and external success signal." }),
   assignee: WorkerName,
   needs: Type.Optional(Type.Array(TaskKey, { uniqueItems: true })),
@@ -120,7 +121,7 @@ export const GraphTaskUpdateParametersSchema = Type.Object({
   operation_id: OperationId,
   expected_version: TaskVersionRefSchema,
   transition: Type.Optional(GraphTaskTransitionSchema),
-  current_context: Type.Optional(Type.String({ minLength: 1, maxLength: 2_000 })),
+  current_context: Type.Optional(Type.String({ minLength: 1, maxLength: TASK_CARD_CONTEXT_MAX_LENGTH })),
   evidence: Type.Optional(Type.String({ minLength: 1 })),
 }, {
   additionalProperties: false,

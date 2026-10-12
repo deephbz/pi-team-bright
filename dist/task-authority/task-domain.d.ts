@@ -1,9 +1,8 @@
 import { Type, type Static } from "typebox";
 export { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
+export { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_TITLE_MAX_LENGTH, TASK_ID_MAX_LENGTH } from "./task-field-limits";
 import { type GraphTaskCard } from "./graph-control-schemas";
 /** Neutral Task contract. This module imports no authority or persistence code. */
-export declare const TASK_CARD_TITLE_MAX_LENGTH = 80;
-export declare const TASK_CARD_CONTEXT_MAX_LENGTH = 2000;
 export declare const TaskCardStatusSchema: Type.TEnum<["open", "in_progress", "blocked", "closed"]>;
 export declare const TaskCardContextSchema: Type.TString;
 export declare const TaskCardWarningSchema: Type.TObject<{
