@@ -17,14 +17,8 @@ function serviceWithInjectedDerivedStore(config: any, calls: string[]) {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: () => ({ kind: "projected", changes: [] }),
   }, {
-    readHidden: async () => ({ kind: "not_found" as const, reason: "absent" as const }),
-    commitHidden: async () => ({ kind: "refused" as const, reason: "stale_acknowledgement" as const }),
     readEvents: () => ({ events: [], headCursor: "0", cursor: "0", truncated: false, remaining: 0 }),
     readEventCursor: () => "0",
-    waitEvents: async () => ({ events: [], headCursor: "0", cursor: "0", truncated: false, remaining: 0, timedOut: true }),
-    readFailureHints: () => ({ headCursor: "0", cursor: "0", hints: [] }),
-  }, undefined, {
-    readHidden: async () => { calls.push("hidden"); return { kind: "missing" }; },
   });
 }
 
@@ -45,7 +39,7 @@ describe("Coordination nudge eligibility compatibility", () => {
 
     expect(exactLead).not.toHaveProperty("logicalWorkers");
     expect(result).toMatchObject({ kind: "unavailable" });
-    expect(calls).toEqual(["binding:/sessions/lead", "hidden", "binding:/sessions/lead"]);
+    expect(calls).toEqual(["binding:/sessions/lead"]);
   });
 
   it("requires the current exact lead Membership before any nudge-derived read", async () => {

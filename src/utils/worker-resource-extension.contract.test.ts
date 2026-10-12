@@ -180,7 +180,6 @@ describe("Worker resource extension projection", () => {
 
     await expect(harness.handlers.get("session_start")!({ reason: "resume" }, resumed)).rejects.toThrow();
     expect(harness.handlers.get("tool_call")!({ toolName: "task_read" }, resumed)).toBeUndefined();
-    await expect(harness.handlers.get("before_provider_request")!({ payload: "unused" }, resumed)).resolves.toBeUndefined();
   });
 
   it("does not re-enable leader-only tools from Worker settings after envless recovery", async () => {

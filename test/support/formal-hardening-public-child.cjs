@@ -51,24 +51,15 @@ async function main() {
     for (const handler of handlers.get("tool_call") || []) await handler({ toolName: call.name }, ctx);
     const result = await tool.execute(call.id, call.params, new AbortController().signal, undefined, ctx);
     results.push({ name: call.name, details: result.details, text: result.content?.[0]?.text });
-    if (call.ack) {
+    if (call.persist) {
       const entryId = `persisted-${call.id}`;
       branch.push({
         type: "message",
         id: entryId,
         parentId: branch.at(-1)?.id || null,
         timestamp: new Date().toISOString(),
-        message: { role: "toolResult", toolCallId: call.id, content: result.content, isError: false, timestamp: Date.now() },
+        message: { role: "toolResult", toolName: call.name, toolCallId: call.id, content: result.content, details: result.details, isError: false, timestamp: Date.now() },
       });
-      for (const handler of handlers.get("before_provider_request") || []) {
-        await handler({ payload: { persistedResult: result.content?.[0]?.text } }, ctx);
-      }
-      for (const handler of handlers.get("message_end") || []) {
-        await handler({ message: { role: "assistant", stopReason: "stop" } }, ctx);
-      }
-      for (const handler of handlers.get("turn_end") || []) {
-        await handler({ message: { role: "assistant", stopReason: "stop" } }, ctx);
-      }
     }
   }
   process.stdout.write(`FORMAL_RESULT ${JSON.stringify({ pid: process.pid, registered: [...tools.keys()], results, entries: branch })}\n`);

@@ -1,7 +1,21 @@
 # 0016 — Framework-owned Team synchronization delivery
 
 Date: 2026-09-26
-Status: accepted intent; implemented and verified in an unpublished candidate
+Status: delivery mechanics superseded by accepted Proposal A on 2026-10-12.
+Batch scheduling remains in force.
+
+## Supersession
+
+[Proposal A](../journal/2026-10-12-state-ownership-and-liveness-proposal.md#proposal-a-the-leads-session-branch-holds-the-cursor)
+moves the cursor into the authorized lead's native Session branch. Native
+`ptb.team-update` messages and `team_sync` results carry each page boundary.
+Persistence commits presentation. Provider success is no longer required.
+Updates return immediately. The lead waits by ending its turn. Compaction
+preserves historical delivery; a snapshot restores model context.
+
+The [branch reader](../../src/coordination/branch-observation.ts) and
+[publisher](../../extensions/team-update.ts) own the executable contract.
+The following sections preserve the superseded rationale.
 
 ## Decision
 

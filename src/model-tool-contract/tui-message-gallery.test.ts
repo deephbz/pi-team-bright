@@ -27,7 +27,7 @@ import {
   formatTaskChangeBatch,
   presentedTaskDeliveryIdsFromEntries,
 } from "../utils/task-delivery";
-import { FRAMEWORK_SYNC_MESSAGE_TYPE } from "../../extensions/framework-sync-execution";
+import { TEAM_UPDATE_TYPE } from "../../extensions/team-update";
 import { SYNC_NUDGE_CUSTOM_TYPE } from "../utils/sync-nudge";
 import { PTB_DOCTOR_CUSTOM_TYPE } from "../utils/ptb-doctor-command";
 import {
@@ -209,7 +209,7 @@ describe("TUI message gallery", () => {
       LEGACY_TASK_CHANGE_CUSTOM_TYPE,
       PTB_DOCTOR_CUSTOM_TYPE,
       SYNC_NUDGE_CUSTOM_TYPE,
-      FRAMEWORK_SYNC_MESSAGE_TYPE,
+      TEAM_UPDATE_TYPE,
       TASK_CHANGE_CUSTOM_TYPE,
     ].sort());
 

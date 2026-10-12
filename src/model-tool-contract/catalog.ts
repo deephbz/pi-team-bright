@@ -249,12 +249,18 @@ export const TeamCreateResultSchema = Type.Union([
 
 export const TeamSyncParametersSchema = Type.Object({
   view: Type.Enum(["snapshot", "updates"], {
-    description: "Use snapshot to restore context; use updates for supervision and waiting.",
+    description: "Snapshot restores context; updates returns one available page immediately.",
   }),
+}, { additionalProperties: false });
+
+const ObservationStampSchema = Type.Object({
+  team: Type.String({ minLength: 1 }), epoch: Type.String({ minLength: 1 }), binding: Type.String({ minLength: 1 }),
+  from: Type.Integer({ minimum: 0 }), through: Type.Integer({ minimum: 0 }),
 }, { additionalProperties: false });
 
 export const TeamSnapshotResultSchema = Type.Object({
   kind: Type.Literal("snapshot"),
+  observation: Type.Optional(ObservationStampSchema),
   team: TeamCurrent,
   model_roles: Type.Optional(Type.Array(WorkerModelRoleSummarySchema)),
   default_model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
@@ -265,6 +271,7 @@ export const TeamSnapshotResultSchema = Type.Object({
 
 export const TeamUpdatesResultSchema = Type.Object({
   kind: Type.Literal("updates"),
+  observation: Type.Optional(ObservationStampSchema),
   team_changes: Type.Array(TeamDeltaSchema),
   worker_changes: Type.Array(WorkerDeltaSchema),
   task_changes: Type.Array(TaskDeltaSchema),
@@ -289,6 +296,7 @@ export const TeamSyncSnapshotRequiredResultSchema = Type.Object({
 
 export const TeamSyncCaughtUpResultSchema = Type.Object({
   kind: Type.Literal("caught_up"),
+  observation: Type.Optional(ObservationStampSchema),
   head: Type.Integer({ minimum: 0 }),
   epoch_id: Type.String({ minLength: 1 }),
   state_changed: Type.Literal(false),
@@ -297,6 +305,7 @@ export const TeamSyncCaughtUpResultSchema = Type.Object({
 
 export const TeamSyncUnsettledResultSchema = Type.Object({
   kind: Type.Literal("unsettled"),
+  observation: Type.Optional(ObservationStampSchema),
   head: Type.Integer({ minimum: 0 }),
   epoch_id: Type.String({ minLength: 1 }),
   workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }),
@@ -876,7 +885,7 @@ export const modelToolCatalog = {
       commonUseCases: [
         "Restore current Team context after startup or compaction.",
         "Receive changes since the exact Session branch's last completed observation.",
-        "Wait for the next Team change when no unseen update exists.",
+        "Read one available page immediately. End the turn to wait for an automatic Team update.",
       ],
       whenNotToUse: [
         "Do not use it to inspect full Task journal history; batch-read selected Tasks instead.",

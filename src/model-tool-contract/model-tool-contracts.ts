@@ -182,7 +182,7 @@ export interface ModelToolTeamPort {
   sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult>;
   readTeamSync(leaderSessionId: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, toolCallId: string): Promise<TeamSyncPortResult>;
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void;
-  acknowledgePendingObservation(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): boolean;
+  acknowledgePendingObservation?(leaderSessionId: ExactLeaderSessionId, entryId: string, branchIds: string[]): boolean;
   setBranchContext(leaderSessionId: ExactLeaderSessionId, branchIds: string[]): void;
   setLeaderSessionFile?(leaderSessionId: ExactLeaderSessionId, sessionFile: string): void;
   setLeaderLaunchContext?(leaderSessionId: ExactLeaderSessionId, context: ModelToolLeaderLaunchContext): void;
