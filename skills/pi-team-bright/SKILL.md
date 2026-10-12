@@ -130,6 +130,9 @@ increase useful learning within the same budget.
 ## Lead: supervise and finish the request
 
 `ensure_worker` can return `attention`; follow its reason and next-action hint.
+`launch_stalled` requires human review of the named pane. With human approval,
+use `worker_stop` to end that launch before `ensure_worker` creates another.
+Unknown launch evidence never authorizes another spawn.
 `worker_ensured.recovered` reports exact-Session recovery without changing the Attempt.
 Ask the human before recovery when `lastStop.suspectedHumanStop` is true.
 Use `/ptb status` to inspect stop evidence and confirm adoption of legacy generations.

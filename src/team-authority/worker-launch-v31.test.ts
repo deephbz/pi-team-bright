@@ -1,7 +1,8 @@
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { nodeHostEnv } from "../env/host-env";
 import type { Member } from "./contracts";
 const fixture = vi.hoisted(() => ({ members: [] as Member[], leased: false, starts: 0, splits: 0, release: undefined as undefined | ((value: any) => void) }));
-vi.mock("../utils/lock", () => ({ withLock: async (_: unknown, fn: () => unknown) => fn() }));
+vi.mock("../utils/lock", async importOriginal => ({ ...await importOriginal<any>(), withLock: async (_: unknown, fn: () => unknown) => fn() }));
 vi.mock("../utils/teams", () => ({
   readConfig: async () => ({ name: "team", terminalBackend: "herdr", members: fixture.members }),
   newLaunchId: () => `launch-${fixture.members.length + 1}`,
@@ -29,6 +30,23 @@ vi.mock("../utils/team-terminal", async () => {
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
 
 beforeEach(() => { fixture.members = []; fixture.leased = false; fixture.splits = 0; fixture.starts = 0; });
+afterEach(() => { vi.restoreAllMocks(); });
+it.each(["started", "unknown"] as const)("returns launch_stalled for an old %s launch with no agent in its pane", async state => {
+  fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
+    launch: { launchId: "launch", state, requestedAt: Date.now() - 16000 } } as Member];
+  const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
+  const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
+  const request = { teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" };
+  expect(await bridge.ensureWorker(request)).toMatchObject({ action: "attention", reason: "launch_stalled", nextActionHint: "ask_human", paneId: "pane", launchId: "launch" });
+  expect(fixture.splits).toBe(0); expect(fixture.starts).toBe(0);
+  run.mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [{ pane_id: "pane", name: "foreign-agent" }] } }), stderr: "" });
+  expect(await bridge.ensureWorker(request)).toMatchObject({ action: "attention", reason: "launch_pending", nextActionHint: "wait" });
+  run.mockResolvedValue({ kind: "timeout", afterMs: 2000 });
+  expect(await bridge.ensureWorker(request)).toMatchObject({ reason: "launch_pending", nextActionHint: "wait" });
+  fixture.members[0].launch!.requestedAt = Date.now(); run.mockClear();
+  expect(await bridge.ensureWorker(request)).toMatchObject({ reason: "launch_pending", nextActionHint: "wait" });
+  expect(run).not.toHaveBeenCalled();
+});
 it("returns a durable receipt before readiness and fences late completion", async () => {
   const publication = { readEventCursor: () => "0", recordWorkerPrepared: async () => ({ cursor: "1" }), observeWorkerStartup: vi.fn() } as any;
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: publication });
