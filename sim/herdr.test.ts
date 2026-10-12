@@ -38,9 +38,9 @@ describe("Herdr wire fake", () => {
   it("exposes shell process-info before managed start and Pi child afterwards", () => {
     const herdr = new HerdrFake(new ProcessTable());
     herdr.spawn("pane-1");
-    const info = () => JSON.parse(herdr.run(["pane", "process-info", "pane-1"]).stdout).result;
-    expect(info().processes.map((p: any) => p.command)).toEqual(["shell"]);
+    const info = () => JSON.parse(herdr.run(["pane", "process-info", "pane-1"]).stdout).result.process_info;
+    expect(info().foreground_processes.map((p: any) => p.argv0)).toEqual(["zsh"]);
     herdr.start("pane-1", "worker");
-    expect(info().processes.map((p: any) => p.command)).toEqual(["shell", "pi"]);
+    expect(info().foreground_processes.map((p: any) => p.argv0)).toEqual(["pi"]);
   });
 });

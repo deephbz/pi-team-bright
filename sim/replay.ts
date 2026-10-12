@@ -1,10 +1,11 @@
 import type { Choice } from "./entropy";
 import { SimActor } from "./actor";
 import { loadActorExtension } from "./actor-loader";
+import { assumptionEvidence } from "./assumptions";
 import { SimWorld } from "./world";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/1";
+export const RUNNER_VERSION = "sim-c1/2";
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */
@@ -35,7 +36,7 @@ export class WorldReplay {
       const generation = world.processes.current(pane.agentPid!);
       world.scheduler.enqueue(`pi.boot:${actorKey(who)}`, () => {
         if (!generation?.alive || world.faults.get("pi.start")?.mode === "hang") return;
-        const actor = this.addActor(who, pane.env);
+        const actor = this.addActor(who, { ...pane.env, HERDR_PANE_ID: pane.id });
         if (world.faults.get("pi.start")?.mode === "exit_before_ready") { world.killPid(world.envs.get(actor.id)!.process.pid); return; }
         return actor.emit("session_start", { reason: "startup" });
       });
@@ -44,7 +45,7 @@ export class WorldReplay {
   addActor(who: ActorRef, variables: Record<string, string> = {}): SimActor {
     const id = actorKey(who);
     if (this.actors.has(id)) throw new Error(`Actor already loaded: ${id}`);
-    const actor = new SimActor(this.world, id, { PI_TEAM_NAME: who.team, PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor, ...variables });
+    const actor = new SimActor(this.world, id, { ...(who.actor === "lead" ? {} : { PI_TEAM_NAME: who.team }), PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor, ...variables });
     const factory = this.factories.get(id);
     if (!factory) throw new Error(`Actor module graph was not prepared: ${id}`);
     actor.initialize(factory);
@@ -104,7 +105,7 @@ export class WorldReplay {
         break;
       }
       case "pi.shutdown": {
-        // A3: graceful quit emits shutdown before process death. Reload keeps the OS process.
+        world.evidence.push(assumptionEvidence("A3", "Graceful quit emits shutdown before process death"));
         const actor = this.actor(step.who);
         await actor.emit("session_shutdown", { reason: step.reason });
         if (step.reason === "quit") world.killPid(world.envs.get(actor.id)!.process.pid);
@@ -121,7 +122,11 @@ export class WorldReplay {
         for (const process of world.processes.history) if (process.alive) world.killPid(process.pid);
         world.processes.reboot(); world.herdr.panes.clear(); break;
       case "human.closePane": world.herdr.close(step.pane); break;
-      case "human.typeInPane": throw new Error("Unmodeled shell input: use explicit OS or Pi trace steps");
+      case "human.typeInPane":
+        if (!world.herdr.panes.has(step.pane)) throw new Error(`Unknown pane: ${step.pane}`);
+        // Input is terminal data. Process effects need explicit OS inputs; no shell interpreter runs.
+        world.record("terminal", "input", { pane: step.pane, text: step.text });
+        break;
       case "herdr.agentState": {
         const pane = world.herdr.panes.get(step.pane);
         if (!pane) throw new Error(`Unknown pane: ${step.pane}`);
@@ -142,8 +147,10 @@ export class WorldReplay {
     if (trace.version !== WORLD_TRACE_VERSION) throw new Error("Unsupported WorldTrace version");
     if (trace.setup.teams.length) throw new Error("Pre-existing Team setup needs a public-tool bootstrap trace");
     // Native module loading finishes before the deterministic scheduler starts.
-    for (const { step } of trace.steps) if ("who" in step && !this.factories.has(actorKey(step.who))) {
-      this.factories.set(actorKey(step.who), await loadActorExtension());
+    for (const { step } of trace.steps) if ("who" in step) {
+      const actors = [step.who];
+      if (step.kind === "tool.call" && step.tool === "ensure_worker" && typeof step.args.name === "string") actors.push({ team: step.who.team, actor: step.args.name });
+      for (const who of actors) if (!this.factories.has(actorKey(who))) this.factories.set(actorKey(who), await loadActorExtension({ PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor }));
     }
     const epoch = this.world.scheduler.now;
     const check = () => {
@@ -164,6 +171,12 @@ export class WorldReplay {
       await this.world.drain({ maxSteps: Math.max(1, bounds.maxSteps - this.world.scheduler.decisions.length) });
       check();
     }
+    while (this.world.scheduler.pendingCount() > 0) {
+      check();
+      if (!await this.world.scheduler.step(true)) throw new Error("Replay has an unfinished operation without a scheduled completion");
+    }
+    check();
+    this.world.assertClean();
     this.world.entropy.assertReplayComplete();
   }
 }
@@ -178,6 +191,12 @@ export async function replayTrace(trace: WorldTrace, options: { seed?: number; r
     options.setup?.(runner);
     await runner.run(trace, bounds);
     const receipt: ReplayReceipt = { traceId: trace.id, runnerVersion: RUNNER_VERSION, seed, choices: world.entropy.choices.filter(choice => choice.label === "schedule").map(choice => choice.value), bounds };
-    return { receipt, choices: world.entropy.choices, decisions: world.scheduler.decisions, history: world.history, assumptions: world.herdr.evidence };
+    return {
+      receipt, choices: world.entropy.choices, decisions: world.scheduler.decisions, history: world.history,
+      assumptions: [...world.evidence, ...world.herdr.evidence],
+      processes: structuredClone(world.processes.history),
+      panes: [...world.herdr.panes.values()].map(pane => ({ id: pane.id, shellPid: pane.shellPid, agentPid: pane.agentPid, agentLive: world.herdr.agentLive(pane) })),
+      actors: [...runner.actors.values()].map(actor => ({ id: actor.id, sessionId: actor.session.getSessionId(), tools: [...actor.tools.keys()], branch: actor.session.getBranch() })),
+    };
   } finally { world.dispose(); }
 }
