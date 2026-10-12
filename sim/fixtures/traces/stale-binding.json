@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "synthetic-stale-binding",
+  "source": "synthetic",
+  "assumptions": ["A-delayed-call-retains-original-membership"],
+  "setup": { "ptbVersion": "v3.1", "teams": [] },
+  "steps": [
+    { "at": 0, "step": { "kind": "pi.start", "who": { "team": "team-1", "actor": "lead" }, "session": "session-1", "reason": "startup" } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "team_create", "args": { "name": "team-1" } } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "ensure_worker", "args": { "name": "w1", "scope": "text-1" } } },
+    { "at": 0, "step": { "kind": "pi.fork", "who": { "team": "team-1", "actor": "w1" }, "fromEntry": "entry-1", "newSession": "session-2" } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "w1" }, "tool": "task_update", "args": { "task_id": "task-1", "operation_id": "operation-1", "expected_version": "version-1", "transition": "claim" } } },
+    { "at": 0, "step": { "kind": "turn.end", "who": { "team": "team-1", "actor": "w1" }, "outcome": "error" } },
+    { "at": 0, "step": { "kind": "tool.call", "who": { "team": "team-1", "actor": "lead" }, "tool": "ensure_worker", "args": { "name": "w1", "scope": "text-1" } } }
+  ]
+}
