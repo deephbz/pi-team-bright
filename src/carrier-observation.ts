@@ -74,6 +74,12 @@ export async function herdrList(source: "agent" | "pane"): Promise<Record<string
 
 /** Ephemeral projection. It owns observations, never Membership or Task transitions. */
 export const CARRIER_SAMPLE_TTL_MS = 6000;
+export const LAUNCH_STALL_MS = 15000;
+export function launchIsStalled(member: Member, agents: readonly Record<string, unknown>[] | undefined, now = hostEnv().clock.now()): boolean {
+  const paneId = member.terminalTarget?.targetId ?? member.tmuxPaneId;
+  return !!(member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= LAUNCH_STALL_MS
+    && paneId && agents && !agents.some(row => row.pane_id === paneId));
+}
 type SourceSample<T> = { value?: T; observedAt: number; fact?: string };
 
 export class CarrierObserver {
@@ -201,7 +207,7 @@ export class CarrierObserver {
         const historical = this.lastEvents.get(`${view.membership}:${field}`)?.carrier;
         const sameGeneration = JSON.stringify(historical?.generation) === JSON.stringify(view.generation);
         const key = JSON.stringify([view.membership, view.generation, view.launchId, field]);
-        const before = historical?.launchId === view.launchId && sameGeneration ? historical.to : this.published.get(key);
+        const before = historical && historical.launchId === view.launchId && sameGeneration ? historical.to : this.published.get(key);
         if (view[field] === before || (field === "terminal" && view.terminal !== "absent")) continue;
         if (reloading && field === "process") continue;
         if (before === undefined && (!prior || !samePriorGeneration) && ["none", "unknown", "bound", "live"].includes(view[field])) {
@@ -216,10 +222,9 @@ export class CarrierObserver {
         if (!(recorded?.cause.fact === "reload_hung" && recorded.observedAt >= view.lastStop.observedAt + 15000)) await this.publish(view, "process", "live", "stopping", status, "reload_hung");
         view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
       }
-      if (view.binding === "unbound" && ["requested", "started", "unknown"].includes(view.launch)
-        && member.launch && now - member.launch.requestedAt >= 15000 && agents && !agent) {
+      if (view.binding === "unbound" && launchIsStalled(member, agents, now)) {
         const recorded = this.lastEvents.get(`${view.membership}:launch`)?.carrier;
-        if (recorded?.cause.fact !== "launch_hung" || recorded.launchId !== view.launchId) await this.publish(view, "launch", view.launch, view.launch, status, "launch_hung");
+        if (recorded?.cause.fact !== "launch_stalled" || recorded.launchId !== view.launchId) await this.publish(view, "launch", view.launch, view.launch, status, "launch_stalled");
       }
       const attempt = this.taskCursors.get(member.name) ?? "0";
       const block = this.blocked.get(view.membership);

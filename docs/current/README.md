@@ -224,9 +224,15 @@ restating executable definitions.
   Session switches require attention; stopping that Membership keeps its pane.
   Each observation source owns its sample time. Samples expire to unknown after
   six seconds, including collection failure. A stalled read remains single-flight.
-  Herdr preparation uses bounded asynchronous calls. Only decisive shell-busy
-  refusal retries on the same pane and launch ID. Hung starts emit attention;
-  a missing Herdr row never authorizes another spawn.
+  Publication uses a separate accepted baseline. Failed appends retry under the
+  exact generation fence without delaying the source projection.
+  One ten-second receipt deadline covers claim, nested leases, Herdr preparation,
+  and target CAS. Expiry returns attention and prevents late startup. Prepared
+  targets reconcile asynchronously under the exact Membership and launch ID.
+  Only decisive shell-busy refusal retries on the same pane and launch ID.
+  An old started or unknown launch with no Herdr agent in its pane returns
+  `launch_stalled` attention. The human can authorize `worker_stop` before retry.
+  A missing Herdr row never authorizes another spawn.
   Linux reads procfs. macOS uses the dependency-free helper built with
   `npm run build:process-generation`; a missing helper yields unknown.
   `/ptb status` persists one human-only transcript entry with carrier, stop,

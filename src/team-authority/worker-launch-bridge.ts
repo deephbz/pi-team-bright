@@ -1,10 +1,10 @@
-import { hostEnv } from "../env/host-env";
+import { hostEnv, type TimerHandle } from "../env/host-env";
 import path from "node:path";
 import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
-import { withLock } from "../utils/lock";
+import { assertLockDeadline, LockDeadlineError, withLock, withLockDeadline } from "../utils/lock";
 import { teamDir } from "../utils/paths";
-import { deriveCarrierView, type CarrierView } from "../carrier-observation";
+import { deriveCarrierView, herdrList, launchIsStalled, type CarrierView } from "../carrier-observation";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig, TerminalTarget } from "./contracts";
 import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
@@ -46,7 +46,7 @@ export interface WorkerLaunchRequest {
 }
 export type WorkerLaunchResult =
   | { action: "reused"; member: Member; membershipId: string; target?: TerminalTarget; lastStop?: CarrierView["lastStop"] }
-  | { action: "attention"; member: Member; membershipId: string; launchId?: string; launch: CarrierView["launch"]; lastStop?: CarrierView["lastStop"]; reason: string; nextActionHint: "wait" | "ask_human" }
+  | { action: "attention"; member?: Member; membershipId?: string; paneId?: string; launchId?: string; launch: CarrierView["launch"]; lastStop?: CarrierView["lastStop"]; reason: string; nextActionHint: "wait" | "ask_human" }
   | { action: "created" | "recovered"; member: Member; membershipId: string; recoveryMode?: WorkerRecoveryMode; target?: PreparedLaunchTarget; startup: WorkerStartupObservation; launchId: string; launch: "requested"; lastStop?: CarrierView["lastStop"] };
 export function launchObservationState(observation: WorkerStartupObservation): WorkerLaunchObservationState {
   return observation.observed ? { carrier: "session_bound", runtime: "observed" } : { carrier: observation.carrier, runtime: "not_observed" };
@@ -68,20 +68,51 @@ export class WorkerLaunchBridge {
   }
   async ensureWorker(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
     return withSemanticTrace("worker_launch", { teamName: request.teamName, workerName: request.workerName }, async () => {
-      // The name lease serializes first Membership creation. It ends before pane creation.
-      const deadline = hostEnv().clock.now() + 9000;
-      const claim = await withLock(path.join(teamDir(request.teamName), `launch-${encodeURIComponent(request.workerName)}`), () => this.claim(request));
-      if (!("config" in claim)) return claim;
-      return this.launch(request, claim, deadline);
+      const deadline = hostEnv().clock.now() + 10000;
+      const receipt = new AbortController();
+      const observed: { member?: Member; paneId?: string } = {};
+      const expired = (): WorkerLaunchResult => ({ action: "attention", member: observed.member, membershipId: observed.member?.membershipId,
+        paneId: observed.paneId ?? observed.member?.terminalTarget?.targetId, launchId: observed.member?.launch?.launchId,
+        launch: "unknown", reason: "receipt_deadline", nextActionHint: "ask_human" });
+      // Async scope propagates the receipt deadline through every nested persistence lock.
+      const operation = withLockDeadline(deadline, async () => {
+        const claim = await withLock(path.join(teamDir(request.teamName), `launch-${encodeURIComponent(request.workerName)}`), () => this.claim(request, member => { observed.member = member; }));
+        assertLockDeadline();
+        if (!("config" in claim)) return this.inspectAttention(request, claim);
+        observed.member = claim.member;
+        return this.launch(request, claim, deadline, paneId => { observed.paneId = paneId; });
+      }, receipt.signal);
+      let timer: TimerHandle | undefined;
+      try {
+        return await Promise.race([operation, new Promise<WorkerLaunchResult>(resolve => {
+          timer = hostEnv().clock.setTimeout(() => { receipt.abort(); resolve(expired()); }, Math.max(0, deadline - hostEnv().clock.now()));
+        })]);
+      } catch (error) { if (error instanceof LockDeadlineError) return expired(); throw error; }
+      finally { hostEnv().clock.clearTimeout(timer); }
     });
   }
-  private async claim(request: WorkerLaunchRequest): Promise<LaunchClaim | WorkerLaunchResult> {
+  private async inspectAttention(request: WorkerLaunchRequest, result: WorkerLaunchResult): Promise<WorkerLaunchResult> {
+    if (result.action !== "attention" || !result.member || result.member.terminalTarget?.backend !== "herdr"
+      || !launchIsStalled(result.member, [])) return result;
+    const agents = await herdrList("agent").catch(() => undefined);
+    assertLockDeadline();
+    if (!launchIsStalled(result.member, agents)) return result;
+    const observed = result.member;
+    return teams.withCurrentMembershipLease(request.teamName, observed.membershipId!, async current => {
+      if (current.launch?.launchId !== observed.launch?.launchId || current.sessionFile !== observed.sessionFile
+        || current.terminalTarget?.targetId !== observed.terminalTarget?.targetId || !launchIsStalled(current, agents)) return result;
+      return { ...result, member: current, paneId: current.terminalTarget?.targetId, reason: "launch_stalled", nextActionHint: "ask_human" };
+    });
+  }
+  private async claim(request: WorkerLaunchRequest, observe: (member: Member) => void): Promise<LaunchClaim | WorkerLaunchResult> {
     const config = await teams.readConfig(request.teamName);
     const member = [...config.members].reverse().find(m => m.name === request.workerName && m.agentType === "teammate" && m.isActive !== false);
     if (member) {
+      observe(member);
       if (request.modelRole !== undefined && member.modelProfile?.alias !== request.modelRole) throw new WorkerModelConflictError(member.name, member.modelProfile?.alias, request.modelRole);
       return teams.withCurrentMembershipLease(request.teamName, member.membershipId!, async current => {
         const status = await runtime.readRuntimeStatus(request.teamName, member.name);
+        assertLockDeadline();
         const view = deriveCarrierView(current, status);
         const plan = planWorkerEnsure(normalizeWorkerCarrier(current), view);
         // Even a bound dead prior generation cannot bypass an in-flight recovery.
@@ -109,10 +140,12 @@ export class WorkerLaunchBridge {
       name: request.workerName, agentType: "teammate", model: chosen.model, modelProfile: chosen.binding,
       joinedAt: hostEnv().clock.now(), cwd: request.cwd, subscriptions: [], isActive: true, prompt: request.scope, color: "blue", thinking: chosen.binding?.thinking ?? request.thinking };
     await teams.addMember(request.teamName, prepared);
+    observe(prepared);
+    assertLockDeadline();
     await this.dependencies.lifecyclePublication.recordWorkerPrepared({ teamName: request.teamName, workerName: prepared.name, membershipId: prepared.membershipId! });
     return { member: prepared, config, action: "created" };
   }
-  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number): Promise<WorkerLaunchResult> {
+  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
     const { member, config } = claim;
     const launchId = member.launch!.launchId;
     const terminal = currentTerminalForTeam(config);
@@ -126,6 +159,7 @@ export class WorkerLaunchBridge {
     let target: PreparedLaunchTarget | undefined;
     try {
       if (request.initialMessage) await request.initialMessage();
+      assertLockDeadline();
       if (terminal instanceof Iterm2Adapter) {
         const last = options.panePlacement?.workerPaneIds.at(-1);
         terminal.setSpawnContext(last?.startsWith("iterm_") ? { lastSessionId: last.replace("iterm_", "") } : {});
@@ -133,27 +167,33 @@ export class WorkerLaunchBridge {
       const terminalId = terminal instanceof HerdrAdapter ? await terminal.prepareSpawnAsync(options, deadline)
         : config.separateWindows ? terminal.spawnWindow(options) : terminal.spawn(options);
       target = { terminalId, isWindow: !!config.separateWindows, backend: terminal.name };
+      observePane(terminalId);
+      assertLockDeadline();
       // This CAS records the target before Herdr starts the process.
       await teams.withCurrentMembershipLease(request.teamName, member.membershipId!, async current => {
         if (current.launch?.launchId !== launchId) throw new Error("Launch target belongs to a superseded launch. Inspect the orphan pane.");
         await teams.updateMembership(request.teamName, member.membershipId!, { terminalTarget: terminalTarget(terminal.name, target!.isWindow ? "window" : "pane", terminalId) });
       });
+      assertLockDeadline();
       const completion = terminal instanceof HerdrAdapter ? terminal.startPrepared(terminalId, options) : Promise.resolve({ state: "started" as const, fact: "carrier_start_accepted" });
       void completion.then(result => this.completeLaunch(request.teamName, member.membershipId!, launchId, result))
         .catch(() => this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: "completion_unavailable" })).catch(() => undefined);
     } catch (error) {
       // Unknown effect keeps its marker and pane. Time and transport errors never authorize cleanup.
-      await this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: error instanceof Error ? error.message : String(error) });
+      void this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: error instanceof Error ? error.message : String(error) }, target).catch(() => undefined);
+      if (error instanceof LockDeadlineError) throw error;
     }
     return { action: claim.action, member, membershipId: member.membershipId!, recoveryMode: claim.recoveryMode, target, launchId, launch: "requested", lastStop: claim.lastStop,
       startup: { observed: false, carrier: member.sessionFile ? "session_bound" : "prepared", runtime: "not_observed", cursor: this.dependencies.lifecyclePublication.readEventCursor(request.teamName), reason: "requested" } };
   }
-  async completeLaunch(teamName: string, membershipId: string, launchId: string, result: { state: "started" | "refused" | "unknown"; fact: string }): Promise<boolean> {
-    return teams.withCurrentMembershipLease(teamName, membershipId, async current => {
+  async completeLaunch(teamName: string, membershipId: string, launchId: string, result: { state: "started" | "refused" | "unknown"; fact: string }, target?: PreparedLaunchTarget): Promise<boolean> {
+    // Receipt expiry may leave a prepared pane. Reconcile only the same launch, never start it.
+    return withLockDeadline(hostEnv().clock.now() + 60000, () => teams.withCurrentMembershipLease(teamName, membershipId, async current => {
       if (current.launch?.launchId !== launchId) return false;
-      await teams.updateMembership(teamName, membershipId, { launch: { ...current.launch, ...result, observedAt: hostEnv().clock.now() } });
+      await teams.updateMembership(teamName, membershipId, { launch: { ...current.launch, ...result, observedAt: hostEnv().clock.now() },
+        ...(target ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) } : {}) });
       return true;
-    });
+    }));
   }
   async launchPreparedMembership(teamName: string, prepared: Member, initialMessage: (() => Promise<IdentifiedInboxMessage>) | null, spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>, _aggregatePath?: string): Promise<PreparedLaunchReceipt> {
     const message = initialMessage ? await initialMessage() : undefined;

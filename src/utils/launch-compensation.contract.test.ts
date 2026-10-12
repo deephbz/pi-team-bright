@@ -512,10 +512,10 @@ describe("compensated Worker launch", () => {
     });
     const f = await team("role-recovery");
     const createdWorker = await bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own work", cwd: process.cwd() });
-    expect(createdWorker.member.modelProfile).toMatchObject({ alias: "fixture", provider: "fixture", model: "model", thinking: "low" });
+    expect(createdWorker.member?.modelProfile).toMatchObject({ alias: "fixture", provider: "fixture", model: "model", thinking: "low" });
     const recovered = await bridge.ensureWorker({ teamName: f.name, workerName: "worker", scope: "Own work", cwd: process.cwd() });
     expect(recovered.action).toBe("recovered");
-    expect(recovered.member.modelProfile).toEqual(createdWorker.member.modelProfile);
+    expect(recovered.member?.modelProfile).toEqual(createdWorker.member?.modelProfile);
     expect(captured).toEqual(["fixture/model", "fixture/model"]);
   });
 
