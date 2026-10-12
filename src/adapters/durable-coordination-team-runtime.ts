@@ -1,4 +1,4 @@
-import { probePidPresence, readRuntimeStatus } from "../utils/runtime";
+import { verifyRuntimeGeneration, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, resolveCurrentLeadSessionBinding } from "../utils/teams";
 import type {
   CoordinationMemberEvidence,
@@ -15,9 +15,8 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
       ...(status.membershipId !== undefined ? { membershipId: status.membershipId } : {}),
       ...(status.pid !== undefined ? { pid: status.pid } : {}),
       ...(status.startedAt !== undefined ? { startedAt: status.startedAt } : {}),
-      // A status file can outlive its Pi process. Process absence removes
-      // positive active evidence; it does not prove a settled run.
-      ...(status.runState !== undefined && !(status.runState === "active" && status.pid !== undefined && probePidPresence(status.pid) === "absent") ? { runState: status.runState } : {}),
+      // Self-reported settlement cannot outlive its verified process generation.
+      ...(verifyRuntimeGeneration(status) === "live" && !status.lastStop && status.runState !== undefined ? { runState: status.runState } : {}),
     };
   }
 

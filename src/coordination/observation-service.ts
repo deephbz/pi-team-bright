@@ -645,7 +645,11 @@ export class CoordinationObservationService {
       if (event.type !== "worker") continue;
       const logical = bound.config.logicalWorkers?.find((worker) => worker.name === event.worker);
       if (!logical) continue;
-      workerChanges.push({ worker: logical.name, scope: logical.scope, kind: workerEventChange(event), text: `Worker ${logical.name} ${event.phase.replaceAll("_", " ")}.` });
+      const c = event.carrier;
+      const tasks = this.projection.projectNonterminalTaskIds(taskResult.tasks, logical.name);
+      workerChanges.push({ worker: logical.name, scope: logical.scope, kind: workerEventChange(event), text: c
+        ? `Worker ${logical.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; nonterminalTaskIds=${tasks.join(",") || "none"}.`
+        : `Worker ${logical.name}: ${event.phase === "failed" ? "startup admission refused" : event.phase.replaceAll("_", " ")}.` });
     }
     const taskChanges = events.length > 0
       ? this.projection.projectTaskChanges(this.currentTaskEvents(events, taskResult.tasks), taskResult.tasks)

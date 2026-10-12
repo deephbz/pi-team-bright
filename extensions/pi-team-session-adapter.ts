@@ -1,3 +1,4 @@
+import { CarrierObserver } from "../src/coordination/carrier-observation";
 import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
@@ -465,7 +466,13 @@ function frameworkSyncDelivered(ctx: any, debtKey: string): boolean {
   });
 }
 
+let carrierObserver: CarrierObserver | undefined;
 async function startSyncNudgeConductor(ctx: any) {
+  carrierObserver?.stop();
+  if (teamName) {
+    carrierObserver = new CarrierObserver(teamName, text => ctx.ui?.notify?.(text, "warning"));
+    carrierObserver.start();
+  }
   stopSyncNudgeConductor();
   if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.coordination.readSyncNudgeDebt) return;
   let policy;
@@ -829,6 +836,8 @@ pi.on("session_shutdown", async (event, ctx) => {
     // Best effort only: this disposable file is never orchestration authority.
     removeWorkerAggregate(hostEnv().process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
   }
+  carrierObserver?.stop();
+  carrierObserver = undefined;
   stopDeliveries();
   taskGraphPane.shutdown();
   clearTeamProjection(ctx);
@@ -908,9 +917,6 @@ pi.on("turn_end", async (event, ctx) => {
         ? persistedFrameworkSyncForPending(ctx.sessionManager.getBranch(), sessionId, sessionFile, pending.toolCallId, pending.resultText) : undefined;
       if (prior) failedFrameworkSync = { record: prior.record, reason: stopReason };
       else if (sessionId && pending) modelToolJourney()?.port.coordination.discardPendingObservation?.(exactLeaderSessionId(sessionId), pending.toolCallId);
-    }
-    if (isTeammate && teamName && currentMembershipId) {
-      await lifecyclePublication.recordWorkerFailed({ teamName, workerName: agentName, membershipId: currentMembershipId }).catch(() => undefined);
     }
     return;
   }
