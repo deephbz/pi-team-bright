@@ -64,8 +64,19 @@ export type WorldStep =
   | { kind: "herdr.agentState"; pane: Ref; state: "idle" | "working" | "blocked" | "done" | "unknown" }
   | { kind: "herdr.restart" }
   // Source faults. Each lasts until the matching `fault.clear`.
-  | { kind: "fault.set"; source: "herdr" | "generation" | "bd"; mode: "unavailable" | "partial" | "slow" }
-  | { kind: "fault.clear"; source: "herdr" | "generation" | "bd" };
+  | { kind: "fault.set"; fault: Fault }
+  | { kind: "fault.clear"; source: Fault["source"] };
+
+/**
+ * Environment fault modes. Scenario 1 (a Worker that never starts) is
+ * `herdr.start` refused or timed out, or `pi.start` hang.
+ */
+export type Fault =
+  | { source: "herdr"; mode: "unavailable" | "slow" | "partial_list" }
+  | { source: "herdr.start"; mode: "refused" | "timeout" }
+  | { source: "pi.start"; mode: "hang" | "exit_before_ready" }
+  | { source: "generation"; mode: "unavailable" }
+  | { source: "bd"; mode: "unavailable" | "slow" };
 
 export interface TimedStep {
   /**
