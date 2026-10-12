@@ -1,4 +1,4 @@
-import { hostEnv } from "../env/host-env";
+import { hostEnv, nodeHostEnv } from "../env/host-env";
 /**
  * Tmux Terminal Adapter
  * 
@@ -110,6 +110,7 @@ export class TmuxAdapter implements TerminalAdapter {
   }
 
   isAlive(paneId: string): boolean {
+    if (hostEnv() !== nodeHostEnv) throw new Error("Legacy tmux subprocesses are unavailable in simulation.");
     if (!paneId || paneId.startsWith("iterm_") || paneId.startsWith("zellij_")) {
       return false; // Not a tmux pane
     }

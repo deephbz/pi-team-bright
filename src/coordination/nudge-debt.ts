@@ -8,7 +8,7 @@ export type SyncNudgeDebt =
       kind: "eligible";
       /** Exact content coordinate. Changes as canonical unseen content changes. */
       debtKey: string;
-      /** Exact binding and acknowledged baseline. Stays stable as content accumulates. */
+      /** Exact binding and native branch baseline. Stays stable as content accumulates. */
       scopeKey: string;
       /** Count from the shared canonical, nonblocking observation projection. */
       updateCount: number;
@@ -37,20 +37,8 @@ type BoundNudgeTeam = {
   };
 };
 
-export type CoordinationNudgeHiddenResult =
-  | { kind: "found"; projection: { teamEventCursor: string; authorityRevisions: Record<string, string | undefined> } }
-  | { kind: "missing" }
-  | { kind: "contract_gap"; reason: string };
-
-export interface CoordinationNudgeStore {
-  readHidden(teamName: string, input: {
-    teamEpochId: string;
-    exactSessionId: string;
-    branchLineage: string[];
-  }): CoordinationNudgeHiddenResult | Promise<CoordinationNudgeHiddenResult>;
-}
-
 export interface CoordinationNudgeProbeReader {
+  selectTeamSyncView(file: string, ids: string[]): Promise<"snapshot" | "updates">;
   peekTeamSync(
     exactSessionFile: string,
     view: "snapshot" | "updates",
@@ -68,7 +56,6 @@ function currentLead(config: CoordinationLeaderBindingEvidence, sessionFile: str
 export class CoordinationNudgeDebtService {
   constructor(
     private readonly probe: CoordinationNudgeProbeReader,
-    private readonly store: CoordinationNudgeStore,
   ) {}
 
   async read(bound: BoundNudgeTeam, branchLineage: string[]): Promise<SyncNudgeDebt> {
@@ -78,20 +65,7 @@ export class CoordinationNudgeDebtService {
     if (!branchId || new Set(branchLineage).size !== branchLineage.length) return { kind: "none" };
     const lead = currentLead(config, bound.sessionFile);
     if (!lead?.membershipId) return { kind: "none" };
-    let hidden: CoordinationNudgeHiddenResult;
-    try {
-      hidden = await this.store.readHidden(bound.teamName, {
-        teamEpochId: config.epochId,
-        exactSessionId: bound.sessionFile,
-        branchLineage,
-      });
-    } catch {
-      return { kind: "unavailable", message: "Leader observation baseline is unavailable." };
-    }
-    if (hidden.kind === "contract_gap") {
-      return { kind: "unavailable", message: `Model-tool ${hidden.reason.replaceAll("_", " ")} is unavailable.` };
-    }
-    const requestedView = hidden.kind === "found" ? "updates" : "snapshot";
+    const requestedView = await this.probe.selectTeamSyncView(bound.sessionFile, branchLineage);
     let projection: CoordinationSyncProbe;
     try {
       projection = await this.probe.peekTeamSync(bound.sessionFile, requestedView, branchLineage);
@@ -103,7 +77,7 @@ export class CoordinationNudgeDebtService {
     if (projection.kind === "unavailable" || projection.kind === "contract_gap" || projection.kind === "snapshot_required") {
       return { kind: "unavailable", message: projection.message };
     }
-    if (projection.kind !== "prepared" || projection.result.kind !== requestedView) {
+    if (projection.kind !== "prepared") {
       return { kind: "indeterminate", message: "Team observation probe returned a mismatched view; automatic sync is suppressed." };
     }
     if (!Number.isSafeInteger(projection.updateCount) || projection.updateCount < 0 || !projection.scopeKey) {
@@ -118,7 +92,7 @@ export class CoordinationNudgeDebtService {
       .digest("hex");
     return {
       kind: "eligible", debtKey, scopeKey: projection.scopeKey,
-      updateCount: projection.updateCount, requestedView,
+      updateCount: projection.updateCount, requestedView: projection.result.kind,
       teamEpochId: config.epochId, leaderSessionId: bound.sessionFile,
       leaderMembershipId: lead.membershipId, branchLineage: [...branchLineage],
       branchId, policyVersion: config.syncLiveness.policyVersion ?? "legacy",

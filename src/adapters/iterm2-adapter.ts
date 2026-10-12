@@ -1,4 +1,4 @@
-import { hostEnv } from "../env/host-env";
+import { hostEnv, nodeHostEnv } from "../env/host-env";
 /**
  * iTerm2 Terminal Adapter
  *
@@ -17,6 +17,10 @@ import * as paths from "../utils/paths";
 export interface Iterm2SpawnContext {
   /** ID of the last spawned session, used for layout decisions */
   lastSessionId?: string;
+}
+
+function assertNativeAppleScript(): void {
+  if (hostEnv() !== nodeHostEnv) throw new Error("Legacy iTerm subprocesses are unavailable in simulation.");
 }
 
 export class Iterm2Adapter implements TerminalAdapter {
@@ -38,6 +42,7 @@ export class Iterm2Adapter implements TerminalAdapter {
    * Helper to execute AppleScript via stdin to avoid escaping issues with -e
    */
   private runAppleScript(script: string): { stdout: string; stderr: string; status: number | null } {
+    assertNativeAppleScript();
     const result = spawnSync("osascript", ["-"], {
       input: script,
       encoding: "utf-8",
@@ -50,6 +55,7 @@ export class Iterm2Adapter implements TerminalAdapter {
   }
 
   spawn(options: SpawnOptions): string {
+    assertNativeAppleScript();
     const itermCmd = `cd ${shellQuote(options.cwd)} && ${shellCommand(options)}`;
     const escapedCmd = appleScriptQuote(itermCmd).slice(1, -1);
 
@@ -98,6 +104,7 @@ end tell`;
   }
 
   kill(paneId: string): void {
+    assertNativeAppleScript();
     if (!paneId || !paneId.startsWith("iterm_") || paneId.startsWith("iterm_win_")) {
       return;
     }
@@ -124,6 +131,7 @@ end tell`;
   }
 
   isAlive(paneId: string): boolean {
+    assertNativeAppleScript();
     if (!paneId || !paneId.startsWith("iterm_") || paneId.startsWith("iterm_win_")) {
       return false;
     }
@@ -150,6 +158,7 @@ end tell`;
   }
 
   setTitle(title: string): void {
+    assertNativeAppleScript();
     const escapedTitle = title.replace(/"/g, '\\"');
 
     // For teammate processes, find the specific session to avoid renaming
@@ -239,6 +248,7 @@ end tell`;
    * Spawn a new separate OS window with the given options.
    */
   spawnWindow(options: SpawnOptions): string {
+    assertNativeAppleScript();
     const itermCmd = `cd ${shellQuote(options.cwd)} && ${shellCommand(options)}`;
     const escapedCmd = appleScriptQuote(itermCmd).slice(1, -1);
 
@@ -276,6 +286,7 @@ end tell`;
    * Set the title of a specific window.
    */
   setWindowTitle(windowId: string, title: string): void {
+    assertNativeAppleScript();
     if (!windowId || !windowId.startsWith("iterm_win_")) {
       return;
     }
@@ -305,6 +316,7 @@ end tell`;
    * Kill/terminate a window.
    */
   killWindow(windowId: string): void {
+    assertNativeAppleScript();
     if (!windowId || !windowId.startsWith("iterm_win_")) {
       return;
     }
@@ -330,6 +342,7 @@ end tell`;
    * Check if a window is still alive/active.
    */
   isWindowAlive(windowId: string): boolean {
+    assertNativeAppleScript();
     if (!windowId || !windowId.startsWith("iterm_win_")) {
       return false;
     }

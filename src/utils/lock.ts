@@ -73,11 +73,20 @@ function createOwnerFile(file: string, owner: LockOwner): boolean {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, ownerText(owner), { flag: "wx", mode: 0o600 });
+  } catch (error: any) {
+    if (error?.code === "EEXIST") return false;
+    throw error;
+  }
+  try {
     const now = new Date(hostEnv().clock.now());
     fs.utimesSync(file, now, now);
     return true;
-  } catch (error: any) {
-    if (error?.code === "EEXIST") return false;
+  } catch (error) {
+    // Metadata failure must not strand the new lock or recovery claim.
+    // A replaced pathname belongs to its successor and must remain intact.
+    if (ownerMatches(file, owner)) {
+      try { fs.unlinkSync(file); } catch {}
+    }
     throw error;
   }
 }

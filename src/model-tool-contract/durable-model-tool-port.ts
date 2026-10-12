@@ -65,8 +65,7 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
   discardPendingObservation(...args: Parameters<DurableModelToolCoordinationApplication["discardPendingObservation"]>) { return this.coordination.discardPendingObservation(...args); }
   readSyncNudgeDebt(...args: Parameters<DurableModelToolCoordinationApplication["readSyncNudgeDebt"]>) { return this.coordination.readSyncNudgeDebt(...args); }
   setPendingObservationResult(...args: Parameters<DurableModelToolCoordinationApplication["setPendingObservationResult"]>) { return this.coordination.setPendingObservationResult(...args); }
-  acknowledgePendingObservation(...args: Parameters<DurableModelToolCoordinationApplication["acknowledgePendingObservation"]>) { return this.coordination.acknowledgePendingObservation(...args); }
-  acknowledgePendingObservationAsync(...args: Parameters<DurableModelToolCoordinationApplication["acknowledgePendingObservationAsync"]>) { return this.coordination.acknowledgePendingObservationAsync(...args); }
+  setBranchEntries(...args: Parameters<DurableModelToolCoordinationApplication["setBranchEntries"]>) { return this.coordination.setBranchEntries(...args); }
   setBranchContext(...args: Parameters<DurableModelToolCoordinationApplication["setBranchContext"]>) { return this.coordination.setBranchContext(...args); }
   getPendingObservation(...args: Parameters<DurableModelToolCoordinationApplication["getPendingObservation"]>) { return this.coordination.getPendingObservation(...args); }
 }

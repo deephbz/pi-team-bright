@@ -50,7 +50,7 @@ describe("registered Task tools across process loss", () => {
 
     let commandIndex = 0;
     let leaderEntries: any[] = [];
-    async function run(actor: "team-lead" | "worker-a" | "worker-b", calls: Array<{ name: string; id: string; params: object; ack?: boolean }>, crash: boolean): Promise<PublicResult> {
+    async function run(actor: "team-lead" | "worker-a" | "worker-b", calls: Array<{ name: string; id: string; params: object; persist?: boolean }>, crash: boolean): Promise<PublicResult> {
       const command = isolated.write(`command-${++commandIndex}.json`, JSON.stringify({
         cwd: packageRoot,
         sessionFile: actor === "team-lead" ? leaderSession : actor === "worker-a" ? workerASession : workerBSession,
@@ -115,7 +115,7 @@ describe("registered Task tools across process loss", () => {
       const reopened = await run("team-lead", [
         { name: "task_graph_apply", id: "replay", params: graph },
         { name: "task_read", id: "read", params: { task_ids: ["source", "consumer"] } },
-        { name: "team_sync", id: "sync", params: { view: "snapshot" }, ack: true },
+        { name: "team_sync", id: "sync", params: { view: "snapshot" }, persist: true },
       ], false);
       expect(reopened.pid).not.toBe(applied.pid);
       expect(reopened.results[0].details).toMatchObject({ kind: "task_graph_applied", replayed: true });
@@ -129,15 +129,11 @@ describe("registered Task tools across process loss", () => {
       expect(reopened.results[2].details.kind).toBe("snapshot");
       expect(fs.readFileSync(graphFile, "utf8")).toBe(committedGraph);
       expect(fs.readFileSync(eventFile, "utf8")).toBe(publishedEvents);
-      const hiddenRoot = path.join(teamRoot, "hidden-observations");
-      const [epochDirectory] = fs.readdirSync(hiddenRoot);
-      const [projectionName] = fs.readdirSync(path.join(hiddenRoot, epochDirectory));
-      const projectionFile = path.join(hiddenRoot, epochDirectory, projectionName);
-      const acknowledgedSnapshot = fs.readFileSync(projectionFile, "utf8");
-      expect(JSON.parse(acknowledgedSnapshot)).toMatchObject({
-        acknowledgedEntryId: "persisted-sync",
-        teamEventCursor: String(publishedEvents.trim().split("\n").length),
+      const persistedSnapshot = leaderEntries.find(entry => entry.id === "persisted-sync");
+      expect(persistedSnapshot.message.details.observation).toMatchObject({
+        through: publishedEvents.trim().split("\n").length,
       });
+      expect(fs.existsSync(path.join(teamRoot, "hidden-observations"))).toBe(false);
 
       const sourceVersion = receipt.tasks_by_key.source.version;
       const claimed = await run("worker-a", [{ name: "task_update", id: "claim", params: {
@@ -155,7 +151,7 @@ describe("registered Task tools across process loss", () => {
         kind: "updated", task: { id: "source", status: "goal_achieved" }, ready_task_ids: ["consumer"],
       });
 
-      // An incomplete authority read must leave the acknowledged position in place.
+      // An incomplete authority read must leave the native branch position in place.
       const committedAfterAchieve = fs.readFileSync(graphFile, "utf8");
       fs.writeFileSync(graphFile, "{");
       try {
@@ -163,7 +159,7 @@ describe("registered Task tools across process loss", () => {
           { name: "team_sync", id: "partial-sync", params: { view: "updates" } },
         ], false);
         expect(partial.results[0].details).toMatchObject({ kind: "unavailable", reason: "task_authority_unavailable" });
-        expect(fs.readFileSync(projectionFile, "utf8")).toBe(acknowledgedSnapshot);
+        expect(leaderEntries.find(entry => entry.id === "persisted-sync")).toEqual(persistedSnapshot);
       } finally {
         fs.writeFileSync(graphFile, committedAfterAchieve);
       }

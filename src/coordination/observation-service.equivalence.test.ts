@@ -50,12 +50,8 @@ describe("Coordination observation service equivalence fences", () => {
       projectNonterminalTaskIds: () => [],
       projectTaskChanges: () => ({ kind: "projected", changes: [] }),
     }, {
-      readHidden: async () => ({ kind: "not_found", reason: "absent" }),
-      commitHidden: async () => ({ kind: "refused", reason: "stale_acknowledgement" }),
       readEvents: () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0 }),
       readEventCursor: () => "0",
-      waitEvents: async () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0, timedOut: true }),
-      readFailureHints: () => ({ hints: [], cursor: "0", headCursor: "0" }),
     });
 
     // A timed-out or cancelled liveness waiter no longer awaits this check,
@@ -107,12 +103,8 @@ describe("Coordination observation service equivalence fences", () => {
       projectNonterminalTaskIds: () => [],
       projectTaskChanges: () => ({ kind: "projected", changes: [] }),
     }, {
-      readHidden: async () => ({ kind: "not_found", reason: "absent" }),
-      commitHidden: async () => ({ kind: "refused", reason: "stale_acknowledgement" }),
       readEvents: () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0 }),
       readEventCursor: () => "0",
-      waitEvents: async () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0, timedOut: true }),
-      readFailureHints: () => ({ hints: [], cursor: "0", headCursor: "0" }),
     });
     try {
       const timedOut = waitForLivenessHint({ teamName, waitMs: 10, check: () => false, checkAuthority: async () => { await service.readTaskProjection(teamName); return false; } });
@@ -144,20 +136,19 @@ describe("Coordination observation service equivalence fences", () => {
     }
   });
 
-  it("keeps branch, pending, cache, and acknowledgement ownership in one Coordination service", () => {
+  it("keeps branch-derived observations and reservation ownership in one Coordination service", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "src/coordination/observation-service.ts"), "utf8");
-    expect(source).toContain("private readonly branchLineages");
-    expect(source).toContain("private readonly pendingBySession");
-    expect(source).toContain("private readonly taskProjections");
-    expect(source).toContain("async acknowledge(exactSessionFile");
-    expect(source).toContain("commitHidden");
-    expect(source).toContain("cachedProjectionForBound");
+    expect(source).toContain("private readonly branches");
+    expect(source).toContain("private readonly reservations");
+    expect(source).toContain("readBranchObservation");
+    expect(source).not.toContain("commitHidden");
+    expect(source).toContain("OBSERVATION_RESERVATION_MS");
   });
 
   it("keeps the Coordination application as the observation-service delegate without a copied algorithm", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-coordination-application.ts"), "utf8");
     expect(source).toContain("this.service.readTeamSync(file, view, signal, call, context)");
-    expect(source).toContain("this.service.acknowledge(");
+    expect(source).toContain("this.service.setBranchEntries(");
     expect(source).toContain("this.service.setBranchContext(");
     expect(source).toContain("this.service.pending(");
     expect(source).toContain("this.service.readSyncNudgeDebt(file, lineage)");
@@ -169,8 +160,7 @@ describe("Coordination observation service equivalence fences", () => {
   it("keeps the flat durable port as an exact Coordination forwarder", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-port.ts"), "utf8");
     expect(source).toContain("return this.coordination.readTeamSync(...args);");
-    expect(source).toContain("return this.coordination.acknowledgePendingObservation(...args);");
-    expect(source).toContain("return this.coordination.acknowledgePendingObservationAsync(...args);");
+    expect(source).toContain("return this.coordination.setBranchEntries(...args);");
     expect(source).toContain("return this.coordination.setBranchContext(...args);");
     expect(source).toContain("return this.coordination.getPendingObservation(...args);");
     expect(source).toContain("return this.coordination.readSyncNudgeDebt(...args);");
@@ -192,12 +182,8 @@ describe("Coordination observation service equivalence fences", () => {
       projectNonterminalTaskIds: () => [],
       projectTaskChanges: () => ({ kind: "projected", changes: [] }),
     }, {
-      readHidden: async () => ({ kind: "not_found", reason: "absent" }),
-      commitHidden: async () => ({ kind: "refused", reason: "stale_acknowledgement" }),
       readEvents: () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0 }),
       readEventCursor: () => "0",
-      waitEvents: async () => ({ events: [], cursor: "0", headCursor: "0", truncated: false, remaining: 0, timedOut: true }),
-      readFailureHints: () => ({ hints: [], cursor: "0", headCursor: "0" }),
     })).not.toThrow();
   });
 });

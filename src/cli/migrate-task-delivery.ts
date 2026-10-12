@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import { migrateLegacyTaskDeliveryEpoch } from "../utils/task-delivery-migration";
 import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 import { DurableTaskAuthorityReadTeam } from "../adapters/durable-task-authority-read-team";
@@ -8,7 +9,7 @@ function usage(): never {
   throw new Error("Usage: npm run migrate:task-delivery -- <stopped-team-name>");
 }
 
-const [, , teamName] = process.argv;
+const [, , teamName] = hostEnv().process.argv;
 if (!teamName) usage();
 
 async function main(): Promise<void> {

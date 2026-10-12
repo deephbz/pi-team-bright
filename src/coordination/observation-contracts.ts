@@ -47,9 +47,7 @@ export interface CoordinationPendingPresentation {
   resultDigest: string;
   head: number;
   epochId: string;
-  /** Hidden baseline used to select this result. Null denotes a new snapshot. */
-  baselineCursor?: string | null;
-  baselineAcknowledgedEntryId?: string | null;
+  observation?: import("./branch-observation").ObservationStamp;
 }
 
 /** A branch-local durable observation coordinate. */
@@ -68,8 +66,7 @@ export interface CoordinationPendingObservation<TResult = unknown> {
   resultDigest: string;
   head: number;
   epochId: string;
-  baselineCursor?: string | null;
-  baselineAcknowledgedEntryId?: string | null;
+  observation?: import("./branch-observation").ObservationStamp;
   result: TResult;
 }
 
