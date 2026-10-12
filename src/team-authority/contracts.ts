@@ -25,7 +25,7 @@ export interface Member {
   pendingLaunchId?: string;
   launchConsumedAt?: string;
   /** Durable effect fence. Completion must match this launchId. */
-  launch?: { launchId: string; state: "requested" | "started" | "refused" | "unknown"; requestedAt: number; priorGeneration?: { pid: number; osBirthToken?: string; bootId?: string }; fact?: string };
+  launch?: { launchId: string; state: "requested" | "started" | "refused" | "unknown"; requestedAt: number; observedAt?: number; priorGeneration?: { pid: number; osBirthToken?: string; bootId?: string }; fact?: string };
   agentId: string;
   name: string;
   agentType: string;

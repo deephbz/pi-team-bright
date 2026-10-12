@@ -150,7 +150,7 @@ export class WorkerLaunchBridge {
   async completeLaunch(teamName: string, membershipId: string, launchId: string, result: { state: "started" | "refused" | "unknown"; fact: string }): Promise<boolean> {
     return teams.withCurrentMembershipLease(teamName, membershipId, async current => {
       if (current.launch?.launchId !== launchId) return false;
-      await teams.updateMembership(teamName, membershipId, { launch: { ...current.launch, ...result } });
+      await teams.updateMembership(teamName, membershipId, { launch: { ...current.launch, ...result, observedAt: hostEnv().clock.now() } });
       return true;
     });
   }

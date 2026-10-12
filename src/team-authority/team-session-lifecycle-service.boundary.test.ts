@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({
   config: { name: "team", members: [] as any[] },
   current: null as any,
+  onConfig: undefined as undefined | (() => void),
   lookup: vi.fn(async () => fixture.current),
   admission: { kind: "admitted" } as any,
   runtimeStatus: null as any,
@@ -22,14 +23,14 @@ vi.mock("../utils/paths", () => ({ leadSessionPath: () => fixture.runtimePath })
 vi.mock("../utils/session-terminal", () => ({ admitTeamSession: () => fixture.admission }));
 vi.mock("../utils/runtime", () => ({
   ownBirthIdentity: () => ({}),
-  verifyRuntimeGeneration: () => "live",
+  verifyRuntimeGeneration: () => "unknown",
   readRuntimeStatus: async () => fixture.runtimeStatus,
   admitRuntimeStartup: (...args: unknown[]) => { fixture.events.push("runtime-claim"); return fixture.runtimeAdmission; },
   probePidPresence: () => "occupied",
   writeRuntimeStatus: (...args: unknown[]) => { fixture.events.push("runtime-write"); return fixture.writeRuntime(...args); },
 }));
 vi.mock("../utils/teams", () => ({
-  readConfig: async () => fixture.config,
+  readConfig: async () => { fixture.onConfig?.(); return fixture.config; },
   currentMembership: () => { fixture.events.push("current-lookup"); return fixture.lookup(); },
   withCurrentMembershipLease: async (_team: string, membershipId: string, action: (member: any) => Promise<unknown>) => {
     fixture.events.push(`lease:${membershipId}`);
@@ -65,6 +66,7 @@ function publication(): TeamLifecyclePublication {
 function reset() {
   fixture.config = { name: "team", members: [] };
   fixture.current = null;
+  fixture.onConfig = undefined;
   fixture.lookup.mockReset().mockImplementation(async () => fixture.current);
   fixture.admission = { kind: "admitted" };
   fixture.runtimeStatus = null;
@@ -92,19 +94,20 @@ describe("Team Session lifecycle boundary", () => {
     expect(fixture.publish).not.toHaveBeenCalled(); expect(fixture.bind).not.toHaveBeenCalled();
   });
 
-  it("never clears a stop newer than re-admission", async () => {
+  it("never clears a newer stop with the same millisecond timestamp",  async () => {
     reset(); fixture.current = member("worker", workerInput.sessionFile);
-    fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: "worker-membership", lastStop: { piReason: "reload", observedAt: Date.now() + 60000 } };
+    fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: "worker-membership", lastStop: { stopId: "before", piReason: "reload", observedAt: 100 } };
     fixture.runtimeAdmission = { kind: "admitted", action: "already_current" };
+    fixture.onConfig = () => { fixture.runtimeStatus.lastStop.stopId = "after"; };
     expect(await new TeamSessionLifecycleService(publication()).admitWorker(workerInput)).toMatchObject({ kind: "refused", exitProcess: false });
     expect(fixture.writeRuntime).not.toHaveBeenCalled(); expect(fixture.publish).not.toHaveBeenCalled();
   });
 
-  it("records shutdown intent for the admitted generation without a failed event", async () => {
+  it.each(["quit", "new", "resume", "fork"] as const)("records %s intent during verifier outage without a failed event", async piReason => {
     reset(); fixture.current = member("worker", workerInput.sessionFile);
     fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: "worker-membership" };
-    await new TeamSessionLifecycleService(publication()).recordStop({ ...workerInput, membershipId: "worker-membership", piReason: "quit" });
-    expect(fixture.writeRuntime).toHaveBeenCalledWith("team", "worker", { lastStop: expect.objectContaining({ piReason: "quit", suspectedHumanStop: true }) }, "worker-membership");
+    await new TeamSessionLifecycleService(publication()).recordStop({ ...workerInput, membershipId: "worker-membership", piReason });
+    expect(fixture.writeRuntime).toHaveBeenCalledWith("team", "worker", { lastStop: expect.objectContaining({ piReason, stopId: expect.any(String), suspectedHumanStop: true }) }, "worker-membership");
     expect(fixture.failed).not.toHaveBeenCalled();
   });
 
