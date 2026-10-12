@@ -1,3 +1,4 @@
+import { parseObservationContent } from "../src/coordination/observation-content";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamUpdateController, TEAM_UPDATE_TYPE } from "./team-update";
 import { CompactionDeliveryGate } from "./compaction-delivery-gate";
@@ -14,6 +15,7 @@ function fixture() {
   const execute = vi.fn(async (_id: string, _view: string, _signal: AbortSignal, call: string) => {
     pending = { toolCallId: call, observation: { team: "team", epoch: "epoch", binding: "lead", from: 0, through: 1 } }; return result;
   });
+  const notify = vi.fn();
   const controller = new TeamUpdateController({ pi,
     current: () => ({ sessionId: session, sessionFile: "/sessions/lead", branch: [...branch] }),
     executeNow: execute,
@@ -22,9 +24,9 @@ function fixture() {
     setBranchEntries: (_session, entries) => { if (entries.some(entry => entry.customType === TEAM_UPDATE_TYPE)) pending = undefined; },
     clearPending: () => { pending = undefined; },
     isBusy: () => busy,
-    notify: vi.fn(),
+    notify,
   });
-  return { controller, branch, send, execute, gate, pending: () => pending, busy: (next: boolean) => { busy = next; }, binding: (next: string) => { binding = next; }, session: (next: string) => { session = next; } };
+  return { controller, branch, notify, send, execute, gate, pending: () => pending, busy: (next: boolean) => { busy = next; }, binding: (next: string) => { binding = next; }, session: (next: string) => { session = next; } };
 }
 afterEach(() => vi.useRealTimers());
 describe("idle Team update publisher", () => {
@@ -33,8 +35,21 @@ describe("idle Team update publisher", () => {
     expect(await fx.controller.execute("team", "automatic")).toBe("published");
     expect(fx.send).toHaveBeenCalledWith(expect.objectContaining({ customType: "ptb.team-update", details: { team: "team", epoch: "epoch", binding: "lead", from: 0, through: 1 } }), { triggerTurn: true, deliverAs: "followUp" });
     expect(fx.branch).toHaveLength(2);
-    expect(JSON.parse(fx.branch[1].content as string)).toMatchObject({ kind: "updates" });
+    expect(fx.branch[1].content).toMatch(/^ptb.team-update: team_sync updates, events 1-1\. Handle the changes, then end your turn to wait\.\n/);
+    expect(parseObservationContent(fx.branch[1].content as string)).toMatchObject({ kind: "updates" });
     expect(fx.pending()).toBeUndefined();
+  });
+  it("suppresses failed automatic sends until branch change and permits a manual retry", async () => {
+    const fx = fixture();
+    fx.send.mockImplementationOnce(() => { throw new Error("send failed"); });
+    expect(await fx.controller.execute("team", "automatic")).toBe("failed");
+    expect(fx.notify).toHaveBeenLastCalledWith("Team synchronization failed: send failed Run /ptb sync to retry.", "error");
+    expect(await fx.controller.execute("team", "automatic")).toBe("skipped");
+    fx.controller.invalidate();
+    expect(await fx.controller.execute("team", "automatic")).toBe("skipped");
+    expect(await fx.controller.execute("team", "command")).toBe("published");
+    expect(fx.send).toHaveBeenCalledTimes(2);
+    expect(await fx.controller.execute("team", "automatic")).toBe("published");
   });
   it("does not publish while the Session is busy", async () => {
     const fx = fixture(); fx.busy(true);

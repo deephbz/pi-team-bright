@@ -12,10 +12,11 @@ function fixture() {
   let logicalWorkers = [{ name: "worker", scope: "work" }];
   let branch: BranchEntry[] = [snapshotEntry("base", "team", epoch, membership, tasks)];
   const events: TeamEvent[] = [];
+  let onWatermark = () => {};
   const readTasks = vi.fn(async (_team: string, ids: readonly string[]) => ids.map(id => ({ kind: "found" as const, task: tasks.find(task => task.id === id)! })));
   const makeService = () => new CoordinationObservationService({
     teamRuntime: {
-      readLeaderBinding: async (session) => authorized && session === file ? { teamName: "team", epochId: epoch, sessionFile: file, logicalWorkers, members: [{ name: "team-lead", agentType: "lead", membershipId: membership, sessionFile: file, isActive: true }], syncLiveness: { waitSeconds: 120 } } : undefined,
+      readLeaderBinding: async (session) => authorized && session === file ? { teamName: "team", epochId: epoch, sessionFile: file, logicalWorkers: [...logicalWorkers], members: [{ name: "team-lead", agentType: "lead", membershipId: membership, sessionFile: file, isActive: true }], syncLiveness: { waitSeconds: 120 } } : undefined,
       readRuntime: async () => null,
     },
     taskStateDelivery: { listTaskIds: async () => tasks.map(task => task.id), readTasks, readDeliveryEvidence: async () => ({ known: true, pending: false }) },
@@ -24,7 +25,7 @@ function fixture() {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: (events, current) => ({ kind: "projected", changes: events.flatMap(event => event.type === "task" ? current.filter(task => task.id === event.ref.taskId).map(task => ({ taskId: task.id, changeKinds: ["progress" as const], journalEntries: [], current: task })) : []) }),
   }, {
-    readEventCursor: () => String(events.length),
+    readEventCursor: () => { onWatermark(); return String(events.length); },
     readEvents: (_team, options) => {
       const unseen = events.filter(event => Number(event.cursor) > Number(options?.afterCursor ?? 0));
       const page = unseen.slice(0, 1);
@@ -41,6 +42,8 @@ function fixture() {
     restart: () => { service = makeService(); service.setBranchEntries(file, branch); },
     tasks: (next: CanonicalTaskCard[]) => { tasks = next; },
     noWorkers: () => { logicalWorkers = []; },
+    workers: (next: typeof logicalWorkers) => { logicalWorkers = next; },
+    onWatermark: (callback: () => void) => { onWatermark = callback; },
     bind: (next: string) => { membership = next; }, epoch: (next: string) => { epoch = next; }, unbind: () => { authorized = false; },
   };
 }
@@ -133,6 +136,29 @@ describe("branch-held Team observation", () => {
     expect(await fx.sync()).toMatchObject({ kind: "updates", head: 0, taskChanges: [{ current: { version: "v_2" } }] });
     fx.persist();
     expect(await fx.sync()).toMatchObject({ kind: "caught_up" });
+  });
+  it.each(["stale Task", "retired Worker", "mixed pages"])("reconciles authority after %s events and converges without manual reads", async kind => {
+    const fx = fixture();
+    fx.tasks([{ ...task, version: "v_3", current_context: "External update" }]);
+    if (kind !== "retired Worker") fx.events.push({ type: "task", ref: { taskId: task.id, version: "v_2" as any }, actor: "worker", change: "note", cursor: "1", at: "2026-10-12T00:00:00Z" });
+    if (kind !== "stale Task") fx.events.push({ type: "worker", worker: "retired", membershipId: "old", phase: "prepared", cursor: String(fx.events.length + 1), at: "2026-10-12T00:00:00Z" });
+    expect(await fx.service.readSyncNudgeDebt(file, ["base"])).toMatchObject({ kind: "eligible", updateCount: 1 });
+    expect(await fx.service.readTeamSyncNow(file, "updates", new AbortController().signal, "auto")).toMatchObject({ kind: "updates", head: fx.events.length, taskChanges: [{ current: { version: "v_3" } }] });
+    fx.persist();
+    expect(await fx.service.readSyncNudgeDebt(file, fx.branch.map(entry => entry.id))).toMatchObject({ kind: "none" });
+  });
+  it("hydrates Workers after the snapshot watermark covers their creation", async () => {
+    const fx = fixture(); fx.noWorkers();
+    fx.onWatermark(() => { fx.workers([{ name: "worker", scope: "work" }]); fx.append(); });
+    expect(await fx.sync("snapshot")).toMatchObject({ kind: "snapshot", head: 1, workers: [{ name: "worker" }] });
+    fx.persist();
+    expect(await fx.service.readTeamSyncNow(file, "updates", new AbortController().signal, "next")).toMatchObject({ kind: "quiet" });
+  });
+  it.each(["binding", "epoch"])("rejects %s replacement between watermark and Worker hydration", async scope => {
+    const fx = fixture();
+    fx.onWatermark(() => scope === "binding" ? fx.bind("new") : fx.epoch("new"));
+    expect(await fx.sync("snapshot")).toMatchObject({ kind: "unavailable" });
+    expect(fx.service.pending(file)).toBeUndefined();
   });
   it("presents complete Task removal as a snapshot", async () => {
     const fx = fixture(); fx.tasks([]);

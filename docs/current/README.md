@@ -88,17 +88,25 @@ selected native Session branch owns delivery position. The adapter publishes
 `ptb.team-update` only while idle. Native persistence commits presentation;
 provider success has no role. `team_sync` returns immediately. A missing branch
 cursor selects a snapshot, which captures its journal watermark before Task
-hydration. Task-authority revision reconciliation and batch scheduling remain.
+and Worker hydration. The service revalidates the Team epoch and lead binding.
+Task-authority reconciliation runs after semantically empty journal pages;
+stale Task and retired Worker events cannot hide an authority revision.
 
 An in-memory reservation prevents competing reads of one page. Persistence,
 branch or binding change, or a bounded failure timer releases it. Compaction
 does not undo delivery; a snapshot restores model context. Forked entries do
 not bind the new Session. Hidden-observation stores and provider ACKs are removed.
+The in-memory authority fixture composes the production Coordination reader.
+Native results and custom messages name their event page and next action. A
+failed automatic send stays suppressed until branch change; `/ptb sync` can retry.
 
 Architecture impact: **changed** inside PTB's observation persistence boundary.
 The HyperCarrier diagram keeps PTB internals opaque. Focused branch, publisher,
-and registered-tool tests cover the contract. Real-provider validation remains
-pending. Live settings and parent adoption remain unchanged.
+and registered-tool tests cover the contract. The isolated real-Pi S1, S3, S5,
+and S6 checks pass with a loopback scripted provider: native compaction, custom
+publication, context loss, and historical reload. See the
+[scenario method](../maintainers/scenario-verification.md). Remote-provider
+validation remains unclaimed. Live settings and parent adoption remain unchanged.
 
 ## v0.19.0: Task timeline view
 
