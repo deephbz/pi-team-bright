@@ -117,6 +117,7 @@ export type V31Expected =
 /** Today's output, mapped one-to-one from WorkerEnsurePlan. */
 export type TodayAction =
   | { kind: "create" }
+  | { kind: "attention"; reason: string; nextActionHint: string }
   | { kind: "reuse" }
   | { kind: "recover"; mode: WorkerRecoveryMode }
   | { kind: "refuse"; reason: string };
@@ -232,17 +233,18 @@ function carrierFor(input: V31PlanInput): WorkerCarrierState {
   if (input.binding === "bound") {
     return normalizeWorkerCarrier(member({ sessionFile: "/sessions/worker.jsonl", pendingLaunchId: undefined }));
   }
-  if (input.launch === "none") return normalizeWorkerCarrier(member({ pendingLaunchId: undefined }));
+  if (input.launch === "none") return { kind: "unbound", member: member({ pendingLaunchId: undefined }), membershipId: "membership-1" };
   return normalizeWorkerCarrier(member({ pendingLaunchId: "launch-1" }));
 }
 
 /** Today's planWorkerEnsure, fed from the v3.1 binding and the shell probe only. */
 export function runToday(input: V31PlanInput, shell: ShellProbe): TodayAction {
-  return toTodayAction(planWorkerEnsure(carrierFor(input), shell));
+  return toTodayAction(planWorkerEnsure(carrierFor(input), input));
 }
 
 function toTodayAction(plan: WorkerEnsurePlan): TodayAction {
   switch (plan.action) {
+    case "attention": return { kind: "attention", reason: plan.reason, nextActionHint: plan.nextActionHint };
     case "create":
       return { kind: "create" };
     case "reuse":
@@ -302,7 +304,7 @@ function registerCase(title: string, mutant: string | undefined, check: () => vo
     }
   })();
   if (agrees) it(title, check);
-  else it.fails(`[${mutant ?? "unattributed"}] ${title}`, check);
+  else it(`[${mutant ?? "unattributed"}] ${title}`, check);
 }
 
 describe("v3.1 planWorkerEnsure table (exhaustive)", () => {

@@ -27,7 +27,8 @@ it.each([neverStarts, deadPi])("records observable oracle inputs for $id", async
   expect(execs.some(event => event.command === "herdr")).toBe(true);
   for (const call of execs) expect(history.some(event => event.kind === "exec.result" && event.callId === call.callId)).toBe(true);
   const bound = history.find(event => event.kind === "journal.append" && event.event.type === "worker" && event.event.raw.phase === "session_bound");
-  expect(bound).toBeDefined();
+  if (fixture.id === neverStarts.id) expect(bound).toBeUndefined();
+  else expect(bound).toBeDefined();
   expect(history.some(event => event.kind === "durable.runtime" && event.record?.membershipId && event.record.pid)).toBe(true);
   expect(history.some(event => event.kind === "durable.team" && event.record)).toBe(true);
   expect(history.some(event => event.kind === "durable.launch" && event.record)).toBe(true);
@@ -35,9 +36,8 @@ it.each([neverStarts, deadPi])("records observable oracle inputs for $id", async
   expect(history.flatMap(event => event.kind === "step.begin" ? [event.operationId] : []))
     .toEqual(history.flatMap(event => event.kind === "step.end" ? [event.operationId] : []));
   if (fixture.id === neverStarts.id) {
-    const close = history.find(event => event.kind === "pane.close" && event.pane.paneId === "pane-1")!;
-    expect(close.origin).toMatchObject({ kind: "ptb", actor: { team: "team-1", actor: "lead" } });
-    expect(close.origin.kind === "ptb" && close.origin.execCallId).toBeTruthy();
+    expect(history.some(event => event.kind === "pane.close" && event.pane.paneId === "pane-1")).toBe(false);
+    expect(results.filter(event => event.name === "ensure_worker").at(-1)?.result.details).toMatchObject({ kind: "attention" });
     expect(history.some(event => event.kind === "fault.set" && event.fault.source === "pi.start")).toBe(true);
     expect(history.some(event => event.kind === "fault.clear" && event.source === "pi.start")).toBe(true);
     expect(history.some(event => event.kind === "lead.entry" && event.stamp)).toBe(true);
@@ -51,7 +51,8 @@ it.each([neverStarts, deadPi])("records observable oracle inputs for $id", async
 }, 30000);
 
 it("observes automatic team-update branch stamps through the real Pi boundary", async () => {
-  const trace = structuredClone(neverStarts) as WorldTrace;
+  // This trace has unread recovery events. neverStarts consumed its events through team_sync.
+  const trace = structuredClone(deadPi) as WorldTrace;
   trace.id = "owner-scenario-with-idle-update";
   trace.steps.push({ at: 300500, step: { kind: "agent.settled", who: { team: "team-1", actor: "lead" } } });
   trace.steps.push({ at: 350000, step: { kind: "agent.settled", who: { team: "team-1", actor: "lead" } } });

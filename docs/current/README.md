@@ -212,16 +212,45 @@ restating executable definitions.
 
 ## Decisions still in force
 
-- [Decision 0018](../decisions/0018-worker-start-under-load.md) supersedes the
-  timing rules of Decisions 0012 and 0013. Launch observation checks carrier
-  liveness and exact failed events. Undecidable probes keep observing.
-  Refused launcher-spawned Workers publish failed events for their exact
-  launch-environment Membership before shutdown. Stale refusals cannot fail
-  a replacement Membership. Herdr readiness, shell-busy retries, and
-  binding observation use a five-minute hang ceiling. The binding environment
-  override still wins. Worker admission has no persistence-lock wait budget.
-  Exact binding, generation fencing, and compensation remain unchanged.
-  Architecture impact: **none**.
+- Accepted [v3.1 Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md)
+  and its [lead rulings](../journal/2026-10-12-v31-implementation-plan.md)
+  amend Decision 0018. `CarrierObserver` owns process-generation observations.
+  A live shell never proves a live Worker. Unknown evidence fails closed.
+  Launch claims a durable ID before external effects and returns a receipt
+  without waiting for readiness. Elapsed time and start errors keep the pane.
+  The same-generation `live`/`stopping` reload pair stays silent while durable
+  `lastStop` says `reload`. Verified death always journals. Local shutdown intent
+  survives verifier failure; an exact stop-ID check fences older admission work.
+  Session switches require attention; stopping that Membership keeps its pane.
+  Each observation source owns its sample time. Samples expire to unknown after
+  six seconds, including collection failure. A stalled read remains single-flight.
+  The visible event journal is the sole publication baseline, including after
+  observer restart. Coordinates are Membership, generation, launch ID, field,
+  and terminal target (backend, kind, ID). Each coordinate starts at `unknown`.
+  Binding, launch, process, terminal, and activity changes journal in sample order.
+  Terminal present/unknown and activity changes use `wait` without a human toast.
+  Debounced blocked attention remains separate. Legacy pane-only events do not
+  establish a baseline for a typed terminal target.
+  Publication rereads the journal under the Membership lease and fences the exact
+  generation and terminal target. Failed appends leave the accepted baseline
+  unchanged; healthy polling retries the current source difference. A transient
+  observation lost before append is not durable. There are no hidden observation
+  checkpoints. Journal failure does not delay the source projection.
+  One ten-second receipt deadline covers claim, nested leases, Herdr preparation,
+  and target CAS. Expiry returns attention and prevents late startup. Prepared
+  targets reconcile asynchronously under the exact Membership and launch ID.
+  Only decisive shell-busy refusal retries on the same pane and launch ID.
+  An old started or unknown launch with no Herdr agent in its pane returns
+  `launch_stalled` attention. The human can authorize `worker_stop` before retry.
+  A missing Herdr row never authorizes another spawn.
+  Linux reads procfs. macOS uses the dependency-free helper built with
+  `npm run build:process-generation`; a missing helper yields unknown.
+  `/ptb status` persists one human-only transcript entry with carrier, stop,
+  and nonterminal Task evidence. It batches explicit adoption of tokenless
+  records and remembers a decline within the exact Session runtime.
+  Herdr outage attention reaches both the human and `team_sync`.
+  Architecture impact: **changed** inside Pi Team Bright. HyperCarrier keeps
+  these internals opaque.
 
 - [Decision 0017](../decisions/0017-delegation-boundary-and-second-opinion.md)
   keeps one lead, delegates facts and keeps opinions with the lead, and makes
@@ -509,10 +538,10 @@ restating executable definitions.
 - Worker admission remains a two-phase external-actuation protocol. Herdr
   acceptance is positive actuation evidence, not Worker authority. Exact
   Membership, Session, and runtime-generation binding is the linearization
-  point. Ceiling expiry remains suspicion. Exact-target compensation and
-  generation fencing handle late or lost outcomes. The official ready-start
-  command from Decision 0013 remains in force. Decision 0018 supersedes its
-  timing rules. Pane and process liveness never prove Worker readiness.
+  point. Ceiling expiry remains suspicion. Launch-ID compare-and-swap fences
+  late completion. The async ready-start call retains its pane on failure.
+  Accepted Proposal B supersedes Decision 0018's cleanup timing. Pane and
+  process liveness never prove Worker readiness.
 - One current Membership admits one live Pi process generation. The executable
   rule is [`src/utils/runtime.ts`](../../src/utils/runtime.ts), lifecycle wiring
   is [`extensions/index.ts`](../../extensions/index.ts), and focused evidence is

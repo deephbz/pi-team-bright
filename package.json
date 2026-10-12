@@ -28,6 +28,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build:process-generation": "sh scripts/build-process-generation.sh",
     "build:observation": "rm -rf dist && tsc -p tsconfig.observation.json",
     "verify:observation-package": "npm run build:observation && node scripts/verify-observation-package.cjs",
     "verify:package": "npm run verify:observation-package && node scripts/verify-generated-dist.cjs",
@@ -72,6 +73,9 @@
     }
   },
   "files": [
+    "native",
+    "!native/bin",
+    "scripts/build-process-generation.sh",
     "extensions",
     "!extensions/**/*.test.ts",
     "skills",
@@ -116,6 +120,7 @@
     "@earendil-works/pi-coding-agent": "0.83.0",
     "@earendil-works/pi-tui": "0.83.0",
     "@types/node": "^25.3.0",
+    "fast-check": "^4.3.0",
     "vitest": "^4.1.10"
   }
 }

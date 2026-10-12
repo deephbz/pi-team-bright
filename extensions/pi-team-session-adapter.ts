@@ -1,3 +1,5 @@
+import { adoptLegacyGeneration } from "../src/team-authority/legacy-generation-adoption";
+import { CarrierObserver } from "../src/carrier-observation";
 import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs";
@@ -263,6 +265,11 @@ const runDoctor = async (ctx: any, requestedTeamName?: string) => {
       present("Doctor guide or metadata is unavailable. Check the installed package and retry.", "error");
       return;
     }
+    if (selectedTeamName) {
+      const observer = selectedTeamName === owner.teamName && carrierObserver ? carrierObserver : new CarrierObserver(selectedTeamName);
+      await observer.refresh().catch(() => undefined);
+      content = `CarrierView (current observations):\n${JSON.stringify([...observer.views.values()], null, 2)}\n\n${content}`;
+    }
     if (!owner.isCurrent()) {
       present("Doctor request cancelled because the Session or Team changed. Run /ptb doctor again.", "warning");
       return;
@@ -321,6 +328,7 @@ registerCommand?.("pi-team-graph", {
   handler: runGraph,
 });
 
+const declinedAdoptionSessions = new Set<string>();
 const runStatus = async (ctx: any) => {
     const present = (text: string, level: "info" | "warning" | "error" = "info") => {
       if (ctx.hasUI !== false && ctx.ui?.notify) ctx.ui.notify(text, level);
@@ -343,7 +351,33 @@ const runStatus = async (ctx: any) => {
     try {
       const report = await diagnoseTeam(owner.teamName, { role: owner.role, sessionBinding, sessionDetail });
       if (!owner.isCurrent()) return;
-      present(formatTeamStatus(report), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
+      const lines = [formatTeamStatus(report)];
+      if (owner.role === "team-lead" && sessionBinding === "current") {
+        const observer = carrierObserver ?? new CarrierObserver(owner.teamName);
+        await observer.refresh();
+        const tasks = taskGraphControlSource?.hasGraph(owner.teamName) ? (await taskGraphControlSource.trace(owner.teamName)).tasks : undefined;
+        if (!owner.isCurrent()) return;
+        const views = [...observer.views.values()];
+        for (const view of views) {
+          const taskIds = tasks?.filter(task => task.assignee === view.worker && !["goal_achieved", "goal_failed", "cancelled"].includes(task.state.kind)).map(task => task.id);
+          lines.push(`${view.worker}: process ${view.process}; launch ${view.launch}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.`);
+        }
+        const declineKey = JSON.stringify([owner.teamName, owner.membershipId, sessionFile]);
+        const candidates = views.filter(view => view.generation && !view.generation.osBirthToken && !view.lastStop);
+        if (candidates.length && !declinedAdoptionSessions.has(declineKey) && ctx.hasUI !== false && ctx.ui?.confirm) {
+          const accepted = await ctx.ui.confirm("Adopt legacy Worker generations?", `Verify and record OS birth tokens for these Workers? Each requires an exact matching Herdr Session.\n${candidates.map(view => `${view.worker}: pane ${view.paneId ?? "unknown"}`).join("\n")}`);
+          if (!owner.isCurrent()) return;
+          if (!accepted) declinedAdoptionSessions.add(declineKey);
+          else for (const view of candidates) {
+            const adopted = await adoptLegacyGeneration(owner.teamName, view.worker, view.membership);
+            if (!owner.isCurrent()) return;
+            lines.push(adopted ? `${view.worker}: generation adopted; run status to refresh.` : `${view.worker}: adoption refused; evidence changed or is unavailable.`);
+          }
+        }
+      }
+      if (!owner.isCurrent()) return;
+      messageSink.appendEntry("ptb.status", { lines });
+      if (ctx.mode !== "tui") present(lines.join("\n"), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
     } catch (error) {
       if (owner.isCurrent()) present(`Pi Team Bright status failed for ${owner.teamName}. ${error instanceof Error ? error.message : String(error)}`, "error");
     }
@@ -428,6 +462,8 @@ function scheduleTeamTitleRefresh(ctx: any) {
 }
 
 function stopSyncNudgeConductor() {
+  carrierObserver?.stop();
+  carrierObserver = undefined;
   frameworkSync.invalidate();
   syncNudgeConductor?.stop();
   syncNudgeConductor = null;
@@ -435,8 +471,13 @@ function stopSyncNudgeConductor() {
   stopSyncNudgeMonitor = null;
 }
 
+let carrierObserver: CarrierObserver | undefined;
 async function startSyncNudgeConductor(ctx: any) {
   stopSyncNudgeConductor();
+  if (teamName && !isTeammate && agentName === "team-lead") {
+    carrierObserver = new CarrierObserver(teamName, text => ctx.ui?.notify?.(text, "warning"));
+    carrierObserver.start();
+  }
   if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.coordination.readSyncNudgeDebt) return;
   let policy;
   try { policy = await teamQuery.syncNudgePolicy(teamName); } catch { return; }
@@ -696,6 +737,7 @@ function registerSessionHooks() {
     );
   }
 
+  let recoveredWorker = false;
   if (isTeammate) {
     configureWorkerResources(ctx);
     if (teamName) {
@@ -725,12 +767,20 @@ function registerSessionHooks() {
         return;
       }
       currentMembershipId = startup.member!.membershipId;
+      recoveredWorker = startup.recovered === true;
     }
     ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
     // Establish the Worker-owned Session name before any Task delivery activates.
     projectionBound = !!await refreshTeamFooter(ctx);
     if (teamName) {
       await activateRecipientDeliveries(ctx);
+      if (recoveredWorker && currentMembershipId && piSessionFile && taskGraphControlSource?.hasGraph(teamName)) {
+        const active = (await taskGraphControlSource.trace(teamName)).tasks.filter(task => task.assignee === agentName && task.state.kind === "in_progress");
+        if (active.length) await teams.withCurrentSessionBinding(teamName, agentName, piSessionFile, currentMembershipId, async () => {
+          if (ctx.sessionManager.getSessionFile() !== piSessionFile) return;
+          messageSink.sendMessage({ customType: "ptb.worker-recovery", content: `Your exact Worker Session resumed. Continue the current Attempt for ${active.map(task => task.id).join(", ")}. Use task_read for current authority. Recovery changed no Task state.`, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+        });
+      }
     }
   } else if (teamName) {
     if (!piSessionFile) throw new Error("Lead resume requires a durable Pi Session file.");
@@ -773,6 +823,12 @@ function registerSessionHooks() {
 });
 
 pi.on("session_shutdown", async (event, ctx) => {
+  const sessionFile = ctx.sessionManager.getSessionFile();
+  if (teamName && currentMembershipId && sessionFile) {
+    await teamSessionLifecycleService.recordStop({ teamName, workerName: agentName, sessionFile,
+      membershipId: currentMembershipId, piReason: event.reason, targetSessionFile: event.targetSessionFile,
+    }).catch(() => undefined);
+  }
   compactionGate.reset();
   settingsWarnings.clear(ctx);
   doctorGeneration++;
@@ -794,6 +850,8 @@ pi.on("session_shutdown", async (event, ctx) => {
     // Best effort only: this disposable file is never orchestration authority.
     removeWorkerAggregate(hostEnv().process.env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
   }
+  carrierObserver?.stop();
+  carrierObserver = undefined;
   stopDeliveries();
   taskGraphPane.shutdown();
   clearTeamProjection(ctx);
@@ -836,9 +894,7 @@ pi.on("agent_settled", async (_event, ctx) => {
 pi.on("turn_end", async (event, ctx) => {
   const stopReason = event.message?.role === "assistant" ? event.message.stopReason : undefined;
   if (stopReason === "error" || stopReason === "aborted") {
-    if (isTeammate && teamName && currentMembershipId) {
-      await lifecyclePublication.recordWorkerFailed({ teamName, workerName: agentName, membershipId: currentMembershipId }).catch(() => undefined);
-    }
+    // An interrupted or failed turn does not change Worker liveness.
     return;
   }
   if (isTeammate && teamName) {

@@ -10,21 +10,20 @@ function results(replay: Awaited<ReturnType<typeof replayTrace>>, name: string) 
     ? [{ at: event.at, details: event.result.details as any }] : []);
 }
 
-it("baseline scenario 1 waits 300 virtual seconds, cleans its carrier, then starts a real Worker on retry", async () => {
+it("v3.1 scenario 1 returns within ten virtual seconds and keeps an ambiguous launch and pane", async () => {
   const started = performance.now();
   const replay = await replayTrace(startFailure as WorldTrace);
   console.info(`sim scenario 1: ${((performance.now() - started) * 1000 / replay.decisions.length).toFixed(2)} ms / 1000 operations (${replay.decisions.length} operations; includes module loading and real fs)`);
   const calls = results(replay, "ensure_worker");
   expect(results(replay, "team_create")[0]!.details.kind).toBe("team_created");
-  expect(calls[0]!.at - replay.decisions[0]!.at).toBe(300000);
-  expect(calls[0]!.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
-  expect(calls[0]!.details.message).toContain("confirmed carrier cleanup");
-  expect(calls[1]!.details).toMatchObject({ kind: "worker_ensured", effect: "created", worker: { carrier: "connected" } });
-  expect(replay.actors.find(actor => actor.id === "team-1/w1")?.tools.sort()).toEqual(["alert_send", "task_read", "task_update"]);
-  expect(replay.panes.find(pane => pane.id === "pane-1")).toBeUndefined();
+  expect(calls[0]!.at - replay.decisions[0]!.at).toBeLessThanOrEqual(10000);
+  expect(calls[0]!.details).toMatchObject({ kind: "worker_ensured", effect: "created", launch: "requested" });
+  expect(calls[1]!.details).toMatchObject({ kind: "attention", launchId: calls[0]!.details.launchId, nextActionHint: "wait" });
+  expect(replay.panes.find(pane => pane.id === "pane-1")).toBeDefined();
+  expect(replay.panes.filter(pane => pane.id.startsWith("pane-"))).toHaveLength(1);
 }, 30000);
 
-it("baseline scenario 2 reproduces dead-Pi reuse and replays real actor decisions and enabled operations exactly", async () => {
+it("v3.1 scenario 2 never reuses dead Pi and replays real actor decisions exactly", async () => {
   const trace = piDead as WorldTrace;
   const started = performance.now();
   const first = await replayTrace(trace, { seed: 42 });
@@ -32,8 +31,10 @@ it("baseline scenario 2 reproduces dead-Pi reuse and replays real actor decision
   const second = await replayTrace(trace, { receipt: first.receipt });
   expect(second).toEqual(first);
   expect(results(first, "team_create")[0]!.details.kind).toBe("team_created");
-  expect(results(first, "ensure_worker").find(call => call.details.effect === "reused")?.details.worker.carrier).toBe("connected");
-  const worker = first.processes.findLast(process => process.actor === "team-1/w1")!;
+  const ensures = results(first, "ensure_worker");
+  expect(ensures.some(call => call.details.effect === "reused")).toBe(false);
+  expect(ensures.at(-1)!.details).toMatchObject({ kind: "worker_ensured", effect: "recovered", recoveryMode: "exact_session_resume" });
+  const worker = first.processes.find(process => process.actor === "team-1/w1")!;
   expect(worker.alive).toBe(false);
   expect(first.panes.find(pane => pane.id === "pane-1")).toMatchObject({ agentPid: worker.pid, agentLive: false });
   expect(first.processes.find(process => process.pid === first.panes.find(pane => pane.id === "pane-1")!.shellPid)?.alive).toBe(true);

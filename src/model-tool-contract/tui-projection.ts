@@ -60,6 +60,9 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
     if (model.kind === "worker_ensured") {
       lines.push(`Worker ${quoted(model.worker.name)} ${model.effect} · carrier ${model.worker.carrier}.`);
       if (model.worker.model_role) lines.push(`Model role ${quoted(model.worker.model_role)} selected.`);
+    } else if (model.kind === "attention") {
+      lines.push(`Worker ${quoted(model.worker)} needs attention: ${model.reason} · pane ${model.paneId ?? "unknown"}.`);
+      lines.push(`Next: ${model.nextActionHint}.`);
     } else if (model.kind === "refused" && model.existing_worker) {
       const conflict = model.reason === "model_conflict" ? "model conflict" : "scope conflict";
       lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · ${conflict}.`);
@@ -101,6 +104,8 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
     if (model.kind === "snapshot") lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}.`);
     else if (model.kind === "updates") {
       lines.push(`Updates: ${model.team_changes.length} Team change${model.team_changes.length === 1 ? "" : "s"}, ${model.task_changes.length} Task change${model.task_changes.length === 1 ? "" : "s"}, ${model.worker_changes.length} Worker change${model.worker_changes.length === 1 ? "" : "s"}, ${model.alerts.length} Alert${model.alerts.length === 1 ? "" : "s"}.`);
+      for (const change of model.team_changes.slice(0, 4)) lines.push(change.text);
+      for (const change of model.worker_changes.slice(0, 4)) lines.push(change.text);
       for (const change of model.task_changes.slice(0, 4)) {
         const blocker = change.journal_entries.find((entry: any) => entry.kind === "blocker");
         lines.push(`Task ${quoted(change.task_id)} changed · ${change.current.status}${change.current.assignee ? ` · @ ${change.current.assignee}` : " · unassigned"}${blocker ? ` · blocker: ${compact(blocker.text)}` : ""}.`);

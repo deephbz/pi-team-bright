@@ -1,7 +1,8 @@
+import { nodeHostEnv } from "../env/host-env";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { deriveWorkerRunObservation, readWorkerRunObservation, livenessIsComplete, livenessIsProductive } from "./sync-liveness";
 import { writeRuntimeStatus } from "./runtime";
 import { inboxPath, taskDeliveryPath, teamDir } from "./paths";
@@ -16,6 +17,7 @@ const queries = createDurableCoordinationQueries(createReadOnlyBeadsTaskAdapterF
   listTaskIds: async () => [],
 }));
 afterEach(() => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
   if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
@@ -40,7 +42,8 @@ describe("exact Worker run-state evidence", () => {
     process.env.PI_CODING_AGENT_DIR = root;
     const team = "liveness-test";
     fs.mkdirSync(teamDir(team), { recursive: true });
-    await writeRuntimeStatus(team, "worker", { pid: process.pid, startedAt: 10, runState: "active" }, "membership-1");
+    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => ({ kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }));
+    await writeRuntimeStatus(team, "worker", { pid: process.pid, osBirthToken: "birth", bootId: "boot", startedAt: 10, runState: "active" }, "membership-1");
     await expect(readWorkerRunObservation(team, member(), queries)).resolves.toMatchObject({ state: "active", generation: { membershipId: "membership-1", pid: process.pid, startedAt: 10 } });
     await writeRuntimeStatus(team, "worker", { runState: "settled" }, "membership-1");
     await expect(readWorkerRunObservation(team, member(), queries)).resolves.toMatchObject({ state: "settled" });

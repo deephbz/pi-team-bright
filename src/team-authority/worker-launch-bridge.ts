@@ -1,752 +1,207 @@
-import { hostEnv } from "../env/host-env";
+import { hostEnv, type TimerHandle } from "../env/host-env";
+import path from "node:path";
 import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
+import { assertLockDeadline, LockDeadlineError, withLock, withLockDeadline } from "../utils/lock";
+import { teamDir } from "../utils/paths";
+import { deriveCarrierView, herdrList, launchIsStalled, type CarrierView } from "../carrier-observation";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
-import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
+import type { Member, TeamConfig, TerminalTarget } from "./contracts";
 import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
 import { resolveWorkerModelRole, type ModelRoleSettings } from "../utils/model-role-settings";
-import {
-  normalizeWorkerCarrier,
-  planWorkerEnsure,
-  type WorkerRecoveryMode,
-  type WorkerEnsurePlan,
-} from "../utils/worker-ensure-lifecycle";
-import { getAdapterByName } from "../adapters/terminal-registry";
+import { normalizeWorkerCarrier, planWorkerEnsure, type WorkerRecoveryMode } from "../utils/worker-ensure-lifecycle";
+import { HerdrAdapter } from "../adapters/herdr-adapter";
 import { Iterm2Adapter } from "../adapters/iterm2-adapter";
 import { memberTerminalTarget, terminalTarget } from "../utils/terminal-target";
 import { teamPanePlacement } from "../utils/team-pane-placement";
-import { assertTargetSupportedByTerminal, currentTerminalForTeam } from "../utils/team-terminal";
-import { recordWorkerLaunchStage, withSemanticTrace } from "../utils/trace";
+import { currentTerminalForTeam } from "../utils/team-terminal";
+import type { SpawnOptions } from "../utils/terminal-adapter";
+import { withSemanticTrace } from "../utils/trace";
 import type { TeamLifecyclePublication, WorkerStartupObservation } from "./team-lifecycle-publication";
 import type { WorkerLaunchObservationState } from "../utils/receipt-types";
 
 export type PreparedLaunchTarget = { terminalId: string; isWindow: boolean; backend: string };
 export type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: IdentifiedInboxMessage };
-
-export interface WorkerAggregate {
-  path?: string;
-  projectTrusted: boolean;
-  modelRoleSettings?: ModelRoleSettings;
-}
-
+export interface WorkerAggregate { path?: string; projectTrusted: boolean; modelRoleSettings?: ModelRoleSettings }
 export interface WorkerLaunchBridgeDependencies {
-  /** Build the normal Pi argv with the already resolved model and aggregate. */
   buildWorkerArgv(model: string | undefined, thinking: Member["thinking"], aggregatePath: string | undefined, projectTrusted: boolean): string[];
-  /** Resolve the Worker-process resource projection for one launch. */
   workerAggregate(cwd: string): WorkerAggregate;
-  /** Durable Coordination publication and startup observation for Worker carriers. */
   lifecyclePublication: TeamLifecyclePublication;
 }
-
 export class WorkerModelConflictError extends Error {
   constructor(readonly workerName: string, readonly currentAlias: string | undefined, readonly requestedAlias: string) {
     super(`Worker ${workerName} already has model role ${currentAlias ?? "<historical selection>"}; refusing to reconfigure it with ${requestedAlias}.`);
-    this.name = "WorkerModelConflictError";
   }
 }
-
 export class WorkerLegacyTeamModelDefaultError extends Error {
-  constructor() {
-    super("This Team has a legacy raw model default. Finish it with its original version or create a new Team with pi_team_bright.default_model_role before creating another Worker.");
-    this.name = "WorkerLegacyTeamModelDefaultError";
-  }
+  constructor() { super("This Team has a legacy raw model default. Finish it with its original version or create a new Team with pi_team_bright.default_model_role before creating another Worker."); }
 }
-
 export interface WorkerLaunchRequest {
-  teamName: string;
-  workerName: string;
-  /** Durable logical Worker scope. It becomes the launch prompt/profile only. */
-  scope: string;
-  cwd: string;
-  /** Explicit configured model role name. */
-  modelRole?: string;
-  /** A historical logical Worker exists without a stored binding. */
-  preserveHistoricalModelSelection?: boolean;
-  thinking?: Member["thinking"];
-  modelProfile?: Member["modelProfile"];
-  /** Ephemeral qualified keys captured from this exact model-tool invocation. */
-  availableModelKeys?: QualifiedAvailableModelKeys;
-  signal?: AbortSignal;
+  teamName: string; workerName: string; scope: string; cwd: string; modelRole?: string;
+  preserveHistoricalModelSelection?: boolean; thinking?: Member["thinking"]; modelProfile?: Member["modelProfile"];
+  availableModelKeys?: QualifiedAvailableModelKeys; signal?: AbortSignal;
   workerAggregate?: (cwd: string) => WorkerAggregate;
   initialMessage?: () => Promise<IdentifiedInboxMessage>;
   launchEnvironment?: Record<string, string>;
 }
-
 export type WorkerLaunchResult =
-  | {
-    action: "reused";
-    member: Member;
-    membershipId: string;
-    target?: TerminalTarget;
-  }
-  | {
-    action: "recovered";
-    member: Member;
-    membershipId: string;
-    recoveryMode: WorkerRecoveryMode;
-    target: PreparedLaunchTarget;
-    startup: WorkerStartupObservation;
-  }
-  | {
-    action: "created";
-    member: Member;
-    membershipId: string;
-    target: PreparedLaunchTarget;
-    startup: WorkerStartupObservation;
-  };
-
-type PreparedLaunchSpawn = () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>;
-type PreparedCompensationOutcome = "deactivated" | "session_bound";
-
-type WorkerRecoveryInput = {
-  teamName: string;
-  teamConfig: TeamConfig;
-  teamTerminal: ReturnType<typeof currentTerminalForTeam>;
-  member: Member;
-  argv: string[];
-  env: Record<string, string>;
-  useSeparateWindow: boolean;
-};
-
-type WorkerRecoveryExecution =
-  | { action: "reused"; member: Member; target?: TerminalTarget }
-  | {
-    action: "recovered";
-    target: PreparedLaunchTarget;
-    recoveryMode: WorkerRecoveryMode;
-    priorRuntimeGeneration?: runtime.RuntimeGeneration;
-  };
-
-function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStatus | null): runtime.RuntimeGeneration | null {
-  const generation = runtime.runtimeGeneration(status);
-  return member.membershipId && generation?.membershipId === member.membershipId ? generation : null;
-}
-
-function sameRuntimeGeneration(left: runtime.RuntimeGeneration, right: runtime.RuntimeGeneration): boolean {
-  return left.membershipId === right.membershipId && left.pid === right.pid && left.startedAt === right.startedAt;
-}
-
-function stopLaunchTarget(target: PreparedLaunchTarget): void {
-  const launchTerminal = getAdapterByName(target.backend);
-  if (!launchTerminal) throw new Error(`cannot stop ${target.terminalId}: terminal backend ${target.backend} is unavailable`);
-  if (target.isWindow && !launchTerminal.supportsWindows()) {
-    throw new Error(`${launchTerminal.name} doesn't support window targets`);
-  }
-  if (target.isWindow) {
-    launchTerminal.killWindow(target.terminalId);
-    if (launchTerminal.isWindowAlive(target.terminalId)) {
-      throw new Error(`${launchTerminal.name} did not stop window ${target.terminalId}`);
-    }
-    return;
-  }
-  launchTerminal.kill(target.terminalId);
-  if (launchTerminal.isAlive(target.terminalId)) {
-    throw new Error(`${launchTerminal.name} did not stop pane ${target.terminalId}`);
-  }
-}
-
+  | { action: "reused"; member: Member; membershipId: string; target?: TerminalTarget; lastStop?: CarrierView["lastStop"] }
+  | { action: "attention"; member?: Member; membershipId?: string; paneId?: string; launchId?: string; launch: CarrierView["launch"]; lastStop?: CarrierView["lastStop"]; reason: string; nextActionHint: "wait" | "ask_human" }
+  | { action: "created" | "recovered"; member: Member; membershipId: string; recoveryMode?: WorkerRecoveryMode; target?: PreparedLaunchTarget; startup: WorkerStartupObservation; launchId: string; launch: "requested"; lastStop?: CarrierView["lastStop"] };
 export function launchObservationState(observation: WorkerStartupObservation): WorkerLaunchObservationState {
-  return observation.observed
-    ? { carrier: "session_bound", runtime: "observed" }
-    : { carrier: observation.carrier, runtime: "not_observed" };
+  return observation.observed ? { carrier: "session_bound", runtime: "observed" } : { carrier: observation.carrier, runtime: "not_observed" };
 }
-
 export type ResolvedWorkerModel = { model?: string; binding?: Member["modelProfile"] };
+export function createWorkerLaunchBridge(dependencies: WorkerLaunchBridgeDependencies): WorkerLaunchBridge { return new WorkerLaunchBridge(dependencies); }
+type LaunchClaim = { member: Member; config: TeamConfig; action: "created" | "recovered"; recoveryMode?: WorkerRecoveryMode; lastStop?: CarrierView["lastStop"] };
 
+/** A durable launch marker precedes every external effect. No readiness wait owns a lease. */
 export class WorkerLaunchBridge {
   constructor(private readonly dependencies: WorkerLaunchBridgeDependencies) {}
-
-  resolveInitialWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): ResolvedWorkerModel {
-    return this.resolveNewWorkerModel(request, teamConfig, aggregate);
-  }
-
-  async ensureWorker(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
-    return withSemanticTrace(
-      "worker_launch",
-      { teamName: request.teamName, workerName: request.workerName },
-      () => this.ensureWorkerWithTrace(request),
-    );
-  }
-
-  private async ensureWorkerWithTrace(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
-    const { teamName, workerName, scope, cwd, signal } = request;
-    recordWorkerLaunchStage("ensure_started");
-    if (!teams.teamExists(teamName)) throw new Error(`Team ${teamName} does not exist`);
-
-    const teamConfig = await teams.readConfig(teamName);
-    const teamTerminal = currentTerminalForTeam(teamConfig);
-    const existingMember = [...teamConfig.members].reverse().find((member) =>
-      member.name === workerName && member.agentType === "teammate" && member.isActive !== false);
-
-    if (existingMember) {
-      if (request.modelRole !== undefined && existingMember.modelProfile?.alias !== request.modelRole) {
-        throw new WorkerModelConflictError(workerName, existingMember.modelProfile?.alias, request.modelRole);
-      }
-      const existingTarget = memberTerminalTarget(existingMember, teamConfig.terminalBackend || teamTerminal.name);
-      if (existingTarget) assertTargetSupportedByTerminal(teamTerminal, existingTarget);
-      const carrierObservation = existingTarget?.kind === "window"
-        ? (teamTerminal.isWindowAlive(existingTarget.targetId) ? "live" : "missing")
-        : existingTarget?.kind === "pane"
-          ? (teamTerminal.isAlive(existingTarget.targetId) ? "live" : "missing")
-          : "missing";
-      const workerPlan: WorkerEnsurePlan = planWorkerEnsure(
-        normalizeWorkerCarrier(existingMember),
-        carrierObservation,
-      );
-
-      if (workerPlan.action === "refuse") {
-        if (workerPlan.reason === "unbound_live") {
-          throw new Error(
-            `Current Membership for ${workerName} has a live terminal carrier before exact Session binding. Refusing to reuse unbound capacity; wait for binding or stop the exact carrier.`,
-          );
-        }
-        throw new Error(
-          `Current Membership for ${workerName} has invalid carrier evidence: ${workerPlan.reason}.`,
-        );
-      }
-
-      if (workerPlan.action === "reuse") {
-        recordWorkerLaunchStage("carrier_reused", { membershipId: existingMember.membershipId! });
-        return {
-          action: "reused",
-          member: { ...existingMember },
-          membershipId: existingMember.membershipId!,
-          ...(existingTarget ? { target: existingTarget } : {}),
-        };
-      }
-
-      if (workerPlan.action !== "recover") {
-        throw new Error("Worker ensure planner returned no executable recovery action.");
-      }
-
-      const useSeparateWindow = teamConfig.separateWindows ?? false;
-      if (useSeparateWindow && !teamTerminal.supportsWindows()) {
-        throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
-      }
-      const aggregate = this.resolveWorkerAggregate(request, existingMember.cwd);
-      const recovery = workerPlan.carrier;
-      const exactSessionResume = recovery.kind === "bound";
-      const model = exactSessionResume ? undefined : existingMember.model;
-      // A prepared retry has no Session to restore human overrides from. Use
-      // the pinned profile's effective thinking before the legacy member field.
-      const thinking = exactSessionResume ? undefined : existingMember.modelProfile?.thinking ?? existingMember.thinking;
-      const baseArgv = this.dependencies.buildWorkerArgv(model, thinking, aggregate.path, aggregate.projectTrusted);
-      const env: Record<string, string> = {
-        ...hostEnv().process.env,
-        ...request.launchEnvironment,
-        PI_TEAM_NAME: teamName,
-        PI_AGENT_NAME: workerName,
-        ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
-      };
-
-      if (recovery.kind === "prepared") {
-        env.PI_AGENT_LAUNCH_ID = recovery.pendingLaunchId;
-      } else {
-        delete env.PI_AGENT_LAUNCH_ID;
-      }
-      env.PI_TEAM_MEMBERSHIP_ID = recovery.membershipId;
-      const argv = exactSessionResume
-        ? [...baseArgv, "--session", recovery.sessionFile]
-        : baseArgv;
-      let recoveryCursor: string;
-      try {
-        recoveryCursor = this.dependencies.lifecyclePublication.readEventCursor(teamName);
-      } catch (error) {
-        removeWorkerAggregate(aggregate.path);
-        throw error;
-      }
-      const execution = await this.executeWorkerRecovery({
-        teamName,
-        teamConfig,
-        teamTerminal,
-        member: recovery.member,
-        argv,
-        env,
-        useSeparateWindow,
-      });
-      if (execution.action === "reused") {
-        // This ensure resolved a disposable aggregate before the leased
-        // revalidation found another ensure's live exact carrier.
-        removeWorkerAggregate(aggregate.path);
-        return {
-          action: "reused",
-          member: execution.member,
-          membershipId: execution.member.membershipId!,
-          ...(execution.target ? { target: execution.target } : {}),
-        };
-      }
-      let startup: WorkerStartupObservation;
-      try {
-        startup = await this.observeLaunchedWorker(
-          teamName,
-          workerName,
-          recovery.membershipId,
-          recoveryCursor,
-          signal,
-        );
-      } catch (error) {
-        if (execution.target.backend === "herdr") {
-          await this.reconcileHerdrRecoveryCarrier(
-            teamName,
-            recovery.member,
-            execution.target,
-            execution.priorRuntimeGeneration,
-            aggregate.path,
-          );
-        }
-        throw error;
-      }
-      recordWorkerLaunchStage(startup.observed ? "session_bound_observed" : "session_bound_not_observed", { membershipId: recovery.membershipId });
-      if (!startup.observed && execution.target.backend === "herdr") {
-        const outcome = await this.reconcileHerdrRecoveryCarrier(
-          teamName,
-          recovery.member,
-          execution.target,
-          execution.priorRuntimeGeneration,
-          aggregate.path,
-        );
-        if (outcome === "stopped") {
-          throw new Error(
-            `Herdr recovery for ${workerName} did not produce exact Session binding during the bounded observation (${startup.reason}). `
-            + "The exact recovery target was stopped; the Membership remains current for an exact child retry.",
-          );
-        }
-      }
-      const current = await teams.currentMembership(teamName, workerName);
-      return {
-        action: "recovered",
-        member: current,
-        membershipId: recovery.membershipId,
-        recoveryMode: execution.recoveryMode,
-        target: execution.target,
-        startup,
-      };
-    }
-
-    const absentPlan: WorkerEnsurePlan = planWorkerEnsure(normalizeWorkerCarrier(undefined), "missing");
-    if (absentPlan.action !== "create") throw new Error("Worker ensure planner returned no executable create action.");
-
-    const aggregate = this.resolveWorkerAggregate(request, cwd);
-    let chosen: ResolvedWorkerModel;
-    try {
-      chosen = this.resolveNewWorkerModel(request, teamConfig, aggregate);
-    } catch (error) {
-      removeWorkerAggregate(aggregate.path);
-      throw error;
-    }
-
-    const useSeparateWindow = teamConfig.separateWindows ?? false;
-    if (useSeparateWindow && !teamTerminal.supportsWindows()) {
-      throw new Error(`Separate windows mode is not supported in ${teamTerminal.name}.`);
-    }
-
-    const member: Member = {
-      membershipId: teams.newMembershipId(),
-      pendingLaunchId: teams.newLaunchId(),
-      agentId: `${workerName}@${teamName}`,
-      name: workerName,
-      agentType: "teammate",
-      model: chosen.model,
-      modelProfile: chosen.binding,
-      joinedAt: hostEnv().clock.now(),
-      cwd,
-      subscriptions: [],
-      isActive: true,
-      prompt: scope,
-      color: "blue",
-      // Persist the effective profile thinking so a prepared Membership retry
-      // reconstructs the same initial launch settings before Session binding.
-      thinking: chosen.binding?.thinking ?? request.thinking,
-    };
-
-    let preparedEvent: { cursor: string };
-    try {
-      await teams.addMember(teamName, member);
-      preparedEvent = await this.dependencies.lifecyclePublication.recordWorkerPrepared({
-        teamName,
-        workerName,
-        membershipId: member.membershipId!,
-      });
-      recordWorkerLaunchStage("membership_prepared", { membershipId: member.membershipId! });
-    } catch (error) {
-      removeWorkerAggregate(aggregate.path);
-      throw error;
-    }
-
-    const piCmd = this.dependencies.buildWorkerArgv(chosen.model, chosen.binding?.thinking ?? request.thinking, aggregate.path, aggregate.projectTrusted);
-    const env: Record<string, string> = {
-      ...hostEnv().process.env,
-      ...request.launchEnvironment,
-      PI_TEAM_NAME: teamName,
-      PI_AGENT_NAME: workerName,
-      PI_TEAM_MEMBERSHIP_ID: member.membershipId!,
-      PI_AGENT_LAUNCH_ID: member.pendingLaunchId!,
-      ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}),
-    };
-
-    const launch = await this.launchPreparedMembership(
-      teamName,
-      member,
-      request.initialMessage ?? null,
-      () => this.spawnWorkerCarrier(teamConfig, teamTerminal, member, piCmd, env, useSeparateWindow),
-      aggregate.path,
-    );
-    let startup: WorkerStartupObservation;
-    try {
-      startup = await this.observeLaunchedWorker(
-        teamName,
-        workerName,
-        member.membershipId!,
-        preparedEvent.cursor,
-        signal,
-      );
-    } catch (error) {
-      if (launch.backend === "herdr") await this.reconcileCancelledHerdrPreparedLaunch(teamName, member, launch, aggregate.path);
-      throw error;
-    }
-    recordWorkerLaunchStage(startup.observed ? "session_bound_observed" : "session_bound_not_observed", { membershipId: member.membershipId! });
-    const currentMember = !startup.observed && launch.backend === "herdr"
-      ? await this.failUnobservedHerdrPreparedLaunch(teamName, member, launch, startup.reason, aggregate.path)
-      : member;
-    return {
-      action: "created",
-      member: currentMember,
-      membershipId: member.membershipId!,
-      target: launch,
-      startup,
-    };
-  }
-
-  private resolveWorkerAggregate(request: WorkerLaunchRequest, cwd: string): WorkerAggregate {
-    return request.workerAggregate?.(cwd) ?? this.dependencies.workerAggregate(cwd);
-  }
-
-  private resolveNewWorkerModel(request: WorkerLaunchRequest, teamConfig: TeamConfig, aggregate: WorkerAggregate): ResolvedWorkerModel {
+  resolveInitialWorkerModel(request: WorkerLaunchRequest, config: TeamConfig, aggregate: WorkerAggregate): ResolvedWorkerModel {
     if (request.preserveHistoricalModelSelection) return {};
-    if (request.modelProfile) {
-      return { model: `${request.modelProfile.provider}/${request.modelProfile.model}`, binding: request.modelProfile };
-    }
-    if (teamConfig.defaultModel !== undefined) throw new WorkerLegacyTeamModelDefaultError();
-    const settings = aggregate.modelRoleSettings;
-    if (!settings) throw new Error("Worker model role settings are unavailable.");
-    const binding = resolveWorkerModelRole(request.modelRole, settings, request.availableModelKeys);
+    if (request.modelProfile) return { model: `${request.modelProfile.provider}/${request.modelProfile.model}`, binding: request.modelProfile };
+    if (config.defaultModel !== undefined) throw new WorkerLegacyTeamModelDefaultError();
+    if (!aggregate.modelRoleSettings) throw new Error("Worker model role settings are unavailable.");
+    const binding = resolveWorkerModelRole(request.modelRole, aggregate.modelRoleSettings, request.availableModelKeys);
     return { model: `${binding.provider}/${binding.model}`, binding };
   }
-
-  async launchPreparedMembership(
-    targetTeamName: string,
-    prepared: Member,
-    initialMessage: (() => Promise<IdentifiedInboxMessage>) | null,
-    spawn: PreparedLaunchSpawn,
-    aggregatePath?: string,
-  ): Promise<PreparedLaunchReceipt> {
-    let target: PreparedLaunchTarget | null = null;
-    try {
-      const acceptedMessage = initialMessage ? await initialMessage() : undefined;
-      target = await spawn();
-      if (!target.terminalId) throw new Error("terminal adapter returned an empty target ID");
-      recordWorkerLaunchStage("carrier_start_accepted", { membershipId: prepared.membershipId! });
-      const teamConfig = await teams.readConfig(targetTeamName);
-      await teams.updateMembership(
-        targetTeamName,
-        prepared.membershipId!,
-        teamConfig.terminalBackend
-          ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) }
-          : target.isWindow
-            ? { windowId: target.terminalId }
-            : { tmuxPaneId: target.terminalId },
-      );
-      recordWorkerLaunchStage("carrier_target_persisted", { membershipId: prepared.membershipId! });
-      return { ...target, ...(acceptedMessage ? { initialMessage: acceptedMessage } : {}) };
-    } catch (launchError) {
-      recordWorkerLaunchStage("compensation_started", { membershipId: prepared.membershipId! });
-      if (!target) removeWorkerAggregate(aggregatePath);
+  async ensureWorker(request: WorkerLaunchRequest): Promise<WorkerLaunchResult> {
+    return withSemanticTrace("worker_launch", { teamName: request.teamName, workerName: request.workerName }, async () => {
+      const deadline = hostEnv().clock.now() + 10000;
+      const receipt = new AbortController();
+      const observed: { member?: Member; paneId?: string } = {};
+      const expired = (): WorkerLaunchResult => ({ action: "attention", member: observed.member, membershipId: observed.member?.membershipId,
+        paneId: observed.paneId ?? observed.member?.terminalTarget?.targetId, launchId: observed.member?.launch?.launchId,
+        launch: "unknown", reason: "receipt_deadline", nextActionHint: "ask_human" });
+      // Async scope propagates the receipt deadline through every nested persistence lock.
+      const operation = withLockDeadline(deadline, async () => {
+        const claim = await withLock(path.join(teamDir(request.teamName), `launch-${encodeURIComponent(request.workerName)}`), () => this.claim(request, member => { observed.member = member; }));
+        assertLockDeadline();
+        if (!("config" in claim)) return this.inspectAttention(request, claim);
+        observed.member = claim.member;
+        return this.launch(request, claim, deadline, paneId => { observed.paneId = paneId; });
+      }, receipt.signal);
+      let timer: TimerHandle | undefined;
       try {
-        const outcome = await this.compensatePreparedLaunch(targetTeamName, prepared, target);
-        if (outcome === "session_bound") {
-          throw new Error(`Prepared Membership for ${prepared.name} completed exact Session binding during compensation.`);
-        }
-        if (target) removeWorkerAggregate(aggregatePath);
-      } catch (cleanupError) {
-        recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: prepared.membershipId! });
-        if ((cleanupError as { carrierStopConfirmed?: boolean }).carrierStopConfirmed) {
-          removeWorkerAggregate(aggregatePath);
-        }
-        const targetText = target
-          ? `${target.isWindow ? "window" : "pane"} ${target.terminalId}`
-          : "the prepared Membership before terminal spawn";
-        throw new Error(
-          `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
-          + `Compensation failed for ${targetText}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
-          + "The Membership remains current because process shutdown could not be confirmed.",
-        );
-      }
-      throw new Error(
-        `Failed to launch ${prepared.name}: ${launchError instanceof Error ? launchError.message : String(launchError)}. `
-        + "The exact prepared Membership was deactivated after compensation.",
-      );
-    }
-  }
-
-  observeLaunchedWorker(
-    teamName: string,
-    workerName: string,
-    membershipId: string,
-    afterCursor: string,
-    signal?: AbortSignal,
-    defaultTimeoutMs?: number,
-  ): Promise<WorkerStartupObservation> {
-    return this.dependencies.lifecyclePublication.observeWorkerStartup({
-      teamName,
-      workerName,
-      membershipId,
-      afterCursor,
-      ...(signal ? { signal } : {}),
-      ...(defaultTimeoutMs === undefined ? {} : { defaultTimeoutMs }),
+        return await Promise.race([operation, new Promise<WorkerLaunchResult>(resolve => {
+          timer = hostEnv().clock.setTimeout(() => { receipt.abort(); resolve(expired()); }, Math.max(0, deadline - hostEnv().clock.now()));
+        })]);
+      } catch (error) { if (error instanceof LockDeadlineError) return expired(); throw error; }
+      finally { hostEnv().clock.clearTimeout(timer); }
     });
   }
-
-  private async reconcileCancelledHerdrPreparedLaunch(
-    teamName: string,
-    member: Member,
-    target: PreparedLaunchTarget,
-    aggregatePath?: string,
-  ): Promise<void> {
-    recordWorkerLaunchStage("compensation_started", { membershipId: member.membershipId! });
-    try {
-      const outcome = await this.compensatePreparedLaunch(teamName, member, target);
-      if (outcome === "deactivated") removeWorkerAggregate(aggregatePath);
-      else recordWorkerLaunchStage("session_binding_won", { membershipId: member.membershipId! });
-    } catch (error) {
-      recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
-      if ((error as { carrierStopConfirmed?: boolean }).carrierStopConfirmed) removeWorkerAggregate(aggregatePath);
-      throw new Error(
-        `Herdr start for ${member.name} was cancelled during exact Session observation. `
-        + `Compensation failed: ${error instanceof Error ? error.message : String(error)}. `
-        + "The Membership remains current because process shutdown could not be confirmed.",
-      );
-    }
+  private async inspectAttention(request: WorkerLaunchRequest, result: WorkerLaunchResult): Promise<WorkerLaunchResult> {
+    if (result.action !== "attention" || !result.member || result.member.terminalTarget?.backend !== "herdr"
+      || !launchIsStalled(result.member, [])) return result;
+    const agents = await herdrList("agent").catch(() => undefined);
+    assertLockDeadline();
+    if (!launchIsStalled(result.member, agents)) return result;
+    const observed = result.member;
+    return teams.withCurrentMembershipLease(request.teamName, observed.membershipId!, async current => {
+      if (current.launch?.launchId !== observed.launch?.launchId || current.sessionFile !== observed.sessionFile
+        || current.terminalTarget?.targetId !== observed.terminalTarget?.targetId || !launchIsStalled(current, agents)) return result;
+      return { ...result, member: current, paneId: current.terminalTarget?.targetId, reason: "launch_stalled", nextActionHint: "ask_human" };
+    });
   }
-
-  private async failUnobservedHerdrPreparedLaunch(
-    teamName: string,
-    member: Member,
-    target: PreparedLaunchTarget,
-    reason: Extract<WorkerStartupObservation, { observed: false }>["reason"],
-    aggregatePath?: string,
-  ): Promise<Member> {
-    recordWorkerLaunchStage("compensation_started", { membershipId: member.membershipId! });
-    try {
-      const outcome = await this.compensatePreparedLaunch(teamName, member, target);
-      if (outcome === "session_bound") {
-        recordWorkerLaunchStage("session_binding_won", { membershipId: member.membershipId! });
-        return teams.currentMembership(teamName, member.name);
-      }
-      removeWorkerAggregate(aggregatePath);
-    } catch (error) {
-      recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
-      if ((error as { carrierStopConfirmed?: boolean }).carrierStopConfirmed) removeWorkerAggregate(aggregatePath);
-      throw new Error(
-        `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation (${reason}). `
-        + `Compensation failed: ${error instanceof Error ? error.message : String(error)}. `
-        + "The Membership remains current because process shutdown could not be confirmed.",
-      );
-    }
-    throw new Error(
-      `Herdr start for ${member.name} did not produce exact Session binding during the bounded observation (${reason}). `
-      + "The exact prepared Membership was deactivated after confirmed carrier cleanup.",
-    );
-  }
-
-  private async reconcileHerdrRecoveryCarrier(
-    teamName: string,
-    member: Member,
-    target: PreparedLaunchTarget,
-    priorRuntimeGeneration: runtime.RuntimeGeneration | undefined,
-    aggregatePath?: string,
-  ): Promise<"authority_won" | "stopped"> {
-    const authorityWon = async (current: Member): Promise<boolean> => {
-      if (current.membershipId !== member.membershipId) return true;
-      const generation = exactRuntimeGeneration(
-        current,
-        await runtime.readRuntimeStatus(teamName, member.name),
-      );
-      return !!generation && (!priorRuntimeGeneration || !sameRuntimeGeneration(generation, priorRuntimeGeneration));
-    };
-
-    const before = await teams.currentMembership(teamName, member.name);
-    if (await authorityWon(before)) {
-      recordWorkerLaunchStage("recovery_authority_won", { membershipId: member.membershipId! });
-      return "authority_won";
-    }
-
-    try {
-      const skipped = await teams.withCurrentMembershipLease(teamName, member.membershipId!, async (current) => {
-        if (await authorityWon(current)) return true;
-        recordWorkerLaunchStage("compensation_started", { membershipId: member.membershipId! });
-        stopLaunchTarget(target);
-        recordWorkerLaunchStage("carrier_stop_confirmed", { membershipId: member.membershipId! });
-        return false;
+  private async claim(request: WorkerLaunchRequest, observe: (member: Member) => void): Promise<LaunchClaim | WorkerLaunchResult> {
+    const config = await teams.readConfig(request.teamName);
+    const member = [...config.members].reverse().find(m => m.name === request.workerName && m.agentType === "teammate" && m.isActive !== false);
+    if (member) {
+      observe(member);
+      if (request.modelRole !== undefined && member.modelProfile?.alias !== request.modelRole) throw new WorkerModelConflictError(member.name, member.modelProfile?.alias, request.modelRole);
+      return teams.withCurrentMembershipLease(request.teamName, member.membershipId!, async current => {
+        const status = await runtime.readRuntimeStatus(request.teamName, member.name);
+        assertLockDeadline();
+        const view = deriveCarrierView(current, status);
+        const plan = planWorkerEnsure(normalizeWorkerCarrier(current), view);
+        // Even a bound dead prior generation cannot bypass an in-flight recovery.
+        const pending = current.launch && (current.launch.state === "requested" || current.launch.state === "started" || current.launch.state === "unknown")
+          && (!status || current.launch.priorGeneration?.osBirthToken === status.osBirthToken);
+        if (pending && plan.action !== "reuse") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: "launch_pending", nextActionHint: "wait" };
+        if (plan.action === "reuse") return { action: "reused", member: current, membershipId: current.membershipId!, target: memberTerminalTarget(current, config.terminalBackend), lastStop: view.lastStop };
+        if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint };
+        if (plan.action === "refuse") throw new Error(`Invalid carrier: ${plan.reason}`);
+        const launchId = teams.newLaunchId();
+        const updated = await teams.updateMembership(request.teamName, current.membershipId!, {
+          launch: { launchId, state: "requested", requestedAt: hostEnv().clock.now(), ...(status?.pid ? { priorGeneration: { pid: status.pid, osBirthToken: status.osBirthToken, bootId: status.bootId } } : {}) },
+          ...(!current.sessionFile ? { pendingLaunchId: launchId } : {}),
+        });
+        return { member: updated, config, action: plan.action === "recover" ? "recovered" : "created", ...(plan.action === "recover" ? { recoveryMode: plan.recoveryMode } : {}), lastStop: view.lastStop };
       });
-      if (skipped) {
-        recordWorkerLaunchStage("recovery_authority_won", { membershipId: member.membershipId! });
-        return "authority_won";
-      }
-      removeWorkerAggregate(aggregatePath);
-      return "stopped";
-    } catch (error) {
-      const current = await teams.currentMembership(teamName, member.name).catch(() => undefined);
-      if (current && await authorityWon(current)) {
-        recordWorkerLaunchStage("recovery_authority_won", { membershipId: member.membershipId! });
-        return "authority_won";
-      }
-      recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
-      throw new Error(
-        `Herdr recovery carrier for ${member.name} could not be reconciled. `
-        + `It could not stop ${target.isWindow ? "window" : "pane"} ${target.terminalId}: ${error instanceof Error ? error.message : String(error)}. `
-        + "The Membership remains current; reconcile the live process before retrying.",
-      );
     }
+    const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(request.cwd);
+    let chosen: ResolvedWorkerModel;
+    try { chosen = this.resolveInitialWorkerModel(request, config, aggregate); }
+    finally { removeWorkerAggregate(aggregate.path); }
+    const launchId = teams.newLaunchId();
+    const prepared: Member = { membershipId: teams.newMembershipId(), pendingLaunchId: launchId,
+      launch: { launchId, state: "requested", requestedAt: hostEnv().clock.now() }, agentId: `${request.workerName}@${request.teamName}`,
+      name: request.workerName, agentType: "teammate", model: chosen.model, modelProfile: chosen.binding,
+      joinedAt: hostEnv().clock.now(), cwd: request.cwd, subscriptions: [], isActive: true, prompt: request.scope, color: "blue", thinking: chosen.binding?.thinking ?? request.thinking };
+    await teams.addMember(request.teamName, prepared);
+    observe(prepared);
+    assertLockDeadline();
+    await this.dependencies.lifecyclePublication.recordWorkerPrepared({ teamName: request.teamName, workerName: prepared.name, membershipId: prepared.membershipId! });
+    return { member: prepared, config, action: "created" };
   }
-
-  private spawnWorkerCarrier(
-    teamConfig: TeamConfig,
-    teamTerminal: ReturnType<typeof currentTerminalForTeam>,
-    member: Member,
-    argv: string[],
-    env: Record<string, string>,
-    useSeparateWindow: boolean,
-  ): PreparedLaunchTarget {
-    if (useSeparateWindow) {
-      const terminalId = teamTerminal.spawnWindow({ name: member.name, cwd: member.cwd, argv, env, teamName: teamConfig.name });
-      return { terminalId, isWindow: true, backend: teamTerminal.name };
-    }
-    const panePlacement = teamPanePlacement(teamConfig, teamTerminal.name, member.membershipId);
-    if (teamTerminal instanceof Iterm2Adapter) {
-      const lastWorkerPaneId = panePlacement.workerPaneIds.at(-1);
-      teamTerminal.setSpawnContext(lastWorkerPaneId?.startsWith("iterm_")
-        ? { lastSessionId: lastWorkerPaneId.replace("iterm_", "") }
-        : {});
-    }
-    const terminalId = teamTerminal.spawn({ name: member.name, cwd: member.cwd, argv, env, panePlacement });
-    return { terminalId, isWindow: false, backend: teamTerminal.name };
-  }
-
-  private async compensatePreparedLaunch(targetTeamName: string, prepared: Member, target: PreparedLaunchTarget | null): Promise<PreparedCompensationOutcome> {
-    if (!prepared.membershipId) throw new Error(`Prepared Membership for ${prepared.name} has no stable identity.`);
-    let carrierStopConfirmed = !target;
-    let sessionBound = false;
+  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
+    const { member, config } = claim;
+    const launchId = member.launch!.launchId;
+    const terminal = currentTerminalForTeam(config);
+    const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(member.cwd);
+    const exactResume = claim.recoveryMode === "exact_session_resume";
+    const argv = this.dependencies.buildWorkerArgv(exactResume ? undefined : member.model, exactResume ? undefined : member.modelProfile?.thinking ?? member.thinking, aggregate.path, aggregate.projectTrusted);
+    if (exactResume) argv.push("--session", member.sessionFile!);
+    const env = { ...hostEnv().process.env, ...request.launchEnvironment, PI_TEAM_NAME: request.teamName, PI_AGENT_NAME: member.name,
+      PI_TEAM_MEMBERSHIP_ID: member.membershipId!, PI_AGENT_LAUNCH_ID: launchId, ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}) } as Record<string, string>;
+    const options: SpawnOptions = { name: member.name, cwd: member.cwd, argv, env, panePlacement: teamPanePlacement(config, terminal.name, member.membershipId) };
+    let target: PreparedLaunchTarget | undefined;
     try {
-      await teams.withCurrentMembershipLease(targetTeamName, prepared.membershipId, async (current) => {
-        if (current.sessionFile) {
-          sessionBound = true;
-          return;
-        }
-        if (!prepared.pendingLaunchId || current.pendingLaunchId !== prepared.pendingLaunchId) {
-          throw new Error(`Prepared Membership for ${prepared.name} no longer has its exact launch capability.`);
-        }
-        if (target) {
-          stopLaunchTarget(target);
-          carrierStopConfirmed = true;
-          recordWorkerLaunchStage("carrier_stop_confirmed", { membershipId: prepared.membershipId! });
-          const status = await runtime.readRuntimeStatus(targetTeamName, prepared.name);
-          const generation = exactRuntimeGeneration(prepared, status);
-          if (generation) await runtime.deleteRuntimeStatus(targetTeamName, prepared.name, generation);
-        }
-        await teams.deactivateMembership(targetTeamName, prepared.membershipId!, "replaced");
-        recordWorkerLaunchStage("membership_deactivated", { membershipId: prepared.membershipId! });
-      });
-      return sessionBound ? "session_bound" : "deactivated";
-    } catch (error) {
-      if (carrierStopConfirmed && error && typeof error === "object") {
-        (error as { carrierStopConfirmed?: boolean }).carrierStopConfirmed = true;
+      if (request.initialMessage) await request.initialMessage();
+      assertLockDeadline();
+      if (terminal instanceof Iterm2Adapter) {
+        const last = options.panePlacement?.workerPaneIds.at(-1);
+        terminal.setSpawnContext(last?.startsWith("iterm_") ? { lastSessionId: last.replace("iterm_", "") } : {});
       }
-      throw error;
-    }
-  }
-
-  private async executeWorkerRecovery(input: WorkerRecoveryInput): Promise<WorkerRecoveryExecution> {
-    const { teamName, teamConfig, teamTerminal, member, argv, env, useSeparateWindow } = input;
-    let target: PreparedLaunchTarget | null = null;
-    try {
-      return await teams.withCurrentMembershipLease(teamName, member.membershipId!, async (leased) => {
-        const current = await teams.currentMembership(teamName, member.name);
-        if (current.membershipId !== member.membershipId || leased.membershipId !== member.membershipId) {
-          throw new Error(`Cannot recover ${member.name}: the exact Membership is no longer current. No candidate was spawned.`);
-        }
-        const currentTarget = memberTerminalTarget(current, teamConfig.terminalBackend || teamTerminal.name);
-        if (currentTarget) assertTargetSupportedByTerminal(teamTerminal, currentTarget);
-        const currentObservation = currentTarget?.kind === "window"
-          ? (teamTerminal.isWindowAlive(currentTarget.targetId) ? "live" : "missing")
-          : currentTarget?.kind === "pane"
-            ? (teamTerminal.isAlive(currentTarget.targetId) ? "live" : "missing")
-            : "missing";
-        const currentPlan = planWorkerEnsure(normalizeWorkerCarrier(current), currentObservation);
-        if (currentPlan.action === "reuse") {
-          return { action: "reused", member: current, ...(currentTarget ? { target: currentTarget } : {}) };
-        }
-        if (currentPlan.action !== "recover") {
-          if (currentPlan.action === "refuse" && currentPlan.reason === "unbound_live") {
-            throw new Error(`Cannot recover ${member.name}: the exact carrier is live but not Session-bound. No candidate was spawned.`);
-          }
-          throw new Error(`Cannot recover ${member.name}: current carrier evidence is ${currentPlan.action}. No candidate was spawned.`);
-        }
-        const preflight = runtime.preflightRuntimeRecovery(
-          current,
-          await runtime.readRuntimeStatus(teamName, member.name),
-          runtime.probePidPresence,
-          currentPlan.recoveryMode === "first_binding_retry" ? current.pendingLaunchId : undefined,
-        );
-        if (preflight.kind === "refused") {
-          throw new Error(`Cannot recover ${member.name}: ${preflight.reason} No terminal target changed and no candidate was spawned.`);
-        }
-        target = this.spawnWorkerCarrier(teamConfig, teamTerminal, member, argv, env, useSeparateWindow);
-        recordWorkerLaunchStage("carrier_start_accepted", { membershipId: member.membershipId! });
-        const update = teamConfig.terminalBackend
-          ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) }
-          : target.isWindow
-            ? { windowId: target.terminalId }
-            : { tmuxPaneId: target.terminalId };
-        // This records only the exact terminal carrier. The child alone claims
-        // runtime and binds its Pi Session after it starts.
-        await teams.updateMembership(teamName, member.membershipId!, update);
-        recordWorkerLaunchStage("carrier_target_persisted", { membershipId: member.membershipId! });
-        return {
-          action: "recovered",
-          target,
-          recoveryMode: currentPlan.recoveryMode,
-          ...(preflight.replaces ? { priorRuntimeGeneration: preflight.replaces } : {}),
-        };
+      const terminalId = terminal instanceof HerdrAdapter ? await terminal.prepareSpawnAsync(options, deadline)
+        : config.separateWindows ? terminal.spawnWindow(options) : terminal.spawn(options);
+      target = { terminalId, isWindow: !!config.separateWindows, backend: terminal.name };
+      observePane(terminalId);
+      assertLockDeadline();
+      // This CAS records the target before Herdr starts the process.
+      await teams.withCurrentMembershipLease(request.teamName, member.membershipId!, async current => {
+        if (current.launch?.launchId !== launchId) throw new Error("Launch target belongs to a superseded launch. Inspect the orphan pane.");
+        await teams.updateMembership(request.teamName, member.membershipId!, { terminalTarget: terminalTarget(terminal.name, target!.isWindow ? "window" : "pane", terminalId) });
       });
+      assertLockDeadline();
+      const completion = terminal instanceof HerdrAdapter ? terminal.startPrepared(terminalId, options) : Promise.resolve({ state: "started" as const, fact: "carrier_start_accepted" });
+      void completion.then(result => this.completeLaunch(request.teamName, member.membershipId!, launchId, result))
+        .catch(() => this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: "completion_unavailable" })).catch(() => undefined);
     } catch (error) {
-      // TypeScript does not track assignment inside the leased callback.
-      const failedTarget = target as PreparedLaunchTarget | null;
-      if (failedTarget) {
-        recordWorkerLaunchStage("compensation_started", { membershipId: member.membershipId! });
-        try {
-          stopLaunchTarget(failedTarget);
-          recordWorkerLaunchStage("carrier_stop_confirmed", { membershipId: member.membershipId! });
-        } catch (cleanupError) {
-          recordWorkerLaunchStage("compensation_unconfirmed", { membershipId: member.membershipId! });
-          throw new Error(
-            `Failed to recover ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
-            + `Compensation could not stop ${failedTarget.isWindow ? "window" : "pane"} ${failedTarget.terminalId}: `
-            + `${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}. `
-            + "The Membership remains current; reconcile the live process before retrying.",
-          );
-        }
-      }
-      removeWorkerAggregate(env.PI_TEAM_BRIGHT_WORKER_AGGREGATE);
-      throw new Error(
-        `Failed to recover ${member.name}: ${error instanceof Error ? error.message : String(error)}. `
-        + (failedTarget
-          ? "The exact recovery target was stopped; the Membership remains current for an exact child retry."
-          : "The Membership remains current for exact child startup admission."),
-      );
+      // Unknown effect keeps its marker and pane. Time and transport errors never authorize cleanup.
+      void this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: error instanceof Error ? error.message : String(error) }, target).catch(() => undefined);
+      if (error instanceof LockDeadlineError) throw error;
     }
+    return { action: claim.action, member, membershipId: member.membershipId!, recoveryMode: claim.recoveryMode, target, launchId, launch: "requested", lastStop: claim.lastStop,
+      startup: { observed: false, carrier: member.sessionFile ? "session_bound" : "prepared", runtime: "not_observed", cursor: this.dependencies.lifecyclePublication.readEventCursor(request.teamName), reason: "requested" } };
   }
-}
-
-export function createWorkerLaunchBridge(dependencies: WorkerLaunchBridgeDependencies): WorkerLaunchBridge {
-  return new WorkerLaunchBridge(dependencies);
+  async completeLaunch(teamName: string, membershipId: string, launchId: string, result: { state: "started" | "refused" | "unknown"; fact: string }, target?: PreparedLaunchTarget): Promise<boolean> {
+    // Receipt expiry may leave a prepared pane. Reconcile only the same launch, never start it.
+    return withLockDeadline(hostEnv().clock.now() + 60000, () => teams.withCurrentMembershipLease(teamName, membershipId, async current => {
+      if (current.launch?.launchId !== launchId) return false;
+      await teams.updateMembership(teamName, membershipId, { launch: { ...current.launch, ...result, observedAt: hostEnv().clock.now() },
+        ...(target ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) } : {}) });
+      return true;
+    }));
+  }
+  async launchPreparedMembership(teamName: string, prepared: Member, initialMessage: (() => Promise<IdentifiedInboxMessage>) | null, spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>, _aggregatePath?: string): Promise<PreparedLaunchReceipt> {
+    const message = initialMessage ? await initialMessage() : undefined;
+    const target = await spawn();
+    await teams.updateMembership(teamName, prepared.membershipId!, { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) });
+    return { ...target, ...(message ? { initialMessage: message } : {}) };
+  }
+  observeLaunchedWorker(teamName: string, workerName: string, membershipId: string, afterCursor: string, signal?: AbortSignal, defaultTimeoutMs?: number): Promise<WorkerStartupObservation> {
+    return this.dependencies.lifecyclePublication.observeWorkerStartup({ teamName, workerName, membershipId, afterCursor, signal, defaultTimeoutMs });
+  }
 }

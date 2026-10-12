@@ -3,6 +3,7 @@ import type { Member } from "../team-authority/contracts";
 /** The only persisted carrier shapes a current teammate Membership may represent. */
 export type WorkerCarrierState =
   | { kind: "absent" }
+  | { kind: "unbound"; member: Member; membershipId: string }
   | { kind: "prepared"; member: Member; membershipId: string; pendingLaunchId: string }
   | { kind: "bound"; member: Member; membershipId: string; sessionFile: string }
   | { kind: "invalid"; member: Member; reason: WorkerCarrierInvalidReason };
@@ -13,17 +14,24 @@ export type WorkerCarrierInvalidReason =
   | "missing_session_and_pending_launch";
 
 /** Team-owned terminal adapter evidence for the recorded carrier target. */
-export type WorkerCarrierObservation = "live" | "missing";
+export type WorkerCarrierObservation = "live" | "missing" | {
+  launch: import("../carrier-observation").LaunchState;
+  process: import("../carrier-observation").ProcessState;
+  readmitted?: boolean;
+  lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork" } | "none" | "quit" | "reload" | "new" | "resume" | "fork";
+};
 
-export type WorkerEnsureAction = "create" | "reuse" | "recover" | "refuse";
+export type WorkerEnsureAction = "create" | "reuse" | "recover" | "refuse" | "attention";
 export type WorkerRecoveryMode = "first_binding_retry" | "exact_session_resume";
 export type PreparedWorkerCarrier = Extract<WorkerCarrierState, { kind: "prepared" }>;
+export type UnboundWorkerCarrier = Extract<WorkerCarrierState, { kind: "unbound" }>;
 export type BoundWorkerCarrier = Extract<WorkerCarrierState, { kind: "bound" }>;
 /** Only an exact Session-bound carrier is reusable work capacity. */
 export type WorkerUsableCarrier = BoundWorkerCarrier;
 
 export type WorkerEnsurePlan =
   | { action: "create" }
+  | { action: "attention"; carrier: PreparedWorkerCarrier | BoundWorkerCarrier | UnboundWorkerCarrier; reason: string; nextActionHint: "wait" | "ask_human" }
   | { action: "reuse"; carrier: WorkerUsableCarrier }
   | { action: "recover"; carrier: PreparedWorkerCarrier; recoveryMode: "first_binding_retry" }
   | { action: "recover"; carrier: BoundWorkerCarrier; recoveryMode: "exact_session_resume" }
@@ -54,20 +62,29 @@ export function normalizeWorkerCarrier(member: Member | undefined): WorkerCarrie
 }
 
 /** Pure exhaustive Worker lifecycle decision; effects execute outside this module. */
-export function planWorkerEnsure(carrier: WorkerCarrierState, observation: WorkerCarrierObservation): WorkerEnsurePlan {
+export function planWorkerEnsure(carrier: WorkerCarrierState, observation: WorkerCarrierObservation | "live" | "missing"): WorkerEnsurePlan {
+  // Historical shell-only callers cannot establish generation identity.
+  const evidence: Exclude<WorkerCarrierObservation, string> = typeof observation === "string" ? { launch: "unknown", process: "unknown" } : observation;
+  const lastStop = typeof evidence.lastStop === "object" ? evidence.lastStop.piReason : evidence.lastStop;
+  const attention = (carrier: PreparedWorkerCarrier | BoundWorkerCarrier | UnboundWorkerCarrier, reason: string, nextActionHint: "wait" | "ask_human" = "wait"): WorkerEnsurePlan => ({ action: "attention", carrier, reason, nextActionHint });
   switch (carrier.kind) {
     case "absent":
       return { action: "create" };
     case "invalid":
       return { action: "refuse", carrier, reason: carrier.reason };
+    case "unbound":
+      if (evidence.launch === "none" && (evidence.process === "gone" || evidence.process === "none")) return { action: "create" };
+      return attention(carrier, evidence.process === "unknown" ? "verifier_unknown" : "candidate_live", evidence.process === "unknown" ? "ask_human" : "wait");
     case "prepared":
-      // A pane or shell proves only terminal presence. Until exact Session
-      // binding, reusing it would turn a hung launch into durable capacity.
-      if (observation === "live") return { action: "refuse", carrier, reason: "unbound_live" };
-      return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
+      if (evidence.launch === "refused" && (evidence.process === "gone" || evidence.process === "none")) return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
+      if (evidence.launch === "refused") return attention(carrier, evidence.process === "unknown" ? "verifier_unknown" : "candidate_live", evidence.process === "unknown" ? "ask_human" : "wait");
+      return attention(carrier, `launch_${evidence.launch}`);
     case "bound":
-      if (observation === "live") return { action: "reuse", carrier };
-      return { action: "recover", carrier, recoveryMode: "exact_session_resume" };
+      if (lastStop === "new" || lastStop === "resume" || lastStop === "fork") return attention(carrier, "session_switched", "ask_human");
+      if (evidence.process === "gone") return { action: "recover", carrier, recoveryMode: "exact_session_resume" };
+      if (evidence.process === "live" && lastStop === "reload" && !evidence.readmitted) return attention(carrier, "reload_pending");
+      if (evidence.process === "live" && lastStop !== "quit") return { action: "reuse", carrier };
+      return attention(carrier, evidence.process === "live" ? "stopping" : evidence.process, evidence.process === "stopping" || lastStop === "quit" ? "ask_human" : "wait");
     default:
       return assertNever(carrier);
   }

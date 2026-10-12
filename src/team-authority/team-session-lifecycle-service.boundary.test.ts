@@ -5,12 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const fixture = vi.hoisted(() => ({
   config: { name: "team", members: [] as any[] },
   current: null as any,
+  onConfig: undefined as undefined | (() => void),
   lookup: vi.fn(async () => fixture.current),
   admission: { kind: "admitted" } as any,
   runtimeStatus: null as any,
   runtimeAdmission: { kind: "admitted", action: "claim" } as any,
   events: [] as string[],
-  writeRuntime: vi.fn(async () => ({})),
+  writeRuntime: vi.fn(async (..._args: unknown[]) => ({})),
   bind: vi.fn(async () => fixture.current),
   publish: vi.fn(async () => ({ cursor: "1" })),
   failed: vi.fn(async () => ({ cursor: "1" })),
@@ -21,13 +22,15 @@ const fixture = vi.hoisted(() => ({
 vi.mock("../utils/paths", () => ({ leadSessionPath: () => fixture.runtimePath }));
 vi.mock("../utils/session-terminal", () => ({ admitTeamSession: () => fixture.admission }));
 vi.mock("../utils/runtime", () => ({
+  ownBirthIdentity: () => ({}),
+  verifyRuntimeGeneration: () => "unknown",
   readRuntimeStatus: async () => fixture.runtimeStatus,
   admitRuntimeStartup: (...args: unknown[]) => { fixture.events.push("runtime-claim"); return fixture.runtimeAdmission; },
   probePidPresence: () => "occupied",
-  writeRuntimeStatus: () => { fixture.events.push("runtime-write"); return fixture.writeRuntime(); },
+  writeRuntimeStatus: (...args: unknown[]) => { fixture.events.push("runtime-write"); return fixture.writeRuntime(...args); },
 }));
 vi.mock("../utils/teams", () => ({
-  readConfig: async () => fixture.config,
+  readConfig: async () => { fixture.onConfig?.(); return fixture.config; },
   currentMembership: () => { fixture.events.push("current-lookup"); return fixture.lookup(); },
   withCurrentMembershipLease: async (_team: string, membershipId: string, action: (member: any) => Promise<unknown>) => {
     fixture.events.push(`lease:${membershipId}`);
@@ -63,6 +66,7 @@ function publication(): TeamLifecyclePublication {
 function reset() {
   fixture.config = { name: "team", members: [] };
   fixture.current = null;
+  fixture.onConfig = undefined;
   fixture.lookup.mockReset().mockImplementation(async () => fixture.current);
   fixture.admission = { kind: "admitted" };
   fixture.runtimeStatus = null;
@@ -80,6 +84,33 @@ afterEach(reset);
 const workerInput = { teamName: "team", workerName: "worker", sessionFile: "/tmp/worker.jsonl", placement: { kind: "unlocated" } as const, identitySource: "launch_env" as const, launchId: "launch" };
 
 describe("Team Session lifecycle boundary", () => {
+  it("re-admits a reload without changing generation or publishing binding", async () => {
+    reset(); fixture.current = member("worker", workerInput.sessionFile);
+    fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: "worker-membership", lastStop: { piReason: "reload", observedAt: 1 } };
+    fixture.runtimeAdmission = { kind: "admitted", action: "already_current" };
+    const result = await new TeamSessionLifecycleService(publication()).admitWorker(workerInput);
+    expect(result).toMatchObject({ kind: "admitted", action: "already_current" });
+    expect(fixture.writeRuntime).toHaveBeenCalledWith("team", "worker", { lastStop: undefined }, "worker-membership");
+    expect(fixture.publish).not.toHaveBeenCalled(); expect(fixture.bind).not.toHaveBeenCalled();
+  });
+
+  it("never clears a newer stop with the same millisecond timestamp",  async () => {
+    reset(); fixture.current = member("worker", workerInput.sessionFile);
+    fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: "worker-membership", lastStop: { stopId: "before", piReason: "reload", observedAt: 100 } };
+    fixture.runtimeAdmission = { kind: "admitted", action: "already_current" };
+    fixture.onConfig = () => { fixture.runtimeStatus.lastStop.stopId = "after"; };
+    expect(await new TeamSessionLifecycleService(publication()).admitWorker(workerInput)).toMatchObject({ kind: "refused", exitProcess: false });
+    expect(fixture.writeRuntime).not.toHaveBeenCalled(); expect(fixture.publish).not.toHaveBeenCalled();
+  });
+
+  it.each(["quit", "new", "resume", "fork"] as const)("records %s intent during verifier outage without a failed event", async piReason => {
+    reset(); fixture.current = member("worker", workerInput.sessionFile);
+    fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: "worker-membership" };
+    await new TeamSessionLifecycleService(publication()).recordStop({ ...workerInput, membershipId: "worker-membership", piReason });
+    expect(fixture.writeRuntime).toHaveBeenCalledWith("team", "worker", { lastStop: expect.objectContaining({ piReason, stopId: expect.any(String), suspectedHumanStop: true }) }, "worker-membership");
+    expect(fixture.failed).not.toHaveBeenCalled();
+  });
+
   it("refuses lead placement before any current-binding lookup", async () => {
     reset();
     fixture.admission = { kind: "refused", reason: "foreign terminal", exitProcess: false };
