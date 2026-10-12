@@ -43,18 +43,11 @@ import { DurableTaskChangeDeliveryMembership } from "../src/adapters/durable-tas
 import { DurablePiSessionTeamQuery } from "../src/adapters/durable-pi-session-team-query";
 import { DurableAlertMembership } from "../src/adapters/durable-alert-membership";
 import { DurableAlertPublication } from "../src/adapters/durable-alert-publication";
-import { createDurableCoordinationNudgeStore } from "../src/adapters/durable-coordination-nudge-store";
 import { createDurableCoordinationQueries } from "../src/adapters/durable-coordination-queries";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../src/coordination/observation-service";
-import { DurableCoordinationHiddenObservation } from "../src/adapters/durable-coordination-hidden-observation";
+
 import { createPiTeamSessionAdapter } from "./pi-team-session-adapter";
-import {
-  FRAMEWORK_SYNC_MESSAGE_TYPE,
-  FRAMEWORK_SYNC_ACK_TYPE,
-  hasStructuredFrameworkSyncPair,
-  persistedFrameworkSyncForPending,
-  projectFrameworkSyncMessage,
-} from "./framework-sync-execution";
+import { TEAM_UPDATE_TYPE, projectTeamUpdateMessage } from "./team-update";
 
 import { GraphTaskUpdateParametersSchema, TaskVersionRefSchema } from "../src/model-tool-contract/catalog";
 import { transitionLegacyGraphTask } from "../src/model-tool-contract/legacy-graph-task-transition-adapter";
@@ -178,7 +171,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer?.(DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
   pi.registerMessageRenderer?.(LEGACY_DIRECT_MESSAGE_CUSTOM_TYPE, directMessageRenderer as any);
   pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, createCustomMessageRenderer(projectSyncNudgeMessage) as any);
-  pi.registerMessageRenderer?.(FRAMEWORK_SYNC_MESSAGE_TYPE, createCustomMessageRenderer(projectFrameworkSyncMessage) as any);
+  pi.registerMessageRenderer?.(TEAM_UPDATE_TYPE, createCustomMessageRenderer(projectTeamUpdateMessage) as any);
   pi.registerMessageRenderer?.(PTB_DOCTOR_CUSTOM_TYPE, createCustomMessageRenderer(projectDoctorMessage) as any);
   registerAutomaticSummaryPolicyProvider(pi);
   // Leader and Worker tools are separate role projections. The leader owns
@@ -251,14 +244,10 @@ export default function (pi: ExtensionAPI) {
   const alertPublication = new DurableAlertPublication();
   const alertSender = createAlertSender(alertMembership, alertPublication);
   const coordinationQueries = createDurableCoordinationQueries(taskReadAdapterFactory, graphTaskOrchestration);
-  const coordinationHiddenObservation = new DurableCoordinationHiddenObservation();
-  const coordinationNudgeStore = createDurableCoordinationNudgeStore(coordinationHiddenObservation);
   const coordinationObservationService = new CoordinationObservationService(
     coordinationQueries,
     { projectNonterminalTaskIds, projectTaskChanges },
-    createDurableCoordinationObservationStore(coordinationHiddenObservation),
-    undefined,
-    coordinationNudgeStore,
+    createDurableCoordinationObservationStore(),
   );
 
   const lifecyclePublication = new DurableTeamLifecyclePublication();
@@ -310,97 +299,12 @@ export default function (pi: ExtensionAPI) {
     return ctx.sessionManager.getBranch().map((entry) => entry.id);
   }
 
-  function modelToolContainsExact(value: unknown, target: string): boolean {
-    if (value === target) return true;
-    if (Array.isArray(value)) return value.some((item) => modelToolContainsExact(item, target));
-    if (value && typeof value === "object") return Object.values(value).some((item) => modelToolContainsExact(item, target));
-    return false;
-  }
-
-  function modelToolPersistedToolResult(ctx: ExtensionContext, toolCallId: string, resultText: string): string | undefined {
-    const entry = ctx.sessionManager.getBranch().find((candidate) => {
-      if (candidate.type !== "message") return false;
-      const message = candidate.message;
-      return message?.role === "toolResult"
-        && message.toolCallId === toolCallId
-        && message.content.some((part) => part.type === "text" && part.text === resultText);
-    });
-    return entry?.id;
-  }
-
   if (modelToolJourney) {
-    // Supported composition: later extensions preserve this result in the payload
-    // and preserve the completed assistant message.
-    let providerCandidate: { sessionId: string; toolCallId: string } | undefined;
-    let providerProof: { source: "native" | "framework"; sessionId: string; sessionFile: string; branch: string[]; entryId: string; toolCallId: string; resultText: string } | undefined;
-    pi.on("session_start", () => { providerProof = undefined; providerCandidate = undefined; });
-    pi.on("session_shutdown", () => { providerProof = undefined; providerCandidate = undefined; });
-    pi.on("tool_call", (event, ctx) => {
-      if (sessionAdapter.isTeammate() || !leaderToolNames.has(event.toolName)) return;
-      modelToolJourney.port.coordination.setBranchContext(
-        exactLeaderSessionId(ctx.sessionManager.getSessionId()),
-        modelToolBranchIds(ctx),
-      );
-    });
-    pi.on("before_provider_request", async (event, ctx) => {
-      providerProof = undefined;
-      providerCandidate = undefined;
+    pi.on("tool_call", (_event, ctx) => {
       if (sessionAdapter.isTeammate()) return;
-      const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
-      const lineage = modelToolBranchIds(ctx);
-      modelToolJourney.port.coordination.setBranchContext(sessionId, lineage);
-      const pending = modelToolJourney.port.coordination.getPendingObservation?.(sessionId);
-      if (!pending) return;
-      providerCandidate = { sessionId, toolCallId: pending.toolCallId };
-      const nativeEntryId = modelToolContainsExact(event.payload, pending.resultText)
-        ? modelToolPersistedToolResult(ctx, pending.toolCallId, pending.resultText) : undefined;
-      const framework = persistedFrameworkSyncForPending(
-        ctx.sessionManager.getBranch(), sessionId, ctx.sessionManager.getSessionFile?.() ?? "", pending.toolCallId, pending.resultText,
+      modelToolJourney.port.coordination.setBranchEntries?.(
+        exactLeaderSessionId(ctx.sessionManager.getSessionId()), ctx.sessionManager.getBranch(),
       );
-      const frameworkEntryId = framework && hasStructuredFrameworkSyncPair(event.payload, framework.record) ? framework.entryId : undefined;
-      const entryId = nativeEntryId ?? frameworkEntryId;
-      if (!entryId) return;
-      providerProof = { source: nativeEntryId ? "native" : "framework", sessionId, sessionFile: ctx.sessionManager.getSessionFile?.() ?? "", branch: lineage, entryId, toolCallId: pending.toolCallId, resultText: pending.resultText };
-    });
-    pi.on("message_end", async (event, ctx) => {
-      if (event.message.role !== "assistant") return;
-      const proof = providerProof;
-      const candidate = providerCandidate;
-      providerProof = undefined;
-      providerCandidate = undefined;
-      if (!candidate || sessionAdapter.isTeammate() || ["error", "aborted", "pending"].includes(event.message.stopReason)) return;
-      if (!proof) {
-        modelToolJourney.port.coordination.discardPendingObservation?.(exactLeaderSessionId(candidate.sessionId), candidate.toolCallId);
-        return;
-      }
-      const sessionId = exactLeaderSessionId(ctx.sessionManager.getSessionId());
-      const sessionFile = ctx.sessionManager.getSessionFile?.() ?? "";
-      const discard = () => modelToolJourney.port.coordination.discardPendingObservation?.(exactLeaderSessionId(proof.sessionId), proof.toolCallId);
-      if (sessionId !== proof.sessionId || sessionFile !== proof.sessionFile) { discard(); return; }
-      const branch = ctx.sessionManager.getBranch();
-      if (proof.branch.some((id, index) => branch[index]?.id !== id)) { discard(); return; }
-      const frameworkRecord = proof.source === "framework"
-        ? persistedFrameworkSyncForPending(branch, sessionId, sessionFile, proof.toolCallId, proof.resultText) : undefined;
-      const persisted = proof.source === "framework" ? frameworkRecord?.entryId : modelToolPersistedToolResult(ctx, proof.toolCallId, proof.resultText);
-      if (persisted !== proof.entryId) { discard(); return; }
-      const currentPending = modelToolJourney.port.coordination.getPendingObservation?.(sessionId);
-      if (!currentPending || currentPending.toolCallId !== proof.toolCallId || currentPending.resultText !== proof.resultText) { discard(); return; }
-      const lineage = branch.map((entry) => entry.id);
-      let acknowledged = false;
-      try {
-        if (modelToolJourney.port.coordination.acknowledgePendingObservationAsync) {
-          acknowledged = await modelToolJourney.port.coordination.acknowledgePendingObservationAsync(sessionId, proof.entryId, lineage);
-        } else {
-          acknowledged = modelToolJourney.port.coordination.acknowledgePendingObservation(sessionId, proof.entryId, lineage);
-        }
-      } catch {
-        // A failed hidden commit leaves the committed baseline available for replay.
-      } finally {
-        if (!acknowledged) discard();
-      }
-      if (acknowledged && frameworkRecord) pi.appendEntry(FRAMEWORK_SYNC_ACK_TYPE, {
-        version: 1, recordId: frameworkRecord.record.id, acknowledgedEntryId: proof.entryId, sessionId, sessionFile,
-      });
     });
   }
 

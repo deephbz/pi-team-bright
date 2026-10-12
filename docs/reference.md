@@ -25,15 +25,17 @@ exhaustive parameter reference.
 
 ## Team synchronization
 
-- [`observation-service.ts`](../src/coordination/observation-service.ts) owns the
-  shared probe, immediate observation, productive wait, and acknowledgement.
+- [`observation-service.ts`](../src/coordination/observation-service.ts) owns
+  immediate observation, Task reconciliation, and bounded in-memory reservation.
+  [`branch-observation.ts`](../src/coordination/branch-observation.ts) derives the
+  cursor from the selected native branch.
 - [`sync-nudge-conductor.ts`](../src/utils/sync-nudge-conductor.ts) owns batch
   scheduling. [`sync-liveness-settings.ts`](../src/utils/sync-liveness-settings.ts)
   resolves its global policy and deprecated setting fallbacks.
 - [`pi-team-session-adapter.ts`](../extensions/pi-team-session-adapter.ts) owns
   `/ptb sync` and automatic delivery.
-  [`framework-sync-execution.ts`](../extensions/framework-sync-execution.ts)
-  owns framework-origin records and provider-context projection.
+  [`team-update.ts`](../extensions/team-update.ts) publishes native
+  `ptb.team-update` messages only while the Session is idle.
 - [Decision 0016](decisions/0016-framework-team-synchronization.md) records intent.
   The [work record](projects/team-sync-continuity.md) records real Pi evidence.
 
