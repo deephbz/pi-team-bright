@@ -30,8 +30,8 @@ function prepare(world: SimWorld): void {
   world.herdr.onStart = undefined;
   world.herdr.start("pane-worker", "team/w1");
   world.enter("lead", () => {
-    hostEnv().clock.setTimeout(() => world.record("lead", "sample", world.herdr.list()), 5);
-    hostEnv().clock.setTimeout(() => world.record("lead", "sample", world.herdr.list()), 5);
+    hostEnv().clock.setTimeout(() => world.record({ kind: "test.sample", value: JSON.parse(JSON.stringify(world.herdr.list())) }), 5);
+    hostEnv().clock.setTimeout(() => world.record({ kind: "test.sample", value: JSON.parse(JSON.stringify(world.herdr.list())) }), 5);
   });
 }
 

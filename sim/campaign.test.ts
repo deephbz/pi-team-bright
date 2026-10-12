@@ -16,8 +16,8 @@ async function run(trace: WorldTrace, seed: number): Promise<Outcome> {
     const second = await replayTrace(trace, { receipt: first.receipt });
     expect(second).toEqual(first);
     const deadWorker = first.processes.findLast(process => process.actor === "team-1/w1")?.alive === false;
-    const reused = first.history.some(event => event.kind === "tool.result" && (event.value as any).name === "ensure_worker"
-      && (event.value as any).result.details.effect === "reused" && (event.value as any).result.details.worker.carrier === "connected");
+    const reused = first.history.some(event => event.kind === "tool.result" && event.name === "ensure_worker"
+      && event.result.details?.effect === "reused" && (event.result.details.worker as any)?.carrier === "connected");
     return { id: trace.id, seed, status: "replayed", operations: first.decisions.length, deadPiReuse: deadWorker && reused };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

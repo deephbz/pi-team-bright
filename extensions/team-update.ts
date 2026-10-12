@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { observationPageLine, parseObservationContent } from "../src/coordination/observation-content";
 import { hostEnv } from "../src/env/host-env";
 import { TEAM_UPDATE_TYPE, type BranchEntry, type ObservationStamp } from "../src/coordination/branch-observation";
 import { projectModelToolTuiMessage } from "../src/model-tool-contract/tui-projection";
@@ -8,7 +9,7 @@ export { TEAM_UPDATE_TYPE };
 
 export function projectTeamUpdateMessage(message: { content?: unknown }): PiTeamBrightTuiMessage | undefined {
   try {
-    const result = JSON.parse(message.content as string);
+    const result = parseObservationContent(message.content as string);
     return { ...projectModelToolTuiMessage("team_sync", result, result), source: "Automatic", provenance: "tool-result" };
   } catch { return undefined; }
 }
@@ -27,6 +28,7 @@ export interface TeamUpdateDependencies {
 export class TeamUpdateController {
   private running = false;
   private generation = 0;
+  private failedBranch?: string;
   private active?: { session: string; call: string; abort: AbortController };
   constructor(private readonly dependencies: TeamUpdateDependencies) {}
   get isRunning(): boolean { return this.running; }
@@ -42,6 +44,9 @@ export class TeamUpdateController {
     const context = this.dependencies.current();
     if (!context || this.running || this.dependencies.isBusy()) return "skipped";
     const start = { ...context, branch: [...context.branch] };
+    const branchKey = JSON.stringify([team, start.sessionId, start.sessionFile, start.branch.map(entry => entry.id)]);
+    if (this.failedBranch !== branchKey) this.failedBranch = undefined;
+    if (source === "automatic" && this.failedBranch === branchKey) return "skipped";
     this.running = true;
     const generation = this.generation;
     const call = `team-update-${hostEnv().random.uuid()}`;
@@ -64,18 +69,19 @@ export class TeamUpdateController {
         if (source === "command") this.dependencies.notify("No Team updates.");
         return "quiet";
       }
-      if (!["snapshot", "updates"].includes(result?.kind)) return "failed";
+      if (!["snapshot", "updates"].includes(result?.kind)) throw new Error(result?.message ?? "Team observation is unavailable.");
       const pending = this.dependencies.pendingObservation(start.sessionId);
       const stamp = pending?.observation;
       if (pending?.toolCallId !== call || !stamp || stamp.team !== team || stamp.epoch !== binding.epochId || stamp.binding !== binding.membershipId) return "skipped";
-      this.dependencies.pi.sendMessage({ customType: TEAM_UPDATE_TYPE, content: JSON.stringify(projectToolResult("team_sync", result)), display: true, details: stamp }, { triggerTurn: true, deliverAs: "followUp" });
+      this.dependencies.pi.sendMessage({ customType: TEAM_UPDATE_TYPE, content: `ptb.team-update: ${observationPageLine(result.kind, stamp)}\n${JSON.stringify(projectToolResult("team_sync", result))}`, display: true, details: stamp }, { triggerTurn: true, deliverAs: "followUp" });
       published = true;
       // sendMessage may queue. Only a native branch entry releases the page.
       const after = this.dependencies.current();
       if (after?.sessionId === start.sessionId && after.sessionFile === start.sessionFile) this.dependencies.setBranchEntries(start.sessionId, after.branch);
       return "published";
     } catch (error) {
-      this.dependencies.notify(`Team synchronization failed: ${error instanceof Error ? error.message : String(error)}`, "error");
+      if (source === "automatic") this.failedBranch = branchKey;
+      this.dependencies.notify(`Team synchronization failed: ${error instanceof Error ? error.message : String(error)} Run /ptb sync to retry.`, "error");
       return "failed";
     } finally {
       if (!published) this.dependencies.clearPending(start.sessionId, call);

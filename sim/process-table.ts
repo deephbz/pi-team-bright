@@ -9,6 +9,7 @@ export class ProcessTable {
   private birth = 0;
   private pid = 100;
   readonly history: SimProcess[] = [];
+  onChange?: (kind: "process.birth" | "process.death", process: SimProcess) => void;
 
   spawn(actor: string, options: { pid?: number; parentPid?: number; command?: string } = {}): SimProcess {
     if (this.actor(actor)?.alive) throw new Error(`Actor already live: ${actor}`);
@@ -16,6 +17,7 @@ export class ProcessTable {
     if (this.exists(pid)) throw new Error(`PID already live: ${pid}`);
     const process: SimProcess = { actor, pid, bootId: this.bootId, osBirthToken: String(++this.birth), alive: true, parentPid: options.parentPid, command: options.command ?? "pi" };
     this.history.push(process);
+    this.onChange?.("process.birth", process);
     return process;
   }
   actor(actor: string): SimProcess | undefined { return this.history.findLast(p => p.actor === actor); }
@@ -29,6 +31,7 @@ export class ProcessTable {
     const process = this.current(pid);
     if (!process) throw Object.assign(new Error("No such process"), { code: "ESRCH" });
     process.alive = false;
+    this.onChange?.("process.death", process);
   }
   reuse(deadActor: string, newcomer: string): SimProcess {
     const old = this.actor(deadActor);
@@ -36,7 +39,7 @@ export class ProcessTable {
     return this.spawn(newcomer, { pid: old.pid });
   }
   reboot(): void {
-    for (const process of this.history) process.alive = false;
+    for (const process of this.history) if (process.alive) this.kill(process.pid);
     this.bootId = `boot-${++this.boot}`;
   }
 }

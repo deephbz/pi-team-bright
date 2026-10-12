@@ -18,6 +18,7 @@ export class HerdrFake {
   partialList?: Set<string>;
   private sequence = 0;
   onStart?: (pane: Pane, argv: string[]) => void;
+  onPane?: (kind: "pane.create" | "pane.close", pane: Pane) => void;
 
   constructor(readonly processes: ProcessTable, private readonly stopProcess = (pid: number) => processes.kill(pid)) {}
   private cite(assumption: AssumptionId, behavior: string, unprobedScope?: string): void { this.evidence.push(assumptionEvidence(assumption, behavior, unprobedScope)); }
@@ -28,6 +29,7 @@ export class HerdrFake {
     const shell = this.processes.spawn(`shell:${id}`, { command: "shell" });
     const pane: Pane = { id, shellPid: shell.pid, state: "unknown", env, rect: { x: 0, y: 0, width: 240, height: 80 } };
     this.panes.set(id, pane);
+    this.onPane?.("pane.create", pane);
     return pane;
   }
   start(paneId: string, name: string, argv: string[] = []): Pane {
@@ -53,6 +55,7 @@ export class HerdrFake {
     if (this.agentLive(pane)) this.stopProcess(pane.agentPid!);
     if (this.processes.exists(pane.shellPid)) this.stopProcess(pane.shellPid);
     this.panes.delete(id);
+    this.onPane?.("pane.close", pane);
   }
   list(): unknown[] {
     this.cite("A1", "agent list excludes shell-only panes");

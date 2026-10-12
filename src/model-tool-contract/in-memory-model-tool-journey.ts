@@ -3,8 +3,8 @@ import { InMemoryAlertApplicationPort, InMemoryCoordinationApplicationPort, InMe
 import { inMemoryAlertState, inMemoryCoordinationState, inMemorySupportRevisionClock, inMemoryTaskState, inMemoryTeamState } from "./in-memory-state";
 
 /**
- * Build four isolated fakes with opaque state. Construction uses only lazy
- * narrow query/publication ports; no fake receives a world or sibling fake.
+ * Build isolated authority fakes around the production Coordination reader.
+ * Construction uses narrow lazy query/publication ports and opaque state.
  */
 export function createInMemoryModelToolJourney() {
   const teamState = inMemoryTeamState();

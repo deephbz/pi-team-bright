@@ -104,6 +104,24 @@ lead's first `team_sync` returns a snapshot with a watermark, so no journal
 replay occurs. Fallback: a stopped-epoch upgrade. It discards every Worker
 Session, so it serves only when a live reload fails.
 
+## Oracle inputs
+
+Monitors judge PTB only by what the world can see, against world truth at
+the same instant. PTB never has to cite its own evidence. The simulator
+records a typed history:
+
+- world truth: process births and deaths with generation, pane creation and
+  closure with cause (`human` or the acting PTB actor), Herdr and verifier
+  faults;
+- PTB acts: every exec call and result (Herdr, bd) with actor and call id;
+- PTB claims: tool calls and results with call id, journal appends read from
+  the world's `team-events.jsonl`, durable runtime and launch records read
+  from disk, and lead branch entries (`ptb.team-update` stamps and
+  `team_sync` results).
+
+E5 bound: an `ensure_worker` receipt returns within 10 s of virtual time.
+Each fake Herdr call costs at most 1 s.
+
 ## Data boundary
 
 The PTB repository is public. Real-derived traces stay in
