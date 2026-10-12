@@ -195,6 +195,17 @@ export function enumerateInputs(): V31PlanInput[] {
 const label = (input: V31PlanInput) =>
   `binding=${input.binding} launch=${input.launch} process=${input.process} lastStop=${input.lastStop}`;
 
+/**
+ * Rows named by the product review. Each row's test title carries the scenario, so
+ * the first expected failure reads as the incident.
+ */
+const OWNER_SCENARIO_ROWS: Record<string, string> = {
+  // Scenario 2: Worker bound, Pi dead, shell still live. Today's plan reuses it.
+  "binding=bound launch=started process=gone lastStop=none": "owner scenario 2",
+  // Scenario 1: prepared, start never completed, shell reads live. Today refuses unbound_live.
+  "binding=unbound launch=requested process=gone lastStop=none": "owner scenario 1",
+};
+
 describe("v3.1 planWorkerEnsure table (exhaustive)", () => {
   const inputs = enumerateInputs();
 
@@ -211,7 +222,8 @@ describe("v3.1 planWorkerEnsure table (exhaustive)", () => {
       continue;
     }
     for (const shell of SHELLS) {
-      const title = `${label(input)} shell=${shell} — spec row "${spec.row}"`;
+      const scenario = OWNER_SCENARIO_ROWS[label(input)];
+      const title = `${scenario ? `[${scenario}] ` : ""}${label(input)} shell=${shell} — spec row "${spec.row}"`;
       const check = () => expect(runToday(input, shell)).toEqual(spec.expected);
       // Disagreeing rows are it.fails and name their mutant in the title (see header).
       const agrees = (() => {
