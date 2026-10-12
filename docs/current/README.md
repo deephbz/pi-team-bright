@@ -1,6 +1,6 @@
 # Pi Team Bright evergreen context
 
-Updated: 2026-10-12
+Updated: 2026-10-13
 
 Published versions and their evidence live in
 [GitHub Releases](https://github.com/deephbz/pi-team-bright/releases) and the npm
@@ -82,8 +82,8 @@ base, scope, verification, and remaining work.
 
 ## Branch-held Team observation
 
-Accepted Proposal A supersedes the delivery mechanics of
-[Decision 0016](../decisions/0016-framework-team-synchronization.md). The lead's
+Accepted Proposal A, recorded in [Decision 0020](../decisions/0020-branch-held-team-cursor.md),
+supersedes the delivery mechanics of [Decision 0016](../decisions/0016-framework-team-synchronization.md). The lead's
 selected native Session branch owns delivery position. The adapter publishes
 `ptb.team-update` only while idle. Native persistence commits presentation;
 provider success has no role. `team_sync` returns immediately. A missing branch
@@ -214,7 +214,7 @@ restating executable definitions.
 
 - Accepted [v3.1 Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md)
   and its [lead rulings](../journal/2026-10-12-v31-implementation-plan.md)
-  amend Decision 0018. `CarrierObserver` owns process-generation observations.
+  amend Decision 0018 as [Decision 0021](../decisions/0021-carrier-observation-liveness.md) records. `CarrierObserver` owns process-generation observations.
   A live shell never proves a live Worker. Unknown evidence fails closed.
   Launch claims a durable ID before external effects and returns a receipt
   without waiting for readiness. Elapsed time and start errors keep the pane.
@@ -315,7 +315,7 @@ restating executable definitions.
   runtime generation and fails closed around malformed or foreign evidence.
 - `team_sync` preserves `caught_up` for current quiescence. `unsettled` names
   Workers whose activity or missing runtime/delivery evidence needs attention.
-  Both advance observation after exact presentation. Pi `>=0.83`
+  Both advance the lead's branch cursor once the native entry commits. Pi `>=0.83`
   is the supported boundary for exact Worker `agent_start` and `agent_settled`
   evidence. Global `pi_team_bright.team` settings resolve the internal wait
   interval and automatic-sync delay/count policy once per Team epoch. The
@@ -465,10 +465,12 @@ restating executable definitions.
   retries. A present stale malformed claim still fails closed. This changes an
   internal lock guard only; architecture impact: **none**.
 - Worker startup hardening removes two avoidable serial costs without weakening
-  admission. Herdr uses one official interactive-ready start command with an
-  explicit hang ceiling from Decision 0018. Exact current Membership, Session,
-  and runtime-generation binding remains the commit point. Binding observation
-  checks carrier liveness and exact failed events within the same ceiling. Configured Worker defaults use the
+  admission. Launch returns a receipt at once and does not wait for readiness. The
+  bounded `herdr agent start` RPC runs asynchronously under the hang ceiling
+  from Decision 0018. Exact current Membership, Session,
+  and runtime-generation binding remains the commit point. Liveness comes from the
+  process-generation verifier, never from a pane or shell check; exact failed
+  events still fence the launch. Configured Worker defaults use the
   invocation-local model registry. `ensure_worker` no longer runs a leader Task
   scan; Session start, Task transitions, and periodic recovery own ready
   delivery. Real stable-Worker reuse measured 31/33 ms p50/p95, while normal

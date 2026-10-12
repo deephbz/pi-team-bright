@@ -9,7 +9,7 @@ They do not read or change live Teams and need no model or Beads process.
 ```sh
 npm run review:tui
 npm run review:tui -- --help
-npm run review:tui -- --scenario custom.framework-sync
+npm run review:tui -- --scenario custom.sync-nudge
 npm run review:tui -- --scenario custom.doctor --theme light
 ```
 
@@ -58,7 +58,7 @@ component or interaction tests and a fresh Pi TUI check.
 
 ```sh
 npm run review:tui -- --format plain --width 80
-npm run review:tui -- --scenario custom.framework-sync --format json --expanded
+npm run review:tui -- --scenario custom.sync-nudge --format json --expanded
 npm run review:tui -- --scenario custom.doctor --format ansi --theme light --expanded --width 80
 npm run review:graph -- --plain --view dag --width 120 --rows 42
 npm run review:graph -- --plain --view timeline --width 80 --rows 24
