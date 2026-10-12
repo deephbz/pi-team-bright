@@ -195,3 +195,16 @@ counterexample lane passed five tests. Before oracle normalization, the focused
 core, async-host, fixture, extraction, and fault lane passed 29 tests. No full
 package test claim is made for this source bundle. Privacy and production-diff
 checks accompany the commit.
+
+## Correction: P5 attribution
+
+The P5 interpretation above is incorrect. The retained two-step trace is
+`pi.start -> os.reboot`. It contains no Pi quit. Reboot closes the pane with OS
+origin. That attribution matches the input. The unchanged P5 monitor rejects
+OS-origin closures because it permits only human actions and PTB stop requests.
+
+The new [attribution verification](2026-10-13-sim-attribution.md) confirms that
+human Pi quit kills Pi with human origin and leaves its shell alive. A subsequent
+`human.closePane` kills the shell and closes the pane with human origin. The
+original trace and receipt remain unchanged. This correction supersedes the P5
+observation and interpretation above; it does not turn the P5 verdict into a pass.

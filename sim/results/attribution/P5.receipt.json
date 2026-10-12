@@ -1,0 +1,13 @@
+{
+  "traceId": "v31-p5-minimal",
+  "runnerVersion": "sim-c1/5",
+  "seed": 42,
+  "choices": [
+    0,
+    0
+  ],
+  "bounds": {
+    "maxSteps": 100000,
+    "maxVirtualMs": 3600000
+  }
+}

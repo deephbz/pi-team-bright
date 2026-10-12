@@ -1,0 +1,282 @@
+[
+  {
+    "sequence": 3,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "human",
+      "input": 0
+    },
+    "process": {
+      "actorKey": "team-1/lead",
+      "command": "pi",
+      "processKind": "lead_pi",
+      "generation": {
+        "pid": 101,
+        "bootId": "boot-1",
+        "osBirthToken": "1"
+      }
+    }
+  },
+  {
+    "sequence": 4,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "human",
+      "input": 0
+    },
+    "process": {
+      "actorKey": "shell:pane:team-1/lead",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 102,
+        "bootId": "boot-1",
+        "osBirthToken": "2"
+      }
+    }
+  },
+  {
+    "sequence": 85,
+    "at": 1700000000000,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "1",
+    "worker": "w1",
+    "phase": "prepared"
+  },
+  {
+    "sequence": 117,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-2",
+      "execCallId": "exec-11"
+    },
+    "process": {
+      "actorKey": "shell:pane-1",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 103,
+        "bootId": "boot-1",
+        "osBirthToken": "3"
+      }
+    }
+  },
+  {
+    "sequence": 142,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-2",
+      "execCallId": "exec-13"
+    },
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 103,
+      "processKind": "worker_pi",
+      "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+      "generation": {
+        "pid": 104,
+        "bootId": "boot-1",
+        "osBirthToken": "4"
+      }
+    }
+  },
+  {
+    "sequence": 152,
+    "at": 1700000000000,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "2",
+    "worker": "w1",
+    "phase": "session_bound"
+  },
+  {
+    "sequence": 217,
+    "at": 1700000000000,
+    "kind": "process.death",
+    "origin": {
+      "kind": "os",
+      "input": 3
+    },
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 103,
+      "processKind": "worker_pi",
+      "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+      "generation": {
+        "pid": 104,
+        "bootId": "boot-1",
+        "osBirthToken": "4"
+      }
+    }
+  },
+  {
+    "sequence": 247,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-3",
+      "execCallId": "exec-22"
+    },
+    "process": {
+      "actorKey": "shell:pane-2",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 105,
+        "bootId": "boot-1",
+        "osBirthToken": "5"
+      }
+    }
+  },
+  {
+    "sequence": 272,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-3",
+      "execCallId": "exec-24"
+    },
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 105,
+      "processKind": "worker_pi",
+      "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+      "generation": {
+        "pid": 106,
+        "bootId": "boot-1",
+        "osBirthToken": "6"
+      }
+    }
+  },
+  {
+    "sequence": 285,
+    "at": 1700000000000,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "3",
+    "worker": "w1",
+    "phase": "session_bound"
+  },
+  {
+    "sequence": 367,
+    "at": 1700000004351.632,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "4",
+    "worker": "w1",
+    "phase": "carrier"
+  },
+  {
+    "sequence": 368,
+    "at": 1700000004351.632,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "5",
+    "worker": "w1",
+    "phase": "carrier"
+  },
+  {
+    "sequence": 369,
+    "at": 1700000004351.632,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "6",
+    "worker": "w1",
+    "phase": "carrier"
+  },
+  {
+    "sequence": 370,
+    "at": 1700000004351.632,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "7",
+    "worker": "w1",
+    "phase": "carrier"
+  },
+  {
+    "sequence": 1074,
+    "at": 1700000100000,
+    "kind": "tool.result",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-4"
+    },
+    "details": {
+      "kind": "snapshot",
+      "team": {
+        "name": "team-1",
+        "purpose": "Synthetic v3.1 campaign",
+        "lifecycle": "active"
+      },
+      "model_roles": [
+        {
+          "name": "sim-worker",
+          "use": "Deterministic simulation"
+        }
+      ],
+      "default_model_role": "sim-worker",
+      "workers": [
+        {
+          "name": "w1",
+          "scope": "Synthetic campaign worker",
+          "carrier": "connected",
+          "nonterminal_task_ids": []
+        }
+      ],
+      "tasks": [],
+      "observation": {
+        "team": "team-1",
+        "epoch": "team_epoch_fe0b10b4-0f33-4333-b459-a30422cab2ea",
+        "binding": "membership_0bc0f30f-cb02-461a-b8f7-84ffa4a209fc",
+        "from": 0,
+        "through": 7
+      }
+    }
+  }
+]

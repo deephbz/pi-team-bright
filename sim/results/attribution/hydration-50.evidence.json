@@ -1,0 +1,189 @@
+[
+  {
+    "sequence": 3,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "human",
+      "input": 0
+    },
+    "process": {
+      "actorKey": "team-1/lead",
+      "command": "pi",
+      "processKind": "lead_pi",
+      "generation": {
+        "pid": 101,
+        "bootId": "boot-1",
+        "osBirthToken": "1"
+      }
+    }
+  },
+  {
+    "sequence": 4,
+    "at": 1700000000000,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "human",
+      "input": 0
+    },
+    "process": {
+      "actorKey": "shell:pane:team-1/lead",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 102,
+        "bootId": "boot-1",
+        "osBirthToken": "2"
+      }
+    }
+  },
+  {
+    "sequence": 99,
+    "at": 1700000000050,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "1",
+    "worker": "w-race",
+    "phase": "prepared"
+  },
+  {
+    "sequence": 131,
+    "at": 1700000000050,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-3",
+      "execCallId": "exec-12"
+    },
+    "process": {
+      "actorKey": "shell:pane-1",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 103,
+        "bootId": "boot-1",
+        "osBirthToken": "3"
+      }
+    }
+  },
+  {
+    "sequence": 156,
+    "at": 1700000000050,
+    "kind": "process.birth",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-3",
+      "execCallId": "exec-14"
+    },
+    "process": {
+      "actorKey": "team-1/w-race",
+      "command": "pi",
+      "parentPid": 103,
+      "processKind": "worker_pi",
+      "membershipId": "membership_fcf03e66-2c1f-4918-b571-591b0e470ece",
+      "generation": {
+        "pid": 104,
+        "bootId": "boot-1",
+        "osBirthToken": "4"
+      }
+    }
+  },
+  {
+    "sequence": 171,
+    "at": 1700000000050,
+    "kind": "journal.append",
+    "origin": {
+      "kind": "observer"
+    },
+    "cursor": "2",
+    "worker": "w-race",
+    "phase": "session_bound"
+  },
+  {
+    "sequence": 196,
+    "at": 1700000000100,
+    "kind": "tool.result",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-2"
+    },
+    "details": {
+      "kind": "snapshot",
+      "team": {
+        "name": "team-1",
+        "purpose": "Synthetic hydration race",
+        "lifecycle": "active"
+      },
+      "model_roles": [
+        {
+          "name": "sim-worker",
+          "use": "Deterministic simulation"
+        }
+      ],
+      "default_model_role": "sim-worker",
+      "workers": [],
+      "tasks": [],
+      "observation": {
+        "team": "team-1",
+        "epoch": "team_epoch_f11a226f-0f51-4469-b9f1-e1bb18082982",
+        "binding": "membership_13399b9d-0a96-451d-9728-edbf01e1911a",
+        "from": 0,
+        "through": 0
+      }
+    }
+  },
+  {
+    "sequence": 251,
+    "at": 1700000000500,
+    "kind": "tool.result",
+    "origin": {
+      "kind": "ptb",
+      "actor": {
+        "team": "team-1",
+        "actor": "lead"
+      },
+      "toolCallId": "team-1/lead-call-4"
+    },
+    "details": {
+      "kind": "updates",
+      "team_changes": [],
+      "worker_changes": [
+        {
+          "worker": "w-race",
+          "scope": "Commit during snapshot hydration",
+          "kind": "created",
+          "text": "Worker w-race: prepared."
+        },
+        {
+          "worker": "w-race",
+          "scope": "Commit during snapshot hydration",
+          "kind": "connected",
+          "text": "Worker w-race: session bound."
+        }
+      ],
+      "task_changes": [],
+      "alerts": [],
+      "observation": {
+        "team": "team-1",
+        "epoch": "team_epoch_f11a226f-0f51-4469-b9f1-e1bb18082982",
+        "binding": "membership_13399b9d-0a96-451d-9728-edbf01e1911a",
+        "from": 0,
+        "through": 2
+      }
+    }
+  }
+]
