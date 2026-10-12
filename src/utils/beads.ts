@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle } from "../env/host-env";
 import { execFile, spawn } from "node:child_process";
 import { Type } from "typebox";
 import fs from "node:fs";
@@ -186,16 +187,16 @@ export function resolveBdExecutable(): string {
       `owned @beads/bd launcher is missing at ${launcher}`,
     );
 
-    if (!["darwin", "linux", "win32", "android"].includes(process.platform) || !["x64", "arm64"].includes(process.arch)) {
+    if (!["darwin", "linux", "win32", "android"].includes(hostEnv().process.platform) || !["x64", "arm64"].includes(process.arch)) {
       throw new OwnedBdBinaryError(
         "BEADS_OWNED_BINARY_UNSUPPORTED",
-        `owned @beads/bd binary is unsupported on ${process.platform}-${process.arch}`,
+        `owned @beads/bd binary is unsupported on ${hostEnv().process.platform}-${process.arch}`,
       );
     }
-    const nativeBinary = path.join(packageRoot, "bin", process.platform === "win32" ? "bd.exe" : "bd");
+    const nativeBinary = path.join(packageRoot, "bin", hostEnv().process.platform === "win32" ? "bd.exe" : "bd");
     if (!fs.statSync(nativeBinary).isFile()) throw new OwnedBdBinaryError(
       "BEADS_OWNED_BINARY_MISSING",
-      `owned @beads/bd binary is missing at ${nativeBinary}; reinstall @beads/bd@1.1.0 for ${process.platform}-${process.arch}`,
+      `owned @beads/bd binary is missing at ${nativeBinary}; reinstall @beads/bd@1.1.0 for ${hostEnv().process.platform}-${process.arch}`,
     );
     return nativeBinary;
   } catch (error) {
@@ -228,13 +229,13 @@ export class ExecBdRunner implements BdRunner {
   constructor(private readonly executable: () => string = resolveBdExecutable) {}
 
   async run(args: string[], options: { cwd: string; timeoutMs: number }): Promise<BdCommandResult> {
-    const startedAt = Date.now();
+    const startedAt = hostEnv().clock.now();
     try {
       const executable = this.executable();
       return await new Promise<BdCommandResult>((resolve) => {
         const child = spawn(executable, args, {
           cwd: options.cwd,
-          detached: process.platform !== "win32",
+          detached: hostEnv().process.platform !== "win32",
           stdio: ["ignore", "pipe", "pipe"],
         });
         let stdout = "";
@@ -242,22 +243,22 @@ export class ExecBdRunner implements BdRunner {
         let timedOut = false;
         let outputLimitExceeded = false;
         let settled = false;
-        let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+        let cleanupTimer: TimerHandle | undefined;
         const finish = (result: BdCommandResult) => {
           if (settled) return;
           settled = true;
-          clearTimeout(deadline);
-          if (cleanupTimer) clearTimeout(cleanupTimer);
+          hostEnv().clock.clearTimeout(deadline);
+          if (cleanupTimer) hostEnv().clock.clearTimeout(cleanupTimer);
           if (timedOut || outputLimitExceeded) {
             child.stdout.destroy();
             child.stderr.destroy();
             child.unref();
           }
-          recordBdRunnerLifecycle("settled", Date.now() - startedAt, timedOut);
+          recordBdRunnerLifecycle("settled", hostEnv().clock.now() - startedAt, timedOut);
           resolve(result);
         };
         const terminate = async (signal: NodeJS.Signals): Promise<void> => {
-          if (process.platform === "win32") {
+          if (hostEnv().process.platform === "win32") {
             await new Promise<void>((resolve) => {
               if (!child.pid) return resolve();
               execFile("taskkill", ["/pid", String(child.pid), "/T", "/F"], (error) => {
@@ -266,7 +267,7 @@ export class ExecBdRunner implements BdRunner {
               });
             });
           } else if (child.pid) {
-            try { process.kill(-child.pid, signal); } catch { child.kill(signal); }
+            try { hostEnv().process.kill(-child.pid, signal); } catch { child.kill(signal); }
           } else child.kill(signal);
         };
         const appendOutput = (target: "stdout" | "stderr", chunk: string) => {
@@ -289,12 +290,12 @@ export class ExecBdRunner implements BdRunner {
         child.once("error", (error) => finish(bdExecFailure(error)));
         child.once("close", (code) => finish({ stdout, stderr, exitCode: timedOut ? 124 : code ?? 1 }));
         recordBdRunnerLifecycle("start", 0, false);
-        const deadline = setTimeout(() => {
+        const deadline = hostEnv().clock.setTimeout(() => {
           timedOut = true;
-          recordBdRunnerLifecycle("deadline", Date.now() - startedAt, true);
+          recordBdRunnerLifecycle("deadline", hostEnv().clock.now() - startedAt, true);
           void terminate("SIGTERM").finally(() => {
-            recordBdRunnerLifecycle("termination_cleanup", Date.now() - startedAt, true);
-            cleanupTimer = setTimeout(() => {
+            recordBdRunnerLifecycle("termination_cleanup", hostEnv().clock.now() - startedAt, true);
+            cleanupTimer = hostEnv().clock.setTimeout(() => {
               void terminate("SIGKILL").finally(() => finish({ stdout, stderr, exitCode: 124 }));
             }, 100);
           });
@@ -323,9 +324,9 @@ export async function initializeBeadsWorkspace(
   const metadataPath = path.join(workspace, ".beads", "metadata.json");
   if (!fs.existsSync(metadataPath)) {
     const args = ["init", "--quiet", "--non-interactive", "--skip-agents", "--skip-hooks", "--init-if-missing"];
-    const startedAt = Date.now();
+    const startedAt = hostEnv().clock.now();
     const result = await runner.run(args, { cwd: workspace, timeoutMs: DEFAULT_BD_INIT_TIMEOUT_MS });
-    recordBdCall("init", Date.now() - startedAt, result.exitCode === 0 ? "ok" : "error");
+    recordBdCall("init", hostEnv().clock.now() - startedAt, result.exitCode === 0 ? "ok" : "error");
     if (result.exitCode !== 0) {
       const stderr = result.stderr.trim();
       const kind = result.exitCode === 127 ? "unavailable" : result.exitCode === 124 ? "timeout" : "command";
@@ -473,7 +474,7 @@ export function beadsLabel(teamName: string): string {
 }
 
 function actorName(actor?: string): string {
-  return actor || process.env.PI_AGENT_NAME || process.env.BEADS_ACTOR || "pi-teams";
+  return actor || hostEnv().process.env.PI_AGENT_NAME || hostEnv().process.env.BEADS_ACTOR || "pi-teams";
 }
 
 function metadataValue(raw: RawBead, key: string): string | undefined {
@@ -682,14 +683,14 @@ export class BeadsTaskStore {
   private async command<T>(args: string[]): Promise<T> {
     const fullArgs = ["--directory", this.workspace, "--json", ...args];
     const display = ["bd", ...fullArgs].join(" ");
-    const startedAt = Date.now();
+    const startedAt = hostEnv().clock.now();
     const command = args[0] || "unknown";
     try {
       const result = parseJson<T>(await this.runner.run(fullArgs, { cwd: this.workspace, timeoutMs: this.timeoutMs }), display);
-      recordBdCall(command, Date.now() - startedAt, "ok");
+      recordBdCall(command, hostEnv().clock.now() - startedAt, "ok");
       return result;
     } catch (error) {
-      recordBdCall(command, Date.now() - startedAt, "error");
+      recordBdCall(command, hostEnv().clock.now() - startedAt, "error");
       throw error;
     }
   }
@@ -978,7 +979,7 @@ export class BeadsTaskStore {
           type: "blocks",
         })),
       };
-      const planPath = path.join(this.workspace, `.pi-teams-graph-${operationHash}-${process.pid}.json`);
+      const planPath = path.join(this.workspace, `.pi-teams-graph-${operationHash}-${hostEnv().process.pid}.json`);
       fs.writeFileSync(planPath, JSON.stringify(plan), { encoding: "utf8", mode: 0o600, flag: "wx" });
       let result: { ids?: Record<string, string>; schema_version?: number };
       try {

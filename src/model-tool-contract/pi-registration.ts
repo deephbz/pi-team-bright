@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { captureQualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
 import {
@@ -95,7 +96,7 @@ export function registerModelToolJourney(
       projectTrusted = undefined;
     }
     journeyPort.team.setLeaderLaunchContext?.(exact, {
-      cwd: ctx.cwd ?? process.cwd(),
+      cwd: ctx.cwd ?? hostEnv().process.cwd(),
       projectTrusted,
     });
     return exact;

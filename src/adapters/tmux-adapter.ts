@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 /**
  * Tmux Terminal Adapter
  * 
@@ -17,11 +18,11 @@ export class TmuxAdapter implements TerminalAdapter {
 
   detect(): boolean {
     // tmux is available if TMUX environment variable is set
-    return !!process.env.TMUX;
+    return !!hostEnv().process.env.TMUX;
   }
 
   currentTargetId(): string | null {
-    const paneId = process.env.TMUX_PANE?.trim();
+    const paneId = hostEnv().process.env.TMUX_PANE?.trim();
     return paneId ? paneId : null;
   }
 

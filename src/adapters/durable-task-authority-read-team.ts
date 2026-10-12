@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import type { TaskAuthorityBinding, TaskAuthorityReadTeamPort } from "../task-authority/contracts";
 
 import { readConfig } from "../utils/teams";
@@ -7,7 +8,7 @@ export class DurableTaskAuthorityReadTeam implements TaskAuthorityReadTeamPort {
   async readBinding(teamName: string): Promise<TaskAuthorityBinding> {
     const config = await readConfig(teamName);
     if (config.taskBackend !== "beads") {
-      const target = process.env.PI_TEAMS_BEADS_WORKSPACE?.trim() || "<absolute-beads-workspace>";
+      const target = hostEnv().process.env.PI_TEAMS_BEADS_WORKSPACE?.trim() || "<absolute-beads-workspace>";
       throw new Error(`Team ${teamName} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${teamName} ${target}`);
     }
     if (!config.taskWorkspace) {

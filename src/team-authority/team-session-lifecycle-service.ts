@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import * as paths from "../utils/paths";
@@ -41,18 +42,18 @@ export class TeamSessionLifecycleService {
           return { kind: "refused", reason: `Worker ${input.workerName} started for a Membership that is no longer current.`, exitProcess: true };
         }
       }
-      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), process.pid, runtime.probePidPresence, input.launchId);
+      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, await runtime.readRuntimeStatus(input.teamName, input.workerName), hostEnv().process.pid, runtime.probePidPresence, input.launchId);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
       }
       if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: current };
-      const startedAt = Date.now();
-      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
+      const startedAt = hostEnv().clock.now();
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined }, current.membershipId);
       recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });
       const bound = await teams.bindMemberSession(input.teamName, input.workerName, input.sessionFile, input.launchId, admission.update ?? {}, current.membershipId);
       recordWorkerLaunchStage("session_bound_persisted", { membershipId: bound.membershipId! });
-      await this.lifecyclePublication.recordWorkerSessionBound({ teamName: input.teamName, workerName: input.workerName, membershipId: bound.membershipId!, generation: { membershipId: bound.membershipId!, pid: process.pid, startedAt } });
+      await this.lifecyclePublication.recordWorkerSessionBound({ teamName: input.teamName, workerName: input.workerName, membershipId: bound.membershipId!, generation: { membershipId: bound.membershipId!, pid: hostEnv().process.pid, startedAt } });
       recordWorkerLaunchStage("session_bound_published", { membershipId: bound.membershipId! });
       return { kind: "admitted", action: "claim", member: bound };
     });
@@ -71,13 +72,13 @@ export class TeamSessionLifecycleService {
       if (runtimeAdmission.action === "already_current") return { kind: "admitted", action: "already_current", member: lead };
       const membershipId = lead.membershipId;
       if (!membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
-      const startedAt = Date.now();
-      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: process.pid, startedAt }, membershipId);
+      const startedAt = hostEnv().clock.now();
+      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, startedAt }, membershipId);
       if (admission.update) await teams.updateMembership(input.teamName, membershipId, admission.update);
       const recordPath = paths.leadSessionPath(input.teamName);
       const dir = path.dirname(recordPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(recordPath, JSON.stringify({ pid: process.pid, sessionFile: input.sessionFile, startedAt }));
+      fs.writeFileSync(recordPath, JSON.stringify({ pid: hostEnv().process.pid, sessionFile: input.sessionFile, startedAt }));
       return { kind: "admitted", action: "claim", member: lead };
     });
   }

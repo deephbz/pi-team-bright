@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -213,7 +214,7 @@ function recipientBinding(config: TeamConfig, recipient: string): { membershipId
   return { membershipId: member.membershipId, sessionFile: member.sessionFile };
 }
 
-export function taskPollMs(env: NodeJS.ProcessEnv = process.env): number {
+export function taskPollMs(env: NodeJS.ProcessEnv = hostEnv().process.env): number {
   const parsed = Number(env[TASK_POLL_MS_ENV]);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : DEFAULT_TASK_POLL_MS;
 }
@@ -289,7 +290,7 @@ async function enqueueTaskProjectionWithConfig(
     recipientSessionFile,
     targetAgentRef,
     taskProjection: structuredClone(taskProjection),
-    queuedAt: new Date().toISOString(),
+    queuedAt: new Date(hostEnv().clock.now()).toISOString(),
     attemptCount: 0,
   };
   const file = taskDeliveryPath(teamName, recipient);
@@ -434,7 +435,7 @@ export async function prepareOwnerTransitionIntent(input: {
         beforeOwner: input.before.assignee,
         afterOwner,
         targets: ownerTransitionTargets(config, input.before.assignee, afterOwner),
-        createdAt: new Date().toISOString(),
+        createdAt: new Date(hostEnv().clock.now()).toISOString(),
         state: "prepared",
       });
     }
@@ -869,7 +870,7 @@ export async function suppressTaskVersionForSession(
       recipient,
       recipientMembershipId: binding.membershipId,
       recipientSessionFile: sessionFile,
-      observedAt: new Date().toISOString(),
+      observedAt: new Date(hostEnv().clock.now()).toISOString(),
       evidence: "tool-post-state",
     }]);
   });
@@ -948,15 +949,15 @@ function watchFile(teamName: string, recipient: string, onHint: () => void): () 
   const file = taskDeliveryPath(teamName, recipient);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const name = path.basename(file);
-  const watcher = fs.watch(path.dirname(file), (_event, filename) => {
+  const watcher = hostEnv().watch.watchDirectory(path.dirname(file), (filename) => {
     if (!filename || filename.toString() === name) onHint();
   });
-  watcher.on("error", () => undefined);
+  watcher.onError(() => undefined);
   return () => watcher.close();
 }
 
 export class TaskChangeDelivery {
-  private interval: ReturnType<typeof setInterval> | null = null;
+  private interval: TimerHandle | null = null;
   private stopWatch: (() => void) | null = null;
   private stopped = true;
   private attempted = new Set<string>();
@@ -1015,11 +1016,11 @@ export class TaskChangeDelivery {
         recipient: record.recipient,
         recipientMembershipId: record.recipientMembershipId,
         recipientSessionFile: record.recipientSessionFile,
-        observedAt: new Date().toISOString(),
+        observedAt: new Date(hostEnv().clock.now()).toISOString(),
         evidence: "successful-turn-ack" as const,
       })));
       await mutateRecords(this.options.teamName, this.options.recipient, this.acknowledged, (record) => {
-        record.successfulTurnAckAt ||= new Date().toISOString();
+        record.successfulTurnAckAt ||= new Date(hostEnv().clock.now()).toISOString();
       });
     });
     if (this.stopped || generation !== this.generation) return;
@@ -1032,7 +1033,7 @@ export class TaskChangeDelivery {
     const presented = presentedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
     for (const id of presented) this.attempted.add(id);
     this.stopWatch = watchFile(this.options.teamName, this.options.recipient, () => void this.scan().catch(() => undefined));
-    this.interval = setInterval(() => void this.scan().catch(() => undefined), this.options.pollMs ?? DEFAULT_TASK_POLL_MS);
+    this.interval = hostEnv().clock.setInterval(() => void this.scan().catch(() => undefined), this.options.pollMs ?? DEFAULT_TASK_POLL_MS);
     if (presented.size > 0) {
       const records = (await this.eligible()).filter((record) => presented.has(record.deliveryId));
       if (this.stopped || generation !== this.generation) return;
@@ -1060,7 +1061,7 @@ export class TaskChangeDelivery {
   stop(): void {
     this.generation += 1;
     this.stopped = true;
-    if (this.interval) clearInterval(this.interval);
+    if (this.interval) hostEnv().clock.clearInterval(this.interval);
     this.stopWatch?.();
     this.interval = null;
     this.stopWatch = null;
@@ -1128,11 +1129,11 @@ export class TaskChangeDelivery {
             recipient: record.recipient,
             recipientMembershipId: record.recipientMembershipId,
             recipientSessionFile: record.recipientSessionFile,
-            observedAt: new Date().toISOString(),
+            observedAt: new Date(hostEnv().clock.now()).toISOString(),
             evidence: "successful-turn-ack" as const,
           })));
           return mutateRecords(this.options.teamName, this.options.recipient, currentRecords.map((record) => record.deliveryId), (record) => {
-            record.successfulTurnAckAt ||= new Date().toISOString();
+            record.successfulTurnAckAt ||= new Date(hostEnv().clock.now()).toISOString();
           });
         });
     });
@@ -1176,7 +1177,7 @@ export class TaskChangeDelivery {
     if (this.stopped || generation !== this.generation || records.length === 0) return;
     for (const record of records) this.attempted.add(record.deliveryId);
     await mutateRecords(this.options.teamName, this.options.recipient, records.map((r) => r.deliveryId), (record) => {
-      record.attemptedAt = new Date().toISOString();
+      record.attemptedAt = new Date(hostEnv().clock.now()).toISOString();
       record.attemptCount += 1;
     });
     if (this.stopped || generation !== this.generation) return;

@@ -1,4 +1,4 @@
-import { setTimeout as delay } from "node:timers/promises";
+import { hostEnv } from "../env/host-env";
 import type { TeamEventWaitResult } from "../coordination/event-journal";
 import type { WorkerRuntimeGenerationEvidence, WorkerTeamEvent } from "../coordination/contracts";
 
@@ -64,10 +64,8 @@ export async function observeWorkerStartup(
     throw new Error("Worker startup observation timeout must be a nonnegative finite number.");
   }
 
-  const now = input.now ?? performance.now.bind(performance);
-  const waitForRetry = input.waitForRetry ?? (async (delayMs: number, signal?: AbortSignal) => {
-    await delay(delayMs, undefined, { signal });
-  });
+  const now = input.now ?? (() => hostEnv().clock.now());
+  const waitForRetry = input.waitForRetry ?? ((delayMs: number, signal?: AbortSignal) => hostEnv().clock.sleep(delayMs, signal));
   const deadline = now() + timeoutMs;
   let cursor = input.afterCursor;
 

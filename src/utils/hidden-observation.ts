@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -144,7 +145,7 @@ function writeProjectionAtomic(file: string, projection: HiddenObservationProjec
   fs.mkdirSync(directory, { recursive: true });
   const existing = fs.existsSync(file) ? fs.statSync(file) : undefined;
   if (existing && !existing.isFile()) throw new Error(`Cannot replace hidden observation projection ${file}: existing path is not a regular file.`);
-  const temp = path.join(directory, `.${path.basename(file)}.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString("hex")}.tmp`);
+  const temp = path.join(directory, `.${path.basename(file)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.${hostEnv().random.bytes(6).toString("hex")}.tmp`);
   let fd: number | undefined;
   try {
     fd = fs.openSync(temp, "wx", 0o600);
@@ -260,7 +261,7 @@ export async function commitHiddenObservationProjection(
         acknowledgedLineage,
         teamEventCursor: input.teamEventCursor,
         authorityRevisions,
-        updatedAt: new Date().toISOString(),
+        updatedAt: new Date(hostEnv().clock.now()).toISOString(),
       };
       writeProjectionAtomic(file, projection);
       return { kind: "committed", projection: structuredClone(projection) };

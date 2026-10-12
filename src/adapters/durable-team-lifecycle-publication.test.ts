@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { nodeHostEnv } from "../env/host-env";
 
 const fixture = vi.hoisted(() => ({ alive: true, time: 0, bound: false, mode: "exit", membershipId: "membership" }));
 const isAlive = vi.hoisted(() => vi.fn((_paneId: string) => fixture.alive));
@@ -34,7 +35,7 @@ describe("durable launch carrier observation", () => {
     readConfig.mockReset().mockResolvedValue({ terminalBackend: "herdr", members: [] });
     currentMembership.mockClear();
     vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "300000");
-    vi.spyOn(performance, "now").mockImplementation(() => fixture.time);
+    vi.spyOn(nodeHostEnv.clock, "now").mockImplementation(() => fixture.time);
   });
   afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 

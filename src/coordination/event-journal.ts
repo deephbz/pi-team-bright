@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "../utils/lock";
@@ -279,8 +280,8 @@ function readJournal(teamName: string): TeamEvent[] {
 function writeCursorProjection(teamName: string, cursor: string): void {
   const target = teamEventCursorStatePath(teamName);
   const directory = path.dirname(target);
-  const temp = path.join(directory, `.${path.basename(target)}.${process.pid}.${Date.now()}.tmp`);
-  fs.writeFileSync(temp, JSON.stringify({ schema: EVENT_SCHEMA, cursor, updatedAt: new Date().toISOString() }), {
+  const temp = path.join(directory, `.${path.basename(target)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
+  fs.writeFileSync(temp, JSON.stringify({ schema: EVENT_SCHEMA, cursor, updatedAt: new Date(hostEnv().clock.now()).toISOString() }), {
     flag: "wx",
     mode: 0o600,
   });
@@ -298,7 +299,7 @@ export async function appendTeamEvent(teamName: string, input: TeamEventInput): 
   return withLock(journal, async () => {
     const events = readJournal(teamName);
     const cursor = ((events.length ? parseCursor(events[events.length - 1].cursor) : 0n) + 1n).toString();
-    const event = { ...input, cursor, at: new Date().toISOString() } as TeamEvent;
+    const event = { ...input, cursor, at: new Date(hostEnv().clock.now()).toISOString() } as TeamEvent;
     // Validate before committing so a structurally invalid internal caller
     // cannot poison the append-only journal.
     parseEvent(JSON.stringify(event), events.length + 1);
@@ -444,15 +445,16 @@ export async function waitForTeamEvents(options: TeamEventWaitOptions): Promise<
 
   const journal = teamEventJournalPath(options.teamName);
   fs.mkdirSync(path.dirname(journal), { recursive: true });
+  const clock = hostEnv().clock;
   return new Promise<TeamEventWaitResult>((resolve, reject) => {
     let settled = false;
     let scanning = false;
     let rescan = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: TimerHandle;
     const finish = (action: () => void) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clock.clearTimeout(timer);
       watcher.close();
       options.signal?.removeEventListener("abort", onAbort);
       action();
@@ -478,12 +480,12 @@ export async function waitForTeamEvents(options: TeamEventWaitOptions): Promise<
       }
     };
     const onAbort = () => finish(() => reject(abortError()));
-    const watcher = fs.watch(path.dirname(journal), (_event, filename) => {
+    const watcher = hostEnv().watch.watchDirectory(path.dirname(journal), (filename) => {
       if (!filename || filename.toString() === path.basename(journal)) scan();
     });
-    watcher.on("error", (error) => finish(() => reject(error)));
+    watcher.onError((error) => finish(() => reject(error)));
     options.signal?.addEventListener("abort", onAbort, { once: true });
-    timer = setTimeout(() => {
+    timer = clock.setTimeout(() => {
       try {
         const batch = read();
         finish(() => resolve({ ...batch, timedOut: true }));
@@ -491,7 +493,7 @@ export async function waitForTeamEvents(options: TeamEventWaitOptions): Promise<
         finish(() => reject(error));
       }
     }, waitMs);
-    timer.unref?.();
+    if ("unref" in timer) timer.unref();
     // Close the lost-wakeup gap between the first read and watcher creation.
     scan();
   });

@@ -1,3 +1,4 @@
+import { hostEnv, type TimerHandle } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
@@ -51,7 +52,7 @@ export interface DirectMessageDeliveryOptions {
   dependencies?: Partial<DeliveryDependencies>;
 }
 
-export function messagePollMs(env: NodeJS.ProcessEnv = process.env): number {
+export function messagePollMs(env: NodeJS.ProcessEnv = hostEnv().process.env): number {
   const raw = env[MESSAGE_POLL_MS_ENV];
   if (!raw) return DEFAULT_MESSAGE_POLL_MS;
   const parsed = Number(raw);
@@ -195,10 +196,10 @@ function watchInboxFile(teamName: string, recipient: string, onHint: () => void)
   const directory = path.dirname(target);
   fs.mkdirSync(directory, { recursive: true });
   const targetName = path.basename(target);
-  const watcher = fs.watch(directory, (_eventType, filename) => {
+  const watcher = hostEnv().watch.watchDirectory(directory, (filename) => {
     if (!filename || filename.toString() === targetName) onHint();
   });
-  watcher.on("error", () => {
+  watcher.onError(() => {
     // The fallback rescan remains authoritative when a filesystem watch fails.
   });
   return () => watcher.close();
@@ -219,12 +220,12 @@ export class DirectMessageDelivery {
   private readonly attempted = new Set<string>();
   private readonly acknowledged = new Set<string>();
   private readonly staged = new Set<string>();
-  private interval: ReturnType<typeof setInterval> | null = null;
+  private interval: TimerHandle | null = null;
   private stopWatch: (() => void) | null = null;
   private stopped = true;
   private scanPromise: Promise<void> | null = null;
   private rescanRequested = false;
-  private hintTimer: ReturnType<typeof setTimeout> | null = null;
+  private hintTimer: TimerHandle | null = null;
   /** Fences asynchronous binding/ack recovery against a later stop or start. */
   private generation = 0;
 
@@ -298,7 +299,7 @@ export class DirectMessageDelivery {
     for (const id of presented) this.attempted.add(id);
     if (!this.isCurrent(generation)) return;
     this.stopWatch = this.dependencies.watch(() => this.scheduleHintScan());
-    this.interval = setInterval(() => void this.scan().catch(() => undefined), this.pollMs);
+    this.interval = hostEnv().clock.setInterval(() => void this.scan().catch(() => undefined), this.pollMs);
     if (presented.size > 0) {
       const messageIds = [...presented];
       this.sink.sendMessage({
@@ -314,8 +315,8 @@ export class DirectMessageDelivery {
   stop(): void {
     this.generation += 1;
     this.stopped = true;
-    if (this.interval) clearInterval(this.interval);
-    if (this.hintTimer) clearTimeout(this.hintTimer);
+    if (this.interval) hostEnv().clock.clearInterval(this.interval);
+    if (this.hintTimer) hostEnv().clock.clearTimeout(this.hintTimer);
     this.stopWatch?.();
     this.interval = null;
     this.hintTimer = null;
@@ -384,7 +385,7 @@ export class DirectMessageDelivery {
 
   private scheduleHintScan(): void {
     if (this.stopped || this.hintTimer) return;
-    this.hintTimer = setTimeout(() => {
+    this.hintTimer = hostEnv().clock.setTimeout(() => {
       this.hintTimer = null;
       void this.scan().catch(() => undefined);
     }, 20);

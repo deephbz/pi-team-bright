@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { hostEnv } from "../env/host-env";
 import * as inboxDelivery from "./inbox-delivery";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import {
@@ -103,7 +103,7 @@ export async function sendAlert(
   publication: AlertPublicationPort,
 ): Promise<SendAlertResult> {
   validateAlert(input);
-  const alertId = `alert_${randomUUID()}`;
+  const alertId = `alert_${hostEnv().random.uuid()}`;
   const taskRef = taskReference(input);
   const text = deliveryText(alertId, input.kind, input.text.trim(), taskRef);
   const summary = deliverySummary(input.kind, taskRef);

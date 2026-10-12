@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import path from "node:path";
@@ -62,7 +63,7 @@ interface TraceContext {
 const storage = new AsyncLocalStorage<TraceContext>();
 
 function configuredPath(): string | null {
-  const file = process.env[PI_TEAMS_TRACE_JSONL_ENV]?.trim();
+  const file = hostEnv().process.env[PI_TEAMS_TRACE_JSONL_ENV]?.trim();
   if (!file) return null;
   if (!path.isAbsolute(file)) throw new Error(`${PI_TEAMS_TRACE_JSONL_ENV} must be an absolute path.`);
   return file;
@@ -106,11 +107,11 @@ export async function withSemanticTrace<T>(
   identity: { teamName?: string; taskId?: string; workerName?: string },
   action: () => Promise<T>,
 ): Promise<T> {
-  if (!process.env[PI_TEAMS_TRACE_JSONL_ENV]) return action();
+  if (!hostEnv().process.env[PI_TEAMS_TRACE_JSONL_ENV]) return action();
   const context: TraceContext = {
     operation,
     ...identity,
-    startedAt: Date.now(),
+    startedAt: hostEnv().clock.now(),
     startedAtMonotonic: performance.now(),
     bdCalls: [],
     bdRunnerLifecycle: [],
@@ -130,10 +131,10 @@ export async function withSemanticTrace<T>(
       try {
         append({
           schemaVersion: 1,
-          timestamp: new Date().toISOString(),
+          timestamp: new Date(hostEnv().clock.now()).toISOString(),
           operation,
           ...identity,
-          durationMs: Date.now() - context.startedAt,
+          durationMs: hostEnv().clock.now() - context.startedAt,
           bdCallCount: context.bdCalls.length,
           bdTotalMs: context.bdCalls.reduce((sum, call) => sum + call.durationMs, 0),
           bdCalls: context.bdCalls,

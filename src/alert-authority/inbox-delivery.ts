@@ -1,6 +1,7 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { IdentifiedInboxMessage, InboxMessage } from "./delivery-contracts";
 import type {
   AlertMembershipPort,
@@ -41,11 +42,11 @@ export class RecipientMembershipUnresolvedError extends Error {
 }
 
 export function nowIso(): string {
-  return new Date().toISOString();
+  return new Date(hostEnv().clock.now()).toISOString();
 }
 
 function newMessageId(): string {
-  return `message_${randomUUID()}`;
+  return `message_${hostEnv().random.uuid()}`;
 }
 
 function legacyMessageId(

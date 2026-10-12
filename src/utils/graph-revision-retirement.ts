@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
 import { writeJsonAtomic } from "./atomic-json";
@@ -152,7 +153,7 @@ export function recordGraphRevisionRetirementLocked(input: GraphRevisionRetireme
     operationId: input.operationId,
     currentTasks: sortedUnique(input.currentTasks),
     retiredTasks: sortedUnique(input.retiredTasks),
-    recordedAt: new Date().toISOString(),
+    recordedAt: new Date(hostEnv().clock.now()).toISOString(),
   };
   const priorOperation = prior?.history.find((record) => record.operationId === input.operationId);
   if (priorOperation && graphOperationSemantics(priorOperation) !== graphOperationSemantics(candidate)) {

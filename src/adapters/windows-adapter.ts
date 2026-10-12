@@ -1,3 +1,4 @@
+import { hostEnv } from "../env/host-env";
 /**
  * Windows Terminal/PowerShell Adapter
  *
@@ -42,7 +43,7 @@ export class WindowsAdapter implements TerminalAdapter {
       // Method 2: Check common paths
       const fs = require("fs");
       const possiblePaths = [
-        `C:\\Users\\${process.env.USERNAME}\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe`,
+        `C:\\Users\\${hostEnv().process.env.USERNAME}\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe`,
         "C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\wt.exe",
       ];
       
@@ -58,7 +59,7 @@ export class WindowsAdapter implements TerminalAdapter {
 
     // Method 3: Just assume wt is available on Windows and let spawn fail if not
     // This is a reasonable fallback for most Windows 10/11 systems
-    if (process.platform === "win32") {
+    if (hostEnv().process.platform === "win32") {
       this.wtPath = "wt";
       return "wt";
     }
@@ -105,13 +106,13 @@ export class WindowsAdapter implements TerminalAdapter {
 
   detect(): boolean {
     // Windows only - check platform
-    if (process.platform !== "win32") {
+    if (hostEnv().process.platform !== "win32") {
       return false;
     }
 
     // Don't use if inside tmux, Zellij, or WezTerm
     // Note: we DO detect in mintty/Git Bash because we can still use Windows Terminal
-    if (process.env.TMUX || process.env.ZELLIJ || process.env.WEZTERM_PANE) {
+    if (hostEnv().process.env.TMUX || hostEnv().process.env.ZELLIJ || hostEnv().process.env.WEZTERM_PANE) {
       return false;
     }
 
@@ -188,7 +189,7 @@ export class WindowsAdapter implements TerminalAdapter {
 
     // wt doesn't return a pane ID, so we create a synthetic one
     // We'll use a timestamp + name to make it unique
-    const syntheticId = `windows_${Date.now()}_${options.name}`;
+    const syntheticId = `windows_${hostEnv().clock.now()}_${options.name}`;
     return syntheticId;
   }
 
@@ -261,7 +262,7 @@ export class WindowsAdapter implements TerminalAdapter {
     }
 
     // Create a synthetic window ID
-    const syntheticId = `windows_win_${Date.now()}_${options.name}`;
+    const syntheticId = `windows_win_${hostEnv().clock.now()}_${options.name}`;
     return syntheticId;
   }
 
