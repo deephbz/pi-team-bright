@@ -73,10 +73,10 @@ export function planWorkerEnsure(carrier: WorkerCarrierState, observation: Worke
     case "invalid":
       return { action: "refuse", carrier, reason: carrier.reason };
     case "unbound":
-      if (evidence.launch === "none" && evidence.process === "gone") return { action: "create" };
+      if (evidence.launch === "none" && (evidence.process === "gone" || evidence.process === "none")) return { action: "create" };
       return attention(carrier, evidence.process === "unknown" ? "verifier_unknown" : "candidate_live", evidence.process === "unknown" ? "ask_human" : "wait");
     case "prepared":
-      if (evidence.launch === "refused" && evidence.process === "gone") return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
+      if (evidence.launch === "refused" && (evidence.process === "gone" || evidence.process === "none")) return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
       if (evidence.launch === "refused") return attention(carrier, evidence.process === "unknown" ? "verifier_unknown" : "candidate_live", evidence.process === "unknown" ? "ask_human" : "wait");
       return attention(carrier, `launch_${evidence.launch}`);
     case "bound":

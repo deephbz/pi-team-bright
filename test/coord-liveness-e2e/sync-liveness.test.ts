@@ -1,3 +1,4 @@
+import { nodeHostEnv } from "../../src/env/host-env";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
@@ -184,7 +185,8 @@ describe("hardened coordination liveness boundaries", () => {
     const name = teamName("runtime");
     fs.mkdirSync(paths.teamDir(name), { recursive: true });
     const current = member();
-    await writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1, runState: "active" }, current.membershipId);
+    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => ({ kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }));
+    await writeRuntimeStatus(name, "worker", { pid: process.pid, osBirthToken: "birth", bootId: "boot", startedAt: 1, runState: "active" }, current.membershipId);
     await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "active", actuationPending: false });
     await writeRuntimeStatus(name, "worker", { runState: "settled" }, current.membershipId);
     await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "settled", actuationPending: false });

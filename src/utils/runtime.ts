@@ -49,9 +49,9 @@ export interface RuntimeGeneration {
 }
 
 /** Tokenless legacy records fail closed until their own process re-admits. */
-export function verifyRuntimeGeneration(status: Pick<AgentRuntimeStatus, "pid" | "osBirthToken" | "bootId"> | null): "live" | "gone" | "unknown" {
+export function verifyRuntimeGeneration(status: Pick<AgentRuntimeStatus, "pid" | "osBirthToken" | "bootId"> | null, observed?: import("../env/host-env").GenerationProbe): "live" | "gone" | "unknown" {
   if (!status?.pid || !status.osBirthToken || !status.bootId) return "unknown";
-  const probe = hostEnv().process.generation(status.pid);
+  const probe = observed ?? hostEnv().process.generation(status.pid);
   if (probe.kind === "absent") return "gone";
   if (probe.kind === "unknown") return "unknown";
   return probe.generation.osBirthToken === status.osBirthToken && probe.generation.bootId === status.bootId ? "live" : "gone";

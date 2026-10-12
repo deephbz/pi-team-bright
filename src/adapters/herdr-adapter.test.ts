@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { HerdrAdapter, herdrCarrierName } from "./herdr-adapter";
 import { nodeHostEnv } from "../env/host-env";
 import * as terminalAdapter from "../utils/terminal-adapter";
@@ -31,11 +31,12 @@ const readyStart = (paneId: string, name: string) => success({
 
 describe("HerdrAdapter", () => {
   let adapter: HerdrAdapter;
-  let exec: ReturnType<typeof vi.spyOn>;
+  let exec: MockInstance<typeof terminalAdapter.execCommand>;
 
   beforeEach(() => {
     adapter = new HerdrAdapter();
     exec = vi.spyOn(terminalAdapter, "execCommand");
+    vi.spyOn(nodeHostEnv.exec, "run").mockImplementation(async (command, args) => ({ kind: "exited", ...terminalAdapter.execCommand(command, [...args]) }));
     vi.stubEnv("HERDR_ENV", "1");
     vi.stubEnv("HERDR_TAB_ID", "tab-origin");
     vi.stubEnv("HERDR_PANE_ID", "pane-origin");
@@ -602,7 +603,7 @@ describe("HerdrAdapter", () => {
     expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["split"]));
   });
 
-  it("retries the transient split-to-shell readiness race before starting Pi", () => {
+  it("returns a receipt without a synchronous retry or readiness wait", () => {
     const sleep = vi.spyOn(nodeHostEnv.clock, "sleepSync").mockImplementation(() => {});
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
@@ -616,12 +617,11 @@ describe("HerdrAdapter", () => {
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
     })).toBe("pane-worker");
-    expect(exec).toHaveBeenCalledTimes(6);
-    expect(exec.mock.calls[4]).toEqual(exec.mock.calls[5]);
-    expect(sleep).toHaveBeenCalledExactlyOnceWith(50);
+    expect(exec).toHaveBeenCalledTimes(5);
+    expect(sleep).not.toHaveBeenCalled();
   });
 
-  it("requires the official interactive-ready response without a compatibility retry", () => {
+  it("keeps the pane when interactive recognition is unavailable", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
@@ -632,15 +632,15 @@ describe("HerdrAdapter", () => {
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
 
-    expect(() => adapter.spawn({
+    expect(adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toThrow(/interactive recognized Pi agent worker/i);
+    })).toBe("pane-worker");
     expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
   });
 
-  it("closes the exact pane when ready start reports a contradictory detected kind", () => {
+  it("keeps the pane when ready start reports a contradictory detected kind", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
       .mockReturnValueOnce(leaderLayout("pane-origin"))
@@ -651,15 +651,15 @@ describe("HerdrAdapter", () => {
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
 
-    expect(() => adapter.spawn({
+    expect(adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toThrow(/interactive recognized Pi agent worker/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    })).toBe("pane-worker");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
     expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
   });
 
-  it("closes the exact pane for malformed ready argv or target evidence", () => {
+  it("keeps the exact pane for malformed ready argv or target evidence", () => {
     const spawn = () => adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
@@ -673,8 +673,8 @@ describe("HerdrAdapter", () => {
         pane_id: "pane-worker", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(spawn).toThrow(/canonical Pi argv/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    expect(spawn()).toBe("pane-worker");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
 
     exec.mockReset();
     exec
@@ -686,8 +686,8 @@ describe("HerdrAdapter", () => {
         pane_id: "wrong-pane", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
       } }))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(spawn).toThrow(/exact managed target worker in pane pane-worker-2/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker-2"]);
+    expect(spawn()).toBe("pane-worker-2");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
   });
 
   it("rejects legacy shell commands and malformed or incomplete start envelopes", () => {
@@ -718,12 +718,11 @@ describe("HerdrAdapter", () => {
       .mockReturnValueOnce(renamed)
       .mockReturnValueOnce(failure("agent_start_failed", "agent unavailable"))
       .mockReturnValueOnce(success({ type: "ok" }));
-    expect(() => adapter.spawn({
+    expect(adapter.spawn({
       name: "worker", cwd: "/repo", argv: ["pi"], env: {},
       panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    }))
-      .toThrow(/agent_start_failed: agent unavailable/i);
-    expect(exec).toHaveBeenLastCalledWith("herdr", ["pane", "close", "pane-worker"]);
+    })).toBe("pane-worker");
+    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
     expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
   });
 

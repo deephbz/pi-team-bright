@@ -17,7 +17,7 @@ import { teamDir } from "../src/utils/paths";
 // Each exception pins its access count. Remove or lower it when routing an
 // access through HostEnv; new exceptions require an explicit reason.
 const allowlist: Record<string, { count: number; reason: string }> = {
-  "src/env/process-generation.ts": { count: 3, reason: "The production generation capability reads procfs or the native macOS helper." },
+  "src/env/process-generation.ts": { count: 5, reason: "The production generation capability reads procfs or the native macOS helper." },
   "src/env/host-env.ts": { count: 22, reason: "The production capability implementation owns Node primitives." },
   "src/adapters/iterm2-adapter.ts": { count: 1, reason: "AppleScript needs stdin input; HostExec exposes only command and argv." },
   "src/adapters/tmux-adapter.ts": { count: 1, reason: "Legacy shell-based session probe retains execSync error semantics." },

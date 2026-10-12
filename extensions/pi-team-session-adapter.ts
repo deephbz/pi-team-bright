@@ -447,6 +447,8 @@ function scheduleTeamTitleRefresh(ctx: any) {
 }
 
 function stopSyncNudgeConductor() {
+  carrierObserver?.stop();
+  carrierObserver = undefined;
   frameworkSync.invalidate();
   syncNudgeConductor?.stop();
   syncNudgeConductor = null;
@@ -456,12 +458,11 @@ function stopSyncNudgeConductor() {
 
 let carrierObserver: CarrierObserver | undefined;
 async function startSyncNudgeConductor(ctx: any) {
-  carrierObserver?.stop();
-  if (teamName) {
+  stopSyncNudgeConductor();
+  if (teamName && !isTeammate && agentName === "team-lead") {
     carrierObserver = new CarrierObserver(teamName, text => ctx.ui?.notify?.(text, "warning"));
     carrierObserver.start();
   }
-  stopSyncNudgeConductor();
   if (isTeammate || !teamName || agentName !== "team-lead" || !modelToolJourney()?.port.coordination.readSyncNudgeDebt) return;
   let policy;
   try { policy = await teamQuery.syncNudgePolicy(teamName); } catch { return; }
@@ -721,6 +722,7 @@ function registerSessionHooks() {
     );
   }
 
+  let recoveredWorker = false;
   if (isTeammate) {
     configureWorkerResources(ctx);
     if (teamName) {
@@ -750,12 +752,20 @@ function registerSessionHooks() {
         return;
       }
       currentMembershipId = startup.member!.membershipId;
+      recoveredWorker = startup.recovered === true;
     }
     ctx.ui.notify(`Teammate: ${agentName} (Team: ${teamName})`, "info");
     // Establish the Worker-owned Session name before any Task delivery activates.
     projectionBound = !!await refreshTeamFooter(ctx);
     if (teamName) {
       await activateRecipientDeliveries(ctx);
+      if (recoveredWorker && currentMembershipId && piSessionFile && taskGraphControlSource?.hasGraph(teamName)) {
+        const active = (await taskGraphControlSource.trace(teamName)).tasks.filter(task => task.assignee === agentName && task.state.kind === "in_progress");
+        if (active.length) await teams.withCurrentSessionBinding(teamName, agentName, piSessionFile, currentMembershipId, async () => {
+          if (ctx.sessionManager.getSessionFile() !== piSessionFile) return;
+          messageSink.sendMessage({ customType: "ptb.worker-recovery", content: `Your exact Worker Session resumed. Continue the current Attempt for ${active.map(task => task.id).join(", ")}. Use task_read for current authority. Recovery changed no Task state.`, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+        });
+      }
     }
   } else if (teamName) {
     if (!piSessionFile) throw new Error("Lead resume requires a durable Pi Session file.");

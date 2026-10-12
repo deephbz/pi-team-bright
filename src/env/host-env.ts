@@ -29,7 +29,7 @@
  *   if that actor generation has exited.
  * - While a simulation is active, `hostEnv()` outside an actor throws.
  */
-import { probeProcessGeneration } from "./process-generation";
+import { probeProcessGeneration, probeProcessGenerations } from "./process-generation";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -85,6 +85,7 @@ export interface HostProcess {
   kill(pid: number, signal: NodeJS.Signals | number): void;
   /** Read the generation of `pid` now. Unsupported platforms answer `unknown`. */
   generation(pid: number): GenerationProbe;
+  generations?(pids: readonly number[]): Promise<Map<number, GenerationProbe>>;
   /** Terminate this actor. Simulated actors stop scheduling instead of exiting the test process. */
   exit(code: number): never;
 }
@@ -183,6 +184,7 @@ export const nodeHostEnv: HostEnv = {
     },
     kill: (pid, signal) => { process.kill(pid, signal); },
     generation: probeProcessGeneration,
+    generations: probeProcessGenerations,
     exit: (code) => process.exit(code),
   },
   exec: {
