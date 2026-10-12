@@ -1,0 +1,585 @@
+{
+  "version": 1,
+  "id": "v31-scale-1-3x10",
+  "source": "synthetic",
+  "assumptions": [],
+  "setup": {
+    "ptbVersion": "v3.1",
+    "teams": []
+  },
+  "steps": [
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "session": "session-1",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_create",
+        "args": {
+          "name": "team-1",
+          "purpose": "Synthetic scale campaign"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w1",
+          "scope": "Synthetic worker 1"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w2",
+          "scope": "Synthetic worker 2"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w3",
+          "scope": "Synthetic worker 3"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w4",
+          "scope": "Synthetic worker 4"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w5",
+          "scope": "Synthetic worker 5"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w6",
+          "scope": "Synthetic worker 6"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w7",
+          "scope": "Synthetic worker 7"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w8",
+          "scope": "Synthetic worker 8"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w9",
+          "scope": "Synthetic worker 9"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w10",
+          "scope": "Synthetic worker 10"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "session": "session-2",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "team_create",
+        "args": {
+          "name": "team-2",
+          "purpose": "Synthetic scale campaign"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w1",
+          "scope": "Synthetic worker 1"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w2",
+          "scope": "Synthetic worker 2"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w3",
+          "scope": "Synthetic worker 3"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w4",
+          "scope": "Synthetic worker 4"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w5",
+          "scope": "Synthetic worker 5"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w6",
+          "scope": "Synthetic worker 6"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w7",
+          "scope": "Synthetic worker 7"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w8",
+          "scope": "Synthetic worker 8"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w9",
+          "scope": "Synthetic worker 9"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w10",
+          "scope": "Synthetic worker 10"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "session": "session-3",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "team_create",
+        "args": {
+          "name": "team-3",
+          "purpose": "Synthetic scale campaign"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w1",
+          "scope": "Synthetic worker 1"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w2",
+          "scope": "Synthetic worker 2"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w3",
+          "scope": "Synthetic worker 3"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w4",
+          "scope": "Synthetic worker 4"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w5",
+          "scope": "Synthetic worker 5"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w6",
+          "scope": "Synthetic worker 6"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w7",
+          "scope": "Synthetic worker 7"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w8",
+          "scope": "Synthetic worker 8"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w9",
+          "scope": "Synthetic worker 9"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w10",
+          "scope": "Synthetic worker 10"
+        }
+      }
+    },
+    {
+      "at": 20000,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_sync",
+        "args": {
+          "view": "updates"
+        }
+      }
+    },
+    {
+      "at": 20000,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-2",
+          "actor": "lead"
+        },
+        "tool": "team_sync",
+        "args": {
+          "view": "updates"
+        }
+      }
+    },
+    {
+      "at": 20000,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-3",
+          "actor": "lead"
+        },
+        "tool": "team_sync",
+        "args": {
+          "view": "updates"
+        }
+      }
+    }
+  ]
+}
