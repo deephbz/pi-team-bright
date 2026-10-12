@@ -139,6 +139,20 @@ export function projectDoctorMessage(message: PiCustomMessage): PiTeamBrightTuiM
   };
 }
 
+export function projectWorkerRecoveryMessage(message: PiCustomMessage): PiTeamBrightTuiMessage | undefined {
+  const content = contentText(message.content).trim();
+  if (!content) return undefined;
+  return { type: "worker-recovery", tone: "info", status: "Worker Session resumed", summary: "Continue the current Attempt. Recovery changed no Task state.",
+    body: [], expandedLines: content.split("\n"), detail: { content }, provenance: "carrier" };
+}
+
+export function projectStatusEntry(data: unknown): PiTeamBrightTuiMessage | undefined {
+  const lines = (data as { lines?: unknown })?.lines;
+  if (!Array.isArray(lines) || !lines.every(line => typeof line === "string")) return undefined;
+  return { type: "status", tone: "info", status: "Team status sampled", summary: "Current carrier and Task evidence.",
+    body: lines.slice(0, 4), expandedLines: lines.slice(4), detail: { lines }, provenance: "carrier" };
+}
+
 export function projectSyncNudgeMessage(message: PiCustomMessage): PiTeamBrightTuiMessage | undefined {
   const record = validateSyncNudgeRecord(message.details);
   if (!record) return undefined;

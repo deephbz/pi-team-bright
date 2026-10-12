@@ -218,11 +218,21 @@ restating executable definitions.
   A live shell never proves a live Worker. Unknown evidence fails closed.
   Launch claims a durable ID before external effects and returns a receipt
   without waiting for readiness. Elapsed time and start errors keep the pane.
-  Reload re-admits the same generation without a lifecycle event. Session
-  switches require attention; stopping that Membership keeps its pane.
+  Same-generation reload re-admission stays silent while the process is live
+  or stopping. Verified death always journals. Local shutdown intent survives
+  verifier failure; an exact stop-ID check fences older admission work.
+  Session switches require attention; stopping that Membership keeps its pane.
+  Each observation source owns its sample time. Samples expire to unknown after
+  six seconds, including collection failure. A stalled read remains single-flight.
+  Herdr preparation uses bounded asynchronous calls. Only decisive shell-busy
+  refusal retries on the same pane and launch ID. Hung starts emit attention;
+  a missing Herdr row never authorizes another spawn.
   Linux reads procfs. macOS uses the dependency-free helper built with
   `npm run build:process-generation`; a missing helper yields unknown.
-  `/ptb status` offers explicit human adoption of tokenless records.
+  `/ptb status` persists one human-only transcript entry with carrier, stop,
+  and nonterminal Task evidence. It batches explicit adoption of tokenless
+  records and remembers a decline within the exact Session runtime.
+  Herdr outage attention reaches both the human and `team_sync`.
   Architecture impact: **changed** inside Pi Team Bright. HyperCarrier keeps
   these internals opaque.
 

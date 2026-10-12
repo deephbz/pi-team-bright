@@ -10,7 +10,10 @@ import {
   projectSyncNudgeMessage,
   projectTaskChangeMessage,
   projectDoctorMessage,
+  projectWorkerRecoveryMessage,
+  projectStatusEntry,
 } from "../src/model-tool-contract/custom-message-projection";
+import { renderProjectionWithTheme } from "../src/model-tool-contract/tui-message-projection";
 import { resolveWorkerLaunchResources } from "../src/utils/worker-resource-projection";
 import { SYNC_NUDGE_CUSTOM_TYPE } from "../src/utils/sync-nudge";
 import { LEGACY_TASK_CHANGE_CUSTOM_TYPE, TASK_CHANGE_CUSTOM_TYPE } from "../src/utils/task-delivery";
@@ -174,6 +177,11 @@ export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer?.(SYNC_NUDGE_CUSTOM_TYPE, createCustomMessageRenderer(projectSyncNudgeMessage) as any);
   pi.registerMessageRenderer?.(TEAM_UPDATE_TYPE, createCustomMessageRenderer(projectTeamUpdateMessage) as any);
   pi.registerMessageRenderer?.(PTB_DOCTOR_CUSTOM_TYPE, createCustomMessageRenderer(projectDoctorMessage) as any);
+  pi.registerMessageRenderer?.("ptb.worker-recovery", createCustomMessageRenderer(projectWorkerRecoveryMessage) as any);
+  pi.registerEntryRenderer?.("ptb.status", (entry, options, theme) => {
+    const projection = projectStatusEntry(entry.data);
+    return projection ? renderProjectionWithTheme(projection, options, theme) : undefined;
+  });
   registerAutomaticSummaryPolicyProvider(pi);
   // Leader and Worker tools are separate role projections. The leader owns
   // the current model-tool journey; Workers own the three Task/Alert tools.

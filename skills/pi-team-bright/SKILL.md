@@ -129,6 +129,11 @@ increase useful learning within the same budget.
 
 ## Lead: supervise and finish the request
 
+`ensure_worker` can return `attention`; follow its reason and next-action hint.
+`worker_ensured.recovered` reports exact-Session recovery without changing the Attempt.
+Ask the human before recovery when `lastStop.suspectedHumanStop` is true.
+Use `/ptb status` to inspect stop evidence and confirm adoption of legacy generations.
+
 Use `team_sync` updates to read available changes. It returns immediately and
 uses a snapshot when the current branch has no observation baseline. Mutation
 receipts already report post-state; read again only when meaning is missing,
