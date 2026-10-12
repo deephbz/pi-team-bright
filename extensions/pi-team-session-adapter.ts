@@ -1,3 +1,4 @@
+import { adoptLegacyGeneration } from "../src/team-authority/legacy-generation-adoption";
 import { CarrierObserver } from "../src/coordination/carrier-observation";
 import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -280,6 +281,11 @@ const runDoctor = async (ctx: any, requestedTeamName?: string) => {
       present("Doctor guide or metadata is unavailable. Check the installed package and retry.", "error");
       return;
     }
+    if (selectedTeamName) {
+      const observer = selectedTeamName === owner.teamName && carrierObserver ? carrierObserver : new CarrierObserver(selectedTeamName);
+      await observer.refresh().catch(() => undefined);
+      content += `\n\nCarrierView (current observations):\n${JSON.stringify([...observer.views.values()], null, 2)}`;
+    }
     if (!owner.isCurrent()) {
       present("Doctor request cancelled because the Session or Team changed. Run /ptb doctor again.", "warning");
       return;
@@ -361,6 +367,18 @@ const runStatus = async (ctx: any) => {
       const report = await diagnoseTeam(owner.teamName, { role: owner.role, sessionBinding, sessionDetail });
       if (!owner.isCurrent()) return;
       present(formatTeamStatus(report), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
+      if (owner.role === "team-lead" && sessionBinding === "current") {
+        const observer = carrierObserver ?? new CarrierObserver(owner.teamName);
+        await observer.refresh();
+        for (const view of observer.views.values()) {
+          present(`${view.worker}: process ${view.process}; launch ${view.launch}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}.`);
+          if (view.generation && !view.generation.osBirthToken && !view.lastStop && ctx.hasUI !== false && ctx.ui?.confirm) {
+            const accepted = await ctx.ui.confirm("Adopt legacy Worker generation?", `Verify and record the current OS birth token for ${view.worker} in pane ${view.paneId ?? "unknown"}? This requires a matching Herdr Session.`);
+            if (!owner.isCurrent()) return;
+            if (accepted) present(await adoptLegacyGeneration(owner.teamName, view.worker, view.membership) ? `${view.worker}: generation adopted.` : `${view.worker}: adoption refused; evidence changed or is unavailable.`, "warning");
+          }
+        }
+      }
     } catch (error) {
       if (owner.isCurrent()) present(`Pi Team Bright status failed for ${owner.teamName}. ${error instanceof Error ? error.message : String(error)}`, "error");
     }
