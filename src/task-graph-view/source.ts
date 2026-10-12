@@ -5,6 +5,7 @@ import type {
   GraphTaskView,
 } from "../task-authority/graph-control";
 import type { TaskCard } from "../task-authority/task-domain";
+import { TASK_ID_MAX_LENGTH } from "../task-authority/task-field-limits";
 
 export const TASK_GRAPH_VIEW_SCHEMA = "pi-team-bright-task-graph-view/3" as const;
 export const TASK_GRAPH_DEFAULT_LIMIT = 50;
@@ -163,6 +164,11 @@ function boundedString(value: unknown, field: string, maxLength: number): string
   return value;
 }
 
+function nonemptyString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.length < 1) throw new Error(`${field} must be a nonempty string.`);
+  return value;
+}
+
 function identityString(value: unknown, field: string, maxLength: number): string {
   const text = boundedString(value, field, maxLength);
   if (/[\u0000-\u001f\u007f-\u009f]/u.test(text)) {
@@ -182,8 +188,13 @@ export function sanitizeTaskGraphDisplayText(value: string): string {
     .trim();
 }
 
-function displayString(value: unknown, field: string, maxLength: number): string {
-  const raw = boundedString(value, field, maxLength);
+/**
+ * Task prose is authority-owned. Its authoring limits apply when a Task is
+ * written; this reader accepts every stored value, and TASK_GRAPH_MAX_SOURCE_BYTES
+ * bounds the whole source.
+ */
+function displayString(value: unknown, field: string): string {
+  const raw = nonemptyString(value, field);
   const clean = sanitizeTaskGraphDisplayText(raw);
   if (!clean) throw new Error(`${field} contains no displayable text.`);
   return clean;
@@ -339,7 +350,7 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
   if (!NODE_STATE.has(node.state as TaskGraphNodeState)) throw new Error(`${field}.state is invalid.`);
   if (!Array.isArray(node.waiting_on_task_ids)) throw new Error(`${field}.waiting_on_task_ids must be an array.`);
   const waiting = node.waiting_on_task_ids.map((taskId, taskIndex) =>
-    identityString(taskId, `${field}.waiting_on_task_ids[${taskIndex}]`, 128));
+    identityString(taskId, `${field}.waiting_on_task_ids[${taskIndex}]`, TASK_ID_MAX_LENGTH));
   if (new Set(waiting).size !== waiting.length) throw new Error(`${field} contains duplicate waiting Task IDs.`);
   const state = node.state as TaskGraphNodeState;
   if ((state === "dependency_waiting") !== (waiting.length > 0)) {
@@ -396,11 +407,11 @@ function parseNode(value: unknown, index: number): TaskGraphViewNode {
     throw new Error(`${field}.last_activity_at cannot be before first_activity_at.`);
   }
   return {
-    id: identityString(node.id, `${field}.id`, 128),
-    title: displayString(node.title, `${field}.title`, 256),
-    ...(node.goal === undefined ? {} : { goal: displayString(node.goal, `${field}.goal`, 1_000) }),
-    ...(node.current_context === undefined ? {} : { current_context: displayString(node.current_context, `${field}.current_context`, 2_000) }),
-    ...(node.assignee === undefined ? {} : { assignee: displayString(node.assignee, `${field}.assignee`, 128) }),
+    id: identityString(node.id, `${field}.id`, TASK_ID_MAX_LENGTH),
+    title: displayString(node.title, `${field}.title`),
+    ...(node.goal === undefined ? {} : { goal: displayString(node.goal, `${field}.goal`) }),
+    ...(node.current_context === undefined ? {} : { current_context: displayString(node.current_context, `${field}.current_context`) }),
+    ...(node.assignee === undefined ? {} : { assignee: displayString(node.assignee, `${field}.assignee`) }),
     state,
     waiting_on_task_ids: waiting,
     activity_cursor: parseCursor(node.activity_cursor, `${field}.activity_cursor`),
@@ -419,8 +430,8 @@ function parseEdge(value: unknown, index: number): TaskGraphViewEdge {
   if (!EDGE_KIND.has(edge.kind as TaskGraphEdgeKind)) throw new Error(`${field}.kind is invalid.`);
   const kind = edge.kind as TaskGraphEdgeKind;
   const parsed: TaskGraphViewEdge = {
-    from_task_id: identityString(edge.from_task_id, `${field}.from_task_id`, 128),
-    to_task_id: identityString(edge.to_task_id, `${field}.to_task_id`, 128),
+    from_task_id: identityString(edge.from_task_id, `${field}.from_task_id`, TASK_ID_MAX_LENGTH),
+    to_task_id: identityString(edge.to_task_id, `${field}.to_task_id`, TASK_ID_MAX_LENGTH),
     kind,
   };
   if (kind === "goal_failed") {
@@ -543,7 +554,7 @@ function activityCoordinates(
   const headCursor = parseCursor(activity.headCursor, "activity.headCursor");
   const byTask = new Map<string, ParsedTaskGraphActivity>();
   for (const [index, coordinate] of activity.tasks.entries()) {
-    const taskId = identityString(coordinate.taskId, `activity.tasks[${index}].taskId`, 128);
+    const taskId = identityString(coordinate.taskId, `activity.tasks[${index}].taskId`, TASK_ID_MAX_LENGTH);
     const cursor = parseCursor(coordinate.cursor, `activity.tasks[${index}].cursor`);
     const firstActivityAt = coordinate.firstActivityAt === undefined
       ? undefined

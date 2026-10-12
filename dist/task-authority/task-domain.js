@@ -1,39 +1,42 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TaskCardSchema = exports.TaskCardIncompleteSchema = exports.TaskCardCompleteSchema = exports.TaskDependencyStateSchema = exports.TaskDependencyRelationSchema = exports.TaskCardWarningSchema = exports.TaskCardContextSchema = exports.TaskCardStatusSchema = exports.TASK_CARD_CONTEXT_MAX_LENGTH = exports.TASK_CARD_TITLE_MAX_LENGTH = exports.TASK_CARD_GOAL_MAX_LENGTH = void 0;
+exports.TaskCardSchema = exports.TaskCardIncompleteSchema = exports.TaskCardCompleteSchema = exports.TaskDependencyStateSchema = exports.TaskDependencyRelationSchema = exports.TaskCardWarningSchema = exports.TaskCardContextSchema = exports.TaskCardStatusSchema = exports.TASK_ID_MAX_LENGTH = exports.TASK_CARD_TITLE_MAX_LENGTH = exports.TASK_CARD_CONTEXT_MAX_LENGTH = exports.TASK_CARD_GOAL_MAX_LENGTH = void 0;
 exports.isTaskCardContext = isTaskCardContext;
 exports.isTaskCardGoal = isTaskCardGoal;
 exports.isGraphTaskCard = isGraphTaskCard;
 exports.isTaskTerminal = isTaskTerminal;
 const typebox_1 = require("typebox");
 const task_limits_1 = require("./task-limits");
+const task_field_limits_1 = require("./task-field-limits");
 var task_limits_2 = require("./task-limits");
 Object.defineProperty(exports, "TASK_CARD_GOAL_MAX_LENGTH", { enumerable: true, get: function () { return task_limits_2.TASK_CARD_GOAL_MAX_LENGTH; } });
+var task_field_limits_2 = require("./task-field-limits");
+Object.defineProperty(exports, "TASK_CARD_CONTEXT_MAX_LENGTH", { enumerable: true, get: function () { return task_field_limits_2.TASK_CARD_CONTEXT_MAX_LENGTH; } });
+Object.defineProperty(exports, "TASK_CARD_TITLE_MAX_LENGTH", { enumerable: true, get: function () { return task_field_limits_2.TASK_CARD_TITLE_MAX_LENGTH; } });
+Object.defineProperty(exports, "TASK_ID_MAX_LENGTH", { enumerable: true, get: function () { return task_field_limits_2.TASK_ID_MAX_LENGTH; } });
 const task_version_ref_1 = require("./task-version-ref");
 const graph_control_schemas_1 = require("./graph-control-schemas");
 /** Neutral Task contract. This module imports no authority or persistence code. */
-exports.TASK_CARD_TITLE_MAX_LENGTH = 80;
-exports.TASK_CARD_CONTEXT_MAX_LENGTH = 2_000;
 exports.TaskCardStatusSchema = typebox_1.Type.Enum(["open", "in_progress", "blocked", "closed"]);
-exports.TaskCardContextSchema = typebox_1.Type.String({ minLength: 1, maxLength: exports.TASK_CARD_CONTEXT_MAX_LENGTH });
+exports.TaskCardContextSchema = typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_CARD_CONTEXT_MAX_LENGTH });
 exports.TaskCardWarningSchema = typebox_1.Type.Object({
-    task_id: typebox_1.Type.String({ minLength: 1, maxLength: 128 }),
+    task_id: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH }),
     truncated_fields: typebox_1.Type.Array(typebox_1.Type.Enum(["title", "goal", "current_context"])),
     incomplete_fields: typebox_1.Type.Array(typebox_1.Type.Enum(["title", "goal", "current_context"])),
     message: typebox_1.Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 exports.TaskDependencyRelationSchema = typebox_1.Type.Object({
     relation: typebox_1.Type.Enum(["blocked_by", "parent", "related"]),
-    target_task_id: typebox_1.Type.String({ minLength: 1, maxLength: 128 }),
+    target_task_id: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH }),
 }, { additionalProperties: false });
 exports.TaskDependencyStateSchema = typebox_1.Type.Union([
-    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("ready"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: 128 }), { maxItems: 0 }) }, { additionalProperties: false }),
-    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("waiting"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: 128 }), { minItems: 1 }) }, { additionalProperties: false }),
-    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("terminal"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: 128 })) }, { additionalProperties: false }),
+    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("ready"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH }), { maxItems: 0 }) }, { additionalProperties: false }),
+    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("waiting"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH }), { minItems: 1 }) }, { additionalProperties: false }),
+    typebox_1.Type.Object({ kind: typebox_1.Type.Literal("terminal"), active_blocker_ids: typebox_1.Type.Array(typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH })) }, { additionalProperties: false }),
 ]);
 const TaskCardBase = {
-    id: typebox_1.Type.String({ minLength: 1, maxLength: 128 }),
-    title: typebox_1.Type.String({ minLength: 1, maxLength: exports.TASK_CARD_TITLE_MAX_LENGTH }),
+    id: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH }),
+    title: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_CARD_TITLE_MAX_LENGTH }),
     status: exports.TaskCardStatusSchema,
     assignee: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1, maxLength: 64 })),
     relations: typebox_1.Type.Optional(typebox_1.Type.Array(exports.TaskDependencyRelationSchema)),
@@ -57,7 +60,7 @@ exports.TaskCardIncompleteSchema = typebox_1.Type.Object({
  */
 exports.TaskCardSchema = typebox_1.Type.Union([exports.TaskCardCompleteSchema, exports.TaskCardIncompleteSchema, graph_control_schemas_1.GraphTaskCardSchema]);
 function isTaskCardContext(value) {
-    return typeof value === "string" && value.length >= 1 && value.length <= exports.TASK_CARD_CONTEXT_MAX_LENGTH;
+    return typeof value === "string" && value.length >= 1 && value.length <= task_field_limits_1.TASK_CARD_CONTEXT_MAX_LENGTH;
 }
 function isTaskCardGoal(value) {
     return typeof value === "string" && value.length >= 1 && value.length <= task_limits_1.TASK_CARD_GOAL_MAX_LENGTH;

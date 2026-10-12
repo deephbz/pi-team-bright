@@ -1,17 +1,17 @@
 import { Type, type Static } from "typebox";
 import { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
+import { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_TITLE_MAX_LENGTH, TASK_ID_MAX_LENGTH } from "./task-field-limits";
 export { TASK_CARD_GOAL_MAX_LENGTH } from "./task-limits";
+export { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_TITLE_MAX_LENGTH, TASK_ID_MAX_LENGTH } from "./task-field-limits";
 import { TaskVersionRefSchema } from "./task-version-ref";
 import { GraphTaskCardSchema, type GraphTaskCard } from "./graph-control-schemas";
 
 /** Neutral Task contract. This module imports no authority or persistence code. */
-export const TASK_CARD_TITLE_MAX_LENGTH = 80;
-export const TASK_CARD_CONTEXT_MAX_LENGTH = 2_000;
 
 export const TaskCardStatusSchema = Type.Enum(["open", "in_progress", "blocked", "closed"]);
 export const TaskCardContextSchema = Type.String({ minLength: 1, maxLength: TASK_CARD_CONTEXT_MAX_LENGTH });
 export const TaskCardWarningSchema = Type.Object({
-  task_id: Type.String({ minLength: 1, maxLength: 128 }),
+  task_id: Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH }),
   truncated_fields: Type.Array(Type.Enum(["title", "goal", "current_context"])),
   incomplete_fields: Type.Array(Type.Enum(["title", "goal", "current_context"])),
   message: Type.String({ minLength: 1 }),
@@ -19,17 +19,17 @@ export const TaskCardWarningSchema = Type.Object({
 
 export const TaskDependencyRelationSchema = Type.Object({
   relation: Type.Enum(["blocked_by", "parent", "related"]),
-  target_task_id: Type.String({ minLength: 1, maxLength: 128 }),
+  target_task_id: Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH }),
 }, { additionalProperties: false });
 
 export const TaskDependencyStateSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("ready"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { maxItems: 0 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("waiting"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: 128 }), { minItems: 1 }) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("terminal"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: 128 })) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("ready"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH }), { maxItems: 0 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("waiting"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH }), { minItems: 1 }) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("terminal"), active_blocker_ids: Type.Array(Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH })) }, { additionalProperties: false }),
 ]);
 
 const TaskCardBase = {
-  id: Type.String({ minLength: 1, maxLength: 128 }),
+  id: Type.String({ minLength: 1, maxLength: TASK_ID_MAX_LENGTH }),
   title: Type.String({ minLength: 1, maxLength: TASK_CARD_TITLE_MAX_LENGTH }),
   status: TaskCardStatusSchema,
   assignee: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),

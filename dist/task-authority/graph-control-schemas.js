@@ -4,7 +4,8 @@ exports.GraphTaskUpdateParametersSchema = exports.TaskGraphApplyParametersSchema
 const typebox_1 = require("typebox");
 const task_version_ref_1 = require("./task-version-ref");
 const task_limits_1 = require("./task-limits");
-const TaskId = typebox_1.Type.String({ minLength: 1, maxLength: 128 });
+const task_field_limits_1 = require("./task-field-limits");
+const TaskId = typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_ID_MAX_LENGTH });
 const TaskKey = typebox_1.Type.String({ minLength: 1, maxLength: 64, pattern: "^[A-Za-z0-9_-]+$" });
 const WorkerName = typebox_1.Type.String({ minLength: 1, maxLength: 64 });
 const OperationId = typebox_1.Type.String({ minLength: 1, maxLength: 128 });
@@ -61,14 +62,14 @@ exports.GraphAttemptSummarySchema = typebox_1.Type.Object({
 /** Canonical graph-native Task card used by tools, delivery, and Coordination. */
 exports.GraphTaskCardSchema = typebox_1.Type.Object({
     id: TaskId,
-    title: typebox_1.Type.String({ minLength: 1, maxLength: 80 }),
+    title: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_CARD_TITLE_MAX_LENGTH }),
     goal: typebox_1.Type.String({ minLength: 1, maxLength: task_limits_1.TASK_CARD_GOAL_MAX_LENGTH }),
     assignee: WorkerName,
     needs: typebox_1.Type.Array(TaskId),
     on_goal_failed: typebox_1.Type.Optional(exports.GraphFailureEdgeSchema),
     status: typebox_1.Type.Enum(["dependency_waiting", "ready", "in_progress", "blocked", "goal_failed", "goal_achieved", "cancelled"]),
     state: exports.GraphTaskStateSchema,
-    current_context: typebox_1.Type.String({ minLength: 1, maxLength: 2_000 }),
+    current_context: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_CARD_CONTEXT_MAX_LENGTH }),
     version: task_version_ref_1.TaskVersionRefSchema,
     activation_key: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1 })),
     accepted_attempt_id: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1 })),
@@ -94,7 +95,7 @@ exports.GraphTaskCardSchema = typebox_1.Type.Object({
 }, { additionalProperties: false });
 const GraphTaskItemSchema = typebox_1.Type.Object({
     key: TaskKey,
-    title: typebox_1.Type.String({ minLength: 1, maxLength: 80 }),
+    title: typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_CARD_TITLE_MAX_LENGTH }),
     goal: typebox_1.Type.String({ minLength: 1, maxLength: task_limits_1.TASK_CARD_GOAL_MAX_LENGTH, description: "Desired outcome and external success signal." }),
     assignee: WorkerName,
     needs: typebox_1.Type.Optional(typebox_1.Type.Array(TaskKey, { uniqueItems: true })),
@@ -115,7 +116,7 @@ exports.GraphTaskUpdateParametersSchema = typebox_1.Type.Object({
     operation_id: OperationId,
     expected_version: task_version_ref_1.TaskVersionRefSchema,
     transition: typebox_1.Type.Optional(exports.GraphTaskTransitionSchema),
-    current_context: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1, maxLength: 2_000 })),
+    current_context: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1, maxLength: task_field_limits_1.TASK_CARD_CONTEXT_MAX_LENGTH })),
     evidence: typebox_1.Type.Optional(typebox_1.Type.String({ minLength: 1 })),
 }, {
     additionalProperties: false,

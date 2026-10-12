@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GraphTaskController, type GraphTaskTransition } from "../task-authority/graph-control";
 import { taskVersionRef } from "../task-authority/task-version-ref";
-import type { TaskCard } from "../task-authority/task-domain";
+import { TASK_CARD_CONTEXT_MAX_LENGTH, TASK_CARD_GOAL_MAX_LENGTH, TASK_CARD_TITLE_MAX_LENGTH, type TaskCard } from "../task-authority/task-domain";
 import {
   parseTaskGraphLimit,
   parseTaskGraphViewSource,
@@ -253,6 +253,30 @@ describe("Task graph view source", () => {
     expect(visible.nodes[0].state).toBe("dependency_waiting");
     expect(visible.omittedNodeCount).toBe(6);
     expect(visible.boundaryEdgeCount).toBe(1);
+  });
+
+  it("renders every Task text the authority stored, including text above a later lowered limit", () => {
+    const controller = new GraphTaskController();
+    controller.applyGraph({
+      operationId: "graph",
+      tasks: [{
+        key: "long",
+        title: "t".repeat(TASK_CARD_TITLE_MAX_LENGTH),
+        goal: "g".repeat(TASK_CARD_GOAL_MAX_LENGTH),
+        assignee: "builder",
+      }],
+    });
+    const source = projectGraphControlTaskGraphViewSource({ teamName: "graph-team", trace: controller.trace() });
+    expect(parseTaskGraphViewSourceJson(JSON.stringify(source)).nodes[0].goal).toHaveLength(TASK_CARD_GOAL_MAX_LENGTH);
+
+    const stored = source.nodes.map((node) => ({
+      ...node,
+      goal: "g".repeat(TASK_CARD_GOAL_MAX_LENGTH * 2),
+      current_context: "c".repeat(TASK_CARD_CONTEXT_MAX_LENGTH * 2),
+    }));
+    const parsed = parseTaskGraphViewSourceJson(JSON.stringify({ ...source, nodes: stored }));
+    expect(parsed.nodes[0].goal).toHaveLength(TASK_CARD_GOAL_MAX_LENGTH * 2);
+    expect(parsed.nodes[0].current_context).toHaveLength(TASK_CARD_CONTEXT_MAX_LENGTH * 2);
   });
 
   it("rejects malformed authority, dangling and cyclic edges, oversized input, and unsupported limits", () => {
