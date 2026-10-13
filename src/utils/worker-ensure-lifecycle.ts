@@ -19,6 +19,7 @@ export type WorkerCarrierObservation = "live" | "missing" | {
   process: import("../carrier-observation").ProcessState;
   readmitted?: boolean;
   generation?: { osBirthToken?: string };
+  evidence?: ReadonlyArray<{ source: string; fact: string }>;
   lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork" } | "none" | "quit" | "reload" | "new" | "resume" | "fork";
 };
 
@@ -68,6 +69,10 @@ export function planWorkerEnsure(carrier: WorkerCarrierState, observation: Worke
   const evidence: Exclude<WorkerCarrierObservation, string> = typeof observation === "string" ? { launch: "unknown", process: "unknown" } : observation;
   const lastStop = typeof evidence.lastStop === "object" ? evidence.lastStop.piReason : evidence.lastStop;
   const attention = (carrier: PreparedWorkerCarrier | BoundWorkerCarrier | UnboundWorkerCarrier, reason: string, nextActionHint: "wait" | "ask_human" = "wait"): WorkerEnsurePlan => ({ action: "attention", carrier, reason, nextActionHint });
+  if (carrier.kind !== "absent" && carrier.kind !== "invalid" && evidence.process === "unknown"
+    && evidence.evidence?.some(item => item.source === "process_generation" && item.fact === "generation_helper_missing")) {
+    return attention(carrier, "generation_helper_missing", "ask_human");
+  }
   switch (carrier.kind) {
     case "absent":
       return { action: "create" };

@@ -29,6 +29,9 @@ vi.mock("../utils/team-terminal", async () => {
   return { currentTerminalForTeam: () => terminal };
 });
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
+import { createModelToolJourneyExecutors } from "../model-tool-contract/executors";
+import { projectToolResult } from "../model-tool-contract/result-projection";
+import { projectToolTuiMessage } from "../model-tool-contract/tui-projection";
 
 beforeEach(() => { fixture.members = []; fixture.leased = false; fixture.splits = 0; fixture.starts = 0; });
 afterEach(() => { vi.restoreAllMocks(); });
@@ -61,6 +64,28 @@ it.each(["none", "requested", "started", "unknown", "refused"] as const)("preser
   expect(fixture.splits).toBe(0);
   expect(fixture.starts).toBe(0);
   expect(fixture.members[0].sessionFile).toBe("/sessions/worker.jsonl");
+});
+it.each([true, false])("missing macOS helper gives actionable attention without spawning (tokened=%s)", async tokened => {
+  fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", sessionFile: "/sessions/worker.jsonl",
+    terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
+    launch: { launchId: "launch", state: "started", requestedAt: Date.now() - 16000 } } as Member];
+  vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue({ teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1,
+    ...(tokened ? { osBirthToken: "1:2", bootId: "3:4" } : {}) });
+  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "unknown", reason: "generation_helper_missing" });
+  const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
+  const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
+  const result = await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" });
+  expect(result).toMatchObject({ action: "attention", reason: "generation_helper_missing", nextActionHint: "ask_human" });
+  const executors = createModelToolJourneyExecutors({ team: { ensureWorker: async () => ({ ...result, kind: "attention", worker: { name: "worker" } }) } } as any);
+  const details = await executors.ensureWorker("lead" as any, { name: "worker", scope: "test" });
+  const served = projectToolResult("ensure_worker", details) as any;
+  expect(served.message).toMatch(/macOS.*helper.*missing/i);
+  expect(served.message).toContain("npm run build:process-generation");
+  expect(served.message).toContain("rustc");
+  expect(projectToolTuiMessage({ tool: "ensure_worker", details, expanded: false }).body?.join("\n")).toContain(served.message);
+  expect(run).not.toHaveBeenCalled();
+  expect(fixture.splits).toBe(0);
+  expect(fixture.starts).toBe(0);
 });
 it("returns a durable receipt before readiness and fences late completion", async () => {
   const publication = { readEventCursor: () => "0", recordWorkerPrepared: async () => ({ cursor: "1" }), observeWorkerStartup: vi.fn() } as any;
