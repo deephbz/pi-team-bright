@@ -15,7 +15,7 @@ vi.mock("node:child_process", async importOriginal => ({
 const platform = process.platform;
 afterEach(() => { Object.defineProperty(process, "platform", { value: platform }); fixture.code = "ENOENT"; });
 
-it("missing macOS helper stays unknown in single and batch probes and names the startup remedy", async () => {
+it("missing macOS helper stays unknown and refuses different-pid admission with the build remedy", async () => {
   Object.defineProperty(process, "platform", { value: "darwin" });
   const expected = { kind: "unknown", reason: "generation_helper_missing" };
   expect(probeProcessGeneration(123)).toEqual(expected);
@@ -26,6 +26,29 @@ it("missing macOS helper stays unknown in single and batch probes and names the 
     expect(result).toMatchObject({ kind: "refused", nextActionHint: "ask_human" });
     if (result.kind !== "refused") throw new Error("Missing helper must refuse admission");
     expect(result.reason).toMatch(/macOS.*helper.*missing/i);
+    expect(result.reason).toContain("npm run build:process-generation");
+  });
+});
+
+it.each([true, false])("admits same-pid bound re-entry without the helper (tokened=%s)", tokened => {
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, pid: 123, generation: probeProcessGeneration } }, () => {
+    const member = { name: "worker", membershipId: "m", sessionFile: "/session" };
+    const status = { teamName: "team", agentName: "worker", membershipId: "m", pid: 123, startedAt: 1,
+      ...(tokened ? { osBirthToken: "1:2", bootId: "3:4" } : {}) };
+    expect(admitRuntimeStartup(member, "/session", status)).toEqual({ kind: "admitted", action: "already_current" });
+    expect(admitRuntimeStartup(member, "/other-session", status)).toMatchObject({ kind: "refused" });
+    expect(admitRuntimeStartup(member, "/session", { ...status, membershipId: "other" })).toMatchObject({ kind: "refused" });
+  });
+});
+
+it.each([123, 456])("keeps prepared claims fenced without the helper (caller pid=%s)", pid => {
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, pid, generation: probeProcessGeneration } }, () => {
+    const result = admitRuntimeStartup({ name: "worker", membershipId: "m", pendingLaunchId: "launch" }, "/session",
+      { teamName: "team", agentName: "worker", membershipId: "m", pid: 123, startedAt: 1 }, pid, undefined, "launch");
+    expect(result).toMatchObject({ kind: "refused", nextActionHint: "ask_human" });
+    if (result.kind !== "refused") throw new Error("A prepared claim has no bound Session for re-entry");
     expect(result.reason).toContain("npm run build:process-generation");
   });
 });

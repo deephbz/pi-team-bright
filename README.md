@@ -294,13 +294,17 @@ pi install npm:@hypercarrier/pi-team-bright@0.20.0
 
 ### Carrier-liveness upgrade (unreleased)
 
-On macOS, install Rust (`rustc`) and Xcode Command Line Tools before installing
-this update. The package's `postinstall` hook builds the process-generation
-helper from its included source. Linux uses procfs and needs no native build.
-If install scripts were disabled, run `npm run build:process-generation` from
-the installed `@hypercarrier/pi-team-bright` directory. A missing helper returns
-`generation_helper_missing` attention with `ask_human` and this build command.
-PTB cannot verify or replace a Worker generation until the helper is available.
+On macOS, the package's `postinstall` hook builds the process-generation helper
+from included Rust source. If `rustc` is missing, installation succeeds with one
+warning that names the build command. Install Rust (`rustc`) and Xcode Command
+Line Tools, then run `npm run build:process-generation` from the installed
+`@hypercarrier/pi-team-bright` directory. Use the same command if install scripts
+were disabled. Linux uses procfs and needs no native build.
+
+A missing helper returns `generation_helper_missing` attention with `ask_human`
+and this build command. Plain `/reload` in the same bound Pi process remains
+admitted as `already_current`. This does not verify the generation. A
+replacement with a different PID still refuses until the helper is available.
 
 For a live Team, reload the lead's Pi first, then reload each Worker's Pi. Keep
 the Team store and native Session logs. A bound legacy Worker without a birth
