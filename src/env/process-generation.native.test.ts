@@ -5,11 +5,18 @@ import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
 // Regression for the independent C2 native probe; no production process is changed.
-it.skipIf(process.platform !== "darwin")("reports stable microsecond birth identity and decisive absence on macOS", () => {
+it.skipIf(process.platform !== "darwin")("builds via the macOS postinstall hook and reports stable birth identity and absence", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ptb-native-probe-"));
   try {
-    const helper = path.join(dir, "generation");
-    const build = spawnSync("rustc", ["native/process-generation.rs", "-o", helper], { encoding: "utf8", timeout: 30000 });
+    // A clean installed layout has source and the build script, but no binary.
+    for (const file of ["package.json", "native/process-generation.rs", "scripts/build-process-generation.sh"]) {
+      const target = path.join(dir, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.copyFileSync(file, target);
+    }
+    const helper = path.join(dir, "native/bin/process-generation");
+    expect(fs.existsSync(helper)).toBe(false);
+    const build = spawnSync("npm", ["run", "postinstall"], { cwd: dir, encoding: "utf8", timeout: 30000 });
     expect(build.status, build.stderr).toBe(0);
     const read = () => {
       const result = spawnSync(helper, [String(process.pid), "2147483647"], { encoding: "utf8", timeout: 2000 });

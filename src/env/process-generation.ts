@@ -3,6 +3,10 @@ import path from "node:path";
 import { execFile, spawnSync } from "node:child_process";
 import type { GenerationProbe } from "./host-env";
 
+export const MISSING_GENERATION_HELPER_MESSAGE = "The macOS process-generation helper is missing. Install Rust (rustc) and Xcode Command Line Tools, then run npm run build:process-generation in the installed @hypercarrier/pi-team-bright directory. Retry after the build.";
+const helperFailure = (error: (Error & { code?: string | number | null }) | null | undefined): GenerationProbe => ({ kind: "unknown",
+  reason: error?.code === "ENOENT" ? "generation_helper_missing" : "generation_helper_unavailable" });
+
 /** Field 22 follows a parenthesized comm which can itself contain spaces and ')'. */
 export function linuxStartToken(stat: string): string | undefined {
   if (!/^\d+ \(/.test(stat) || stat.lastIndexOf(")") < 0) return undefined;
@@ -27,7 +31,7 @@ export async function probeProcessGenerations(pids: readonly number[]): Promise<
   return new Promise(resolve => {
     execFile(helper, unique.map(String), { encoding: "utf8", timeout: 2000 }, (error, stdout) => {
       const lines = new Map(String(stdout ?? "").trim().split("\n").map(line => [Number(line.split(/\s+/)[0]), line]));
-      resolve(new Map(unique.map(pid => [pid, error ? { kind: "unknown", reason: "generation_helper_unavailable" } : parseReply(pid, lines.get(pid) ?? "")])));
+      resolve(new Map(unique.map(pid => [pid, error ? helperFailure(error) : parseReply(pid, lines.get(pid) ?? "")])));
     });
   });
 }
@@ -46,7 +50,7 @@ export function probeProcessGeneration(pid: number): GenerationProbe {
     if (process.platform === "darwin") {
       const helper = path.resolve(__dirname, "../../native/bin/process-generation");
       const result = spawnSync(helper, [String(pid)], { encoding: "utf8", timeout: 2000 });
-      if (result.error || result.status !== 0) return { kind: "unknown", reason: "generation_helper_unavailable" };
+      if (result.error || result.status !== 0) return helperFailure(result.error);
       return parseReply(pid, result.stdout);
     }
     return { kind: "unknown", reason: "generation_verifier_unavailable" };

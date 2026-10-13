@@ -1,4 +1,5 @@
 import { hostEnv } from "../env/host-env";
+import { MISSING_GENERATION_HELPER_MESSAGE } from "../env/process-generation";
 import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
@@ -81,7 +82,7 @@ export function runtimeGeneration(status: AgentRuntimeStatus | null): RuntimeGen
 /** One current Membership admits one live Pi process generation. */
 export type RuntimeStartupAdmission =
   | { kind: "admitted"; action: "claim" | "already_current"; replaces?: RuntimeGeneration }
-  | { kind: "refused"; reason: string };
+  | { kind: "refused"; reason: string; nextActionHint?: "ask_human" };
 
 /** A pure recovery check. Only the spawned child can claim and publish startup. */
 export type RuntimeRecoveryPreflight =
@@ -148,10 +149,14 @@ export function admitRuntimeStartup(
     if (generation.membershipId !== member.membershipId) {
       return { kind: "refused", reason: `Runtime evidence for prepared ${member.name} belongs to another Membership.` };
     }
+    const observed = probe ? undefined : hostEnv().process.generation(generation.pid);
+    if (observed?.kind === "unknown" && observed.reason === "generation_helper_missing") {
+      return { kind: "refused", reason: MISSING_GENERATION_HELPER_MESSAGE, nextActionHint: "ask_human" };
+    }
     // A prepared Membership has no completed Session binding. A same-PID
     // record can only be a prior claim whose bind failed, not an idempotent
     // Session re-entry. Keep it fenced until exact exit evidence exists.
-    if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status) === "gone") return { kind: "admitted", action: "claim", replaces: generation };
+    if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status, observed) === "gone") return { kind: "admitted", action: "claim", replaces: generation };
     return { kind: "refused", reason: `Prepared Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
   }
   if (member.sessionFile !== sessionFile) {
@@ -161,8 +166,12 @@ export function admitRuntimeStartup(
   if (!generation || generation.membershipId !== member.membershipId) {
     return { kind: "refused", reason: `Runtime evidence for already Session-bound ${member.name} is missing, malformed, or belongs to another Membership.` };
   }
-  if (generation.pid === pid && (!status?.osBirthToken || verifyRuntimeGeneration(status) === "live" || probe)) return { kind: "admitted", action: "already_current" };
-  if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status) === "gone") return { kind: "admitted", action: "claim", replaces: generation };
+  const observed = probe ? undefined : hostEnv().process.generation(generation.pid);
+  if (observed?.kind === "unknown" && observed.reason === "generation_helper_missing") {
+    return { kind: "refused", reason: MISSING_GENERATION_HELPER_MESSAGE, nextActionHint: "ask_human" };
+  }
+  if (generation.pid === pid && (!status?.osBirthToken || verifyRuntimeGeneration(status, observed) === "live" || probe)) return { kind: "admitted", action: "already_current" };
+  if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status, observed) === "gone") return { kind: "admitted", action: "claim", replaces: generation };
   return { kind: "refused", reason: `Current Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
 }
 

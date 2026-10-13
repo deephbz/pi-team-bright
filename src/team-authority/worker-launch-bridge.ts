@@ -92,7 +92,7 @@ export class WorkerLaunchBridge {
     });
   }
   private async inspectAttention(request: WorkerLaunchRequest, result: WorkerLaunchResult): Promise<WorkerLaunchResult> {
-    if (result.action !== "attention" || result.reason === "legacy_unverified" || !result.member || result.member.terminalTarget?.backend !== "herdr"
+    if (result.action !== "attention" || ["legacy_unverified", "generation_helper_missing"].includes(result.reason) || !result.member || result.member.terminalTarget?.backend !== "herdr"
       || !launchIsStalled(result.member, [])) return result;
     const agents = await herdrList("agent").catch(() => undefined);
     assertLockDeadline();
@@ -118,7 +118,7 @@ export class WorkerLaunchBridge {
         // Even a bound dead prior generation cannot bypass an in-flight recovery.
         const pending = current.launch && (current.launch.state === "requested" || current.launch.state === "started" || current.launch.state === "unknown")
           && (!status || current.launch.priorGeneration?.osBirthToken === status.osBirthToken);
-        if (pending && plan.action !== "reuse" && !(plan.action === "attention" && plan.reason === "legacy_unverified")) return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: "launch_pending", nextActionHint: "wait" };
+        if (pending && plan.action !== "reuse" && !(plan.action === "attention" && ["legacy_unverified", "generation_helper_missing"].includes(plan.reason))) return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: "launch_pending", nextActionHint: "wait" };
         if (plan.action === "reuse") return { action: "reused", member: current, membershipId: current.membershipId!, target: memberTerminalTarget(current, config.terminalBackend), lastStop: view.lastStop };
         if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint };
         if (plan.action === "refuse") throw new Error(`Invalid carrier: ${plan.reason}`);
