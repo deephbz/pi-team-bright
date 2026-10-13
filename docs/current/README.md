@@ -257,8 +257,12 @@ restating executable definitions.
   Linux reads procfs. On macOS, npm `postinstall` builds the dependency-free
   helper from packaged source with `rustc` and Xcode Command Line Tools.
   `npm run build:process-generation` repairs installs with disabled lifecycle
-  scripts. Missing `rustc` fails installation with a prerequisite diagnostic.
-  A missing helper yields unknown process evidence and never authorizes a spawn.
+  scripts. Missing `rustc` leaves installation successful with one warning that
+  names the build command. A missing helper yields unknown process evidence and
+  never authorizes a spawn. Exact Session-bound re-entry by the same PID remains
+  `already_current` without the helper. Different-PID replacement still refuses
+  with `ask_human`. A prepared claim has no completed Session binding and keeps
+  its existing admission fence.
   `/ptb status` persists one human-only transcript entry with carrier, stop,
   and nonterminal Task evidence. It batches explicit adoption of tokenless
   records and remembers a decline within the exact Session runtime.

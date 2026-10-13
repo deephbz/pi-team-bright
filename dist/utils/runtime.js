@@ -129,11 +129,14 @@ function admitRuntimeStartup(member, sessionFile, status, pid = (0, host_env_1.h
         return { kind: "refused", reason: `Runtime evidence for already Session-bound ${member.name} is missing, malformed, or belongs to another Membership.` };
     }
     const observed = probe ? undefined : (0, host_env_1.hostEnv)().process.generation(generation.pid);
-    if (observed?.kind === "unknown" && observed.reason === "generation_helper_missing") {
+    const helperMissing = observed?.kind === "unknown" && observed.reason === "generation_helper_missing";
+    // Exact bound re-entry does not replace a generation. A missing helper must
+    // not eject the current process from its own Session during reload.
+    if (generation.pid === pid && (helperMissing || !status?.osBirthToken || verifyRuntimeGeneration(status, observed) === "live" || probe))
+        return { kind: "admitted", action: "already_current" };
+    if (helperMissing) {
         return { kind: "refused", reason: process_generation_1.MISSING_GENERATION_HELPER_MESSAGE, nextActionHint: "ask_human" };
     }
-    if (generation.pid === pid && (!status?.osBirthToken || verifyRuntimeGeneration(status, observed) === "live" || probe))
-        return { kind: "admitted", action: "already_current" };
     if (probe ? probe(generation.pid) === "absent" : verifyRuntimeGeneration(status, observed) === "gone")
         return { kind: "admitted", action: "claim", replaces: generation };
     return { kind: "refused", reason: `Current Membership for ${member.name} already has a live or unverified Pi process generation (PID ${generation.pid}).` };
