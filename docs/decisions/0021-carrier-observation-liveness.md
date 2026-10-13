@@ -52,8 +52,12 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    - `reload` keeps the same-generation `live`/`stopping` pair silent while the
      durable `lastStop` says `reload`. A verified death always journals.
    - `new`, `resume`, and `fork` mean the human replaced the Session in that pane.
-     The binding is dead while the pid stays live. These require attention, and
-     PTB never relaunches into that pane. Stopping that Membership keeps its pane.
+     The process can stay live or exit. Pi 0.83.0 exits after `/new`
+     (`docs/journal/2026-10-13-real-herdr-liveness.md`, item 5). In both cases
+     `ensure_worker` gives `session_switched` with `ask_human`. PTB never
+     relaunches into that pane. Stopping that Membership keeps its pane.
+     The real run returned `launch_stalled`. Fix 8524df1 returns
+     `session_switched` for a bound Worker.
    - Local shutdown intent survives a verifier failure. An exact stop-ID check
      fences older admission work.
 4. **Launch returns a receipt without a readiness wait.** `ensure_worker` claims a
