@@ -57,17 +57,17 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    - Local shutdown intent survives a verifier failure. An exact stop-ID check
      fences older admission work.
 4. **Launch returns a receipt without a readiness wait.** `ensure_worker` claims a
-   durable launch ID under the Membership lease, records the launch marker and the
-   target before any external effect, and returns `launch: requested` with the
+   durable launch ID under the Membership lease, records the launch ID before the
+   pane split and the target before Herdr agent start, and returns `launch: requested` with the
    receipt. The lease is released before `herdr agent start` runs. That start is a
    bounded asynchronous RPC. Success sets `started`. A refusal sets `refused` and
    keeps the pane. An RPC bound sets `unknown` with attention. A ten-second receipt
    deadline covers claim, nested leases, Herdr preparation, and target
    compare-and-swap. Expiry returns attention and prevents a late start.
    - Only a decisive shell-busy refusal retries, on the same pane and launch ID.
-   - An ambiguous start is never retried blindly. After a lead crash between pane
-     split and record, PTB reconciles markers against Herdr and the verifier and
-     raises an orphan warning.
+   - An ambiguous start is never retried blindly. Restart orphan reconciliation is
+     pending. A lead restart does not yet reconcile markers against Herdr or the
+     verifier. Target reconciliation runs in process only.
 5. **Publication baseline (lead ruling).** The accepted visible journal events are
    the only carrier publication baseline. There are no durable observation
    checkpoints. Each coordinate starts at `unknown`. Binding, launch, process,

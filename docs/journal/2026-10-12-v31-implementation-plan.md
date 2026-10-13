@@ -130,8 +130,30 @@ The PTB repository is public. Real-derived traces stay in
 `~/.pi/ptb-sim-corpus/` outside every repository. Committed fixtures are
 synthetic or sanitized probe output.
 
+## Owner ratification (2026-10-13)
+
+The owner ratified these rulings and decisions on 2026-10-13.
+
+- R1: An unknown launch never spawns.
+- R2: The visible event journal is the only publication record. No durable
+  observation checkpoints exist.
+- R3: Lead rulings G1–G10, in
+  [Lead rulings on planWorkerEnsure gaps](#lead-rulings-on-planworkerensure-gaps),
+  stand.
+- R4: G11. A bound Worker without a birth token returns `legacy_unverified` with
+  `ask_human`. No external launch occurs.
+- R5: G12. Admission publishes a verified predecessor exit before it replaces
+  that generation's runtime record. An exit-publication failure keeps the
+  predecessor current and prevents replacement.
+- R6: Checker bounds are P3 ≤ 10 s and E1–E4 ≤ 60 s of simulated time.
+- R7: Scale comes from shards: isolated 20×50 shards and a shared 3×10 world. A
+  shared 20×50 world is not claimed.
+- R8: The launch stall threshold is 15 s.
+- R9: [Decision 0020](../decisions/0020-branch-held-team-cursor.md) and
+  [Decision 0021](../decisions/0021-carrier-observation-liveness.md) are accepted.
+
 ## Not in scope now
 
-- Linux probes A7 and A9: no Linux host access path yet.
+- Linux probes A7 and A9: not run. Linux is unverified (owner decision D4=C).
 - Release or publication.
 - Hegel spike.

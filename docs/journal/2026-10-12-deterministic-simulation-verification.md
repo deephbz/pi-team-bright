@@ -142,6 +142,12 @@ fails its own assertion with a minimal recorded trace.
 `prepared` + live shell refusal stays correct while an earlier start remains
 unresolved. M2 targets only the decisive-refusal case.
 
+Gate status (2026-10-13): M1, M2, M4, M5, and M6 fail their assertions, with
+passing named controls. M3 survives in both campaign rounds. The bounded-unknown
+defense absorbs it, so E3 does not fail within the campaign bound. The literal
+all-mutants-killed gate therefore does not hold. M3 is a defended survivor, not a
+kill.
+
 ## Fake drift control
 
 A `probes` test lane records each probe's output as a fixture. Each fake
@@ -204,10 +210,15 @@ queue integration beyond `SessionManager`.
 No scenario counts as verified until its real call chain fails the mutant
 and passes the fix.
 
-## Open owner questions
+## Owner decisions
 
-1. Must a failed probe block a release, or only the next fake change?
-2. Which Linux host runs A7 and the Linux filesystem probes?
+Resolved 2026-10-13:
+
+1. Probe policy (D3=B): a refuted real-world probe blocks a release only when a
+   safety property depends on the faked assumption. Otherwise it blocks changes
+   to that fake, and the docs mark the assumption unverified.
+2. Linux (D4=C): Linux stays unverified. Probes A7 and A9 have not run. A later
+   check runs them.
 
 ## Limits
 
