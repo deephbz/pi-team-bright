@@ -25,13 +25,14 @@ import type { BeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-t
 import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
-import { diagnoseTeam, formatTeamStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
+import { diagnoseTeam, formatTeamStatus, formatCarrierStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { collectPtbDoctorContext, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbAction, type PtbSettingsScope } from "../src/utils/ptb-command";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
+import { createProcessGenerationWarning } from "./process-generation-warning";
 import { CompactionDeliveryGate, DELIVERY_HOLD_CHANNEL, isDeliveryHoldSignal } from "./compaction-delivery-gate";
 import { openPtbCommandPalette } from "./ptb-command-palette";
 import { TeamUpdateController } from "./team-update";
@@ -86,6 +87,7 @@ export function createPiTeamSessionAdapter(options: {
   let workerResourcePolicy: WorkerResourcePolicy | undefined;
   let workerActiveToolBaseline: string[] | undefined;
   const settingsWarnings = createSettingsWarningPresenter();
+  const warnMissingGenerationHelper = createProcessGenerationWarning();
   let doctorGeneration = 0;
   let titleOwned = false;
   let titleGeneration = 0;
@@ -352,6 +354,7 @@ const runStatus = async (ctx: any) => {
       const report = await diagnoseTeam(owner.teamName, { role: owner.role, sessionBinding, sessionDetail });
       if (!owner.isCurrent()) return;
       const lines = [formatTeamStatus(report)];
+      const carrierFacts: ReturnType<typeof formatCarrierStatus>["facts"][] = [];
       if (owner.role === "team-lead" && sessionBinding === "current") {
         const observer = carrierObserver ?? new CarrierObserver(owner.teamName);
         await observer.refresh();
@@ -360,7 +363,9 @@ const runStatus = async (ctx: any) => {
         const views = [...observer.views.values()];
         for (const view of views) {
           const taskIds = tasks?.filter(task => task.assignee === view.worker && !["goal_achieved", "goal_failed", "cancelled"].includes(task.state.kind)).map(task => task.id);
-          lines.push(`${view.worker}: process ${view.process}; launch ${view.launch}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.`);
+          const status = formatCarrierStatus(view, taskIds);
+          lines.push(status.line);
+          if (status.facts.process || status.facts.launch) carrierFacts.push(status.facts);
         }
         const declineKey = JSON.stringify([owner.teamName, owner.membershipId, sessionFile]);
         const candidates = views.filter(view => view.generation && !view.generation.osBirthToken && !view.lastStop);
@@ -376,7 +381,7 @@ const runStatus = async (ctx: any) => {
         }
       }
       if (!owner.isCurrent()) return;
-      messageSink.appendEntry("ptb.status", { lines });
+      messageSink.appendEntry("ptb.status", { lines, ...(carrierFacts.length ? { carrierFacts } : {}) });
       if (ctx.mode !== "tui") present(lines.join("\n"), report.taskAuthority.health === "verified" && sessionBinding === "current" ? "info" : "warning");
     } catch (error) {
       if (owner.isCurrent()) present(`Pi Team Bright status failed for ${owner.teamName}. ${error instanceof Error ? error.message : String(error)}`, "error");
@@ -685,6 +690,7 @@ function registerSessionHooks() {
   // Pi 0.83 lacks this event; the gate's hold limit covers that version.
   (pi.on as (event: string, handler: () => void) => void)("session_compact_failed", () => { compactionGate.end(); });
   pi.on("session_start", async (event, ctx) => {
+  warnMissingGenerationHelper(ctx);
   compactionGate.reset();
   doctorGeneration++;
   paths.ensureDirs();

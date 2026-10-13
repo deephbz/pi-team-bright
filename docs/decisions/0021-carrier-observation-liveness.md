@@ -27,8 +27,10 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    `{pid, osBirthToken, bootId}`. Linux reads `/proc/<pid>/stat` field 22 and
    `/proc/sys/kernel/random/boot_id`. macOS uses the dependency-free helper built by
    the npm `postinstall` hook. It compiles packaged source with `rustc` and Xcode
-   Command Line Tools. If `rustc` is absent, installation succeeds with one
-   warning that names `npm run build:process-generation` (owner decision D1=B).
+   Command Line Tools. If `rustc` is absent, installation succeeds and the hook
+   writes one diagnostic naming `npm run build:process-generation` (owner decision
+   D1=B). Npm can hide that output. Pi startup therefore shows one native
+   missing-helper warning per extension load with the same remedy.
    That command also repairs installs with disabled lifecycle scripts.
    A missing helper produces `generation_helper_missing`
    attention with `ask_human`; the tool result and native admission refusal name

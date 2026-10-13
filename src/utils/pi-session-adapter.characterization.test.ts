@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CarrierObserver } from "../carrier-observation";
+import { nodeHostEnv, runWithHostEnv } from "../env/host-env";
+import { projectStatusEntry } from "../model-tool-contract/custom-message-projection";
+import { projectionLines } from "../model-tool-contract/tui-message-projection";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
@@ -83,21 +86,22 @@ function extension(activeTools = ["foreign_extension_tool", "team_create", "team
   const setActiveTools = vi.fn((names: string[]) => { active = [...names]; });
   const setSessionName = vi.fn();
   const appendEntry = vi.fn();
+  const sendMessage = vi.fn(), sendUserMessage = vi.fn();
   piTeams({
     on(event: string, handler: (event: any, ctx: any) => Promise<void>) { handlers.set(event, handler); },
     registerCommand(name: string, command: { handler(args: string, ctx: any): Promise<void> }) { commands.set(name, command); },
     registerTool(tool: { name: string }) { registrations.push(tool.name); tools.set(tool.name, tool); },
     registerMessageRenderer() {},
     appendEntry,
-    sendMessage() {},
-    sendUserMessage() {},
+    sendMessage,
+    sendUserMessage,
     setSessionName,
     getThinkingLevel: () => "high",
     getActiveTools: () => active,
     getAllTools: () => registrations.map((name) => ({ name })),
     setActiveTools,
   } as never);
-  return Object.assign(handlers, { commands, registrations, tools, setActiveTools, setSessionName, appendEntry });
+  return Object.assign(handlers, { commands, registrations, tools, setActiveTools, setSessionName, appendEntry, sendMessage, sendUserMessage });
 }
 
 async function createTeam(name: string, sessionFile: string) {
@@ -352,6 +356,50 @@ describe("registered Pi Session adapter characterization", () => {
     ctx.sessionManager.getSessionFile.mockReturnValue("/tmp/other-lead.jsonl");
     await harness.commands.get("pi-team-bright")!.handler("status", ctx);
     expect(ctx.ui.confirm).toHaveBeenCalledOnce();
+  });
+
+  it("shows decisive unknown carrier facts in status with full facts in expandable detail", async () => {
+    vi.stubEnv("PI_AGENT_NAME", ""); vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("unknown-facts"), sessionFile = `/tmp/${name}-lead.jsonl`;
+    const config = await createTeam(name, sessionFile);
+    await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: 1 }, config.members[0].membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(CarrierObserver.prototype, "start").mockImplementation(() => {});
+    vi.spyOn(CarrierObserver.prototype, "refresh").mockResolvedValue(undefined);
+    const launchFact = `timeout: timed out waiting for agent startup ${"detail ".repeat(40)}`;
+    vi.spyOn(CarrierObserver.prototype, "views", "get").mockReturnValue(new Map([["worker", {
+      worker: "worker", membership: "m", process: "unknown", launch: "unknown", terminal: "present", activity: "unknown", paneId: "pane",
+      evidence: [{ source: "process_generation", fact: "generation_helper_missing", observedAt: 1 }, { source: "launch", fact: launchFact, observedAt: 1 }],
+    }]]) as any);
+    const ctx = context(sessionFile), harness = extension();
+    await harness.get("session_start")!({ reason: "resume" }, ctx);
+    harness.appendEntry.mockClear(); harness.sendMessage.mockClear(); harness.sendUserMessage.mockClear();
+    await harness.commands.get("ptb")!.handler("status", ctx);
+    const data = harness.appendEntry.mock.calls.find(call => call[0] === "ptb.status")![1];
+    expect(data.lines[1]).toContain("process unknown (generation_helper_missing); launch unknown (timeout: timed out waiting for agent startup");
+    expect(data.lines[1]).not.toContain(launchFact);
+    expect(data.carrierFacts).toEqual([{ worker: "worker", process: "generation_helper_missing", launch: launchFact }]);
+    expect(projectionLines(projectStatusEntry(data)!, { expanded: true }).join("\n")).toContain(launchFact);
+    expect(harness.sendMessage).not.toHaveBeenCalled(); expect(harness.sendUserMessage).not.toHaveBeenCalled();
+  });
+
+  it.each(["darwin", "linux"] as const)("warns once per extension load about a missing helper only on macOS (%s), without model history", async platform => {
+    vi.stubEnv("PI_AGENT_NAME", ""); vi.stubEnv("PI_TEAM_NAME", "");
+    await runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, platform,
+      generation: () => ({ kind: "unknown", reason: "generation_helper_missing" }) } }, async () => {
+      const ctx = context("/tmp/helper-warning-session.jsonl"), harness = extension();
+      await harness.get("session_start")!({ reason: "fork" }, ctx);
+      await harness.get("session_start")!({ reason: "fork" }, ctx);
+      const warnings = ctx.ui.notify.mock.calls.filter((call: unknown[]) => String(call[0]).includes("process-generation helper"));
+      expect(warnings).toHaveLength(platform === "darwin" ? 1 : 0);
+      if (platform === "darwin") {
+        expect(warnings[0]).toEqual([expect.stringMatching(/rustc.*Xcode Command Line Tools.*npm run build:process-generation/), "warning"]);
+        const reloaded = extension(); await reloaded.get("session_start")!({ reason: "fork" }, ctx);
+        expect(ctx.ui.notify.mock.calls.filter((call: unknown[]) => String(call[0]).includes("process-generation helper"))).toHaveLength(2);
+      }
+      expect(harness.appendEntry).not.toHaveBeenCalled(); expect(harness.sendMessage).not.toHaveBeenCalled(); expect(harness.sendUserMessage).not.toHaveBeenCalled();
+    });
   });
 
   it("suppresses stale fork identity through the registered Session hook", async () => {

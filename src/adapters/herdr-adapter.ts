@@ -444,13 +444,14 @@ export class HerdrAdapter implements TerminalAdapter {
     if (result.kind === "timeout" || result.kind === "aborted") return { state: "unknown", fact: result.kind };
     if (result.kind === "spawn_failed") return { state: "refused", fact: `spawn_failed:${result.code}` };
     try {
-      const envelope = parseEnvelope(result.stdout);
+      const envelope = parseEnvelope(result.stdout.trim() ? result.stdout : result.stderr);
       if (envelope.error || result.status !== 0) {
         // A readiness timeout can follow successful actuation. Only explicit pre-actuation refusal is decisive.
         const fact = envelope.error ? errorText(envelope.error) : result.stderr;
         const code = envelope.error && typeof envelope.error === "object" ? (envelope.error as Record<string, unknown>).code : undefined;
         return { state: ["agent_pane_busy", "pane_not_found", "invalid_params", "unsupported_agent_kind"].includes(String(code)) ? "refused" : "unknown", fact };
       }
+      if (!result.stdout.trim()) throw new Error("Start success requires stdout evidence.");
       assertReadyStart(resultRecord(envelope), carrierName, paneId);
       return { state: "started", fact: "agent_start_accepted" };
     } catch { return { state: "unknown", fact: "malformed_start_reply" }; }

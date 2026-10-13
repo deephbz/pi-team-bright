@@ -251,20 +251,27 @@ restating executable definitions.
   and target CAS. Expiry returns attention and prevents late startup. Prepared
   targets reconcile asynchronously under the exact Membership and launch ID.
   Only decisive shell-busy refusal retries on the same pane and launch ID.
-  An old started or unknown launch with no Herdr agent in its pane returns
+  Herdr error envelopes on stderr retain their code and text when stdout is empty.
+  A readiness timeout remains unknown and never authorizes another spawn.
+  An old unbound started or unknown launch with no Herdr agent in its pane returns
   `launch_stalled` attention. The human can authorize `worker_stop` before retry.
   A missing Herdr row never authorizes another spawn.
   Linux reads procfs. On macOS, npm `postinstall` builds the dependency-free
   helper from packaged source with `rustc` and Xcode Command Line Tools.
   `npm run build:process-generation` repairs installs with disabled lifecycle
-  scripts. Missing `rustc` leaves installation successful with one warning that
-  names the build command. A missing helper yields unknown process evidence and
+  scripts. Missing `rustc` leaves installation successful. Npm can hide the
+  postinstall diagnostic. On macOS, Pi startup emits one native missing-helper
+  warning per extension load with the Rust/Xcode remedy and build command.
+  The warning creates no model turn or Session entry.
+  A missing helper yields unknown process evidence and
   never authorizes a spawn. Exact Session-bound re-entry by the same PID remains
   `already_current` without the helper. Different-PID replacement still refuses
   with `ask_human`. A prepared claim has no completed Session binding and keeps
   its existing admission fence.
   `/ptb status` persists one human-only transcript entry with carrier, stop,
-  and nonterminal Task evidence. It batches explicit adoption of tokenless
+  and nonterminal Task evidence. Unknown process and launch states include their
+  decisive evidence facts. Inline facts are bounded; expansion shows their full
+  text. It batches explicit adoption of tokenless
   records and remembers a decline within the exact Session runtime.
   Herdr outage attention reaches both the human and `team_sync`.
   Architecture impact: **changed** inside Pi Team Bright. HyperCarrier keeps

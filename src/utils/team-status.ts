@@ -1,10 +1,24 @@
 import { hostEnv } from "../env/host-env";
+import { stripVTControlCharacters } from "node:util";
+import type { CarrierView } from "../carrier-observation";
 import fs from "node:fs";
 import path from "node:path";
 import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
 import { verifyTaskAuthority } from "../model-tool-contract/beads-authority-adapter";
 import * as paths from "./paths";
 import * as teams from "./teams";
+
+export function formatCarrierStatus(view: CarrierView, taskIds?: string[]): { line: string; facts: { worker: string; process?: string; launch?: string } } {
+  const facts = { worker: view.worker,
+    ...(view.process === "unknown" ? { process: view.evidence.find(item => item.source === "process_generation")?.fact } : {}),
+    ...(view.launch === "unknown" ? { launch: view.evidence.find(item => item.source === "launch")?.fact } : {}) };
+  const suffix = (fact?: string): string => {
+    if (!fact) return "";
+    const text = stripVTControlCharacters(fact).replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim();
+    return ` (${text.length > 120 ? `${text.slice(0, 119)}…` : text})`;
+  };
+  return { line: `${view.worker}: process ${view.process}${suffix(facts.process)}; launch ${view.launch}${suffix(facts.launch)}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.`, facts };
+}
 
 export const PI_TEAMS_COMMAND_USAGE = "Usage: /pi-team-bright [status|help]";
 

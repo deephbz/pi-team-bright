@@ -149,8 +149,11 @@ export function projectWorkerRecoveryMessage(message: PiCustomMessage): PiTeamBr
 export function projectStatusEntry(data: unknown): PiTeamBrightTuiMessage | undefined {
   const lines = (data as { lines?: unknown })?.lines;
   if (!Array.isArray(lines) || !lines.every(line => typeof line === "string")) return undefined;
+  const rawFacts = (data as { carrierFacts?: unknown }).carrierFacts;
+  const carrierFacts = Array.isArray(rawFacts) ? rawFacts.flatMap(fact => fact && typeof fact.worker === "string"
+    ? [{ worker: fact.worker, ...(typeof fact.process === "string" ? { process: fact.process } : {}), ...(typeof fact.launch === "string" ? { launch: fact.launch } : {}) }] : []) : [];
   return { type: "status", tone: "info", status: "Team status sampled", summary: "Current carrier and Task evidence.",
-    body: lines.slice(0, 4), expandedLines: lines.slice(4), detail: { lines }, provenance: "carrier" };
+    body: lines.slice(0, 4), expandedLines: lines.slice(4), detail: { lines, ...(carrierFacts.length ? { carrierFacts } : {}) }, provenance: "carrier" };
 }
 
 export function projectSyncNudgeMessage(message: PiCustomMessage): PiTeamBrightTuiMessage | undefined {

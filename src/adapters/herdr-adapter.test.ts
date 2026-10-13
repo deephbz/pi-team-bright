@@ -664,6 +664,32 @@ describe("HerdrAdapter", () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it.each(["", "  \n"])("preserves the real-Herdr-3 stderr readiness timeout with empty stdout %j and never retries", async stdout => {
+    const run = vi.mocked(nodeHostEnv.exec.run);
+    // Herdr 0.9.3 real-herdr-3 probe: nonzero exit, empty stdout, JSON error on stderr.
+    run.mockResolvedValue({ kind: "exited", status: 1, stdout,
+      stderr: '{"error":{"code":"timeout","message":"timed out waiting for agent startup"},"id":"cli:agent:start"}\n' });
+    await expect(adapter.startPrepared("pane-worker", { name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
+      .resolves.toEqual({ state: "unknown", fact: "timeout: timed out waiting for agent startup" });
+    expect(run).toHaveBeenCalledOnce();
+    expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("keeps decisive stderr refusals and never masks nonempty stdout with stderr", async () => {
+    const run = vi.mocked(nodeHostEnv.exec.run);
+    const options = { name: "worker", cwd: "/repo", argv: ["pi"], env: {} };
+    const stderr = JSON.stringify({ error: { code: "pane_not_found", message: "pane missing" } });
+    run.mockResolvedValueOnce({ kind: "exited", status: 1, stdout: "", stderr });
+    await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "refused", fact: "pane_not_found: pane missing" });
+    run.mockResolvedValueOnce({ kind: "exited", ...readyStart("pane-worker", "worker"), stderr });
+    await expect(adapter.startPrepared("pane-worker", options)).resolves.toMatchObject({ state: "started" });
+    run.mockResolvedValueOnce({ kind: "exited", status: 1, stdout: "malformed", stderr });
+    await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "unknown", fact: "malformed_start_reply" });
+    run.mockResolvedValueOnce({ kind: "exited", status: 0, stdout: "", stderr: readyStart("pane-worker", "worker").stdout });
+    await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "unknown", fact: "malformed_start_reply" });
+    expect(run).toHaveBeenCalledTimes(4);
+  });
+
   it("keeps the pane when interactive recognition is unavailable", () => {
     exec
       .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
