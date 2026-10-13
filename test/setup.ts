@@ -1,5 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
+import { vi } from "vitest";
+
+// Unit fixtures have one synthetic live process: the test process. Other PIDs
+// need an explicit scenario probe. Restore/reset of spies must not expose the
+// real OS verifier. Simulated actors supply their own HostEnv process table;
+// native verifier tests invoke the native adapter directly.
+vi.mock("../src/env/host-env", async importOriginal => {
+  const module = await importOriginal<typeof import("../src/env/host-env")>();
+  module.nodeHostEnv.process.generation = pid => pid === process.pid
+    ? { kind: "found", generation: { pid, osBirthToken: "fixture-birth", bootId: "fixture-boot" } }
+    : { kind: "unknown", reason: "unit_fixture_unconfigured_pid" };
+  module.nodeHostEnv.process.generations = async pids => new Map(pids.map(pid => [pid, module.nodeHostEnv.process.generation(pid)]));
+  return module;
+});
 
 const root = process.env.PI_TEAMS_VITEST_ROOT;
 if (!root) {

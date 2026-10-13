@@ -17,7 +17,7 @@ export interface TaskTeamEvent {
     actor: string;
     at: string;
 }
-export type WorkerEventPhase = "prepared" | "session_bound" | "stopped" | "failed";
+export type WorkerEventPhase = "prepared" | "session_bound" | "stopped" | "failed" | "carrier";
 export interface WorkerRuntimeGenerationEvidence {
     membershipId: string;
     pid: number;
@@ -29,6 +29,7 @@ export interface WorkerTeamEvent {
     worker: string;
     membershipId: string;
     phase: WorkerEventPhase;
+    carrier?: import("../carrier-observation").CarrierEvent;
     /** Absent on legacy journal records; required for new session_bound evidence. */
     generation?: WorkerRuntimeGenerationEvidence;
     at: string;
