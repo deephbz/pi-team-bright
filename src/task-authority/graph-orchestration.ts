@@ -2,7 +2,7 @@ import { DurableGraphTaskAuthority, GraphSnapshotCorruption } from "../adapters/
 import type {
   TaskMutationCoordinates,
   TaskMutationPublicationPort,
-} from "../model-tool-contract/beads-authority-adapter";
+} from "./publication";
 import { readConfig } from "../utils/teams";
 import {
   GraphControlRefusal,
