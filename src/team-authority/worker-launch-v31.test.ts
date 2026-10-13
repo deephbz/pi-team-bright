@@ -29,6 +29,7 @@ vi.mock("../utils/team-terminal", async () => {
   return { currentTerminalForTeam: () => terminal };
 });
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
+import { deriveCarrierView } from "../carrier-observation";
 import { createModelToolJourneyExecutors } from "../model-tool-contract/executors";
 import { projectToolResult } from "../model-tool-contract/result-projection";
 import { projectToolTuiMessage } from "../model-tool-contract/tui-projection";
@@ -136,6 +137,27 @@ it.each(["none", "requested", "started", "unknown", "refused"] as const)("preser
   expect(fixture.splits).toBe(0);
   expect(fixture.starts).toBe(0);
   expect(fixture.members[0].sessionFile).toBe("/sessions/worker.jsonl");
+});
+it.each(["absent", "found", "unknown"] as const)("ensure_worker preserves the carrier's legacy %s advice without actuation", async kind => {
+  const member = { name: "worker", agentType: "teammate", membershipId: "membership", sessionFile: "/sessions/worker.jsonl",
+    terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" } } as Member;
+  fixture.members = [member];
+  const status = { teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1 };
+  vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue(status);
+  const probe = kind === "found" ? { kind, generation: { pid: 321, osBirthToken: "birth", bootId: "boot" } }
+    : kind === "unknown" ? { kind, reason: "probe_unavailable" } : { kind };
+  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue(probe);
+  const run = vi.spyOn(nodeHostEnv.exec, "run");
+  const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
+  const result = await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" });
+  expect(result).toMatchObject({ action: "attention", reason: "legacy_unverified", nextActionHint: "ask_human", message: deriveCarrierView(member, status).attention!.message });
+  const executors = createModelToolJourneyExecutors({ team: { ensureWorker: async () => ({ ...result, kind: "attention", worker: { name: "worker" } }) } } as any);
+  const model = projectToolResult("ensure_worker", await executors.ensureWorker("lead" as any, { name: "worker", scope: "test" })) as any;
+  expect(model.message).toMatch(kind === "absent" ? /^Restart.*or stop the Worker/ : kind === "found" ? /^Reload.*or adopt it/ : /^Verify/);
+  expect(model.message).toContain(`probe=${kind === "found" ? "present" : kind}`);
+  expect(model.message).toContain("pid=321");
+  expect(model.message).toContain("Unknown generation evidence never authorizes");
+  expect(run).not.toHaveBeenCalled(); expect(fixture.starts).toBe(0); expect(fixture.splits).toBe(0); expect(fixture.mutations).toEqual([]);
 });
 it.each([true, false])("missing macOS helper gives actionable attention without spawning (tokened=%s)", async tokened => {
   fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", sessionFile: "/sessions/worker.jsonl",

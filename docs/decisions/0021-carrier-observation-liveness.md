@@ -91,7 +91,9 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    This closes the death/recovery race without publishing a stale generation.
 6. **Samples expire.** Each observation source owns its sample time. A sample
    expires to `unknown` after six seconds, including when collection fails. A stalled
-   read stays single-flight.
+   read stays single-flight. Derived legacy advice expires with its process sample:
+   attention stays `legacy_unverified` / `ask_human`, but its probe becomes unknown
+   and asks for verification. Historical journal messages keep their sampled evidence.
 7. **Unknown fails closed.** `unknown` never authorizes a spawn, a reuse, or a
    `gone` claim. It produces attention with its evidence. Pre-upgrade records without
    a birth token read `unknown` until the current process rebinds or the human
@@ -102,7 +104,10 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    requires human restart of that Worker's Pi in its pane, or stopping the Worker.
    A present PID permits human reload or adoption in `/ptb status`. Unknown probe
    evidence requires human verification first. The missing-helper remedy in item 2
-   still applies. None of these observations verifies a tokenless generation.
+   still applies. The shared message puts the human action before evidence.
+   `ensure_worker` retains the model safety rule; human projections omit that rule.
+   The adoption confirmation excludes absent PID probes.
+   None of these observations verifies a tokenless generation.
    Attention journals once per evidence change under the same generation fence,
    including when the process baseline is already `unknown`. Snapshot `connected`
    describes Session binding only; snapshot attention remains visible after the

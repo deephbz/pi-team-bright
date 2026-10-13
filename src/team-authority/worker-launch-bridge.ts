@@ -46,7 +46,7 @@ export interface WorkerLaunchRequest {
 }
 export type WorkerLaunchResult =
   | { action: "reused"; member: Member; membershipId: string; target?: TerminalTarget; lastStop?: CarrierView["lastStop"] }
-  | { action: "attention"; member?: Member; membershipId?: string; paneId?: string; launchId?: string; launch: CarrierView["launch"]; lastStop?: CarrierView["lastStop"]; reason: string; nextActionHint: "wait" | "ask_human" }
+  | { action: "attention"; member?: Member; membershipId?: string; paneId?: string; launchId?: string; launch: CarrierView["launch"]; lastStop?: CarrierView["lastStop"]; reason: string; nextActionHint: "wait" | "ask_human"; message?: string }
   | { action: "created" | "recovered"; member: Member; membershipId: string; recoveryMode?: WorkerRecoveryMode; target?: PreparedLaunchTarget; startup: WorkerStartupObservation; launchId: string; launch: "requested"; lastStop?: CarrierView["lastStop"] };
 export function launchObservationState(observation: WorkerStartupObservation): WorkerLaunchObservationState {
   return observation.observed ? { carrier: "session_bound", runtime: "observed" } : { carrier: observation.carrier, runtime: "not_observed" };
@@ -127,7 +127,8 @@ export class WorkerLaunchBridge {
         const pending = launchIsOutstanding(current, status);
         if (pending && plan.action !== "reuse" && !(plan.action === "attention" && ["legacy_unverified", "generation_helper_missing"].includes(plan.reason))) return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: "launch_pending", nextActionHint: "wait" };
         if (plan.action === "reuse") return { action: "reused", member: current, membershipId: current.membershipId!, target: memberTerminalTarget(current, config.terminalBackend), lastStop: view.lastStop };
-        if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint };
+        if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint,
+          ...(plan.reason === "legacy_unverified" && view.attention ? { message: view.attention.message } : {}) };
         if (plan.action === "refuse") throw new Error(`Invalid carrier: ${plan.reason}`);
         const launchId = teams.newLaunchId();
         const updated = await teams.updateMembership(request.teamName, current.membershipId!, {

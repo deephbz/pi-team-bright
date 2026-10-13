@@ -37,7 +37,7 @@ export type CreateTeamPortResult =
 
 export type EnsureWorkerPortResult =
   | { kind: "created" | "recovered" | "reused"; worker: ModelToolWorkerCurrent; launchId?: string; launch?: string; recoveryMode?: string; lastStop?: import("../carrier-observation").CarrierView["lastStop"] }
-  | { kind: "attention"; worker: ModelToolWorkerCurrent; paneId?: string; launchId?: string; launch: string; reason: string; nextActionHint: "wait" | "ask_human"; lastStop?: import("../carrier-observation").CarrierView["lastStop"] }
+  | { kind: "attention"; worker: ModelToolWorkerCurrent; paneId?: string; launchId?: string; launch: string; reason: string; nextActionHint: "wait" | "ask_human"; message?: string; lastStop?: import("../carrier-observation").CarrierView["lastStop"] }
   | { kind: "scope_conflict"; worker: ModelToolWorkerCurrent }
   | { kind: "invalid_model_role"; message: string; validModelRoles: Array<{ name: string; use: string }> }
   | { kind: "legacy_team_model_default"; message: string }

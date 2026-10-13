@@ -1,4 +1,5 @@
 import * as teamEvents from "./event-journal";
+import { humanCarrierAttentionMessage } from "../carrier-observation";
 import { deriveWorkerRunObservation, type WorkerRunObservation } from "../utils/sync-liveness";
 import { hostEnv, type TimerHandle } from "../env/host-env";
 import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
@@ -179,7 +180,7 @@ export class CoordinationObservationService {
         const c = event.carrier;
         const taskIds = worker ? this.projection.projectNonterminalTaskIds(tasks.tasks, worker.name) : [];
         return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: c
-          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; ${c.attention ? `${c.attention.message} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
+          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; ${c.attention ? `${humanCarrierAttentionMessage(c.attention)} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
           : `Worker ${worker.name}: ${event.phase === "failed" ? "startup admission refused" : event.phase.replaceAll("_", " ")}.` }] : [];
       });
       const teamChanges = page.events.flatMap(event => event.type === "alert" && event.alertId.startsWith("herdr-observation:") && event.from === "team-lead" && event.to === "team-lead"

@@ -25,7 +25,7 @@ import type { BeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-t
 import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
-import { diagnoseTeam, formatTeamStatus, formatCarrierStatus, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
+import { diagnoseTeam, formatTeamStatus, formatCarrierStatus, isLegacyAdoptionCandidate, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { collectPtbDoctorContext, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbAction, type PtbSettingsScope } from "../src/utils/ptb-command";
 import { getTerminalAdapter } from "../src/adapters/terminal-registry";
@@ -368,7 +368,7 @@ const runStatus = async (ctx: any) => {
           if (status.facts.process || status.facts.launch) carrierFacts.push(status.facts);
         }
         const declineKey = JSON.stringify([owner.teamName, owner.membershipId, sessionFile]);
-        const candidates = views.filter(view => view.generation && !view.generation.osBirthToken && !view.lastStop);
+        const candidates = views.filter(isLegacyAdoptionCandidate);
         if (candidates.length && !declinedAdoptionSessions.has(declineKey) && ctx.hasUI !== false && ctx.ui?.confirm) {
           const accepted = await ctx.ui.confirm("Adopt legacy Worker generations?", `Verify and record OS birth tokens for these Workers? Each requires an exact matching Herdr Session.\n${candidates.map(view => `${view.worker}: pane ${view.paneId ?? "unknown"}`).join("\n")}`);
           if (!owner.isCurrent()) return;

@@ -336,8 +336,9 @@ describe("registered Pi Session adapter characterization", () => {
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(CarrierObserver.prototype, "start").mockImplementation(() => {});
     vi.spyOn(CarrierObserver.prototype, "refresh").mockResolvedValue(undefined);
-    vi.spyOn(CarrierObserver.prototype, "views", "get").mockReturnValue(new Map(["one", "two", "stopped"].map(worker => [worker, {
+    vi.spyOn(CarrierObserver.prototype, "views", "get").mockReturnValue(new Map(["one", "two", "stopped", "absent"].map(worker => [worker, {
       worker, membership: worker, generation: { pid: 42, startedAt: 1, membershipId: worker }, process: "unknown", launch: "none", terminal: "present", activity: "unknown", paneId: `pane-${worker}`, evidence: [],
+      ...(worker === "absent" ? { processSample: { pid: 42, probe: { kind: "absent" } } } : {}),
       ...(worker === "stopped" ? { lastStop: { piReason: "quit", observedAt: 1, suspectedHumanStop: true } } : {}),
     }])) as any);
     const ctx = context(sessionFile); ctx.ui.confirm = vi.fn().mockResolvedValue(false);
@@ -349,8 +350,9 @@ describe("registered Pi Session adapter characterization", () => {
     expect(ctx.ui.confirm.mock.calls[0][1]).toContain("one: pane pane-one");
     expect(ctx.ui.confirm.mock.calls[0][1]).toContain("two: pane pane-two");
     expect(ctx.ui.confirm.mock.calls[0][1]).not.toContain("stopped");
+    expect(ctx.ui.confirm.mock.calls[0][1]).not.toContain("absent");
     const entries = harness.appendEntry.mock.calls.filter(call => call[0] === "ptb.status");
-    expect(entries).toHaveLength(2); expect(entries[0][1].lines).toHaveLength(4);
+    expect(entries).toHaveLength(2); expect(entries[0][1].lines).toHaveLength(5);
     expect(entries[0][1].lines[3]).toContain("lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=");
     expect(ctx.ui.notify).not.toHaveBeenCalled();
     ctx.sessionManager.getSessionFile.mockReturnValue("/tmp/other-lead.jsonl");

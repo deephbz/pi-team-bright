@@ -15,7 +15,7 @@ vi.mock("./coordination/event-journal", () => ({
   readTeamEvents: (_: string, options: any) => { if (f.journalFailure) throw new Error("journal unavailable"); return { events: f.events.filter(e => Number(e.cursor) > Number(options.afterCursor)), cursor: String(f.events.length), truncated: false }; },
   appendTeamEvent: async (_: string, event: any) => { if (f.appendFailures > 0) { f.appendFailures--; throw new Error("EIO"); } const saved = { ...event, cursor: String(f.events.length + 1) }; f.events.push(saved); return saved; },
 }));
-import { CarrierObserver, publishPredecessorExit } from "./carrier-observation";
+import { CarrierObserver, publishPredecessorExit, CARRIER_SAMPLE_TTL_MS } from "./carrier-observation";
 import { DurableCoordinationTeamRuntimeQuery } from "./adapters/durable-coordination-team-runtime";
 import { CoordinationObservationService } from "./coordination/observation-service";
 import { snapshotEntry } from "../test/support/branch-observation";
@@ -23,6 +23,7 @@ import { createModelToolJourneyExecutors } from "./model-tool-contract/executors
 import { projectToolResult } from "./model-tool-contract/result-projection";
 import { projectionLines } from "./model-tool-contract/tui-message-projection";
 import { projectToolTuiMessage } from "./model-tool-contract/tui-projection";
+import { formatCarrierStatus } from "./utils/team-status";
 const env = () => ({ ...nodeHostEnv, clock: { ...nodeHostEnv.clock, now: () => f.now, setTimeout: (() => 0) as any, clearTimeout: () => {} }, process: { ...nodeHostEnv.process,
   generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid, { kind: "found" as const, generation: { pid, osBirthToken: "birth", bootId: "boot" } }])),
 }, exec: { ...nodeHostEnv.exec, run: vi.fn(async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "", stdout: JSON.stringify(f.outage ? { error: "offline" } : { result: args[0] === "agent" ? { agents: f.noAgent ? [] : [{ pane_id: "pane", name: "team-worker", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" }, agent_status: f.blocked ? "blocked" : f.activity }] } : { panes: f.panePresent ? [{ pane_id: f.paneId }] : [] } }) })) } });
@@ -38,6 +39,37 @@ it("journals a finished Herdr turn as idle without unknown activity", async () =
   expect(f.events.filter(e => e.carrier?.field === "activity").map(e => e.carrier.to)).toEqual(["working", "idle"]);
   observer.stop();
 }));
+it.each(["found", "absent"] as const)("expires legacy %s advice with the process sample (production-probe regression)", async kind => {
+  const host = env();
+  host.process.generations = (async (pids: readonly number[]) => new Map(pids.map(pid => [pid, kind === "found"
+    ? { kind, generation: { pid, osBirthToken: "birth", bootId: "boot" } } : { kind }]))) as any;
+  await runWithHostEnv(host, async () => {
+    delete f.status.osBirthToken; f.status.pid = 4242; f.now = 10000;
+    const observer = await running();
+    expect(observer.views.get("m")?.attention?.message).toContain(`probe=${kind === "found" ? "present" : "absent"}`);
+    const probe = host.process.generations;
+    let entered!: () => void, release!: () => void;
+    const sampling = new Promise<void>(resolve => { entered = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    host.process.generations = async pids => { entered(); await held; return probe(pids); };
+    const stalled = observer.refresh(); await sampling;
+    f.now += CARRIER_SAMPLE_TTL_MS;
+    const expired = observer.views.get("m")!;
+    expect(expired.attention).toMatchObject({ reason: "legacy_unverified", nextActionHint: "ask_human" });
+    expect(expired.attention?.message).toContain("probe=unknown (sample_expired)");
+    expect(expired.attention?.message).not.toMatch(/probe=(present|absent)/);
+    expect(formatCarrierStatus(expired).line).toContain("Verify");
+    expect(formatCarrierStatus(expired).facts.process).toContain("sample_expired");
+    expect(f.events.filter(e => e.carrier?.attention)).toHaveLength(1);
+    release(); await stalled;
+    expect(observer.views.get("m")?.attention?.message).toContain("sample_expired");
+    await observer.refresh(); await observer.refresh();
+    expect(observer.views.get("m")?.attention?.message).toContain(`probe=${kind === "found" ? "present" : "absent"}`);
+    expect(f.events.filter(e => e.carrier?.attention).map(e => e.carrier.attention.message.match(/probe=(\w+)/)[1]))
+      .toEqual([kind === "found" ? "present" : "absent", "unknown", kind === "found" ? "present" : "absent"]);
+    observer.stop();
+  });
+});
 it("retains an unrecognized Herdr status as raw evidence", async () => runWithHostEnv(env(), async () => {
   f.activity = "future-status"; const observer = await running();
   expect(observer.views.get("m")?.activity).toBe("unknown");
@@ -65,8 +97,11 @@ it.each(["absent", "found", "unknown"] as const)("journals one legacy attention 
     delete f.status.osBirthToken;
     host.process.generation = () => kind === "found" ? { kind, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } }
       : kind === "unknown" ? { kind, reason: "generation_helper_missing" } : { kind };
-    let observer = await running(); await observer.refresh(); observer.stop();
+    const notify = vi.fn();
+    let observer = new CarrierObserver("team", notify); observer.start(); await observer.refresh(); await observer.refresh(); observer.stop();
     observer = await running(); await observer.refresh();
+    expect(notify.mock.calls.flat().join("\n")).not.toContain("Unknown generation evidence never authorizes");
+    expect(notify.mock.calls.flat().join("\n")).toContain("pid=42");
     const events = f.events.filter(e => e.carrier?.field === "process");
     expect(events).toHaveLength(1);
     expect(events[0].carrier).toMatchObject({ to: "unknown", cause: { fact: "legacy_unverified" }, nextActionHint: "ask_human" });
@@ -83,12 +118,14 @@ it.each(["absent", "found", "unknown"] as const)("journals one legacy attention 
     expect(model.workers[0].attention).toEqual(observer.views.get("m")?.attention);
     const lines = projectionLines(projectToolTuiMessage({ tool: "team_sync", details: snapshot, expanded: false }), { expanded: false }).join("\n");
     expect(lines).toContain("legacy_unverified"); expect(lines).toContain("pid=42"); expect(lines).toContain("ask_human");
-    expect(lines).toContain(kind === "absent" ? "restart Worker" : kind === "found" ? "reload Worker" : "build:process-generation");
+    expect(lines).toContain(kind === "absent" ? "Restart this Worker" : kind === "found" ? "Reload this Worker" : "build:process-generation");
     service.clearPending("/lead");
     service.setBranchEntries("/lead", [snapshotEntry("base", "team", "epoch", "lead")]);
     const updates = await executors.teamSync("/lead" as any, { view: "updates" });
     expect(JSON.stringify(projectToolResult("team_sync", updates))).toContain("legacy_unverified");
     expect(JSON.stringify(updates)).toContain("pid=42");
+    expect(JSON.stringify(updates)).not.toContain("Unknown generation evidence never authorizes");
+    expect(model.workers[0].attention.message).toContain("Unknown generation evidence never authorizes");
     observer.stop();
   });
 });
