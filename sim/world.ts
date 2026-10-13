@@ -3,11 +3,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { HISTORY_VERSION, actorRef, type HistoryEntry, type HistoryFact, type HistoryOrigin } from "./history";
 import { HistoryObserver } from "./history-observer";
 import path from "node:path";
-import { enterSimulation, runWithHostEnv, type ExecOutcome, type HostEnv, type HostWatcher, type GenerationProbe } from "../src/env/host-env";
+import { enterSimulation, runWithHostEnv, type ExecOutcome, type HostEnv, type HostWatcher, type GenerationProbe, type ProcessGeneration } from "../src/env/host-env";
 import type { Fault } from "./trace-format";
 import { Entropy, type Choice } from "./entropy";
 import { Scheduler } from "./scheduler";
-import { ProcessTable } from "./process-table";
+import { generationKey, ProcessTable } from "./process-table";
 import { ExecRouter, HerdrFake } from "./herdr";
 import { HostGuard } from "./host-guard";
 import { emptyBdWire } from "./bd-wire";
@@ -77,7 +77,8 @@ export class SimWorld {
   createActor(actor: string, variables: Record<string, string> = {}): HostEnv {
     if (this.envs.has(actor)) throw new Error(`Actor environment already exists: ${actor}`);
     const membershipId = variables.PI_TEAM_MEMBERSHIP_ID;
-    const process = this.processes.actor(actor) ?? this.processes.spawn(actor, { identity:
+    const previous = this.processes.actor(actor);
+    const process = (previous?.alive ? previous : undefined) ?? this.processes.spawn(actor, { identity:
       membershipId ? { processKind: "worker_pi", membershipId }
         : { processKind: variables.PI_AGENT_NAME === "team-lead" ? "lead_pi" : "other" },
     });
@@ -137,11 +138,14 @@ export class SimWorld {
     pane.state = "idle";
     return env;
   }
-  actorGenerationIsLive(actor: string): boolean { return this.generations.get(actor)?.alive === true; }
-  enter<T>(actor: string, action: () => T): T {
+  actorGenerationIsLive(actor: string, expected?: ProcessGeneration): boolean {
+    const captured = this.generations.get(actor);
+    return captured?.alive === true && (!expected || generationKey(captured) === generationKey(expected));
+  }
+  enter<T>(actor: string, action: () => T, expected?: ProcessGeneration): T {
     const env = this.envs.get(actor);
     const process = this.processes.actor(actor);
-    if (!env || !process?.alive || process !== this.generations.get(actor)) throw new Error(`Actor is not live: ${actor}`);
+    if (!env || !process?.alive || process !== this.generations.get(actor) || !this.actorGenerationIsLive(actor, expected)) throw new Error(`Actor is not live: ${actor}`);
     const origin = this.origins.getStore();
     return this.withOrigin(origin?.kind === "ptb" && origin.actor.team === actorRef(actor).team && origin.actor.actor === actorRef(actor).actor
       ? origin : { kind: "ptb", actor: actorRef(actor) }, () => runWithHostEnv(env, () => this.guard.run(action)));
