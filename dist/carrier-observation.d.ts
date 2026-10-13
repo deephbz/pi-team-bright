@@ -49,8 +49,9 @@ export declare function herdrList(source: "agent" | "pane"): Promise<Record<stri
 /** Ephemeral projection. It owns observations, never Membership or Task transitions. */
 export declare const CARRIER_SAMPLE_TTL_MS = 6000;
 export declare const LAUNCH_STALL_MS = 15000;
-/** Session binding completes first launch; later process loss belongs to the lifecycle planner. */
-export declare function launchIsStalled(member: Member, agents: readonly Record<string, unknown>[] | undefined, now?: number): boolean;
+/** Recovery retains the Session; a successor generation completes its outstanding launch. */
+export declare function launchIsOutstanding(member: Member, status: AgentRuntimeStatus | null): boolean;
+export declare function launchIsStalled(member: Member, status: AgentRuntimeStatus | null, agents: readonly Record<string, unknown>[] | undefined, now?: number): boolean;
 export declare class CarrierObserver {
     private readonly teamName;
     private readonly notify;

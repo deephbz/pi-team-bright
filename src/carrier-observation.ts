@@ -79,10 +79,19 @@ export async function herdrList(source: "agent" | "pane"): Promise<Record<string
 /** Ephemeral projection. It owns observations, never Membership or Task transitions. */
 export const CARRIER_SAMPLE_TTL_MS = 6000;
 export const LAUNCH_STALL_MS = 15000;
-/** Session binding completes first launch; later process loss belongs to the lifecycle planner. */
-export function launchIsStalled(member: Member, agents: readonly Record<string, unknown>[] | undefined, now = hostEnv().clock.now()): boolean {
+/** Recovery retains the Session; a successor generation completes its outstanding launch. */
+export function launchIsOutstanding(member: Member, status: AgentRuntimeStatus | null): boolean {
+  if (!member.launch || !["requested", "started", "unknown"].includes(member.launch.state)) return false;
+  if (!member.sessionFile) return true;
+  const prior = member.launch.priorGeneration;
+  if (!prior) return false;
+  const current = runtimeGeneration(status);
+  return !current || current.membershipId !== member.membershipId
+    || (current.pid === prior.pid && current.osBirthToken === prior.osBirthToken && current.bootId === prior.bootId);
+}
+export function launchIsStalled(member: Member, status: AgentRuntimeStatus | null, agents: readonly Record<string, unknown>[] | undefined, now = hostEnv().clock.now()): boolean {
   const paneId = member.terminalTarget?.targetId ?? member.tmuxPaneId;
-  return !!(!member.sessionFile && member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= LAUNCH_STALL_MS
+  return !!(launchIsOutstanding(member, status) && member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= LAUNCH_STALL_MS
     && paneId && agents && !agents.some(row => row.pane_id === paneId));
 }
 type SourceSample<T> = { value?: T; observedAt: number; fact?: string };
@@ -210,7 +219,7 @@ export class CarrierObserver {
         await this.publish(view, "process", "stopping", status, "reload_hung");
         view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
       }
-      if (launchIsStalled(member, agents, now)) {
+      if (launchIsStalled(member, status, agents, now)) {
         await this.publish(view, "launch", view.launch, status, "launch_stalled");
       }
       const attempt = this.publication.taskCursor(member.name);

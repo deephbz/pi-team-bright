@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CarrierObserver = exports.LAUNCH_STALL_MS = exports.CARRIER_SAMPLE_TTL_MS = void 0;
 exports.deriveCarrierView = deriveCarrierView;
 exports.herdrList = herdrList;
+exports.launchIsOutstanding = launchIsOutstanding;
 exports.launchIsStalled = launchIsStalled;
 exports.publishPredecessorExit = publishPredecessorExit;
 const node_fs_1 = __importDefault(require("node:fs"));
@@ -58,10 +59,22 @@ async function herdrList(source) {
 /** Ephemeral projection. It owns observations, never Membership or Task transitions. */
 exports.CARRIER_SAMPLE_TTL_MS = 6000;
 exports.LAUNCH_STALL_MS = 15000;
-/** Session binding completes first launch; later process loss belongs to the lifecycle planner. */
-function launchIsStalled(member, agents, now = (0, host_env_1.hostEnv)().clock.now()) {
+/** Recovery retains the Session; a successor generation completes its outstanding launch. */
+function launchIsOutstanding(member, status) {
+    if (!member.launch || !["requested", "started", "unknown"].includes(member.launch.state))
+        return false;
+    if (!member.sessionFile)
+        return true;
+    const prior = member.launch.priorGeneration;
+    if (!prior)
+        return false;
+    const current = (0, runtime_1.runtimeGeneration)(status);
+    return !current || current.membershipId !== member.membershipId
+        || (current.pid === prior.pid && current.osBirthToken === prior.osBirthToken && current.bootId === prior.bootId);
+}
+function launchIsStalled(member, status, agents, now = (0, host_env_1.hostEnv)().clock.now()) {
     const paneId = member.terminalTarget?.targetId ?? member.tmuxPaneId;
-    return !!(!member.sessionFile && member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= exports.LAUNCH_STALL_MS
+    return !!(launchIsOutstanding(member, status) && member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= exports.LAUNCH_STALL_MS
         && paneId && agents && !agents.some(row => row.pane_id === paneId));
 }
 /** Coordinates isolate independent carrier histories. Legacy pane-only events stay unscoped. */
@@ -220,7 +233,7 @@ class CarrierObserver {
                 await this.publish(view, "process", "stopping", status, "reload_hung");
                 view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
             }
-            if (launchIsStalled(member, agents, now)) {
+            if (launchIsStalled(member, status, agents, now)) {
                 await this.publish(view, "launch", view.launch, status, "launch_stalled");
             }
             const attempt = this.publication.taskCursor(member.name);
