@@ -16,8 +16,9 @@ import { families, generatedTrace } from "../v31-schedules";
 const mutant = process.env.PI_MUTANT!;
 const mode = process.env.PI_MUTANT_MODE ?? "campaign";
 const output = process.env.PI_MUTANT_OUTPUT!;
+const label = process.env.PI_MUTANT_RUN_LABEL ?? "gate";
 const bounds = { maxSteps: 10000, maxVirtualMs: 400000 };
-const options: Record<string, any> = { P3: { freshnessMs: 10000 }, E1: { deadlineMs: 60000 }, E2: { latencyMs: 60000 }, E3: { boundMs: 60000 }, E4: { thresholdMs: 60000 }, E5: { boundMs: 10000 } };
+const options: Record<string, any> = { E1: { deadlineMs: 60000 }, E2: { latencyMs: 60000 }, E3: { boundMs: 60000 }, E4: { thresholdMs: 60000 }, E5: { boundMs: 10000 } };
 const monitors = Object.entries({ ...safety, ...liveness, ...witnesses }).flatMap(([name, run]) => {
   const match = name.match(/^([pes]\d+)/i);
   return match && typeof run === "function" ? [{ id: match[1]!.toUpperCase(), run: run as (h: readonly HistoryEntry[], o?: any) => Verdict | WitnessVerdict }] : [];
@@ -115,23 +116,23 @@ it("records the mutant campaign and exact replay; a survivor is a finding", asyn
         const trace = structuredClone(representative.trace); trace.steps.splice(i, 1);
         attempts++;
         const candidate = await execute(trace, representative.receipt.seed);
-        if (failure(candidate)) { representative = candidate; changed = true; break; }
+        if (failure(candidate)) { representative = candidate; changed = true; i--; }
       }
-      if (changed) continue;
       for (let i = 0; i < representative.trace.steps.length; i++) {
         const at = i ? representative.trace.steps[i - 1]!.at : 0;
         if (representative.trace.steps[i]!.at <= at) continue;
         const trace = structuredClone(representative.trace); trace.steps[i]!.at = at;
         attempts++;
         const candidate = await execute(trace, representative.receipt.seed);
-        if (failure(candidate)) { representative = candidate; changed = true; break; }
+        if (failure(candidate)) { representative = candidate; changed = true; }
       }
+      console.info(`${mutant} shrink: ${attempts} candidates, ${representative.trace.steps.length} steps`);
     }
   } else {
     // A surviving mutant keeps a completed targeted witness and its replay receipt.
     representative = await execute(targeted()[mutant === "M2" ? 1 : mutant === "M5" ? 2 : mutant === "M6" ? 4 : mutant === "M4" ? 3 : 0]!);
   }
-  representative = await execute({ ...representative.trace, id: `${mutant.toLowerCase()}-gate-witness` }, representative.receipt.seed);
+  representative = await execute({ ...representative.trace, id: `${mutant.toLowerCase()}-${label}-witness` }, representative.receipt.seed);
   const replayed = await execute(representative.trace, representative.receipt.seed, representative.receipt);
   expect(replayed.stopped).toEqual(representative.stopped);
   expect(replayed.history).toEqual(representative.history);
@@ -145,7 +146,7 @@ it("records the mutant campaign and exact replay; a survivor is a finding", asyn
 function evidence(history: readonly HistoryEntry[]) {
   return history.flatMap<any>(e => {
     if (e.kind === "tool.result") return [{ sequence: e.sequence, at: e.at, kind: e.kind, name: e.name, effect: e.result.details?.effect, reason: e.result.details?.reason,
-      head: e.result.details?.head, workerChanges: (e.result.details?.worker_changes as any[])?.map(w => w.worker), tasks: (e.result.details?.tasks as any[])?.map(t => t.id) }];
+      head: e.result.details?.head, workers: (e.result.details?.workers as any[])?.map(w => w.name), workerChanges: (e.result.details?.worker_changes as any[])?.map(w => w.worker), tasks: (e.result.details?.tasks as any[])?.map(t => t.id) }];
     if (e.kind === "journal.append") return [{ sequence: e.sequence, at: e.at, kind: e.kind, cursor: e.event.cursor, type: e.event.type, worker: e.event.worker, phase: e.event.phase }];
     if (e.kind === "durable.launch") return [{ sequence: e.sequence, at: e.at, kind: e.kind, record: e.record ? { membershipId: e.record.membershipId, pendingLaunchId: e.record.pendingLaunchId, launch: e.record.raw.launch } : null }];
     if (e.kind === "lead.entry" && e.stamp) return [{ sequence: e.sequence, at: e.at, kind: e.kind, stamp: e.stamp }];
