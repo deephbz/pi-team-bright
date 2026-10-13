@@ -4,12 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.readMembershipObservation = readMembershipObservation;
+const host_env_1 = require("../env/host-env");
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_os_1 = __importDefault(require("node:os"));
 const node_path_1 = __importDefault(require("node:path"));
 const TEAM_CONFIG_FILENAME = "config.json";
 const RUNTIME_DIRECTORY = "runtime";
-const yieldRead = () => new Promise(resolve => setImmediate(resolve));
+const yieldRead = () => (0, host_env_1.hostEnv)().clock.yield();
 function iso(value) { const time = typeof value === "number" ? value : typeof value === "string" ? Date.parse(value) : NaN; try {
     return Number.isFinite(time) && time > 0 ? new Date(time).toISOString() : undefined;
 }
@@ -24,7 +25,7 @@ function parseObject(file) { return JSON.parse(node_fs_1.default.readFileSync(fi
 function configIsUsable(value) { return !!value && typeof value === "object" && validString(value.name) && Array.isArray(value.members); }
 function memberIsUsable(member) { return !!member && typeof member === "object" && validString(member.membershipId) && safeName(member.name) && (member.agentType === "lead" || member.agentType === "teammate") && !!iso(member.joinedAt); }
 function generation(runtime) { const pid = runtime?.pid; const startedAt = runtime?.startedAt; return runtime && !!runtime.membershipId && typeof pid === "number" && Number.isSafeInteger(pid) && pid > 1 && typeof startedAt === "number" && Number.isFinite(startedAt) && startedAt > 0 ? { membershipId: runtime.membershipId, pid, startedAt } : undefined; }
-function expired(options, deadline) { return options.signal?.aborted ? "projection_aborted" : Date.now() >= deadline ? "projection_deadline_exceeded" : undefined; }
+function expired(options, deadline) { return options.signal?.aborted ? "projection_aborted" : (0, host_env_1.hostEnv)().clock.now() >= deadline ? "projection_deadline_exceeded" : undefined; }
 function projectMember(teamName, candidate, duplicateIds, ambiguousBindings) {
     const { member, runtime, runtimeState } = candidate;
     const diagnoses = [];
@@ -156,7 +157,7 @@ async function readTeam(directory, directoryName, options, deadline) {
 /** Read lock-free recorded Membership evidence. This module never writes Team or runtime records. */
 async function readMembershipObservation(options = {}) {
     const teamsRoot = options.teamsRoot ?? node_path_1.default.join(node_os_1.default.homedir(), ".pi", "teams");
-    const deadline = Date.now() + Math.max(0, options.deadlineMs ?? 1_000);
+    const deadline = (0, host_env_1.hostEnv)().clock.now() + Math.max(0, options.deadlineMs ?? 1_000);
     const result = { teams: [], diagnoses: [] };
     const initialStop = expired(options, deadline);
     if (initialStop) {
