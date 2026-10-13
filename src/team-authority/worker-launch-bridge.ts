@@ -106,6 +106,10 @@ export class WorkerLaunchBridge {
   }
   private async claim(request: WorkerLaunchRequest, observe: (member: Member) => void): Promise<LaunchClaim | WorkerLaunchResult> {
     const config = await teams.readConfig(request.teamName);
+    if (config.separateWindows) {
+      const terminal = currentTerminalForTeam(config);
+      if (!terminal.supportsWindows()) throw new Error(`Separate windows mode is not supported in ${terminal.name}.`);
+    }
     const member = [...config.members].reverse().find(m => m.name === request.workerName && m.agentType === "teammate" && m.isActive !== false);
     if (member) {
       observe(member);
