@@ -4,6 +4,10 @@ import type { ProcessIdentity } from "./history";
 
 export type SimProcess = ProcessGeneration & ProcessIdentity & { actor: string; alive: boolean; parentPid?: number; command: string };
 
+export function generationKey(generation: ProcessGeneration): string {
+  return JSON.stringify([generation.bootId, generation.pid, generation.osBirthToken]);
+}
+
 /** A7: birth tokens distinguish reused pids. Host probe support remains advisory. */
 export class ProcessTable {
   bootId = "boot-1";
