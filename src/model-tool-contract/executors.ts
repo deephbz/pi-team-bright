@@ -179,7 +179,8 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
         return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
       }
       const receipt = { ...(outcome.launchId ? { launchId: outcome.launchId } : {}), ...(outcome.launch ? { launch: outcome.launch } : {}), ...(outcome.lastStop ? { lastStop: outcome.lastStop } : {}) };
-      if (outcome.kind === "attention") return { kind: "attention", worker: outcome.worker.name, ...(outcome.paneId ? { paneId: outcome.paneId } : {}), reason: outcome.reason, nextActionHint: outcome.nextActionHint, ...receipt };
+      if (outcome.kind === "attention") return { kind: "attention", worker: outcome.worker.name, ...(outcome.paneId ? { paneId: outcome.paneId } : {}), reason: outcome.reason, nextActionHint: outcome.nextActionHint,
+        ...(outcome.reason === "legacy_unverified" ? { message: `Reload Worker ${outcome.worker.name}'s Pi to re-admit its generation with a birth token, or adopt that Worker in /ptb status. No replacement was started.` } : {}), ...receipt };
       return { kind: "worker_ensured", effect: outcome.kind, worker: publicWorker(outcome.worker), ...receipt, ...(outcome.recoveryMode ? { recoveryMode: outcome.recoveryMode } : {}) };
     },
 

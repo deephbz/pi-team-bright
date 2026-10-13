@@ -12,6 +12,7 @@ function publication(): TeamLifecyclePublication {
     readEventCursor: vi.fn(() => "0"),
     recordWorkerPrepared: vi.fn(async () => ({ cursor: "1" })),
     recordWorkerStopped: vi.fn(async () => ({ cursor: "1" })),
+    recordWorkerGenerationExit: vi.fn(async () => {}),
     recordWorkerSessionBound: vi.fn(async () => ({ cursor: "1" })),
     recordWorkerFailed: vi.fn(async () => ({ cursor: "1" })),
     observeWorkerStartup: vi.fn(async () => ({

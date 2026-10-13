@@ -126,12 +126,12 @@ export class CarrierObserver {
   private inFlight?: Promise<void>;
   private outage = false;
   private lastGood = new Map<string, number>();
-  private journalCursor = "0";
-  private taskCursors = new Map<string, string>();
-  private lastEvents = new Map<string, WorkerTeamEvent>();
+  private readonly publication: CarrierPublication;
   private journal = false;
   private blocked = new Map<string, { since: number; emitted: boolean; attempt: string }>();
-  constructor(private readonly teamName: string, private readonly notify: (text: string) => void = () => {}) {}
+  constructor(private readonly teamName: string, private readonly notify: (text: string) => void = () => {}) {
+    this.publication = new CarrierPublication(teamName, notify);
+  }
   start(): void { this.stopped = false; this.journal = true; void this.tick(); }
   stop(): void { this.stopped = true; hostEnv().clock.clearTimeout(this.timer); }
   private async tick(): Promise<void> {
@@ -183,7 +183,7 @@ export class CarrierObserver {
       await appendTeamEvent(this.teamName, { type: "alert", alertId: `herdr-observation:${hostEnv().random.uuid()}`, from: "team-lead", to: "team-lead", kind: "attention", text }).catch(() => undefined);
     }
     this.outage = unavailable;
-    try { this.readPublications(); } catch { /* Source projection does not depend on journal availability. */ }
+    try { this.publication.read(); } catch { /* Source projection does not depend on journal availability. */ }
     for (const member of members) {
       if (this.stopped) return;
       const status = statuses.get(member.name) ?? null;
@@ -200,7 +200,7 @@ export class CarrierObserver {
       this.expire();
       let accepted = true;
       for (const field of ["binding", "launch", "process", "terminal", "activity"] as const) {
-        if ((this.lastEvents.get(publicationKey(view, field))?.carrier?.to ?? "unknown") === view[field]) continue;
+        if ((this.publication.last(view, field)?.carrier?.to ?? "unknown") === view[field]) continue;
         if (!await this.publish(view, field, view[field], status)) { accepted = false; break; }
       }
       if (!accepted) continue;
@@ -211,7 +211,7 @@ export class CarrierObserver {
       if (view.binding === "unbound" && launchIsStalled(member, agents, now)) {
         await this.publish(view, "launch", view.launch, status, "launch_stalled");
       }
-      const attempt = this.taskCursors.get(member.name) ?? "0";
+      const attempt = this.publication.taskCursor(member.name);
       const blockKey = publicationKey(view, "blocked");
       const block = this.blocked.get(blockKey);
       if (!block || block.attempt !== attempt) this.blocked.set(blockKey, { since: now, emitted: false, attempt });
@@ -223,7 +223,24 @@ export class CarrierObserver {
       this.projection.set(view.membership, view);
     }
   }
-  private readPublications(): void {
+  private async publish(view: CarrierView, field: CarrierEvent["field"], to: string, status: AgentRuntimeStatus | null, attentionFact?: string): Promise<boolean> {
+    if (!this.journal || this.stopped) return false;
+    return withCurrentMembershipLease(this.teamName, view.membership, async member => {
+      if (this.stopped) return false;
+      return this.publication.publishUnderLease(member, view, field, to, status, attentionFact, () => this.stopped);
+    }).catch(() => false);
+  }
+}
+
+/** One journal baseline for polling and admission. Callers hold the exact Membership lease. */
+class CarrierPublication {
+  private journalCursor = "0";
+  private taskCursors = new Map<string, string>();
+  private lastEvents = new Map<string, WorkerTeamEvent>();
+  constructor(private readonly teamName: string, private readonly notify: (text: string) => void = () => {}) {}
+  last(view: CarrierView, field: CarrierEvent["field"]): WorkerTeamEvent | undefined { return this.lastEvents.get(publicationKey(view, field)); }
+  taskCursor(worker: string): string { return this.taskCursors.get(worker) ?? "0"; }
+  read(): void {
     for (;;) {
       const page = readTeamEvents(this.teamName, { afterCursor: this.journalCursor, limit: 100 });
       for (const event of page.events) {
@@ -234,19 +251,16 @@ export class CarrierObserver {
       if (!page.truncated) return;
     }
   }
-  private async publish(view: CarrierView, field: CarrierEvent["field"], to: string, status: AgentRuntimeStatus | null, attentionFact?: string): Promise<boolean> {
-    if (!this.journal || this.stopped) return false;
-    // Reconcile journal and source coordinates under the same Membership lease as append.
-    // No observation checkpoint or unaccepted value can become a publication baseline.
-    return withCurrentMembershipLease(this.teamName, view.membership, async member => {
+  async publishUnderLease(member: Member, view: CarrierView, field: CarrierEvent["field"], to: string, status: AgentRuntimeStatus | null, attentionFact?: string, stopped = () => false): Promise<boolean> {
+      // No observation checkpoint or unaccepted value can become a publication baseline.
       const current = await readRuntimeStatus(this.teamName, view.worker);
       const coordinates = { membership: member.membershipId ?? "", launchId: member.launch?.launchId ?? member.pendingLaunchId,
         generation: runtimeGeneration(current) ?? undefined, terminalTarget: memberTerminalTarget(member, view.terminalTarget?.backend) };
       const key = publicationKey(view, field);
-      if (this.stopped || member.sessionFile !== view.sessionFile || publicationKey(coordinates, field) !== key
+      if (stopped() || member.sessionFile !== view.sessionFile || publicationKey(coordinates, field) !== key
         || JSON.stringify(current?.lastStop) !== JSON.stringify(status?.lastStop)
         || current?.stopRequested !== status?.stopRequested) return false;
-      this.readPublications(); // Fail closed if the accepted baseline cannot be read.
+      this.read(); // Fail closed if the accepted baseline cannot be read.
       const recorded = this.lastEvents.get(key);
       const before = recorded?.carrier;
       const from = before?.to ?? "unknown";
@@ -282,6 +296,17 @@ export class CarrierObserver {
         try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`); } catch { /* UI delivery cannot undo append. */ }
       }
       return true;
-    }).catch(() => false);
+  }
+}
+
+/** Publish verified predecessor death before admission can overwrite its runtime record.
+ * The admission caller holds the Membership lease through publication and replacement.
+ */
+export async function publishPredecessorExit(teamName: string, member: Member, status: AgentRuntimeStatus, teamBackend?: string): Promise<void> {
+  const current = { ...member, terminalTarget: memberTerminalTarget(member, teamBackend) };
+  const view = deriveCarrierView(current, status);
+  if (view.process !== "gone") throw new Error("Predecessor exit is not verified; runtime replacement cannot proceed.");
+  if (!await new CarrierPublication(teamName).publishUnderLease(current, view, "process", "gone", status)) {
+    throw new Error("Predecessor coordinates changed; runtime replacement cannot proceed.");
   }
 }

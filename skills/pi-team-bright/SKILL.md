@@ -134,7 +134,11 @@ For `receipt_deadline`, call `ensure_worker` again; a stalled launch becomes `la
 `launch_stalled` requires human review of the named pane. With human approval,
 use `worker_stop` to end that launch before `ensure_worker` creates another.
 Unknown launch evidence never authorizes another spawn.
+`legacy_unverified` with `ask_human` identifies a bound Worker without a birth token.
+Ask the human to reload that Worker's Pi to re-admit its generation with a birth token,
+or adopt that Worker in `/ptb status`. Never spawn a replacement from this result.
 `worker_ensured.recovered` reports exact-Session recovery without changing the Attempt.
+Recovery journals the previous generation's verified exit before binding its replacement.
 Ask the human before recovery when `lastStop.suspectedHumanStop` is true.
 Use `/ptb status` to inspect stop evidence and confirm adoption of legacy generations.
 

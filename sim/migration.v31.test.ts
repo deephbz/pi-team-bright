@@ -109,10 +109,18 @@ it("migrates a baseline Team lead first, then three Workers without replacing a 
       while ((h.world.scheduler.nextDue() ?? Infinity) <= target) await h.world.scheduler.step(true);
       await h.world.drain();
       for (const name of names.slice(1)) {
-        const result = (await h.tool("lead", "ensure_worker", { name, scope: `Scope ${name}` })).details;
+        const reply = await h.tool("lead", "ensure_worker", { name, scope: `Scope ${name}` });
+        const result = reply.details;
         expect(result).toMatchObject(remaining.has(name)
-          ? { kind: "attention", reason: "unknown", nextActionHint: "wait" }
+          ? { kind: "attention", reason: "legacy_unverified", nextActionHint: "ask_human" }
           : { kind: "worker_ensured", effect: "reused" });
+        if (remaining.has(name)) {
+          expect(JSON.parse(reply.content[0].text).message).toBe(result.message);
+          expect(result.message).toContain(name);
+          expect(result.message).toMatch(/reload.*Pi/i);
+          expect(result.message).toMatch(/birth token/i);
+          expect(result.message).toMatch(/adopt.*\/ptb status/i);
+        } else expect(result.reason).not.toBe("legacy_unverified");
       }
       // Terminal wait hints are informational. Human-action hints must never
       // target a Worker whose reload completed successfully.
