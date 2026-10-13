@@ -3,6 +3,7 @@ import { HISTORY_VERSION, type HistoryEntry, type HistoryFact, type HistoryOrigi
 import { e1ExitReachesCarrierView, e2EventReachesBranch, e3LaunchCompletesOrReportsUnknown, e4BlockedAttentionOncePerEpoch, e5ReceiptWithinBound } from "./liveness";
 import { p10JournalMatchesWorldTruth, p1SingleAdmittedGeneration, p2GoneMatchesWorldTruth, p3LiveIsFresh, p4ActMatchesWorldTruth, p5ClosesCited, p6OneOutstandingReservation, p7PublicationNeverWritesTasks, p8CoverageLedger, p9NoDuplicatePage } from "./safety";
 import { s1PidReuseWitness, s2OverlappingEnsureWitness, s3CrashBeforeRecordWitness, s4HerdrLossInLaunchWitness, s5CompactionAfterUpdateWitness, s6SuspectedHumanStopWitness } from "./witnesses";
+import wirePage from "./fixtures/p8-wire-page.json";
 
 // Each monitor has one history that passes and one that violates or witnesses.
 // Histories are built from typed facts in sim/history.ts with contiguous sequences.
@@ -159,7 +160,7 @@ describe("P8 coverage ledger", () => {
   const taskEvent = (at: number, taskId: string): Step => [at, { kind: "journal.append", team, path: journalPath, line: 1, event: { type: "task", seq: 1, raw: { type: "task", ref: { taskId } } } as JournalFact }];
   const taskUpdate = (at: number, taskIds: string[]): Step => [at, {
     kind: "lead.entry", actor: lead, sessionId: "s1", entryId: `u${at}`,
-    entry: { customType: "ptb.team-update", content: `ptb.team-update: team_sync updates.\n${JSON.stringify({ kind: "updates", workerChanges: [], taskChanges: taskIds.map(taskId => ({ taskId })) })}` },
+    entry: { customType: "ptb.team-update", content: `ptb.team-update: team_sync updates.\n${JSON.stringify({ kind: "updates", worker_changes: [], task_changes: taskIds.map(task_id => ({ task_id, change_kinds: ["progress"], journal_entries: [], current: { id: task_id, version: "v_current" } })) })}` },
     stamp: { team, epoch: "ep", binding: "b", from: 0, through: 1 },
   }];
   it("violates when a page omits a Task event (probe omittedTask)", () => {
@@ -187,6 +188,22 @@ describe("P8 coverage ledger", () => {
   it("violates the M4 scratch: a snapshot stamped through 2 without the Worker creation changes", () => {
     const mutant = h(row(0, { seq: 1 }, undefined, "w-race"), row(1, { seq: 2 }, undefined, "w-race"), stamp(10, 0, 2, "snapshot", []));
     expect(p8CoverageLedger(mutant)).toMatchObject({ status: "violation" });
+  });
+});
+
+describe("P8 reads the captured branch wire", () => {
+  // Steps come from a real simulator run (see the fixture's provenance); the page uses the model-facing wire.
+  const real = (wirePage.steps as unknown as Array<{ fact: HistoryFact }>).map(({ fact }, index): Step => [index * 10, fact]);
+  it("passes when the captured updates page names every eligible Task and Worker event", () => {
+    expect(p8CoverageLedger(h(...real))).toEqual({ status: "pass" });
+  });
+  it("violates when the same page omits the eligible Task event on the wire", () => {
+    const page = real.at(-1)![1] as unknown as { entry: { message: { content: Array<{ type: string; text: string }> } } };
+    const text = page.entry.message.content[0]!.text;
+    const split = text.indexOf("\n");
+    const payload = JSON.parse(text.slice(split + 1));
+    const omitted = { ...page, entry: { ...page.entry, message: { ...page.entry.message, content: [{ type: "text", text: `${text.slice(0, split + 1)}${JSON.stringify({ ...payload, task_changes: [] })}` }] } } };
+    expect(p8CoverageLedger(h(...real.slice(0, -1), [real.at(-1)![0], omitted as unknown as HistoryFact]))).toMatchObject({ status: "violation" });
   });
 });
 
