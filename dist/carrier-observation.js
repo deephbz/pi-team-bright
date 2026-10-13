@@ -58,9 +58,10 @@ async function herdrList(source) {
 /** Ephemeral projection. It owns observations, never Membership or Task transitions. */
 exports.CARRIER_SAMPLE_TTL_MS = 6000;
 exports.LAUNCH_STALL_MS = 15000;
+/** Session binding completes first launch; later process loss belongs to the lifecycle planner. */
 function launchIsStalled(member, agents, now = (0, host_env_1.hostEnv)().clock.now()) {
     const paneId = member.terminalTarget?.targetId ?? member.tmuxPaneId;
-    return !!(member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= exports.LAUNCH_STALL_MS
+    return !!(!member.sessionFile && member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= exports.LAUNCH_STALL_MS
         && paneId && agents && !agents.some(row => row.pane_id === paneId));
 }
 /** Coordinates isolate independent carrier histories. Legacy pane-only events stay unscoped. */
@@ -219,7 +220,7 @@ class CarrierObserver {
                 await this.publish(view, "process", "stopping", status, "reload_hung");
                 view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
             }
-            if (view.binding === "unbound" && launchIsStalled(member, agents, now)) {
+            if (launchIsStalled(member, agents, now)) {
                 await this.publish(view, "launch", view.launch, status, "launch_stalled");
             }
             const attempt = this.publication.taskCursor(member.name);
