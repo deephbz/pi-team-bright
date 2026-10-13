@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { nodeHostEnv } from "../env/host-env";
 import type { Member } from "./contracts";
+import * as runtime from "../utils/runtime";
 const fixture = vi.hoisted(() => ({ members: [] as Member[], leased: false, starts: 0, splits: 0, release: undefined as undefined | ((value: any) => void) }));
 vi.mock("../utils/lock", async importOriginal => ({ ...await importOriginal<any>(), withLock: async (_: unknown, fn: () => unknown) => fn() }));
 vi.mock("../utils/teams", () => ({
@@ -46,6 +47,20 @@ it.each(["started", "unknown"] as const)("returns launch_stalled for an old %s l
   fixture.members[0].launch!.requestedAt = Date.now(); run.mockClear();
   expect(await bridge.ensureWorker(request)).toMatchObject({ reason: "launch_pending", nextActionHint: "wait" });
   expect(run).not.toHaveBeenCalled();
+});
+it.each(["none", "requested", "started", "unknown", "refused"] as const)("preserves G11 for a bound tokenless Worker with %s launch evidence", async state => {
+  fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", sessionFile: "/sessions/worker.jsonl",
+    terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
+    ...(state === "none" ? {} : { launch: { launchId: "launch", state, requestedAt: Date.now() - 16000 } }) } as Member];
+  vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue({ teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1 });
+  const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
+  const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
+  expect(await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" }))
+    .toMatchObject({ action: "attention", reason: "legacy_unverified", nextActionHint: "ask_human", membershipId: "membership" });
+  expect(run).not.toHaveBeenCalled();
+  expect(fixture.splits).toBe(0);
+  expect(fixture.starts).toBe(0);
+  expect(fixture.members[0].sessionFile).toBe("/sessions/worker.jsonl");
 });
 it("returns a durable receipt before readiness and fences late completion", async () => {
   const publication = { readEventCursor: () => "0", recordWorkerPrepared: async () => ({ cursor: "1" }), observeWorkerStartup: vi.fn() } as any;

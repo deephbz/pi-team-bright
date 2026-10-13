@@ -367,7 +367,7 @@ export const WorkerLaunchReceiptFields = {
   lastStop: Type.Optional(Type.Object({ stopId: Type.Optional(Type.String()), piReason: Type.Enum(["quit", "reload", "new", "resume", "fork"]), observedAt: Type.Number(), suspectedHumanStop: Type.Boolean(), targetSessionFile: Type.Optional(Type.String()) }, { additionalProperties: false })),
 };
 export const WorkerAttentionSchema = Type.Object({ kind: Type.Literal("attention"), worker: WorkerName, paneId: Type.Optional(Type.String()),
-  reason: Type.String(), nextActionHint: Type.Enum(["wait", "ask_human"]), ...WorkerLaunchReceiptFields }, { additionalProperties: false });
+  reason: Type.String(), nextActionHint: Type.Enum(["wait", "ask_human"]), message: Type.Optional(Type.String()), ...WorkerLaunchReceiptFields }, { additionalProperties: false });
 export const EnsureWorkerResultSchema = Type.Union([
   WorkerAttentionSchema,
   Type.Object({
