@@ -3,6 +3,28 @@ import { replayTrace } from "./replay";
 import type { WorldTrace } from "./trace-format";
 import deadPi from "./fixtures/traces/bound-pi-dead.json";
 
+it("recovers an exact Session after all registered Worker panes close", async () => {
+  const trace: WorldTrace = {
+    version: 1, id: "all-worker-panes-closed", source: "synthetic",
+    assumptions: ["A2", "S-first-worker-pane-is-pane-1"],
+    setup: { ptbVersion: "v3.1", teams: [{ team: "team-1", workers: ["w1", "w2"] }] },
+    steps: [
+      { at: 0, step: { kind: "human.closePane", pane: "pane-1" } },
+      { at: 1, step: { kind: "human.closePane", pane: "pane-2" } },
+      { at: 2, step: { kind: "tool.call", who: { team: "team-1", actor: "lead" }, tool: "ensure_worker", args: { name: "w1", scope: "Recover closed Worker" } } },
+    ],
+  };
+  const replay = await replayTrace(trace, { seed: 42 });
+  const ensured = replay.history.filter(e => e.kind === "tool.result" && e.name === "ensure_worker").at(-1);
+  expect(ensured).toMatchObject({ result: { details: { kind: "worker_ensured", effect: "recovered", recoveryMode: "exact_session_resume" } } });
+  expect(replay.panes.some(pane => pane.id === "pane-1" || pane.id === "pane-2")).toBe(false);
+  expect(replay.panes.find(pane => pane.id === "pane-3")).toMatchObject({ agentLive: true });
+  const generations = replay.actors.filter(actor => actor.id === "team-1/w1");
+  expect(generations).toHaveLength(2);
+  expect(generations[1]).toMatchObject({ alive: true, sessionId: generations[0]!.sessionId });
+  expect(generations[1]!.generation).not.toEqual(generations[0]!.generation);
+}, 30000);
+
 // Full-suite CPU contention reached 4524 ms; retain 30 s for durable Task recovery.
 it("wakes an exact recovered Session for its ACKed in-progress Task without a new Attempt", async () => {
   const lead = { team: "team-1", actor: "lead" };

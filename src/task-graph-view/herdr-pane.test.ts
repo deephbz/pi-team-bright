@@ -44,6 +44,16 @@ function setup() {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("Task graph Herdr pane lifecycle", () => {
+  it("accepts only the structured missing-pane code from stderr as absence", () => {
+    const execute = vi.fn(() => ({ stdout: "", stderr: JSON.stringify({ error: { code: "pane_not_found", message: "pane gone" } }), status: 1 }));
+    const host = new HerdrCliTaskGraphPaneHost("herdr-test", execute);
+    expect(host.getPane("pane-graph")).toBeUndefined();
+    execute.mockReturnValue({ stdout: "", stderr: JSON.stringify({ error: { code: "permission_denied", message: "pane_not_found in diagnostic text" } }), status: 1 });
+    expect(() => host.getPane("pane-graph")).toThrow("permission_denied");
+    execute.mockReturnValue({ stdout: "not-json", stderr: JSON.stringify({ error: { code: "pane_not_found" } }), status: 1 });
+    expect(() => host.getPane("pane-graph")).toThrow("malformed JSON");
+  });
+
   it("accepts Herdr pane run's successful empty stdout", () => {
     const execute = vi.fn(() => ({ stdout: "", stderr: "", status: 0 }));
     const host = new HerdrCliTaskGraphPaneHost("herdr-test", execute);

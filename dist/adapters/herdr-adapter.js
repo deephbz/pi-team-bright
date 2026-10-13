@@ -6,6 +6,7 @@ const host_env_1 = require("../env/host-env");
 const terminal_adapter_1 = require("../utils/terminal-adapter");
 const node_crypto_1 = require("node:crypto");
 const team_pane_layout_1 = require("../utils/team-pane-layout");
+const herdr_reply_1 = require("../utils/herdr-reply");
 const FORWARDED_ENV = /^(?:PI_[A-Z0-9_]+|HTTP_PROXY|HTTPS_PROXY|WSS_PROXY|ALL_PROXY|NO_PROXY|http_proxy|https_proxy|wss_proxy|all_proxy|no_proxy)$/;
 const SHELL_READY_RETRY_MS = 50;
 const SHELL_READY_TIMEOUT_MS = 5_000;
@@ -20,38 +21,8 @@ function currentHerdrTab() {
     const tabId = (0, host_env_1.hostEnv)().process.env.HERDR_TAB_ID?.trim();
     return tabId || null;
 }
-function errorText(error) {
-    const code = typeof error?.code === "string" ? error.code : "unknown_error";
-    const message = typeof error?.message === "string" ? error.message : "Herdr returned an invalid error response";
-    return `${code}: ${message}`;
-}
-function parseEnvelope(stdout) {
-    let parsed;
-    try {
-        parsed = JSON.parse(stdout);
-    }
-    catch {
-        throw new Error("Herdr returned malformed JSON.");
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error("Herdr returned an invalid JSON envelope.");
-    }
-    return parsed;
-}
-function resultRecord(envelope) {
-    if (envelope.error)
-        throw new Error(`Herdr request failed: ${errorText(envelope.error)}`);
-    const result = envelope.result ?? envelope;
-    if (!result || typeof result !== "object" || Array.isArray(result)) {
-        throw new Error("Herdr returned a response without an object result.");
-    }
-    return result;
-}
 function isPaneNotFound(error) {
-    return error instanceof Error && /(?:^|\W)pane_not_found(?:\W|$)/.test(error.message);
-}
-function isAgentPaneBusy(error) {
-    return error instanceof Error && /(?:^|\W)agent_pane_busy(?:\W|$)/.test(error.message);
+    return error instanceof herdr_reply_1.HerdrRequestError && error.code === "pane_not_found";
 }
 function managedPiArgv(response) {
     const argv = response.argv;
@@ -120,23 +91,7 @@ class HerdrAdapter {
         }
     }
     invoke(args) {
-        const response = (0, terminal_adapter_1.execCommand)("herdr", args);
-        let envelope;
-        try {
-            envelope = parseEnvelope(response.stdout);
-        }
-        catch (error) {
-            if (response.status !== 0) {
-                throw new Error(`Herdr command failed with status ${response.status}: ${response.stderr || (error instanceof Error ? error.message : String(error))}`);
-            }
-            throw error;
-        }
-        if (envelope.error)
-            throw new Error(`Herdr request failed: ${errorText(envelope.error)}`);
-        if (response.status !== 0) {
-            throw new Error(`Herdr command failed with status ${response.status}: ${response.stderr || "unknown error"}`);
-        }
-        return resultRecord(envelope);
+        return (0, herdr_reply_1.readHerdrReply)((0, terminal_adapter_1.execCommand)("herdr", args));
     }
     paneRecord(paneId, query = this.invoke.bind(this)) {
         const pane = query(["pane", "get", paneId]).pane;
@@ -175,9 +130,7 @@ class HerdrAdapter {
         }
         return { x, y, width, height };
     }
-    assertWorkerRegion(leaderPaneId, workerPaneId, query) {
-        const leader = this.paneRecord(leaderPaneId, query);
-        const worker = this.paneRecord(workerPaneId, query);
+    assertWorkerRegion(leaderPaneId, leader, workerPaneId, worker, query) {
         if (leader.tab_id !== worker.tab_id || leader.workspace_id !== worker.workspace_id) {
             throw new Error(`Herdr Team Worker pane ${workerPaneId} is not in the leader tab; refusing to split it.`);
         }
@@ -233,21 +186,10 @@ class HerdrAdapter {
         return String(requestedLeaderWidth / width);
     }
     /** Choose the largest viable registered Worker pane from the live Herdr layout. */
-    adaptiveSplit(leaderPaneId, workerPaneIds, columnsPerRow, query) {
-        const leader = this.paneRecord(leaderPaneId, query);
+    adaptiveSplit(leaderPaneId, leader, registered, columnsPerRow, query) {
         if (typeof leader.tab_id !== "string" || !leader.tab_id || typeof leader.workspace_id !== "string" || !leader.workspace_id) {
             throw new Error(`Herdr leader pane ${leaderPaneId} has no exact tab or workspace identity; refusing Worker spawn.`);
         }
-        const registered = workerPaneIds.flatMap((paneId) => {
-            try {
-                return [{ paneId, pane: this.paneRecord(paneId, query) }];
-            }
-            catch (error) {
-                if (isPaneNotFound(error))
-                    return [];
-                throw error;
-            }
-        });
         // Membership registration supplies the candidate set. A moved or otherwise
         // unusable candidate is ignored; a valid registered candidate can still be
         // selected without falling back to an ambient pane.
@@ -305,28 +247,37 @@ class HerdrAdapter {
         const paneLayout = options.panePlacement.paneLayout ?? team_pane_layout_1.DEFAULT_TEAM_PANE_LAYOUT;
         // `grid` remains a read-compatible alias for live adaptive placement.
         const adaptive = paneLayout.worker_tiling === "adaptive" || paneLayout.worker_tiling === "grid";
-        const workerCount = workerPaneIds.length;
-        if (paneLayout.worker_limit !== undefined && workerCount >= paneLayout.worker_limit) {
+        // Capacity counts registered Workers even when their panes have closed.
+        if (paneLayout.worker_limit !== undefined && workerPaneIds.length >= paneLayout.worker_limit) {
             throw new Error(`Herdr Worker limit ${paneLayout.worker_limit} has been reached; refusing another Worker pane.`);
         }
         if (!workerPaneIds.every((paneId) => !!paneId && paneId !== leaderPaneId)
             || new Set(workerPaneIds).size !== workerPaneIds.length) {
             throw new Error("Herdr Worker spawn requires distinct exact Team pane targets.");
         }
+        const leader = this.paneRecord(leaderPaneId, query);
+        const presentWorkers = workerPaneIds.flatMap((paneId) => {
+            try {
+                return [{ paneId, pane: this.paneRecord(paneId, query) }];
+            }
+            catch (error) {
+                if (isPaneNotFound(error))
+                    return [];
+                throw error;
+            }
+        });
+        const workerCount = presentWorkers.length;
         let adaptiveTarget;
         if (workerCount > 0 && adaptive) {
-            adaptiveTarget = this.adaptiveSplit(leaderPaneId, workerPaneIds, paneLayout.columns_per_row ?? team_pane_layout_1.DEFAULT_COLUMNS_PER_ROW, query);
+            adaptiveTarget = this.adaptiveSplit(leaderPaneId, leader, presentWorkers, paneLayout.columns_per_row ?? team_pane_layout_1.DEFAULT_COLUMNS_PER_ROW, query);
         }
-        const targetPaneId = workerCount === 0 ? leaderPaneId : adaptiveTarget?.targetPaneId ?? workerPaneIds.at(-1);
+        const targetPaneId = workerCount === 0 ? leaderPaneId : adaptiveTarget?.targetPaneId ?? presentWorkers.at(-1).paneId;
         const direction = workerCount === 0 ? "right" : adaptiveTarget?.direction ?? "down";
         const firstWorkerLeaderShare = workerCount === 0
-            ? (() => {
-                const leaderRecord = this.paneRecord(targetPaneId, query);
-                return this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share, adaptive, leaderRecord, query);
-            })()
+            ? this.firstWorkerLeaderShare(leaderPaneId, paneLayout.leader_share, adaptive, leader, query)
             : undefined;
         if (workerCount > 0 && !adaptive)
-            this.assertWorkerRegion(leaderPaneId, targetPaneId, query);
+            this.assertWorkerRegion(leaderPaneId, leader, targetPaneId, presentWorkers.at(-1).pane, query);
         const envArgs = Object.entries(options.env)
             .filter(([key, value]) => FORWARDED_ENV.test(key) && !value.includes("\0"))
             .flatMap(([key, value]) => ["--env", `${key}=${value}`]);
@@ -363,12 +314,7 @@ class HerdrAdapter {
         const result = await (0, host_env_1.hostEnv)().exec.run("herdr", args, { timeoutMs });
         if (result.kind !== "exited")
             throw new Error(`herdr_${args[1]}_${result.kind}`);
-        const envelope = parseEnvelope(result.stdout);
-        if (envelope.error)
-            throw new Error(errorText(envelope.error));
-        if (result.status !== 0)
-            throw new Error(`herdr_${args[1]}_exit:${result.status}`);
-        return resultRecord(envelope);
+        return (0, herdr_reply_1.readHerdrReply)(result);
     }
     /** Snapshot placement asynchronously; geometry uses the same algorithm as legacy callers. */
     async prepareSpawnAsync(options, deadline = (0, host_env_1.hostEnv)().clock.now() + 9000) {
@@ -423,16 +369,17 @@ class HerdrAdapter {
         if (result.kind === "spawn_failed")
             return { state: "refused", fact: `spawn_failed:${result.code}` };
         try {
-            const envelope = parseEnvelope(result.stdout.trim() ? result.stdout : result.stderr);
+            const envelope = (0, herdr_reply_1.readHerdrEnvelope)(result);
             if (envelope.error || result.status !== 0) {
                 // A readiness timeout can follow successful actuation. Only explicit pre-actuation refusal is decisive.
-                const fact = envelope.error ? errorText(envelope.error) : result.stderr;
-                const code = envelope.error && typeof envelope.error === "object" ? envelope.error.code : undefined;
+                const error = envelope.error ? new herdr_reply_1.HerdrRequestError(envelope.error) : undefined;
+                const fact = error?.fact ?? result.stderr;
+                const code = error?.code;
                 return { state: ["agent_pane_busy", "pane_not_found", "invalid_params", "unsupported_agent_kind"].includes(String(code)) ? "refused" : "unknown", fact };
             }
             if (!result.stdout.trim())
                 throw new Error("Start success requires stdout evidence.");
-            assertReadyStart(resultRecord(envelope), carrierName, paneId);
+            assertReadyStart((0, herdr_reply_1.herdrResult)(envelope), carrierName, paneId);
             return { state: "started", fact: "agent_start_accepted" };
         }
         catch {
