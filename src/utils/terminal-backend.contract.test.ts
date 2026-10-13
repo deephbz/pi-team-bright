@@ -107,16 +107,19 @@ describe("Team terminal backend binding", () => {
 
   it("refuses spawning or resume from a different current backend", () => {
     setAdapter(adapter("tmux"));
+    vi.stubEnv("HERDR_ENV", "");
+    vi.stubEnv("HERDR_PANE_ID", "");
+    vi.stubEnv("HERDR_TAB_ID", "");
     const config = { name: "bound", terminalBackend: "herdr", members: [] } as any;
 
-    expect(() => currentTerminalForTeam(config)).toThrow(/bound to herdr.*running in tmux/i);
+    expect(() => currentTerminalForTeam(config)).toThrow(/Herdr launch requires a direct pane-local Team carrier/i);
   });
 
   it("refuses launch from a nested carrier even when its backend identity matches", () => {
     setAdapter(adapter("herdr", "w4:p9", false));
     const config = { name: "bound", terminalBackend: "herdr", members: [] } as any;
 
-    expect(() => currentTerminalForTeam(config)).toThrow(/nested terminal carrier/i);
+    expect(() => currentTerminalForTeam(config)).toThrow(/Herdr launch requires a direct pane-local Team carrier/i);
   });
 
   it("refuses ambient lifecycle dispatch for terminal-bound legacy Teams", () => {

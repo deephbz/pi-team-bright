@@ -430,7 +430,7 @@ describe.skipIf(!hasBd)("semantic task_update surface", () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const tools = harness().tools;
-    const context = { sessionManager: { getSessionFile: () => leadSession } };
+    const context = { sessionManager: { getSessionFile: () => leadSession, getBranch: () => [] } };
 
     const createdResult = await tools.get("task_graph_apply")!.execute("create", {
       operation_id: "create-receipt-contract",
