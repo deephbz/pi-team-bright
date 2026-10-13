@@ -55,12 +55,15 @@ export function e2EventReachesBranch(history: readonly HistoryEntry[], options: 
   if (!events.length) return notApplicable("journal seq fields");
   const stamps = ofKind(history, "lead.entry").filter(entry => entry.stamp !== undefined);
   const settled = ofKind(history, "world.input");
+  const leadSteps = settled.filter(entry => "who" in entry.step && entry.step.who.actor === "lead");
   let decided = false;
   let underFault = false;
   let unobserved = false;
   for (const event of events) {
     const seq = event.event.seq!;
-    const idle = settled.find(entry => entry.sequence > event.sequence && entry.step.kind === "agent.settled" && entry.step.who.team === event.team && entry.step.who.actor === "lead");
+    // The window starts at the later of the append and the first idle moment. A lead already idle at the append starts it there.
+    const last = leadSteps.filter(entry => entry.sequence < event.sequence && "who" in entry.step && entry.step.who.team === event.team).at(-1);
+    const idle = last?.step.kind === "agent.settled" ? { at: event.at } : settled.find(entry => entry.sequence > event.sequence && entry.step.kind === "agent.settled" && entry.step.who.team === event.team && entry.step.who.actor === "lead");
     if (!idle) continue;
     decided = true;
     const deadline = idle.at + latencyMs;
@@ -85,7 +88,7 @@ export function e3LaunchCompletesOrReportsUnknown(history: readonly HistoryEntry
     const membershipId = start.record!.membershipId;
     const deadline = start.at + boundMs;
     const resolved = ofKind(history, "durable.launch").some(entry => entry.sequence > start.sequence && entry.record?.membershipId === membershipId && entry.record?.launchConsumedAt !== undefined && entry.at <= deadline)
-      || ofKind(history, "journal.append").some(entry => entry.sequence > start.sequence && entry.event.raw.field === "launch" && entry.event.membershipId === membershipId && entry.at <= deadline);
+      || ofKind(history, "journal.append").some(entry => entry.sequence > start.sequence && entry.event.raw.field === "launch" && ["started", "refused", "unknown"].includes(String(entry.event.raw.to)) && entry.event.membershipId === membershipId && entry.at <= deadline);
     if (resolved) continue;
     if (lastAt(history) <= deadline) { unobserved = true; continue; }
     if (faultInWindow(history, start.at, deadline)) { underFault = true; continue; }
