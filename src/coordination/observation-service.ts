@@ -188,8 +188,13 @@ export class CoordinationObservationService {
         const worker = bound.config.logicalWorkers!.find(worker => worker.name === event.worker);
         const c = event.carrier;
         const taskIds = worker ? this.projection.projectNonterminalTaskIds(tasks.tasks, worker.name) : [];
+        const unfinished = c?.field === "activity" && c.to === "idle"
+          ? tasks.tasks.filter(task => task.assignee === worker?.name && task.status === "in_progress").map(task => task.id) : [];
+        const advice = unfinished.length
+          ? `Inspect in_progress Task ${unfinished.join(", ")} and its blocker and evidence; then decide whether to send a clarification Alert`
+          : `nextActionHint=${c?.nextActionHint}`;
         return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: c
-          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; ${c.attention ? `${humanCarrierAttentionMessage(c.attention)} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
+          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; ${advice}; ${c.attention ? `${humanCarrierAttentionMessage(c.attention)} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
           : `Worker ${worker.name}: ${event.phase === "failed" ? "startup admission refused" : event.phase.replaceAll("_", " ")}.` }] : [];
       });
       const teamChanges = page.events.flatMap(event => event.type === "alert" && event.alertId.startsWith("herdr-observation:") && event.from === "team-lead" && event.to === "team-lead"

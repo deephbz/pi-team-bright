@@ -377,6 +377,9 @@ restating executable definitions.
   and their retries. Partial shutdown retains the current leader delivery.
   Full shutdown ends only the exact lead runtime generation and fails closed
   around malformed or foreign evidence.
+- Coordination advice for an idle Worker with an `in_progress` Task names that
+  Task and asks the lead to inspect its blocker and evidence before deciding.
+  Carrier facts stay unchanged. Idle alone authorizes no spawn or replacement.
 - `team_sync` preserves `caught_up` for current quiescence. `unsettled` names
   Workers whose activity or missing runtime/delivery evidence needs attention.
   Both advance the lead's branch cursor once the native entry commits. Pi `>=0.83`

@@ -51,6 +51,26 @@ function fixture() {
 afterEach(() => vi.useRealTimers());
 
 describe("branch-held Team observation", () => {
+  it.each([true, false])("projects idle Worker advice with in_progress Task=%s", async unfinished => {
+    const fx = fixture();
+    fx.tasks(unfinished ? [{ ...task, assignee: "worker", status: "in_progress" }] : []);
+    fx.select([snapshotEntry("base", "team", "epoch", "lead", unfinished ? [{ ...task, assignee: "worker", status: "in_progress" }] : [])]);
+    fx.events.push({ type: "worker", worker: "worker", membershipId: "worker-1", phase: "carrier", cursor: "1", at: "2026-10-12T00:00:00Z",
+      carrier: { membership: "worker-1", observedAt: 1, field: "activity", from: "working", to: "idle", cause: { source: "herdr", fact: "agent_status=done" }, paneId: "pane-1", suspectedHumanStop: false, nextActionHint: "wait" } });
+    const result = await fx.sync();
+    expect(result.kind).toBe("updates");
+    if (result.kind !== "updates") throw new Error("Expected Worker update");
+    const text = result.workerChanges[0]!.text;
+    if (unfinished) {
+      expect(text).toContain("Inspect in_progress Task task and its blocker and evidence");
+      expect(text).toContain("then decide whether to send a clarification Alert");
+      expect(text).not.toMatch(/wait|ask_human|spawn|replace/i);
+    } else {
+      expect(text).toBe("Worker worker: activity idle; herdr: agent_status=done; pane pane-1; suspectedHumanStop=false; nextActionHint=wait; nonterminalTaskIds=none.");
+    }
+    expect(fx.events[0]).toMatchObject({ carrier: { nextActionHint: "wait" } });
+    fx.service.clearPending(file);
+  });
   it("commits only native persistence and stamps the page boundary, never the journal head", async () => {
     const fx = fixture(); fx.append(); fx.append();
     expect(await fx.sync()).toMatchObject({ kind: "updates", head: 1 });
