@@ -38,6 +38,7 @@ exports.loadTeamPaneLayoutSettings = loadTeamPaneLayoutSettings;
 exports.assertTeamPaneLayoutSupported = assertTeamPaneLayoutSupported;
 exports.resolveTeamPaneLayout = resolveTeamPaneLayout;
 exports.normalizeTeamPaneLayout = normalizeTeamPaneLayout;
+const host_env_1 = require("../env/host-env");
 const fs = __importStar(require("node:fs"));
 const os = __importStar(require("node:os"));
 const path = __importStar(require("node:path"));
@@ -95,7 +96,7 @@ function settingsPaneLayout(file, source) {
         : undefined;
 }
 function agentDirectory(agentDir) {
-    return agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
+    return agentDir ?? (0, host_env_1.hostEnv)().process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
 }
 /** Read only the global policy and, when trusted, the nearest project policy. */
 function loadTeamPaneLayoutSettings(input) {

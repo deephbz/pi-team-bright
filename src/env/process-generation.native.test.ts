@@ -4,7 +4,9 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, it } from "vitest";
 
-// Regression for the independent C2 native probe; no production process is changed.
+// Host integration: requires macOS, rustc and Xcode Command Line Tools.
+// Builds in a temporary package layout; never needs a preinstalled native/bin.
+// Invokes the native adapter directly, outside the unit HostEnv verifier fixture.
 it.skipIf(process.platform !== "darwin")("builds via the macOS postinstall hook and reports stable birth identity and absence", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ptb-native-probe-"));
   try {
