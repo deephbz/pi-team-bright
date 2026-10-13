@@ -1,0 +1,179 @@
+{
+  "id": "M5",
+  "status": "killed",
+  "targets": [
+    "E5"
+  ],
+  "killedBy": [
+    "E5"
+  ],
+  "sourceRevision": "fec686e1efa8b8c13b0e394fcc95885083f4edd7",
+  "patchSha256": "dc1fc2be04632a02ede795ac3ab9678d6eef8a4fe71233e35388d554d170f0f2",
+  "traceId": "m5-oracle-gaps-witness",
+  "replayVerified": true,
+  "control": {
+    "P1": {
+      "status": "pass"
+    },
+    "P2": {
+      "status": "not_applicable",
+      "missing": "journal process: gone claims"
+    },
+    "P3": {
+      "status": "not_applicable",
+      "missing": "served process: live claims"
+    },
+    "P4": {
+      "status": "pass"
+    },
+    "P5": {
+      "status": "not_applicable",
+      "missing": "pane closures"
+    },
+    "P6": {
+      "status": "pass"
+    },
+    "P7": {
+      "status": "not_applicable",
+      "missing": "journal appends with PTB tool call ids"
+    },
+    "P8": {
+      "status": "not_applicable",
+      "missing": "lead observation stamps"
+    },
+    "P9": {
+      "status": "not_applicable",
+      "missing": "lead observation stamps"
+    },
+    "P10": {
+      "status": "not_applicable",
+      "missing": "journal carrier events with paneId, generation, cause or suspectedHumanStop"
+    },
+    "E1": {
+      "status": "not_applicable",
+      "missing": "worker_pi process exits bound to a Membership (processKind)"
+    },
+    "E2": {
+      "status": "not_applicable",
+      "missing": "lead never idle and eligible after the append in the window"
+    },
+    "E3": {
+      "status": "not_applicable",
+      "missing": "window not observed before history end"
+    },
+    "E4": {
+      "status": "not_applicable",
+      "missing": "journal activity: blocked transitions (C2)"
+    },
+    "E5": {
+      "status": "pass"
+    },
+    "S1": {
+      "status": "absent"
+    },
+    "S2": {
+      "status": "absent"
+    },
+    "S3": {
+      "status": "absent"
+    },
+    "S4": {
+      "status": "absent"
+    },
+    "S5": {
+      "status": "not_applicable",
+      "missing": "ptb.team-update branch entries"
+    },
+    "S6": {
+      "status": "not_applicable",
+      "missing": "journal suspectedHumanStop fields (P10)"
+    },
+    "retry": {
+      "status": "not_applicable",
+      "missing": "decisive start refusal"
+    }
+  },
+  "mutant": {
+    "P1": {
+      "status": "pass"
+    },
+    "P2": {
+      "status": "not_applicable",
+      "missing": "journal process: gone claims"
+    },
+    "P3": {
+      "status": "not_applicable",
+      "missing": "served process: live claims"
+    },
+    "P4": {
+      "status": "pass"
+    },
+    "P5": {
+      "status": "not_applicable",
+      "missing": "pane closures"
+    },
+    "P6": {
+      "status": "pass"
+    },
+    "P7": {
+      "status": "not_applicable",
+      "missing": "journal appends with PTB tool call ids"
+    },
+    "P8": {
+      "status": "not_applicable",
+      "missing": "lead observation stamps"
+    },
+    "P9": {
+      "status": "not_applicable",
+      "missing": "lead observation stamps"
+    },
+    "P10": {
+      "status": "pass"
+    },
+    "E1": {
+      "status": "not_applicable",
+      "missing": "worker_pi process exits bound to a Membership (processKind)"
+    },
+    "E2": {
+      "status": "not_applicable",
+      "missing": "lead never idle and eligible after the append in the window"
+    },
+    "E3": {
+      "status": "pass"
+    },
+    "E4": {
+      "status": "not_applicable",
+      "missing": "journal activity: blocked transitions (C2)"
+    },
+    "E5": {
+      "status": "violation",
+      "sequence": 9289,
+      "detail": "ensure_worker receipt took 300000 ms (bound 10000)"
+    },
+    "S1": {
+      "status": "absent"
+    },
+    "S2": {
+      "status": "absent"
+    },
+    "S3": {
+      "status": "absent"
+    },
+    "S4": {
+      "status": "absent"
+    },
+    "S5": {
+      "status": "not_applicable",
+      "missing": "ptb.team-update branch entries"
+    },
+    "S6": {
+      "status": "absent"
+    },
+    "retry": {
+      "status": "not_applicable",
+      "missing": "decisive start refusal"
+    }
+  },
+  "scratchReverted": true,
+  "runtimeMs": 65380
+}

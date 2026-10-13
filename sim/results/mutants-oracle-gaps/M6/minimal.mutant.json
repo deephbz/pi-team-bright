@@ -1,0 +1,89 @@
+{
+  "traceId": "m6-oracle-gaps-witness",
+  "seed": 42,
+  "stopped": null,
+  "results": {
+    "P1": {
+      "status": "pass"
+    },
+    "P2": {
+      "status": "not_applicable",
+      "missing": "journal process: gone claims"
+    },
+    "P3": {
+      "status": "not_applicable",
+      "missing": "served process: live claims"
+    },
+    "P4": {
+      "status": "pass"
+    },
+    "P5": {
+      "status": "not_applicable",
+      "missing": "pane closures"
+    },
+    "P6": {
+      "status": "pass"
+    },
+    "P7": {
+      "status": "not_applicable",
+      "missing": "journal appends with PTB tool call ids"
+    },
+    "P8": {
+      "status": "violation",
+      "sequence": 6620,
+      "detail": "page through 52 omits event 51 (extra-29); M6 class"
+    },
+    "P9": {
+      "status": "pass"
+    },
+    "P10": {
+      "status": "not_applicable",
+      "missing": "journal generation without exact fields (C2)"
+    },
+    "E1": {
+      "status": "not_applicable",
+      "missing": "worker_pi process exits bound to a Membership (processKind)"
+    },
+    "E2": {
+      "status": "not_applicable",
+      "missing": "lead never idle and eligible after the append in the window"
+    },
+    "E3": {
+      "status": "pass"
+    },
+    "E4": {
+      "status": "not_applicable",
+      "missing": "journal activity: blocked transitions (C2)"
+    },
+    "E5": {
+      "status": "pass"
+    },
+    "S1": {
+      "status": "absent"
+    },
+    "S2": {
+      "status": "absent"
+    },
+    "S3": {
+      "status": "absent"
+    },
+    "S4": {
+      "status": "absent"
+    },
+    "S5": {
+      "status": "not_applicable",
+      "missing": "ptb.team-update branch entries"
+    },
+    "S6": {
+      "status": "not_applicable",
+      "missing": "journal suspectedHumanStop fields (P10)"
+    },
+    "retry": {
+      "status": "not_applicable",
+      "missing": "decisive start refusal"
+    }
+  },
+  "attempts": 94,
+  "criterion": "fixed point under single-step deletion and timestamp reduction to predecessor, preserving target violation and completed replay; control checked separately",
+  "replayVerified": true
+}
