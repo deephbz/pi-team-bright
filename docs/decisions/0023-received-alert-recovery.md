@@ -49,6 +49,8 @@ low coupling, and no large complexity for rare cases.
    and the omitted count. The expanded view shows one line per Alert.
 7. Preview-only recovery: no read path returns the full text of a cut Alert or
    an omitted Alert. If the cut part matters, the lead asks the sender.
+8. An inbox decode failure leaves Workers and Tasks available in the snapshot;
+   the result reports `alerts_unavailable` with the read error.
 
 ## Consequences
 

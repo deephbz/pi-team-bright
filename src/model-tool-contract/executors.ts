@@ -122,14 +122,16 @@ function projectSyncOutcome(port: ModelToolJourneyPort, leaderSessionId: ExactLe
           ...(outcome.defaultModelRole ? { default_model_role: outcome.defaultModelRole } : {}),
           workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, ...(worker.attention ? { attention: worker.attention } : {}), ...(worker.modelRole ? { model_role: worker.modelRole } : {}), nonterminal_task_ids: worker.nonterminalTaskIds })),
           tasks: outcome.tasks,
-          alerts: outcome.alerts.map(alert => ({
-            alert_id: alert.alertId, from: alert.from, kind: alert.kind,
-            ...(alert.taskId ? { task_id: alert.taskId } : {}),
-            ...(alert.taskVersion ? { task_version: alert.taskVersion } : {}),
-            received_at: alert.receivedAt, text: alert.text,
-            ...(alert.truncated ? { truncated: true as const, text_length: alert.textLength } : {}),
-          })),
-          alerts_omitted: outcome.alertsOmitted,
+          ...(outcome.alerts ? {
+            alerts: outcome.alerts.map(alert => ({
+              alert_id: alert.alertId, from: alert.from, kind: alert.kind,
+              ...(alert.taskId ? { task_id: alert.taskId } : {}),
+              ...(alert.taskVersion ? { task_version: alert.taskVersion } : {}),
+              received_at: alert.receivedAt, text: alert.text,
+              ...(alert.truncated ? { truncated: true as const, text_length: alert.textLength } : {}),
+            })),
+            alerts_omitted: outcome.alertsOmitted,
+          } : { alerts_unavailable: outcome.alertsUnavailable }),
           ...(outcome.taskProjectionWarnings?.length ? { task_projection_warnings: outcome.taskProjectionWarnings } : {}),
         }
         : {

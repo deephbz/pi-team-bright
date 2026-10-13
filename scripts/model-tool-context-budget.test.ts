@@ -18,7 +18,8 @@ const EXPECTED_TOOL_NAMES = [
 // team_create measured 744 characters after pane-layout fields expanded; keep a 16-character guard.
 const MAX_COMPACT_CHARACTERS = {
   team_create: 760,
-  team_sync: 380,
+  // Restored whole-Team responsibility and explicit recent-Alert recovery guidance.
+  team_sync: 460,
   // Baseline 411 chars; approved optional model alias adds 111 chars. Keep 18 chars of guard.
   ensure_worker: 540,
   task_graph_apply: 1_500,

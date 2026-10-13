@@ -5,6 +5,7 @@ import { ALERT_KINDS, deliveryText, parseAlertDeliveryText, readRecentReceivedAl
 import type { AlertMembershipPort, AlertTaskReference } from "./contracts";
 import { inboxPath, teamDir } from "../utils/paths";
 import { CoordinationObservationService } from "../coordination/observation-service";
+import { projectToolResult } from "../model-tool-contract/result-projection";
 import { snapshotEntry } from "../../test/support/branch-observation";
 import type { TeamEvent } from "../coordination/contracts";
 
@@ -51,13 +52,27 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); fs.rmSync(teamDir(team), { recursive: true, force: true }); });
 
 describe("received Alert recovery", () => {
-  it.each(ALERT_KINDS)("round-trips %s envelopes with Task references, multiline and Unicode bodies", kind => {
-    const refs: Array<AlertTaskReference | undefined> = [undefined, { taskId: "task-a" }, { taskId: "task-a", version }];
+  it.each(ALERT_KINDS)("round-trips %s envelopes with exact summary-guided Task references", kind => {
+    const refs: Array<AlertTaskReference | undefined> = [undefined, { taskId: "task-a" }, { taskId: "task-a", version }, { taskId: "task-a @ v_0123456789abcdef" }, { taskId: "task with spaces" }, { taskId: "task\nwith\nnewlines" }];
     for (const taskRef of refs) for (const text of ["Check scope.", "First line\nSecond line\n", "🧭 确认\nDecision: proceed ✅"]) {
-      expect(parseAlertDeliveryText(deliveryText("alert_example", kind, text, taskRef))).toEqual({ alertId: "alert_example", kind, text, ...(taskRef ? { taskRef } : {}) });
+      const summary = taskRef ? `${kind} for Task ${taskRef.taskId}` : `${kind} Alert`;
+      expect(parseAlertDeliveryText(deliveryText("alert_example", kind, text, taskRef), summary)).toEqual({ alertId: "alert_example", kind, text, ...(taskRef ? { taskRef } : {}) });
     }
+    for (const text of ["Task: Pause the release.", "Task: x\nWait for approval.", "Task: " + "x".repeat(200) + "\nWait for approval."]) {
+      expect(parseAlertDeliveryText(deliveryText("alert_example", kind, text, undefined), `${kind} Alert`)).toEqual({ alertId: "alert_example", kind, text });
+    }
+    expect(parseAlertDeliveryText(deliveryText("alert_example", kind, "body", { taskId: "task-a" }), "unknown summary")).toEqual({ alertId: "alert_example", kind, text: "Task: task-a\nbody" });
     expect(parseAlertDeliveryText("ordinary inbox message")).toBeUndefined();
-    expect(parseAlertDeliveryText(deliveryText("alert_example", kind, "body", undefined).replace(/Task\.$/, "broken trailer"))).toBeUndefined();
+    expect(parseAlertDeliveryText(deliveryText("alert_example", kind, "body", undefined).replace(/Task\.$/, "broken trailer"), `${kind} Alert`)).toBeUndefined();
+  });
+
+  it("keeps Task-prefixed body text in the registered team_sync snapshot", async () => {
+    await send("Task: Pause the release.\nWait for approval.");
+    const recent = await readRecentReceivedAlerts(team, "team-lead", "membership-lead", 10);
+    const input = { kind: "snapshot", team: { name: team, purpose: "Review", lifecycle: "active" }, workers: [], tasks: [],
+      alerts: recent.alerts.map(alert => ({ alert_id: alert.alertId, from: alert.from, kind: alert.kind, received_at: alert.receivedAt, text: alert.text })), alerts_omitted: recent.omitted };
+    const result = projectToolResult("team_sync", input);
+    expect(result).toMatchObject({ kind: "snapshot", alerts: [{ text: "Task: Pause the release.\nWait for approval." }] });
   });
 
   it("returns newest 10 of 12 received Alerts in inbox order and counts two omitted", async () => {
@@ -82,7 +97,7 @@ describe("received Alert recovery", () => {
     await sendAlert({ teamName: team, from: "worker-a", to: "team-lead", kind: "clarification", text, taskId: "task-a", taskVersion: version }, membership, publication);
     const result = await snapshotFixture().snapshot();
     expect(result).toMatchObject({ kind: "snapshot", alerts: [{ text: "a".repeat(1999) + "🧭", truncated: true, textLength: Array.from(text).length, taskId: "task-a", taskVersion: version }] });
-    if (result.kind !== "snapshot") throw new Error("Snapshot unavailable");
+    if (result.kind !== "snapshot" || !result.alerts) throw new Error("Snapshot unavailable");
     expect(Array.from(result.alerts[0]!.text)).toHaveLength(2000);
     expect(result.alerts[0]!.text.endsWith("🧭")).toBe(true);
     expect(result.alerts[0]!.text).not.toContain("STOP");
@@ -132,10 +147,14 @@ describe("received Alert recovery", () => {
     expect(JSON.parse(fs.readFileSync(inbox, "utf8")).map((row: any) => row.read)).toEqual(rows.map((row: any) => row.read));
   });
 
-  it("fails unavailable instead of claiming no Alerts when the inbox cannot be decoded", async () => {
+  it("keeps Workers and Tasks when the inbox cannot be decoded", async () => {
     const inbox = inboxPath(team, "team-lead");
     fs.mkdirSync(path.dirname(inbox), { recursive: true }); fs.writeFileSync(inbox, "not json");
-    expect(await snapshotFixture().snapshot()).toMatchObject({ kind: "unavailable", reason: "team_state_unavailable" });
+    const fx = snapshotFixture();
+    const result = await fx.snapshot();
+    expect(result).toMatchObject({ kind: "snapshot", workers: [{ name: "worker-a" }], tasks: [], alertsUnavailable: { message: expect.any(String) } });
+    expect(result.kind === "snapshot" && "alerts" in result).toBe(false);
+    expect(result.kind === "snapshot" && "alertsOmitted" in result).toBe(false);
   });
 
   it("keeps updates.alerts empty and does not read the inbox during incremental observation", async () => {

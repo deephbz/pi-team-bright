@@ -17,7 +17,10 @@ export interface CoordinationWorkerCurrent {
 }
 
 export type CoordinationSnapshotResult =
-  | { kind: "snapshot"; team: CoordinationTeamCurrent; modelRoles?: Array<{ name: string; use: string }>; defaultModelRole?: string; workers: Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: CanonicalTaskCard[]; alerts: ReceivedAlert[]; alertsOmitted: number; taskProjectionWarnings?: TaskCardWarning[] }
+  | ({ kind: "snapshot"; team: CoordinationTeamCurrent; modelRoles?: Array<{ name: string; use: string }>; defaultModelRole?: string; workers: Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: CanonicalTaskCard[]; taskProjectionWarnings?: TaskCardWarning[] } & (
+      | { alerts: ReceivedAlert[]; alertsOmitted: number; alertsUnavailable?: never }
+      | { alertsUnavailable: { message: string }; alerts?: never; alertsOmitted?: never }
+    ))
   | { kind: "no_active_team" }
   | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };

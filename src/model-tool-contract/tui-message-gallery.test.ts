@@ -213,8 +213,15 @@ describe("TUI message gallery", () => {
     const details = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [],
       alerts: [{ alert_id: "alert-one", from: "worker", kind: "clarification", task_id: "task-one", received_at: "2026-10-13T00:00:00Z", text, truncated: true, text_length: 2100 }], alerts_omitted: 2 };
     const message = projectToolTuiMessage({ tool: "team_sync", details, expanded: true });
-    expect(projectionLines(message, { expanded: false }).join("\n")).toContain("1 recent Alerts, 2 omitted");
+    expect(projectionLines(message, { expanded: false }).join("\n")).toContain("1 recent Alert, 2 omitted");
     expect(message.expandedLines).toEqual([`Alert from worker · clarification · Task \"task-one\" · 2026-10-13T00:00:00Z: ${"🧭".repeat(80)}… · preview cut; ask sender`]);
+  });
+
+  it("shows unavailable Alert history without hiding the snapshot", () => {
+    const details = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [], alerts_unavailable: { message: "inbox decode failed" } };
+    const projected = projectToolResult("team_sync", details);
+    const message = projectToolTuiMessage({ tool: "team_sync", details: projected, expanded: true });
+    expect(message.summary).toContain("Alert history unavailable");
   });
 
   it.each([false, true])("reads old snapshots without inventing an empty Alert history (stamped=%s)", stamped => {
