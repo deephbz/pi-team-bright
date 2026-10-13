@@ -26,7 +26,7 @@ import type {
   TaskOwnerTransitionCompletionInput,
   TaskOwnerTransitionPreparationInput,
   TaskPublicationEvidence,
-} from "../model-tool-contract/beads-authority-adapter";
+} from "../task-authority/publication";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskReadyDeliveryPort } from "../task-authority/ready-dispatch";

@@ -31,7 +31,7 @@ import { TeamLifecycleService } from "../src/team-authority/team-lifecycle-servi
 import { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
 import { createPublishingBeadsTaskAdapterFactory, createReadOnlyBeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
 import { DurableTaskAuthorityProvisioning } from "../src/adapters/durable-task-authority-provisioning";
-import { projectNonterminalTaskIds, projectTaskChanges } from "../src/model-tool-contract/beads-task-adapter";
+import { projectNonterminalTaskIds, projectTaskChanges } from "../src/coordination/task-change-projection";
 import { DurableTaskMutationPublication } from "../src/adapters/durable-task-mutation-publication";
 import { DurableTaskOrchestration } from "../src/adapters/durable-task-orchestration";
 import { DurableGraphTaskAuthority } from "../src/adapters/durable-graph-task-authority";
