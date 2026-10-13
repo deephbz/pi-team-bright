@@ -223,8 +223,8 @@ restating executable definitions.
   attention. It never spawns a replacement. A missing macOS verifier helper takes
   precedence with `generation_helper_missing` and `ask_human`. The model result,
   collapsed TUI, and native admission refusal name the helper and build command.
-  Launch claims a durable ID before external effects and returns a receipt
-  without waiting for readiness. Elapsed time and start errors keep the pane.
+  Launch records the launch ID before the pane split and the target before
+  Herdr agent start. It returns a receipt without waiting for readiness. Elapsed time and start errors keep the pane.
   The same-generation `live`/`stopping` reload pair stays silent while durable
   `lastStop` says `reload`. Verified death always journals. Local shutdown intent
   survives verifier failure; an exact stop-ID check fences older admission work.
@@ -249,12 +249,15 @@ restating executable definitions.
   failure preserves the predecessor record and prevents replacement.
   One ten-second receipt deadline covers claim, nested leases, Herdr preparation,
   and target CAS. Expiry returns attention and prevents late startup. Prepared
-  targets reconcile asynchronously under the exact Membership and launch ID.
+  targets reconcile asynchronously, in process, under the exact Membership and
+  launch ID. Restart orphan reconciliation is pending; a lead restart does not yet
+  recover an unfinished launch.
   Only decisive shell-busy refusal retries on the same pane and launch ID.
   An old started or unknown launch with no Herdr agent in its pane returns
   `launch_stalled` attention. The human can authorize `worker_stop` before retry.
   A missing Herdr row never authorizes another spawn.
-  Linux reads procfs. On macOS, npm `postinstall` builds the dependency-free
+  Linux reads procfs, but Linux is unverified: probes A7 and A9 have not run. On
+  macOS, npm `postinstall` builds the dependency-free
   helper from packaged source with `rustc` and Xcode Command Line Tools.
   `npm run build:process-generation` repairs installs with disabled lifecycle
   scripts. Missing `rustc` leaves installation successful with one warning that
@@ -684,6 +687,22 @@ Next steps:
    destroy-on-outcome behavior, lost-actuation reconciliation, and measured
    stockout and replenishment distributions.
 
+
+## Verification probes and fake drift
+
+The v3.1 simulator models Herdr, Pi, Linux, and filesystem behaviour with fakes.
+Each fake cites a probe fixture. The [simulation plan](../journal/2026-10-12-deterministic-simulation-verification.md#fake-drift-control)
+owns the fake list. Probe policy (owner decision D3=B, 2026-10-13):
+
+- A refuted real-world probe blocks a release only when a safety property
+  depends on the faked assumption.
+- Otherwise a refuted probe blocks changes to that fake. The docs mark the
+  assumption unverified.
+
+Platform status:
+
+- macOS: probes A1–A6 cover their recorded versions and paths. A8 is inconclusive.
+- Linux: unverified. Probes A7 and A9 have not run (owner decision D4=C).
 
 ## Test lanes
 
