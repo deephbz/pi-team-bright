@@ -28,7 +28,10 @@ jobs:
       # Contract tests exercise a terminal carrier; use the deterministic
       # adapter surface rather than depending on a hosted runner's terminal.
       - run: TERM_PROGRAM=iTerm.app npm test
-      - run: TERM_PROGRAM=iTerm.app npm run test:exhaustive-only
+      # The v3.1 simulator campaign exceeds 60 min on Node 22 and takes about
+      # 20 min on Node 24. Run the exhaustive lane once, on the publish Node.
+      - if: matrix.node == '24.x'
+        run: TERM_PROGRAM=iTerm.app npm run test:exhaustive-only
       - run: npm run test:lanes
       - run: npm run verify:package
 
