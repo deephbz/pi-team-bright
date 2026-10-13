@@ -51,6 +51,33 @@ it.each(["started", "unknown"] as const)("returns launch_stalled for an old %s l
   expect(await bridge.ensureWorker(request)).toMatchObject({ reason: "launch_pending", nextActionHint: "wait" });
   expect(run).not.toHaveBeenCalled();
 });
+it.each([
+  { stop: "new", process: "gone", reason: "session_switched", hint: "ask_human" },
+  { stop: "resume", process: "gone", reason: "session_switched", hint: "ask_human" },
+  { stop: "fork", process: "gone", reason: "session_switched", hint: "ask_human" },
+  { stop: "quit", process: "live", reason: "stopping", hint: "ask_human" },
+  { stop: "quit", process: "unknown", reason: "unknown", hint: "ask_human" },
+  { stop: undefined, process: "unknown", reason: "unknown", hint: "wait" },
+] as const)("preserves bound planner attention after $stop with $process process beyond the launch stall deadline", async ({ stop, process, reason, hint }) => {
+  fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", sessionFile: "/sessions/worker.jsonl",
+    terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
+    launch: { launchId: "launch", state: "started", requestedAt: Date.now() - 16000 } } as Member];
+  vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue({ teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1,
+    osBirthToken: "birth", bootId: "boot", ...(stop ? { lastStop: { piReason: stop, observedAt: 2, suspectedHumanStop: true } } : {}) });
+  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue(process === "gone" ? { kind: "absent" }
+    : process === "live" ? { kind: "found", generation: { pid: 321, osBirthToken: "birth", bootId: "boot" } }
+    : { kind: "unknown", reason: "probe_unavailable" });
+  const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
+  const prior = structuredClone(fixture.members);
+  const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
+  expect(await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" }))
+    .toMatchObject({ action: "attention", reason, nextActionHint: hint, membershipId: "membership" });
+  expect(run).not.toHaveBeenCalled();
+  expect(fixture.members).toEqual(prior);
+  expect(fixture.mutations).toEqual([]);
+  expect(fixture.splits).toBe(0);
+  expect(fixture.starts).toBe(0);
+});
 it.each(["none", "requested", "started", "unknown", "refused"] as const)("preserves G11 for a bound tokenless Worker with %s launch evidence", async state => {
   fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", sessionFile: "/sessions/worker.jsonl",
     terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },

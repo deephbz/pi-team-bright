@@ -79,9 +79,10 @@ export async function herdrList(source: "agent" | "pane"): Promise<Record<string
 /** Ephemeral projection. It owns observations, never Membership or Task transitions. */
 export const CARRIER_SAMPLE_TTL_MS = 6000;
 export const LAUNCH_STALL_MS = 15000;
+/** Session binding completes first launch; later process loss belongs to the lifecycle planner. */
 export function launchIsStalled(member: Member, agents: readonly Record<string, unknown>[] | undefined, now = hostEnv().clock.now()): boolean {
   const paneId = member.terminalTarget?.targetId ?? member.tmuxPaneId;
-  return !!(member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= LAUNCH_STALL_MS
+  return !!(!member.sessionFile && member.launch && ["started", "unknown"].includes(member.launch.state) && now - member.launch.requestedAt >= LAUNCH_STALL_MS
     && paneId && agents && !agents.some(row => row.pane_id === paneId));
 }
 type SourceSample<T> = { value?: T; observedAt: number; fact?: string };
@@ -209,7 +210,7 @@ export class CarrierObserver {
         await this.publish(view, "process", "stopping", status, "reload_hung");
         view.evidence.push({ source: "session_shutdown", fact: "reload_hung", observedAt: now });
       }
-      if (view.binding === "unbound" && launchIsStalled(member, agents, now)) {
+      if (launchIsStalled(member, agents, now)) {
         await this.publish(view, "launch", view.launch, status, "launch_stalled");
       }
       const attempt = this.publication.taskCursor(member.name);

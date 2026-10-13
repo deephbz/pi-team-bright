@@ -129,11 +129,19 @@ it("lets a current PTB stop request outrank earlier human suspicion and keeps la
   expect(f.events.find(e => e.carrier?.field === "launch").carrier).toMatchObject({ cause: { source: "launch", fact: "agent_pane_busy: shell warming" }, observedAt: 20 });
   observer.stop();
 }));
-it("emits one hung launch attention without authorizing another launch", async () => runWithHostEnv(env(), async () => {
-  delete f.member.sessionFile; f.noAgent = true; f.member.launch = { launchId: "launch", state: "unknown", requestedAt: 1 };
+it.each(["started", "unknown"])("emits one hung %s launch attention without authorizing another launch", async state => runWithHostEnv(env(), async () => {
+  delete f.member.sessionFile; f.noAgent = true; f.member.launch = { launchId: "launch", state, requestedAt: 1 };
   const observer = await running(); f.now += 16000; await observer.refresh(); await observer.refresh();
   expect(f.events.filter(e => e.carrier?.cause.fact === "launch_stalled")).toHaveLength(1);
-  expect(f.events.find(e => e.carrier?.cause.fact === "launch_stalled").carrier).toMatchObject({ to: "unknown", paneId: "pane", nextActionHint: "ask_human" });
+  expect(f.events.find(e => e.carrier?.cause.fact === "launch_stalled").carrier).toMatchObject({ to: state, paneId: "pane", nextActionHint: "ask_human" });
+  observer.stop();
+}));
+it.each(["new", "resume", "fork", "quit"])("does not journal a stalled launch for a bound Worker after %s", async piReason => runWithHostEnv(env(), async () => {
+  f.noAgent = true; f.member.launch = { launchId: "launch", state: "started", requestedAt: 1 };
+  f.status.lastStop = { piReason, observedAt: 2, suspectedHumanStop: true };
+  const observer = await running(); f.now += 16000; await observer.refresh(); await observer.refresh();
+  expect(f.events.filter(e => e.carrier?.cause.fact === "launch_stalled")).toEqual([]);
+  expect(f.events.find(e => e.carrier?.field === "process").carrier).toMatchObject({ to: "stopping", cause: { source: "session_shutdown", fact: piReason } });
   observer.stop();
 }));
 it("rehydrates low-noise terminal changes and failed appends without a hidden checkpoint", async () => runWithHostEnv(env(), async () => {
