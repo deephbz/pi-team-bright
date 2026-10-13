@@ -18,7 +18,7 @@ it("PD-1 records the predecessor when recovery outruns the carrier death poll", 
   const death = result.history.find(e => e.kind === "process.death" && e.process.processKind === "worker_pi");
   if (death?.kind !== "process.death") throw new Error("Missing predecessor death");
   const exits = result.history.filter(e => e.kind === "journal.append" && e.event.carrier?.to === "gone"
-    && e.event.generation?.osBirthToken === death.process.generation.osBirthToken);
+    && e.event.carrier.generation?.osBirthToken === death.process.generation.osBirthToken);
   expect(exits).toHaveLength(1);
   const replacement = result.history.find(e => e.kind === "durable.runtime" && e.record?.agentName === "w1"
     && e.sequence > death.sequence && e.record.osBirthToken !== death.process.generation.osBirthToken);

@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import { nodeHostEnv } from "../env/host-env";
+import { parseObservationContent } from "../coordination/observation-content";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,12 +51,14 @@ function context(sessionFile: string, cwd = process.cwd()) {
   return {
     cwd,
     modelRegistry: { getAvailable: () => [{ provider: "fixture", id: "model", reasoning: true }] },
-    sessionManager: { getSessionFile: () => sessionFile },
+    sessionManager: { getSessionFile: () => sessionFile, getBranch: () => [] },
     ui: { setStatus() {}, notify() {} },
   };
 }
 
 beforeEach(() => {
+  const generation = nodeHostEnv.process.generation;
+  vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
   const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-model-role-fixture-"));
   createdAgentDirs.push(agentDir);
   const promptPath = path.join(agentDir, "worker.md");
@@ -210,7 +214,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       "snapshot", { view: "snapshot" }, undefined, undefined, leadContext,
     );
     expect(snapshot.details).toMatchObject({ kind: "snapshot", team: { name: team, lifecycle: "active" }, workers: [], tasks: [] });
-    expect(JSON.parse(snapshot.content[0].text)).toMatchObject({ kind: "snapshot", team: { name: team, lifecycle: "active" } });
+    expect(parseObservationContent(snapshot.content[0].text)).toMatchObject({ kind: "snapshot", team: { name: team, lifecycle: "active" } });
     return;
 
     const cursorAhead = await tools.get("team_sync")!.execute("cursor-ahead", {
@@ -332,6 +336,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       sessionBinding = (async () => {
         const prepared = await teams.currentMembership(team, "worker");
         await teams.bindMemberSession(team, "worker", workerSession, prepared.pendingLaunchId, {}, prepared.membershipId);
+        await runtime.writeRuntimeStatus(team, "worker", { pid: process.pid, startedAt: Date.now(), osBirthToken: "fixture-birth", bootId: "fixture-boot" }, prepared.membershipId);
       })();
       return "pane-worker";
     };
@@ -398,17 +403,18 @@ describe("ergonomic agent-facing Team contracts", () => {
     }
   });
 
-  it("observes the exact Worker binding and runtime during the bounded launch wait", async () => {
+  it("returns the launch receipt before exact Worker binding and runtime evidence", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_TEAMS_WORKER_STARTUP_WAIT_MS", "1000");
     const team = uniqueTeam("worker-startup-observed");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     const workerSession = `/tmp/${team}-worker.jsonl`;
+    let bindWorker!: () => Promise<void>;
     const adapter: TerminalAdapter = {
       ...terminal(),
       spawn: () => {
-        queueMicrotask(async () => {
+        bindWorker = async () => {
           const prepared = await teams.currentMembership(team, "worker");
           const bound = await teams.bindMemberSession(
             team,
@@ -420,7 +426,9 @@ describe("ergonomic agent-facing Team contracts", () => {
           );
           const startedAt = Date.now();
           await runtime.writeRuntimeStatus(team, "worker", {
-            pid: 4242,
+            pid: process.pid,
+            osBirthToken: "fixture-birth",
+            bootId: "fixture-boot",
             startedAt,
             ready: false,
           }, bound.membershipId);
@@ -429,9 +437,9 @@ describe("ergonomic agent-facing Team contracts", () => {
             worker: "worker",
             membershipId: bound.membershipId!,
             phase: "session_bound",
-            generation: { membershipId: bound.membershipId!, pid: 4242, startedAt },
+            generation: { membershipId: bound.membershipId!, pid: process.pid, startedAt },
           });
-        });
+        };
         return "pane-worker";
       },
       isAlive: (paneId) => paneId === "pane-worker",
@@ -450,8 +458,11 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(result.details).toMatchObject({
       kind: "worker_ensured",
       effect: "created",
-      worker: { name: "worker", scope: "Review interfaces.", carrier: expect.stringMatching(/starting|connected/) },
+      worker: { name: "worker", scope: "Review interfaces.", carrier: "starting" },
     });
+    expect(await runtime.readRuntimeStatus(team, "worker")).toBeNull();
+    await bindWorker();
+    expect(await runtime.readRuntimeStatus(team, "worker")).toMatchObject({ pid: process.pid, osBirthToken: "fixture-birth" });
   });
 
   it("uses the Team window policy for every new Worker", async () => {
@@ -481,7 +492,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(spawnWindow).toHaveBeenCalledOnce();
   });
 
-  it("retries a missing prepared carrier with the same unconsumed launch capability", async () => {
+  it("retries a decisively refused prepared carrier with a fresh launch capability", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_TEAM_BRIGHT_SHIPPED_EXTENSION", "/private/exact-team-extension.ts");
@@ -499,6 +510,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const worker: Member = {
       membershipId: teams.newMembershipId(),
       pendingLaunchId,
+      launch: { launchId: pendingLaunchId, state: "refused", requestedAt: Date.now(), fact: "fixture_start_refused" },
       agentId: `worker@${team}`,
       name: "worker",
       agentType: "teammate",
@@ -532,7 +544,7 @@ describe("ergonomic agent-facing Team contracts", () => {
 
     expect(result.details).toMatchObject({
       kind: "worker_ensured",
-      effect: "created",
+      effect: "recovered",
       worker: { name: "worker", scope: worker.prompt, carrier: expect.stringMatching(/starting|connected/) },
     });
     const spawnOptions = spawn.mock.calls[0][0];
@@ -552,12 +564,13 @@ describe("ergonomic agent-facing Team contracts", () => {
       PI_TEAM_NAME: team,
       PI_AGENT_NAME: "worker",
       PI_TEAM_MEMBERSHIP_ID: worker.membershipId,
-      PI_AGENT_LAUNCH_ID: pendingLaunchId,
+      PI_AGENT_LAUNCH_ID: expect.any(String),
     });
+    expect(spawnOptions.env.PI_AGENT_LAUNCH_ID).not.toBe(pendingLaunchId);
     const current = await teams.currentMembership(team, "worker");
     expect(current).toMatchObject({
       membershipId: worker.membershipId,
-      pendingLaunchId,
+      pendingLaunchId: spawnOptions.env.PI_AGENT_LAUNCH_ID,
       // The parent persists its exact carrier target. The child alone claims
       // runtime and consumes the pending launch capability into a Session.
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-retried" },
@@ -584,7 +597,10 @@ describe("ergonomic agent-facing Team contracts", () => {
       subscriptions: [],
       terminalTarget: { backend: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-missing" },
     };
-    await teams.addMember(team, prepared);
+    await teams.addMember(team, {
+      ...prepared,
+      launch: { launchId: prepared.pendingLaunchId!, state: "refused", requestedAt: Date.now(), fact: "fixture_start_refused" },
+    });
 
     const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-prepared-window-refused",
@@ -611,6 +627,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-missing" },
     });
     await teams.addMember(team, worker);
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
 
     const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-resume-window-refused",
@@ -625,7 +642,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(materialize).not.toHaveBeenCalled();
   });
 
-  it("cleans the owned aggregate when exact-Session cursor acquisition fails", async () => {
+  it("retains the launched aggregate when receipt cursor acquisition fails", async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-recovery-resource-"));
     const append = path.join(home, "append.md");
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
@@ -646,8 +663,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: "ergonomic-contract-terminal", kind: "pane", targetId: "pane-missing" },
     });
     await teams.addMember(team, worker);
-    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
     vi.spyOn(teamEvents, "readTeamEventCursor").mockImplementation(() => { throw new Error("injected cursor failure"); });
 
     const refused = await registerTools().get("ensure_worker")!.execute(
@@ -662,7 +678,8 @@ describe("ergonomic agent-facing Team contracts", () => {
 
     const aggregate = resolved.mock.results[0]?.value.aggregatePath;
     expect(aggregate).toBeTruthy();
-    expect(fs.existsSync(aggregate!)).toBe(false);
+    expect(fs.existsSync(aggregate!)).toBe(true);
+    workerResources.removeWorkerAggregate(aggregate);
   });
 
   it("recovers a missing carrier by resuming the exact bound Session without reading Task authority", async () => {
@@ -686,8 +703,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-missing" },
     });
     await teams.addMember(team, worker);
-    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
     const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
     const leaderAdmission = vi.spyOn(runtime, "admitRuntimeStartup");
 
@@ -706,7 +722,7 @@ describe("ergonomic agent-facing Team contracts", () => {
 
     expect(result.details).toMatchObject({
       kind: "worker_ensured",
-      effect: "created",
+      effect: "recovered",
       worker: { name: "worker", scope: "Review interfaces and verify contract tests.", carrier: expect.stringMatching(/starting|connected/) },
     });
     const spawnOptions = spawn.mock.calls[0][0];
@@ -716,7 +732,8 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(spawnOptions.argv).not.toContain("--model");
     expect(spawnOptions.argv).not.toContain("--thinking");
     expect(spawnOptions.env).toMatchObject({ PI_TEAM_NAME: team, PI_AGENT_NAME: "worker", PI_TEAM_MEMBERSHIP_ID: worker.membershipId });
-    expect(spawnOptions.env).not.toHaveProperty("PI_AGENT_LAUNCH_ID");
+    expect(spawnOptions.env.PI_AGENT_LAUNCH_ID).toBeTruthy();
+    expect(spawnOptions.env.PI_AGENT_LAUNCH_ID).not.toBe("stale-parent-launch");
     expect(leaderAdmission).not.toHaveBeenCalled();
     // The parent persists only the exact terminal target. The child retains
     // sole ownership of runtime generation and Session binding.
@@ -728,6 +745,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       sessionFile: workerSession,
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-recovered" },
     });
+    await runtime.writeRuntimeStatus(team, "worker", { pid: process.pid, startedAt: Date.now(), osBirthToken: "fixture-birth", bootId: "fixture-boot" }, worker.membershipId);
     const reused = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovered-again",
       { team_name: team, name: "worker", scope: "Review interfaces and verify contract tests.", cwd: process.cwd() },
@@ -740,7 +758,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     expect(taskReads).toHaveBeenCalledTimes(0);
   });
 
-  it("removes the aggregate after confirmed recovery-carrier stop", async () => {
+  it("keeps the recovery pane and aggregate after target persistence fails", async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-recovery-resource-"));
     const append = path.join(home, "append.md");
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
@@ -771,9 +789,11 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-gone" },
     });
     await teams.addMember(team, worker);
-    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
-    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("simulated recovery target persistence failure"));
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
+    const updateMembership = teams.updateMembership;
+    vi.spyOn(teams, "updateMembership").mockImplementation((teamName, membershipId, patch) => patch.terminalTarget
+      ? Promise.reject(new Error("simulated recovery target persistence failure"))
+      : updateMembership(teamName, membershipId, patch));
     const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
 
     const refused = await registerTools().get("ensure_worker")!.execute(
@@ -783,13 +803,13 @@ describe("ergonomic agent-facing Team contracts", () => {
       undefined,
       context(leadSession),
     );
-    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
-    expect(refused.details.message).toMatch(/simulated recovery target persistence failure.*exact recovery target was stopped/i);
-    expect(kill).toHaveBeenCalledWith("pane-recovery-attempt");
-    expect(live.has("pane-recovery-attempt")).toBe(false);
+    expect(refused.details).toMatchObject({ kind: "worker_ensured", effect: "recovered" });
+    expect(kill).not.toHaveBeenCalled();
+    expect(live.has("pane-recovery-attempt")).toBe(true);
     const aggregate = resolved.mock.results[0]?.value.aggregatePath;
     expect(aggregate).toBeTruthy();
-    expect(fs.existsSync(aggregate!)).toBe(false);
+    expect(fs.existsSync(aggregate!)).toBe(true);
+    workerResources.removeWorkerAggregate(aggregate);
     const current = (await teams.readConfig(team)).members.filter(candidate =>
       candidate.name === "worker" && candidate.isActive !== false);
     expect(current).toHaveLength(1);
@@ -800,7 +820,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
   });
 
-  it("retains the aggregate when recovery-carrier stop is unconfirmed", async () => {
+  it("retains the recovery aggregate without attempting speculative pane cleanup", async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-recovery-resource-"));
     const append = path.join(home, "append.md");
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
@@ -827,9 +847,11 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-gone" },
     });
     await teams.addMember(team, worker);
-    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementationOnce(() => { const error = new Error("gone") as NodeJS.ErrnoException; error.code = "ESRCH"; throw error; });
-    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("simulated recovery target persistence failure"));
+    await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
+    const updateMembership = teams.updateMembership;
+    vi.spyOn(teams, "updateMembership").mockImplementation((teamName, membershipId, patch) => patch.terminalTarget
+      ? Promise.reject(new Error("simulated recovery target persistence failure"))
+      : updateMembership(teamName, membershipId, patch));
 
     const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovery-stop-unconfirmed",
@@ -838,9 +860,8 @@ describe("ergonomic agent-facing Team contracts", () => {
       undefined,
       context(leadSession),
     );
-    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
-    expect(refused.details.message).toMatch(/Compensation could not stop.*pane-still-live/i);
-    expect(adapter.kill).toHaveBeenCalledWith("pane-still-live");
+    expect(refused.details).toMatchObject({ kind: "worker_ensured", effect: "recovered" });
+    expect(adapter.kill).not.toHaveBeenCalled();
 
     const aggregate = resolved.mock.results[0]?.value.aggregatePath;
     expect(aggregate).toBeTruthy();
@@ -848,7 +869,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     workerResources.removeWorkerAggregate(aggregate);
   });
 
-  it("retains the aggregate when prepared-launch stop is unconfirmed", async () => {
+  it("retains the prepared aggregate after target persistence fails", async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-launch-resource-"));
     const append = path.join(home, "append.md");
     fs.mkdirSync(path.join(home, ".pi", "agent"), { recursive: true });
@@ -879,10 +900,10 @@ describe("ergonomic agent-facing Team contracts", () => {
       undefined,
       context(leadSession),
     );
-    expect(refused.details).toMatchObject({ kind: "unavailable", reason: "carrier_unavailable" });
-    expect(refused.details.message).toMatch(/Membership remains current/);
+    expect(refused.details).toMatchObject({ kind: "worker_ensured", effect: "created" });
+    expect(adapter.kill).not.toHaveBeenCalled();
 
-    const aggregate = resolved.mock.results[0]?.value.aggregatePath;
+    const aggregate = resolved.mock.results[1]?.value.aggregatePath;
     expect(aggregate).toBeTruthy();
     expect(fs.existsSync(aggregate!)).toBe(true);
     workerResources.removeWorkerAggregate(aggregate);
