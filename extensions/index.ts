@@ -474,7 +474,7 @@ export default function (pi: ExtensionAPI) {
     const alertRegistration = {
       name: "alert_send",
       label: "Send Alert",
-      description: "Send exceptional clarification or attention to team-lead.",
+      description: "Send exceptional clarification or attention to team-lead. Accepted means stored, not presented or processed.",
       parameters: Type.Object({
         kind: StringEnum(["clarification", "attention"]),
         text: Type.String({ minLength: 1 }),
@@ -486,7 +486,7 @@ export default function (pi: ExtensionAPI) {
         const actor = binding.member;
         try {
           const result = await alertSender.sendAlert({ teamName: binding.teamName, from: actor.name, to: "team-lead", kind: params.kind, text: params.text, taskId: params.task_id, taskVersion: params.task_version, expectedSender: actor.membershipId && actor.sessionFile ? { membershipId: actor.membershipId, sessionFile: actor.sessionFile } : undefined });
-          return assembleToolResult("alert_send", { kind: "alert_sent", alert_id: result.alertId, accepted_recipients: result.accepted.map((item) => item.recipient), failed_recipients: result.failures.map((item) => item.recipient), task_state_changed: false });
+          return assembleToolResult("alert_send", { kind: "alert_sent", alert_id: result.alertId, accepted_recipients: result.accepted.map((item) => item.recipient), failed_recipients: result.failures.map((item) => item.recipient), ...(result.deliveryDegraded?.length ? { delivery_degraded: result.deliveryDegraded } : {}), task_state_changed: false });
         } catch (error) {
           return assembleToolResult("alert_send", { kind: "refused", reason: "no_eligible_recipients", message: error instanceof Error ? error.message : String(error), state_changed: false });
         }

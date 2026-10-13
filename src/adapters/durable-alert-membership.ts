@@ -1,3 +1,4 @@
+import { currentDeliveryDegradations, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, teamExists, withCurrentConfig } from "../utils/teams";
 import type {
   AlertCurrentDelivery,
@@ -40,10 +41,14 @@ export class DurableAlertMembership implements AlertMembershipPort {
         || sender.membershipId !== input.expectedSender.membershipId
         || sender.sessionFile !== input.expectedSender.sessionFile
       )) return { kind: "sender_stale" };
+      // Delivery health is diagnostic. Missing evidence cannot refuse a durable send.
+      const deliveryDegraded = await readRuntimeStatus(input.teamName, recipient.name)
+        .then(status => currentDeliveryDegradations(recipient, status)).catch(() => []);
       return {
         kind: "delivered",
         value: await append({
           recipientMembershipId: recipient.membershipId,
+          ...(deliveryDegraded.length ? { deliveryDegraded } : {}),
           ...(sender?.membershipId ? { senderMembershipId: sender.membershipId } : {}),
         }),
       };

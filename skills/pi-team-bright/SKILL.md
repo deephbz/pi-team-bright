@@ -167,7 +167,9 @@ to decide what can proceed or what requires intervention.
 `caught_up` means no new change is available and current Workers are quiescent.
 It does not mean every Task succeeded. `unsettled` lists Workers whose activity
 or missing evidence needs attention. Use its reasons and current Task records
-to identify a blocker or recovery need. `observation_in_progress` means another
+to identify a blocker or recovery need.
+If a Worker stays at `actuation_pending` after an accepted Alert, use `team_sync` and involve the human if recovery needs intervention.
+`observation_in_progress` means another
 observation owns the page; end the turn and use its result. Read selected Tasks
 with `task_read` when needed. Tell the human the pane ID when a Worker is
 `blocked`. Ask the human before relaunch after a suspected human stop.

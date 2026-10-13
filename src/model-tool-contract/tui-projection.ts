@@ -134,8 +134,12 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
   } else if (tool === "alert_send") {
     if (model.kind === "alert_sent") {
       lines.push(model.failed_recipients.length > 0
-        ? `Alert partially accepted by ${model.accepted_recipients.join(", ") || "no recipients"}; failed recipients: ${model.failed_recipients.join(", ")}. Task state unchanged.`
-        : `Alert accepted by ${model.accepted_recipients.join(", ") || "no recipients"}; Task state unchanged.`);
+        ? `Alert partially accepted for ${model.accepted_recipients.join(", ") || "no recipients"}; failed recipients: ${model.failed_recipients.join(", ")}.`
+        : `Alert accepted for ${model.accepted_recipients.join(", ") || "no recipients"}.`);
+      lines.push(`${model.acceptance} Task state unchanged.`);
+      for (const recipient of model.delivery_degraded ?? []) for (const engine of recipient.engines) {
+        lines.push(`⚠ ${recipient.recipient}: ${engine.engine} delivery degraded (${engine.operation}: ${compact(engine.message)}); retry at ${engine.retryAt}.`);
+      }
     } else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "worker_stop") {
     if (model.kind === "worker_stopped") lines.push(`Worker ${quoted(model.worker)} stopped; Task state unchanged.`);

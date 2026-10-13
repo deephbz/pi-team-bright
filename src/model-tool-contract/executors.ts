@@ -433,6 +433,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
         alert_id: outcome.alertId,
         accepted_recipients: outcome.acceptedRecipients,
         failed_recipients: outcome.failedRecipients,
+        ...(outcome.deliveryDegraded?.length ? { delivery_degraded: outcome.deliveryDegraded } : {}),
         task_state_changed: false,
       };
       if (outcome.kind === "unavailable") return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
