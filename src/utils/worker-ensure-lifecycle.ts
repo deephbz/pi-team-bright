@@ -18,6 +18,7 @@ export type WorkerCarrierObservation = "live" | "missing" | {
   launch: import("../carrier-observation").LaunchState;
   process: import("../carrier-observation").ProcessState;
   readmitted?: boolean;
+  generation?: { osBirthToken?: string };
   lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork" } | "none" | "quit" | "reload" | "new" | "resume" | "fork";
 };
 
@@ -80,6 +81,7 @@ export function planWorkerEnsure(carrier: WorkerCarrierState, observation: Worke
       if (evidence.launch === "refused") return attention(carrier, evidence.process === "unknown" ? "verifier_unknown" : "candidate_live", evidence.process === "unknown" ? "ask_human" : "wait");
       return attention(carrier, `launch_${evidence.launch}`);
     case "bound":
+      if (evidence.generation && !evidence.generation.osBirthToken) return attention(carrier, "legacy_unverified", "ask_human");
       if (lastStop === "new" || lastStop === "resume" || lastStop === "fork") return attention(carrier, "session_switched", "ask_human");
       if (evidence.process === "gone") return { action: "recover", carrier, recoveryMode: "exact_session_resume" };
       if (evidence.process === "live" && lastStop === "reload" && !evidence.readmitted) return attention(carrier, "reload_pending");

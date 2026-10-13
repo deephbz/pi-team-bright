@@ -78,6 +78,14 @@ describe("TUI message gallery", () => {
     }
   });
 
+  it("keeps both legacy adoption exits in the model result and collapsed TUI", () => {
+    const details = { kind: "attention", worker: "worker", reason: "legacy_unverified", nextActionHint: "ask_human",
+      message: "Reload Worker worker's Pi to re-admit its generation with a birth token, or adopt that Worker in /ptb status. No replacement was started." };
+    expect(Check(ModelResultSchemas.ensure_worker, details)).toBe(true);
+    const projected = projectToolTuiMessage({ tool: "ensure_worker", details, expanded: false });
+    expect(projectionLines(projected, { expanded: false }).join("\n")).toContain(details.message);
+  });
+
   it("shows actionable Worker evidence and duplicate observation recovery", () => {
     const scenarios = tuiMessageGallery();
     const unsettled = scenarios.find(scenario => scenario.id === "team_sync.unsettled-workers")!;

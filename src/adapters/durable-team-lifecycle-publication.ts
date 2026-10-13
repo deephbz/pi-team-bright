@@ -1,3 +1,4 @@
+import { publishPredecessorExit } from "../carrier-observation";
 import { hostEnv } from "../env/host-env";
 import * as runtime from "../utils/runtime";
 import * as teamEvents from "../coordination/event-journal";
@@ -35,6 +36,10 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
       membershipId: input.membershipId,
       phase: "stopped",
     });
+  }
+
+  recordWorkerGenerationExit(input: Parameters<TeamLifecyclePublication["recordWorkerGenerationExit"]>[0]): Promise<void> {
+    return publishPredecessorExit(input.teamName, input.member, input.status, input.terminalBackend);
   }
 
   recordWorkerSessionBound(input: { teamName: string; workerName: string; membershipId: string; generation: { membershipId: string; pid: number; startedAt: number } }): Promise<{ cursor: string }> {

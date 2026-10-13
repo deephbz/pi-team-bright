@@ -62,14 +62,23 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    the accepted baseline unchanged. Healthy polling retries the current source
    difference. A transient observation lost before append is not durable.
    Publication rereads the journal under the Membership lease and fences the exact
-   generation and terminal target.
+   generation and terminal target. Worker admission publishes verified predecessor
+   death before it overwrites that runtime generation. It holds the same lease
+   through both steps and uses the same publication baseline as polling. A failed
+   exit append prevents replacement and preserves the predecessor record for retry.
+   This closes the death/recovery race without publishing a stale generation.
 6. **Samples expire.** Each observation source owns its sample time. A sample
    expires to `unknown` after six seconds, including when collection fails. A stalled
    read stays single-flight.
 7. **Unknown fails closed.** `unknown` never authorizes a spawn, a reuse, or a
    `gone` claim. It produces attention with its evidence. Pre-upgrade records without
    a birth token read `unknown` until the current process rebinds or the human
-   authorizes adoption.
+   authorizes adoption. For a bound tokenless generation, `ensure_worker` returns
+   `attention` with reason `legacy_unverified` and hint `ask_human` (G11).
+   Its model result and collapsed TUI name both exits: reload that Worker's Pi to
+   re-admit its generation with a birth token, or adopt it in `/ptb status`.
+   Pending or stalled launch evidence does not replace this attention. It never
+   authorizes a spawn. Other unknown-generation planner rows stay unchanged.
 
 ## Consequences
 
@@ -105,6 +114,9 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
 Executable evidence: [`carrier-observer.v31.test.ts`](../../src/carrier-observer.v31.test.ts),
 [`carrier-observer.property.test.ts`](../../src/carrier-observer.property.test.ts),
 [`carrier-observation.test.ts`](../../src/carrier-observation.test.ts),
+[`v31-receipts.test.ts`](../../sim/v31-receipts.test.ts),
+[`migration.v31.test.ts`](../../sim/migration.v31.test.ts),
+[`worker-ensure-plan.v31.test.ts`](../../src/utils/worker-ensure-plan.v31.test.ts),
 [`process-generation.test.ts`](../../src/env/process-generation.test.ts), and
 [`process-generation.native.test.ts`](../../src/env/process-generation.native.test.ts).
 The verification list in [Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md#verification)

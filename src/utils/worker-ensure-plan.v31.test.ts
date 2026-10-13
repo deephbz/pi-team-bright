@@ -104,6 +104,7 @@ export interface V31PlanInput {
   process: V31Process;
   lastStop: V31LastStop;
   readmitted?: boolean;
+  tokenless?: boolean;
 }
 
 /** Expected action in the v3.1 vocabulary (G7). */
@@ -143,6 +144,7 @@ export function classifyLaunchRefusal(evidence: RefusalEvidence): "refused" | "u
 /** Spec table with the tightened lead rulings applied. Every v3.1 input has one expected action. */
 export function specRow(input: V31PlanInput): { expected: V31Expected; row: string } {
   if (input.binding === "bound") {
+    if (input.tokenless) return { expected: { kind: "attention", reason: "legacy_unverified", nextActionHint: "ask_human" }, row: "bound / token-less legacy generation (G11)" };
     // G1: the process left this Worker Session. No reuse, no spawn.
     if (input.lastStop === "new" || input.lastStop === "resume" || input.lastStop === "fork") {
       return { expected: { kind: "attention", reason: "session_switched" }, row: "bound / lastStop new|resume|fork (G1)" };
@@ -239,7 +241,7 @@ function carrierFor(input: V31PlanInput): WorkerCarrierState {
 
 /** Today's planWorkerEnsure, fed from the v3.1 binding and the shell probe only. */
 export function runToday(input: V31PlanInput, shell: ShellProbe): TodayAction {
-  return toTodayAction(planWorkerEnsure(carrierFor(input), input));
+  return toTodayAction(planWorkerEnsure(carrierFor(input), { ...input, generation: input.tokenless ? {} : { osBirthToken: "birth" } }));
 }
 
 function toTodayAction(plan: WorkerEnsurePlan): TodayAction {
@@ -275,12 +277,15 @@ export function enumerateInputs(): V31PlanInput[] {
             inputs.push({ binding, launch, process, lastStop });
           }
         }
+  // A token-less generation cannot be verified live/gone. G11 adds only its
+  // reachable bound/unknown rows; all previously specified rows stay unchanged.
+  inputs.push(...inputs.filter(input => input.binding === "bound" && input.process === "unknown").map(input => ({ ...input, tokenless: true })));
   return inputs;
 }
 
 const label = (input: V31PlanInput) =>
   `binding=${input.binding} launch=${input.launch} process=${input.process} lastStop=${input.lastStop}` +
-  (input.readmitted === undefined ? "" : ` readmitted=${input.readmitted}`);
+  (input.readmitted === undefined ? "" : ` readmitted=${input.readmitted}`) + (input.tokenless ? " tokenless=true" : "");
 
 /**
  * Rows named by the product review. Each row's test title carries the scenario, so
@@ -311,8 +316,8 @@ describe("v3.1 planWorkerEnsure table (exhaustive)", () => {
   const inputs = enumerateInputs();
 
   it("enumerates every v3.1 plan input, each with one expected action", () => {
-    expect(inputs).toHaveLength(280);
-    expect(inputs.map((input) => specRow(input).expected)).toHaveLength(280);
+    expect(inputs).toHaveLength(315);
+    expect(inputs.map((input) => specRow(input).expected)).toHaveLength(315);
   });
 
   for (const input of inputs) {

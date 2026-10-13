@@ -61,6 +61,11 @@ export class TeamSessionLifecycleService {
         if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, input.workerName, { ...identity, lastStop: undefined }, current.membershipId);
         return { kind: "admitted", action: "already_current", member: current };
       }
+      // Keep the verified predecessor current until its exit is durable. The observer
+      // cannot publish that generation once this lease installs its successor.
+      if (runtimeAdmission.replaces && status) await this.lifecyclePublication.recordWorkerGenerationExit({
+        teamName: input.teamName, member: current, status, terminalBackend: config.terminalBackend,
+      });
       const startedAt = hostEnv().clock.now();
       await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined, lastStop: undefined, stopRequested: undefined }, current.membershipId);
       recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });

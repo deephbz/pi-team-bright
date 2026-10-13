@@ -30,11 +30,11 @@ vi.mock("./coordination/event-journal", () => ({
     io.events.push(saved); return saved;
   },
 }));
-import { CarrierObserver } from "./carrier-observation";
+import { CarrierObserver, publishPredecessorExit } from "./carrier-observation";
 
 const host = () => ({ ...nodeHostEnv,
   clock: { ...nodeHostEnv.clock, now: () => io.now, setTimeout: (() => 0) as any, clearTimeout: () => {} },
-  process: { ...nodeHostEnv.process, generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid,
+  process: { ...nodeHostEnv.process, generation: () => ({ kind: "absent" as const }), generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid,
     io.probe === "gone" ? { kind: "absent" as const } : io.probe === "unknown" ? { kind: "unknown" as const, reason: "source_unavailable" }
       : { kind: "found" as const, generation: { pid, osBirthToken: io.status.osBirthToken, bootId: "boot" } }])) },
   exec: { ...nodeHostEnv.exec, run: async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "",
@@ -134,6 +134,23 @@ it("CarrierObserver publishes the accepted-journal reference across samples, fai
       let observer: CarrierObserver | undefined;
       try {
         for (const s of [initial, ...steps]) {
+          if (s.successor) {
+            // Admission must publish the current predecessor before replacing it. This
+            // action kills it in world truth without waiting for an observer poll.
+            io.failures = s.failures; io.readFailure = s.readFailure;
+            const identity = [io.member.membershipId, io.status.startedAt, io.member.launch?.launchId ?? null,
+              "herdr", io.member.terminalTarget.kind, io.member.terminalTarget.targetId];
+            const before = expected.findLast(e => e.field === "process" && JSON.stringify(e.identity) === JSON.stringify(identity))?.to ?? "unknown";
+            const blocked = s.readFailure || (before !== "gone" && s.failures > 0);
+            if (blocked) {
+              await expect(publishPredecessorExit("team", io.member, io.status, "herdr")).rejects.toThrow();
+              expect(actual()).toEqual(expected);
+              continue;
+            }
+            await publishPredecessorExit("team", io.member, io.status, "herdr");
+            if (before !== "gone") expected.push({ identity, field: "process", from: before, to: "gone" });
+            expect(actual()).toEqual(expected);
+          }
           source(s);
           reference(expected, s);
           if (!observer || s.restart) { observer?.stop(); observer = new CarrierObserver("team"); observer.start(); }

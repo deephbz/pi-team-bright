@@ -216,6 +216,12 @@ restating executable definitions.
   and its [lead rulings](../journal/2026-10-12-v31-implementation-plan.md)
   amend Decision 0018 as [Decision 0021](../decisions/0021-carrier-observation-liveness.md) records. `CarrierObserver` owns process-generation observations.
   A live shell never proves a live Worker. Unknown evidence fails closed.
+  For a bound tokenless generation, `ensure_worker` returns `legacy_unverified`
+  attention with `ask_human`. The model result and collapsed TUI name both exits:
+  reload that Worker's Pi to re-admit its generation with a birth token, or adopt
+  it in `/ptb status`. Pending or stalled launch evidence cannot replace this
+  attention. It never spawns a replacement. Other unknown-generation rows stay
+  unchanged.
   Launch claims a durable ID before external effects and returns a receipt
   without waiting for readiness. Elapsed time and start errors keep the pane.
   The same-generation `live`/`stopping` reload pair stays silent while durable
@@ -236,6 +242,10 @@ restating executable definitions.
   unchanged; healthy polling retries the current source difference. A transient
   observation lost before append is not durable. There are no hidden observation
   checkpoints. Journal failure does not delay the source projection.
+  Worker admission publishes a verified predecessor exit before it replaces that
+  generation's runtime record. It holds the Membership lease through both steps.
+  Polling and admission use the same accepted journal baseline. An exit-publication
+  failure preserves the predecessor record and prevents replacement.
   One ten-second receipt deadline covers claim, nested leases, Herdr preparation,
   and target CAS. Expiry returns attention and prevents late startup. Prepared
   targets reconcile asynchronously under the exact Membership and launch ID.

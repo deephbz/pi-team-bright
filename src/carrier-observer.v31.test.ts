@@ -8,7 +8,7 @@ vi.mock("./coordination/event-journal", () => ({
   readTeamEvents: (_: string, options: any) => { if (f.journalFailure) throw new Error("journal unavailable"); return { events: f.events.filter(e => Number(e.cursor) > Number(options.afterCursor)), cursor: String(f.events.length), truncated: false }; },
   appendTeamEvent: async (_: string, event: any) => { if (f.appendFailures > 0) { f.appendFailures--; throw new Error("EIO"); } const saved = { ...event, cursor: String(f.events.length + 1) }; f.events.push(saved); return saved; },
 }));
-import { CarrierObserver } from "./carrier-observation";
+import { CarrierObserver, publishPredecessorExit } from "./carrier-observation";
 const env = () => ({ ...nodeHostEnv, clock: { ...nodeHostEnv.clock, now: () => f.now, setTimeout: (() => 0) as any, clearTimeout: () => {} }, process: { ...nodeHostEnv.process,
   generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid, { kind: "found" as const, generation: { pid, osBirthToken: "birth", bootId: "boot" } }])),
 }, exec: { ...nodeHostEnv.exec, run: vi.fn(async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "", stdout: JSON.stringify(f.outage ? { error: "offline" } : { result: args[0] === "agent" ? { agents: f.noAgent ? [] : [{ pane_id: "pane", name: "team-worker", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" }, agent_status: f.blocked ? "blocked" : "idle" }] } : { panes: f.panePresent ? [{ pane_id: f.paneId }] : [] } }) })) } });
@@ -16,6 +16,27 @@ beforeEach(() => {
   f.now = 1000; f.events = []; f.noAgent = false; f.paneId = "pane"; f.panePresent = true; f.blocked = false; f.outage = false; f.configFailure = false; f.journalFailure = false; f.appendFailures = 0; f.leaseFailures = 0; f.beforeLease = undefined;
   f.member = { name: "worker", agentType: "teammate", membershipId: "m", sessionFile: "/session", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" } };
   f.status = { membershipId: "m", pid: 42, startedAt: 10, osBirthToken: "birth", bootId: "boot" };
+});
+it("retries predecessor exit publication without duplicate accepted death", async () => {
+  const host = env(); host.process.generation = () => ({ kind: "absent" });
+  await runWithHostEnv(host, async () => {
+    f.appendFailures = 1;
+    await expect(publishPredecessorExit("team", f.member, f.status, "herdr")).rejects.toThrow("EIO");
+    expect(f.events).toEqual([]);
+    await publishPredecessorExit("team", f.member, f.status, "herdr");
+    await publishPredecessorExit("team", f.member, f.status, "herdr");
+    expect(f.events).toHaveLength(1);
+    expect(f.events[0].carrier).toMatchObject({ field: "process", to: "gone", generation: { pid: 42, startedAt: 10 } });
+  });
+});
+it("refuses predecessor publication without verified death or matching runtime coordinates", async () => {
+  const host = env(); host.process.generation = () => ({ kind: "unknown", reason: "offline" });
+  await runWithHostEnv(host, async () => {
+    await expect(publishPredecessorExit("team", f.member, f.status, "herdr")).rejects.toThrow("not verified");
+    host.process.generation = () => ({ kind: "absent" });
+    await expect(publishPredecessorExit("team", f.member, { ...f.status, startedAt: 5 }, "herdr")).rejects.toThrow("coordinates changed");
+    expect(f.events).toEqual([]);
+  });
 });
 it.each(["pane", "pane-2"])("records repeated terminal loss after low-noise presence at %s", async target => runWithHostEnv(env(), async () => {
   // Fixed sequence from c2-v3-terminal-probe.json, plus same-target recovery.
