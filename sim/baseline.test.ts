@@ -10,6 +10,7 @@ function results(replay: Awaited<ReturnType<typeof replayTrace>>, name: string) 
     ? [{ at: event.at, details: event.result.details as any }] : []);
 }
 
+// Full-suite CPU contention reached 2584 ms; retain 30 s without changing virtual deadlines.
 it("v3.1 scenario 1 returns within ten virtual seconds and keeps an ambiguous launch and pane", async () => {
   const started = performance.now();
   const replay = await replayTrace(startFailure as WorldTrace);
@@ -23,6 +24,7 @@ it("v3.1 scenario 1 returns within ten virtual seconds and keeps an ambiguous la
   expect(replay.panes.filter(pane => pane.id.startsWith("pane-"))).toHaveLength(1);
 }, 30000);
 
+// Full-suite CPU contention reached 5240 ms; retain 30 s for both exact replays.
 it("v3.1 scenario 2 never reuses dead Pi and replays real actor decisions exactly", async () => {
   const trace = piDead as WorldTrace;
   const started = performance.now();

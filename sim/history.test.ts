@@ -8,6 +8,7 @@ import type { WorldTrace } from "./trace-format";
 import { SimWorld } from "./world";
 import { HISTORY_VERSION } from "./history";
 
+// Full-suite CPU contention reached 2657 ms; retain 30 s for both real-actor fixtures.
 it.each([neverStarts, deadPi])("records observable oracle inputs for $id", async fixture => {
   const result = await replayTrace(fixture as WorldTrace, { seed: 42 });
   const history = result.history;
@@ -50,6 +51,7 @@ it.each([neverStarts, deadPi])("records observable oracle inputs for $id", async
   }
 }, 30000);
 
+// Full-suite CPU contention reached 8105 ms; retain 30 s for the long virtual-time replay.
 it("observes automatic team-update branch stamps through the real Pi boundary", async () => {
   // This trace has unread recovery events. neverStarts consumed its events through team_sync.
   const trace = structuredClone(deadPi) as WorldTrace;

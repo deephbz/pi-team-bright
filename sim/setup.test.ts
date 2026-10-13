@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { replayTrace } from "./replay";
 import type { WorldTrace } from "./trace-format";
 
+// Full-suite CPU contention reached 3696 ms; 15 s gives Team bootstrap and replay headroom.
 it("boots an assumed Team through durable authorities before observed inputs", async () => {
   const trace: WorldTrace = { version: 1, id: "existing-team", source: "synthetic", assumptions: [],
     setup: { ptbVersion: "v3.1", teams: [{ team: "team-1", workers: ["w1"] }] }, steps: [
@@ -16,8 +17,9 @@ it("boots an assumed Team through durable authorities before observed inputs", a
   expect(result.history.filter(e => e.kind === "world.input")).toHaveLength(2);
   const repeated = await replayTrace(trace, { receipt: result.receipt });
   expect(repeated.history).toEqual(result.history);
-});
+}, 15000);
 
+// Full-suite CPU contention reached 2947 ms; 10 s gives Task creation and observation headroom.
 it("shows a created Task on the updates page independently of the P8 parser", async () => {
   const who = { team: "team-1", actor: "lead" };
   const result = await replayTrace({ version: 1, id: "task-page-shape", source: "synthetic", assumptions: [],
@@ -36,4 +38,4 @@ it("shows a created Task on the updates page independently of the P8 parser", as
   const payload = JSON.parse(message.content[0].text.slice(message.content[0].text.indexOf("\n") + 1));
   expect(payload.task_changes).toEqual(expect.arrayContaining([expect.objectContaining({ task_id: ref.taskId, current: expect.objectContaining({ id: ref.taskId, version: ref.version }) })]));
   expect(page.stamp!.through).toBeGreaterThanOrEqual(event.event.seq!);
-});
+}, 10000);
