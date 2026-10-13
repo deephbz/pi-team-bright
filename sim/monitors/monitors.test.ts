@@ -90,13 +90,21 @@ describe("P4 reuse and spawn acts match world truth", () => {
 
 describe("P5 pane closes are cited", () => {
   const close: Step = [10, { kind: "pane.close", pane: { paneId: "p1", shellPid: 10 } }, ptb("x")];
-  it("passes when PTB closes after a stop request", () => {
+  const roster = (targets: Record<string, string>): Step => [
+    0,
+    { kind: "durable.team", team, path: "config.json", record: { members: Object.entries(targets).map(([name, targetId]) => ({ name, membershipId: `m-${name}`, isActive: true, terminalTarget: { backend: "herdr", kind: "pane", targetId } })) } },
+  ];
+  it("passes when a Worker stop closes that Worker's current target pane, with no earlier journal row", () => {
     const stop: Step = [0, { kind: "tool.call", actor: lead, callId: "s1", name: "worker_stop", args: { worker: "w1" } }, ptb("s1")];
-    expect(p5ClosesCited(h(row(0, { paneId: "p1" }, undefined, "w1"), stop, close))).toEqual({ status: "pass" });
+    expect(p5ClosesCited(h(roster({ w1: "p1" }), stop, close))).toEqual({ status: "pass" });
   });
   it("violates when a stop of A authorizes closing B's pane (probe unrelatedStop)", () => {
     const stop: Step = [0, { kind: "tool.call", actor: lead, callId: "s1", name: "worker_stop", args: { worker: "w2" } }, ptb("s1")];
-    expect(p5ClosesCited(h(row(0, { paneId: "p1" }, undefined, "w1"), stop, close))).toMatchObject({ status: "violation" });
+    expect(p5ClosesCited(h(roster({ w1: "p1", w2: "p2" }), stop, close))).toMatchObject({ status: "violation" });
+  });
+  it("is not applicable when no durable record proves the stopped Worker's target", () => {
+    const stop: Step = [0, { kind: "tool.call", actor: lead, callId: "s1", name: "worker_stop", args: { worker: "w1" } }, ptb("s1")];
+    expect(p5ClosesCited(h(stop, close))).toMatchObject({ status: "not_applicable" });
   });
   it("passes when a team stop authorizes the close", () => {
     const stop: Step = [0, { kind: "tool.call", actor: lead, callId: "s1", name: "team_shutdown", args: {} }, ptb("s1")];
@@ -159,6 +167,18 @@ describe("P8 coverage ledger", () => {
   });
   it("passes when the page names the Task event", () => {
     expect(p8CoverageLedger(h(taskEvent(0, "task-a"), taskUpdate(10, ["task-a"])))).toEqual({ status: "pass" });
+  });
+  const versionedTask = (at: number, version: string): Step => [at, { kind: "journal.append", team, path: journalPath, line: 1, event: { type: "task", seq: 1, raw: { type: "task", ref: { taskId: "task-a", version } } } as JournalFact }];
+  const snapshot = (at: number, version: string): Step => [at, {
+    kind: "lead.entry", actor: lead, sessionId: "s1", entryId: `snap${at}`,
+    entry: { customType: "ptb.team-update", content: `ptb.team-update: team_sync snapshot.\n${JSON.stringify({ kind: "snapshot", tasks: [{ id: "task-a", version }] })}` },
+    stamp: { team, epoch: "ep", binding: "b", from: 0, through: 0 },
+  }];
+  it("passes when a page omits an obsolete Task version the lead already saw at a newer version (probe obsoleteTaskPage)", () => {
+    expect(p8CoverageLedger(h(snapshot(0, "v2"), versionedTask(5, "v1"), taskUpdate(10, [])))).toEqual({ status: "pass" });
+  });
+  it("violates when a page omits the current Task version the lead already saw", () => {
+    expect(p8CoverageLedger(h(snapshot(0, "v2"), versionedTask(5, "v2"), taskUpdate(10, [])))).toMatchObject({ status: "violation" });
   });
   it("passes the M4 control: snapshot through 0, then the Worker creation update through 2", () => {
     const control = h(row(0, { seq: 1 }, undefined, "w-race"), row(1, { seq: 2 }, undefined, "w-race"), stamp(10, 0, 0, "snapshot", []), stamp(20, 0, 2, "update", ["w-race"]));
@@ -230,8 +250,11 @@ describe("E3 launches complete or report unknown", () => {
     { kind: "durable.launch", team, path: "launch/w1.json", source: "file", record: { raw: record, membershipId: "m1", pendingLaunchId: record.pendingLaunchId, launchConsumedAt: record.launchConsumedAt } },
   ];
   const options = { boundMs: 1000 };
-  it("passes when the reservation is consumed inside the bound", () => {
-    expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), launch(500, { pendingLaunchId: "L1", launchConsumedAt: "t" })), options)).toEqual({ status: "pass" });
+  it("passes when the reservation is consumed inside the bound (consumption clears pendingLaunchId, as in production)", () => {
+    expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), launch(500, { launchConsumedAt: "t" })), options)).toEqual({ status: "pass" });
+  });
+  it("violates when a later consumption settled a different launch on the same Membership", () => {
+    expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), launch(200, { pendingLaunchId: "L2" }), launch(500, { launchConsumedAt: "t" }), filler(5000)), options)).toMatchObject({ status: "violation" });
   });
   it("violates when the reservation neither completes nor reports unknown", () => {
     expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), filler(5000)), options)).toMatchObject({ status: "violation" });
@@ -239,8 +262,11 @@ describe("E3 launches complete or report unknown", () => {
   it("violates when a launch row only states requested past the bound (probe requestedOnly)", () => {
     expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), row(500, { field: "launch", to: "requested", membershipId: "m1" }), filler(5000)), options)).toMatchObject({ status: "violation" });
   });
-  it("passes when the launch row reports a start inside the bound", () => {
-    expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), row(500, { field: "launch", to: "started", membershipId: "m1" }), filler(5000)), options)).toEqual({ status: "pass" });
+  it("passes when the launch row reports a start for the same launch inside the bound", () => {
+    expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "L1" }), row(500, { field: "launch", to: "started", membershipId: "m1", launchId: "L1" }), filler(5000)), options)).toEqual({ status: "pass" });
+  });
+  it("violates when a start of an older launch on the same Membership does not resolve the newer one (probe staleLaunch)", () => {
+    expect(e3LaunchCompletesOrReportsUnknown(h(launch(0, { pendingLaunchId: "new-launch" }), row(500, { field: "launch", to: "started", membershipId: "m1", launchId: "old-launch" }), filler(5000)), options)).toMatchObject({ status: "violation" });
   });
 });
 

@@ -6,6 +6,7 @@
     "process": {
       "actorKey": "team-1/lead",
       "command": "pi",
+      "processKind": "lead_pi",
       "generation": {
         "pid": 101,
         "bootId": "boot-1",
@@ -20,6 +21,7 @@
     "process": {
       "actorKey": "shell:pane:team-1/lead",
       "command": "shell",
+      "processKind": "shell",
       "generation": {
         "pid": 102,
         "bootId": "boot-1",
@@ -38,14 +40,29 @@
   },
   {
     "at": 1700000000000,
-    "sequence": 89,
+    "sequence": 85,
     "kind": "journal.append",
     "cursor": "1",
     "phase": "prepared"
   },
   {
     "at": 1700000000000,
-    "sequence": 116,
+    "sequence": 117,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "shell:pane-1",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 103,
+        "bootId": "boot-1",
+        "osBirthToken": "3"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 133,
     "kind": "tool.result",
     "tool": "ensure_worker",
     "result": {
@@ -54,23 +71,215 @@
     }
   },
   {
-    "at": 1700000004351.632,
-    "sequence": 143,
-    "kind": "journal.append",
-    "cursor": "2"
+    "at": 1700000000000,
+    "sequence": 142,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 103,
+      "processKind": "worker_pi",
+      "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+      "generation": {
+        "pid": 104,
+        "bootId": "boot-1",
+        "osBirthToken": "4"
+      }
+    }
   },
   {
-    "at": 1700000004351.632,
-    "sequence": 144,
+    "at": 1700000000000,
+    "sequence": 152,
+    "kind": "journal.append",
+    "cursor": "2",
+    "phase": "session_bound"
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 217,
+    "kind": "process.death",
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 103,
+      "processKind": "worker_pi",
+      "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+      "generation": {
+        "pid": 104,
+        "bootId": "boot-1",
+        "osBirthToken": "4"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 247,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "shell:pane-2",
+      "command": "shell",
+      "processKind": "shell",
+      "generation": {
+        "pid": 105,
+        "bootId": "boot-1",
+        "osBirthToken": "5"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 263,
+    "kind": "tool.result",
+    "tool": "ensure_worker",
+    "result": {
+      "kind": "worker_ensured",
+      "effect": "recovered"
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 272,
+    "kind": "process.birth",
+    "process": {
+      "actorKey": "team-1/w1",
+      "command": "pi",
+      "parentPid": 105,
+      "processKind": "worker_pi",
+      "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+      "generation": {
+        "pid": 106,
+        "bootId": "boot-1",
+        "osBirthToken": "6"
+      }
+    }
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 285,
     "kind": "journal.append",
     "cursor": "3",
     "carrier": {
+      "field": "process",
+      "to": "gone",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 104,
+        "startedAt": 1700000000000,
+        "osBirthToken": "4",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "process_generation",
+        "fact": "gone"
+      },
+      "paneId": "pane-2",
+      "suspectedHumanStop": false,
+      "nextActionHint": "ensure_worker"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000000000,
+    "sequence": 286,
+    "kind": "journal.append",
+    "cursor": "4",
+    "phase": "session_bound"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 378,
+    "kind": "journal.append",
+    "cursor": "5",
+    "carrier": {
       "field": "binding",
-      "to": "unbound",
+      "to": "bound",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 106,
+        "startedAt": 1700000000000,
+        "osBirthToken": "6",
+        "bootId": "boot-1"
+      },
       "cause": {
         "source": "membership",
-        "fact": "unbound"
+        "fact": "bound"
       },
+      "paneId": "pane-2",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 379,
+    "kind": "journal.append",
+    "cursor": "6",
+    "carrier": {
+      "field": "launch",
+      "to": "started",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 106,
+        "startedAt": 1700000000000,
+        "osBirthToken": "6",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "launch",
+        "fact": "agent_start_accepted"
+      },
+      "paneId": "pane-2",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 380,
+    "kind": "journal.append",
+    "cursor": "7",
+    "carrier": {
+      "field": "process",
+      "to": "live",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 106,
+        "startedAt": 1700000000000,
+        "osBirthToken": "6",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "process_generation",
+        "fact": "live"
+      },
+      "paneId": "pane-2",
+      "suspectedHumanStop": false,
+      "nextActionHint": "wait"
+    },
+    "phase": "carrier"
+  },
+  {
+    "at": 1700000004351.632,
+    "sequence": 381,
+    "kind": "journal.append",
+    "cursor": "8",
+    "carrier": {
+      "field": "terminal",
+      "to": "present",
+      "generation": {
+        "membershipId": "membership_c60128a4-aeaf-49f6-855d-85175e6be2d2",
+        "pid": 106,
+        "startedAt": 1700000000000,
+        "osBirthToken": "6",
+        "bootId": "boot-1"
+      },
+      "cause": {
+        "source": "herdr_panes",
+        "fact": "present"
+      },
+      "paneId": "pane-2",
       "suspectedHumanStop": false,
       "nextActionHint": "wait"
     },
@@ -78,7 +287,7 @@
   },
   {
     "at": 1700000100000,
-    "sequence": 780,
+    "sequence": 1165,
     "kind": "tool.result",
     "tool": "team_sync",
     "result": {
