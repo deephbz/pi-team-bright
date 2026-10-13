@@ -136,6 +136,34 @@ it.each(["started", "unknown"])("emits one hung %s launch attention without auth
   expect(f.events.find(e => e.carrier?.cause.fact === "launch_stalled").carrier).toMatchObject({ to: state, paneId: "pane", nextActionHint: "ask_human" });
   observer.stop();
 }));
+it.each(["missing", "prior"])("journals one stalled recovery with %s runtime and a retained Session", async runtimeKind => runWithHostEnv(env(), async () => {
+  f.noAgent = true; f.member.launch = { launchId: "recovery", state: "started", requestedAt: 1,
+    priorGeneration: { pid: 42, osBirthToken: "birth", bootId: "boot" } };
+  if (runtimeKind === "missing") f.status = null;
+  const observer = await running(); f.now += 16000; await observer.refresh(); await observer.refresh();
+  expect(f.events.filter(e => e.carrier?.cause.fact === "launch_stalled")).toHaveLength(1);
+  expect(f.events.find(e => e.carrier?.cause.fact === "launch_stalled").carrier)
+    .toMatchObject({ launchId: "recovery", to: "started", nextActionHint: "ask_human" });
+  observer.stop();
+}));
+it("fences stalled-recovery publication when a successor admits after sampling", async () => runWithHostEnv(env(), async () => {
+  f.noAgent = true; f.member.launch = { launchId: "recovery", state: "started", requestedAt: 1,
+    priorGeneration: { pid: 42, osBirthToken: "birth", bootId: "boot" } };
+  const observer = await running(); f.now += 16000;
+  f.beforeLease = () => { f.status = { ...f.status, pid: 43, osBirthToken: "successor", startedAt: 20 }; };
+  await observer.refresh(); f.beforeLease = undefined; await observer.refresh();
+  expect(f.events.filter(e => e.carrier?.cause.fact === "launch_stalled")).toEqual([]);
+  observer.stop();
+}));
+it.each(["pid", "osBirthToken", "bootId"])("does not stall a recovered Worker after admission changes %s", async changed => runWithHostEnv(env(), async () => {
+  f.noAgent = true; f.member.launch = { launchId: "recovery", state: "started", requestedAt: 1,
+    priorGeneration: { pid: 42, osBirthToken: "birth", bootId: "boot" } };
+  f.status[changed] = changed === "pid" ? 43 : "successor";
+  f.status.startedAt = 20; f.status.lastStop = { piReason: "new", observedAt: 25, suspectedHumanStop: true };
+  const observer = await running(); f.now += 16000; await observer.refresh(); await observer.refresh();
+  expect(f.events.filter(e => e.carrier?.cause.fact === "launch_stalled")).toEqual([]);
+  observer.stop();
+}));
 it.each(["new", "resume", "fork", "quit"])("does not journal a stalled launch for a bound Worker after %s", async piReason => runWithHostEnv(env(), async () => {
   f.noAgent = true; f.member.launch = { launchId: "launch", state: "started", requestedAt: 1 };
   f.status.lastStop = { piReason, observedAt: 2, suspectedHumanStop: true };

@@ -253,8 +253,13 @@ restating executable definitions.
   Only decisive shell-busy refusal retries on the same pane and launch ID.
   Herdr error envelopes on stderr retain their code and text when stdout is empty.
   A readiness timeout remains unknown and never authorizes another spawn.
-  An old unbound started or unknown launch with no Herdr agent in its pane returns
-  `launch_stalled` attention. The human can authorize `worker_stop` before retry.
+  A first launch remains outstanding until Session binding. A recovery remains
+  outstanding while its runtime record is absent or still names its prior
+  process generation. Pending and stalled checks share this rule. An outstanding
+  started or unknown launch with no Herdr agent in its pane returns
+  `launch_stalled` attention after 15 seconds. An admitted successor retains its
+  planner reason after process exit. The human can authorize `worker_stop`
+  before retry.
   A missing Herdr row never authorizes another spawn.
   Linux reads procfs. On macOS, npm `postinstall` builds the dependency-free
   helper from packaged source with `rustc` and Xcode Command Line Tools.

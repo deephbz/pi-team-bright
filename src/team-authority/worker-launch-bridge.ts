@@ -4,7 +4,7 @@ import * as teams from "../utils/teams";
 import * as runtime from "../utils/runtime";
 import { assertLockDeadline, LockDeadlineError, withLock, withLockDeadline } from "../utils/lock";
 import { teamDir } from "../utils/paths";
-import { deriveCarrierView, herdrList, launchIsStalled, type CarrierView } from "../carrier-observation";
+import { deriveCarrierView, herdrList, launchIsOutstanding, launchIsStalled, type CarrierView } from "../carrier-observation";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig, TerminalTarget } from "./contracts";
 import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
@@ -92,15 +92,19 @@ export class WorkerLaunchBridge {
     });
   }
   private async inspectAttention(request: WorkerLaunchRequest, result: WorkerLaunchResult): Promise<WorkerLaunchResult> {
-    if (result.action !== "attention" || ["legacy_unverified", "generation_helper_missing"].includes(result.reason) || !result.member || result.member.terminalTarget?.backend !== "herdr"
-      || !launchIsStalled(result.member, [])) return result;
+    if (result.action !== "attention" || ["legacy_unverified", "generation_helper_missing"].includes(result.reason) || !result.member || result.member.terminalTarget?.backend !== "herdr") return result;
+    const status = await runtime.readRuntimeStatus(request.teamName, result.member.name);
+    assertLockDeadline();
+    if (!launchIsStalled(result.member, status, [])) return result;
     const agents = await herdrList("agent").catch(() => undefined);
     assertLockDeadline();
-    if (!launchIsStalled(result.member, agents)) return result;
+    if (!launchIsStalled(result.member, status, agents)) return result;
     const observed = result.member;
     return teams.withCurrentMembershipLease(request.teamName, observed.membershipId!, async current => {
+      const currentStatus = await runtime.readRuntimeStatus(request.teamName, current.name);
+      assertLockDeadline();
       if (current.launch?.launchId !== observed.launch?.launchId || current.sessionFile !== observed.sessionFile
-        || current.terminalTarget?.targetId !== observed.terminalTarget?.targetId || !launchIsStalled(current, agents)) return result;
+        || current.terminalTarget?.targetId !== observed.terminalTarget?.targetId || !launchIsStalled(current, currentStatus, agents)) return result;
       return { ...result, member: current, paneId: current.terminalTarget?.targetId, reason: "launch_stalled", nextActionHint: "ask_human" };
     });
   }
@@ -120,8 +124,7 @@ export class WorkerLaunchBridge {
         const view = deriveCarrierView(current, status);
         const plan = planWorkerEnsure(normalizeWorkerCarrier(current), view);
         // Even a bound dead prior generation cannot bypass an in-flight recovery.
-        const pending = current.launch && (current.launch.state === "requested" || current.launch.state === "started" || current.launch.state === "unknown")
-          && (!status || current.launch.priorGeneration?.osBirthToken === status.osBirthToken);
+        const pending = launchIsOutstanding(current, status);
         if (pending && plan.action !== "reuse" && !(plan.action === "attention" && ["legacy_unverified", "generation_helper_missing"].includes(plan.reason))) return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: "launch_pending", nextActionHint: "wait" };
         if (plan.action === "reuse") return { action: "reused", member: current, membershipId: current.membershipId!, target: memberTerminalTarget(current, config.terminalBackend), lastStop: view.lastStop };
         if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint };
