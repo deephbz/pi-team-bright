@@ -36,7 +36,7 @@ export class SimWorld {
   readonly observer: HistoryObserver;
   private readonly origins = new AsyncLocalStorage<HistoryOrigin>();
   private execSequence = 0;
-  readonly evidence: FakeEvidence[] = [assumptionEvidence("A7", "PID reuse changes the birth token"), assumptionEvidence("A9", "Real filesystem atomic rename; host-crash durability is unclaimed")];
+  readonly evidence: FakeEvidence[] = [assumptionEvidence("A7", "PID reuse changes the birth token", "Linux procfs only; the macOS helper has no PID-reuse probe"), assumptionEvidence("A9", "Real filesystem atomic rename and exclusive create under process crash; host-crash durability is unclaimed")];
   private readonly watches = new Set<WatchRegistration>();
 
   constructor(seed: number, options: { tape?: readonly number[]; replay?: readonly Choice[]; scheduleChoices?: readonly number[] } = {}) {
