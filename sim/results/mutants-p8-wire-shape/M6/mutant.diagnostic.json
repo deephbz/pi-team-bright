@@ -1,0 +1,110 @@
+{
+  "scope": "Existing unit assertion; not the simulator gate oracle",
+  "exitCode": 1,
+  "assertions": [
+    {
+      "title": "commits only native persistence and stamps the page boundary, never the journal head",
+      "status": "failed"
+    },
+    {
+      "title": "reserves before Task hydration so a competing call returns immediately",
+      "status": "skipped"
+    },
+    {
+      "title": "expires a lost send without advancing the branch cursor",
+      "status": "skipped"
+    },
+    {
+      "title": "fences a hydration result whose reservation expired",
+      "status": "skipped"
+    },
+    {
+      "title": "replays a crash before persistence and retains delivery across a restart after persistence",
+      "status": "skipped"
+    },
+    {
+      "title": "keeps the native cursor after compaction removes payload from model context",
+      "status": "skipped"
+    },
+    {
+      "title": "recomputes on tree navigation before an update and on a sibling branch",
+      "status": "skipped"
+    },
+    {
+      "title": "never lets copied fork entries authorize an unbound Session",
+      "status": "skipped"
+    },
+    {
+      "title": "invalidates a reservation on binding replacement",
+      "status": "skipped"
+    },
+    {
+      "title": "invalidates a reservation on epoch replacement",
+      "status": "skipped"
+    },
+    {
+      "title": "bootstraps a 50-event Team from unstamped pre-upgrade results without replaying updates",
+      "status": "skipped"
+    },
+    {
+      "title": "captures the snapshot watermark before Task hydration",
+      "status": "skipped"
+    },
+    {
+      "title": "reconciles Task authority changes with no journal event",
+      "status": "skipped"
+    },
+    {
+      "title": "reconciles authority after stale Task events and converges without manual reads",
+      "status": "skipped"
+    },
+    {
+      "title": "reconciles authority after retired Worker events and converges without manual reads",
+      "status": "skipped"
+    },
+    {
+      "title": "reconciles authority after mixed pages events and converges without manual reads",
+      "status": "skipped"
+    },
+    {
+      "title": "hydrates Workers after the snapshot watermark covers their creation",
+      "status": "skipped"
+    },
+    {
+      "title": "rejects binding replacement between watermark and Worker hydration",
+      "status": "skipped"
+    },
+    {
+      "title": "rejects epoch replacement between watermark and Worker hydration",
+      "status": "skipped"
+    },
+    {
+      "title": "presents complete Task removal as a snapshot",
+      "status": "skipped"
+    },
+    {
+      "title": "automatically delivers an empty removal snapshot and then clears debt",
+      "status": "skipped"
+    },
+    {
+      "title": "presents partial Task removal once and converges after native persistence",
+      "status": "skipped"
+    },
+    {
+      "title": "ignores authority enumeration order when reconciling a native branch",
+      "status": "skipped"
+    },
+    {
+      "title": "returns unavailable without advancing when Task hydration fails",
+      "status": "skipped"
+    },
+    {
+      "title": "aborts without a reservation or cursor commit",
+      "status": "skipped"
+    },
+    {
+      "title": "derives max through from native updates and team_sync results in the authorized scope",
+      "status": "skipped"
+    }
+  ]
+}

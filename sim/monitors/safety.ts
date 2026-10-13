@@ -174,12 +174,12 @@ function namesIn(lists: Array<Json | undefined>, keys: string[]): Set<string> {
   return names;
 }
 
-/** Workers and Tasks a branch page names (snapshot `workers`/`tasks`, update `workerChanges`/`taskChanges` rows). */
+/** Workers and Tasks a branch page names (snapshot `workers`/`tasks`, update `worker_changes`/`task_changes` rows). */
 function pageNames(entry: JsonObject): { workers: Set<string>; tasks: Set<string> } {
   const payload = observationPayload((entry.message as JsonObject | undefined)?.content ?? entry.content);
   return {
-    workers: namesIn([payload?.workers, payload?.worker_changes, payload?.workerChanges], ["name", "worker"]),
-    tasks: namesIn([payload?.tasks, payload?.taskChanges], ["id", "taskId"]),
+    workers: namesIn([payload?.workers, payload?.worker_changes], ["name", "worker"]),
+    tasks: namesIn([payload?.tasks, payload?.task_changes], ["id", "task_id"]),
   };
 }
 
@@ -190,25 +190,26 @@ function taskRef(event: JournalFact): { taskId: string; version?: string } | und
   return { taskId: ref.taskId, version: typeof ref.version === "string" ? ref.version : undefined };
 }
 
-/** The Task cards (id and version) a branch page or an authority read carries. */
+/** The Task cards (id and version) a branch page or an authority read carries: snapshot `tasks`, update `task_changes[].current`, or a task tool's `task`. */
 function taskCards(payload: JsonObject | undefined): Array<[string, string]> {
   const cards: Array<[string, string]> = [];
   const take = (card: Json | undefined) => {
     if (card === null || typeof card !== "object" || Array.isArray(card)) return;
     if (typeof card.id === "string" && typeof card.version === "string") cards.push([card.id, card.version]);
   };
+  take(payload?.task);
   if (Array.isArray(payload?.tasks)) payload.tasks.forEach(take);
-  if (Array.isArray(payload?.taskChanges)) {
-    payload.taskChanges.forEach(change => take(change !== null && typeof change === "object" && !Array.isArray(change) ? change.current : undefined));
+  if (Array.isArray(payload?.task_changes)) {
+    payload.task_changes.forEach(change => take(change !== null && typeof change === "object" && !Array.isArray(change) ? change.current : undefined));
   }
   return cards;
 }
 
-/** The latest Task version the branch or an authority read showed before a sequence. */
+/** The latest Task version the branch or an authority read showed at or before a sequence (the page's own cards included). */
 function observedTaskVersions(history: readonly HistoryEntry[], before: number): Map<string, string> {
   const versions = new Map<string, string>();
   for (const entry of history) {
-    if (entry.sequence >= before) continue;
+    if (entry.sequence > before) continue;
     if (entry.kind === "lead.entry") {
       const payload = observationPayload((entry.entry.message as JsonObject | undefined)?.content ?? entry.entry.content);
       for (const [id, version] of taskCards(payload)) versions.set(id, version);
