@@ -2,6 +2,7 @@ import { Check } from "typebox/value";
 import { Type, type Static, type TSchema } from "typebox";
 import {
   AlertSendResultSchema,
+  ALERT_ACCEPTANCE_DESCRIPTION,
   AlertReceiptDegradationSchema,
   EnsureWorkerResultSchema,
   WorkerAttentionSchema, WorkerLaunchReceiptFields, CarrierAttentionSchema,
@@ -202,7 +203,7 @@ export const TaskLinkModelResultSchema = Type.Union([
 ]);
 
 export const AlertSendModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("alert_sent"), acceptance: Type.Literal("Stored for the recipient. Presentation and processing are unconfirmed."), accepted_recipients: Type.Array(WorkerName), failed_recipients: Type.Array(WorkerName), delivery_degraded: Type.Optional(AlertReceiptDegradationSchema), task_id: Type.Optional(TaskId), task_version: Type.Optional(TaskVersion) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("alert_sent"), accepted_recipients: Type.Array(WorkerName), failed_recipients: Type.Array(WorkerName), delivery_degraded: Type.Optional(AlertReceiptDegradationSchema), task_id: Type.Optional(TaskId), task_version: Type.Optional(TaskVersion) }, { additionalProperties: false, description: ALERT_ACCEPTANCE_DESCRIPTION }),
   Type.Object({ kind: Type.Literal("refused"), reason: Type.Enum(["recipient_not_current", "no_eligible_recipients", "invalid_fanout"]), message: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   ModelFailure(Type.Union([Type.Literal("no_active_team"), Type.Literal("team_authority_unavailable")])),
 ]);
@@ -388,7 +389,6 @@ function projectOutcome(tool: ProjectedTool, raw: any): any {
   }
   if (tool === "alert_send" && raw.kind === "alert_sent") return {
     kind: raw.kind,
-    acceptance: "Stored for the recipient. Presentation and processing are unconfirmed.",
     accepted_recipients: raw.accepted_recipients,
     failed_recipients: raw.failed_recipients,
     ...(raw.delivery_degraded?.length ? { delivery_degraded: raw.delivery_degraded } : {}),

@@ -1,3 +1,5 @@
+import { deliveryRetryTime } from "../utils/delivery-retry-time";
+import { ALERT_ACCEPTANCE_DESCRIPTION } from "./catalog";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { decodeHistoricalTeamSyncResult, projectToolResult, type ProjectedTool } from "./result-projection";
 import { piTeamBrightSettingsExamplePath } from "../utils/package-example-path";
@@ -136,9 +138,9 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
       lines.push(model.failed_recipients.length > 0
         ? `Alert partially accepted for ${model.accepted_recipients.join(", ") || "no recipients"}; failed recipients: ${model.failed_recipients.join(", ")}.`
         : `Alert accepted for ${model.accepted_recipients.join(", ") || "no recipients"}.`);
-      lines.push(`${model.acceptance} Task state unchanged.`);
+      lines.push(`${ALERT_ACCEPTANCE_DESCRIPTION} Task state unchanged.`);
       for (const recipient of model.delivery_degraded ?? []) for (const engine of recipient.engines) {
-        lines.push(`⚠ ${recipient.recipient}: ${engine.engine} delivery degraded (${engine.operation}: ${compact(engine.message)}); retry at ${engine.retryAt}.`);
+        lines.push(`⚠ ${recipient.recipient}: ${engine.engine} delivery degraded (${engine.operation}: ${compact(engine.message)}); ${deliveryRetryTime(engine.retryAt)}.`);
       }
     } else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "worker_stop") {

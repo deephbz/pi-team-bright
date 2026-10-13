@@ -520,6 +520,8 @@ export const AlertSendParametersSchema = Type.Object({
   task_version: Type.Optional(TaskVersionRefSchema),
 }, { additionalProperties: false });
 
+export const ALERT_ACCEPTANCE_DESCRIPTION = "Stored for the recipient. Presentation and processing are unconfirmed.";
+
 export const AlertReceiptDegradationSchema = Type.Array(Type.Object({ recipient: WorkerName, engines: DeliveryDegradedSchema }, { additionalProperties: false }), { minItems: 1 });
 
 export const AlertSendResultSchema = Type.Union([
@@ -530,7 +532,7 @@ export const AlertSendResultSchema = Type.Union([
     failed_recipients: Type.Array(WorkerName),
     delivery_degraded: Type.Optional(AlertReceiptDegradationSchema),
     task_state_changed: Type.Literal(false),
-  }, { additionalProperties: false }),
+  }, { additionalProperties: false, description: ALERT_ACCEPTANCE_DESCRIPTION }),
   Type.Object({
     kind: Type.Literal("refused"),
     reason: Type.Enum(["recipient_not_current", "no_eligible_recipients", "invalid_fanout"]),
