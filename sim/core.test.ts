@@ -46,6 +46,7 @@ describe("single-queue deterministic world", () => {
     expect(first.decisions.some(decision => decision.enabled.length > 1)).toBe(true);
   });
 
+  // Full-suite CPU contention reached 5036 ms; 20 s keeps the microtask workload unchanged.
   it("fast-check drives the same queue rather than a second scheduler", async () => {
     await fc.assert(fc.asyncProperty(fc.integer(), async seed => {
       const run = async () => {
@@ -58,7 +59,7 @@ describe("single-queue deterministic world", () => {
       };
       expect(await run()).toEqual(await run());
     }), { seed: 19, numRuns: 20 });
-  });
+  }, 20000);
 
   it("rejects a replay when the enabled set changes", () => {
     const entropy = new Entropy(1, [0]);

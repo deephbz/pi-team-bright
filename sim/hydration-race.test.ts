@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { replayTrace } from "./replay";
 import { hydrationRaceTrace } from "./hydration-race";
 
+// Full-suite CPU contention reached 4002 ms; 15 s gives both deterministic replays headroom.
 it("creates a Worker after the snapshot watermark and before Task hydration completes", async () => {
   const result = await replayTrace(hydrationRaceTrace(), { seed: 42 });
   const calls = result.history.filter(e => e.kind === "tool.call");
@@ -15,4 +16,4 @@ it("creates a Worker after the snapshot watermark and before Task hydration comp
   expect(syncResults[1]!.result.details).toMatchObject({ kind: "updates", worker_changes: expect.arrayContaining([expect.objectContaining({ worker: "w-race" })]) });
   const repeated = await replayTrace(hydrationRaceTrace(), { receipt: result.receipt });
   expect(repeated.history).toEqual(result.history);
-});
+}, 15000);

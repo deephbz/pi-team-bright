@@ -6,6 +6,7 @@ import { replayTrace } from "./replay";
 import pidReuse from "./fixtures/traces/pid-reuse.json";
 import type { WorldTrace } from "./trace-format";
 
+// Full-suite CPU contention reached 4562 ms; 15 s gives the real-actor replay headroom.
 it("replaces a dead actor even when another process occupies its old pid", async () => {
   const result = await replayTrace(pidReuse as WorldTrace, { seed: 42 });
   const workers = result.processes.filter(p => p.actor === "team-1/w1");
@@ -14,7 +15,7 @@ it("replaces a dead actor even when another process occupies its old pid", async
   expect(workers[1]!.alive).toBe(true);
   expect(workers[1]!.osBirthToken).not.toBe(workers[0]!.osBirthToken);
   expect(result.processes.some(p => p.pid === workers[0]!.pid && p.alive)).toBe(true);
-});
+}, 15000);
 
 it("throws after journal bytes are committed and leaves the accepted row readable", () => {
   const world = new SimWorld(3);

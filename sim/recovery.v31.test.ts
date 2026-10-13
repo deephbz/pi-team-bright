@@ -3,6 +3,7 @@ import { replayTrace } from "./replay";
 import type { WorldTrace } from "./trace-format";
 import deadPi from "./fixtures/traces/bound-pi-dead.json";
 
+// Full-suite CPU contention reached 4524 ms; retain 30 s for durable Task recovery.
 it("wakes an exact recovered Session for its ACKed in-progress Task without a new Attempt", async () => {
   const lead = { team: "team-1", actor: "lead" };
   const worker = { team: "team-1", actor: "w1" };
