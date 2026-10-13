@@ -1,4 +1,4 @@
-import type { HistoryEntry, JsonObject } from "../history";
+import type { HistoryEntry, Json, JournalFact, JsonObject } from "../history";
 import { genKey, generationOf, liveAt, notApplicable, ofKind, pass, violation, actorKey } from "./util";
 import type { Verdict } from "./types";
 
@@ -85,13 +85,18 @@ const STOP_TOOLS = new Set(["worker_stop", "team_shutdown"]);
 export function p5ClosesCited(history: readonly HistoryEntry[]): Verdict {
   const closes = ofKind(history, "pane.close");
   if (!closes.length) return notApplicable("pane closures");
+  const rows = ofKind(history, "journal.append");
+  const stops = ofKind(history, "tool.call").filter(call => STOP_TOOLS.has(call.name));
   for (const close of closes) {
     const origin = close.origin;
     if (origin.kind !== "ptb") continue;
-    const cited = ofKind(history, "tool.call").some(
-      call => call.sequence < close.sequence && STOP_TOOLS.has(call.name) && actorKey(call.actor) === actorKey(origin.actor),
+    // A stop authorizes only its target: a Worker stop covers that Worker's pane, a team stop covers any pane.
+    const owners = new Set(rows.filter(row => row.sequence < close.sequence && row.event.paneId === close.pane.paneId && row.event.worker !== undefined).map(row => row.event.worker!));
+    const authorized = stops.some(
+      call => call.sequence < close.sequence && actorKey(call.actor) === actorKey(origin.actor)
+        && (call.name === "team_shutdown" || (typeof call.args.worker === "string" && owners.has(call.args.worker))),
     );
-    if (!cited) return violation(close.sequence, `pane ${close.pane.paneId} closed without a PTB stop request`);
+    if (!authorized) return violation(close.sequence, `pane ${close.pane.paneId} closed without a stop for its Worker`);
   }
   return pass();
 }
@@ -148,20 +153,33 @@ function observationPayload(content: unknown): JsonObject | undefined {
   } catch { return undefined; }
 }
 
-/** Worker names a branch page carries (snapshot `workers`, update `workerChanges`/`worker_changes` rows). */
-function pageWorkers(entry: JsonObject): Set<string> {
-  const details = observationPayload((entry.message as JsonObject | undefined)?.content ?? entry.content);
+/** Names from rows of observation lists. Each row yields the first of `keys` that holds a string. */
+function namesIn(lists: Array<Json | undefined>, keys: string[]): Set<string> {
   const names = new Set<string>();
-  for (const key of ["workers", "worker_changes", "workerChanges"]) {
-    const rows = details?.[key];
+  for (const rows of lists) {
     if (!Array.isArray(rows)) continue;
     for (const row of rows) {
       if (row === null || typeof row !== "object" || Array.isArray(row)) continue;
-      const name = row.name ?? row.worker;
+      const name = keys.map(key => row[key]).find(value => typeof value === "string");
       if (typeof name === "string") names.add(name);
     }
   }
   return names;
+}
+
+/** Workers and Tasks a branch page names (snapshot `workers`/`tasks`, update `workerChanges`/`taskChanges` rows). */
+function pageNames(entry: JsonObject): { workers: Set<string>; tasks: Set<string> } {
+  const payload = observationPayload((entry.message as JsonObject | undefined)?.content ?? entry.content);
+  return {
+    workers: namesIn([payload?.workers, payload?.worker_changes, payload?.workerChanges], ["name", "worker"]),
+    tasks: namesIn([payload?.tasks, payload?.taskChanges], ["id", "taskId"]),
+  };
+}
+
+/** The Task a journal event names (`type: task`, `ref.taskId`). */
+function taskOf(event: JournalFact): string | undefined {
+  const ref = event.raw.ref as JsonObject | undefined;
+  return event.type === "task" && typeof ref?.taskId === "string" ? ref.taskId : undefined;
 }
 
 /** P8 (always): an eligible journal event below a stamp's cursor is represented by the branch or a snapshot. A page's own range must name each event it covers. */
@@ -172,13 +190,18 @@ export function p8CoverageLedger(history: readonly HistoryEntry[]): Verdict {
   if (!events.length) return notApplicable("journal seq fields");
   for (const stamp of stamps) {
     const { team, from, through } = stamp.stamp!;
+    const page = pageNames(stamp.entry);
     for (const event of events) {
       const seq = event.event.seq!;
       if (event.team !== team || seq <= 0 || seq > through || event.sequence > stamp.sequence) continue;
       if (seq > from) {
         const worker = event.event.worker;
-        if (worker !== undefined && !pageWorkers(stamp.entry).has(worker)) {
+        if (worker !== undefined && !page.workers.has(worker)) {
           return violation(stamp.sequence, `page through ${through} omits event ${seq} (${worker}); M6 class`);
+        }
+        const task = taskOf(event.event);
+        if (task !== undefined && !page.tasks.has(task)) {
+          return violation(stamp.sequence, `page through ${through} omits task event ${seq} (${task}); M6 class`);
         }
         continue;
       }
