@@ -4,6 +4,15 @@ import { type AgentRuntimeStatus, type RuntimeGeneration } from "./utils/runtime
 export type LaunchState = "none" | "requested" | "started" | "refused" | "unknown";
 export type ProcessState = "live" | "stopping" | "gone" | "unknown" | "none";
 export type NextActionHint = "ensure_worker" | "ask_human" | "wait";
+export interface CarrierAttention {
+    reason: "legacy_unverified";
+    nextActionHint: "ask_human";
+    message: string;
+}
+/** Herdr completion ends a turn, not the Worker process or its Task. */
+export declare function herdrAgentActivity(status: unknown): CarrierView["activity"];
+/** A PID probe cannot verify a legacy generation, but it can guide human repair. */
+export declare function legacyCarrierAttention(member: Pick<Member, "name" | "membershipId" | "sessionFile">, status: AgentRuntimeStatus | null, probe: GenerationProbe): CarrierAttention | undefined;
 export interface CarrierView {
     worker: string;
     membership: string;
@@ -15,6 +24,7 @@ export interface CarrierView {
     process: ProcessState;
     terminal: "present" | "absent" | "unknown";
     activity: "working" | "idle" | "blocked" | "unknown";
+    attention?: CarrierAttention;
     lastStop?: AgentRuntimeStatus["lastStop"];
     paneId?: string;
     terminalTarget?: TerminalTarget;
@@ -42,6 +52,7 @@ export interface CarrierEvent {
     terminalTarget?: TerminalTarget;
     suspectedHumanStop: boolean;
     nextActionHint: NextActionHint;
+    attention?: CarrierAttention;
 }
 export declare function deriveCarrierView(member: Member, status: AgentRuntimeStatus | null, now?: number, observed?: GenerationProbe): CarrierView;
 /** One in-flight bounded read per source. Invalid or partial responses never prove absence. */

@@ -1,3 +1,5 @@
+import { legacyCarrierAttention } from "../carrier-observation";
+import { hostEnv } from "../env/host-env";
 import { verifyRuntimeGeneration, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, resolveCurrentLeadSessionBinding } from "../utils/teams";
 import type {
@@ -11,12 +13,15 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
   async readRuntime(teamName: string, member: CoordinationMemberEvidence): Promise<CoordinationRuntimeEvidence | null> {
     const status = await readRuntimeStatus(teamName, member.name);
     if (!status) return null;
+    const probe = status.pid ? hostEnv().process.generation(status.pid) : { kind: "unknown" as const, reason: "runtime_missing" };
+    const attention = legacyCarrierAttention(member, status, probe);
     return {
+      ...(attention ? { attention } : {}),
       ...(status.membershipId !== undefined ? { membershipId: status.membershipId } : {}),
       ...(status.pid !== undefined ? { pid: status.pid } : {}),
       ...(status.startedAt !== undefined ? { startedAt: status.startedAt } : {}),
       // Self-reported settlement cannot outlive its verified process generation.
-      ...(verifyRuntimeGeneration(status) === "live" && !status.lastStop && status.runState !== undefined ? { runState: status.runState } : {}),
+      ...(verifyRuntimeGeneration(status, probe) === "live" && !status.lastStop && status.runState !== undefined ? { runState: status.runState } : {}),
     };
   }
 

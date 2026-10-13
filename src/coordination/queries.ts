@@ -21,6 +21,7 @@ export interface CoordinationRuntimeGeneration {
 }
 
 export interface CoordinationRuntimeEvidence {
+  attention?: import("../carrier-observation").CarrierAttention;
   membershipId?: string;
   pid?: number;
   startedAt?: number;

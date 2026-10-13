@@ -11,6 +11,7 @@ export interface CoordinationWorkerCurrent {
   name: string;
   scope: string;
   carrier: "starting" | "connected" | "absent";
+  attention?: import("../carrier-observation").CarrierAttention;
   modelRole?: string;
 }
 

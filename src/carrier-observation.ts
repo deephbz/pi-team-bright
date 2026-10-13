@@ -13,6 +13,34 @@ import { appendTeamEvent, readTeamEvents } from "./coordination/event-journal";
 export type LaunchState = "none" | "requested" | "started" | "refused" | "unknown";
 export type ProcessState = "live" | "stopping" | "gone" | "unknown" | "none";
 export type NextActionHint = "ensure_worker" | "ask_human" | "wait";
+export interface CarrierAttention {
+  reason: "legacy_unverified";
+  nextActionHint: "ask_human";
+  message: string;
+}
+
+/** Herdr completion ends a turn, not the Worker process or its Task. */
+export function herdrAgentActivity(status: unknown): CarrierView["activity"] {
+  switch (status) {
+    case "working": case "idle": case "blocked": return status;
+    case "done": return "idle";
+    default: return "unknown";
+  }
+}
+
+/** A PID probe cannot verify a legacy generation, but it can guide human repair. */
+export function legacyCarrierAttention(member: Pick<Member, "name" | "membershipId" | "sessionFile">, status: AgentRuntimeStatus | null, probe: GenerationProbe): CarrierAttention | undefined {
+  if (!member.sessionFile || !status?.pid || status.membershipId !== member.membershipId || status.osBirthToken) return undefined;
+  const result = probe.kind === "found" ? "present" : probe.kind;
+  const evidence = `pid=${status.pid}; probe=${result}${probe.kind === "unknown" ? ` (${probe.reason})` : ""}; birth_token_missing.`;
+  const action = probe.kind === "absent"
+    ? `That Worker's Pi is no longer running at the recorded PID. Ask the human to restart Worker ${member.name}'s Pi in its pane to re-admit with a birth token, or stop the Worker.`
+    : probe.kind === "found"
+      ? `Ask the human to reload Worker ${member.name}'s Pi to re-admit with a birth token, or adopt it in /ptb status.`
+      : `${probe.reason === "generation_helper_missing" ? "Install Rust (rustc) and Xcode Command Line Tools, then run npm run build:process-generation. " : ""}Ask the human to verify the PID before restart, reload, adoption in /ptb status, or stopping the Worker.`;
+  return { reason: "legacy_unverified", nextActionHint: "ask_human", message: `${evidence} ${action} Unknown generation evidence never authorizes an automatic spawn, replacement, or gone claim.` };
+}
+
 export interface CarrierView {
   worker: string;
   membership: string;
@@ -24,6 +52,7 @@ export interface CarrierView {
   process: ProcessState;
   terminal: "present" | "absent" | "unknown";
   activity: "working" | "idle" | "blocked" | "unknown";
+  attention?: CarrierAttention;
   lastStop?: AgentRuntimeStatus["lastStop"];
   paneId?: string;
   terminalTarget?: TerminalTarget;
@@ -42,11 +71,13 @@ export interface CarrierEvent {
   terminalTarget?: TerminalTarget;
   suspectedHumanStop: boolean;
   nextActionHint: NextActionHint;
+  attention?: CarrierAttention;
 }
 export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | null, now = hostEnv().clock.now(), observed?: GenerationProbe): CarrierView {
   const exact = status?.membershipId === member.membershipId ? status : null;
   const probe = observed ?? (exact?.pid ? hostEnv().process.generation(exact.pid) : { kind: "unknown" as const, reason: "runtime_missing" });
   const verified = verifyRuntimeGeneration(exact, probe);
+  const attention = legacyCarrierAttention(member, exact, probe);
   const processFact = probe.kind === "unknown" && probe.reason === "generation_helper_missing" ? probe.reason
     : !exact?.osBirthToken && exact?.pid ? "birth_token_missing" : probe.kind === "unknown" ? probe.reason : verified;
   const process = status === null && member.launch?.state === "refused" && !member.launch.priorGeneration ? "none"
@@ -55,8 +86,10 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
     generation: runtimeGeneration(exact) ?? undefined, binding: member.sessionFile ? "bound" : "unbound", sessionFile: member.sessionFile,
     launch: member.launch?.state ?? (member.pendingLaunchId ? "unknown" : "none"), process,
     terminal: "unknown", activity: "unknown", lastStop: exact?.lastStop,
+    ...(attention ? { attention } : {}),
     paneId: member.terminalTarget?.targetId ?? member.tmuxPaneId, terminalTarget: member.terminalTarget,
     evidence: [{ source: "process_generation", fact: processFact, observedAt: now },
+      ...(attention ? [{ source: "legacy_generation", fact: attention.message, observedAt: now }] : []),
       { source: "launch", fact: member.launch?.fact ?? (member.launch?.state ?? "none"), observedAt: member.launch?.observedAt ?? member.launch?.requestedAt ?? now },
       ...(exact?.lastStop ? [{ source: "session_shutdown", fact: exact.lastStop.piReason, observedAt: exact.lastStop.observedAt }] : [])] };
 }
@@ -204,14 +237,16 @@ export class CarrierObserver {
       view.evidence[0].lastGoodAt = this.lastGood.get(`generation:${view.membership}`);
       if (panes && view.paneId) view.terminal = panes.some(row => row.pane_id === view.paneId) ? "present" : "absent";
       const agent = agents?.find(row => row.name === herdrCarrierName(this.teamName, member.name) && row.pane_id === view.paneId && herdrPiSessionPath(row.agent_session) === member.sessionFile);
-      if (agent && ["working", "idle", "blocked"].includes(String(agent.agent_status))) view.activity = agent.agent_status as CarrierView["activity"];
-      view.evidence.push({ source: "herdr_panes", fact: paneSample?.fact ?? (panes ? view.terminal : "pane_list_unavailable"), observedAt: paneSample?.observedAt ?? now, lastGoodAt: this.lastGood.get("herdr_panes") }, { source: "herdr_agents", fact: agentSample?.fact ?? (agents ? view.activity : "agent_list_unavailable"), observedAt: agentSample?.observedAt ?? now, lastGoodAt: this.lastGood.get("herdr_agents") });
+      if (agent) view.activity = herdrAgentActivity(agent.agent_status);
+      view.evidence.push({ source: "herdr_panes", fact: paneSample?.fact ?? (panes ? view.terminal : "pane_list_unavailable"), observedAt: paneSample?.observedAt ?? now, lastGoodAt: this.lastGood.get("herdr_panes") }, { source: "herdr_agents", fact: agentSample?.fact ?? (agent ? `agent_status=${String(agent.agent_status)}` : agents ? "agent_not_found" : "agent_list_unavailable"), observedAt: agentSample?.observedAt ?? now, lastGoodAt: this.lastGood.get("herdr_agents") });
       for (const item of view.evidence) if (item.source === "process_generation" || item.source.startsWith("herdr_")) item.expiresAt = item.observedAt + CARRIER_SAMPLE_TTL_MS;
       this.projection.set(view.membership, view);
       this.expire();
       let accepted = true;
       for (const field of ["binding", "launch", "process", "terminal", "activity"] as const) {
-        if ((this.publication.last(view, field)?.carrier?.to ?? "unknown") === view[field]) continue;
+        const before = this.publication.last(view, field)?.carrier;
+        if ((before?.to ?? "unknown") === view[field]
+          && (field !== "process" || JSON.stringify(before?.attention) === JSON.stringify(view.attention))) continue;
         if (!await this.publish(view, field, view[field], status)) { accepted = false; break; }
       }
       if (!accepted) continue;
@@ -282,7 +317,7 @@ class CarrierPublication {
       } else if (field === "blocked") {
         if (Number(recorded?.cursor ?? 0) > Number(this.taskCursors.get(view.worker) ?? "0")) return true;
       } else {
-        if (from === to) return true;
+        if (from === to && (field !== "process" || JSON.stringify(before?.attention) === JSON.stringify(view.attention))) return true;
         // The only suppressed pair is normal reload in these exact generation coordinates.
         // Re-admission clears lastStop; the accepted live baseline then needs no change.
         if (field === "process" && ["live", "stopping"].includes(from) && ["live", "stopping"].includes(to)
@@ -295,16 +330,18 @@ class CarrierPublication {
       const cause = field === "process" && view.lastStop && to === "stopping"
         ? { source: "session_shutdown", fact: view.lastStop.piReason }
         : { source, fact: evidence?.fact ?? to };
-      if (attentionFact) cause.fact = attentionFact;
+      const attention = field === "process" ? view.attention : undefined;
+      if (attentionFact || attention) cause.fact = attentionFact ?? attention!.reason;
       const carrier: CarrierEvent = { membership: view.membership, launchId: view.launchId, generation: view.generation, field, from, to, cause,
         observedAt: attentionFact ? hostEnv().clock.now() : cause.source === "session_shutdown" ? view.lastStop!.observedAt : evidence?.observedAt ?? hostEnv().clock.now(),
         paneId: view.paneId, terminalTarget: view.terminalTarget, suspectedHumanStop,
-        nextActionHint: quiet ? "wait" : attentionFact || suspectedHumanStop || field === "blocked" || to === "stopping" ? "ask_human" : to === "gone" || to === "refused" ? "ensure_worker" : "wait" };
+        ...(attention ? { attention } : {}),
+        nextActionHint: quiet ? "wait" : attention || attentionFact || suspectedHumanStop || field === "blocked" || to === "stopping" ? "ask_human" : to === "gone" || to === "refused" ? "ensure_worker" : "wait" };
       await appendTeamEvent(this.teamName, { type: "worker", worker: view.worker, membershipId: view.membership, phase: "carrier", carrier });
       // Consume the receipt through the ordered journal on the next publication. This prevents
       // an older unread event from replacing the accepted value just appended here.
       if (carrier.nextActionHint !== "wait") {
-        try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.`); } catch { /* UI delivery cannot undo append. */ }
+        try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.${attention ? ` ${attention.message}` : ""}`); } catch { /* UI delivery cannot undo append. */ }
       }
       return true;
   }

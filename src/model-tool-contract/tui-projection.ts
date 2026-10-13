@@ -101,7 +101,10 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
     const retry = recoveryLine(model);
     if (retry) lines.push(retry);
   } else if (tool === "team_sync") {
-    if (model.kind === "snapshot") lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}.`);
+    if (model.kind === "snapshot") {
+      lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}.`);
+      for (const worker of model.workers.filter((worker: any) => worker.attention)) lines.push(`Worker ${quoted(worker.name)} · ${worker.attention.reason} · ${worker.attention.nextActionHint}: ${worker.attention.message}`);
+    }
     else if (model.kind === "updates") {
       lines.push(`Updates: ${model.team_changes.length} Team change${model.team_changes.length === 1 ? "" : "s"}, ${model.task_changes.length} Task change${model.task_changes.length === 1 ? "" : "s"}, ${model.worker_changes.length} Worker change${model.worker_changes.length === 1 ? "" : "s"}, ${model.alerts.length} Alert${model.alerts.length === 1 ? "" : "s"}.`);
       for (const change of model.team_changes.slice(0, 4)) lines.push(change.text);
@@ -163,7 +166,7 @@ function fullTask(task: any): string[] {
 
 function toolExpandedLines(tool: ProjectedTool, model: any): string[] {
   if (tool === "team_sync" && model.kind === "snapshot") return [
-    ...model.workers.map((worker: any) => `Worker ${quoted(worker.name)} · ${worker.carrier} · Tasks: ${worker.nonterminal_task_ids.join(", ") || "none"}`),
+    ...model.workers.map((worker: any) => `Worker ${quoted(worker.name)} · ${worker.attention ? `${worker.attention.reason} · ${worker.attention.nextActionHint} · ${worker.attention.message}` : worker.carrier} · Tasks: ${worker.nonterminal_task_ids.join(", ") || "none"}`),
     ...model.tasks.flatMap(fullTask),
   ];
   if (tool === "team_sync" && model.kind === "updates") return [

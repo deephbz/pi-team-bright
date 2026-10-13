@@ -217,10 +217,13 @@ restating executable definitions.
   amend Decision 0018 as [Decision 0021](../decisions/0021-carrier-observation-liveness.md) records. `CarrierObserver` owns process-generation observations.
   A live shell never proves a live Worker. Unknown evidence fails closed.
   For a bound tokenless generation, `ensure_worker` returns `legacy_unverified`
-  attention with `ask_human`. The model result and collapsed TUI name both exits:
-  reload that Worker's Pi to re-admit its generation with a birth token, or adopt
-  it in `/ptb status`. Pending or stalled launch evidence cannot replace this
-  attention. It never spawns a replacement. A missing macOS verifier helper takes
+  attention with `ask_human`. The carrier projection and `team_sync` also show
+  that attention with the PID and probe result. An absent PID needs human restart
+  of the Worker's Pi in its pane or a Worker stop. A present PID permits reload
+  or adoption in `/ptb status`. Unknown probe evidence needs verification first.
+  Snapshot `connected` means Session binding only; its attention field preserves
+  unresolved process evidence. Pending or stalled launch evidence cannot replace
+  this attention. It never spawns a replacement. A missing macOS verifier helper takes
   precedence with `generation_helper_missing` and `ask_human`. The model result,
   collapsed TUI, and native admission refusal name the helper and build command.
   Launch records the launch ID before the pane split and the target before
@@ -236,6 +239,9 @@ restating executable definitions.
   and terminal target (backend, kind, ID). Each coordinate starts at `unknown`.
   Binding, launch, process, terminal, and activity changes journal in sample order.
   Terminal present/unknown and activity changes use `wait` without a human toast.
+  Herdr `done` maps to activity `idle`; unknown wire statuses retain their raw
+  value. Legacy attention journals even from an `unknown` baseline and deduplicates
+  unchanged evidence across polls and observer restart.
   Debounced blocked attention remains separate. Legacy pane-only events do not
   establish a baseline for a typed terminal target.
   Publication rereads the journal under the Membership lease and fences the exact

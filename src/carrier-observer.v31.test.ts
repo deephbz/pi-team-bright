@@ -1,7 +1,14 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { nodeHostEnv, runWithHostEnv } from "./env/host-env";
-const f = vi.hoisted(() => ({ now: 1000, events: [] as any[], status: {} as any, member: {} as any, blocked: false, outage: false, noAgent: false, paneId: "pane", panePresent: true, configFailure: false, journalFailure: false, appendFailures: 0, leaseFailures: 0, beforeLease: undefined as undefined | (() => void) }));
-vi.mock("node:fs", () => ({ default: { readFileSync: () => { if (f.configFailure) throw new Error("config unavailable"); return JSON.stringify({ terminalBackend: "herdr", members: [f.member] }); } } }));
+const f = vi.hoisted(() => ({ now: 1000, events: [] as any[], status: {} as any, member: {} as any, blocked: false, activity: "idle", outage: false, noAgent: false, paneId: "pane", panePresent: true, configFailure: false, journalFailure: false, appendFailures: 0, leaseFailures: 0, beforeLease: undefined as undefined | (() => void) }));
+vi.mock("node:fs", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, default: { ...actual, readFileSync: (...args: any[]) => {
+    if (!String(args[0]).endsWith("/config.json")) return (actual.readFileSync as any)(...args);
+    if (f.configFailure) throw new Error("config unavailable");
+    return JSON.stringify({ terminalBackend: "herdr", members: [f.member] });
+  } } };
+});
 vi.mock("./utils/teams", () => ({ withCurrentMembershipLease: async (_: string, id: string, fn: any) => { if (f.leaseFailures > 0) { f.leaseFailures--; throw new Error("lease unavailable"); } f.beforeLease?.(); return fn(f.member); } }));
 vi.mock("./utils/runtime", async importOriginal => ({ ...await importOriginal<any>(), readRuntimeStatus: async () => structuredClone(f.status) }));
 vi.mock("./coordination/event-journal", () => ({
@@ -9,14 +16,97 @@ vi.mock("./coordination/event-journal", () => ({
   appendTeamEvent: async (_: string, event: any) => { if (f.appendFailures > 0) { f.appendFailures--; throw new Error("EIO"); } const saved = { ...event, cursor: String(f.events.length + 1) }; f.events.push(saved); return saved; },
 }));
 import { CarrierObserver, publishPredecessorExit } from "./carrier-observation";
+import { DurableCoordinationTeamRuntimeQuery } from "./adapters/durable-coordination-team-runtime";
+import { CoordinationObservationService } from "./coordination/observation-service";
+import { snapshotEntry } from "../test/support/branch-observation";
+import { createModelToolJourneyExecutors } from "./model-tool-contract/executors";
+import { projectToolResult } from "./model-tool-contract/result-projection";
+import { projectionLines } from "./model-tool-contract/tui-message-projection";
+import { projectToolTuiMessage } from "./model-tool-contract/tui-projection";
 const env = () => ({ ...nodeHostEnv, clock: { ...nodeHostEnv.clock, now: () => f.now, setTimeout: (() => 0) as any, clearTimeout: () => {} }, process: { ...nodeHostEnv.process,
   generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid, { kind: "found" as const, generation: { pid, osBirthToken: "birth", bootId: "boot" } }])),
-}, exec: { ...nodeHostEnv.exec, run: vi.fn(async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "", stdout: JSON.stringify(f.outage ? { error: "offline" } : { result: args[0] === "agent" ? { agents: f.noAgent ? [] : [{ pane_id: "pane", name: "team-worker", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" }, agent_status: f.blocked ? "blocked" : "idle" }] } : { panes: f.panePresent ? [{ pane_id: f.paneId }] : [] } }) })) } });
+}, exec: { ...nodeHostEnv.exec, run: vi.fn(async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "", stdout: JSON.stringify(f.outage ? { error: "offline" } : { result: args[0] === "agent" ? { agents: f.noAgent ? [] : [{ pane_id: "pane", name: "team-worker", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" }, agent_status: f.blocked ? "blocked" : f.activity }] } : { panes: f.panePresent ? [{ pane_id: f.paneId }] : [] } }) })) } });
 beforeEach(() => {
-  f.now = 1000; f.events = []; f.noAgent = false; f.paneId = "pane"; f.panePresent = true; f.blocked = false; f.outage = false; f.configFailure = false; f.journalFailure = false; f.appendFailures = 0; f.leaseFailures = 0; f.beforeLease = undefined;
+  f.now = 1000; f.events = []; f.noAgent = false; f.paneId = "pane"; f.panePresent = true; f.blocked = false; f.activity = "idle"; f.outage = false; f.configFailure = false; f.journalFailure = false; f.appendFailures = 0; f.leaseFailures = 0; f.beforeLease = undefined;
   f.member = { name: "worker", agentType: "teammate", membershipId: "m", sessionFile: "/session", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" } };
   f.status = { membershipId: "m", pid: 42, startedAt: 10, osBirthToken: "birth", bootId: "boot" };
 });
+it("journals a finished Herdr turn as idle without unknown activity", async () => runWithHostEnv(env(), async () => {
+  f.activity = "working"; const observer = await running();
+  f.activity = "done"; await observer.refresh(); await observer.refresh();
+  expect(observer.views.get("m")?.activity).toBe("idle");
+  expect(f.events.filter(e => e.carrier?.field === "activity").map(e => e.carrier.to)).toEqual(["working", "idle"]);
+  observer.stop();
+}));
+it("retains an unrecognized Herdr status as raw evidence", async () => runWithHostEnv(env(), async () => {
+  f.activity = "future-status"; const observer = await running();
+  expect(observer.views.get("m")?.activity).toBe("unknown");
+  expect(observer.views.get("m")?.evidence.find(e => e.source === "herdr_agents")?.fact).toBe("agent_status=future-status");
+  observer.stop();
+}));
+it("upgrades a historical unknown baseline and retries failed legacy attention", async () => runWithHostEnv(env(), async () => {
+  delete f.status.osBirthToken;
+  let observer = await running(); observer.stop();
+  const before = f.events.find(e => e.carrier?.field === "process");
+  delete before.carrier.attention; before.carrier.nextActionHint = "wait"; before.carrier.cause.fact = "birth_token_missing";
+  const initial = f.events.length; f.appendFailures = 1;
+  observer = await running(); expect(f.events).toHaveLength(initial);
+  await observer.refresh(); await observer.refresh();
+  expect(f.events.slice(initial)).toHaveLength(1);
+  expect(f.events.at(-1).carrier).toMatchObject({ from: "unknown", to: "unknown", nextActionHint: "ask_human", attention: { reason: "legacy_unverified" } });
+  observer.stop();
+}));
+it.each(["absent", "found", "unknown"] as const)("journals one legacy attention for probe %s, including restart", async kind => {
+  const host = env();
+  host.process.generations = (async (pids: readonly number[]) => new Map(pids.map(pid => [pid, kind === "found"
+    ? { kind, generation: { pid, osBirthToken: "birth", bootId: "boot" } }
+    : kind === "unknown" ? { kind, reason: "generation_helper_missing" } : { kind }]))) as any;
+  await runWithHostEnv(host, async () => {
+    delete f.status.osBirthToken;
+    host.process.generation = () => kind === "found" ? { kind, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } }
+      : kind === "unknown" ? { kind, reason: "generation_helper_missing" } : { kind };
+    let observer = await running(); await observer.refresh(); observer.stop();
+    observer = await running(); await observer.refresh();
+    const events = f.events.filter(e => e.carrier?.field === "process");
+    expect(events).toHaveLength(1);
+    expect(events[0].carrier).toMatchObject({ to: "unknown", cause: { fact: "legacy_unverified" }, nextActionHint: "ask_human" });
+    expect(JSON.stringify(events[0])).toContain("pid=42");
+    expect(JSON.stringify(events[0])).toContain(`probe=${kind === "found" ? "present" : kind}`);
+    expect(observer.views.get("m")?.process).toBe("unknown");
+    const service = syncService();
+    const executors = createModelToolJourneyExecutors({ coordination: {
+      readTeamSync: (...args: Parameters<typeof service.readTeamSync>) => service.readTeamSync(...args),
+      setPendingObservationResult: () => {},
+    } } as any);
+    const snapshot = await executors.teamSync("/lead" as any, { view: "snapshot" });
+    const model = projectToolResult("team_sync", snapshot) as any;
+    expect(model.workers[0].attention).toEqual(observer.views.get("m")?.attention);
+    const lines = projectionLines(projectToolTuiMessage({ tool: "team_sync", details: snapshot, expanded: false }), { expanded: false }).join("\n");
+    expect(lines).toContain("legacy_unverified"); expect(lines).toContain("pid=42"); expect(lines).toContain("ask_human");
+    expect(lines).toContain(kind === "absent" ? "restart Worker" : kind === "found" ? "reload Worker" : "build:process-generation");
+    service.clearPending("/lead");
+    service.setBranchEntries("/lead", [snapshotEntry("base", "team", "epoch", "lead")]);
+    const updates = await executors.teamSync("/lead" as any, { view: "updates" });
+    expect(JSON.stringify(projectToolResult("team_sync", updates))).toContain("legacy_unverified");
+    expect(JSON.stringify(updates)).toContain("pid=42");
+    observer.stop();
+  });
+});
+function syncService() {
+  const runtime = new DurableCoordinationTeamRuntimeQuery();
+  return new CoordinationObservationService({
+    teamRuntime: {
+      readRuntime: runtime.readRuntime.bind(runtime),
+      readLeaderBinding: async () => ({ teamName: "team", purpose: "Carrier regression", epochId: "epoch", sessionFile: "/lead", logicalWorkers: [{ name: "worker", scope: "work" }],
+        members: [{ name: "team-lead", agentType: "lead", membershipId: "lead", sessionFile: "/lead" }, f.member] }),
+    },
+    taskStateDelivery: { listTaskIds: async () => [], readTasks: async () => [], readDeliveryEvidence: async () => ({ known: true, pending: false }) },
+    alertActuation: { readInboxEvidence: async () => ({ known: true, pending: false }) },
+  }, { projectNonterminalTaskIds: () => [], projectTaskChanges: () => ({ kind: "projected", changes: [] }) }, {
+    readEventCursor: () => String(f.events.length),
+    readEvents: () => ({ events: f.events, cursor: String(f.events.length), headCursor: String(f.events.length), truncated: false, remaining: 0 }),
+  });
+}
 it("retries predecessor exit publication without duplicate accepted death", async () => {
   const host = env(); host.process.generation = () => ({ kind: "absent" });
   await runWithHostEnv(host, async () => {

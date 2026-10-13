@@ -317,8 +317,12 @@ replacement with a different PID still refuses until the helper is available.
 
 For a live Team, reload the lead's Pi first, then reload each Worker's Pi. Keep
 the Team store and native Session logs. A bound legacy Worker without a birth
-token returns `legacy_unverified` with `ask_human`. The human can reload that
-Worker's Pi to re-admit it with a birth token, or adopt it in `/ptb status`.
+token returns `legacy_unverified` with `ask_human`. `team_sync` and `/ptb status`
+show the PID and probe evidence. If absent, the human restarts that Worker's Pi
+in its pane to re-admit with a birth token, or stops the Worker. If present,
+the human reloads that Pi or adopts it in `/ptb status`. If unknown, resolve the
+probe failure first. Snapshot `connected` means Session binding only; check its
+attention field for unresolved process evidence.
 Neither attention result authorizes a replacement. Worker-first reload is
 untested. As a fallback, shut down the Team under the old version, upgrade the
 lead, and create a new Team epoch. This fallback allocates new Worker Sessions;

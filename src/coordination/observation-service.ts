@@ -104,7 +104,7 @@ export class CoordinationObservationService {
     const settings = loadWorkerResourcePolicy({ cwd: context?.cwd ?? leader?.cwd ?? hostEnv().process.cwd(), projectTrusted: context?.projectTrusted === true }).modelRoleSettings;
     return { kind: "snapshot", team: { name: bound.teamName, purpose: bound.config.purpose ?? "", lifecycle: "active" },
       modelRoles: Object.entries(settings.roles).sort(([a], [b]) => a.localeCompare(b)).map(([name, role]) => ({ name, use: role.use })),
-      ...(settings.defaultRole ? { defaultModelRole: settings.defaultRole } : {}), workers: this.readWorkers(bound, tasks.tasks), tasks: tasks.tasks,
+      ...(settings.defaultRole ? { defaultModelRole: settings.defaultRole } : {}), workers: await this.readWorkers(bound, tasks.tasks), tasks: tasks.tasks,
       ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
   }
   async readTeamSync(file: string, view: "snapshot" | "updates", signal: AbortSignal, call: string, context?: CoordinationObservationContext): Promise<CoordinationSyncResult> {
@@ -179,7 +179,7 @@ export class CoordinationObservationService {
         const c = event.carrier;
         const taskIds = worker ? this.projection.projectNonterminalTaskIds(tasks.tasks, worker.name) : [];
         return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: c
-          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; nonterminalTaskIds=${taskIds.join(",") || "none"}.`
+          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; ${c.attention ? `${c.attention.message} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
           : `Worker ${worker.name}: ${event.phase === "failed" ? "startup admission refused" : event.phase.replaceAll("_", " ")}.` }] : [];
       });
       const teamChanges = page.events.flatMap(event => event.type === "alert" && event.alertId.startsWith("herdr-observation:") && event.from === "team-lead" && event.to === "team-lead"
@@ -246,12 +246,14 @@ export class CoordinationObservationService {
       return { kind: "tasks", tasks, warnings: tasks.flatMap(task => task.projection_warnings ?? []) };
     } catch (error) { return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) }; }
   }
-  private readWorkers(bound: BoundTeam, tasks: CanonicalTaskCard[]): Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }> {
-    return bound.config.logicalWorkers!.map(worker => {
+  private async readWorkers(bound: BoundTeam, tasks: CanonicalTaskCard[]): Promise<Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }>> {
+    return (await Promise.all(bound.config.logicalWorkers!.map(async worker => {
       const member = [...bound.config.members].reverse().find(member => member.name === worker.name && member.isActive !== false);
+      const runtime = member?.sessionFile ? await this.coordinationQueries.teamRuntime.readRuntime(bound.teamName, member) : null;
       return { name: worker.name, scope: worker.scope, carrier: !member ? "absent" as const : member.sessionFile ? "connected" as const : member.pendingLaunchId ? "starting" as const : "absent" as const,
+        ...(runtime?.attention ? { attention: runtime.attention } : {}),
         ...(worker.modelProfile?.alias ? { modelRole: worker.modelProfile.alias } : {}), nonterminalTaskIds: this.projection.projectNonterminalTaskIds(tasks, worker.name) };
-    }).sort((a, b) => a.name.localeCompare(b.name));
+    }))).sort((a, b) => a.name.localeCompare(b.name));
   }
   private async workerRunObservations(bound: BoundTeam): Promise<WorkerRunObservation[]> {
     return Promise.all(bound.config.logicalWorkers!.map(async worker => {

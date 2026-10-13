@@ -1,8 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { HerdrFake, ExecRouter } from "./herdr";
+import { HerdrFake, ExecRouter, type Pane } from "./herdr";
+import { herdrAgentActivity } from "../src/carrier-observation";
 import { ProcessTable } from "./process-table";
 
 describe("Herdr wire fake", () => {
+  it("agrees with production activity for every fake agent status", () => {
+    const expected = { idle: "idle", working: "working", blocked: "blocked", done: "idle", unknown: "unknown" } satisfies Record<Pane["state"], string>;
+    const herdr = new HerdrFake(new ProcessTable());
+    const pane = herdr.spawn(); herdr.start(pane.id, "worker");
+    for (const [status, activity] of Object.entries(expected)) {
+      pane.state = status as Pane["state"];
+      const wire = JSON.parse(herdr.run(["agent", "list"]).stdout).result.agents[0];
+      expect(herdrAgentActivity(wire.agent_status), status).toBe(activity);
+      if (status !== "unknown") expect(herdrAgentActivity(wire.agent_status)).not.toBe("unknown");
+    }
+    expect(herdrAgentActivity("future-status")).toBe("unknown");
+  });
   it("keeps a shell after Pi exit and never revives an agent name on pid reuse", () => {
     const processes = new ProcessTable();
     const herdr = new HerdrFake(processes);
