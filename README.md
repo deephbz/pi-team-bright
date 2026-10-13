@@ -299,7 +299,8 @@ from included Rust source. If `rustc` is missing, installation succeeds with one
 warning that names the build command. Install Rust (`rustc`) and Xcode Command
 Line Tools, then run `npm run build:process-generation` from the installed
 `@hypercarrier/pi-team-bright` directory. Use the same command if install scripts
-were disabled. Linux uses procfs and needs no native build.
+were disabled. Linux uses procfs and needs no native build. Linux support is
+unverified: probes A7 and A9 have not run on Linux.
 
 A missing helper returns `generation_helper_missing` attention with `ask_human`
 and this build command. Plain `/reload` in the same bound Pi process remains
@@ -521,9 +522,9 @@ uses global settings only and warns. Save trust then restart.
 The aggregate covers normal and Task-delivery trigger turns. On Worker reload,
 Pi Team Bright atomically refreshes the fixed aggregate path. If both paths then
 disappear, it restores serialized native global plus ancestor/project context.
-A final Worker shutdown removes its aggregate on a best-effort basis. A failed
-launch removes it only when no carrier exists or terminal stop is confirmed. If
-a carrier can remain live, Pi Team Bright retains its aggregate lease. Restart
+Model selection removes its temporary aggregate before launch. Launch keeps its
+separate aggregate after an uncertain outcome. Final Worker shutdown attempts
+cleanup on a best-effort basis. Restart
 without an aggregate restores Pi's native `getAgentsFiles` metadata. The lead is
 unchanged.
 
