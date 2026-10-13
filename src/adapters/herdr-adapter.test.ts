@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { HerdrAdapter, herdrCarrierName } from "./herdr-adapter";
 import { nodeHostEnv } from "../env/host-env";
+import { HerdrRequestError } from "../utils/herdr-reply";
 import * as terminalAdapter from "../utils/terminal-adapter";
 
 const success = (result: unknown) => ({
@@ -8,7 +9,7 @@ const success = (result: unknown) => ({
 });
 
 const failure = (code: string, message: string, status = 1) => ({
-  stdout: JSON.stringify({ id: "cli:test", error: { code, message } }), stderr: message, status,
+  stdout: "", stderr: JSON.stringify({ id: "cli:test", error: { code, message } }), status,
 });
 
 const leaderLayout = (paneId: string, width = 82) => success({ type: "pane_layout", layout: {
@@ -577,18 +578,85 @@ describe("HerdrAdapter", () => {
     ]));
   });
 
-  it("refuses a stale exact Team Worker target without falling back to the leader", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(failure("pane_not_found", "pane worker is gone"));
+  describe.each(["linear", "adaptive", "grid"] as const)("closed Worker panes (%s)", worker_tiling => {
+    const options = () => ({
+      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: {
+        leaderPaneId: "pane-leader", workerPaneIds: ["worker-a", "worker-b"],
+        paneLayout: { leader_share: 0.6, worker_tiling, worker_limit: 3 },
+      },
+    });
+    function placementReplies(present: string[]) {
+      const panes = [
+        { pane_id: "pane-leader", rect: { x: 0, y: 0, width: present.length ? 60 : 100, height: 60 } },
+        ...present.map(pane_id => ({ pane_id, rect: { x: 60, y: 0, width: 40, height: 60 } })),
+      ];
+      exec.mockImplementation((_command, args) => {
+        if (args[1] === "get") return panes.some(pane => pane.pane_id === args[2])
+          ? success({ pane: { pane_id: args[2], tab_id: "tab-a", workspace_id: "workspace-a" } })
+          : failure("pane_not_found", `pane ${args[2]} not found`);
+        if (args[1] === "layout") return success({ layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes } });
+        if (args[1] === "split") return success({ pane: { pane_id: "worker-new" } });
+        if (args[1] === "rename") return renamed;
+        if (args[1] === "start") return readyStart("worker-new", "worker-new");
+        throw new Error(`Unexpected test command ${args.join(" ")}`);
+      });
+    }
+    it.each(["sync", "async"])("recovers from all Worker panes closed via the leader and starts (%s)", async mode => {
+      placementReplies([]);
+      const spawnOptions = options();
+      const pane = mode === "sync" ? adapter.prepareSpawn(spawnOptions) : await adapter.prepareSpawnAsync(spawnOptions);
+      expect(pane).toBe("worker-new");
+      expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+        "pane", "split", "--pane", "pane-leader", "--direction", "right", "--ratio", "0.6",
+      ]));
+      await expect(adapter.startPrepared(pane, spawnOptions)).resolves.toEqual({ state: "started", fact: "agent_start_accepted" });
+      expect(exec.mock.calls.filter(([, args]) => args[1] === "split")).toHaveLength(1);
+    });
+    it.each(["sync", "async"])("uses the present Worker when the last registered pane has closed (%s)", async mode => {
+      placementReplies(["worker-a"]);
+      const pane = mode === "sync" ? adapter.prepareSpawn(options()) : await adapter.prepareSpawnAsync(options());
+      expect(pane).toBe("worker-new");
+      expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
+        "pane", "split", "--pane", "worker-a", "--direction", "down", "--ratio", "0.5",
+      ]));
+    });
+    it.each([
+      ["pane-leader", failure("pane_not_found", "leader gone"), "pane_not_found"],
+      ["worker-a", failure("permission_denied", "pane_not_found is diagnostic text only"), "permission_denied"],
+      ["worker-a", { stdout: "bad-json", stderr: "", status: 1 }, "malformed JSON"],
+      ["worker-a", { stdout: "bad-json", stderr: failure("pane_not_found", "closed").stderr, status: 1 }, "malformed JSON"],
+    ])("refuses query failure for %s without splitting", async (target, reply, message) => {
+      placementReplies(["worker-b"]);
+      const normal = exec.getMockImplementation()!;
+      exec.mockImplementation((command, args) => args[1] === "get" && args[2] === target ? reply : normal(command, args));
+      expect(() => adapter.prepareSpawn(options())).toThrow(message);
+      await expect(adapter.prepareSpawnAsync(options())).rejects.toThrow(message);
+      expect(exec.mock.calls.some(([, args]) => args[1] === "split")).toBe(false);
+    });
+    it("refuses a Worker query timeout without splitting", async () => {
+      placementReplies(["worker-b"]);
+      const run = vi.mocked(nodeHostEnv.exec.run);
+      const normal = run.getMockImplementation()!;
+      run.mockImplementation((command, args, config) => args[1] === "get" && args[2] === "worker-a"
+        ? Promise.resolve({ kind: "timeout", afterMs: 2000 }) : normal(command, args, config));
+      await expect(adapter.prepareSpawnAsync(options())).rejects.toThrow("herdr_get_timeout");
+      expect(exec.mock.calls.some(([, args]) => args[1] === "split")).toBe(false);
+    });
+  });
 
-    expect(() => adapter.spawn({
-      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-stale"] },
-    })).toThrow(/pane_not_found/i);
-    expect(exec).toHaveBeenCalledWith("herdr", ["pane", "get", "pane-leader"]);
-    expect(exec).toHaveBeenCalledWith("herdr", ["pane", "get", "pane-stale"]);
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["split"]));
+  it("preserves stderr error code and text for sync and async calls as typed facts", async () => {
+    exec.mockReturnValue(failure("pane_not_found", "pane worker not found"));
+    expect(() => adapter.renamePane("worker", "label")).toThrow(HerdrRequestError);
+    expect(() => adapter.renamePane("worker", "label")).toThrow("pane_not_found: pane worker not found");
+    await expect(adapter.prepareSpawnAsync({ name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
+    })).rejects.toMatchObject({ code: "pane_not_found", fact: "pane_not_found: pane worker not found" });
+    expect(adapter.isAlive("worker")).toBe(false);
+    expect(() => adapter.kill("worker")).not.toThrow();
+    exec.mockReturnValue(failure("server_unavailable", "pane_not_found is diagnostic text only"));
+    expect(() => adapter.isAlive("worker")).toThrow(HerdrRequestError);
+    expect(() => adapter.kill("worker")).toThrow("server_unavailable");
   });
 
   it("refuses a Worker pane moved to another leader tab", () => {
