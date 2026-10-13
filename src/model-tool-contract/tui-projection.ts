@@ -102,7 +102,8 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
     if (retry) lines.push(retry);
   } else if (tool === "team_sync") {
     if (model.kind === "snapshot") {
-      const alerts = Array.isArray(model.alerts) ? `${model.alerts.length} recent Alert${model.alerts.length === 1 ? "" : "s"}, ${model.alerts_omitted} omitted` : "Alert history unavailable";
+      const alerts = Array.isArray(model.alerts) ? `${model.alerts.length} recent Alert${model.alerts.length === 1 ? "" : "s"}, ${model.alerts_omitted} omitted`
+        : model.alerts_unavailable ? `Alert history unavailable: ${compact(model.alerts_unavailable.message)}` : "Alert history unavailable";
       lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}, ${alerts}.`);
       for (const worker of model.workers.filter((worker: any) => worker.attention)) lines.push(`Worker ${quoted(worker.name)} · ${worker.attention.reason} · ${worker.attention.nextActionHint}: ${worker.attention.message}`);
     }
@@ -169,6 +170,7 @@ function toolExpandedLines(tool: ProjectedTool, model: any): string[] {
   if (tool === "team_sync" && model.kind === "snapshot") return [
     ...model.workers.map((worker: any) => `Worker ${quoted(worker.name)} · ${worker.attention ? `${worker.attention.reason} · ${worker.attention.nextActionHint} · ${worker.attention.message}` : worker.carrier} · Tasks: ${worker.nonterminal_task_ids.join(", ") || "none"}`),
     ...model.tasks.flatMap(fullTask),
+    ...(model.alerts_unavailable ? [`Alert history unavailable: ${model.alerts_unavailable.message}. Workers and Tasks remain current. Ask the human to inspect the inbox file.`] : []),
     ...(model.alerts ?? []).map((alert: any) => `Alert from ${alert.from} · ${alert.kind}${alert.task_id ? ` · Task ${quoted(alert.task_id)}` : ""} · ${alert.received_at}: ${Array.from(alert.text as string).slice(0, 80).join("").replace(/\s+/g, " ")}${Array.from(alert.text as string).length > 80 ? "…" : ""}${alert.truncated ? " · preview cut; ask sender" : ""}`),
   ];
   if (tool === "team_sync" && model.kind === "updates") return [
