@@ -62,7 +62,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
       if (model.worker.model_role) lines.push(`Model role ${quoted(model.worker.model_role)} selected.`);
     } else if (model.kind === "attention") {
       lines.push(`Worker ${quoted(model.worker)} needs attention: ${model.reason} · pane ${model.paneId ?? "unknown"}.`);
-      lines.push(`Next: ${model.nextActionHint}.`);
+      lines.push(model.message ?? `Next: ${model.nextActionHint}.`);
     } else if (model.kind === "refused" && model.existing_worker) {
       const conflict = model.reason === "model_conflict" ? "model conflict" : "scope conflict";
       lines.push(`Worker ${quoted(model.existing_worker.name)} was not changed · ${conflict}.`);

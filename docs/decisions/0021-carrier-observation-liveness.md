@@ -73,7 +73,12 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
 7. **Unknown fails closed.** `unknown` never authorizes a spawn, a reuse, or a
    `gone` claim. It produces attention with its evidence. Pre-upgrade records without
    a birth token read `unknown` until the current process rebinds or the human
-   authorizes adoption.
+   authorizes adoption. For a bound tokenless generation, `ensure_worker` returns
+   `attention` with reason `legacy_unverified` and hint `ask_human` (G11).
+   Its model result and collapsed TUI name both exits: reload that Worker's Pi to
+   re-admit its generation with a birth token, or adopt it in `/ptb status`.
+   Pending or stalled launch evidence does not replace this attention. It never
+   authorizes a spawn. Other unknown-generation planner rows stay unchanged.
 
 ## Consequences
 
@@ -110,6 +115,8 @@ Executable evidence: [`carrier-observer.v31.test.ts`](../../src/carrier-observer
 [`carrier-observer.property.test.ts`](../../src/carrier-observer.property.test.ts),
 [`carrier-observation.test.ts`](../../src/carrier-observation.test.ts),
 [`v31-receipts.test.ts`](../../sim/v31-receipts.test.ts),
+[`migration.v31.test.ts`](../../sim/migration.v31.test.ts),
+[`worker-ensure-plan.v31.test.ts`](../../src/utils/worker-ensure-plan.v31.test.ts),
 [`process-generation.test.ts`](../../src/env/process-generation.test.ts), and
 [`process-generation.native.test.ts`](../../src/env/process-generation.native.test.ts).
 The verification list in [Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md#verification)
