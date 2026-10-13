@@ -28,17 +28,25 @@ export function herdrAgentActivity(status: unknown): CarrierView["activity"] {
   }
 }
 
+const LEGACY_MODEL_CAUTION = "Unknown generation evidence never authorizes an automatic spawn, replacement, or gone claim.";
+/** Human projections keep the repair advice and evidence; model results retain the safety rule. */
+export function humanCarrierAttentionMessage(attention: CarrierAttention): string {
+  return attention.message.endsWith(` ${LEGACY_MODEL_CAUTION}`) ? attention.message.slice(0, -LEGACY_MODEL_CAUTION.length - 1) : attention.message;
+}
+
 /** A PID probe cannot verify a legacy generation, but it can guide human repair. */
-export function legacyCarrierAttention(member: Pick<Member, "name" | "membershipId" | "sessionFile">, status: AgentRuntimeStatus | null, probe: GenerationProbe): CarrierAttention | undefined {
+export function legacyCarrierAttention(member: Pick<Member, "name" | "membershipId" | "sessionFile">, status: Pick<AgentRuntimeStatus, "pid" | "membershipId" | "osBirthToken"> | null, probe: GenerationProbe): CarrierAttention | undefined {
   if (!member.sessionFile || !status?.pid || status.membershipId !== member.membershipId || status.osBirthToken) return undefined;
   const result = probe.kind === "found" ? "present" : probe.kind;
   const evidence = `pid=${status.pid}; probe=${result}${probe.kind === "unknown" ? ` (${probe.reason})` : ""}; birth_token_missing.`;
   const action = probe.kind === "absent"
-    ? `That Worker's Pi is no longer running at the recorded PID. Ask the human to restart Worker ${member.name}'s Pi in its pane to re-admit with a birth token, or stop the Worker.`
+    ? "Restart this Worker's Pi in its pane, or stop the Worker."
     : probe.kind === "found"
-      ? `Ask the human to reload Worker ${member.name}'s Pi to re-admit with a birth token, or adopt it in /ptb status.`
-      : `${probe.reason === "generation_helper_missing" ? "Install Rust (rustc) and Xcode Command Line Tools, then run npm run build:process-generation. " : ""}Ask the human to verify the PID before restart, reload, adoption in /ptb status, or stopping the Worker.`;
-  return { reason: "legacy_unverified", nextActionHint: "ask_human", message: `${evidence} ${action} Unknown generation evidence never authorizes an automatic spawn, replacement, or gone claim.` };
+      ? "Reload this Worker's Pi, or adopt it in /ptb status."
+      : probe.reason === "generation_helper_missing"
+        ? "Install the process-generation helper, then verify the PID. Install Rust (rustc) and Xcode Command Line Tools, then run npm run build:process-generation."
+        : "Verify this Worker's PID before choosing a recovery action.";
+  return { reason: "legacy_unverified", nextActionHint: "ask_human", message: `${action} ${evidence} ${LEGACY_MODEL_CAUTION}` };
 }
 
 export interface CarrierView {
@@ -50,6 +58,7 @@ export interface CarrierView {
   sessionFile?: string;
   launch: LaunchState;
   process: ProcessState;
+  processSample?: { pid: number; probe: GenerationProbe };
   terminal: "present" | "absent" | "unknown";
   activity: "working" | "idle" | "blocked" | "unknown";
   attention?: CarrierAttention;
@@ -87,6 +96,7 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
     launch: member.launch?.state ?? (member.pendingLaunchId ? "unknown" : "none"), process,
     terminal: "unknown", activity: "unknown", lastStop: exact?.lastStop,
     ...(attention ? { attention } : {}),
+    ...(exact?.pid ? { processSample: { pid: exact.pid, probe } } : {}),
     paneId: member.terminalTarget?.targetId ?? member.tmuxPaneId, terminalTarget: member.terminalTarget,
     evidence: [{ source: "process_generation", fact: processFact, observedAt: now },
       ...(attention ? [{ source: "legacy_generation", fact: attention.message, observedAt: now }] : []),
@@ -148,6 +158,12 @@ export class CarrierObserver {
         if (evidence && now >= (evidence.expiresAt ?? evidence.observedAt + CARRIER_SAMPLE_TTL_MS)) {
           view[field] = "unknown";
           if (!evidence.fact.startsWith("expired:")) evidence.fact = `expired:${evidence.fact}`;
+          if (field === "process" && view.attention && view.processSample) {
+            view.attention = legacyCarrierAttention({ name: view.worker, membershipId: view.membership, sessionFile: view.sessionFile },
+              { membershipId: view.membership, pid: view.processSample.pid }, { kind: "unknown", reason: "sample_expired" });
+            const legacy = view.evidence.find(item => item.source === "legacy_generation");
+            if (legacy) { legacy.fact = view.attention!.message; legacy.expiresAt = evidence.expiresAt ?? evidence.observedAt + CARRIER_SAMPLE_TTL_MS; }
+          }
         }
       }
     }
@@ -341,7 +357,7 @@ class CarrierPublication {
       // Consume the receipt through the ordered journal on the next publication. This prevents
       // an older unread event from replacing the accepted value just appended here.
       if (carrier.nextActionHint !== "wait") {
-        try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.${attention ? ` ${attention.message}` : ""}`); } catch { /* UI delivery cannot undo append. */ }
+        try { this.notify(`Worker ${view.worker}: ${field} ${to} (${cause.source}: ${cause.fact}); pane ${view.paneId ?? "unknown"}; ${carrier.nextActionHint}.${attention ? ` ${humanCarrierAttentionMessage(attention)}` : ""}`); } catch { /* UI delivery cannot undo append. */ }
       }
       return true;
   }

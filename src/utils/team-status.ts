@@ -1,6 +1,6 @@
 import { hostEnv } from "../env/host-env";
 import { stripVTControlCharacters } from "node:util";
-import type { CarrierView } from "../carrier-observation";
+import { humanCarrierAttentionMessage, type CarrierView } from "../carrier-observation";
 import fs from "node:fs";
 import path from "node:path";
 import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
@@ -8,9 +8,13 @@ import { verifyTaskAuthority } from "../model-tool-contract/beads-authority-adap
 import * as paths from "./paths";
 import * as teams from "./teams";
 
+export function isLegacyAdoptionCandidate(view: CarrierView): boolean {
+  return !!view.generation && !view.generation.osBirthToken && !view.lastStop && view.processSample?.probe.kind !== "absent";
+}
+
 export function formatCarrierStatus(view: CarrierView, taskIds?: string[]): { line: string; facts: { worker: string; process?: string; launch?: string } } {
   const facts = { worker: view.worker,
-    ...(view.process === "unknown" ? { process: view.attention ? `${view.attention.reason}; ${view.attention.nextActionHint}; ${view.attention.message}` : view.evidence.find(item => item.source === "process_generation")?.fact } : {}),
+    ...(view.process === "unknown" ? { process: view.attention ? `${view.attention.reason}; ${view.attention.nextActionHint}; ${humanCarrierAttentionMessage(view.attention)}` : view.evidence.find(item => item.source === "process_generation")?.fact } : {}),
     ...(view.launch === "unknown" ? { launch: view.evidence.find(item => item.source === "launch")?.fact } : {}) };
   const suffix = (fact?: string): string => {
     if (!fact) return "";

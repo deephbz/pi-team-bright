@@ -11,8 +11,10 @@ export interface CarrierAttention {
 }
 /** Herdr completion ends a turn, not the Worker process or its Task. */
 export declare function herdrAgentActivity(status: unknown): CarrierView["activity"];
+/** Human projections keep the repair advice and evidence; model results retain the safety rule. */
+export declare function humanCarrierAttentionMessage(attention: CarrierAttention): string;
 /** A PID probe cannot verify a legacy generation, but it can guide human repair. */
-export declare function legacyCarrierAttention(member: Pick<Member, "name" | "membershipId" | "sessionFile">, status: AgentRuntimeStatus | null, probe: GenerationProbe): CarrierAttention | undefined;
+export declare function legacyCarrierAttention(member: Pick<Member, "name" | "membershipId" | "sessionFile">, status: Pick<AgentRuntimeStatus, "pid" | "membershipId" | "osBirthToken"> | null, probe: GenerationProbe): CarrierAttention | undefined;
 export interface CarrierView {
     worker: string;
     membership: string;
@@ -22,6 +24,10 @@ export interface CarrierView {
     sessionFile?: string;
     launch: LaunchState;
     process: ProcessState;
+    processSample?: {
+        pid: number;
+        probe: GenerationProbe;
+    };
     terminal: "present" | "absent" | "unknown";
     activity: "working" | "idle" | "blocked" | "unknown";
     attention?: CarrierAttention;

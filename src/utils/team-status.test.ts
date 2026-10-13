@@ -79,13 +79,14 @@ it("bounds and sanitizes unknown status facts while keeping selected detail and 
   expect(formatCarrierStatus({ ...view, process: "live", launch: "started" }).facts).toEqual({ worker: "worker" });
 });
 
-it("shows the legacy PID and probe in status and preserves full human exits in detail", () => {
+it.each(["absent", "found"] as const)("keeps both human exits before the status truncation for probe %s", kind => {
   const member = { name: "worker", membershipId: "m", sessionFile: "/session" } as TeamConfig["members"][number];
-  const view = deriveCarrierView(member, { teamName: "team", agentName: "worker", membershipId: "m", pid: 42, startedAt: 1 }, 100, { kind: "absent" });
+  const view = deriveCarrierView(member, { teamName: "team", agentName: "worker", membershipId: "m", pid: 42, startedAt: 1 }, 100, kind === "absent" ? { kind } : { kind, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } });
   const result = formatCarrierStatus(view);
-  for (const text of ["legacy_unverified", "ask_human", "pid=42", "probe=absent"]) expect(result.line).toContain(text);
-  expect(result.facts.process).toContain("restart Worker worker's Pi in its pane");
-  expect(result.facts.process).toContain("or stop the Worker");
+  for (const text of ["legacy_unverified", "ask_human", kind === "absent" ? "Restart this Worker's Pi in its pane, or stop the Worker." : "Reload this Worker's Pi, or adopt it in /ptb status."]) expect(result.line).toContain(text);
+  expect(result.facts.process).toContain("pid=42");
+  expect(result.facts.process).toContain(`probe=${kind === "found" ? "present" : "absent"}`);
+  expect(result.facts.process).not.toContain("Unknown generation evidence never authorizes");
 });
 
 describe("/pi-team-bright command grammar", () => {

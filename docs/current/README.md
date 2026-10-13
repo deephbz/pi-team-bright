@@ -221,6 +221,8 @@ restating executable definitions.
   that attention with the PID and probe result. An absent PID needs human restart
   of the Worker's Pi in its pane or a Worker stop. A present PID permits reload
   or adoption in `/ptb status`. Unknown probe evidence needs verification first.
+  The shared advice puts the human action before evidence. `ensure_worker` retains
+  its model safety rule; human toasts, status, and worker-change text omit that rule.
   Snapshot `connected` means Session binding only; its attention field preserves
   unresolved process evidence. Pending or stalled launch evidence cannot replace
   this attention. It never spawns a replacement. A missing macOS verifier helper takes
@@ -233,7 +235,9 @@ restating executable definitions.
   survives verifier failure; an exact stop-ID check fences older admission work.
   Session switches require attention; stopping that Membership keeps its pane.
   Each observation source owns its sample time. Samples expire to unknown after
-  six seconds, including collection failure. A stalled read remains single-flight.
+  six seconds, including collection failure. Legacy attention then changes its
+  probe to unknown and asks for verification before repair. Historical journal
+  messages retain their sampled evidence. A stalled read remains single-flight.
   The visible event journal is the sole publication baseline, including after
   observer restart. Coordinates are Membership, generation, launch ID, field,
   and terminal target (backend, kind, ID). Each coordinate starts at `unknown`.
@@ -285,8 +289,8 @@ restating executable definitions.
   `/ptb status` persists one human-only transcript entry with carrier, stop,
   and nonterminal Task evidence. Unknown process and launch states include their
   decisive evidence facts. Inline facts are bounded; expansion shows their full
-  text. It batches explicit adoption of tokenless
-  records and remembers a decline within the exact Session runtime.
+  text. It batches explicit adoption of tokenless records, excludes records with
+  an absent PID probe, and remembers a decline within the exact Session runtime.
   Herdr outage attention reaches both the human and `team_sync`.
   Architecture impact: **changed** inside Pi Team Bright. HyperCarrier keeps
   these internals opaque.

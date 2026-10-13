@@ -118,9 +118,9 @@ it("migrates a baseline Team lead first, then three Workers without replacing a 
           : { kind: "worker_ensured", effect: "reused" });
         if (remaining.has(name)) {
           expect(JSON.parse(reply.content[0].text).message).toBe(result.message);
-          expect(result.message).toContain(name);
-          expect(result.message).toMatch(/reload.*Pi/i);
-          expect(result.message).toMatch(/birth token/i);
+          expect(result.worker).toBe(name);
+          expect(result.message).toMatch(/^Reload.*Pi/);
+          expect(result.message).toContain("probe=present; birth_token_missing");
           expect(result.message).toMatch(/adopt.*\/ptb status/i);
         } else expect(result.reason).not.toBe("legacy_unverified");
       }
