@@ -289,10 +289,16 @@ signal contract and executable checks.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.20.0
+pi install npm:@hypercarrier/pi-team-bright@0.23.1
 ```
 
-### Carrier-liveness upgrade (unreleased)
+The carrier-liveness prerelease is on npm `next`:
+
+```sh
+pi install npm:@hypercarrier/pi-team-bright@0.24.0-rc.1
+```
+
+### Carrier-liveness upgrade (0.24.0-rc.1)
 
 On macOS, the package's `postinstall` hook builds the process-generation helper
 from included Rust source. If `rustc` is missing, installation still succeeds.
