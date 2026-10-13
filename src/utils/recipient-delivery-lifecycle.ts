@@ -1,9 +1,23 @@
+import { hostEnv, type TimerHandle } from "../env/host-env";
+
 export interface RecipientDeliveryBinding {
   teamName: string;
   recipient: string;
   membershipId: string;
   sessionFile: string;
 }
+
+export type DeliveryEngineName = "alert" | "task";
+export type DeliveryOperation = "start" | "context" | "acknowledgement" | "scan";
+export interface DeliveryDegradation {
+  engine: DeliveryEngineName;
+  operation: DeliveryOperation;
+  message: string;
+  observedAt: number;
+  retryAt: number;
+}
+export type DeliveryEngineState = { state: "running"; observedAt: number }
+  | ({ state: "degraded" } & DeliveryDegradation);
 
 export interface RecipientDeliveryEngine {
   start(): Promise<void>;
@@ -17,88 +31,119 @@ export interface RecipientDeliveryPair {
   task: RecipientDeliveryEngine;
 }
 
-/**
- * The one Pi-Session actuator for an exact recipient Membership. Delivery
- * engines retain their own watch, replay, acknowledgement, and fencing rules;
- * this small adapter only makes their Session lifecycle atomic as a pair.
- */
+type Slot = { engine: RecipientDeliveryEngine; running: boolean; generation: number; failures: number; retry?: TimerHandle };
+type Activation = { binding: RecipientDeliveryBinding; slots: Record<DeliveryEngineName, Slot>; publication: Promise<void>; checking?: Promise<boolean> };
+
+/** One exact recipient fence; each delivery engine owns an independent failure and retry. */
 export class RecipientDeliveryLifecycle {
-  private pair: RecipientDeliveryPair | undefined;
-  private pendingPair: RecipientDeliveryPair | undefined;
-  private activeBinding: RecipientDeliveryBinding | undefined;
-  private generation = 0;
-  private readonly stoppedPairs = new WeakSet<RecipientDeliveryPair>();
+  private active: Activation | undefined;
 
-  constructor(private readonly dependencies: { makePair(binding: RecipientDeliveryBinding): RecipientDeliveryPair }) {}
+  constructor(private readonly dependencies: {
+    makePair(binding: RecipientDeliveryBinding, failed: (engine: DeliveryEngineName, error: unknown) => void): RecipientDeliveryPair;
+    isCurrentBinding(binding: RecipientDeliveryBinding): Promise<boolean>;
+    publishState?(binding: RecipientDeliveryBinding, engine: DeliveryEngineName, state: DeliveryEngineState): Promise<void>;
+  }) {}
 
-  get binding(): RecipientDeliveryBinding | undefined {
-    return this.activeBinding;
-  }
+  get binding(): RecipientDeliveryBinding | undefined { return this.active?.binding; }
 
   async activate(binding: RecipientDeliveryBinding): Promise<void> {
-    const generation = ++this.generation;
-    this.unbind();
-    const pair = this.dependencies.makePair(binding);
-    this.pendingPair = pair;
-    try {
-      await pair.direct.start();
-      if (!this.isCurrent(generation, pair)) return;
-      await pair.task.start();
-      if (!this.isCurrent(generation, pair)) return;
-      this.pendingPair = undefined;
-      this.pair = pair;
-      this.activeBinding = binding;
-    } catch (error) {
-      if (this.pendingPair === pair) this.pendingPair = undefined;
-      this.stopPair(pair);
-      throw error;
-    }
+    this.deactivate();
+    const pair = this.dependencies.makePair(binding, (name, error) => { void this.fail(activation, name, "scan", error); });
+    const activation: Activation = { binding, publication: Promise.resolve(), slots: {
+      alert: { engine: pair.direct, running: false, generation: 0, failures: 0 },
+      task: { engine: pair.task, running: false, generation: 0, failures: 0 },
+    } };
+    this.active = activation;
+    // Preserve initial lease ordering. Each start catches its own failure and
+    // schedules its own retry before activation proceeds to the next engine.
+    await this.start(activation, "alert");
+    await this.start(activation, "task");
   }
 
   deactivate(): void {
-    this.generation += 1;
-    this.unbind();
+    const active = this.active;
+    this.active = undefined;
+    if (!active) return;
+    for (const slot of Object.values(active.slots)) {
+      hostEnv().clock.clearTimeout(slot.retry);
+      slot.retry = undefined;
+      this.stop(slot);
+    }
   }
 
   async observeContext(messages: readonly unknown[]): Promise<void> {
-    const generation = this.generation;
-    const pair = this.pair;
-    if (!pair) return;
-    await pair.direct.observeContext(messages);
-    if (!this.isCurrent(generation, pair)) return;
-    await pair.task.observeContext(messages);
+    await this.forward("context", engine => engine.observeContext(messages));
   }
 
   async commitPresentedAfterSuccessfulTurn(reason: unknown): Promise<void> {
-    const generation = this.generation;
-    const pair = this.pair;
-    if (!pair || !this.isCurrent(generation, pair)) return;
-    // Preserve the Session adapter's existing concurrent successful-turn
-    // callback behavior while keeping pair ownership internal.
-    await Promise.all([
-      pair.direct.commitPresentedAfterSuccessfulTurn(reason),
-      pair.task.commitPresentedAfterSuccessfulTurn(reason),
-    ]);
+    await this.forward("acknowledgement", engine => engine.commitPresentedAfterSuccessfulTurn(reason));
   }
 
-  private isCurrent(generation: number, pair: RecipientDeliveryPair): boolean {
-    return this.generation === generation && (this.pair === pair || this.pendingPair === pair);
+  private async current(active: Activation): Promise<boolean> {
+    if (this.active !== active) return false;
+    const check = active.checking ??= this.dependencies.isCurrentBinding(active.binding);
+    let current: boolean;
+    try { current = await check; }
+    finally { if (active.checking === check) active.checking = undefined; }
+    if (this.active !== active) return false;
+    if (!current) this.deactivate();
+    return current;
   }
 
-  private unbind(): void {
-    const active = this.pair;
-    const pending = this.pendingPair;
-    this.pair = undefined;
-    this.pendingPair = undefined;
-    this.activeBinding = undefined;
-    if (active) this.stopPair(active);
-    if (pending) this.stopPair(pending);
+  private async start(active: Activation, name: DeliveryEngineName, retry = false): Promise<void> {
+    const slot = active.slots[name];
+    const generation = slot.generation;
+    try {
+      if (this.active !== active || (retry && !await this.current(active))) return;
+      // Admission validates initial activation. Engines retain their own exact
+      // effect fences; only a delayed retry needs another shared binding read.
+      await slot.engine.start();
+      if (this.active !== active || slot.generation !== generation) return;
+      slot.running = true;
+      slot.failures = 0;
+      await this.publish(active, name, { state: "running", observedAt: hostEnv().clock.now() });
+    } catch (error) { if (slot.generation === generation) await this.fail(active, name, "start", error); }
   }
 
-  private stopPair(pair: RecipientDeliveryPair): void {
-    if (this.stoppedPairs.has(pair)) return;
-    this.stoppedPairs.add(pair);
-    pair.direct.stop();
-    pair.task.stop();
+  private async forward(operation: "context" | "acknowledgement", call: (engine: RecipientDeliveryEngine) => Promise<number>): Promise<void> {
+    const active = this.active;
+    if (!active) return;
+    await Promise.all((["alert", "task"] as const).map(async name => {
+      const slot = active.slots[name];
+      if (!slot.running) return;
+      const generation = slot.generation;
+      try { if (this.active === active) await call(slot.engine); }
+      catch (error) { if (slot.generation === generation) await this.fail(active, name, operation, error); }
+    }));
+  }
+
+  private async fail(active: Activation, name: DeliveryEngineName, operation: DeliveryOperation, error: unknown): Promise<void> {
+    if (this.active !== active) return;
+    const slot = active.slots[name];
+    if (slot.retry) return;
+    this.stop(slot);
+    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(slot.failures++, 5));
+    const observedAt = hostEnv().clock.now();
+    slot.retry = hostEnv().clock.setTimeout(() => {
+      slot.retry = undefined;
+      void this.start(active, name, true);
+    }, delay);
+    if ("unref" in slot.retry) slot.retry.unref();
+    await this.publish(active, name, { state: "degraded", engine: name, operation,
+      message: error instanceof Error ? error.message : String(error), observedAt, retryAt: observedAt + delay });
+  }
+
+  private stop(slot: Slot): void {
+    slot.generation += 1;
+    slot.running = false;
+    try { slot.engine.stop(); }
+    catch (error) { console.error("[pi-teams] delivery cleanup failed:", error); }
+  }
+
+  private async publish(active: Activation, name: DeliveryEngineName, state: DeliveryEngineState): Promise<void> {
+    active.publication = active.publication.then(async () => {
+      if (this.active === active) await this.dependencies.publishState?.(active.binding, name, state);
+    }).catch(error => { console.error("[pi-teams] delivery state publication failed:", error); });
+    await active.publication;
   }
 }

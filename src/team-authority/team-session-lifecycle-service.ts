@@ -9,6 +9,7 @@ import { admitTeamSession, type SessionTerminalPlacement, type TeamIdentitySourc
 import { recordWorkerLaunchStage, withSemanticTrace } from "../utils/trace";
 import type { Member } from "./contracts";
 import type { TeamLifecyclePublication } from "./team-lifecycle-publication";
+import type { RecipientDeliveryBinding, DeliveryEngineName, DeliveryEngineState } from "../utils/recipient-delivery-lifecycle";
 
 export type SessionStartup =
   | { kind: "refused"; reason: string; exitProcess: boolean }
@@ -125,6 +126,23 @@ export class TeamSessionLifecycleService {
   async recordAdmissionFailure(teamName: string, workerName: string): Promise<void> {
     const candidate = await teams.currentMembership(teamName, workerName);
     if (candidate.membershipId) await this.lifecyclePublication.recordWorkerFailed({ teamName, workerName, membershipId: candidate.membershipId });
+  }
+
+  async writeDeliveryState(binding: RecipientDeliveryBinding, engine: DeliveryEngineName, state: DeliveryEngineState, isCurrent: () => boolean): Promise<void> {
+    // Ordinary startup creates no diagnostic write. A successful retry or reload
+    // clears only a recorded failure for this engine.
+    if (state.state === "running") {
+      const previous = await runtime.readRuntimeStatus(binding.teamName, binding.recipient);
+      if (previous?.delivery?.engines[engine]?.state !== "degraded") return;
+    }
+    await teams.withCurrentSessionBinding(binding.teamName, binding.recipient, binding.sessionFile, binding.membershipId, async () => {
+      const status = await runtime.readRuntimeStatus(binding.teamName, binding.recipient);
+      if (!isCurrent() || status?.pid !== hostEnv().process.pid || status.membershipId !== binding.membershipId || status.lastStop) return;
+      const engines = status.delivery?.sessionFile === binding.sessionFile ? status.delivery.engines : {};
+      await runtime.writeRuntimeStatus(binding.teamName, binding.recipient, {
+        delivery: { sessionFile: binding.sessionFile, engines: { ...engines, [engine]: state } },
+      }, binding.membershipId);
+    });
   }
 
   async writeBoundWorkerRuntime(input: { teamName: string; workerName: string; sessionFile: string; membershipId?: string; updates: Partial<runtime.AgentRuntimeStatus> }): Promise<string> {

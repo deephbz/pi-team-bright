@@ -1,6 +1,6 @@
 import { legacyCarrierAttention } from "../carrier-observation";
 import { hostEnv } from "../env/host-env";
-import { verifyRuntimeGeneration, readRuntimeStatus } from "../utils/runtime";
+import { currentDeliveryDegradations, verifyRuntimeGeneration, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, resolveCurrentLeadSessionBinding } from "../utils/teams";
 import type {
   CoordinationMemberEvidence,
@@ -15,7 +15,9 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
     if (!status) return null;
     const probe = status.pid ? hostEnv().process.generation(status.pid) : { kind: "unknown" as const, reason: "runtime_missing" };
     const attention = legacyCarrierAttention(member, status, probe);
+    const deliveryDegraded = currentDeliveryDegradations(member, status, verifyRuntimeGeneration(status, probe));
     return {
+      ...(deliveryDegraded.length ? { deliveryDegraded } : {}),
       ...(attention ? { attention } : {}),
       ...(status.membershipId !== undefined ? { membershipId: status.membershipId } : {}),
       ...(status.pid !== undefined ? { pid: status.pid } : {}),

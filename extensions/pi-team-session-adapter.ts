@@ -10,7 +10,7 @@ import * as teams from "../src/utils/teams";
 import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
 import type { AlertMembershipPort } from "../src/alert-authority/contracts";
 import { TaskChangeDelivery, taskPollMs, type TaskDeliveryMembershipPort } from "../src/utils/task-delivery";
-import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding } from "../src/utils/recipient-delivery-lifecycle";
+import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding, type DeliveryEngineName } from "../src/utils/recipient-delivery-lifecycle";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../src/utils/sync-nudge-conductor";
 import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD } from "../src/utils/sync-liveness-settings";
 import { clearTeamFooter, initializeTeamFooter, syncTeamFooter } from "../src/utils/team-footer";
@@ -80,8 +80,17 @@ export function createPiTeamSessionAdapter(options: {
   let leaderContext: any;
   let deliveryContext: any;
   let holdWarningContext: any;
-  const recipientDeliveries = new RecipientDeliveryLifecycle({
-    makePair: (binding) => createDeliveryPair(binding, deliveryContext),
+  const recipientDeliveries: RecipientDeliveryLifecycle = new RecipientDeliveryLifecycle({
+    makePair: (binding, failed) => createDeliveryPair(binding, deliveryContext, failed),
+    isCurrentBinding: async binding => {
+      if (!await alertMembership.isCurrentSessionBinding(binding)) return false;
+      const status = await runtime.readRuntimeStatus(binding.teamName, binding.recipient);
+      return status?.membershipId === binding.membershipId && status.pid === hostEnv().process.pid && !status.lastStop;
+    },
+    publishState: async (binding, engine, state) => {
+      if (state.state === "degraded") deliveryContext?.ui?.notify?.(`${engine === "alert" ? "Alert" : "Task"} delivery is degraded: ${state.message}. Retry is scheduled.`, "warning");
+      await teamSessionLifecycleService.writeDeliveryState(binding, engine, state, () => recipientDeliveries.binding === binding);
+    },
   });
   let footerModel: any;
   let workerResourcePolicy: WorkerResourcePolicy | undefined;
@@ -576,7 +585,7 @@ async function writeCurrentTeammateRuntime(ctx: any, updates: Partial<runtime.Ag
   });
 }
 
-function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any) {
+function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any, failed: (engine: DeliveryEngineName, error: unknown) => void) {
   if (!ctx || ctx.sessionManager?.getSessionFile?.() !== binding.sessionFile) {
     throw new Error("Recipient delivery activation requires its exact current Pi Session context.");
   }
@@ -588,10 +597,12 @@ function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any) {
     sessionFile: binding.sessionFile,
     pollMs: messagePollMs(),
     membership: alertMembership,
+    onError: error => failed("alert", error),
   });
   const task = new TaskChangeDelivery(messageSink, {
     teamName: binding.teamName, recipient: binding.recipient, membershipId: binding.membershipId, sessionFile: binding.sessionFile,
     pollMs: taskPollMs(), membership: taskDeliveryMembership,
+    onError: error => failed("task", error),
     reconciliationQuery: new BeadsTaskReconciliationQuery(binding.teamName, taskReadAdapterFactory),
     ...(isTeammate && taskReadyReconciliation ? {
       // One Team lease selects the entire ready frontier, so any bound Worker

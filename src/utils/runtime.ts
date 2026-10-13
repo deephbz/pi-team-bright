@@ -5,6 +5,7 @@ import path from "node:path";
 import { withLock } from "./lock";
 import { runtimeStatusPath, teamDir } from "./paths";
 import type { Member } from "../team-authority/contracts";
+import type { DeliveryDegradation, DeliveryEngineName, DeliveryEngineState } from "./recipient-delivery-lifecycle";
 
 /**
  * Runtime constants for health checking.
@@ -35,9 +36,25 @@ export interface AgentRuntimeStatus {
   ready?: boolean;
   /** Exact Pi 0.83 agent lifecycle evidence for the current generation. */
   runState?: "active" | "settled";
+  delivery?: { sessionFile: string; engines: Partial<Record<DeliveryEngineName, DeliveryEngineState>> };
   lastError?: RuntimeError;
   lastStop?: { stopId?: string; piReason: "quit" | "reload" | "new" | "resume" | "fork"; targetSessionFile?: string; observedAt: number; suspectedHumanStop: boolean };
   stopRequested?: "worker_stop" | "team_shutdown" | "compensation";
+}
+
+/** Delivery observations apply only to this bound, verified process generation. */
+export function currentDeliveryDegradations(
+  member: Pick<Member, "membershipId" | "sessionFile">,
+  status: AgentRuntimeStatus | null,
+  verified = verifyRuntimeGeneration(status),
+): DeliveryDegradation[] {
+  if (!member.membershipId || status?.membershipId !== member.membershipId || !member.sessionFile
+    || status.delivery?.sessionFile !== member.sessionFile || verified !== "live" || status.lastStop) return [];
+  return Object.values(status.delivery.engines).flatMap(state => {
+    if (state?.state !== "degraded") return [];
+    const { state: _state, ...degradation } = state;
+    return [degradation];
+  });
 }
 
 /** Exact ephemeral process generation within one durable Membership. */

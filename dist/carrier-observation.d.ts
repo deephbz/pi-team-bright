@@ -31,6 +31,7 @@ export interface CarrierView {
     terminal: "present" | "absent" | "unknown";
     activity: "working" | "idle" | "blocked" | "unknown";
     attention?: CarrierAttention;
+    deliveryDegraded?: import("./utils/recipient-delivery-lifecycle").DeliveryDegradation[];
     lastStop?: AgentRuntimeStatus["lastStop"];
     paneId?: string;
     terminalTarget?: TerminalTarget;

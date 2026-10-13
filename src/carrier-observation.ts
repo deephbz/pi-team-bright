@@ -4,7 +4,7 @@ import { herdrCarrierName } from "./adapters/herdr-adapter";
 import { hostEnv, type TimerHandle, type GenerationProbe } from "./env/host-env";
 import { memberTerminalTarget } from "./utils/terminal-target";
 import type { Member, TeamConfig, TerminalTarget } from "./team-authority/contracts";
-import { readRuntimeStatus, runtimeGeneration, verifyRuntimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "./utils/runtime";
+import { currentDeliveryDegradations, readRuntimeStatus, runtimeGeneration, verifyRuntimeGeneration, type AgentRuntimeStatus, type RuntimeGeneration } from "./utils/runtime";
 import { configPath } from "./utils/paths";
 import { withCurrentMembershipLease } from "./utils/teams";
 import type { WorkerTeamEvent } from "./coordination/contracts";
@@ -62,6 +62,7 @@ export interface CarrierView {
   terminal: "present" | "absent" | "unknown";
   activity: "working" | "idle" | "blocked" | "unknown";
   attention?: CarrierAttention;
+  deliveryDegraded?: import("./utils/recipient-delivery-lifecycle").DeliveryDegradation[];
   lastStop?: AgentRuntimeStatus["lastStop"];
   paneId?: string;
   terminalTarget?: TerminalTarget;
@@ -87,6 +88,7 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
   const probe = observed ?? (exact?.pid ? hostEnv().process.generation(exact.pid) : { kind: "unknown" as const, reason: "runtime_missing" });
   const verified = verifyRuntimeGeneration(exact, probe);
   const attention = legacyCarrierAttention(member, exact, probe);
+  const deliveryDegraded = currentDeliveryDegradations(member, exact, verified);
   const processFact = probe.kind === "unknown" && probe.reason === "generation_helper_missing" ? probe.reason
     : !exact?.osBirthToken && exact?.pid ? "birth_token_missing" : probe.kind === "unknown" ? probe.reason : verified;
   const process = status === null && member.launch?.state === "refused" && !member.launch.priorGeneration ? "none"
@@ -96,6 +98,7 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
     launch: member.launch?.state ?? (member.pendingLaunchId ? "unknown" : "none"), process,
     terminal: "unknown", activity: "unknown", lastStop: exact?.lastStop,
     ...(attention ? { attention } : {}),
+    ...(deliveryDegraded.length ? { deliveryDegraded } : {}),
     ...(exact?.pid ? { processSample: { pid: exact.pid, probe } } : {}),
     paneId: member.terminalTarget?.targetId ?? member.tmuxPaneId, terminalTarget: member.terminalTarget,
     evidence: [{ source: "process_generation", fact: processFact, observedAt: now },
