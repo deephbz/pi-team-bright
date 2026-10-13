@@ -207,3 +207,91 @@ On `467143c`, `npm test` exits 1: 7 files and 22 tests fail, all under `src/`
 `worker-identity-process-admission.characterization`). No `src/` file imports
 `sim/`. These failures come from the integrated production tree. This task does
 not change `src/`. `native/bin` is absent. The present-state run was not done.
+
+## Round 3: P8 reads the branch wire (task `p8-wire-shape`)
+
+Source: `v31-props` at `0457658` (merge of `v31-integration`). Brief:
+`/tmp/ptb-lead/briefs/p8-wire-shape.md`.
+
+### Change
+
+P8 read the internal camelCase service shape (`workerChanges`, `taskChanges`,
+`taskId`). The branch carries the model-facing wire. The monitor now reads that
+wire (`src/model-tool-contract/executors.ts:130-131`):
+
+- Snapshot: `workers[].name`, `tasks[].id`.
+- Updates: `worker_changes[].worker`, `task_changes[].task_id`. The Task card is
+  `task_changes[].current`.
+- A task tool result carries its card in `details.task`. The monitor counts that
+  card as authority content.
+
+Eligibility now uses the latest card observed at or before the page. The page
+itself counts. Round 2 looked only before the page. A real Task event at a new
+version was then judged by an older snapshot and skipped. That hid an omitted
+Task. The round-2 limitation is therefore real, and this round fixes it for the
+case where the new version is observed on the branch or in a task tool result.
+
+### Fixture
+
+`sim/monitors/fixtures/p8-wire-page.json` holds a slice of a real replay. The
+base is the `bound-pi-dead` trace with seed 42. The lead creates Task `work` for
+w1, takes a snapshot, updates the Task context, and takes an updates sync. The
+slice keeps journal rows 1-8, the snapshot, the task-update result, and the
+updates page (sequence 579, events 4-8). The page carries `task_changes` for
+`work` at `v_eb73a85dce183af5`.
+
+Tests in `sim/monitors/monitors.test.ts`:
+
+- The captured page names every eligible event. Verdict: pass.
+- The same page with `task_changes` removed omits event 4 (`work`). Verdict:
+  violation. This is the eligible-Task counterpart.
+- The synthetic `taskUpdate` helper uses the wire shape.
+
+### Before and after
+
+Checked against the committed round-2 monitor (`HEAD` `safety.ts`) with the new
+tests:
+
+- Pass case: fails. The page names `work`, but the old reader does not read
+  `task_changes`. This is a false positive.
+- Omitted-Task case: passes. The round-2 eligibility rule skipped event 4 as
+  obsolete. This is a false negative.
+
+Campaign P8 counts (`sim/results/v31/campaign.json`, 1045 histories):
+
+| Run | Violation | Pass | N/A |
+| --- | --- | --- | --- |
+| Round 2 (`260360a`) | 0 | 1034 | 11 |
+| Round 3 (this change) | 0 | 1034 | 11 |
+
+The campaign counts did not change. I did not check whether campaign update
+pages carry Task rows. So the campaign does not show this path. This is open.
+
+### Mutant M6
+
+Killed by P8. Mutant verdict: page through 52 omits event 51 (`extra-29`).
+Control P8: pass. Evidence: `sim/results/mutants-p8-wire-shape/M6/`. Round 2
+gave the same verdict.
+
+### Classification
+
+- New P8 violations in the campaign: none.
+- The omitted-Task case is a monitor test. A violation is the expected result.
+  No production defect is implied.
+
+### Limitation
+
+Eligibility is still equality with the latest observed card. A Task event at a
+version that no branch page or task tool result shows is skipped. This can hide
+an omission.
+
+### Verification
+
+- `sim/monitors`: 73 of 73 pass. `tsc --noEmit` is clean for `sim/`.
+- `npm test` with `native/bin` absent: 172 files passed, 2 skipped. 1981 tests
+  passed, 3 skipped.
+- First `npm test` attempt: one 5-second timeout in `sim/core.test.ts`
+  ("fast-check drives the same queue"). The file passed alone. The second full
+  run passed.
+- The temporary capture test was removed. The capture steps are in the fixture
+  provenance.
