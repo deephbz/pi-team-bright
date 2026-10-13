@@ -6,7 +6,7 @@ import { SimWorld } from "./world";
 import { generationKey } from "./process-table";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/5";
+export const RUNNER_VERSION = "sim-c1/6";
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */
@@ -31,7 +31,7 @@ export class WorldReplay {
   readonly results = new Map<number, unknown>();
   readonly sessionRefs = new Map<string, string>();
   private readonly factories = new Map<string, Awaited<ReturnType<typeof loadActorExtension>>>();
-  constructor(readonly world: SimWorld) {
+  constructor(readonly world: SimWorld, readonly options: { sourceRoot?: string } = {}) {
     world.herdr.onStart = (pane, argv) => {
       const who = { team: pane.env.PI_TEAM_NAME || "team", actor: pane.env.PI_AGENT_NAME || pane.name! };
       const generation = world.processes.current(pane.agentPid!);
@@ -166,18 +166,55 @@ export class WorldReplay {
       default: { const exhaustive: never = step; throw new Error(`Unsupported world step ${exhaustive}`); }
     }
   }
+  /** Public authorities synthesize consistent Team, Membership, Session and runtime records. */
+  private async bootstrap(trace: WorldTrace): Promise<void> {
+    const firstSetupEntry = this.world.history.length;
+    const invoke = async (action: () => Promise<unknown>) => {
+      let complete = false;
+      let result: any;
+      this.world.scheduler.enqueue("setup", async () => { result = await action(); complete = true; });
+      for (let i = 0; !complete && i < 10000; i++) {
+        if (!await this.world.scheduler.step(true)) throw new Error("Setup has no scheduled completion");
+      }
+      if (!complete) throw new Error("Setup bound exceeded");
+      await this.world.drain({ maxSteps: 10000 });
+      return result;
+    };
+    for (const initial of trace.setup.teams) {
+      const who = { team: initial.team, actor: "lead" };
+      const lead = this.addActor(who);
+      await invoke(() => lead.emit("session_start", { reason: "startup" }));
+      const created = await invoke(() => lead.tool("team_create", { name: initial.team, purpose: "Synthetic existing Team" }));
+      if (created?.details?.kind !== "team_created") throw new Error("Existing Team setup was refused");
+      for (const worker of initial.workers) {
+        const observed = trace.steps.find(({ step }) => step.kind === "tool.call" && step.who.team === initial.team
+          && step.tool === "ensure_worker" && step.args.name === worker)?.step;
+        const scope = observed?.kind === "tool.call" && typeof observed.args.scope === "string" ? observed.args.scope : "Synthetic existing Worker";
+        const ensured = await invoke(() => lead.tool("ensure_worker", { name: worker, scope }));
+        if (ensured?.details?.kind !== "worker_ensured" || !this.currentActor({ team: initial.team, actor: worker }))
+          throw new Error("Existing Worker setup was refused");
+      }
+    }
+    // These facts describe the assumed initial world, not observed model actions.
+    for (const entry of this.world.history.slice(firstSetupEntry)) entry.origin = { kind: "setup" };
+  }
   async run(trace: WorldTrace, bounds: ReplayReceipt["bounds"] = { maxSteps: 10000, maxVirtualMs: 3600000 }): Promise<void> {
     if (trace.version !== WORLD_TRACE_VERSION) throw new Error("Unsupported WorldTrace version");
-    if (trace.setup.teams.length) throw new Error("Pre-existing Team setup needs a public-tool bootstrap trace");
     // Native module loading finishes before the deterministic scheduler starts.
+    const prepare = async (who: ActorRef) => {
+      if (!this.factories.has(actorKey(who))) this.factories.set(actorKey(who), await loadActorExtension({ PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor }, this.options.sourceRoot));
+    };
+    for (const initial of trace.setup.teams) for (const actor of ["lead", ...initial.workers]) await prepare({ team: initial.team, actor });
     for (const { step } of trace.steps) if ("who" in step) {
       const actors = [step.who];
       if (step.kind === "tool.call" && step.tool === "ensure_worker" && typeof step.args.name === "string") actors.push({ team: step.who.team, actor: step.args.name });
-      for (const who of actors) if (!this.factories.has(actorKey(who))) this.factories.set(actorKey(who), await loadActorExtension({ PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor }));
+      for (const who of actors) await prepare(who);
     }
+    if (trace.setup.teams.length) await this.bootstrap(trace);
     const epoch = this.world.scheduler.now;
+    const initialOperations = this.world.scheduler.decisions.length;
     const check = () => {
-      if (this.world.scheduler.decisions.length > bounds.maxSteps || this.world.scheduler.now - epoch > bounds.maxVirtualMs) throw new Error("Replay bound exceeded");
+      if (this.world.scheduler.decisions.length - initialOperations > bounds.maxSteps || this.world.scheduler.now - epoch > bounds.maxVirtualMs) throw new Error("Replay bound exceeded");
     };
     let previous = 0;
     for (const [index, input] of trace.steps.entries()) {
@@ -191,7 +228,7 @@ export class WorldReplay {
       }
       if (target > this.world.scheduler.now) this.world.scheduler.advance(target - this.world.scheduler.now);
       this.world.scheduler.enqueue(`input:${index}:${input.step.kind}`, () => this.apply(input.step, index));
-      await this.world.drain({ maxSteps: Math.max(1, bounds.maxSteps - this.world.scheduler.decisions.length) });
+      await this.world.drain({ maxSteps: Math.max(1, bounds.maxSteps - (this.world.scheduler.decisions.length - initialOperations)) });
       check();
     }
     while (this.world.scheduler.pendingCount() > 0) {
@@ -205,13 +242,13 @@ export class WorldReplay {
   }
 }
 
-export async function replayTrace(trace: WorldTrace, options: { seed?: number; receipt?: ReplayReceipt; choices?: readonly Choice[]; setup?: (runner: WorldReplay) => void } = {}) {
+export async function replayTrace(trace: WorldTrace, options: { seed?: number; receipt?: ReplayReceipt; choices?: readonly Choice[]; setup?: (runner: WorldReplay) => void; sourceRoot?: string } = {}) {
   if (options.receipt && (options.receipt.traceId !== trace.id || options.receipt.runnerVersion !== RUNNER_VERSION)) throw new Error("Receipt does not identify this trace and runner");
   const seed = options.receipt?.seed ?? options.seed ?? 0;
   const bounds = options.receipt?.bounds ?? { maxSteps: 10000, maxVirtualMs: 3600000 };
   const world = new SimWorld(seed, { replay: options.choices, scheduleChoices: options.receipt?.choices });
   try {
-    const runner = new WorldReplay(world);
+    const runner = new WorldReplay(world, { sourceRoot: options.sourceRoot });
     options.setup?.(runner);
     await runner.run(trace, bounds);
     const receipt: ReplayReceipt = { traceId: trace.id, runnerVersion: RUNNER_VERSION, seed, choices: world.entropy.choices.filter(choice => choice.label === "schedule").map(choice => choice.value), bounds };

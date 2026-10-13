@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { ShapeRedactor } from "./shape";
 import { reconstruct, type TeamInput } from "./reconstruct";
 import { validateWorldTrace } from "./validate";
 import { assertExternalDirectory, extractCorpus } from "./index";
@@ -63,6 +64,29 @@ it("uses each role's live argument schema", () => {
   expect(() => validate("w1", "team_create", { name: "team-1", purpose: "Synthetic purpose" })).toThrow();
 });
 
+it("preserves valid public argument shapes and repeated identities", () => {
+  const redactor = new ShapeRedactor();
+  const samples = [
+    ["lead", "team_create", { name: "private-team", purpose: "Private purpose" }],
+    ["lead", "ensure_worker", { name: "private-worker", scope: "Private scope" }],
+    ["w1", "task_update", { task_id: "private-task", operation_id: "private-op", expected_version: "v_abcdef0123456789", transition: "claim" }],
+    ["lead", "task_read", { task_ids: ["private-task", "other-task"] }],
+  ] as const;
+  for (const [actor, tool, args] of samples) {
+    const projected = redactor.args(args);
+    expect(Object.keys(projected)).toEqual(Object.keys(args));
+    for (const [key, value] of Object.entries(args)) {
+      expect(typeof projected[key]).toBe(typeof value);
+      if (typeof value === "string" || Array.isArray(value)) expect(projected[key]).toHaveLength(value.length);
+    }
+    validateWorldTrace({ version: 1, id: "shape", source: "synthetic", assumptions: [], setup: { ptbVersion: "v3.1", teams: [] },
+      steps: [{ at: 0, step: { kind: "tool.call", who: { team: "team-1", actor }, tool, args: projected } }] });
+  }
+  expect(redactor.args({ task_id: "private-task" }).task_id).toBe(redactor.args({ needs: ["private-task"] }).needs[0]);
+  expect(redactor.args({ pid: 12345 }).pid).not.toBe(redactor.args({ pid: 12346 }).pid);
+  expect(redactor.args({ count: 12, force: false, metadata: null })).toEqual({ count: 12, force: false, metadata: null });
+});
+
 describe("source projection", () => {
   it("redacts nested keys, prose, paths, numeric identities and unknown tools while preserving joins", () => {
     const input = base();
@@ -87,7 +111,7 @@ describe("source projection", () => {
     expect(toolSteps[0].args.name).toBe(task.assignee);
     expect(task.id).toBe(toolSteps[2].args.task_id);
     expect(task.needs[0]).toBe(toolSteps[2].args.task_id);
-    expect(toolSteps[2]).toMatchObject({ who: { team: "team-1", actor: toolSteps[0].args.name }, args: { transition: "claim" } });
+    expect(toolSteps[2]).toMatchObject({ who: { team: toolSteps[0].who.team, actor: toolSteps[0].args.name }, args: { transition: "claim" } });
   });
 
   it("orders clocks, keeps aborted/error outcomes, and does not equate abort with Escape or stop with agent_end", () => {
@@ -100,10 +124,11 @@ describe("source projection", () => {
     input.runtime = [{ agentName: "private-worker", membershipId: "private-membership", runState: "settled", lastHeartbeatAt: 800 }];
     input.events = [{ type: "worker", phase: "stopped", at: 900 }];
     const result = reconstruct(input);
+    const team = result.trace.setup.teams[0].team;
     expect(result.trace.steps.filter(x => x.step.kind === "turn.end").map(x => [x.at, x.step])).toEqual([
-      [0, { kind: "turn.end", who: { team: "team-1", actor: "lead" }, outcome: "error" }],
-      [200, { kind: "turn.end", who: { team: "team-1", actor: "lead" }, outcome: "aborted" }],
-      [300, { kind: "turn.end", who: { team: "team-1", actor: "lead" }, outcome: "settled" }],
+      [0, { kind: "turn.end", who: { team, actor: "lead" }, outcome: "error" }],
+      [200, { kind: "turn.end", who: { team, actor: "lead" }, outcome: "aborted" }],
+      [300, { kind: "turn.end", who: { team, actor: "lead" }, outcome: "settled" }],
     ]);
     expect(result.trace.steps.map(x => x.at)).toEqual([0, 0, 200, 300]);
     expect(result.trace.steps.some(x => ["human.escape", "pi.shutdown", "agent.settled", "os.kill"].includes(x.step.kind))).toBe(false);
@@ -154,7 +179,7 @@ describe("source projection", () => {
     expect(JSON.stringify(result)).not.toContain("private");
   });
 
-  it("keeps the creation call before the config timestamp and joins date-prefixed Team names", () => {
+  it("keeps the creation coordinate and the distinct full-name argument lengths", () => {
     const input = base();
     input.config.name = "20260101-private-team";
     input.sessions = [{ identity: "session", actor: "team-lead", lead: true, rows: [
@@ -166,7 +191,8 @@ describe("source projection", () => {
     const calls = result.trace.steps.map(x => x.step).filter(s => s.kind === "tool.call");
     expect(calls.map(c => c.tool)).toEqual(["team_create", "team_sync"]);
     expect(calls[0].args.name).toBe(calls[1].who.team);
-    expect(calls[1].args.team).toBe(calls[1].who.team);
+    expect(calls[1].args.team).toHaveLength("20260101-private-team".length);
+    expect(calls[0].args.name).toHaveLength("private-team".length);
     expect(result.trace.setup.teams).toEqual([]);
     expect(result.trace.steps.map(x => x.at)).toEqual([0, 0, 20]);
   });
