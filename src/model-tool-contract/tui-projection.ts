@@ -102,7 +102,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
     if (retry) lines.push(retry);
   } else if (tool === "team_sync") {
     if (model.kind === "snapshot") {
-      const alerts = Array.isArray(model.alerts) ? `${model.alerts.length} recent Alerts, ${model.alerts_omitted} omitted` : "Alert history unavailable";
+      const alerts = Array.isArray(model.alerts) ? `${model.alerts.length} recent Alert${model.alerts.length === 1 ? "" : "s"}, ${model.alerts_omitted} omitted` : "Alert history unavailable";
       lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}, ${alerts}.`);
       for (const worker of model.workers.filter((worker: any) => worker.attention)) lines.push(`Worker ${quoted(worker.name)} · ${worker.attention.reason} · ${worker.attention.nextActionHint}: ${worker.attention.message}`);
     }

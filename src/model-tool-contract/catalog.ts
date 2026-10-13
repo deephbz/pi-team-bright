@@ -277,10 +277,10 @@ export const ReceivedAlertSchema = Type.Object({
   text_length: Type.Optional(Type.Integer({ minimum: 2001, description: "Full body length in Unicode code points, present when truncated." })),
 }, { additionalProperties: false });
 
-export const RecentAlertsSchema = Type.Array(ReceivedAlertSchema, { maxItems: 10, description: "Newest received Alerts for this exact Membership, in inbox receipt order. Recent does not mean open: read means delivered, not resolved. This read does not consume delivery. Ask the sender for omitted text." });
+export const RecentAlertsSchema = Type.Array(ReceivedAlertSchema, { maxItems: 10, description: "Newest first. from is sender member name; received_at is inbox receipt time, not send time. Recent is not unresolved." });
 export const AlertsOmittedSchema = Type.Integer({ minimum: 0, description: "Older eligible received Alerts outside the newest-10 bound." });
 
-export const TeamSnapshotResultSchema = Type.Object({
+const TeamSnapshotFields = {
   kind: Type.Literal("snapshot"),
   observation: Type.Optional(ObservationStampSchema),
   team: TeamCurrent,
@@ -288,10 +288,12 @@ export const TeamSnapshotResultSchema = Type.Object({
   default_model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   workers: Type.Array(WorkerCurrentSchema),
   tasks: Type.Array(TaskCardSchema),
-  alerts: RecentAlertsSchema,
-  alerts_omitted: AlertsOmittedSchema,
   task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
-}, { additionalProperties: false });
+};
+export const TeamSnapshotResultSchema = Type.Union([
+  Type.Object({ ...TeamSnapshotFields, alerts: RecentAlertsSchema, alerts_omitted: AlertsOmittedSchema }, { additionalProperties: false }),
+  Type.Object({ ...TeamSnapshotFields, alerts_unavailable: Type.Object({ message: Type.String({ minLength: 1 }) }, { additionalProperties: false }) }, { additionalProperties: false }),
+]);
 
 export const TeamUpdatesResultSchema = Type.Object({
   kind: Type.Literal("updates"),
@@ -906,7 +908,7 @@ export const modelToolCatalog = {
     {
       name: "team_sync",
       label: "Sync Team",
-      responsibility: "Observe current Team state. Alerts are recent; read is not resolved. Ask senders for cut text.",
+      responsibility: "Return a whole-Team snapshot or incremental coordination updates. Use task_read for selected complete Task cards. Snapshots also list recent received Alerts; recent is not unresolved.",
       actors: ["leader"],
       commonUseCases: [
         "Restore current Team context after startup or compaction.",

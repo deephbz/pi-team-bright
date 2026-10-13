@@ -103,17 +103,18 @@ export class CoordinationObservationService {
     if (tasks.kind !== "tasks") return tasks;
     // This inbox read is independent of the Team journal watermark.
     let received;
+    let alertsUnavailable: { message: string } | undefined;
     try {
       received = await this.coordinationQueries.receivedAlerts.readRecentReceivedAlerts(bound.teamName, "team-lead", bound.membershipId, 10);
     } catch (error) {
-      return { kind: "unavailable", reason: "team_state_unavailable", message: `Received Alerts unavailable: ${error instanceof Error ? error.message : String(error)}` };
+      alertsUnavailable = { message: error instanceof Error ? error.message : String(error) };
     }
     const leader = bound.config.members.find(member => member.name === "team-lead");
     const settings = loadWorkerResourcePolicy({ cwd: context?.cwd ?? leader?.cwd ?? hostEnv().process.cwd(), projectTrusted: context?.projectTrusted === true }).modelRoleSettings;
     return { kind: "snapshot", team: { name: bound.teamName, purpose: bound.config.purpose ?? "", lifecycle: "active" },
       modelRoles: Object.entries(settings.roles).sort(([a], [b]) => a.localeCompare(b)).map(([name, role]) => ({ name, use: role.use })),
       ...(settings.defaultRole ? { defaultModelRole: settings.defaultRole } : {}), workers: await this.readWorkers(bound, tasks.tasks), tasks: tasks.tasks,
-      alerts: received.alerts, alertsOmitted: received.omitted,
+      ...(received ? { alerts: received.alerts, alertsOmitted: received.omitted } : { alertsUnavailable: alertsUnavailable! }),
       ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
   }
   async readTeamSync(file: string, view: "snapshot" | "updates", signal: AbortSignal, call: string, context?: CoordinationObservationContext): Promise<CoordinationSyncResult> {

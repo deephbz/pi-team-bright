@@ -84,15 +84,36 @@ export function deliveryText(
 }
 
 /** Decode only the envelope emitted above; ordinary inbox messages stay out. */
-export function parseAlertDeliveryText(value: string): { alertId: string; kind: AlertKind; text: string; taskRef?: AlertTaskReference } | undefined {
-  const lines = value.split("\n");
-  const header = /^\[PiTeams (clarification|attention|announcement) Alert (alert_[^\s\]]+)\]$/.exec(lines[0] ?? "");
-  if (!header || lines.at(-1) !== ALERT_TRAILER) return undefined;
-  const task = /^Task: (.+?)(?: @ (v_[0-9a-f]{16}))?$/.exec(lines[1] ?? "");
-  const text = lines.slice(task ? 2 : 1, -1).join("\n");
+export function parseAlertDeliveryText(value: string, summary?: string): { alertId: string; kind: AlertKind; text: string; taskRef?: AlertTaskReference } | undefined {
+  const headerEnd = value.indexOf("\n");
+  const headerLine = headerEnd < 0 ? value : value.slice(0, headerEnd);
+  const header = /^\[PiTeams (clarification|attention|announcement) Alert (alert_[^\s\]]+)\]$/.exec(headerLine);
+  if (!header || !value.endsWith(`\n${ALERT_TRAILER}`)) return undefined;
+  const kind = header[1] as AlertKind;
+  const bodyStart = headerEnd < 0 ? value.length : headerEnd + 1;
+  const bodyEnd = value.length - ALERT_TRAILER.length - 1;
+  let textStart = bodyStart;
+  let taskRef: AlertTaskReference | undefined;
+  const taskSummaryPrefix = `${kind} for Task `;
+  if (summary?.startsWith(taskSummaryPrefix)) {
+    const taskId = summary.slice(taskSummaryPrefix.length);
+    const marker = `Task: ${taskId}`;
+    if (taskId && value.startsWith(marker, bodyStart)) {
+      const remainderStart = bodyStart + marker.length;
+      const suffix = value.slice(remainderStart, bodyEnd);
+      const version = /^ @ (v_[0-9a-f]{16})\n/.exec(suffix);
+      if (version) {
+        taskRef = { taskId, version: assertTaskVersionRef(version[1]) };
+        textStart = remainderStart + version[0].length;
+      } else if (value.startsWith("\n", remainderStart)) {
+        taskRef = { taskId };
+        textStart = remainderStart + 1;
+      }
+    }
+  }
+  const text = value.slice(textStart, bodyEnd);
   if (!text.trim()) return undefined;
-  return { alertId: header[2], kind: header[1] as AlertKind, text,
-    ...(task ? { taskRef: { taskId: task[1], ...(task[2] ? { version: assertTaskVersionRef(task[2]) } : {}) } } : {}) };
+  return { alertId: header[2], kind, text, ...(taskRef ? { taskRef } : {}) };
 }
 
 /** Inbox append order proves receipt order even when sender clocks disagree. */
@@ -100,7 +121,7 @@ export async function readRecentReceivedAlerts(teamName: string, memberName: str
   if (!Number.isInteger(limit) || limit < 0) throw new Error("Received Alert limit must be a nonnegative integer.");
   const messages = await inboxDelivery.readStoredInboxForMembership(teamName, memberName, membershipId);
   const eligible = messages.flatMap(message => {
-    const parsed = typeof message.text === "string" ? parseAlertDeliveryText(message.text) : undefined;
+    const parsed = typeof message.text === "string" ? parseAlertDeliveryText(message.text, message.summary) : undefined;
     return parsed && typeof message.from === "string" && typeof message.timestamp === "string"
       ? [{ message, parsed }] : [];
   }).reverse();
