@@ -1,0 +1,3300 @@
+{
+  "mutant": "M4",
+  "mode": "control",
+  "runnerVersion": "sim-c1/5",
+  "bounds": {
+    "maxSteps": 10000,
+    "maxVirtualMs": 400000
+  },
+  "monitorOptions": {
+    "E1": {
+      "deadlineMs": 60000
+    },
+    "E2": {
+      "latencyMs": 60000
+    },
+    "E3": {
+      "boundMs": 60000
+    },
+    "E4": {
+      "thresholdMs": 60000
+    },
+    "E5": {
+      "boundMs": 10000
+    }
+  },
+  "generator": {
+    "seed": 20261013,
+    "samples": [
+      {
+        "family": 7,
+        "seed": 13,
+        "gap": 186,
+        "repeats": 3
+      },
+      {
+        "family": 1,
+        "seed": 12,
+        "gap": 49,
+        "repeats": 2
+      },
+      {
+        "family": 9,
+        "seed": 0,
+        "gap": 118,
+        "repeats": 4
+      },
+      {
+        "family": 0,
+        "seed": 11,
+        "gap": 60,
+        "repeats": 3
+      },
+      {
+        "family": 2,
+        "seed": 6,
+        "gap": 3,
+        "repeats": 3
+      },
+      {
+        "family": 3,
+        "seed": 99994,
+        "gap": 4,
+        "repeats": 2
+      },
+      {
+        "family": 3,
+        "seed": 70421,
+        "gap": 26,
+        "repeats": 3
+      },
+      {
+        "family": 10,
+        "seed": 4,
+        "gap": 171,
+        "repeats": 3
+      },
+      {
+        "family": 10,
+        "seed": 70676,
+        "gap": 91,
+        "repeats": 4
+      },
+      {
+        "family": 3,
+        "seed": 68711,
+        "gap": 2,
+        "repeats": 2
+      },
+      {
+        "family": 0,
+        "seed": 15,
+        "gap": 198,
+        "repeats": 3
+      },
+      {
+        "family": 1,
+        "seed": 11192,
+        "gap": 93,
+        "repeats": 3
+      }
+    ]
+  },
+  "outcomes": [
+    {
+      "traceId": "mutant-healthy-launch",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-decisive-refusal",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "pass"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-readiness-hang",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal carrier events with paneId, generation, cause or suspectedHumanStop"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "not_applicable",
+          "missing": "window not observed before history end"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-snapshot-updates",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-multiple-pages",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-bound-pi-dead",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "window not observed before history end"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-clock-gap",
+      "seed": 42,
+      "stopped": "Replay bound exceeded",
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-cursor-replay",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "not_applicable",
+          "missing": "ensure_worker results"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "not_applicable",
+          "missing": "durable launch records with pendingLaunchId (C2)"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "journal seq fields"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal carrier events with paneId, generation, cause or suspectedHumanStop"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "journal seq fields"
+        },
+        "E3": {
+          "status": "not_applicable",
+          "missing": "durable launch records with pendingLaunchId"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "not_applicable",
+          "missing": "ensure_worker calls"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "not_applicable",
+          "missing": "ensure_worker calls"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "not_applicable",
+          "missing": "ensure_worker calls"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-escape",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "window not observed before history end"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-never-starts",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-pane-loss",
+      "seed": 42,
+      "stopped": "No such process",
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "pass"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "window not observed before history end"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-pid-reuse",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "witnessed",
+          "sequence": 221,
+          "detail": "pid 104 reused with a new birth token"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-restart",
+      "seed": 42,
+      "stopped": "Unmodeled bd command: show",
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-shutdown-resume",
+      "seed": 42,
+      "stopped": "Actor is not live: team-1/lead",
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "not_applicable",
+          "missing": "ensure_worker results"
+        },
+        "P5": {
+          "status": "pass"
+        },
+        "P6": {
+          "status": "not_applicable",
+          "missing": "durable launch records with pendingLaunchId (C2)"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal carrier events with paneId, generation, cause or suspectedHumanStop"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "journal seq fields"
+        },
+        "E3": {
+          "status": "not_applicable",
+          "missing": "durable launch records with pendingLaunchId"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "not_applicable",
+          "missing": "ensure_worker calls"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "not_applicable",
+          "missing": "ensure_worker calls"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "not_applicable",
+          "missing": "ensure_worker calls"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "synthetic-stale-binding",
+      "seed": 42,
+      "stopped": "Pi cross-Session fork allocation is not modeled yet",
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P9": {
+          "status": "not_applicable",
+          "missing": "lead observation stamps"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-pid-reuse",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "violation",
+          "sequence": 364,
+          "detail": "exit of w1 not named ended within 60000 ms"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "witnessed",
+          "sequence": 368,
+          "detail": "pid 106 reused with a new birth token"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-herdr-loss",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "not_applicable",
+          "missing": "window contains a fault: N/A under assumption"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "witnessed",
+          "sequence": 117,
+          "detail": "herdr fault during ensure_worker team-1/lead-call-2"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-reload-storm",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-compaction",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "pass"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "witnessed",
+          "sequence": 517,
+          "detail": "Pi compacted after a Team-update branch entry"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-contended-reservation",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "witnessed",
+          "sequence": 117,
+          "detail": "ensure_worker team-1/lead-call-3 started before team-1/lead-call-2 returned"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-source-ttl",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-delayed-source",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "witnessed",
+          "sequence": 245,
+          "detail": "pid 104 reused with a new birth token"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-append-ambiguity",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-human-stop",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "pass"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "witnessed",
+          "sequence": 245,
+          "detail": "suspectedHumanStop true"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-crash-before-record",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "pass"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "witnessed",
+          "sequence": 131,
+          "detail": "shell 103 of pane-1 died before any record"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "witnessed",
+          "sequence": 184,
+          "detail": "suspectedHumanStop true"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-snapshot-hydration",
+      "seed": 42,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-0",
+      "seed": 13,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-1",
+      "seed": 12,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "not_applicable",
+          "missing": "window contains a fault: N/A under assumption"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "witnessed",
+          "sequence": 117,
+          "detail": "herdr fault during ensure_worker team-1/lead-call-2"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-2",
+      "seed": 0,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "pass"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "witnessed",
+          "sequence": 140,
+          "detail": "shell 103 of pane-1 died before any record"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "witnessed",
+          "sequence": 184,
+          "detail": "suspectedHumanStop true"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-3",
+      "seed": 11,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "violation",
+          "sequence": 520,
+          "detail": "exit of w1 not named ended within 60000 ms"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "witnessed",
+          "sequence": 524,
+          "detail": "pid 108 reused with a new birth token"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-4",
+      "seed": 6,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-5",
+      "seed": 99994,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "pass"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "witnessed",
+          "sequence": 517,
+          "detail": "Pi compacted after a Team-update branch entry"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-6",
+      "seed": 70421,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "pass"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "witnessed",
+          "sequence": 557,
+          "detail": "Pi compacted after a Team-update branch entry"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-7",
+      "seed": 4,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-8",
+      "seed": 70676,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "not_applicable",
+          "missing": "journal suspectedHumanStop fields (P10)"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-9",
+      "seed": 68711,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "pass"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "pass"
+        },
+        "E2": {
+          "status": "pass"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "witnessed",
+          "sequence": 537,
+          "detail": "Pi compacted after a Team-update branch entry"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-10",
+      "seed": 15,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "pass"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "not_applicable",
+          "missing": "journal generation without exact fields (C2)"
+        },
+        "E1": {
+          "status": "violation",
+          "sequence": 520,
+          "detail": "exit of w1 not named ended within 60000 ms"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "pass"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "witnessed",
+          "sequence": 524,
+          "detail": "pid 108 reused with a new birth token"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "absent"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    },
+    {
+      "traceId": "mutant-generated-11",
+      "seed": 11192,
+      "stopped": null,
+      "results": {
+        "P1": {
+          "status": "pass"
+        },
+        "P2": {
+          "status": "not_applicable",
+          "missing": "journal process: gone claims"
+        },
+        "P3": {
+          "status": "not_applicable",
+          "missing": "served process: live claims"
+        },
+        "P4": {
+          "status": "pass"
+        },
+        "P5": {
+          "status": "not_applicable",
+          "missing": "pane closures"
+        },
+        "P6": {
+          "status": "pass"
+        },
+        "P7": {
+          "status": "not_applicable",
+          "missing": "journal appends with PTB tool call ids"
+        },
+        "P8": {
+          "status": "pass"
+        },
+        "P9": {
+          "status": "pass"
+        },
+        "P10": {
+          "status": "pass"
+        },
+        "E1": {
+          "status": "not_applicable",
+          "missing": "worker_pi process exits bound to a Membership (processKind)"
+        },
+        "E2": {
+          "status": "not_applicable",
+          "missing": "lead never idle and eligible after the append in the window"
+        },
+        "E3": {
+          "status": "not_applicable",
+          "missing": "window contains a fault: N/A under assumption"
+        },
+        "E4": {
+          "status": "not_applicable",
+          "missing": "journal activity: blocked transitions (C2)"
+        },
+        "E5": {
+          "status": "pass"
+        },
+        "S1": {
+          "status": "absent"
+        },
+        "S2": {
+          "status": "absent"
+        },
+        "S3": {
+          "status": "absent"
+        },
+        "S4": {
+          "status": "witnessed",
+          "sequence": 117,
+          "detail": "herdr fault during ensure_worker team-1/lead-call-2"
+        },
+        "S5": {
+          "status": "not_applicable",
+          "missing": "ptb.team-update branch entries"
+        },
+        "S6": {
+          "status": "absent"
+        },
+        "retry": {
+          "status": "not_applicable",
+          "missing": "decisive start refusal"
+        }
+      }
+    }
+  ]
+}
