@@ -85,20 +85,27 @@ const STOP_TOOLS = new Set(["worker_stop", "team_shutdown"]);
 export function p5ClosesCited(history: readonly HistoryEntry[]): Verdict {
   const closes = ofKind(history, "pane.close");
   if (!closes.length) return notApplicable("pane closures");
-  const rows = ofKind(history, "journal.append");
+  const teams = ofKind(history, "durable.team");
   const stops = ofKind(history, "tool.call").filter(call => STOP_TOOLS.has(call.name));
+  let undecided: string | undefined;
   for (const close of closes) {
     const origin = close.origin;
     if (origin.kind !== "ptb") continue;
-    // A stop authorizes only its target: a Worker stop covers that Worker's pane, a team stop covers any pane.
-    const owners = new Set(rows.filter(row => row.sequence < close.sequence && row.event.paneId === close.pane.paneId && row.event.worker !== undefined).map(row => row.event.worker!));
-    const authorized = stops.some(
-      call => call.sequence < close.sequence && actorKey(call.actor) === actorKey(origin.actor)
-        && (call.name === "team_shutdown" || (typeof call.args.worker === "string" && owners.has(call.args.worker))),
-    );
-    if (!authorized) return violation(close.sequence, `pane ${close.pane.paneId} closed without a stop for its Worker`);
+    const sameActor = (call: { sequence: number; actor: { team: string; actor: string } }) => call.sequence < close.sequence && actorKey(call.actor) === actorKey(origin.actor);
+    if (stops.some(call => sameActor(call) && call.name === "team_shutdown")) continue;
+    const workerStops = stops.filter(call => sameActor(call) && call.name === "worker_stop");
+    if (!workerStops.length) return violation(close.sequence, `pane ${close.pane.paneId} closed without a stop request`);
+    // A Worker stop authorizes only the Worker's current Membership target, read from the latest durable Team record.
+    const config = teams.filter(entry => entry.sequence < close.sequence).at(-1)?.record;
+    const targets = workerStops.map(call => (typeof call.args.worker === "string" ? currentTargetPane(config, call.args.worker) : undefined));
+    if (targets.includes(close.pane.paneId)) continue;
+    if (targets.includes(undefined)) {
+      undecided ??= `pane ${close.pane.paneId}: no current target evidence for the stopped Worker in durable Team records`;
+      continue;
+    }
+    return violation(close.sequence, `pane ${close.pane.paneId} closed by a stop of another Worker's target`);
   }
-  return pass();
+  return undecided ? notApplicable(undecided) : pass();
 }
 
 /** P6 (always): at most one outstanding launch reservation per Membership. */
@@ -176,10 +183,53 @@ function pageNames(entry: JsonObject): { workers: Set<string>; tasks: Set<string
   };
 }
 
-/** The Task a journal event names (`type: task`, `ref.taskId`). */
-function taskOf(event: JournalFact): string | undefined {
+/** The Task and version a journal event names (`type: task`, `ref.taskId`, `ref.version`). */
+function taskRef(event: JournalFact): { taskId: string; version?: string } | undefined {
   const ref = event.raw.ref as JsonObject | undefined;
-  return event.type === "task" && typeof ref?.taskId === "string" ? ref.taskId : undefined;
+  if (event.type !== "task" || typeof ref?.taskId !== "string") return undefined;
+  return { taskId: ref.taskId, version: typeof ref.version === "string" ? ref.version : undefined };
+}
+
+/** The Task cards (id and version) a branch page or an authority read carries. */
+function taskCards(payload: JsonObject | undefined): Array<[string, string]> {
+  const cards: Array<[string, string]> = [];
+  const take = (card: Json | undefined) => {
+    if (card === null || typeof card !== "object" || Array.isArray(card)) return;
+    if (typeof card.id === "string" && typeof card.version === "string") cards.push([card.id, card.version]);
+  };
+  if (Array.isArray(payload?.tasks)) payload.tasks.forEach(take);
+  if (Array.isArray(payload?.taskChanges)) {
+    payload.taskChanges.forEach(change => take(change !== null && typeof change === "object" && !Array.isArray(change) ? change.current : undefined));
+  }
+  return cards;
+}
+
+/** The latest Task version the branch or an authority read showed before a sequence. */
+function observedTaskVersions(history: readonly HistoryEntry[], before: number): Map<string, string> {
+  const versions = new Map<string, string>();
+  for (const entry of history) {
+    if (entry.sequence >= before) continue;
+    if (entry.kind === "lead.entry") {
+      const payload = observationPayload((entry.entry.message as JsonObject | undefined)?.content ?? entry.entry.content);
+      for (const [id, version] of taskCards(payload)) versions.set(id, version);
+    } else if (entry.kind === "tool.result") {
+      for (const [id, version] of taskCards(entry.result.details)) versions.set(id, version);
+    }
+  }
+  return versions;
+}
+
+/** The Membership target pane of a Worker in the durable Team record, or undefined when the record does not prove it. */
+function currentTargetPane(record: JsonObject | null | undefined, worker: string): string | undefined {
+  const members = record?.members;
+  if (!Array.isArray(members)) return undefined;
+  for (const member of members) {
+    if (member === null || typeof member !== "object" || Array.isArray(member)) continue;
+    if (member.name !== worker || member.isActive === false) continue;
+    const target = member.terminalTarget;
+    return target !== null && typeof target === "object" && !Array.isArray(target) && typeof target.targetId === "string" ? target.targetId : undefined;
+  }
+  return undefined;
 }
 
 /** P8 (always): an eligible journal event below a stamp's cursor is represented by the branch or a snapshot. A page's own range must name each event it covers. */
@@ -191,17 +241,20 @@ export function p8CoverageLedger(history: readonly HistoryEntry[]): Verdict {
   for (const stamp of stamps) {
     const { team, from, through } = stamp.stamp!;
     const page = pageNames(stamp.entry);
+    const observed = observedTaskVersions(history, stamp.sequence);
     for (const event of events) {
       const seq = event.event.seq!;
       if (event.team !== team || seq <= 0 || seq > through || event.sequence > stamp.sequence) continue;
+      // A Task version that the branch or an authority read already superseded is not eligible for the page.
+      const ref = taskRef(event.event);
+      if (ref?.version !== undefined && observed.has(ref.taskId) && observed.get(ref.taskId) !== ref.version) continue;
       if (seq > from) {
         const worker = event.event.worker;
         if (worker !== undefined && !page.workers.has(worker)) {
           return violation(stamp.sequence, `page through ${through} omits event ${seq} (${worker}); M6 class`);
         }
-        const task = taskOf(event.event);
-        if (task !== undefined && !page.tasks.has(task)) {
-          return violation(stamp.sequence, `page through ${through} omits task event ${seq} (${task}); M6 class`);
+        if (ref !== undefined && !page.tasks.has(ref.taskId)) {
+          return violation(stamp.sequence, `page through ${through} omits task event ${seq} (${ref.taskId}); M6 class`);
         }
         continue;
       }
