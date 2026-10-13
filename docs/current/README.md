@@ -212,6 +212,11 @@ restating executable definitions.
 
 ## Decisions still in force
 
+- Accepted [Decision 0023](../decisions/0023-received-alert-recovery.md)
+  makes received Alerts recoverable: the `team_sync` snapshot lists the newest
+  10 Alerts that the caller's exact Membership received, from its inbox, with
+  2000-point previews and an omitted count. `updates.alerts` stays empty.
+
 - Accepted [Decision 0022](../decisions/0022-carrier-harness-migration.md)
   keeps multiplexer and agent-harness migration open. The generic layer holds
   PTB's intrinsic ontology; adapters hold knowledge that depends on Herdr, Pi
