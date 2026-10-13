@@ -2,18 +2,18 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { nodeHostEnv } from "../env/host-env";
 import type { Member } from "./contracts";
 import * as runtime from "../utils/runtime";
-const fixture = vi.hoisted(() => ({ members: [] as Member[], leased: false, starts: 0, splits: 0, release: undefined as undefined | ((value: any) => void) }));
+const fixture = vi.hoisted(() => ({ members: [] as Member[], separateWindows: false, mutations: [] as string[], leased: false, starts: 0, splits: 0, release: undefined as undefined | ((value: any) => void) }));
 vi.mock("../utils/lock", async importOriginal => ({ ...await importOriginal<any>(), withLock: async (_: unknown, fn: () => unknown) => fn() }));
 vi.mock("../utils/teams", () => ({
-  readConfig: async () => ({ name: "team", terminalBackend: "herdr", members: fixture.members }),
+  readConfig: async () => ({ name: "team", terminalBackend: "herdr", members: fixture.members, separateWindows: fixture.separateWindows }),
   newLaunchId: () => `launch-${fixture.members.length + 1}`,
   newMembershipId: () => "membership",
-  addMember: async (_: unknown, member: Member) => { fixture.members.push(member); },
+  addMember: async (_: unknown, member: Member) => { fixture.mutations.push("add"); fixture.members.push(member); },
   withCurrentMembershipLease: async (_: unknown, id: string, fn: (member: Member) => unknown) => {
     fixture.leased = true;
     try { return await fn(fixture.members.find(m => m.membershipId === id)!); } finally { fixture.leased = false; }
   },
-  updateMembership: async (_: unknown, id: string, updates: Partial<Member>) => Object.assign(fixture.members.find(m => m.membershipId === id)!, updates),
+  updateMembership: async (_: unknown, id: string, updates: Partial<Member>) => { fixture.mutations.push("update"); return Object.assign(fixture.members.find(m => m.membershipId === id)!, updates); },
 }));
 vi.mock("../utils/team-pane-placement", () => ({ teamPanePlacement: () => ({ leaderPaneId: "leader", workerPaneIds: [] }) }));
 vi.mock("../utils/team-terminal", async () => {
@@ -33,7 +33,7 @@ import { createModelToolJourneyExecutors } from "../model-tool-contract/executor
 import { projectToolResult } from "../model-tool-contract/result-projection";
 import { projectToolTuiMessage } from "../model-tool-contract/tui-projection";
 
-beforeEach(() => { fixture.members = []; fixture.leased = false; fixture.splits = 0; fixture.starts = 0; });
+beforeEach(() => { fixture.members = []; fixture.separateWindows = false; fixture.mutations = []; fixture.leased = false; fixture.splits = 0; fixture.starts = 0; });
 afterEach(() => { vi.restoreAllMocks(); });
 it.each(["started", "unknown"] as const)("returns launch_stalled for an old %s launch with no agent in its pane", async state => {
   fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
@@ -84,6 +84,27 @@ it.each([true, false])("missing macOS helper gives actionable attention without 
   expect(served.message).toContain("rustc");
   expect(projectToolTuiMessage({ tool: "ensure_worker", details, expanded: false }).body?.join("\n")).toContain(served.message);
   expect(run).not.toHaveBeenCalled();
+  expect(fixture.splits).toBe(0);
+  expect(fixture.starts).toBe(0);
+});
+it.each(["create", "prepared recovery", "bound recovery"])("refuses unsupported separate windows before %s claim or effects", async scenario => {
+  fixture.separateWindows = true;
+  if (scenario !== "create") fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership",
+    ...(scenario === "bound recovery" ? { sessionFile: "/sessions/worker.jsonl" } : { pendingLaunchId: "prior-launch" }),
+    launch: { launchId: "prior-launch", state: "refused", requestedAt: 1 } } as Member];
+  vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue(scenario === "bound recovery"
+    ? { teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1, osBirthToken: "birth", bootId: "boot" } : null);
+  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+  const prior = structuredClone(fixture.members);
+  const aggregate = vi.fn(() => ({ projectTrusted: false }));
+  const publish = vi.fn(async () => ({ cursor: "1" }));
+  const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: aggregate, lifecyclePublication: { recordWorkerPrepared: publish, readEventCursor: () => "0" } as any });
+  await expect(bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/workspace", scope: "test", modelProfile: { provider: "fixture", model: "small" } }))
+    .rejects.toThrow("Separate windows mode is not supported in herdr.");
+  expect(fixture.members).toEqual(prior);
+  expect(fixture.mutations).toEqual([]);
+  expect(aggregate).not.toHaveBeenCalled();
+  expect(publish).not.toHaveBeenCalled();
   expect(fixture.splits).toBe(0);
   expect(fixture.starts).toBe(0);
 });

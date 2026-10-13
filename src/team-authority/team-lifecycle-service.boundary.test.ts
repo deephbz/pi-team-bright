@@ -15,6 +15,7 @@ const fixture = vi.hoisted(() => ({
   killWindow: vi.fn(),
   paneAlive: false,
   windowAlive: false,
+  windowsSupported: true,
   stopped: [] as string[],
   deactivate: [] as string[],
 }));
@@ -55,15 +56,16 @@ vi.mock("../utils/terminal-target", () => ({
   assertTeamTerminalTarget: (_config: unknown, member: any) => member.terminalTarget,
   memberTerminalTarget: (member: any) => member.terminalTarget,
 }));
-vi.mock("../utils/team-terminal", () => ({
+vi.mock("../utils/team-terminal", async importOriginal => ({
+  ...await importOriginal<any>(),
   terminalForTeam: () => ({
     name: "fake-terminal",
     kill: (...args: unknown[]) => fixture.kill(...args),
     killWindow: (...args: unknown[]) => fixture.killWindow(...args),
     isAlive: () => fixture.paneAlive,
     isWindowAlive: () => fixture.windowAlive,
+    supportsWindows: () => fixture.windowsSupported,
   }),
-  assertTargetSupportedByTerminal: () => undefined,
 }));
 
 import { TeamLifecycleService } from "./team-lifecycle-service";
@@ -117,6 +119,7 @@ function reset() {
   fixture.killWindow.mockReset();
   fixture.paneAlive = false;
   fixture.windowAlive = false;
+  fixture.windowsSupported = true;
   fixture.stopped = [];
   fixture.deactivate = [];
 }
@@ -183,6 +186,22 @@ describe("Team lifecycle service boundary", () => {
     expect(killMethod === "kill" ? fixture.kill : fixture.killWindow).toHaveBeenCalledWith(targetId);
     expect(fixture.deactivate).toEqual(["worker"]);
     expect(fixture.events).toEqual(["topology", "guard:worker", "membership:worker-membership", "deactivate:worker-membership", "stopped:worker"]);
+  });
+
+  it("refuses to stop an unsupported window target without closing or deactivating it", async () => {
+    reset();
+    const worker = member("worker", { kind: "window", targetId: "window-1" });
+    fixture.config.members = [worker];
+    fixture.windowsSupported = false;
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+    await expect(service.stopWorker("team", "worker")).resolves.toMatchObject({ kind: "refused", reason: "stop_not_confirmed",
+      message: expect.stringMatching(/fake-terminal.*doesn't support windows/) });
+    expect(fixture.kill).not.toHaveBeenCalled();
+    expect(fixture.killWindow).not.toHaveBeenCalled();
+    expect(fixture.deleteRuntime).not.toHaveBeenCalled();
+    expect(fixture.deactivate).toEqual([]);
+    expect(fixture.stopped).toEqual([]);
+    expect(worker.isActive).toBe(true);
   });
 
   it("characterizes a stopped-event publication failure after the Membership deactivates", async () => {
