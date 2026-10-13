@@ -137,6 +137,9 @@ Unknown launch evidence never authorizes another spawn.
 `legacy_unverified` with `ask_human` identifies a bound Worker without a birth token.
 Ask the human to reload that Worker's Pi to re-admit its generation with a birth token,
 or adopt that Worker in `/ptb status`. Never spawn a replacement from this result.
+`generation_helper_missing` with `ask_human` means the macOS process-generation helper is missing.
+Tell the human to install Rust (`rustc`) and Xcode Command Line Tools, then run `npm run build:process-generation`.
+Do not call `ensure_worker` again until the human confirms.
 `worker_ensured.recovered` reports exact-Session recovery without changing the Attempt.
 Recovery journals the previous generation's verified exit before binding its replacement.
 Ask the human before recovery when `lastStop.suspectedHumanStop` is true.
