@@ -1,0 +1,459 @@
+{
+  "version": 1,
+  "id": "m6-oracle-gaps-2-witness",
+  "source": "synthetic",
+  "assumptions": [
+    "S-first-worker-pane-is-pane-1"
+  ],
+  "setup": {
+    "ptbVersion": "v3.1",
+    "teams": []
+  },
+  "steps": [
+    {
+      "at": 0,
+      "step": {
+        "kind": "pi.start",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "session": "session-1",
+        "reason": "startup"
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_create",
+        "args": {
+          "name": "team-1",
+          "purpose": "Synthetic v3.1 campaign"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_sync",
+        "args": {
+          "view": "snapshot"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-4",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-5",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-6",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-7",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-8",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-9",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-10",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-11",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-12",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-13",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-14",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-15",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-16",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-17",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-18",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-19",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-20",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-21",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-22",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-23",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-24",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-25",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-26",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-27",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-28",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "extra-29",
+          "scope": "Fill multiple journal pages"
+        }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "team_sync",
+        "args": {
+          "view": "updates"
+        }
+      }
+    }
+  ]
+}
