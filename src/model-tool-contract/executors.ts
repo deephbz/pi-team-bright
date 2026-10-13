@@ -1,4 +1,5 @@
 import type { Static } from "typebox";
+import { MISSING_GENERATION_HELPER_MESSAGE } from "../env/process-generation";
 import {
   EnsureWorkerParametersSchema,
   EnsureWorkerResultSchema,
@@ -180,7 +181,8 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
       }
       const receipt = { ...(outcome.launchId ? { launchId: outcome.launchId } : {}), ...(outcome.launch ? { launch: outcome.launch } : {}), ...(outcome.lastStop ? { lastStop: outcome.lastStop } : {}) };
       if (outcome.kind === "attention") return { kind: "attention", worker: outcome.worker.name, ...(outcome.paneId ? { paneId: outcome.paneId } : {}), reason: outcome.reason, nextActionHint: outcome.nextActionHint,
-        ...(outcome.reason === "legacy_unverified" ? { message: `Reload Worker ${outcome.worker.name}'s Pi to re-admit its generation with a birth token, or adopt that Worker in /ptb status. No replacement was started.` } : {}), ...receipt };
+        ...(outcome.reason === "legacy_unverified" ? { message: `Reload Worker ${outcome.worker.name}'s Pi to re-admit its generation with a birth token, or adopt that Worker in /ptb status. No replacement was started.` } : {}),
+        ...(outcome.reason === "generation_helper_missing" ? { message: `${MISSING_GENERATION_HELPER_MESSAGE} No replacement was started.` } : {}), ...receipt };
       return { kind: "worker_ensured", effect: outcome.kind, worker: publicWorker(outcome.worker), ...receipt, ...(outcome.recoveryMode ? { recoveryMode: outcome.recoveryMode } : {}) };
     },
 

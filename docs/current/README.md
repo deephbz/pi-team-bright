@@ -220,8 +220,9 @@ restating executable definitions.
   attention with `ask_human`. The model result and collapsed TUI name both exits:
   reload that Worker's Pi to re-admit its generation with a birth token, or adopt
   it in `/ptb status`. Pending or stalled launch evidence cannot replace this
-  attention. It never spawns a replacement. Other unknown-generation rows stay
-  unchanged.
+  attention. It never spawns a replacement. A missing macOS verifier helper takes
+  precedence with `generation_helper_missing` and `ask_human`. The model result,
+  collapsed TUI, and native admission refusal name the helper and build command.
   Launch claims a durable ID before external effects and returns a receipt
   without waiting for readiness. Elapsed time and start errors keep the pane.
   The same-generation `live`/`stopping` reload pair stays silent while durable
@@ -253,8 +254,11 @@ restating executable definitions.
   An old started or unknown launch with no Herdr agent in its pane returns
   `launch_stalled` attention. The human can authorize `worker_stop` before retry.
   A missing Herdr row never authorizes another spawn.
-  Linux reads procfs. macOS uses the dependency-free helper built with
-  `npm run build:process-generation`; a missing helper yields unknown.
+  Linux reads procfs. On macOS, npm `postinstall` builds the dependency-free
+  helper from packaged source with `rustc` and Xcode Command Line Tools.
+  `npm run build:process-generation` repairs installs with disabled lifecycle
+  scripts. Missing `rustc` fails installation with a prerequisite diagnostic.
+  A missing helper yields unknown process evidence and never authorizes a spawn.
   `/ptb status` persists one human-only transcript entry with carrier, stop,
   and nonterminal Task evidence. It batches explicit adoption of tokenless
   records and remembers a decline within the exact Session runtime.

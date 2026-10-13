@@ -47,7 +47,8 @@ export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | n
   const exact = status?.membershipId === member.membershipId ? status : null;
   const probe = observed ?? (exact?.pid ? hostEnv().process.generation(exact.pid) : { kind: "unknown" as const, reason: "runtime_missing" });
   const verified = verifyRuntimeGeneration(exact, probe);
-  const processFact = !exact?.osBirthToken && exact?.pid ? "birth_token_missing" : probe.kind === "unknown" ? probe.reason : verified;
+  const processFact = probe.kind === "unknown" && probe.reason === "generation_helper_missing" ? probe.reason
+    : !exact?.osBirthToken && exact?.pid ? "birth_token_missing" : probe.kind === "unknown" ? probe.reason : verified;
   const process = status === null && member.launch?.state === "refused" && !member.launch.priorGeneration ? "none"
     : verified === "live" && exact?.lastStop ? "stopping" : verified;
   return { worker: member.name, membership: member.membershipId ?? "", launchId: member.launch?.launchId ?? member.pendingLaunchId,

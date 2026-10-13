@@ -26,7 +26,13 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
 2. **Process liveness comes from the generation verifier.** Admission records
    `{pid, osBirthToken, bootId}`. Linux reads `/proc/<pid>/stat` field 22 and
    `/proc/sys/kernel/random/boot_id`. macOS uses the dependency-free helper built by
-   `npm run build:process-generation`. An unsupported platform or a read error
+   the npm `postinstall` hook. It compiles packaged source with `rustc` and Xcode
+   Command Line Tools. `npm run build:process-generation` repairs installs with
+   disabled lifecycle scripts. A missing helper produces `generation_helper_missing`
+   attention with `ask_human`; the tool result and native admission refusal name
+   the helper and build command. This takes precedence over legacy-token and
+   launch attention because reload or adoption cannot fix a missing verifier.
+   An unsupported platform or a read error
    yields `unknown`. Only verified absence or a birth-token mismatch sets
    `process: gone`. A live shell or a present terminal target never sets
    `process: live`.
@@ -78,7 +84,8 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    Its model result and collapsed TUI name both exits: reload that Worker's Pi to
    re-admit its generation with a birth token, or adopt it in `/ptb status`.
    Pending or stalled launch evidence does not replace this attention. It never
-   authorizes a spawn. Other unknown-generation planner rows stay unchanged.
+   authorizes a spawn. Other unknown-generation planner rows stay unchanged unless
+   the verifier reports the missing-helper condition in item 2.
 
 ## Consequences
 
@@ -117,7 +124,8 @@ Executable evidence: [`carrier-observer.v31.test.ts`](../../src/carrier-observer
 [`v31-receipts.test.ts`](../../sim/v31-receipts.test.ts),
 [`migration.v31.test.ts`](../../sim/migration.v31.test.ts),
 [`worker-ensure-plan.v31.test.ts`](../../src/utils/worker-ensure-plan.v31.test.ts),
-[`process-generation.test.ts`](../../src/env/process-generation.test.ts), and
-[`process-generation.native.test.ts`](../../src/env/process-generation.native.test.ts).
+[`process-generation.test.ts`](../../src/env/process-generation.test.ts),
+[`process-generation.native.test.ts`](../../src/env/process-generation.native.test.ts), and
+[`process-generation.missing-helper.test.ts`](../../src/env/process-generation.missing-helper.test.ts).
 The verification list in [Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md#verification)
 still names the real-Herdr checks that these unit tests do not replace.
