@@ -40,11 +40,27 @@
     {
       "at": 0,
       "step": {
-        "kind": "fault.set",
-        "fault": {
-          "source": "herdr",
-          "mode": "unavailable"
+        "kind": "tool.call",
+        "who": {
+          "team": "team-1",
+          "actor": "lead"
+        },
+        "tool": "ensure_worker",
+        "args": {
+          "name": "w1",
+          "scope": "Synthetic campaign worker"
         }
+      }
+    },
+    {
+      "at": 0,
+      "step": {
+        "kind": "os.kill",
+        "who": {
+          "team": "team-1",
+          "actor": "w1"
+        },
+        "signal": "SIGKILL"
       }
     },
     {

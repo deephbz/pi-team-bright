@@ -114,3 +114,96 @@ the earlier recheck.
   from the normalized event field. Production placement of that field was not
   re-checked in this step.
 - The `alreadyIdle` rule has no campaign coverage.
+
+## Round 2 (task `oracle-gaps-2`)
+
+Source: `v31-props` at `467143c` (merge of `v31-integration`). Counterexamples:
+`/tmp/ptb-state-liveness/second-opinion-oracle-gaps.md`. Probe:
+`/tmp/ptb-state-liveness/oracle-gaps-negative-probe.mjs`.
+
+### Monitor changes
+
+| Case | Round 1 | Change | Round 2 |
+| --- | --- | --- | --- |
+| P8 obsolete Task version (false positive) | violation | A Task event whose version differs from the latest version the branch or an authority read showed before the stamp is not eligible. | pass |
+| P8 current Task version omitted (control) | violation | Same rule. | violation |
+| P5 exact `worker_stop(w1)` closes w1 target, no journal row (false positive) | violation | A Worker stop authorizes a close only when the pane is that Worker's current target in the latest durable Team record. No record gives N/A with reason. | pass |
+| P5 `worker_stop(w2)` closes w1 target (unrelatedStop) | violation | Same rule, with durable records for both Workers. | violation |
+| P5 unrelated stop, no durable record (probe fixture) | violation | Same rule. | not_applicable |
+| E3 older launch start resolves newer launch (false negative) | pass | A launch resolves only with the same launch id. Durable consumption settles the last pending launch recorded before it. | violation |
+
+Round 1 probe cases are unchanged except `unrelatedStop`. That fixture has no
+durable Team record, so the verdict is N/A. This weakens round 1: the probe
+case no longer proves a violation without durable evidence.
+
+Probe rerun (`oracle-gaps-negative-probe`):
+`authorizedNoJournal` pass, `obsoleteTaskPage` pass, `staleLaunch` violation,
+`omittedTask` violation, `requestedOnly` violation, `unrelatedStop` N/A,
+`alreadyIdle` violation.
+
+Tests: `sim/monitors` 70 of 70 pass. `tsc --noEmit` is clean for `sim/`.
+
+### Campaign (`sim/results/v31/campaign.json`, final run)
+
+1045 histories: 1040 completed, 5 stopped prefixes. Zero violations.
+
+| Monitor | Violation | Pass | N/A |
+| --- | --- | --- | --- |
+| P1 | 0 | 1045 | 0 |
+| P2 | 0 | 465 | 580 |
+| P3 | 0 | 299 | 746 |
+| P4 | 0 | 1043 | 2 |
+| P5 | 0 | 194 | 851 |
+| P6 | 0 | 1043 | 2 |
+| P7 | 0 | 0 | 1045 |
+| P8 | 0 | 1034 | 11 |
+| P9 | 0 | 1035 | 10 |
+| P10 | 0 | 280 | 765 |
+| E1 | 0 | 465 | 580 |
+| E2 | 0 | 110 | 935 |
+| E3 | 0 | 943 | 102 |
+| E4 | 0 | 0 | 1045 |
+| E5 | 0 | 1043 | 2 |
+
+Witnesses S1 to S6: no violations. Counts are in the campaign file.
+
+### Mutant verdicts (`sim/results/mutants-oracle-gaps-2/`)
+
+| Mutant | Verdict | Killed by |
+| --- | --- | --- |
+| M1 | killed | P4 |
+| M2 | killed | retry |
+| M3 | survived | none (bounded unknown; see round 1) |
+| M4 | killed | P8 |
+| M5 | killed | E5 |
+| M6 | killed | P8 |
+
+### Classification of new violations
+
+- **E3, 104 violations, first campaign attempt:** monitor error, not a production
+  defect. My first durable check required `pendingLaunchId` on the consumed
+  record. Production clears that field on consumption
+  (`src/utils/teams.ts:944`). The fix matches the settled launch from the last
+  pending record before consumption. After the fix, zero violations remain.
+- No production defect is classified in round 2.
+
+### Limitations
+
+- P8 eligibility is equality with the latest observed version. A newer event
+  version not yet observed is also skipped. This can hide an omission (false
+  negative risk).
+- E3 journal resolution needs `launchId` on the row, either top-level or in
+  `carrier`. A row published after consumption may carry no launch id. This is
+  not measured.
+- Production consumed records do not store a launch id. The durable match
+  depends on record order.
+- `npm test` is not green on this tree. See the blocker below.
+
+### Blocker: `npm test`
+
+On `467143c`, `npm test` exits 1: 7 files and 22 tests fail, all under `src/`
+(`worker-launch-v31`, `binding-correctness`, `pi-session-adapter.characterization`,
+`runtime-startup-admission`, `session-lifecycle`, `sync-nudge-extension`,
+`worker-identity-process-admission.characterization`). No `src/` file imports
+`sim/`. These failures come from the integrated production tree. This task does
+not change `src/`. `native/bin` is absent. The present-state run was not done.

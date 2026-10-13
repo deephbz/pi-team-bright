@@ -1,4 +1,4 @@
-import { actorRef, type HistoryEntry, type JournalFact } from "../history";
+import { actorRef, type HistoryEntry, type JournalFact, type JsonObject } from "../history";
 import { faultInWindow, genKey, generationOf, lastAt, notApplicable, ofKind, pass, violation } from "./util";
 import type { Verdict } from "./types";
 
@@ -76,6 +76,14 @@ export function e2EventReachesBranch(history: readonly HistoryEntry[], options: 
   return settle(underFault, unobserved);
 }
 
+/**
+ * The launch a consumed durable record settled. Consumption clears `pendingLaunchId`, so the
+ * settled launch is the last pending launch recorded for the same Membership before it.
+ */
+function settledLaunchBefore(history: readonly HistoryEntry[], sequence: number, membershipId: string | undefined): string | undefined {
+  return ofKind(history, "durable.launch").filter(entry => entry.sequence < sequence && entry.record?.membershipId === membershipId && entry.record?.pendingLaunchId !== undefined).at(-1)?.record?.pendingLaunchId;
+}
+
 /** E3 (eventually): a healthy launch completes or reports unknown within the bound. */
 export function e3LaunchCompletesOrReportsUnknown(history: readonly HistoryEntry[], options: { boundMs?: number } = {}): Verdict {
   if (options.boundMs === undefined) return notApplicable("launch completion bound (not ruled)");
@@ -87,8 +95,9 @@ export function e3LaunchCompletesOrReportsUnknown(history: readonly HistoryEntry
   for (const start of launches) {
     const membershipId = start.record!.membershipId;
     const deadline = start.at + boundMs;
-    const resolved = ofKind(history, "durable.launch").some(entry => entry.sequence > start.sequence && entry.record?.membershipId === membershipId && entry.record?.launchConsumedAt !== undefined && entry.at <= deadline)
-      || ofKind(history, "journal.append").some(entry => entry.sequence > start.sequence && entry.event.raw.field === "launch" && ["started", "refused", "unknown"].includes(String(entry.event.raw.to)) && entry.event.membershipId === membershipId && entry.at <= deadline);
+    const launchId = start.record!.pendingLaunchId;
+    const resolved = ofKind(history, "durable.launch").some(entry => entry.sequence > start.sequence && entry.record?.membershipId === membershipId && entry.record?.launchConsumedAt !== undefined && settledLaunchBefore(history, entry.sequence, entry.record?.membershipId) === launchId && entry.at <= deadline)
+      || ofKind(history, "journal.append").some(entry => entry.sequence > start.sequence && entry.event.raw.field === "launch" && ["started", "refused", "unknown"].includes(String(entry.event.raw.to)) && (entry.event.raw.launchId ?? (entry.event.raw.carrier as JsonObject | undefined)?.launchId) === launchId && entry.event.membershipId === membershipId && entry.at <= deadline);
     if (resolved) continue;
     if (lastAt(history) <= deadline) { unobserved = true; continue; }
     if (faultInWindow(history, start.at, deadline)) { underFault = true; continue; }

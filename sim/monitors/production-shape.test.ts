@@ -56,7 +56,7 @@ it("E2 covers a persisted cursor event by a branch stamp", () => {
   expect(e2EventReachesBranch(journal([{ field: "process", to: "gone" }], [], [{ kind: "world.input", input: 0, step: { kind: "agent.settled", who: { team: "team-1", actor: "lead" } } }, { kind: "lead.entry", actor: { team: "team-1", actor: "lead" }, sessionId: "s1", entryId: "e1", entry: {}, stamp }]), { latencyMs: 60000 }).status).toBe("pass");
 });
 it("E3 reads a nested launch result", () => {
-  expect(e3LaunchCompletesOrReportsUnknown(journal([{ field: "launch", to: "started" }], [{ kind: "durable.launch", team: "team-1", path: "launch", source: "member", record: { raw: {}, membershipId: "member-1", pendingLaunchId: "launch-1" } }]), { boundMs: 60000 }).status).toBe("pass");
+  expect(e3LaunchCompletesOrReportsUnknown(journal([{ field: "launch", to: "started", launchId: "launch-1" }], [{ kind: "durable.launch", team: "team-1", path: "launch", source: "member", record: { raw: {}, membershipId: "member-1", pendingLaunchId: "launch-1" } }]), { boundMs: 60000 }).status).toBe("pass");
 });
 it("E4 reads the production blocked attention field", () => {
   expect(e4BlockedAttentionOncePerEpoch(journal([{ field: "activity", to: "blocked" }, { field: "blocked", to: "blocked", nextActionHint: "ask_human" }]), { thresholdMs: 3000 }).status).toBe("pass");
