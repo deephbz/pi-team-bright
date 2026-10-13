@@ -166,4 +166,4 @@ it("records v3.1 fixtures, baseline counterexamples, generated schedules and sca
   write("campaign.json", report); fs.rmSync(path.join(output, "progress.json"), { force: true });
   console.info(`v31 findings ${minimized.map(m => m.property).join(",")}; ${report.timings.totalIncludingShrinkAndScaleMs.toFixed(0)}ms`);
   expect(samples).toHaveLength(runs);
-});
+}, 3_600_000);

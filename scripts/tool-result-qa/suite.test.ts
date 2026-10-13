@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { expect, test } from "vitest";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { parseObservationContent } from "../../src/coordination/observation-content";
 import { projectToolResult } from "../../src/model-tool-contract/result-projection";
 import {
   captureToolCase,
@@ -21,7 +22,7 @@ const outputPath = path.resolve(
 type QaToolResultEntry = {
   id: string;
   type: "message";
-  message: { role: "toolResult"; toolCallId: string; content: any[] };
+  message: { role: "toolResult"; toolCallId: string; toolName: string; details: unknown; content: any[] };
 };
 
 function brief(
@@ -75,6 +76,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     const extension = (await import("../../extensions/index")).default;
     const paths = await import("../../src/utils/paths");
     const teams = await import("../../src/utils/teams");
+    const runtime = await import("../../src/utils/runtime");
     const tasks = await import("../../src/utils/tasks");
     const authorityAdapter = await import("../../src/model-tool-contract/beads-authority-adapter");
     const taskAdapter = await import("../../src/model-tool-contract/beads-task-adapter");
@@ -258,12 +260,12 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
           entries.push({
             id: `qa-entry-${options.id}`,
             type: "message",
-            message: { role: "toolResult", toolCallId: options.id, content: result.content },
+            message: { role: "toolResult", toolCallId: options.id, toolName: options.tool, details: result.details, content: result.content },
           });
           branches.set(sessionId, entries);
           await emit("before_provider_request", { payload: result.content });
-          // This fixture models the successful provider turn after the tool
-          // result. Pi resolves the staged observation at assistant message_end.
+          // Native tool-result persistence commits the branch observation.
+          // Provider lifecycle events do not own its cursor.
           await emit("message_end", { message: { role: "assistant", stopReason: "stop" } });
           await emit("turn_end", { message: { role: "assistant", stopReason: "stop" } });
         },
@@ -412,6 +414,9 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       prepared.terminalTarget ? { terminalTarget: prepared.terminalTarget } : { tmuxPaneId: prepared.tmuxPaneId },
       workerMembership.membershipId,
     );
+    await runtime.writeRuntimeStatus(teamName, "reviewer", {
+      pid: process.pid, startedAt: Date.now(), osBirthToken: "fixture-birth", bootId: "fixture-boot",
+    }, bound.membershipId);
     await teamEvents.appendTeamEvent(teamName, {
       type: "worker",
       worker: "reviewer",
@@ -1287,7 +1292,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       if (!item.execution.threw) {
         expect(item.execution, item.id).toEqual({ threw: false, isError: false });
         const raw = detailsOf(item);
-        const model = JSON.parse(item.projections.model.text);
+        const model = parseObservationContent(item.projections.model.text);
         // This is the parity oracle: raw semantic truth produces exactly the
         // agent JSON from the registered tool, including recovery coordinates.
         expect(model, item.id).toEqual(projectToolResult(item.call.tool, raw));

@@ -135,6 +135,7 @@ function context(teamName: string, actor: string) {
   return {
     sessionManager: {
       getSessionFile: () => `/tmp/${teamName}-${actor}.jsonl`,
+      getBranch: () => [],
       buildContextEntries: () => [],
     },
     ui: { setStatus: vi.fn(), notify: vi.fn(), setTitle: vi.fn() },
