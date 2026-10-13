@@ -135,6 +135,7 @@ For `receipt_deadline`, call `ensure_worker` again; a stalled launch becomes `la
 use `worker_stop` to end that launch before `ensure_worker` creates another.
 Unknown launch evidence never authorizes another spawn.
 `worker_ensured.recovered` reports exact-Session recovery without changing the Attempt.
+Recovery journals the previous generation's verified exit before binding its replacement.
 Ask the human before recovery when `lastStop.suspectedHumanStop` is true.
 Use `/ptb status` to inspect stop evidence and confirm adoption of legacy generations.
 

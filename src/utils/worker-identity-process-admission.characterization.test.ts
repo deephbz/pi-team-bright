@@ -210,6 +210,8 @@ describe("registered Worker identity and process-admission characterization", ()
     expect(bound).toMatchObject({ membershipId, sessionFile });
     expect(bound.pendingLaunchId).toBeUndefined();
     expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([
+      expect.objectContaining({ membershipId, phase: "carrier", carrier: expect.objectContaining({ field: "process", to: "gone",
+        generation: { membershipId, pid: 47_001, startedAt: 7, osBirthToken: "old", bootId: "boot" } }) }),
       expect.objectContaining({ membershipId, phase: "session_bound", generation: expect.objectContaining({ membershipId, pid: process.pid }) }),
     ]);
     expect(recovered.shutdown).not.toHaveBeenCalled();
