@@ -96,7 +96,7 @@ describe("current team binding correctness", () => {
       text: "before removal",
     }, undefined, undefined, context("session"));
     expect(accepted).toMatchObject({
-      content: [{ type: "text", text: '{"kind":"alert_sent","accepted_recipients":["worker"],"failed_recipients":[]}' }],
+      content: [{ type: "text", text: '{"kind":"alert_sent","acceptance":"Stored for the recipient. Presentation and processing are unconfirmed.","accepted_recipients":["worker"],"failed_recipients":[]}' }],
       details: {
         kind: "alert_sent",
         accepted_recipients: ["worker"],

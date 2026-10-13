@@ -520,12 +520,15 @@ export const AlertSendParametersSchema = Type.Object({
   task_version: Type.Optional(TaskVersionRefSchema),
 }, { additionalProperties: false });
 
+export const AlertReceiptDegradationSchema = Type.Array(Type.Object({ recipient: WorkerName, engines: DeliveryDegradedSchema }, { additionalProperties: false }), { minItems: 1 });
+
 export const AlertSendResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("alert_sent"),
     alert_id: Type.String({ minLength: 1, maxLength: 128 }),
     accepted_recipients: Type.Array(WorkerName),
     failed_recipients: Type.Array(WorkerName),
+    delivery_degraded: Type.Optional(AlertReceiptDegradationSchema),
     task_state_changed: Type.Literal(false),
   }, { additionalProperties: false }),
   Type.Object({
@@ -994,7 +997,7 @@ export const modelToolCatalog = {
     {
       name: "alert_send",
       label: "Send Alert",
-      responsibility: "Send exceptional clarification or attention to one Worker, or an announcement to *. Never changes Task state.",
+      responsibility: "Send exceptional Alerts to a Worker or announce to *. Accepted means stored, not presented or processed. Task state stays unchanged.",
       actors: ["leader"],
       commonUseCases: ["Escalate exceptional coordination to one current Worker or announce to the Team."],
       whenNotToUse: ["Do not use an Alert to assign, advance, block, or complete a Task."],

@@ -169,7 +169,7 @@ export async function sendAlert(
       input.expectedSender,
       membership,
     );
-    accepted = [{ recipient: input.to, messageId: message.id }];
+    accepted = [{ recipient: input.to, messageId: message.id, ...(message.deliveryDegraded?.length ? { deliveryDegraded: message.deliveryDegraded } : {}) }];
     failures = [];
   }
 
@@ -187,9 +187,11 @@ export async function sendAlert(
     text: input.text.trim(),
   });
 
+  const deliveryDegraded = accepted.flatMap(row => row.deliveryDegraded?.length ? [{ recipient: row.recipient, engines: row.deliveryDegraded }] : []);
   return {
     alertId,
     cursor: event.cursor,
+    ...(deliveryDegraded.length ? { deliveryDegraded } : {}),
     accepted,
     failures,
   };

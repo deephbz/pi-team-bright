@@ -377,6 +377,10 @@ restating executable definitions.
   and their retries. Partial shutdown retains the current leader delivery.
   Full shutdown ends only the exact lead runtime generation and fails closed
   around malformed or foreign evidence.
+- An accepted Alert is stored for its recipient. The receipt proves neither
+  presentation nor processing. It includes known current-generation delivery
+  degradation as diagnostic evidence. Missing or degraded delivery never refuses
+  durable acceptance. Diagnostic evidence does not enter the inbox payload.
 - Coordination advice for an idle Worker with an `in_progress` Task names that
   Task and asks the lead to inspect its blocker and evidence before deciding.
   Carrier facts stay unchanged. Idle alone authorizes no spawn or replacement.
