@@ -172,3 +172,96 @@ the harness. M4 needs a hydration-race schedule and independent snapshot-content
 coverage. M6 needs a content-based coverage ledger. M3 needs an explicit decision
 about which assertion must reject a lease deadlock when a bounded unknown
 receipt remains valid. No monitor or production fix is included here.
+
+## Recheck after oracle triage
+
+Status: M4 and M6 now fail P8. M3 still survives E3 through the intended bounded
+unknown defense. This section supersedes the earlier survivor interpretation;
+the first experiment and its artifacts remain historical evidence.
+Architecture impact: none. No production source or monitor changed in this Task.
+
+The recheck merged `v31-integration` at `7df11a8` and `v31-props` at `714e9c0`.
+It uses the [triaged monitors](2026-10-13-oracle-triage.md) and the
+`snapshot-hydration` schedule family from `sim/hydration-race.ts`.
+
+| Mutant | Result | Assertion | Trace id | Steps | ReplayReceipt |
+| --- | --- | --- | --- | --- | --- |
+| M3 | Survived | E3 passes | `m3-recheck-witness` | 4 | [M3 receipt](../../sim/results/mutants-recheck/M3/minimal.receipt.json) |
+| M4 | Killed | P8 fails | `m4-recheck-witness` | 5 | [M4 receipt](../../sim/results/mutants-recheck/M4/minimal.receipt.json) |
+| M6 | Killed | P8 fails; P9 passes | `m6-recheck-witness` | 30 | [M6 receipt](../../sim/results/mutants-recheck/M6/minimal.receipt.json) |
+
+The trace, verdict, and evidence files sit beside each receipt. M4 and M6 are
+1-minimal under single-step deletion and timestamp reduction to the predecessor.
+Both use only zero timestamps. Their unchanged controls pass P8. Each recorded
+mutant history and all monitor verdicts match its receipt-driven replay exactly.
+M3 retains a fault-free witness with a complete 70000-millisecond window.
+
+### M3: intended bounded unknown defense
+
+The mutant cannot acquire the nested target-record lease. It returns
+`receipt_deadline` at 10000 milliseconds and records `launch: unknown` at 10015
+milliseconds. No Worker Pi process starts. The rechecked E3 passes this history.
+
+This outcome implements the intended defense; it is not a missed E3 failure:
+
+- [E3 in the verification catalog](2026-10-12-deterministic-simulation-verification.md#properties-revised-catalog)
+  allows a launch to complete **or report unknown**.
+- [Decision 0021, item 4](../decisions/0021-carrier-observation-liveness.md#decision)
+  explicitly includes nested leases in the ten-second receipt deadline. Expiry
+  must return attention and prevent a late start. Item 7 makes unknown fail closed.
+- The same decision requires the normal launch path to release the Membership
+  lease before starting Herdr. M3 violates that structural rule, but the deadline
+  still contains its failure.
+
+The older catalog sentence “Deadlock under the lease fails E3” and its M3 gate
+row are stricter than E3's completion-or-unknown outcome rule. The accepted
+bounded-unknown policy does not require this mutant to fail E3. This recheck does
+not change either rule or claim that launch-under-lease is acceptable production
+code. It reports a defended mutant and identifies the literal all-mutants-killed
+gate requirement as inconsistent with that permitted outcome.
+
+### M4: the hydration race now kills the mutant
+
+The minimized trace delays the external Task read while a real `ensure_worker`
+creates `w-race`. The snapshot contains no Workers. The control stamps cursor 0;
+the mutant stamps cursor 2 after hydration. P8 now inspects page content and fails
+at sequence 198: `page through 2 omits event 1 (w-race); M6 class`.
+The monitor's `M6 class` suffix describes the omission class; this run applies M4.
+
+### M6: the content ledger now detects the omitted page tail
+
+The minimized trace snapshots an empty Team, creates 26 Workers, and reads one
+update page. The 52 journal events exceed the 50-event page bound. Both runs
+return the first 50 changes. The control stamps through 50; the mutant stamps
+through 52. P8 fails at sequence 6620 because event 51 for `extra-29` is absent
+from the page. P9 still passes because the trace contains no duplicate page.
+
+### Recheck method and verification
+
+```sh
+PI_MUTANT_RUN_LABEL=recheck node sim/mutants/run.mjs M3 M4 M6
+```
+
+The label preserves results under `sim/results/mutants-recheck/`. The runner
+still applies and reverses each patch only in an ignored archived scratch tree.
+The source revisions are `ed4ba2760d7519c8c82f4ac24f13f1e4ffa63608` for M3/M4
+and `187f85d08331195403bec40628bb96d3b4c2c63b` for M6. Each `result.json` records
+its source revision and patch digest. The only intervening runner change groups
+shrink candidates into fixed-point sweeps instead of restarting after each edit.
+
+Each mutant and control ran 38 schedules: five targeted schedules, ten fixtures,
+eleven schedule families, and twelve recorded fast-check samples with generator
+seed `20261013`. All 21 monitors ran. The retained campaigns contain 228
+executions before shrinking and replay. Controls complete 33/38 schedules; M3
+completes 18/38, and M4/M6 complete 33/38. Stopped prefixes remain explicit and
+never count as kills. The three completed experiments took 615.217 seconds.
+
+An earlier M6 shrink exceeded a 1200-second shell timeout. It produced no final
+verdict. Its scratch patch was reversed, compared with unchanged source, and
+removed before the completed rerun. The stored M6 result comes only from that
+completed rerun, with 94 shrink candidates. M4 used 23 candidates.
+
+All three patched trees passed typecheck. The focused hydration and monitor
+checks passed 58 tests. Test-lane verification passed. Existing M4/M6 unit
+diagnostics also pass on controls and fail on mutants. The production diff
+`git diff 1a8a3f6 -- src extensions native` remains empty. No push was made.
