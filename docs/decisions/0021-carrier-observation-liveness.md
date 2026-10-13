@@ -77,6 +77,9 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    checkpoints. Each coordinate starts at `unknown`. Binding, launch, process,
    terminal, and activity changes are journaled in sample order. Terminal `present`
    and `unknown` are low-noise events: they use `wait` and no human toast.
+   Herdr `done` maps to activity `idle`: the turn finished and Pi can accept input.
+   It does not complete a Task or prove process liveness. Unknown wire statuses
+   stay `unknown` and retain their raw value in evidence.
    Debounced `blocked` attention remains a separate event. A failed append leaves
    the accepted baseline unchanged. Healthy polling retries the current source
    difference. A transient observation lost before append is not durable.
@@ -94,8 +97,16 @@ the user stopped its Pi with Ctrl-C twice, Ctrl-D, or pane close.
    a birth token read `unknown` until the current process rebinds or the human
    authorizes adoption. For a bound tokenless generation, `ensure_worker` returns
    `attention` with reason `legacy_unverified` and hint `ask_human` (G11).
-   Its model result and collapsed TUI name both exits: reload that Worker's Pi to
-   re-admit its generation with a birth token, or adopt it in `/ptb status`.
+   The carrier projection and `team_sync` also surface this attention. They retain
+   the PID and probe result (`absent`, `present`, or `unknown`). An absent PID
+   requires human restart of that Worker's Pi in its pane, or stopping the Worker.
+   A present PID permits human reload or adoption in `/ptb status`. Unknown probe
+   evidence requires human verification first. The missing-helper remedy in item 2
+   still applies. None of these observations verifies a tokenless generation.
+   Attention journals once per evidence change under the same generation fence,
+   including when the process baseline is already `unknown`. Snapshot `connected`
+   describes Session binding only; snapshot attention remains visible after the
+   update cursor advances.
    Pending or stalled launch evidence does not replace this attention. It never
    authorizes a spawn. Other unknown-generation planner rows stay unchanged unless
    the verifier reports the missing-helper condition in item 2.

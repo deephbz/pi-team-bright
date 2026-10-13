@@ -10,7 +10,7 @@ import * as teams from "./teams";
 
 export function formatCarrierStatus(view: CarrierView, taskIds?: string[]): { line: string; facts: { worker: string; process?: string; launch?: string } } {
   const facts = { worker: view.worker,
-    ...(view.process === "unknown" ? { process: view.evidence.find(item => item.source === "process_generation")?.fact } : {}),
+    ...(view.process === "unknown" ? { process: view.attention ? `${view.attention.reason}; ${view.attention.nextActionHint}; ${view.attention.message}` : view.evidence.find(item => item.source === "process_generation")?.fact } : {}),
     ...(view.launch === "unknown" ? { launch: view.evidence.find(item => item.source === "launch")?.fact } : {}) };
   const suffix = (fact?: string): string => {
     if (!fact) return "";

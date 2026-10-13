@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TeamConfig } from "./models";
-import type { CarrierView } from "../carrier-observation";
+import { deriveCarrierView, type CarrierView } from "../carrier-observation";
 import * as paths from "./paths";
 import {
   diagnoseTeam,
@@ -77,6 +77,15 @@ it("bounds and sanitizes unknown status facts while keeping selected detail and 
   expect(result.line).toContain(`launch unknown (timeout: ${"x".repeat(110)}…)`);
   expect(result.facts.launch).toBe(view.evidence[1].fact);
   expect(formatCarrierStatus({ ...view, process: "live", launch: "started" }).facts).toEqual({ worker: "worker" });
+});
+
+it("shows the legacy PID and probe in status and preserves full human exits in detail", () => {
+  const member = { name: "worker", membershipId: "m", sessionFile: "/session" } as TeamConfig["members"][number];
+  const view = deriveCarrierView(member, { teamName: "team", agentName: "worker", membershipId: "m", pid: 42, startedAt: 1 }, 100, { kind: "absent" });
+  const result = formatCarrierStatus(view);
+  for (const text of ["legacy_unverified", "ask_human", "pid=42", "probe=absent"]) expect(result.line).toContain(text);
+  expect(result.facts.process).toContain("restart Worker worker's Pi in its pane");
+  expect(result.facts.process).toContain("or stop the Worker");
 });
 
 describe("/pi-team-bright command grammar", () => {

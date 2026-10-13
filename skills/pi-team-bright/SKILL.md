@@ -135,8 +135,13 @@ For `receipt_deadline`, call `ensure_worker` again; a stalled launch becomes `la
 use `worker_stop` to end that launch before `ensure_worker` creates another.
 Unknown launch evidence never authorizes another spawn.
 `legacy_unverified` with `ask_human` identifies a bound Worker without a birth token.
-Ask the human to reload that Worker's Pi to re-admit its generation with a birth token,
-or adopt that Worker in `/ptb status`. Never spawn a replacement from this result.
+Read its PID and probe evidence in `team_sync` or `/ptb status`.
+If the PID is absent, ask the human to restart that Worker's Pi in its pane to
+re-admit with a birth token, or stop the Worker. If present, ask the human to
+reload that Pi or adopt it in `/ptb status`. If unknown, resolve the probe failure
+before choosing either path. Never spawn a replacement from this result.
+A snapshot's `connected` label means Session binding only. Its attention field
+carries unresolved process evidence.
 `generation_helper_missing` with `ask_human` means the macOS process-generation helper is missing.
 Tell the human to install Rust (`rustc`) and Xcode Command Line Tools, then run `npm run build:process-generation`.
 Do not call `ensure_worker` again until the human confirms.

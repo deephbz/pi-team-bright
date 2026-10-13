@@ -3,7 +3,7 @@ import { Type, type Static, type TSchema } from "typebox";
 import {
   AlertSendResultSchema,
   EnsureWorkerResultSchema,
-  WorkerAttentionSchema, WorkerLaunchReceiptFields,
+  WorkerAttentionSchema, WorkerLaunchReceiptFields, CarrierAttentionSchema,
   TaskCreateResultSchema,
   TaskReadResultSchema,
   TaskUpdateResultSchema,
@@ -169,7 +169,7 @@ export function decodeHistoricalTeamSyncResult(value: unknown): Record<string, u
 
 const SyncRecovery = Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false });
 export const TeamSyncModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), nonterminal_task_ids: Type.Array(TaskId), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), attention: Type.Optional(CarrierAttentionSchema), nonterminal_task_ids: Type.Array(TaskId), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(TeamDeltaSchema), worker_changes: Type.Array(WorkerDeltaSchema), task_changes: Type.Array(TaskDeltaSchema), alerts: Type.Array(AlertDeltaSchema), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("caught_up"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unsettled"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }), workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }) }, { additionalProperties: false }),

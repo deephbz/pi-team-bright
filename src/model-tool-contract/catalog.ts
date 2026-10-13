@@ -34,7 +34,7 @@ export { TaskVersionRefSchema } from "../task-authority/task-version-ref";
 const WorkerName = Type.String({ minLength: 1, maxLength: 64 });
 const Timestamp = Type.String({ minLength: 1, maxLength: 64 });
 const WorkerCarrier = Type.Enum(["starting", "connected", "absent"], {
-  description: "Current carrier observation. It is not Task progress or readiness.",
+  description: "Carrier binding only. Connected means a Session is bound, not verified process liveness, readiness, or Task progress.",
 });
 
 const TeamCurrent = Type.Object({
@@ -48,10 +48,17 @@ export const WorkerModelRoleSummarySchema = Type.Object({
   use: Type.String({ minLength: 1 }),
 }, { additionalProperties: false });
 
+export const CarrierAttentionSchema = Type.Object({
+  reason: Type.Literal("legacy_unverified"),
+  nextActionHint: Type.Literal("ask_human"),
+  message: Type.String(),
+}, { additionalProperties: false });
+
 export const WorkerCurrentSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1, description: "Concise semantic area owned by this Worker, not its current Task." }),
   carrier: WorkerCarrier,
+  attention: Type.Optional(CarrierAttentionSchema),
   nonterminal_task_ids: Type.Array(TaskId),
   model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
