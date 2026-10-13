@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.observationJsonSchema = exports.OBSERVATION_PRODUCER_VERSION = exports.OBSERVATION_SCHEMA_VERSION = exports.OBSERVATION_SCHEMA = void 0;
 exports.readObservationSnapshot = readObservationSnapshot;
+const host_env_1 = require("../env/host-env");
 const package_json_1 = __importDefault(require("../../package.json"));
 const membership_observation_reader_1 = require("../team-authority/membership-observation-reader");
 exports.OBSERVATION_SCHEMA = "pi-teams-observation/1";
@@ -44,7 +45,7 @@ async function readObservationSnapshot(options = {}) {
     const read = await (0, membership_observation_reader_1.readMembershipObservation)(options);
     const teams = read.teams.map(team => ({ teamName: team.teamName, memberships: team.memberships.map(member => projectMember(team.teamName, member)), issues: team.diagnoses.map(code => teamIssue(code, team.teamName)) }));
     const issues = read.diagnoses.map(diagnosis => "teamName" in diagnosis ? teamIssue(diagnosis.code, diagnosis.teamName) : { code: diagnosis.code, scope: "snapshot" });
-    const snapshot = { schema: exports.OBSERVATION_SCHEMA, generatedAt: new Date().toISOString(), producerVersion: options.producerVersion ?? exports.OBSERVATION_PRODUCER_VERSION, availability: "available", teams, issues };
+    const snapshot = { schema: exports.OBSERVATION_SCHEMA, generatedAt: new Date((0, host_env_1.hostEnv)().clock.now()).toISOString(), producerVersion: options.producerVersion ?? exports.OBSERVATION_PRODUCER_VERSION, availability: "available", teams, issues };
     if (snapshot.issues.length || snapshot.teams.some(team => team.issues.length || team.memberships.some(member => member.issues.length)))
         snapshot.availability = snapshot.teams.length ? "partial" : "unavailable";
     return snapshot;

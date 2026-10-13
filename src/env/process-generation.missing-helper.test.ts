@@ -3,6 +3,9 @@ import { probeProcessGeneration, probeProcessGenerations } from "./process-gener
 import { admitRuntimeStartup } from "../utils/runtime";
 import { nodeHostEnv, runWithHostEnv } from "./host-env";
 
+// Portable adapter test: the platform and helper execution errors are synthetic.
+// No macOS host, compiler, or installed native/bin is required. Admission below
+// explicitly injects this adapter through HostEnv instead of the unit default.
 const fixture = vi.hoisted(() => ({ code: "ENOENT" }));
 vi.mock("node:child_process", async importOriginal => ({
   ...await importOriginal<any>(),
