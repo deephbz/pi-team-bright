@@ -365,11 +365,18 @@ restating executable definitions.
   never OS liveness.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
-  Direct-Message and Task-change delivery form one exact recipient Session pair.
-  Initial create and resume activate it; binding replacement, admission refusal,
-  Session shutdown, and successful full Team shutdown stop it. Partial shutdown
-  retains the current leader pair. Full shutdown ends only the exact lead
-  runtime generation and fails closed around malformed or foreign evidence.
+  Alert and Task delivery share one exact recipient Session fence. Each engine
+  has an independent failure and retry outcome. Initial starts retain Alert-first
+  ordering for the shared lease. A failed start, context observation,
+  acknowledgement, or background scan stops only that engine. Retries use
+  capped backoff while the binding stays current. The runtime record carries
+  each engine's degradation for its exact generation. `team_sync` snapshots,
+  unsettled results, and `/ptb status` expose that fact.
+  Initial create and resume activate delivery. Binding replacement, admission
+  refusal, Session shutdown, and successful full Team shutdown stop both engines
+  and their retries. Partial shutdown retains the current leader delivery.
+  Full shutdown ends only the exact lead runtime generation and fails closed
+  around malformed or foreign evidence.
 - `team_sync` preserves `caught_up` for current quiescence. `unsettled` names
   Workers whose activity or missing runtime/delivery evidence needs attention.
   Both advance the lead's branch cursor once the native entry commits. Pi `>=0.83`

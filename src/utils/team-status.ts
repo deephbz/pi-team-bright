@@ -21,7 +21,7 @@ export function formatCarrierStatus(view: CarrierView, taskIds?: string[]): { li
     const text = stripVTControlCharacters(fact).replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim();
     return ` (${text.length > 120 ? `${text.slice(0, 119)}…` : text})`;
   };
-  return { line: `${view.worker}: process ${view.process}${suffix(facts.process)}; launch ${view.launch}${suffix(facts.launch)}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.`, facts };
+  return { line: `${view.worker}: process ${view.process}${suffix(facts.process)}; launch ${view.launch}${suffix(facts.launch)}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.${view.deliveryDegraded?.map(failure => ` ${failure.engine} delivery degraded${suffix(`${failure.operation}: ${failure.message}; retryAt=${failure.retryAt}`)}.`).join("") ?? ""}`, facts };
 }
 
 export const PI_TEAMS_COMMAND_USAGE = "Usage: /pi-team-bright [status|help]";

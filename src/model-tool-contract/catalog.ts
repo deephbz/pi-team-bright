@@ -54,11 +54,20 @@ export const CarrierAttentionSchema = Type.Object({
   message: Type.String(),
 }, { additionalProperties: false });
 
+export const DeliveryDegradedSchema = Type.Array(Type.Object({
+  engine: Type.Enum(["alert", "task"]),
+  operation: Type.Enum(["start", "context", "acknowledgement", "scan"]),
+  message: Type.String(),
+  observedAt: Type.Number(),
+  retryAt: Type.Number(),
+}, { additionalProperties: false }), { minItems: 1, maxItems: 2, description: "Known delivery failures for this exact recipient generation. Retries use capped backoff. Absence does not prove presentation." });
+
 export const WorkerCurrentSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1, description: "Concise semantic area owned by this Worker, not its current Task." }),
   carrier: WorkerCarrier,
   attention: Type.Optional(CarrierAttentionSchema),
+  delivery_degraded: Type.Optional(DeliveryDegradedSchema),
   nonterminal_task_ids: Type.Array(TaskId),
   model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
@@ -332,7 +341,7 @@ export const TeamSyncUnsettledResultSchema = Type.Object({
   observation: Type.Optional(ObservationStampSchema),
   head: Type.Integer({ minimum: 0 }),
   epoch_id: Type.String({ minLength: 1 }),
-  workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }),
+  workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown", "delivery_degraded"]), delivery_degraded: Type.Optional(DeliveryDegradedSchema) }, { additionalProperties: false }), { minItems: 1 }),
   state_changed: Type.Literal(false),
   observation_advanced: Type.Literal(true),
 }, { additionalProperties: false });

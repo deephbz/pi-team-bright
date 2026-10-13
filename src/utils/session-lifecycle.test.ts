@@ -369,8 +369,10 @@ describe("Pi session lifecycle", () => {
     await expect(handlers.get("turn_end")?.(
       { message: { role: "assistant", stopReason: "stop" } },
       ctx,
-    )).rejects.toThrow("ack persistence fault");
-    expect((await runtime.readRuntimeStatus(teamName, "worker"))?.ready).toBe(true);
+    )).resolves.toBeUndefined();
+    expect(await runtime.readRuntimeStatus(teamName, "worker")).toMatchObject({ ready: true,
+      delivery: { engines: { alert: { state: "degraded", operation: "acknowledgement", message: "ack persistence fault" } } },
+    });
     expect((await messaging.readInbox(teamName, "worker", true, false))).toHaveLength(1);
     await handlers.get("session_shutdown")?.({ reason: "quit" }, ctx);
   });

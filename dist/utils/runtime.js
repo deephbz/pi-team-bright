@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RUNTIME_STALE_MS = exports.STARTUP_STALL_MS = exports.HEARTBEAT_STALE_MS = void 0;
+exports.currentDeliveryDegradations = currentDeliveryDegradations;
 exports.verifyRuntimeGeneration = verifyRuntimeGeneration;
 exports.ownBirthIdentity = ownBirthIdentity;
 exports.runtimeGeneration = runtimeGeneration;
@@ -29,6 +30,18 @@ const paths_1 = require("./paths");
 exports.HEARTBEAT_STALE_MS = 90000; // 90 seconds
 exports.STARTUP_STALL_MS = 60000; // 60 seconds
 exports.RUNTIME_STALE_MS = 300000; // 5 minutes - files older than this are considered stale
+/** Delivery observations apply only to this bound, verified process generation. */
+function currentDeliveryDegradations(member, status, verified = verifyRuntimeGeneration(status)) {
+    if (!member.membershipId || status?.membershipId !== member.membershipId || !member.sessionFile
+        || status.delivery?.sessionFile !== member.sessionFile || verified !== "live" || status.lastStop)
+        return [];
+    return Object.values(status.delivery.engines).flatMap(state => {
+        if (state?.state !== "degraded")
+            return [];
+        const { state: _state, ...degradation } = state;
+        return [degradation];
+    });
+}
 /** Tokenless legacy records fail closed until their own process re-admits. */
 function verifyRuntimeGeneration(status, observed) {
     if (!status?.pid || !status.osBirthToken || !status.bootId)

@@ -1,6 +1,7 @@
 import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { ModelToolTaskJournalEntry } from "../task-authority/contracts";
 import type { ReceivedAlert } from "../alert-authority/contracts";
+import type { DeliveryDegradation } from "../utils/recipient-delivery-lifecycle";
 
 export interface CoordinationTeamCurrent {
   name: string;
@@ -13,6 +14,7 @@ export interface CoordinationWorkerCurrent {
   scope: string;
   carrier: "starting" | "connected" | "absent";
   attention?: import("../carrier-observation").CarrierAttention;
+  deliveryDegraded?: DeliveryDegradation[];
   modelRole?: string;
 }
 
@@ -26,7 +28,7 @@ export type CoordinationSyncResult =
   | (Extract<CoordinationSnapshotResult, { kind: "snapshot" }> & { head: number; epochId: string })
   | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed" | "carrier"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: CanonicalTaskCard }>; taskProjectionWarnings?: TaskCardWarning[]; alerts: []; head: number; epochId: string }
   | { kind: "caught_up"; head: number; epochId: string }
-  | { kind: "unsettled"; head: number; epochId: string; workers: Array<{ name: string; reason: "still_active" | "actuation_pending" | "run_state_unknown" | "delivery_state_unknown" }> }
+  | { kind: "unsettled"; head: number; epochId: string; workers: Array<{ name: string; reason: "still_active" | "actuation_pending" | "run_state_unknown" | "delivery_state_unknown" | "delivery_degraded"; delivery_degraded?: DeliveryDegradation[] }> }
   | { kind: "refused"; reason: "observation_in_progress"; message: string }
   | { kind: "cancelled"; message: string }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string }
