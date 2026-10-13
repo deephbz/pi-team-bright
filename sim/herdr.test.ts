@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { HerdrFake, ExecRouter, type Pane } from "./herdr";
 import { herdrAgentActivity } from "../src/carrier-observation";
 import { ProcessTable } from "./process-table";
+import { HerdrRequestError, readHerdrReply } from "../src/utils/herdr-reply";
 
 describe("Herdr wire fake", () => {
   it("agrees with production activity for every fake agent status", () => {
@@ -16,6 +17,20 @@ describe("Herdr wire fake", () => {
     }
     expect(herdrAgentActivity("future-status")).toBe("unknown");
   });
+  it("agrees with the lead's Herdr 0.9.3 missing-pane stderr probe and production reader", () => {
+    // Lead probe, 2026-10-13: `herdr pane get w99:p999` (read-only).
+    const probe = { status: 1, stdout: "", stderr: '{"error":{"code":"pane_not_found","message":"pane w99:p999 not found"},"id":"cli:pane:get"}' };
+    const fake = new HerdrFake(new ProcessTable());
+    const reply = fake.run(["pane", "get", "w99:p999"]);
+    expect(reply).toMatchObject({ status: probe.status, stdout: probe.stdout });
+    expect(JSON.parse(reply.stderr).error.code).toBe(JSON.parse(probe.stderr).error.code);
+    for (const response of [probe, reply]) {
+      expect(() => readHerdrReply(response)).toThrow(HerdrRequestError);
+      expect(() => readHerdrReply(response)).toThrow(JSON.parse(response.stderr).error.message);
+      try { readHerdrReply(response); } catch (error) { expect(error).toMatchObject({ code: "pane_not_found" }); }
+    }
+  });
+
   it("keeps a shell after Pi exit and never revives an agent name on pid reuse", () => {
     const processes = new ProcessTable();
     const herdr = new HerdrFake(processes);

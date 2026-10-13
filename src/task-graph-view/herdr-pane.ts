@@ -1,5 +1,6 @@
 import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
+import { HerdrRequestError, readHerdrReply } from "../utils/herdr-reply";
 import os from "node:os";
 import path from "node:path";
 import { execCommand, shellQuote } from "../utils/terminal-adapter";
@@ -171,23 +172,6 @@ export class TaskGraphPaneController {
   }
 }
 
-type HerdrEnvelope = { result?: unknown; error?: { code?: unknown; message?: unknown } };
-
-function parseEnvelope(stdout: string): Record<string, unknown> {
-  let value: unknown;
-  try { value = JSON.parse(stdout); } catch { throw new Error("Herdr returned malformed JSON."); }
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Herdr returned an invalid JSON envelope.");
-  const envelope = value as HerdrEnvelope;
-  if (envelope.error) {
-    const code = typeof envelope.error.code === "string" ? envelope.error.code : "unknown_error";
-    const message = typeof envelope.error.message === "string" ? envelope.error.message : "invalid Herdr error";
-    throw new Error(`Herdr request failed: ${code}: ${message}`);
-  }
-  const result = envelope.result ?? envelope;
-  if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("Herdr response has no object result.");
-  return result as Record<string, unknown>;
-}
-
 function paneFrom(value: unknown, expectedPaneId: string): HerdrPaneCoordinate {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Herdr response has no pane record.");
   const pane = value as Record<string, unknown>;
@@ -205,18 +189,7 @@ export class HerdrCliTaskGraphPaneHost implements TaskGraphPaneHost {
   ) {}
 
   private invoke(args: string[]): Record<string, unknown> {
-    const response = this.execute(this.binary, args);
-    try {
-      const result = parseEnvelope(response.stdout);
-      if (response.status !== 0) throw new Error(`Herdr command failed with status ${response.status}: ${response.stderr || "unknown error"}`);
-      return result;
-    } catch (error) {
-      if (error instanceof Error && /pane_not_found/.test(error.message)) throw error;
-      if (response.status !== 0 && !response.stdout.trim()) {
-        throw new Error(`Herdr command failed with status ${response.status}: ${response.stderr || (error instanceof Error ? error.message : String(error))}`);
-      }
-      throw error;
-    }
+    return readHerdrReply(this.execute(this.binary, args));
   }
 
   getPane(paneId: string): HerdrPaneCoordinate | undefined {
@@ -224,7 +197,7 @@ export class HerdrCliTaskGraphPaneHost implements TaskGraphPaneHost {
       const result = this.invoke(["pane", "get", paneId]);
       return paneFrom(result.pane, paneId);
     } catch (error) {
-      if (error instanceof Error && /pane_not_found/.test(error.message)) return undefined;
+      if (error instanceof HerdrRequestError && error.code === "pane_not_found") return undefined;
       throw error;
     }
   }

@@ -212,6 +212,9 @@ restating executable definitions.
 
 ## Decisions still in force
 
+- **Proposed:** [Decision 0022](../decisions/0022-carrier-harness-migration.md)
+  keeps multiplexer and agent-harness migration open. Owner ratification is pending.
+
 - Accepted [v3.1 Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md)
   and its [lead rulings](../journal/2026-10-12-v31-implementation-plan.md)
   amend Decision 0018 as [Decision 0021](../decisions/0021-carrier-observation-liveness.md) records. `CarrierObserver` owns process-generation observations.
@@ -263,7 +266,8 @@ restating executable definitions.
   launch ID. Restart orphan reconciliation is pending; a lead restart does not yet
   recover an unfinished launch.
   Only decisive shell-busy refusal retries on the same pane and launch ID.
-  Herdr error envelopes on stderr retain their code and text when stdout is empty.
+  The shared Herdr reply reader preserves error codes and text from stderr when
+  stdout is empty. Placement treats only structured `pane_not_found` as absence.
   A readiness timeout remains unknown and never authorizes another spawn.
   A first launch remains outstanding until Session binding. A recovery remains
   outstanding while its runtime record is absent or still names its prior
@@ -403,7 +407,9 @@ restating executable definitions.
   resolved `pane_layout` once: explicit `team_create.pane_layout`, trusted project
   `pi_team_bright.team.pane_layout`, global settings, then `{ leader_share: 0.6,
   worker_tiling: "linear" }`. Settings changes do not move live Teams. Herdr
-  supports `linear` and live `adaptive` placement; adaptive ranks only registered
+  supports `linear` and live `adaptive` placement. Both exclude absent registered
+  panes and use the first-Worker split from the leader when none remain. Other
+  pane-query failures stop the launch. Adaptive ranks only present registered
   Worker panes in the leader tab and region by `max(width / columns_per_row,
   height)`, defaults bias `columns_per_row` to 2, and splits the longer visual
   dimension 50/50. It skips children below 20 columns or 5 rows and reports
