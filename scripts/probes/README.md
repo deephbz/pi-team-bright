@@ -2,7 +2,7 @@
 
 Stage: exploration. Architecture impact: none.
 
-This opt-in lane records real-component evidence for the assumptions in
+The opt-in `run.mjs` lane records real-component evidence for the assumptions in
 [Fake drift control](../../docs/journal/2026-10-12-deterministic-simulation-verification.md#fake-drift-control).
 It does not test PTB authority or launch a Team. It is outside `npm test`.
 
@@ -18,7 +18,26 @@ Pi, Herdr, Node, OS architecture, date, and source base. The committed run
 used Pi 0.83.0 and Herdr 0.9.3. It does not establish behavior for Pi 1.1.0.
 A7 and A9 are deliberately skipped.
 
-## Safety
+## D5 real-Team campaign
+
+`real-herdr-liveness.mjs` runs Proposal B items 1, 3, 5, and 9 with the
+production PTB extension, real Worker panes, and an isolated Team store.
+Build the native helper first. Use a comma-separated item list for a focused
+run. The [D5 journal](../../docs/journal/2026-10-13-real-herdr-liveness.md)
+records results and the scoped timeout/outage mechanisms.
+
+```sh
+npm run build:process-generation
+node scripts/probes/real-herdr-liveness.mjs
+node scripts/probes/real-herdr-liveness.mjs 3
+```
+
+D5 fixtures replace runtime identities with fixture-local aliases. Failed
+runs retain private diagnostics in their temporary sandbox. No Task is
+assigned to the idle probe Workers. The harness closes its recorded panes
+and verifies workspace removal.
+
+## A1–A9 safety
 
 - The Herdr lane needs explicit live-host permission. It creates one
   throwaway workspace with `--no-focus`. It controls only the returned pane.
@@ -33,7 +52,7 @@ A7 and A9 are deliberately skipped.
 - Fixtures replace home paths, user names, host names, and sandbox paths.
   Agent-list evidence retains only owned agents and the total count.
 
-## Predictions and limits
+## A1–A9 predictions and limits
 
 | Probe | Expected witness |
 | --- | --- |
