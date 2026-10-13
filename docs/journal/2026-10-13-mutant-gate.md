@@ -1,6 +1,8 @@
 # v3.1 mutant gate
 
-Status: completed experiment; the simulator gate does **not** pass.
+Status: experiment and recheck complete. M1, M2, M4, M5, and M6 are killed.
+M3 survives through the intended bounded-unknown defense. The literal all-killed
+gate conflicts with E3's accepted outcome rule. See the recheck below.
 Scope: M1–M6 from the [verification proposal](2026-10-12-deterministic-simulation-verification.md#mutant-gate).
 Architecture impact: none. Production source is unchanged.
 

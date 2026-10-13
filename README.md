@@ -292,6 +292,27 @@ Install the stable release by exact version:
 pi install npm:@hypercarrier/pi-team-bright@0.20.0
 ```
 
+### Carrier-liveness upgrade (unreleased)
+
+On macOS, install Rust (`rustc`) and Xcode Command Line Tools before installing
+this update. The package's `postinstall` hook builds the process-generation
+helper from its included source. Linux uses procfs and needs no native build.
+If install scripts were disabled, run `npm run build:process-generation` from
+the installed `@hypercarrier/pi-team-bright` directory. A missing helper returns
+`generation_helper_missing` attention with `ask_human` and this build command.
+PTB cannot verify or replace a Worker generation until the helper is available.
+
+For a live Team, reload the lead's Pi first, then reload each Worker's Pi. Keep
+the Team store and native Session logs. A bound legacy Worker without a birth
+token returns `legacy_unverified` with `ask_human`. The human can reload that
+Worker's Pi to re-admit it with a birth token, or adopt it in `/ptb status`.
+Neither attention result authorizes a replacement. Worker-first reload is
+untested. As a fallback, shut down the Team under the old version, upgrade the
+lead, and create a new Team epoch. This fallback allocates new Worker Sessions;
+it does not preserve the old Worker Session bindings.
+
+### Earlier upgrades
+
 Version `0.20.0` is backward compatible with `0.19.0` Team state. It adds the
 `/ptb` command palette, validated editing of scoped settings, and one transcript
 presentation for PTB messages. The old command names remain aliases. Restart Pi
