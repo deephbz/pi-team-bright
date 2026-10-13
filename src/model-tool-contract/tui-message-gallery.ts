@@ -154,7 +154,7 @@ function toolScenarios(): TuiMessageGalleryScenario[] {
     title: "alert_send: partial recipient delivery",
     source: "tool",
     resultKind: "alert_sent",
-    message: projectModelToolTuiMessage("alert_send", { kind: "alert_sent", acceptance: "Stored for the recipient. Presentation and processing are unconfirmed.", accepted_recipients: ["reviewer"], failed_recipients: ["offline"] }),
+    message: projectModelToolTuiMessage("alert_send", { kind: "alert_sent", accepted_recipients: ["reviewer"], failed_recipients: ["offline"] }),
   });
   scenarios.push({
     id: "task_update.version-conflict",

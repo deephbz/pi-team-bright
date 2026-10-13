@@ -88,8 +88,12 @@ export function createPiTeamSessionAdapter(options: {
       return status?.membershipId === binding.membershipId && status.pid === hostEnv().process.pid && !status.lastStop;
     },
     publishState: async (binding, engine, state) => {
-      if (state.state === "degraded") deliveryContext?.ui?.notify?.(`${engine === "alert" ? "Alert" : "Task"} delivery is degraded: ${state.message}. Retry is scheduled.`, "warning");
-      await teamSessionLifecycleService.writeDeliveryState(binding, engine, state, () => recipientDeliveries.binding === binding);
+      const transition = await teamSessionLifecycleService.writeDeliveryState(binding, engine, state, () => recipientDeliveries.binding === binding);
+      if (!transition || recipientDeliveries.binding !== binding) return;
+      const label = engine === "alert" ? "Alert" : "Task";
+      deliveryContext?.ui?.notify?.(state.state === "degraded"
+        ? `${label} delivery is degraded: ${state.message}. Retry is scheduled.`
+        : `${label} delivery recovered.`, state.state === "degraded" ? "warning" : "info");
     },
   });
   let footerModel: any;

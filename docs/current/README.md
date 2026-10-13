@@ -371,7 +371,9 @@ restating executable definitions.
   acknowledgement, or background scan stops only that engine. Retries use
   capped backoff while the binding stays current. The runtime record carries
   each engine's degradation for its exact generation. `team_sync` snapshots,
-  unsettled results, and `/ptb status` expose that fact.
+  unsettled results, and `/ptb status` expose that fact. Runtime diagnostics
+  update on each retry. The recipient pane toasts once when an engine becomes
+  degraded and once when it recovers.
   Initial create and resume activate delivery. Binding replacement, admission
   refusal, Session shutdown, and successful full Team shutdown stop both engines
   and their retries. Partial shutdown retains the current leader delivery.
@@ -384,6 +386,8 @@ restating executable definitions.
 - Coordination advice for an idle Worker with an `in_progress` Task names that
   Task and asks the lead to inspect its blocker and evidence before deciding.
   Carrier facts stay unchanged. Idle alone authorizes no spawn or replacement.
+  Known limit: this advice appears only on the activity-change event. A snapshot
+  after compaction does not repeat it.
 - `team_sync` preserves `caught_up` for current quiescence. `unsettled` names
   Workers whose activity or missing runtime/delivery evidence needs attention.
   Both advance the lead's branch cursor once the native entry commits. Pi `>=0.83`

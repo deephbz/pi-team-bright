@@ -128,20 +128,23 @@ export class TeamSessionLifecycleService {
     if (candidate.membershipId) await this.lifecyclePublication.recordWorkerFailed({ teamName, workerName, membershipId: candidate.membershipId });
   }
 
-  async writeDeliveryState(binding: RecipientDeliveryBinding, engine: DeliveryEngineName, state: DeliveryEngineState, isCurrent: () => boolean): Promise<void> {
+  async writeDeliveryState(binding: RecipientDeliveryBinding, engine: DeliveryEngineName, state: DeliveryEngineState, isCurrent: () => boolean): Promise<"degraded" | "recovered" | undefined> {
     // Ordinary startup creates no diagnostic write. A successful retry or reload
     // clears only a recorded failure for this engine.
     if (state.state === "running") {
       const previous = await runtime.readRuntimeStatus(binding.teamName, binding.recipient);
       if (previous?.delivery?.engines[engine]?.state !== "degraded") return;
     }
-    await teams.withCurrentSessionBinding(binding.teamName, binding.recipient, binding.sessionFile, binding.membershipId, async () => {
+    return teams.withCurrentSessionBinding(binding.teamName, binding.recipient, binding.sessionFile, binding.membershipId, async () => {
       const status = await runtime.readRuntimeStatus(binding.teamName, binding.recipient);
       if (!isCurrent() || status?.pid !== hostEnv().process.pid || status.membershipId !== binding.membershipId || status.lastStop) return;
       const engines = status.delivery?.sessionFile === binding.sessionFile ? status.delivery.engines : {};
       await runtime.writeRuntimeStatus(binding.teamName, binding.recipient, {
         delivery: { sessionFile: binding.sessionFile, engines: { ...engines, [engine]: state } },
       }, binding.membershipId);
+      const previous = engines[engine]?.state;
+      if (state.state === "degraded" && previous !== "degraded") return "degraded";
+      if (state.state === "running" && previous === "degraded") return "recovered";
     });
   }
 

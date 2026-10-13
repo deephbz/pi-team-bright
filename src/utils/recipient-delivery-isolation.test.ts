@@ -40,7 +40,7 @@ async function fixture(failed: "alert" | "task") {
   const wrap = (engine: DirectMessageDelivery | TaskChangeDelivery): RecipientDeliveryPair["direct"] => ({ start: () => engine.start([]), stop: () => engine.stop(), observeContext: messages => engine.observeContext(messages as any), commitPresentedAfterSuccessfulTurn: reason => engine.commitPresentedAfterSuccessfulTurn(reason) });
   const lifecycle: RecipientDeliveryLifecycle = new RecipientDeliveryLifecycle({ makePair: () => ({ direct: wrap(direct), task: wrap(taskEngine) }),
     isCurrentBinding: value => membership.isCurrentSessionBinding(value),
-    publishState: (value, name, state) => sessionService.writeDeliveryState(value, name, state, () => lifecycle.binding === value) });
+    publishState: async (value, name, state) => { await sessionService.writeDeliveryState(value, name, state, () => lifecycle.binding === value); } });
   lifecycles.push(lifecycle);
   await lifecycle.activate(binding);
   return { member, binding, accepted, sink, lifecycle, config };
