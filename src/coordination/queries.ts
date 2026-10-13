@@ -1,6 +1,7 @@
 import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { WorkerModelBinding } from "../team-authority/contracts";
+import type { RecentReceivedAlerts } from "../alert-authority/contracts";
 
 /** Minimum current Membership evidence used to derive Worker run state. */
 export interface CoordinationMemberEvidence {
@@ -91,11 +92,17 @@ export interface CoordinationAlertActuationQuery {
   readInboxEvidence(teamName: string, worker: string): Promise<CoordinationActuationEvidence>;
 }
 
+/** Alert authority owns exact-recipient selection and preview bounds. */
+export interface CoordinationReceivedAlertQuery {
+  readRecentReceivedAlerts(teamName: string, memberName: string, membershipId: string, limit: number): Promise<RecentReceivedAlerts>;
+}
+
 /** Explicit Coordination dependency bundle. It owns no authority records. */
 export interface CoordinationQueryBundle {
   teamRuntime: CoordinationTeamRuntimeQuery;
   taskStateDelivery: CoordinationTaskStateDeliveryQuery;
   alertActuation: CoordinationAlertActuationQuery;
+  receivedAlerts: CoordinationReceivedAlertQuery;
 }
 
 export interface CoordinationTaskProjection {

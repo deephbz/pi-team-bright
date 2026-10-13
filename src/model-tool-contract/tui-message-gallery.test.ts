@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import piTeamBright from "../../extensions/index";
-import { ModelResultSchemas } from "./result-projection";
+import { ModelResultSchemas, projectToolResult } from "./result-projection";
 import {
   DISPLAYED_TOOL_TYPES,
   exportTuiMessageGallery,
@@ -206,6 +206,25 @@ describe("TUI message gallery", () => {
     expect(message.body).toContain(changes[3].text);
     expect(message.body).not.toContain(changes[4].text);
     expect(message.expandedLines?.join("\n")).toContain(changes[4].text);
+  });
+
+  it("shows the recent Alert bound collapsed and one 80-code-point preview per expanded row", () => {
+    const text = "🧭".repeat(80) + "decisive suffix";
+    const details = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [],
+      alerts: [{ alert_id: "alert-one", from: "worker", kind: "clarification", task_id: "task-one", received_at: "2026-10-13T00:00:00Z", text, truncated: true, text_length: 2100 }], alerts_omitted: 2 };
+    const message = projectToolTuiMessage({ tool: "team_sync", details, expanded: true });
+    expect(projectionLines(message, { expanded: false }).join("\n")).toContain("1 recent Alerts, 2 omitted");
+    expect(message.expandedLines).toEqual([`Alert from worker · clarification · Task \"task-one\" · 2026-10-13T00:00:00Z: ${"🧭".repeat(80)}… · preview cut; ask sender`]);
+  });
+
+  it.each([false, true])("reads old snapshots without inventing an empty Alert history (stamped=%s)", stamped => {
+    const old = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [],
+      ...(stamped ? { observation: { team: "review", epoch: "epoch-one", binding: "membership-lead:session-one", from: 0, through: 1 } } : {}) };
+    const message = projectToolTuiMessage({ tool: "team_sync", details: old, expanded: true });
+    expect(message.summary).toContain("Alert history unavailable");
+    expect(message.detail).toBe(old);
+    expect(message.expandedLines).toEqual([]);
+    expect(() => projectToolResult("team_sync", old)).toThrow();
   });
 
   it("registers all tool headers plus current and historical custom identities", () => {

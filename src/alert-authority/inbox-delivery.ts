@@ -184,6 +184,22 @@ export async function readInboxForMembership(
   });
 }
 
+/** Recovery reads never identify legacy rows or change delivery state. */
+export async function readStoredInboxForMembership(
+  teamName: string,
+  agentName: string,
+  membershipId: string,
+): Promise<IdentifiedInboxMessage[]> {
+  if (!membershipId) throw new Error("Received Alert recovery requires an exact Membership.");
+  const p = inboxPath(teamName, agentName);
+  if (!fs.existsSync(p)) return [];
+  return withLock(p, async () => {
+    const messages: InboxMessage[] = JSON.parse(fs.readFileSync(p, "utf-8"));
+    return messages.filter((message): message is IdentifiedInboxMessage =>
+      typeof message?.id === "string" && !!message.id && message.recipientMembershipId === membershipId);
+  });
+}
+
 /** Mark only Messages observed in Pi model context as read. */
 export async function markMessagesRead(
   teamName: string,

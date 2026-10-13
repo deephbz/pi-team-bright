@@ -13,6 +13,7 @@ function serviceWithInjectedDerivedStore(config: any, calls: string[]) {
       readDeliveryEvidence: async () => ({ known: true, pending: false }),
     },
     alertActuation: { readInboxEvidence: async () => ({ known: true, pending: false }) },
+    receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
   }, {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: () => ({ kind: "projected", changes: [] }),

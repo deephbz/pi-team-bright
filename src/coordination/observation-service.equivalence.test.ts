@@ -40,6 +40,7 @@ describe("Coordination observation service equivalence fences", () => {
       .mockResolvedValueOnce([]);
     const service = new CoordinationObservationService({
       teamRuntime: { readRuntime: vi.fn() },
+      receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
       taskStateDelivery: {
         listTaskIds,
         readTasks: vi.fn(async () => []),
@@ -87,6 +88,7 @@ describe("Coordination observation service equivalence fences", () => {
     });
     const service = new CoordinationObservationService({
       teamRuntime: { readRuntime: vi.fn() },
+      receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
       taskStateDelivery: {
         listTaskIds: vi.fn(() => {
           reads++;

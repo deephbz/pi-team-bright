@@ -1,5 +1,6 @@
 import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
 import type { ModelToolTaskJournalEntry } from "../task-authority/contracts";
+import type { ReceivedAlert } from "../alert-authority/contracts";
 
 export interface CoordinationTeamCurrent {
   name: string;
@@ -16,13 +17,13 @@ export interface CoordinationWorkerCurrent {
 }
 
 export type CoordinationSnapshotResult =
-  | { kind: "snapshot"; team: CoordinationTeamCurrent; modelRoles?: Array<{ name: string; use: string }>; defaultModelRole?: string; workers: Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: CanonicalTaskCard[]; taskProjectionWarnings?: TaskCardWarning[] }
+  | { kind: "snapshot"; team: CoordinationTeamCurrent; modelRoles?: Array<{ name: string; use: string }>; defaultModelRole?: string; workers: Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: CanonicalTaskCard[]; alerts: ReceivedAlert[]; alertsOmitted: number; taskProjectionWarnings?: TaskCardWarning[] }
   | { kind: "no_active_team" }
   | { kind: "unavailable"; reason: "no_active_team" | "team_state_unavailable" | "task_authority_unavailable"; message: string }
   | { kind: "contract_gap"; reason: "team_epoch_missing" | "logical_workers_missing" | "task_metadata_absent" | "task_metadata_invalid" | "structured_task_event_evidence_absent"; message: string };
 
 export type CoordinationSyncResult =
-  | { kind: "snapshot"; team: CoordinationTeamCurrent; modelRoles?: Array<{ name: string; use: string }>; defaultModelRole?: string; workers: Array<CoordinationWorkerCurrent & { nonterminalTaskIds: string[] }>; tasks: CanonicalTaskCard[]; taskProjectionWarnings?: TaskCardWarning[]; head: number; epochId: string }
+  | (Extract<CoordinationSnapshotResult, { kind: "snapshot" }> & { head: number; epochId: string })
   | { kind: "updates"; teamChanges: Array<{ kind: "created" | "lifecycle" | "purpose"; text: string }>; workerChanges: Array<{ worker: string; scope: string; kind: "created" | "connected" | "stopped" | "failed" | "scope_changed" | "carrier"; text: string }>; taskChanges: Array<{ taskId: string; changeKinds: Array<"created" | "goal" | "assignment" | "progress" | "status" | "relation">; journalEntries: ModelToolTaskJournalEntry[]; current: CanonicalTaskCard }>; taskProjectionWarnings?: TaskCardWarning[]; alerts: []; head: number; epochId: string }
   | { kind: "caught_up"; head: number; epochId: string }
   | { kind: "unsettled"; head: number; epochId: string; workers: Array<{ name: string; reason: "still_active" | "actuation_pending" | "run_state_unknown" | "delivery_state_unknown" }> }

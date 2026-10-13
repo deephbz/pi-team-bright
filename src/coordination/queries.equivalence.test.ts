@@ -93,6 +93,7 @@ describe("durable Coordination query equivalence", () => {
         readDeliveryEvidence: vi.fn().mockResolvedValue({ known: true, pending: true }),
       },
       alertActuation: { readInboxEvidence: vi.fn().mockResolvedValue({ known: true, pending: false }) },
+      receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
     };
     const member = {
       name: "worker", membershipId: "member-1", sessionFile: "/sessions/worker.jsonl", isActive: true,

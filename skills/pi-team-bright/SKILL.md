@@ -154,6 +154,7 @@ Use `team_sync` updates to read available changes. It returns immediately and
 uses a snapshot when the current branch has no observation baseline. Mutation
 receipts already report post-state; read again only when meaning is missing,
 stale, or conflicting. After compaction, use a snapshot to restore Team context.
+Snapshots include recent received Alert previews; ask the sender if cut or omitted text matters.
 
 Wait by ending your turn. Your last message names what you wait for. A
 `ptb.team-update` resumes the lead when a new batch is available. Do not use

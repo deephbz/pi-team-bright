@@ -139,6 +139,7 @@ function syncService() {
     },
     taskStateDelivery: { listTaskIds: async () => [], readTasks: async () => [], readDeliveryEvidence: async () => ({ known: true, pending: false }) },
     alertActuation: { readInboxEvidence: async () => ({ known: true, pending: false }) },
+    receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
   }, { projectNonterminalTaskIds: () => [], projectTaskChanges: () => ({ kind: "projected", changes: [] }) }, {
     readEventCursor: () => String(f.events.length),
     readEvents: () => ({ events: f.events, cursor: String(f.events.length), headCursor: String(f.events.length), truncated: false, remaining: 0 }),
