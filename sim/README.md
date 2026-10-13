@@ -36,6 +36,10 @@ No provider or real Herdr process runs in these lanes.
   file required by Team creation. Streaming follow-ups use the operation queue.
 - Timer, watcher, exec and actor callbacks bind their actor generation.
   Death drops callbacks and pending waits. PID reuse cannot restore an agent.
+  The replay actor registry uses the exact boot/PID/birth identity and retains
+  dead instances. Replay actor results expose `generation` and `alive`.
+  The [generation repair](../docs/journal/2026-10-13-sim-pid-reuse.md) verifies
+  stale-handle rejection and exact Session resume on a replacement generation.
 - Async exec separates arrival, effect and completion. Timeout or abort leaves
   the effect unknown. Sync operations block other actors under `S-sync-block`.
 - Real synchronous filesystem operations are atomic inside one queued callback.
