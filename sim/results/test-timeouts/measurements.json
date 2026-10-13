@@ -1,0 +1,1576 @@
+{
+  "measurementRevision": "fc341b23223883b988c2dd4057ce60b96123f084",
+  "testedRevision": "fa06916e0f1bd4a62b8e895a356f177f902025a2",
+  "measurementCommand": "npm test -- --reporter=json --outputFile=<report>",
+  "defaultTimeoutMs": 5000,
+  "selection": "Worst duration >=2500ms in three full runs, or a reported default-timeout incident; preserve existing explicit limits with >=2x measured headroom. New limits are 3x worst rounded up to 5000ms.",
+  "priorIncident": {
+    "file": "sim/core.test.ts",
+    "title": "fast-check drives the same queue rather than a second scheduler",
+    "observedMs": 5036,
+    "source": "team-lead merge2-npmtest log supplied with Task"
+  },
+  "measurementRuns": [
+    {
+      "run": 1,
+      "exitCode": 0,
+      "passed": 2029,
+      "failed": 0,
+      "skipped": 3,
+      "nativeBinAbsentBeforeAndAfter": true
+    },
+    {
+      "run": 2,
+      "exitCode": 0,
+      "passed": 2029,
+      "failed": 0,
+      "skipped": 3,
+      "nativeBinAbsentBeforeAndAfter": true
+    },
+    {
+      "run": 3,
+      "exitCode": 0,
+      "passed": 2029,
+      "failed": 0,
+      "skipped": 3,
+      "nativeBinAbsentBeforeAndAfter": true
+    }
+  ],
+  "timeoutChanges": [
+    {
+      "file": "sim/attribution.test.ts",
+      "title": "distinguishes Membership-associated Worker, lead, shell and reused unrelated process",
+      "beforeMs": 5000,
+      "afterMs": 15000
+    },
+    {
+      "file": "sim/campaign-faults.test.ts",
+      "title": "replaces a dead actor even when another process occupies its old pid",
+      "beforeMs": 5000,
+      "afterMs": 15000
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "fast-check drives the same queue rather than a second scheduler",
+      "beforeMs": 5000,
+      "afterMs": 20000
+    },
+    {
+      "file": "sim/hydration-race.test.ts",
+      "title": "creates a Worker after the snapshot watermark and before Task hydration completes",
+      "beforeMs": 5000,
+      "afterMs": 15000
+    },
+    {
+      "file": "sim/pid-reuse.test.ts",
+      "title": "keeps stale Worker handles dead after recovery while an outsider holds the old PID",
+      "beforeMs": 5000,
+      "afterMs": 15000
+    },
+    {
+      "file": "sim/setup.test.ts",
+      "title": "boots an assumed Team through durable authorities before observed inputs",
+      "beforeMs": 5000,
+      "afterMs": 15000
+    },
+    {
+      "file": "sim/setup.test.ts",
+      "title": "shows a created Task on the updates page independently of the P8 parser",
+      "beforeMs": 5000,
+      "afterMs": 10000
+    }
+  ],
+  "unchangedTestBodies": 32,
+  "measurements": [
+    {
+      "file": "sim/migration.v31.test.ts",
+      "title": "migrates a baseline Team lead first, then three Workers without replacing a Session or carrier",
+      "fullName": "migrates a baseline Team lead first, then three Workers without replacing a Session or carrier",
+      "durationMs": [
+        24272.629417,
+        21742.689583,
+        22363.540374999997
+      ],
+      "worstMs": 24272.629417
+    },
+    {
+      "file": "sim/migration.v31.test.ts",
+      "title": "falls back to a stopped epoch and allocates new Worker Sessions",
+      "fullName": "falls back to a stopped epoch and allocates new Worker Sessions",
+      "durationMs": [
+        10841.709124999998,
+        11578.423374999998,
+        11159.133082999997
+      ],
+      "worstMs": 11578.423374999998
+    },
+    {
+      "file": "sim/history.test.ts",
+      "title": "observes automatic team-update branch stamps through the real Pi boundary",
+      "fullName": "observes automatic team-update branch stamps through the real Pi boundary",
+      "durationMs": [
+        8104.828167,
+        6051.095750000001,
+        6645.027416
+      ],
+      "worstMs": 8104.828167
+    },
+    {
+      "file": "sim/baseline.test.ts",
+      "title": "v3.1 scenario 2 never reuses dead Pi and replays real actor decisions exactly",
+      "fullName": "v3.1 scenario 2 never reuses dead Pi and replays real actor decisions exactly",
+      "durationMs": [
+        5239.473458,
+        4405.779083,
+        4405.251416
+      ],
+      "worstMs": 5239.473458
+    },
+    {
+      "file": "sim/campaign-faults.test.ts",
+      "title": "replaces a dead actor even when another process occupies its old pid",
+      "fullName": "replaces a dead actor even when another process occupies its old pid",
+      "durationMs": [
+        4561.9411660000005,
+        2304.6935000000003,
+        3754.7024170000004
+      ],
+      "worstMs": 4561.9411660000005
+    },
+    {
+      "file": "sim/recovery.v31.test.ts",
+      "title": "wakes an exact recovered Session for its ACKed in-progress Task without a new Attempt",
+      "fullName": "wakes an exact recovered Session for its ACKed in-progress Task without a new Attempt",
+      "durationMs": [
+        4523.65225,
+        3713.9265,
+        4476.4675
+      ],
+      "worstMs": 4523.65225
+    },
+    {
+      "file": "sim/hydration-race.test.ts",
+      "title": "creates a Worker after the snapshot watermark and before Task hydration completes",
+      "fullName": "creates a Worker after the snapshot watermark and before Task hydration completes",
+      "durationMs": [
+        4001.3127500000005,
+        2541.630209,
+        3469.5765829999996
+      ],
+      "worstMs": 4001.3127500000005
+    },
+    {
+      "file": "sim/attribution.test.ts",
+      "title": "distinguishes Membership-associated Worker, lead, shell and reused unrelated process",
+      "fullName": "distinguishes Membership-associated Worker, lead, shell and reused unrelated process",
+      "durationMs": [
+        3372.3265840000004,
+        2603.351708,
+        3981.4255839999996
+      ],
+      "worstMs": 3981.4255839999996
+    },
+    {
+      "file": "sim/setup.test.ts",
+      "title": "boots an assumed Team through durable authorities before observed inputs",
+      "fullName": "boots an assumed Team through durable authorities before observed inputs",
+      "durationMs": [
+        3695.8889579999995,
+        2236.0947909999995,
+        2596.7207500000004
+      ],
+      "worstMs": 3695.8889579999995
+    },
+    {
+      "file": "sim/pid-reuse.test.ts",
+      "title": "keeps stale Worker handles dead after recovery while an outsider holds the old PID",
+      "fullName": "keeps stale Worker handles dead after recovery while an outsider holds the old PID",
+      "durationMs": [
+        3518.5817909999996,
+        2435.9689580000004,
+        2843.6745829999995
+      ],
+      "worstMs": 3518.5817909999996
+    },
+    {
+      "file": "sim/setup.test.ts",
+      "title": "shows a created Task on the updates page independently of the P8 parser",
+      "fullName": "shows a created Task on the updates page independently of the P8 parser",
+      "durationMs": [
+        2946.7505839999994,
+        1711.5914170000005,
+        1861.5121249999993
+      ],
+      "worstMs": 2946.7505839999994
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "fast-check drives the same queue rather than a second scheduler",
+      "fullName": "single-queue deterministic world fast-check drives the same queue rather than a second scheduler",
+      "durationMs": [
+        2753.0102919999995,
+        1988.3647919999994,
+        2177.0491250000005
+      ],
+      "worstMs": 2753.0102919999995
+    },
+    {
+      "file": "sim/history.test.ts",
+      "title": "records observable oracle inputs for 'synthetic-never-starts'",
+      "fullName": "records observable oracle inputs for 'synthetic-never-starts'",
+      "durationMs": [
+        2633.6787090000003,
+        2433.425791,
+        2656.523167
+      ],
+      "worstMs": 2656.523167
+    },
+    {
+      "file": "sim/baseline.test.ts",
+      "title": "v3.1 scenario 1 returns within ten virtual seconds and keeps an ambiguous launch and pane",
+      "fullName": "v3.1 scenario 1 returns within ten virtual seconds and keeps an ambiguous launch and pane",
+      "durationMs": [
+        2583.80125,
+        2519.9969579999997,
+        2538.180833
+      ],
+      "worstMs": 2583.80125
+    },
+    {
+      "file": "sim/history.test.ts",
+      "title": "records observable oracle inputs for 'synthetic-bound-pi-dead'",
+      "fullName": "records observable oracle inputs for 'synthetic-bound-pi-dead'",
+      "durationMs": [
+        2465.3812500000004,
+        2034.5636670000004,
+        2153.0024169999997
+      ],
+      "worstMs": 2465.3812500000004
+    },
+    {
+      "file": "sim/attribution.test.ts",
+      "title": "preserves the shell after human Pi quit and attributes the subsequent human close",
+      "fullName": "preserves the shell after human Pi quit and attributes the subsequent human close",
+      "durationMs": [
+        1387.1881669999993,
+        1228.4267500000005,
+        1623.8191660000002
+      ],
+      "worstMs": 1623.8191660000002
+    },
+    {
+      "file": "sim/pid-reuse.test.ts",
+      "title": "resumes the exact Session on a new generation after shutdown and reboot",
+      "fullName": "resumes the exact Session on a new generation after shutdown and reboot",
+      "durationMs": [
+        1456.1720829999995,
+        1251.7802080000001,
+        1401.5123750000002
+      ],
+      "worstMs": 1456.1720829999995
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "replays WorldTrace decisions and enabled sets identically, including a recorded choice log",
+      "fullName": "single-queue deterministic world replays WorldTrace decisions and enabled sets identically, including a recorded choice log",
+      "durationMs": [
+        393.4915840000001,
+        459.34520799999973,
+        457.6921250000005
+      ],
+      "worstMs": 459.34520799999973
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "E2 covers a persisted cursor event by a branch stamp",
+      "fullName": "E2 covers a persisted cursor event by a branch stamp",
+      "durationMs": [
+        344.74254199999996,
+        69.65858299999991,
+        90.88287500000001
+      ],
+      "worstMs": 344.74254199999996
+    },
+    {
+      "file": "sim/actor.test.ts",
+      "title": "replays real lead startup, settled hooks, and shutdown identically",
+      "fullName": "real extension actor harness replays real lead startup, settled hooks, and shutdown identically",
+      "durationMs": [
+        330.7412079999999,
+        250.12025000000017,
+        307.7432080000003
+      ],
+      "worstMs": 330.7412079999999
+    },
+    {
+      "file": "sim/actor.test.ts",
+      "title": "loads independent lead and Worker tool projections",
+      "fullName": "real extension actor harness loads independent lead and Worker tool projections",
+      "durationMs": [
+        323.0419999999999,
+        196.94741599999998,
+        234.3782080000001
+      ],
+      "worstMs": 323.0419999999999
+    },
+    {
+      "file": "sim/pid-reuse.test.ts",
+      "title": "replays a lead restart after reboot with a new boot identity",
+      "fullName": "replays a lead restart after reboot with a new boot identity",
+      "durationMs": [
+        254.81879200000003,
+        228.76233300000058,
+        302.03612500000054
+      ],
+      "worstMs": 302.03612500000054
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "P10 reads a nested pane coordinate",
+      "fullName": "P10 reads a nested pane coordinate",
+      "durationMs": [
+        135.1675419999999,
+        77.93266699999992,
+        250.443583
+      ],
+      "worstMs": 250.443583
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "uses real Pi branch semantics with deterministic ids and time",
+      "fullName": "single-queue deterministic world uses real Pi branch semantics with deterministic ids and time",
+      "durationMs": [
+        212.47045900000012,
+        237.8495409999996,
+        177.4517079999996
+      ],
+      "worstMs": 237.8495409999996
+    },
+    {
+      "file": "sim/pid-reuse.test.ts",
+      "title": "starts a new actor for the same role and reused PID without reviving the old actor",
+      "fullName": "starts a new actor for the same role and reused PID without reviving the old actor",
+      "durationMs": [
+        168.8140840000001,
+        166.42662500000006,
+        157.6766249999996
+      ],
+      "worstMs": 168.8140840000001
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "E4 reads the production blocked attention field",
+      "fullName": "E4 reads the production blocked attention field",
+      "durationMs": [
+        147.29195800000002,
+        88.45016700000008,
+        99.73445900000002
+      ],
+      "worstMs": 147.29195800000002
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "P2 reads a real nested process claim without changing raw bytes",
+      "fullName": "P2 reads a real nested process claim without changing raw bytes",
+      "durationMs": [
+        146.185041,
+        107.774542,
+        139.289875
+      ],
+      "worstMs": 146.185041
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "runs timers only as queue operations and carries actor identity across awaits",
+      "fullName": "single-queue deterministic world runs timers only as queue operations and carries actor identity across awaits",
+      "durationMs": [
+        135.9139580000001,
+        93.60949999999957,
+        66.24645799999962
+      ],
+      "worstMs": 135.9139580000001
+    },
+    {
+      "file": "sim/history.test.ts",
+      "title": "preserves journal line coordinates and exposes replacement without duplicating unchanged rows",
+      "fullName": "preserves journal line coordinates and exposes replacement without duplicating unchanged rows",
+      "durationMs": [
+        134.72720800000025,
+        72.71341700000085,
+        96.81795799999963
+      ],
+      "worstMs": 134.72720800000025
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "P3 reads the nested live field against world death",
+      "fullName": "P3 reads the nested live field against world death",
+      "durationMs": [
+        131.309125,
+        100.26799999999997,
+        120.67437500000005
+      ],
+      "worstMs": 131.309125
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "S6 reads nested suspected-human-stop evidence",
+      "fullName": "S6 reads nested suspected-human-stop evidence",
+      "durationMs": [
+        103.84000000000003,
+        107.66287499999999,
+        127.12283300000013
+      ],
+      "worstMs": 127.12283300000013
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "P8 derives event order from the persisted cursor",
+      "fullName": "P8 derives event order from the persisted cursor",
+      "durationMs": [
+        108.91258300000004,
+        93.36504200000002,
+        123.63883299999998
+      ],
+      "worstMs": 123.63883299999998
+    },
+    {
+      "file": "sim/async-host.test.ts",
+      "title": "separates command arrival, effect, and completion and keeps timeout effects unknown",
+      "fullName": "bounded host operations separates command arrival, effect, and completion and keeps timeout effects unknown",
+      "durationMs": [
+        103.6284999999998,
+        121.35354199999983,
+        113.0143330000003
+      ],
+      "worstMs": 121.35354199999983
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "E3 reads a nested launch result",
+      "fullName": "E3 reads a nested launch result",
+      "durationMs": [
+        118.76704199999995,
+        69.76929200000006,
+        90.41479200000003
+      ],
+      "worstMs": 118.76704199999995
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "reports wall time per 1000 scheduled operations",
+      "fullName": "single-queue deterministic world reports wall time per 1000 scheduled operations",
+      "durationMs": [
+        112.90595900000062,
+        96.86183299999993,
+        118.20058300000073
+      ],
+      "worstMs": 118.20058300000073
+    },
+    {
+      "file": "sim/history.test.ts",
+      "title": "samples persisted records without consulting PTB state and records deletion and corrupt bytes",
+      "fullName": "samples persisted records without consulting PTB state and records deletion and corrupt bytes",
+      "durationMs": [
+        102.81545900000128,
+        104.3794999999991,
+        114.23266700000022
+      ],
+      "worstMs": 114.23266700000022
+    },
+    {
+      "file": "sim/monitors/production-shape.test.ts",
+      "title": "E1 reads the nested process transition after world death",
+      "fullName": "E1 reads the nested process transition after world death",
+      "durationMs": [
+        111.400125,
+        100.99816700000008,
+        112.49366600000008
+      ],
+      "worstMs": 112.49366600000008
+    },
+    {
+      "file": "sim/async-host.test.ts",
+      "title": "models synchronous blocking without running another actor",
+      "fullName": "bounded host operations models synchronous blocking without running another actor",
+      "durationMs": [
+        79.66562499999964,
+        106.5612500000002,
+        91.44854200000009
+      ],
+      "worstMs": 106.5612500000002
+    },
+    {
+      "file": "sim/actor.test.ts",
+      "title": "persists branch entries and queues streaming follow-ups in virtual time",
+      "fullName": "real extension actor harness persists branch entries and queues streaming follow-ups in virtual time",
+      "durationMs": [
+        106.05037500000026,
+        96.367166,
+        88.51691699999992
+      ],
+      "worstMs": 106.05037500000026
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "fails on real timers, subprocesses, filesystem escape and symlink escape even if caught",
+      "fullName": "single-queue deterministic world fails on real timers, subprocesses, filesystem escape and symlink escape even if caught",
+      "durationMs": [
+        103.29812500000025,
+        104.69062499999927,
+        90.63316599999962
+      ],
+      "worstMs": 104.69062499999927
+    },
+    {
+      "file": "sim/campaign-faults.test.ts",
+      "title": "throws after journal bytes are committed and leaves the accepted row readable",
+      "fullName": "throws after journal bytes are committed and leaves the accepted row readable",
+      "durationMs": [
+        99.92158300000028,
+        90.22845899999993,
+        102.1540840000007
+      ],
+      "worstMs": 102.1540840000007
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "queues watchers after real atomic rename and drops closed notifications",
+      "fullName": "single-queue deterministic world queues watchers after real atomic rename and drops closed notifications",
+      "durationMs": [
+        101.39199999999983,
+        98.25895800000035,
+        97.79312500000015
+      ],
+      "worstMs": 101.39199999999983
+    },
+    {
+      "file": "sim/async-host.test.ts",
+      "title": "rejects sleeps on queued abort and drops a dead generation's completion",
+      "fullName": "bounded host operations rejects sleeps on queued abort and drops a dead generation's completion",
+      "durationMs": [
+        94.96716699999979,
+        95.10304199999973,
+        91.65058399999998
+      ],
+      "worstMs": 95.10304199999973
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "cancels intervals and queued callbacks on actor death",
+      "fullName": "single-queue deterministic world cancels intervals and queued callbacks on actor death",
+      "durationMs": [
+        87.18808400000034,
+        82.74362500000007,
+        91.49741600000016
+      ],
+      "worstMs": 91.49741600000016
+    },
+    {
+      "file": "sim/history.test.ts",
+      "title": "keeps human pane closure distinct from PTB closure and preserves immutable birth evidence",
+      "fullName": "keeps human pane closure distinct from PTB closure and preserves immutable birth evidence",
+      "durationMs": [
+        80.64229200000045,
+        62.13566700000047,
+        67.45724999999948
+      ],
+      "worstMs": 80.64229200000045
+    },
+    {
+      "file": "sim/campaign-faults.test.ts",
+      "title": "delays generation snapshots without blocking intervening world death",
+      "fullName": "delays generation snapshots without blocking intervening world death",
+      "durationMs": [
+        68.51045799999974,
+        63.81916700000056,
+        62.157375000000684
+      ],
+      "worstMs": 68.51045799999974
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "reads disk sources without changing bytes and writes only a validated external corpus",
+      "fullName": "reads disk sources without changing bytes and writes only a validated external corpus",
+      "durationMs": [
+        57.035124999999994,
+        56.55041600000004,
+        57.68233399999997
+      ],
+      "worstMs": 57.68233399999997
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "validates every hand-written fixture against WorldTrace and rejects malformed mutations",
+      "fullName": "validates every hand-written fixture against WorldTrace and rejects malformed mutations",
+      "durationMs": [
+        21.910292000000027,
+        22.72308399999997,
+        21.136040999999977
+      ],
+      "worstMs": 22.72308399999997
+    },
+    {
+      "file": "sim/herdr.test.ts",
+      "title": "keeps a shell after Pi exit and never revives an agent name on pid reuse",
+      "fullName": "Herdr wire fake keeps a shell after Pi exit and never revives an agent name on pid reuse",
+      "durationMs": [
+        4.043541000000005,
+        5.676500000000004,
+        4.501833000000005
+      ],
+      "worstMs": 5.676500000000004
+    },
+    {
+      "file": "sim/herdr-session.test.ts",
+      "title": "matches the recorded Herdr wire object in both the consumer and fake",
+      "fullName": "matches the recorded Herdr wire object in both the consumer and fake",
+      "durationMs": [
+        5.618374999999986,
+        2.8835420000000056,
+        3.670375000000007
+      ],
+      "worstMs": 5.618374999999986
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "preserves valid public argument shapes and repeated identities",
+      "fullName": "preserves valid public argument shapes and repeated identities",
+      "durationMs": [
+        2.6619590000000244,
+        4.14245799999992,
+        2.807957999999985
+      ],
+      "worstMs": 4.14245799999992
+    },
+    {
+      "file": "sim/assumptions.test.ts",
+      "title": "matches the recorded shell process-info wire and missing-pane error",
+      "fullName": "matches the recorded shell process-info wire and missing-pane error",
+      "durationMs": [
+        2.5937909999999818,
+        4.087625000000003,
+        2.548917000000017
+      ],
+      "worstMs": 4.087625000000003
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when an event below the page start is never represented",
+      "fullName": "P8 coverage ledger violates when an event below the page start is never represented",
+      "durationMs": [
+        0.22779199999999378,
+        0.27912500000002183,
+        3.597625000000022
+      ],
+      "worstMs": 3.597625000000022
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "redacts nested keys, prose, paths, numeric identities and unknown tools while preserving joins",
+      "fullName": "source projection redacts nested keys, prose, paths, numeric identities and unknown tools while preserving joins",
+      "durationMs": [
+        2.104208999999969,
+        3.4032920000000786,
+        2.5240830000000187
+      ],
+      "worstMs": 3.4032920000000786
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "keeps the creation coordinate and the distinct full-name argument lengths",
+      "fullName": "source projection keeps the creation coordinate and the distinct full-name argument lengths",
+      "durationMs": [
+        0.654042000000004,
+        1.123207999999977,
+        3.026458000000048
+      ],
+      "worstMs": 3.026458000000048
+    },
+    {
+      "file": "sim/assumptions.test.ts",
+      "title": "keeps absent and inconclusive probes advisory without downgrading the six passing probes",
+      "fullName": "keeps absent and inconclusive probes advisory without downgrading the six passing probes",
+      "durationMs": [
+        1.60695800000002,
+        3.0217499999999973,
+        1.6165409999999838
+      ],
+      "worstMs": 3.0217499999999973
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "reads explicit lifecycle/input events and repeated cursors without emitting source identifiers",
+      "fullName": "source projection reads explicit lifecycle/input events and repeated cursors without emitting source identifiers",
+      "durationMs": [
+        2.4775419999999713,
+        1.1788340000000517,
+        2.6521249999999554
+      ],
+      "worstMs": 2.6521249999999554
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when one generation is live per membership",
+      "fullName": "P1 single admitted generation per membership passes when one generation is live per membership",
+      "durationMs": [
+        2.558624999999978,
+        2.6237910000000113,
+        2.067540999999977
+      ],
+      "worstMs": 2.6237910000000113
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the receipt returns within 10 s",
+      "fullName": "E5 ensure_worker receipts within the bound passes when the receipt returns within 10 s",
+      "durationMs": [
+        0.13491600000000403,
+        0.1469579999999837,
+        2.3433749999999804
+      ],
+      "worstMs": 2.3433749999999804
+    },
+    {
+      "file": "sim/herdr.test.ts",
+      "title": "distinguishes disappeared panes, a partial list, and service loss",
+      "fullName": "Herdr wire fake distinguishes disappeared panes, a partial list, and service loss",
+      "durationMs": [
+        1.4458329999999933,
+        2.2932089999999903,
+        1.6539160000000095
+      ],
+      "worstMs": 2.2932089999999903
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "uses each role's live argument schema",
+      "fullName": "uses each role's live argument schema",
+      "durationMs": [
+        0.7017080000000533,
+        1.4068750000000136,
+        0.7220409999999902
+      ],
+      "worstMs": 1.4068750000000136
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "validates literal siblings while deferring backward result-reference values",
+      "fullName": "validates literal siblings while deferring backward result-reference values",
+      "durationMs": [
+        0.9733329999999114,
+        1.2829169999999976,
+        0.9675830000001042
+      ],
+      "worstMs": 1.2829169999999976
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is witnessed when a journal row marks suspectedHumanStop true",
+      "fullName": "S6 suspected human stop is witnessed when a journal row marks suspectedHumanStop true",
+      "durationMs": [
+        0.10558399999999324,
+        0.109375,
+        1.2416670000000067
+      ],
+      "worstMs": 1.2416670000000067
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when two live generations are admitted for one membership",
+      "fullName": "P1 single admitted generation per membership violates when two live generations are admitted for one membership",
+      "durationMs": [
+        0.8321249999999907,
+        1.1764160000000174,
+        0.6145840000000078
+      ],
+      "worstMs": 1.1764160000000174
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "rejects a replay when the enabled set changes",
+      "fullName": "single-queue deterministic world rejects a replay when the enabled set changes",
+      "durationMs": [
+        1.1261249999997744,
+        0.8590420000000449,
+        0.7950000000000728
+      ],
+      "worstMs": 1.1261249999997744
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the event is inside the stamp's own page",
+      "fullName": "P8 coverage ledger passes when the event is inside the stamp's own page",
+      "durationMs": [
+        0.6808330000000069,
+        0.7807080000000042,
+        1.124875000000003
+      ],
+      "worstMs": 1.124875000000003
+    },
+    {
+      "file": "sim/async-host.test.ts",
+      "title": "resolves result references but never refreshes a literal version",
+      "fullName": "bounded host operations resolves result references but never refreshes a literal version",
+      "durationMs": [
+        0.811916999999994,
+        0.5943750000001273,
+        1.1060410000000047
+      ],
+      "worstMs": 1.1060410000000047
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when the journal names a pane the world never created",
+      "fullName": "P10 journal matches world truth violates when the journal names a pane the world never created",
+      "durationMs": [
+        0.0726669999999956,
+        1.0772909999999456,
+        0.199374999999975
+      ],
+      "worstMs": 1.0772909999999456
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "orders clocks, keeps aborted/error outcomes, and does not equate abort with Escape or stop with agent_end",
+      "fullName": "source projection orders clocks, keeps aborted/error outcomes, and does not equate abort with Escape or stop with agent_end",
+      "durationMs": [
+        0.8405409999999165,
+        0.926708000000076,
+        1.0284169999999904
+      ],
+      "worstMs": 1.0284169999999904
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is N/A under assumption when a fault covers the window",
+      "fullName": "E1 bound Worker exits are named ended is N/A under assumption when a fault covers the window",
+      "durationMs": [
+        0.07933299999999122,
+        0.10004099999997607,
+        0.803167000000002
+      ],
+      "worstMs": 0.803167000000002
+    },
+    {
+      "file": "sim/core.test.ts",
+      "title": "retains distinct birth and boot identities across reuse and reboot",
+      "fullName": "single-queue deterministic world retains distinct birth and boot identities across reuse and reboot",
+      "durationMs": [
+        0.6035000000001673,
+        0.550916999999572,
+        0.6509169999999358
+      ],
+      "worstMs": 0.6509169999999358
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "separates observed generation changes and stale bindings from speculative PID reuse",
+      "fullName": "source projection separates observed generation changes and stale bindings from speculative PID reuse",
+      "durationMs": [
+        0.6409999999999627,
+        0.5123330000000124,
+        0.5162500000000136
+      ],
+      "worstMs": 0.6409999999999627
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a Worker stop closes that Worker's current target pane, with no earlier journal row",
+      "fullName": "P5 pane closes are cited passes when a Worker stop closes that Worker's current target pane, with no earlier journal row",
+      "durationMs": [
+        0.565041999999977,
+        0.5553330000000187,
+        0.5869999999999891
+      ],
+      "worstMs": 0.5869999999999891
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is witnessed when Pi compacts after a Team-update entry",
+      "fullName": "S5 compaction after a Team update is witnessed when Pi compacts after a Team-update entry",
+      "durationMs": [
+        0.12358299999999645,
+        0.12812500000001137,
+        0.5739999999999554
+      ],
+      "worstMs": 0.5739999999999554
+    },
+    {
+      "file": "sim/herdr.test.ts",
+      "title": "exposes shell process-info before managed start and Pi child afterwards",
+      "fullName": "Herdr wire fake exposes shell process-info before managed start and Pi child afterwards",
+      "durationMs": [
+        0.37708299999999895,
+        0.5380830000000003,
+        0.48604100000000017
+      ],
+      "worstMs": 0.5380830000000003
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a stamp covers the event inside the latency bound of lead idle",
+      "fullName": "E2 events reach the branch after lead idle passes when a stamp covers the event inside the latency bound of lead idle",
+      "durationMs": [
+        0.24258400000002212,
+        0.2557909999999879,
+        0.5363749999999925
+      ],
+      "worstMs": 0.5363749999999925
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a reuse has a live world process",
+      "fullName": "P4 reuse and spawn acts match world truth passes when a reuse has a live world process",
+      "durationMs": [
+        0.38129099999997607,
+        0.41670799999997143,
+        0.5283750000000111
+      ],
+      "worstMs": 0.5283750000000111
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the claimed generation was dead",
+      "fullName": "P2 gone claims match world truth passes when the claimed generation was dead",
+      "durationMs": [
+        0.4213330000000042,
+        0.4969169999999963,
+        0.32279099999999517
+      ],
+      "worstMs": 0.4969169999999963
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a stop of A authorizes closing B's pane (probe unrelatedStop)",
+      "fullName": "P5 pane closes are cited violates when a stop of A authorizes closing B's pane (probe unrelatedStop)",
+      "durationMs": [
+        0.3839579999999785,
+        0.2797919999999863,
+        0.4702500000000214
+      ],
+      "worstMs": 0.4702500000000214
+    },
+    {
+      "file": "sim/extract/extract.test.ts",
+      "title": "stops unqualified lead actions when the same Session creates a different Team",
+      "fullName": "source projection stops unqualified lead actions when the same Session creates a different Team",
+      "durationMs": [
+        0.30866600000001654,
+        0.4609169999999949,
+        0.4417909999999665
+      ],
+      "worstMs": 0.4609169999999949
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a page through its stamp omits a journaled event (M6)",
+      "fullName": "P8 coverage ledger violates when a page through its stamp omits a journaled event (M6)",
+      "durationMs": [
+        0.1446250000000191,
+        0.18904200000002902,
+        0.40312500000001705
+      ],
+      "worstMs": 0.40312500000001705
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is witnessed when a Herdr fault hits an outstanding ensure_worker call",
+      "fullName": "S4 Herdr loss during launch is witnessed when a Herdr fault hits an outstanding ensure_worker call",
+      "durationMs": [
+        0.13958299999998758,
+        0.143416000000002,
+        0.4007909999999697
+      ],
+      "worstMs": 0.4007909999999697
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes with adjacent pages",
+      "fullName": "P9 no duplicate page passes with adjacent pages",
+      "durationMs": [
+        0.14220799999998235,
+        0.3866659999999911,
+        0.23775000000000546
+      ],
+      "worstMs": 0.3866659999999911
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes with one outstanding reservation",
+      "fullName": "P6 one outstanding reservation per membership passes with one outstanding reservation",
+      "durationMs": [
+        0.3741669999999999,
+        0.2709169999999972,
+        0.2853330000000085
+      ],
+      "worstMs": 0.3741669999999999
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the claimed generation died within the 10 s grace",
+      "fullName": "P3 served live claims never name a generation dead over 10 s passes when the claimed generation died within the 10 s grace",
+      "durationMs": [
+        0.35925000000000296,
+        0.3720000000000141,
+        0.2658339999999839
+      ],
+      "worstMs": 0.3720000000000141
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a journal event names the exited generation inside the deadline",
+      "fullName": "E1 bound Worker exits are named ended passes when a journal event names the exited generation inside the deadline",
+      "durationMs": [
+        0.24329099999999926,
+        0.3664590000000203,
+        0.34729099999998425
+      ],
+      "worstMs": 0.3664590000000203
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a blocked Worker gets its attention",
+      "fullName": "E4 blocked Workers get one attention per epoch passes when a blocked Worker gets its attention",
+      "durationMs": [
+        0.16787500000000932,
+        0.1787909999999897,
+        0.35308299999999804
+      ],
+      "worstMs": 0.35308299999999804
+    },
+    {
+      "file": "sim/herdr-session.test.ts",
+      "title": "rejects a malformed or foreign Session identity null",
+      "fullName": "rejects a malformed or foreign Session identity null",
+      "durationMs": [
+        0.11379099999999198,
+        0.3406669999999963,
+        0.13191699999998718
+      ],
+      "worstMs": 0.3406669999999963
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the reservation is consumed inside the bound (consumption clears pendingLaunchId, as in production)",
+      "fullName": "E3 launches complete or report unknown passes when the reservation is consumed inside the bound (consumption clears pendingLaunchId, as in production)",
+      "durationMs": [
+        0.21429200000000037,
+        0.22050000000001546,
+        0.3374589999999955
+      ],
+      "worstMs": 0.3374589999999955
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a page omits an obsolete Task version the lead already saw at a newer version (probe obsoleteTaskPage)",
+      "fullName": "P8 coverage ledger passes when a page omits an obsolete Task version the lead already saw at a newer version (probe obsoleteTaskPage)",
+      "durationMs": [
+        0.22366600000000858,
+        0.33583400000003394,
+        0.32370800000001054
+      ],
+      "worstMs": 0.33583400000003394
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a page omits a Task event (probe omittedTask)",
+      "fullName": "P8 coverage ledger violates when a page omits a Task event (probe omittedTask)",
+      "durationMs": [
+        0.18037499999999795,
+        0.23587499999996453,
+        0.32491699999999923
+      ],
+      "worstMs": 0.32491699999999923
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is witnessed when the shell dies before any record",
+      "fullName": "S3 crash before record is witnessed when the shell dies before any record",
+      "durationMs": [
+        0.11683299999998553,
+        0.323915999999997,
+        0.19454199999998423
+      ],
+      "worstMs": 0.323915999999997
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when the publication operation also updates a Task",
+      "fullName": "P7 publication never writes Task authority violates when the publication operation also updates a Task",
+      "durationMs": [
+        0.15020800000002055,
+        0.3069580000000087,
+        0.1564999999999941
+      ],
+      "worstMs": 0.3069580000000087
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the journal pane exists in the world",
+      "fullName": "P10 journal matches world truth passes when the journal pane exists in the world",
+      "durationMs": [
+        0.20437499999999886,
+        0.2987499999999841,
+        0.2588750000000175
+      ],
+      "worstMs": 0.2987499999999841
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the publication operation only reads Tasks",
+      "fullName": "P7 publication never writes Task authority passes when the publication operation only reads Tasks",
+      "durationMs": [
+        0.29479200000000105,
+        0.2496669999999881,
+        0.25875000000002046
+      ],
+      "worstMs": 0.29479200000000105
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is absent when calls run one after another",
+      "fullName": "S2 overlapping ensure_worker calls is absent when calls run one after another",
+      "durationMs": [
+        0.06262499999999704,
+        0.28050000000001774,
+        0.11070900000001416
+      ],
+      "worstMs": 0.28050000000001774
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when a team stop authorizes the close",
+      "fullName": "P5 pane closes are cited passes when a team stop authorizes the close",
+      "durationMs": [
+        0.19354200000000787,
+        0.16779200000001993,
+        0.27266599999998675
+      ],
+      "worstMs": 0.27266599999998675
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when the claimed generation has been dead for more than 10 s",
+      "fullName": "P3 served live claims never name a generation dead over 10 s violates when the claimed generation has been dead for more than 10 s",
+      "durationMs": [
+        0.21608299999999758,
+        0.21620799999999463,
+        0.263417000000004
+      ],
+      "worstMs": 0.263417000000004
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is not applicable when no durable record proves the stopped Worker's target",
+      "fullName": "P5 pane closes are cited is not applicable when no durable record proves the stopped Worker's target",
+      "durationMs": [
+        0.2527499999999918,
+        0.19170900000000302,
+        0.2633339999999862
+      ],
+      "worstMs": 0.2633339999999862
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when no event names the exit and the deadline passes",
+      "fullName": "E1 bound Worker exits are named ended violates when no event names the exit and the deadline passes",
+      "durationMs": [
+        0.1332920000000115,
+        0.1818749999999909,
+        0.2624590000000069
+      ],
+      "worstMs": 0.2624590000000069
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a reuse has no live world process",
+      "fullName": "P4 reuse and spawn acts match world truth violates when a reuse has no live world process",
+      "durationMs": [
+        0.25575000000000614,
+        0.226791999999989,
+        0.24962500000000887
+      ],
+      "worstMs": 0.25575000000000614
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is witnessed when a dead pid returns with a new birth token in the same boot",
+      "fullName": "S1 PID reuse witness is witnessed when a dead pid returns with a new birth token in the same boot",
+      "durationMs": [
+        0.13595799999998803,
+        0.14274999999997817,
+        0.24799999999999045
+      ],
+      "worstMs": 0.24799999999999045
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when the claimed generation was still alive",
+      "fullName": "P2 gone claims match world truth violates when the claimed generation was still alive",
+      "durationMs": [
+        0.23920900000001666,
+        0.24554200000000037,
+        0.17691600000000562
+      ],
+      "worstMs": 0.24554200000000037
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is absent when compaction happens before the update",
+      "fullName": "S5 compaction after a Team update is absent when compaction happens before the update",
+      "durationMs": [
+        0.0573750000000075,
+        0.05700000000001637,
+        0.23695800000001555
+      ],
+      "worstMs": 0.23695800000001555
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is witnessed when a second call starts before the first returns",
+      "fullName": "S2 overlapping ensure_worker calls is witnessed when a second call starts before the first returns",
+      "durationMs": [
+        0.12800000000001432,
+        0.13012499999996407,
+        0.2223329999999919
+      ],
+      "worstMs": 0.2223329999999919
+    },
+    {
+      "file": "sim/herdr-session.test.ts",
+      "title": "rejects a malformed or foreign Session identity \"/sessions/worker.jsonl\"",
+      "fullName": "rejects a malformed or foreign Session identity \"/sessions/worker.jsonl\"",
+      "durationMs": [
+        0.204291000000012,
+        0.16429200000001742,
+        0.2164160000000095
+      ],
+      "worstMs": 0.2164160000000095
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates with overlapping pages",
+      "fullName": "P9 no duplicate page violates with overlapping pages",
+      "durationMs": [
+        0.08395800000002396,
+        0.2125840000000494,
+        0.1318330000000003
+      ],
+      "worstMs": 0.2125840000000494
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when the receipt takes longer than 10 s",
+      "fullName": "E5 ensure_worker receipts within the bound violates when the receipt takes longer than 10 s",
+      "durationMs": [
+        0.06399999999999295,
+        0.06675000000001319,
+        0.20083299999998871
+      ],
+      "worstMs": 0.20083299999998871
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a page omits the current Task version the lead already saw",
+      "fullName": "P8 coverage ledger violates when a page omits the current Task version the lead already saw",
+      "durationMs": [
+        0.10762500000001296,
+        0.1665840000000003,
+        0.18316599999999994
+      ],
+      "worstMs": 0.18316599999999994
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the page names the Task event",
+      "fullName": "P8 coverage ledger passes when the page names the Task event",
+      "durationMs": [
+        0.10970799999998349,
+        0.1688750000000141,
+        0.1811659999999904
+      ],
+      "worstMs": 0.1811659999999904
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when no stamp covers the event after lead idle",
+      "fullName": "E2 events reach the branch after lead idle violates when no stamp covers the event after lead idle",
+      "durationMs": [
+        0.06733300000001918,
+        0.07866599999999835,
+        0.17937499999999318
+      ],
+      "worstMs": 0.17937499999999318
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is absent when the fault arrives after the call returns",
+      "fullName": "S4 Herdr loss during launch is absent when the fault arrives after the call returns",
+      "durationMs": [
+        0.0640420000000006,
+        0.06404199999997218,
+        0.17699999999996407
+      ],
+      "worstMs": 0.17699999999996407
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes the M4 control: snapshot through 0, then the Worker creation update through 2",
+      "fullName": "P8 coverage ledger passes the M4 control: snapshot through 0, then the Worker creation update through 2",
+      "durationMs": [
+        0.10908400000002416,
+        0.16720900000001393,
+        0.17141699999999105
+      ],
+      "worstMs": 0.17141699999999105
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates with two outstanding reservations on different paths",
+      "fullName": "P6 one outstanding reservation per membership violates with two outstanding reservations on different paths",
+      "durationMs": [
+        0.1675000000000182,
+        0.12208300000003192,
+        0.14599999999998658
+      ],
+      "worstMs": 0.1675000000000182
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a launch row only states requested past the bound (probe requestedOnly)",
+      "fullName": "E3 launches complete or report unknown violates when a launch row only states requested past the bound (probe requestedOnly)",
+      "durationMs": [
+        0.09624999999999773,
+        0.10204099999998562,
+        0.15108399999999733
+      ],
+      "worstMs": 0.15108399999999733
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a later consumption settled a different launch on the same Membership",
+      "fullName": "E3 launches complete or report unknown violates when a later consumption settled a different launch on the same Membership",
+      "durationMs": [
+        0.08500000000000796,
+        0.08695799999998144,
+        0.14820899999998005
+      ],
+      "worstMs": 0.14820899999998005
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates the M4 scratch: a snapshot stamped through 2 without the Worker creation changes",
+      "fullName": "P8 coverage ledger violates the M4 scratch: a snapshot stamped through 2 without the Worker creation changes",
+      "durationMs": [
+        0.09629200000000537,
+        0.12137500000000045,
+        0.1456670000000031
+      ],
+      "worstMs": 0.1456670000000031
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is absent when every row marks suspectedHumanStop false",
+      "fullName": "S6 suspected human stop is absent when every row marks suspectedHumanStop false",
+      "durationMs": [
+        0.054000000000002046,
+        0.05858299999999872,
+        0.1452499999999759
+      ],
+      "worstMs": 0.1452499999999759
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is absent when a record is written before the shell dies",
+      "fullName": "S3 crash before record is absent when a record is written before the shell dies",
+      "durationMs": [
+        0.0765829999999994,
+        0.09008300000004965,
+        0.1335420000000056
+      ],
+      "worstMs": 0.1335420000000056
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is absent when no pid is reused",
+      "fullName": "S1 PID reuse witness is absent when no pid is reused",
+      "durationMs": [
+        0.07516699999999332,
+        0.07854199999997036,
+        0.13050000000001205
+      ],
+      "worstMs": 0.13050000000001205
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when an append arrives while the lead is already idle (probe alreadyIdle)",
+      "fullName": "E2 events reach the branch after lead idle violates when an append arrives while the lead is already idle (probe alreadyIdle)",
+      "durationMs": [
+        0.0640420000000006,
+        0.07004100000000335,
+        0.12999999999999545
+      ],
+      "worstMs": 0.12999999999999545
+    },
+    {
+      "file": "sim/herdr-session.test.ts",
+      "title": "rejects a malformed or foreign Session identity {\"source\":\"herdr:pi\",\"agent\":\"pi\",\"kind\":\"id\",\"value\":\"/sessions/worker.jsonl\"}",
+      "fullName": "rejects a malformed or foreign Session identity {\"source\":\"herdr:pi\",\"agent\":\"pi\",\"kind\":\"id\",\"value\":\"/sessions/worker.jsonl\"}",
+      "durationMs": [
+        0.10675000000000523,
+        0.10262500000001751,
+        0.129792000000009
+      ],
+      "worstMs": 0.129792000000009
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when PTB closes with no stop request",
+      "fullName": "P5 pane closes are cited violates when PTB closes with no stop request",
+      "durationMs": [
+        0.11137500000000955,
+        0.12045799999998508,
+        0.12920800000000554
+      ],
+      "worstMs": 0.12920800000000554
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "does not judge an OS-origin close, which is not a PTB act",
+      "fullName": "P5 pane closes are cited does not judge an OS-origin close, which is not a PTB act",
+      "durationMs": [
+        0.11337499999999068,
+        0.12129200000003948,
+        0.12895900000000893
+      ],
+      "worstMs": 0.12895900000000893
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "is N/A when the lead never becomes idle in the window",
+      "fullName": "E2 events reach the branch after lead idle is N/A when the lead never becomes idle in the window",
+      "durationMs": [
+        0.05845899999999915,
+        0.0645420000000172,
+        0.1264579999999853
+      ],
+      "worstMs": 0.1264579999999853
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the launch row reports a start for the same launch inside the bound",
+      "fullName": "E3 launches complete or report unknown passes when the launch row reports a start for the same launch inside the bound",
+      "durationMs": [
+        0.06666699999999537,
+        0.0687499999999659,
+        0.11804200000000264
+      ],
+      "worstMs": 0.11804200000000264
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a start of an older launch on the same Membership does not resolve the newer one (probe staleLaunch)",
+      "fullName": "E3 launches complete or report unknown violates when a start of an older launch on the same Membership does not resolve the newer one (probe staleLaunch)",
+      "durationMs": [
+        0.0751250000000141,
+        0.07491700000002766,
+        0.11466699999999719
+      ],
+      "worstMs": 0.11466699999999719
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "passes when the already-idle append reaches the branch inside the bound",
+      "fullName": "E2 events reach the branch after lead idle passes when the already-idle append reaches the branch inside the bound",
+      "durationMs": [
+        0.06120800000002191,
+        0.06599999999997408,
+        0.1144999999999925
+      ],
+      "worstMs": 0.1144999999999925
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when a blocked Worker stays blocked with no attention",
+      "fullName": "E4 blocked Workers get one attention per epoch violates when a blocked Worker stays blocked with no attention",
+      "durationMs": [
+        0.059708999999998014,
+        0.06258300000001782,
+        0.11058299999999122
+      ],
+      "worstMs": 0.11058299999999122
+    },
+    {
+      "file": "sim/monitors/monitors.test.ts",
+      "title": "violates when the reservation neither completes nor reports unknown",
+      "fullName": "E3 launches complete or report unknown violates when the reservation neither completes nor reports unknown",
+      "durationMs": [
+        0.06141700000000583,
+        0.06487499999997226,
+        0.10966600000000426
+      ],
+      "worstMs": 0.10966600000000426
+    },
+    {
+      "file": "sim/herdr-session.test.ts",
+      "title": "rejects a malformed or foreign Session identity {\"source\":\"herdr:pi\",\"agent\":\"other\",\"kind\":\"path\",\"value\":\"/sessions/worker.jsonl\"}",
+      "fullName": "rejects a malformed or foreign Session identity {\"source\":\"herdr:pi\",\"agent\":\"other\",\"kind\":\"path\",\"value\":\"/sessions/worker.jsonl\"}",
+      "durationMs": [
+        0.0973329999999919,
+        0.09237500000000409,
+        0.10437500000000455
+      ],
+      "worstMs": 0.10437500000000455
+    },
+    {
+      "file": "sim/herdr-session.test.ts",
+      "title": "rejects a malformed or foreign Session identity {\"source\":\"untrusted\",\"agent\":\"pi\",\"kind\":\"path\",\"value\":\"/sessions/worker.jsonl\"}",
+      "fullName": "rejects a malformed or foreign Session identity {\"source\":\"untrusted\",\"agent\":\"pi\",\"kind\":\"path\",\"value\":\"/sessions/worker.jsonl\"}",
+      "durationMs": [
+        0.07191699999998491,
+        0.07029199999999491,
+        0.09004199999998264
+      ],
+      "worstMs": 0.09004199999998264
+    }
+  ],
+  "plainRuns": [
+    {
+      "run": 1,
+      "command": "npm test",
+      "exitCode": 0,
+      "passed": 2029,
+      "skipped": 3,
+      "failed": 0,
+      "filesPassed": 176,
+      "filesSkipped": 2,
+      "durationSeconds": 84.97,
+      "nativeBinAbsentBeforeAndAfter": true
+    },
+    {
+      "run": 2,
+      "command": "npm test",
+      "exitCode": 0,
+      "passed": 2029,
+      "skipped": 3,
+      "failed": 0,
+      "filesPassed": 176,
+      "filesSkipped": 2,
+      "durationSeconds": 88.41,
+      "nativeBinAbsentBeforeAndAfter": true
+    },
+    {
+      "run": 3,
+      "command": "npm test",
+      "exitCode": 0,
+      "passed": 2029,
+      "skipped": 3,
+      "failed": 0,
+      "filesPassed": 176,
+      "filesSkipped": 2,
+      "durationSeconds": 87.22,
+      "nativeBinAbsentBeforeAndAfter": true
+    }
+  ]
+}
