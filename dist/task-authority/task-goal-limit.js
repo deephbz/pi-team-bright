@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TASK_GOAL_MAX_LENGTH_SETTING = exports.DEFAULT_TASK_GOAL_MAX_LENGTH = void 0;
 exports.parseTaskGoalMaxLength = parseTaskGoalMaxLength;
 exports.loadTaskGoalMaxLength = loadTaskGoalMaxLength;
+const host_env_1 = require("../env/host-env");
 const fs = __importStar(require("node:fs"));
 const os = __importStar(require("node:os"));
 const path = __importStar(require("node:path"));
@@ -49,7 +50,7 @@ function parseTaskGoalMaxLength(value) {
 }
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 /** Global-only: every Session uses the same contract regardless of Worker cwd. */
-function loadTaskGoalMaxLength(agentDir = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent")) {
+function loadTaskGoalMaxLength(agentDir = (0, host_env_1.hostEnv)().process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), ".pi", "agent")) {
     const file = path.join(agentDir, "settings.json");
     let root;
     try {
