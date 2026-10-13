@@ -217,18 +217,23 @@ describe("TUI message gallery", () => {
     expect(message.expandedLines).toEqual([`Alert from worker · clarification · Task \"task-one\" · 2026-10-13T00:00:00Z: ${"🧭".repeat(80)}… · preview cut; ask sender`]);
   });
 
-  it("shows unavailable Alert history without hiding the snapshot", () => {
-    const details = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [], alerts_unavailable: { message: "inbox decode failed" } };
-    const projected = projectToolResult("team_sync", details);
+  it.each(["semantic", "model"])("shows the live inbox failure in %s snapshots and its full cause when expanded", source => {
+    const cause = `inbox decode failed: ${"invalid record ".repeat(12)}at the final row`;
+    const details = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [], alerts_unavailable: { message: cause } };
+    const projected = source === "model" ? projectToolResult("team_sync", details) : details;
     const message = projectToolTuiMessage({ tool: "team_sync", details: projected, expanded: true });
-    expect(message.summary).toContain("Alert history unavailable");
+    expect(message.summary).toContain("0 Workers, 0 Tasks");
+    expect(message.summary).toContain("Alert history unavailable: inbox decode failed:");
+    expect(message.summary).not.toContain("at the final row");
+    expect(message.expandedLines).toEqual([`Alert history unavailable: ${cause}. Workers and Tasks remain current. Ask the human to inspect the inbox file.`]);
   });
 
   it.each([false, true])("reads old snapshots without inventing an empty Alert history (stamped=%s)", stamped => {
     const old = { kind: "snapshot", team: { name: "review", purpose: "Review.", lifecycle: "active" }, workers: [], tasks: [],
       ...(stamped ? { observation: { team: "review", epoch: "epoch-one", binding: "membership-lead:session-one", from: 0, through: 1 } } : {}) };
     const message = projectToolTuiMessage({ tool: "team_sync", details: old, expanded: true });
-    expect(message.summary).toContain("Alert history unavailable");
+    expect(message.summary).toContain("Alert history unavailable.");
+    expect(message.summary).not.toContain("Alert history unavailable:");
     expect(message.detail).toBe(old);
     expect(message.expandedLines).toEqual([]);
     expect(() => projectToolResult("team_sync", old)).toThrow();

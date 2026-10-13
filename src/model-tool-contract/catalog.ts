@@ -277,8 +277,12 @@ export const ReceivedAlertSchema = Type.Object({
   text_length: Type.Optional(Type.Integer({ minimum: 2001, description: "Full body length in Unicode code points, present when truncated." })),
 }, { additionalProperties: false });
 
-export const RecentAlertsSchema = Type.Array(ReceivedAlertSchema, { maxItems: 10, description: "Newest first. from is sender member name; received_at is inbox receipt time, not send time. Recent is not unresolved." });
+export const RecentAlertsSchema = Type.Array(ReceivedAlertSchema, { maxItems: 10, description: "Newest first. from is sender member name; received_at is inbox receipt time, not send time. Recent is not unresolved. Use truncated, text_length and alerts_omitted to detect missing text. Ask the sender if cut or omitted text matters." });
 export const AlertsOmittedSchema = Type.Integer({ minimum: 0, description: "Older eligible received Alerts outside the newest-10 bound." });
+export const AlertsUnavailableSchema = Type.Object({ message: Type.String({ minLength: 1 }) }, {
+  additionalProperties: false,
+  description: "Alert inbox read failed. Workers and Tasks remain current. Ask the human to inspect the inbox file.",
+});
 
 const TeamSnapshotFields = {
   kind: Type.Literal("snapshot"),
@@ -292,7 +296,7 @@ const TeamSnapshotFields = {
 };
 export const TeamSnapshotResultSchema = Type.Union([
   Type.Object({ ...TeamSnapshotFields, alerts: RecentAlertsSchema, alerts_omitted: AlertsOmittedSchema }, { additionalProperties: false }),
-  Type.Object({ ...TeamSnapshotFields, alerts_unavailable: Type.Object({ message: Type.String({ minLength: 1 }) }, { additionalProperties: false }) }, { additionalProperties: false }),
+  Type.Object({ ...TeamSnapshotFields, alerts_unavailable: AlertsUnavailableSchema }, { additionalProperties: false }),
 ]);
 
 export const TeamUpdatesResultSchema = Type.Object({

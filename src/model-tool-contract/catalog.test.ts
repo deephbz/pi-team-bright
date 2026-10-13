@@ -13,6 +13,8 @@ import {
   TeamCreateResultSchema,
   TeamSyncParametersSchema,
   TeamSyncResultSchema,
+  RecentAlertsSchema,
+  AlertsUnavailableSchema,
   TeamSyncUnavailableResultSchema,
   WorkerStopParametersSchema,
   WorkerStopResultSchema,
@@ -71,6 +73,21 @@ function schemasFor(tool: "team_create" | "team_sync" | "ensure_worker" | "task_
 }
 
 describe("candidate model-tool catalog", () => {
+  it("describes missing Alert text and isolates inbox failure from current Workers and Tasks", () => {
+    const recent = JSON.parse(JSON.stringify(RecentAlertsSchema)).description;
+    const unavailable = JSON.parse(JSON.stringify(AlertsUnavailableSchema)).description;
+    expect(recent).toContain("Newest first");
+    expect(recent).toContain("Recent is not unresolved");
+    expect(recent).toContain("truncated, text_length and alerts_omitted");
+    expect(recent).toContain("Ask the sender if cut or omitted text matters");
+    expect(unavailable).toContain("Alert inbox read failed");
+    expect(unavailable).toContain("Workers and Tasks remain current");
+    expect(unavailable).toContain("Ask the human to inspect the inbox file");
+    for (const schema of [TeamSyncResultSchema, ModelResultSchemas.team_sync]) {
+      expect(JSON.stringify(schema)).toContain(recent);
+      expect(JSON.stringify(schema)).toContain(unavailable);
+    }
+  });
   it("creates a Team from its stable identity, purpose, and optional pane policy", () => {
     const valid = { name: "release-team", purpose: "Prepare and verify the public release." };
     expect(Check(TeamCreateParametersSchema, valid)).toBe(true);
