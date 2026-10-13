@@ -5,6 +5,7 @@ import deadPi from "./fixtures/traces/bound-pi-dead.json";
 import { generatedTrace } from "./v31-schedules";
 import { p5ClosesCited } from "./monitors/safety";
 
+// Full-suite CPU contention reached 3982 ms; 15 s gives the real-actor replay headroom.
 it("distinguishes Membership-associated Worker, lead, shell and reused unrelated process", async () => {
   const result = await replayTrace(generatedTrace({ family: 0, seed: 42, gap: 0, repeats: 1 }, "classified-pid-reuse"), { seed: 42 });
   const deaths = result.history.filter(entry => entry.kind === "process.death");
@@ -19,7 +20,7 @@ it("distinguishes Membership-associated Worker, lead, shell and reused unrelated
   expect(outsider.process.generation.osBirthToken).not.toBe(workerDeath!.process.generation.osBirthToken);
   const admitted = result.history.filter(entry => entry.kind === "durable.runtime").find(entry => entry.record?.pid === workerDeath!.process.generation.pid && entry.record?.osBirthToken === workerDeath!.process.generation.osBirthToken);
   expect(workerDeath!.process.membershipId).toBe(admitted!.record!.membershipId);
-});
+}, 15000);
 
 it("preserves the shell after human Pi quit and attributes the subsequent human close", async () => {
   const trace = structuredClone(deadPi) as WorldTrace;

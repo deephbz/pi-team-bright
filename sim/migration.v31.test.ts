@@ -96,6 +96,7 @@ async function migrationWorld() {
   } catch (error) { world.dispose(); throw error; }
 }
 
+// Full-suite CPU contention reached 24273 ms; retain 60 s for the mixed-version migration.
 it("migrates a baseline Team lead first, then three Workers without replacing a Session or carrier", async () => {
   const h = await migrationWorld();
   try {
@@ -162,6 +163,7 @@ it("migrates a baseline Team lead first, then three Workers without replacing a 
   } finally { h.world.dispose(); }
 }, 60000);
 
+// Full-suite CPU contention reached 11579 ms; retain 60 s for stopped-epoch migration.
 it("falls back to a stopped epoch and allocates new Worker Sessions", async () => {
   const h = await migrationWorld();
   try {

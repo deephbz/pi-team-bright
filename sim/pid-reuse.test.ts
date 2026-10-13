@@ -36,6 +36,7 @@ it("starts a new actor for the same role and reused PID without reviving the old
   } finally { world.dispose(); }
 });
 
+// Full-suite CPU contention reached 3519 ms; 15 s gives Worker recovery and fencing headroom.
 it("keeps stale Worker handles dead after recovery while an outsider holds the old PID", async () => {
   const world = new SimWorld(42);
   try {
@@ -50,7 +51,7 @@ it("keeps stale Worker handles dead after recovery while an outsider holds the o
     await expect(old.tool("team_sync", { view: "snapshot" })).rejects.toThrow("Actor is not live");
     await expect(old.settle()).rejects.toThrow("Actor is not live");
   } finally { world.dispose(); }
-});
+}, 15000);
 
 it("replays a lead restart after reboot with a new boot identity", async () => {
   const input = trace([start, { at: 0, step: { kind: "os.reboot" } }, { at: 1, step: { kind: "pi.start", who, session: "session-2", reason: "startup" } }]);
