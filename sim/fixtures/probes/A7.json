@@ -1,0 +1,239 @@
+{
+  "assumption": "Linux /proc/<pid>/stat starttime changes on pid reuse.",
+  "verdict": "holds",
+  "command": "node probe.cjs a7 (production probeProcessGeneration/probeProcessGenerations; pidwrap forces reuse)",
+  "observed": {
+    "environment": {
+      "date": "2026-10-13T10:37:10.386Z",
+      "platform": "linux",
+      "arch": "x64",
+      "node": "v22.22.2",
+      "kernel": "6.8.0-124-generic",
+      "distro": "Ubuntu 24.04.4 LTS",
+      "clkTck": "100",
+      "pidMax": "4194304",
+      "procMount": "rw,nosuid,nodev,noexec,relatime",
+      "bootIdRedacted": true,
+      "base": "9c7dd67037b8b238e547309ac912784ee3aedf05"
+    },
+    "trials": [
+      {
+        "trial": 0,
+        "pid": 794955,
+        "before": {
+          "kind": "found",
+          "generation": {
+            "pid": 794955,
+            "osBirthToken": "866716294",
+            "bootId": "boot-1"
+          }
+        },
+        "referenceStarttimeBefore": "866716294",
+        "afterDeath": {
+          "kind": "absent"
+        },
+        "wrap": {
+          "outcome": "found",
+          "forksByWinner": 261525,
+          "ms": 72459
+        },
+        "deathToReuseMs": 72463,
+        "after": {
+          "kind": "found",
+          "generation": {
+            "pid": 794955,
+            "osBirthToken": "866723546",
+            "bootId": "boot-1"
+          }
+        },
+        "newcomerReference": {
+          "state": "S",
+          "starttime": "866723546"
+        },
+        "batch": {
+          "794947": {
+            "kind": "found",
+            "generation": {
+              "pid": 794947,
+              "osBirthToken": "866716291",
+              "bootId": "boot-1"
+            }
+          },
+          "794955": {
+            "kind": "found",
+            "generation": {
+              "pid": 794955,
+              "osBirthToken": "866723546",
+              "bootId": "boot-1"
+            }
+          }
+        },
+        "checks": {
+          "tokenMatchesReference": true,
+          "absentAfterDeath": true,
+          "reusedPidFound": true,
+          "tokenChanged": true,
+          "sameBoot": true,
+          "batchAgrees": true
+        }
+      },
+      {
+        "trial": 1,
+        "pid": 794974,
+        "before": {
+          "kind": "found",
+          "generation": {
+            "pid": 794974,
+            "osBirthToken": "866723547",
+            "bootId": "boot-1"
+          }
+        },
+        "referenceStarttimeBefore": "866723547",
+        "afterDeath": {
+          "kind": "absent"
+        },
+        "wrap": {
+          "outcome": "found",
+          "forksByWinner": 262049,
+          "ms": 72077
+        },
+        "deathToReuseMs": 72080,
+        "after": {
+          "kind": "found",
+          "generation": {
+            "pid": 794974,
+            "osBirthToken": "866730761",
+            "bootId": "boot-1"
+          }
+        },
+        "newcomerReference": {
+          "state": "S",
+          "starttime": "866730761"
+        },
+        "batch": {
+          "794947": {
+            "kind": "found",
+            "generation": {
+              "pid": 794947,
+              "osBirthToken": "866716291",
+              "bootId": "boot-1"
+            }
+          },
+          "794974": {
+            "kind": "found",
+            "generation": {
+              "pid": 794974,
+              "osBirthToken": "866730761",
+              "bootId": "boot-1"
+            }
+          }
+        },
+        "checks": {
+          "tokenMatchesReference": true,
+          "absentAfterDeath": true,
+          "reusedPidFound": true,
+          "tokenChanged": true,
+          "sameBoot": true,
+          "batchAgrees": true
+        }
+      },
+      {
+        "trial": 2,
+        "pid": 794987,
+        "before": {
+          "kind": "found",
+          "generation": {
+            "pid": 794987,
+            "osBirthToken": "866730763",
+            "bootId": "boot-1"
+          }
+        },
+        "referenceStarttimeBefore": "866730763",
+        "afterDeath": {
+          "kind": "absent"
+        },
+        "wrap": {
+          "outcome": "found",
+          "forksByWinner": 261361,
+          "ms": 72544
+        },
+        "deathToReuseMs": 72547,
+        "after": {
+          "kind": "found",
+          "generation": {
+            "pid": 794987,
+            "osBirthToken": "866738024",
+            "bootId": "boot-1"
+          }
+        },
+        "newcomerReference": {
+          "state": "S",
+          "starttime": "866738024"
+        },
+        "batch": {
+          "794947": {
+            "kind": "found",
+            "generation": {
+              "pid": 794947,
+              "osBirthToken": "866716291",
+              "bootId": "boot-1"
+            }
+          },
+          "794987": {
+            "kind": "found",
+            "generation": {
+              "pid": 794987,
+              "osBirthToken": "866738024",
+              "bootId": "boot-1"
+            }
+          }
+        },
+        "checks": {
+          "tokenMatchesReference": true,
+          "absentAfterDeath": true,
+          "reusedPidFound": true,
+          "tokenChanged": true,
+          "sameBoot": true,
+          "batchAgrees": true
+        }
+      }
+    ],
+    "trickyComm": {
+      "stat": "795007 (a) b (c 1 2) S 794947 794946 794",
+      "probe": {
+        "kind": "found",
+        "generation": {
+          "pid": 795007,
+          "osBirthToken": "866738025",
+          "bootId": "boot-1"
+        }
+      },
+      "reference": "866738025",
+      "parser": "866738025"
+    },
+    "zombie": {
+      "pid": 795032,
+      "state": "Z",
+      "probe": {
+        "kind": "found",
+        "generation": {
+          "pid": 795032,
+          "osBirthToken": "866738058",
+          "bootId": "boot-1"
+        }
+      }
+    },
+    "foreignUser": {
+      "pid": 1840047,
+      "probe": {
+        "kind": "found",
+        "generation": {
+          "pid": 1840047,
+          "osBirthToken": "326601684",
+          "bootId": "boot-1"
+        }
+      }
+    },
+    "scope": "Process reuse after a full PID wrap on one boot. starttime has CLK_TCK resolution; a reuse inside one tick is not reachable by wrap at this pid_max and is not tested. A zombie reads as found until reaped."
+  }
+}
