@@ -11,6 +11,8 @@ import {
   TeamDeltaSchema,
   WorkerDeltaSchema,
   AlertDeltaSchema,
+  RecentAlertsSchema,
+  AlertsOmittedSchema,
   TeamCreateResultSchema,
   TeamShutdownResultSchema,
   TeamSyncResultSchema,
@@ -163,14 +165,26 @@ const HistoricalSyncStatusSchema = Type.Union([
 
 /** Read-only Session decoder. Publication continues to use the current schemas. */
 export function decodeHistoricalTeamSyncResult(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    // Older native snapshots did not record received Alerts. Keep absence visible.
+    if (record.kind === "snapshot" && !("alerts" in record) && !("alerts_omitted" in record)) {
+      const augmented = { ...record, alerts: [], alerts_omitted: 0 };
+      if (Check(TeamSyncModelResultSchema, augmented)) return record;
+      if (Check(TeamSyncResultSchema, augmented)) {
+        const { alerts: _alerts, alerts_omitted: _omitted, ...historical } = projectToolResult("team_sync", augmented) as Record<string, unknown>;
+        return historical;
+      }
+    }
+  }
   if (!Check(HistoricalSyncStatusSchema, value) && !Check(TeamSyncModelResultSchema, value)) return undefined;
   return value as Record<string, unknown>;
 }
 
 const SyncRecovery = Type.Object({ action: Type.Literal("request_snapshot") }, { additionalProperties: false });
 export const TeamSyncModelResultSchema = Type.Union([
-  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), attention: Type.Optional(CarrierAttentionSchema), nonterminal_task_ids: Type.Array(TaskId), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
-  Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(TeamDeltaSchema), worker_changes: Type.Array(WorkerDeltaSchema), task_changes: Type.Array(TaskDeltaSchema), alerts: Type.Array(AlertDeltaSchema), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("snapshot"), team: Type.Object({ name: Type.String(), purpose: Type.String(), lifecycle: Type.Literal("active") }, { additionalProperties: false }), model_roles: Type.Optional(Type.Array(WorkerModelRoleSummary)), default_model_role: Type.Optional(WorkerModelRoleName), workers: Type.Array(Type.Object({ name: WorkerName, scope: Type.String(), carrier: Type.Enum(["starting", "connected", "absent"]), attention: Type.Optional(CarrierAttentionSchema), nonterminal_task_ids: Type.Array(TaskId), model_role: Type.Optional(WorkerModelRoleName) }, { additionalProperties: false })), tasks: Type.Array(TaskCard), alerts: RecentAlertsSchema, alerts_omitted: AlertsOmittedSchema, task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
+  Type.Object({ kind: Type.Literal("updates"), team_changes: Type.Array(TeamDeltaSchema), worker_changes: Type.Array(WorkerDeltaSchema), task_changes: Type.Array(TaskDeltaSchema), alerts: Type.Array(AlertDeltaSchema, { maxItems: 0 }), task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("caught_up"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("unsettled"), head: Type.Integer({ minimum: 0 }), epoch_id: Type.String({ minLength: 1 }), workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }) }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal("refused"), reason: Type.Literal("observation_in_progress"), message: Type.String({ minLength: 1 }), state_changed: Type.Literal(false), observation_advanced: Type.Literal(false) }, { additionalProperties: false }),

@@ -21,6 +21,7 @@ function fixture() {
     },
     taskStateDelivery: { listTaskIds: async () => tasks.map(task => task.id), readTasks, readDeliveryEvidence: async () => ({ known: true, pending: false }) },
     alertActuation: { readInboxEvidence: async () => ({ known: true, pending: false }) },
+    receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
   }, {
     projectNonterminalTaskIds: () => [],
     projectTaskChanges: (events, current) => ({ kind: "projected", changes: events.flatMap(event => event.type === "task" ? current.filter(task => task.id === event.ref.taskId).map(task => ({ taskId: task.id, changeKinds: ["progress" as const], journalEntries: [], current: task })) : []) }),

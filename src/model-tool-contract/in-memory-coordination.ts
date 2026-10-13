@@ -28,6 +28,7 @@ export class InMemoryCoordinationApplicationPort implements InMemoryCoordination
         readDeliveryEvidence: async () => ({ known: true, pending: false }),
       },
       alertActuation: { readInboxEvidence: async () => ({ known: true, pending: false }) },
+      receivedAlerts: { readRecentReceivedAlerts: async () => ({ alerts: [], omitted: 0 }) },
     }, { projectNonterminalTaskIds, projectTaskChanges }, {
       readEventCursor: team => String(this.journal.get(this.teamIds.get(team) ?? team)?.length ?? 0),
       readEvents: (team, options) => {

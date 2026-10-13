@@ -8,6 +8,24 @@ export interface AlertTaskReference {
   version?: TaskVersionRef;
 }
 
+/** Recent received evidence. Delivery read flags do not express resolution. */
+export interface ReceivedAlert {
+  alertId: string;
+  from: string;
+  kind: AlertKind;
+  taskId?: string;
+  taskVersion?: TaskVersionRef;
+  receivedAt: string;
+  text: string;
+  truncated?: true;
+  textLength?: number;
+}
+
+export interface RecentReceivedAlerts {
+  alerts: ReceivedAlert[];
+  omitted: number;
+}
+
 export interface ExpectedSenderBinding {
   membershipId: string;
   sessionFile: string;

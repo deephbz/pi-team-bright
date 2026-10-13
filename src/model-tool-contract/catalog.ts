@@ -265,6 +265,21 @@ const ObservationStampSchema = Type.Object({
   from: Type.Integer({ minimum: 0 }), through: Type.Integer({ minimum: 0 }),
 }, { additionalProperties: false });
 
+export const ReceivedAlertSchema = Type.Object({
+  alert_id: Type.String({ minLength: 1, description: "Receipt identity shared with direct delivery; use it to recognize duplicates." }),
+  from: Type.String({ minLength: 1 }),
+  kind: Type.Enum(["clarification", "attention", "announcement"]),
+  task_id: Type.Optional(TaskId),
+  task_version: Type.Optional(Type.String({ pattern: "^v_[0-9a-f]{16}$", description: "Historical Task version named by the sender; not current Task state." })),
+  received_at: Type.String({ minLength: 1 }),
+  text: Type.String({ minLength: 1, description: "Preview of at most 2000 Unicode code points. Ask the sender if the cut part matters." }),
+  truncated: Type.Optional(Type.Literal(true)),
+  text_length: Type.Optional(Type.Integer({ minimum: 2001, description: "Full body length in Unicode code points, present when truncated." })),
+}, { additionalProperties: false });
+
+export const RecentAlertsSchema = Type.Array(ReceivedAlertSchema, { maxItems: 10, description: "Newest received Alerts for this exact Membership, in inbox receipt order. Recent does not mean open: read means delivered, not resolved. This read does not consume delivery. Ask the sender for omitted text." });
+export const AlertsOmittedSchema = Type.Integer({ minimum: 0, description: "Older eligible received Alerts outside the newest-10 bound." });
+
 export const TeamSnapshotResultSchema = Type.Object({
   kind: Type.Literal("snapshot"),
   observation: Type.Optional(ObservationStampSchema),
@@ -273,6 +288,8 @@ export const TeamSnapshotResultSchema = Type.Object({
   default_model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
   workers: Type.Array(WorkerCurrentSchema),
   tasks: Type.Array(TaskCardSchema),
+  alerts: RecentAlertsSchema,
+  alerts_omitted: AlertsOmittedSchema,
   task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
 }, { additionalProperties: false });
 
@@ -282,7 +299,7 @@ export const TeamUpdatesResultSchema = Type.Object({
   team_changes: Type.Array(TeamDeltaSchema),
   worker_changes: Type.Array(WorkerDeltaSchema),
   task_changes: Type.Array(TaskDeltaSchema),
-  alerts: Type.Array(AlertDeltaSchema),
+  alerts: Type.Array(AlertDeltaSchema, { maxItems: 0, description: "Always empty. Direct delivery presents new Alerts; snapshots recover recent received Alerts." }),
   task_projection_warnings: Type.Optional(Type.Array(TaskCardWarningSchema)),
 }, { additionalProperties: false });
 
@@ -601,6 +618,8 @@ const unavailableWorkerResult = {
 
 const snapshotResult = {
   kind: "snapshot",
+  alerts: [],
+  alerts_omitted: 0,
   team: { name: "release-team", purpose: "Prepare and verify the public release.", lifecycle: "active" },
   workers: [
     {
@@ -887,7 +906,7 @@ export const modelToolCatalog = {
     {
       name: "team_sync",
       label: "Sync Team",
-      responsibility: "Return a whole-Team snapshot or incremental coordination updates. Use task_read for selected complete Task cards.",
+      responsibility: "Observe current Team state. Alerts are recent; read is not resolved. Ask senders for cut text.",
       actors: ["leader"],
       commonUseCases: [
         "Restore current Team context after startup or compaction.",
@@ -900,8 +919,8 @@ export const modelToolCatalog = {
         "Do not use it solely to recheck a mutation receipt. Continue supervision with updates while assigned Tasks remain in flight.",
       ],
       sideEffects: [
-        "A persisted snapshot establishes the hidden incremental baseline at its observed head.",
-        "A persisted updates result advances the hidden baseline through all returned changes.",
+        "A persisted snapshot establishes the branch baseline at its observed journal head. The received-Alert inbox read is independent of that watermark and changes no read flag.",
+        "A persisted updates result advances the branch baseline through all returned changes. Its alerts list stays empty; direct delivery presents new Alerts.",
         "Cancellation or unavailable authority advances no baseline and publishes no Team observation.",
       ],
       parameters: TeamSyncParametersSchema,

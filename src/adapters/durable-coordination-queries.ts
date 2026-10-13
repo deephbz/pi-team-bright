@@ -1,4 +1,5 @@
 import type { CoordinationQueryBundle } from "../coordination/queries";
+import { readRecentReceivedAlerts } from "../alert-authority/alerts";
 import { DurableCoordinationAlertActuationQuery } from "./durable-coordination-alert-actuation";
 import { DurableCoordinationTaskStateDeliveryQuery } from "./durable-coordination-task-state-delivery";
 import { DurableGraphTaskStateDeliveryQuery } from "./durable-graph-task-read";
@@ -17,5 +18,6 @@ export function createDurableCoordinationQueries(
       ? new DurableGraphTaskStateDeliveryQuery(graph, factory)
       : new DurableCoordinationTaskStateDeliveryQuery(factory),
     alertActuation: new DurableCoordinationAlertActuationQuery(),
+    receivedAlerts: { readRecentReceivedAlerts },
   };
 }

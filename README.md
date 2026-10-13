@@ -142,7 +142,11 @@ send releases its reservation within 30 seconds. Automatic send failure pauses
 retries until the branch changes. Run `/ptb sync` to retry manually.
 Updates without a branch cursor return a snapshot at the current journal
 watermark; they do not replay the journal from zero. Compaction preserves the
-cursor. Request a snapshot after compaction to restore current Task context.
+cursor. Request a snapshot after compaction to restore Tasks and recent received
+Alerts. The snapshot reads the exact Membership's inbox without changing delivery
+state. It shows the newest 10 Alerts with bounded previews and an omitted count.
+Recent does not mean unresolved. Ask the sender if cut or omitted text matters.
+The inbox read is independent of the journal watermark.
 Update delivery uses bounded event pages. The first observation on a branch
 sends a complete Team snapshot; a large Team can require substantial model context.
 

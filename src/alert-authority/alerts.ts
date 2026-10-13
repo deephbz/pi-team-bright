@@ -1,6 +1,7 @@
 import { hostEnv } from "../env/host-env";
 import * as inboxDelivery from "./inbox-delivery";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
+import type { RecentReceivedAlerts } from "./contracts";
 import {
   ALERT_KINDS,
   type AcceptedAlertDelivery,
@@ -64,7 +65,9 @@ function taskReference(input: SendAlertInput): AlertTaskReference | undefined {
   };
 }
 
-function deliveryText(
+const ALERT_TRAILER = "This Alert is exceptional coordination only. It does not assign, advance, block, or complete a Task.";
+
+export function deliveryText(
   alertId: string,
   kind: AlertKind,
   text: string,
@@ -76,8 +79,41 @@ function deliveryText(
       ? [`Task: ${taskRef.taskId}${taskRef.version ? ` @ ${taskRef.version}` : ""}`]
       : []),
     text,
-    "This Alert is exceptional coordination only. It does not assign, advance, block, or complete a Task.",
+    ALERT_TRAILER,
   ].join("\n");
+}
+
+/** Decode only the envelope emitted above; ordinary inbox messages stay out. */
+export function parseAlertDeliveryText(value: string): { alertId: string; kind: AlertKind; text: string; taskRef?: AlertTaskReference } | undefined {
+  const lines = value.split("\n");
+  const header = /^\[PiTeams (clarification|attention|announcement) Alert (alert_[^\s\]]+)\]$/.exec(lines[0] ?? "");
+  if (!header || lines.at(-1) !== ALERT_TRAILER) return undefined;
+  const task = /^Task: (.+?)(?: @ (v_[0-9a-f]{16}))?$/.exec(lines[1] ?? "");
+  const text = lines.slice(task ? 2 : 1, -1).join("\n");
+  if (!text.trim()) return undefined;
+  return { alertId: header[2], kind: header[1] as AlertKind, text,
+    ...(task ? { taskRef: { taskId: task[1], ...(task[2] ? { version: assertTaskVersionRef(task[2]) } : {}) } } : {}) };
+}
+
+/** Inbox append order proves receipt order even when sender clocks disagree. */
+export async function readRecentReceivedAlerts(teamName: string, memberName: string, membershipId: string, limit: number): Promise<RecentReceivedAlerts> {
+  if (!Number.isInteger(limit) || limit < 0) throw new Error("Received Alert limit must be a nonnegative integer.");
+  const messages = await inboxDelivery.readStoredInboxForMembership(teamName, memberName, membershipId);
+  const eligible = messages.flatMap(message => {
+    const parsed = typeof message.text === "string" ? parseAlertDeliveryText(message.text) : undefined;
+    return parsed && typeof message.from === "string" && typeof message.timestamp === "string"
+      ? [{ message, parsed }] : [];
+  }).reverse();
+  return {
+    alerts: eligible.slice(0, limit).map(({ message, parsed }) => {
+      const points = Array.from(parsed.text);
+      return { alertId: parsed.alertId, from: message.from, kind: parsed.kind,
+        ...(parsed.taskRef ? { taskId: parsed.taskRef.taskId, ...(parsed.taskRef.version ? { taskVersion: parsed.taskRef.version } : {}) } : {}),
+        receivedAt: message.timestamp, text: points.slice(0, 2000).join(""),
+        ...(points.length > 2000 ? { truncated: true as const, textLength: points.length } : {}) };
+    }),
+    omitted: Math.max(0, eligible.length - limit),
+  };
 }
 
 function deliverySummary(kind: AlertKind, taskRef: AlertTaskReference | undefined): string {

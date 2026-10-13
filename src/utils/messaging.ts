@@ -2,7 +2,11 @@ import { DurableAlertMembership } from "../adapters/durable-alert-membership";
 import * as canonical from "../alert-authority/inbox-delivery";
 import type { ExpectedSenderBinding } from "../alert-authority/contracts";
 
-export * from "../alert-authority/inbox-delivery";
+export {
+  MessageTeamDoesNotExistError, RecipientMembershipUnresolvedError, RecipientNotCurrentMemberError,
+  appendMessage, markMessagesRead, markMessagesReadForMembership, nowIso, readInbox, readInboxForMembership,
+} from "../alert-authority/inbox-delivery";
+export type { BroadcastMessageResult, ExpectedSenderBinding } from "../alert-authority/contracts";
 
 /** Compatibility facade for historical utility callers. */
 export function sendPlainMessage(

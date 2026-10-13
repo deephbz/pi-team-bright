@@ -89,6 +89,9 @@ selected native Session branch owns delivery position. The adapter publishes
 provider success has no role. `team_sync` returns immediately. A missing branch
 cursor selects a snapshot, which captures its journal watermark before Task
 and Worker hydration. The service revalidates the Team epoch and lead binding.
+Snapshots also recover recent received Alerts through a non-consuming
+Alert-authority inbox query for the exact Membership. This read is independent
+of the journal watermark. Direct delivery still presents new Alerts.
 Task-authority reconciliation runs after semantically empty journal pages;
 stale Task and retired Worker events cannot hide an authority revision.
 
