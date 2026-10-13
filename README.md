@@ -295,9 +295,11 @@ pi install npm:@hypercarrier/pi-team-bright@0.20.0
 ### Carrier-liveness upgrade (unreleased)
 
 On macOS, the package's `postinstall` hook builds the process-generation helper
-from included Rust source. If `rustc` is missing, installation succeeds with one
-warning that names the build command. Install Rust (`rustc`) and Xcode Command
-Line Tools, then run `npm run build:process-generation` from the installed
+from included Rust source. If `rustc` is missing, installation still succeeds.
+Npm can hide successful postinstall output. PTB checks the helper at Pi startup
+and emits one native warning per extension load when it is missing. Install
+Rust (`rustc`) and Xcode Command Line Tools, then run
+`npm run build:process-generation` from the installed
 `@hypercarrier/pi-team-bright` directory. Use the same command if install scripts
 were disabled. Linux uses procfs and needs no native build.
 
@@ -479,7 +481,10 @@ color. The warning includes the affected field, source, consequence, and
 canonical example path. Repair the settings and reload Pi to stop new warnings.
 The warning does not start a model turn or enter model-visible Session history.
 Pi remains usable; a dependent invalid Worker selection still refuses.
-An absent extension configuration produces no warning during standalone Pi use.
+An absent extension configuration produces no settings warning during standalone
+Pi use. On macOS, a missing process-generation helper produces a separate native
+startup warning with the Rust/Xcode remedy and build command. This warning also
+stays outside model-visible history.
 
 ## Worker resource settings
 

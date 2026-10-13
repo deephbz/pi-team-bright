@@ -266,7 +266,10 @@ function customScenarios(): TuiMessageGalleryScenario[] {
     { id: "custom.sync-nudge", title: "Team synchronization nudge", source: "custom", customTypes: [SYNC_NUDGE_CUSTOM_TYPE], message: projectSyncNudgeMessage({ details: nudge })! },
     { id: "custom.team-update", title: "Team update", source: "custom", customTypes: [TEAM_UPDATE_TYPE], message: teamUpdate },
     { id: "custom.worker-recovery", title: "Exact Worker Session recovery", source: "custom", customTypes: ["ptb.worker-recovery"], message: projectWorkerRecoveryMessage({ content: "Your exact Worker Session resumed. Continue the current Attempt for task-1. Use task_read for current authority. Recovery changed no Task state." })! },
-    { id: "entry.status", title: "Carrier status inspection", source: "custom", customTypes: [], message: projectStatusEntry({ lines: ["Team review: active", "worker: process gone; pane pane-1; lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=task-1."] })! },
+    { id: "entry.status", title: "Carrier status inspection", source: "custom", customTypes: [], message: projectStatusEntry({
+      lines: ["Team review: active", "worker: process unknown (generation_helper_missing); launch unknown (timeout: timed out waiting for agent startup); pane pane-1."],
+      carrierFacts: [{ worker: "worker", process: "generation_helper_missing", launch: "timeout: timed out waiting for agent startup" }],
+    })! },
     { id: "custom.doctor", title: "Team doctor repair context", source: "custom", customTypes: [PTB_DOCTOR_CUSTOM_TYPE], message: doctorMessage },
     { id: "custom.task-change-malformed", title: "Malformed Task delivery projection", source: "diagnostic", message: projectTaskChangeMessage({ content: "not JSON", details: { deliveryIds: ["delivery-bad"] } }) },
     { id: "custom.direct-message-malformed", title: "Malformed coordination projection", source: "diagnostic", message: projectDirectMessage({ content: "not JSON", details: { messageIds: ["alert-bad"] } }) },

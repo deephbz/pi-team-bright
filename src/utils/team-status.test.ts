@@ -3,10 +3,12 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TeamConfig } from "./models";
+import type { CarrierView } from "../carrier-observation";
 import * as paths from "./paths";
 import {
   diagnoseTeam,
   formatTeamStatus,
+  formatCarrierStatus,
   getPiTeamsArgumentCompletions,
   parsePiTeamsCommand,
 } from "./team-status";
@@ -62,6 +64,19 @@ afterEach(() => {
   for (const teamName of createdTeams.splice(0)) {
     fs.rmSync(paths.teamDir(teamName), { recursive: true, force: true });
   }
+});
+
+it("bounds and sanitizes unknown status facts while keeping selected detail and ignoring stale known-state facts", () => {
+  const view = { worker: "worker", process: "unknown", launch: "unknown", terminal: "present", activity: "unknown",
+    evidence: [{ source: "process_generation", fact: "generation_helper_missing\n\u001b[31mred\u001b[0m" },
+      { source: "launch", fact: `timeout: ${"x".repeat(200)}` }, { source: "other", fact: "unrelated secret" }] } as CarrierView;
+  const result = formatCarrierStatus(view);
+  expect(result.line).toContain("process unknown (generation_helper_missing red)");
+  expect(result.line).not.toMatch(/[\n\u001b]/);
+  expect(result.line).not.toContain("unrelated secret");
+  expect(result.line).toContain(`launch unknown (timeout: ${"x".repeat(110)}…)`);
+  expect(result.facts.launch).toBe(view.evidence[1].fact);
+  expect(formatCarrierStatus({ ...view, process: "live", launch: "started" }).facts).toEqual({ worker: "worker" });
 });
 
 describe("/pi-team-bright command grammar", () => {
