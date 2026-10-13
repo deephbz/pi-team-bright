@@ -1,0 +1,321 @@
+{
+  "item": 1,
+  "expected": {
+    "carrier": "quit stop evidence, verified process gone, suspected human stop and ask_human",
+    "status": "process gone; terminal present; lastStop=quit",
+    "pane": "same shell survives and Team agent name disappears",
+    "historicalNote": "Proposal B item 1 describes reused as the pre-fix defect. This run does not request an unauthorized relaunch."
+  },
+  "verdict": "holds",
+  "command": "node scripts/probes/real-herdr-liveness.mjs 1,3,5,9",
+  "observed": {
+    "environment": {
+      "base": "d2791cf593749d80002e6228fa69c15e0d4b5f3b",
+      "date": "2026-10-13T03:05:18.217Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "pi": "0.83.0",
+      "herdr": "herdr 0.9.3",
+      "node": "v25.6.0",
+      "helperBuilt": true
+    },
+    "started": {
+      "receipt": {
+        "kind": "worker_ensured",
+        "effect": "created",
+        "launchId": "<ID_2>",
+        "launch": "requested",
+        "worker": {
+          "name": "quit-worker",
+          "carrier": "starting",
+          "model_role": "fixture"
+        }
+      },
+      "state": {
+        "member": {
+          "membershipId": "<ID_4>",
+          "launch": {
+            "launchId": "<ID_2>",
+            "state": "started",
+            "requestedAt": 1791860723952,
+            "fact": "agent_start_accepted",
+            "observedAt": 1791860727933
+          },
+          "agentId": "<ID_5>",
+          "name": "quit-worker",
+          "agentType": "teammate",
+          "model": "fixture/worker-scripted",
+          "modelProfile": {
+            "alias": "fixture",
+            "provider": "fixture",
+            "model": "worker-scripted",
+            "thinking": "off"
+          },
+          "joinedAt": 1791860723952,
+          "cwd": "<SANDBOX>/project",
+          "subscriptions": [],
+          "isActive": true,
+          "prompt": "Idle carrier for an isolated liveness probe. Do not call a model.",
+          "color": "blue",
+          "thinking": "off",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_6>"
+          },
+          "sessionFile": "<SANDBOX>/sessions/2026-10-13T03-05-24-732Z_<ID_7>.jsonl",
+          "launchConsumedAt": "2026-10-13T03:05:24.897Z"
+        },
+        "runtime": {
+          "teamName": "d5-isolated",
+          "agentName": "quit-worker",
+          "pid": "<PID_8>",
+          "osBirthToken": "<ID_9>",
+          "bootId": "<ID_10>",
+          "startedAt": 1791860724888,
+          "lastHeartbeatAt": 1791860724888,
+          "ready": false,
+          "membershipId": "<ID_4>"
+        },
+        "pane": {
+          "agent": "pi",
+          "agent_status": "idle",
+          "cwd": "<SANDBOX>/project",
+          "focused": false,
+          "foreground_cwd": "<SANDBOX>/project",
+          "label": "quit-worker",
+          "pane_id": "<HERDR_6>",
+          "revision": 3,
+          "scroll": {
+            "max_offset_from_bottom": 0,
+            "offset_from_bottom": 0,
+            "viewport_rows": 38
+          },
+          "tab_id": "<HERDR_11>",
+          "terminal_id": "<ID_12>",
+          "terminal_title": "quit-worker",
+          "terminal_title_stripped": "quit-worker",
+          "workspace_id": "<HERDR_13>"
+        },
+        "processInfo": {
+          "foreground_process_group_id": "<PID_14>",
+          "foreground_processes": [
+            {
+              "argv0": "pi",
+              "cwd": "<SANDBOX>/project",
+              "name": "node",
+              "pid": "<PID_8>"
+            },
+            {
+              "argv": [
+                "<HOME>/.local/share/fnm/node-versions/v25.6.0/installation/bin/node",
+                "<SANDBOX>/bin/pi",
+                "--model",
+                "fixture/worker-scripted",
+                "--thinking",
+                "off",
+                "-e",
+                "<REPO>/scripts/probes/liveness-extension.ts",
+                "--no-approve"
+              ],
+              "argv0": "node",
+              "cmdline": "<HOME>/.local/share/fnm/node-versions/v25.6.0/installation/bin/node <SANDBOX>/bin/pi --model fixture/worker-scripted --thinking off -e <REPO>/scripts/probes/liveness-extension.ts --no-approve",
+              "cwd": "<SANDBOX>/project",
+              "name": "node",
+              "pid": "<PID_14>"
+            }
+          ],
+          "pane_id": "<HERDR_6>",
+          "shell_pid": "<PID_15>"
+        },
+        "agents": [
+          {
+            "agent": "pi",
+            "agent_status": "idle",
+            "cwd": "<SANDBOX>/project",
+            "focused": false,
+            "foreground_cwd": "<SANDBOX>/project",
+            "interactive_ready": true,
+            "name": "d5-isolated-quit-worker",
+            "pane_id": "<HERDR_6>",
+            "revision": 3,
+            "state_change_seq": 2334,
+            "tab_id": "<HERDR_11>",
+            "terminal_id": "<ID_12>",
+            "terminal_title": "quit-worker",
+            "terminal_title_stripped": "quit-worker",
+            "workspace_id": "<HERDR_13>"
+          }
+        ]
+      }
+    },
+    "after": {
+      "member": {
+        "membershipId": "<ID_4>",
+        "launch": {
+          "launchId": "<ID_2>",
+          "state": "started",
+          "requestedAt": 1791860723952,
+          "fact": "agent_start_accepted",
+          "observedAt": 1791860727933
+        },
+        "agentId": "<ID_5>",
+        "name": "quit-worker",
+        "agentType": "teammate",
+        "model": "fixture/worker-scripted",
+        "modelProfile": {
+          "alias": "fixture",
+          "provider": "fixture",
+          "model": "worker-scripted",
+          "thinking": "off"
+        },
+        "joinedAt": 1791860723952,
+        "cwd": "<SANDBOX>/project",
+        "subscriptions": [],
+        "isActive": true,
+        "prompt": "Idle carrier for an isolated liveness probe. Do not call a model.",
+        "color": "blue",
+        "thinking": "off",
+        "terminalTarget": {
+          "backend": "herdr",
+          "kind": "pane",
+          "targetId": "<HERDR_6>"
+        },
+        "sessionFile": "<SANDBOX>/sessions/2026-10-13T03-05-24-732Z_<ID_7>.jsonl",
+        "launchConsumedAt": "2026-10-13T03:05:24.897Z"
+      },
+      "runtime": {
+        "teamName": "d5-isolated",
+        "agentName": "quit-worker",
+        "pid": "<PID_8>",
+        "osBirthToken": "<ID_9>",
+        "bootId": "<ID_10>",
+        "startedAt": 1791860724888,
+        "lastHeartbeatAt": 1791860724888,
+        "ready": false,
+        "membershipId": "<ID_4>",
+        "lastStop": {
+          "stopId": "<ID_16>",
+          "piReason": "quit",
+          "observedAt": 1791860729372,
+          "suspectedHumanStop": true
+        }
+      },
+      "pane": {
+        "agent_status": "unknown",
+        "cwd": "<SANDBOX>/project",
+        "focused": false,
+        "foreground_cwd": "<SANDBOX>/project",
+        "label": "quit-worker",
+        "pane_id": "<HERDR_6>",
+        "revision": 4,
+        "scroll": {
+          "max_offset_from_bottom": 0,
+          "offset_from_bottom": 0,
+          "viewport_rows": 38
+        },
+        "tab_id": "<HERDR_11>",
+        "terminal_id": "<ID_12>",
+        "terminal_title": "π - d5-isolated/quit-worker - project",
+        "terminal_title_stripped": "π - d5-isolated/quit-worker - project",
+        "workspace_id": "<HERDR_13>"
+      },
+      "processInfo": {
+        "foreground_process_group_id": "<PID_15>",
+        "foreground_processes": [
+          {
+            "argv": [
+              "-zsh"
+            ],
+            "argv0": "zsh",
+            "cmdline": "-zsh",
+            "cwd": "<SANDBOX>/project",
+            "name": "zsh",
+            "pid": "<PID_15>"
+          }
+        ],
+        "pane_id": "<HERDR_6>",
+        "shell_pid": "<PID_15>"
+      },
+      "agents": []
+    },
+    "carrierEvents": [
+      {
+        "type": "worker",
+        "worker": "quit-worker",
+        "membershipId": "<ID_4>",
+        "phase": "carrier",
+        "carrier": {
+          "membership": "<ID_4>",
+          "launchId": "<ID_2>",
+          "generation": {
+            "membershipId": "<ID_4>",
+            "pid": "<PID_8>",
+            "startedAt": 1791860724888,
+            "osBirthToken": "<ID_9>",
+            "bootId": "<ID_10>"
+          },
+          "field": "process",
+          "from": "live",
+          "to": "gone",
+          "cause": {
+            "source": "process_generation",
+            "fact": "gone"
+          },
+          "observedAt": 1791860730860,
+          "paneId": "<HERDR_6>",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_6>"
+          },
+          "suspectedHumanStop": true,
+          "nextActionHint": "ask_human"
+        },
+        "cursor": "8",
+        "at": "2026-10-13T03:05:30.896Z"
+      }
+    ],
+    "statusEntry": {
+      "type": "custom",
+      "customType": "ptb.status",
+      "data": {
+        "lines": [
+          "Pi Team Bright · d5-isolated · active\nSession: team-lead · binding current\nMembers: team-lead, quit-worker · Worker memberships: quit-worker · Historical memberships: 0\nTerminal backend: herdr\nTeam workspace: <ISOLATED_HOME>/.pi/teams/d5-isolated\nTeam config: <ISOLATED_HOME>/.pi/teams/d5-isolated/config.json\nTask authority: beads · verified\nBeads workspace: <ISOLATED_HOME>/.pi/teams/d5-isolated\nBeads metadata: <ISOLATED_HOME>/.pi/teams/d5-isolated/.beads/metadata.json\nBeads database: d5_isolated · Project: <ID_17>\nTask authority ID: task_authority_<ID_18>\nAuthority check: Exact Beads authority root verified (dolt/dolt).\nExternal Team view: cd '<ISOLATED_HOME>/.pi/teams/d5-isolated'\nExternal Task view: bd --directory '<ISOLATED_HOME>/.pi/teams/d5-isolated' list --all\nExternal Task edits: Run bd --directory '<ISOLATED_HOME>/.pi/teams/d5-isolated' …; Beads writes there are authoritative.",
+          "quit-worker: process gone; launch started; terminal present; activity unknown; pane <HERDR_6>; lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=unavailable."
+        ]
+      },
+      "id": "<ID_19>",
+      "parentId": "<ID_20>",
+      "timestamp": "2026-10-13T03:05:31.134Z"
+    },
+    "leadNotifications": [
+      {
+        "type": "extension_ui_request",
+        "id": "<ID_22>",
+        "method": "notify",
+        "message": "Worker quit-worker: process gone (process_generation: gone); pane <HERDR_6>; ask_human.",
+        "notifyType": "warning"
+      }
+    ],
+    "cleanup": {
+      "ownedPaneIds": [
+        "<HERDR_23>",
+        "<HERDR_6>",
+        "<HERDR_24>",
+        "<HERDR_25>",
+        "<HERDR_26>"
+      ],
+      "closedPaneIds": [
+        "<HERDR_26>",
+        "<HERDR_25>",
+        "<HERDR_24>",
+        "<HERDR_6>",
+        "<HERDR_23>"
+      ],
+      "workspaceId": "<HERDR_13>",
+      "workspaceGone": true,
+      "sharedServerStopped": false
+    }
+  }
+}

@@ -1,0 +1,427 @@
+{
+  "item": 3,
+  "expected": {
+    "carrier": "prompt requested receipt, then refused; shell pane retained",
+    "retry": "successful ensure_worker retry",
+    "bound": "real Herdr start readiness timeout shortened from 300000 to 4000ms only for failed executable"
+  },
+  "verdict": "refuted",
+  "command": "node scripts/probes/real-herdr-liveness.mjs 1,3,5,9",
+  "observed": {
+    "environment": {
+      "base": "d2791cf593749d80002e6228fa69c15e0d4b5f3b",
+      "date": "2026-10-13T03:05:18.217Z",
+      "platform": "darwin",
+      "arch": "arm64",
+      "pi": "0.83.0",
+      "herdr": "herdr 0.9.3",
+      "node": "v25.6.0",
+      "helperBuilt": true
+    },
+    "receipt": {
+      "kind": "worker_ensured",
+      "effect": "created",
+      "launchId": "<ID_63>",
+      "launch": "requested",
+      "worker": {
+        "name": "never-worker",
+        "carrier": "starting",
+        "model_role": "fixture"
+      }
+    },
+    "receiptElapsedMs": 241,
+    "afterFailure": {
+      "member": {
+        "membershipId": "<ID_65>",
+        "pendingLaunchId": "<ID_63>",
+        "launch": {
+          "launchId": "<ID_63>",
+          "state": "unknown",
+          "requestedAt": 1791860771059,
+          "fact": "malformed_start_reply",
+          "observedAt": 1791860775271
+        },
+        "agentId": "<ID_66>",
+        "name": "never-worker",
+        "agentType": "teammate",
+        "model": "fixture/worker-scripted",
+        "modelProfile": {
+          "alias": "fixture",
+          "provider": "fixture",
+          "model": "worker-scripted",
+          "thinking": "off"
+        },
+        "joinedAt": 1791860771059,
+        "cwd": "<SANDBOX>/project",
+        "subscriptions": [],
+        "isActive": true,
+        "prompt": "Idle carrier for an isolated liveness probe. Do not call a model.",
+        "color": "blue",
+        "thinking": "off",
+        "terminalTarget": {
+          "backend": "herdr",
+          "kind": "pane",
+          "targetId": "<HERDR_26>"
+        }
+      },
+      "pane": {
+        "agent_status": "unknown",
+        "cwd": "<SANDBOX>/project",
+        "focused": false,
+        "foreground_cwd": "<SANDBOX>/project",
+        "label": "never-worker",
+        "pane_id": "<HERDR_26>",
+        "revision": 0,
+        "scroll": {
+          "max_offset_from_bottom": 1,
+          "offset_from_bottom": 0,
+          "viewport_rows": 3
+        },
+        "tab_id": "<HERDR_11>",
+        "terminal_id": "<ID_67>",
+        "workspace_id": "<HERDR_13>"
+      },
+      "processInfo": {
+        "foreground_process_group_id": "<PID_68>",
+        "foreground_processes": [
+          {
+            "argv": [
+              "-zsh"
+            ],
+            "argv0": "zsh",
+            "cmdline": "-zsh",
+            "cwd": "<SANDBOX>/project",
+            "name": "zsh",
+            "pid": "<PID_68>"
+          }
+        ],
+        "pane_id": "<HERDR_26>",
+        "shell_pid": "<PID_68>"
+      },
+      "agents": []
+    },
+    "failureStatus": {
+      "type": "custom",
+      "customType": "ptb.status",
+      "data": {
+        "lines": [
+          "Pi Team Bright · d5-isolated · active\nSession: team-lead · binding current\nMembers: team-lead, quit-worker, session-worker, outage-worker, never-worker · Worker memberships: quit-worker, session-worker, outage-worker, never-worker · Historical memberships: 0\nTerminal backend: herdr\nTeam workspace: <ISOLATED_HOME>/.pi/teams/d5-isolated\nTeam config: <ISOLATED_HOME>/.pi/teams/d5-isolated/config.json\nTask authority: beads · verified\nBeads workspace: <ISOLATED_HOME>/.pi/teams/d5-isolated\nBeads metadata: <ISOLATED_HOME>/.pi/teams/d5-isolated/.beads/metadata.json\nBeads database: d5_isolated · Project: <ID_17>\nTask authority ID: task_authority_<ID_18>\nAuthority check: Exact Beads authority root verified (dolt/dolt).\nExternal Team view: cd '<ISOLATED_HOME>/.pi/teams/d5-isolated'\nExternal Task view: bd --directory '<ISOLATED_HOME>/.pi/teams/d5-isolated' list --all\nExternal Task edits: Run bd --directory '<ISOLATED_HOME>/.pi/teams/d5-isolated' …; Beads writes there are authoritative.",
+          "quit-worker: process gone; launch started; terminal present; activity unknown; pane <HERDR_6>; lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=unavailable.",
+          "session-worker: process gone; launch started; terminal present; activity unknown; pane <HERDR_24>; lastStop=new; suspectedHumanStop=true; nonterminalTaskIds=unavailable.",
+          "outage-worker: process live; launch started; terminal present; activity unknown; pane <HERDR_25>; lastStop=none; suspectedHumanStop=false; nonterminalTaskIds=unavailable.",
+          "never-worker: process unknown; launch unknown; terminal present; activity unknown; pane <HERDR_26>; lastStop=none; suspectedHumanStop=false; nonterminalTaskIds=unavailable."
+        ]
+      },
+      "id": "<ID_69>",
+      "parentId": "<ID_70>",
+      "timestamp": "2026-10-13T03:06:31.567Z"
+    },
+    "retry": {
+      "kind": "attention",
+      "worker": "never-worker",
+      "paneId": "<HERDR_26>",
+      "reason": "launch_stalled",
+      "nextActionHint": "ask_human",
+      "launchId": "<ID_63>",
+      "launch": "unknown"
+    },
+    "afterRetry": {
+      "member": {
+        "membershipId": "<ID_65>",
+        "pendingLaunchId": "<ID_63>",
+        "launch": {
+          "launchId": "<ID_63>",
+          "state": "unknown",
+          "requestedAt": 1791860771059,
+          "fact": "malformed_start_reply",
+          "observedAt": 1791860775271
+        },
+        "agentId": "<ID_66>",
+        "name": "never-worker",
+        "agentType": "teammate",
+        "model": "fixture/worker-scripted",
+        "modelProfile": {
+          "alias": "fixture",
+          "provider": "fixture",
+          "model": "worker-scripted",
+          "thinking": "off"
+        },
+        "joinedAt": 1791860771059,
+        "cwd": "<SANDBOX>/project",
+        "subscriptions": [],
+        "isActive": true,
+        "prompt": "Idle carrier for an isolated liveness probe. Do not call a model.",
+        "color": "blue",
+        "thinking": "off",
+        "terminalTarget": {
+          "backend": "herdr",
+          "kind": "pane",
+          "targetId": "<HERDR_26>"
+        }
+      },
+      "pane": {
+        "agent_status": "unknown",
+        "cwd": "<SANDBOX>/project",
+        "focused": false,
+        "foreground_cwd": "<SANDBOX>/project",
+        "label": "never-worker",
+        "pane_id": "<HERDR_26>",
+        "revision": 0,
+        "scroll": {
+          "max_offset_from_bottom": 1,
+          "offset_from_bottom": 0,
+          "viewport_rows": 3
+        },
+        "tab_id": "<HERDR_11>",
+        "terminal_id": "<ID_67>",
+        "workspace_id": "<HERDR_13>"
+      },
+      "processInfo": {
+        "foreground_process_group_id": "<PID_68>",
+        "foreground_processes": [
+          {
+            "argv": [
+              "-zsh"
+            ],
+            "argv0": "zsh",
+            "cmdline": "-zsh",
+            "cwd": "<SANDBOX>/project",
+            "name": "zsh",
+            "pid": "<PID_68>"
+          }
+        ],
+        "pane_id": "<HERDR_26>",
+        "shell_pid": "<PID_68>"
+      },
+      "agents": []
+    },
+    "retryStatus": {
+      "type": "custom",
+      "customType": "ptb.status",
+      "data": {
+        "lines": [
+          "Pi Team Bright · d5-isolated · active\nSession: team-lead · binding current\nMembers: team-lead, quit-worker, session-worker, outage-worker, never-worker · Worker memberships: quit-worker, session-worker, outage-worker, never-worker · Historical memberships: 0\nTerminal backend: herdr\nTeam workspace: <ISOLATED_HOME>/.pi/teams/d5-isolated\nTeam config: <ISOLATED_HOME>/.pi/teams/d5-isolated/config.json\nTask authority: beads · verified\nBeads workspace: <ISOLATED_HOME>/.pi/teams/d5-isolated\nBeads metadata: <ISOLATED_HOME>/.pi/teams/d5-isolated/.beads/metadata.json\nBeads database: d5_isolated · Project: <ID_17>\nTask authority ID: task_authority_<ID_18>\nAuthority check: Exact Beads authority root verified (dolt/dolt).\nExternal Team view: cd '<ISOLATED_HOME>/.pi/teams/d5-isolated'\nExternal Task view: bd --directory '<ISOLATED_HOME>/.pi/teams/d5-isolated' list --all\nExternal Task edits: Run bd --directory '<ISOLATED_HOME>/.pi/teams/d5-isolated' …; Beads writes there are authoritative.",
+          "quit-worker: process gone; launch started; terminal present; activity unknown; pane <HERDR_6>; lastStop=quit; suspectedHumanStop=true; nonterminalTaskIds=unavailable.",
+          "session-worker: process gone; launch started; terminal present; activity unknown; pane <HERDR_24>; lastStop=new; suspectedHumanStop=true; nonterminalTaskIds=unavailable.",
+          "outage-worker: process live; launch started; terminal present; activity unknown; pane <HERDR_25>; lastStop=none; suspectedHumanStop=false; nonterminalTaskIds=unavailable.",
+          "never-worker: process unknown; launch unknown; terminal present; activity unknown; pane <HERDR_26>; lastStop=none; suspectedHumanStop=false; nonterminalTaskIds=unavailable."
+        ]
+      },
+      "id": "<ID_71>",
+      "parentId": "<ID_72>",
+      "timestamp": "2026-10-13T03:06:31.871Z"
+    },
+    "failures": [
+      {
+        "at": 1791860771257,
+        "worker": "never-worker",
+        "exitCode": 73
+      }
+    ],
+    "startCalls": [
+      {
+        "at": 1791860775268,
+        "args": [
+          "agent",
+          "start",
+          "d5-isolated-never-worker",
+          "--kind",
+          "pi",
+          "--pane",
+          "<HERDR_26>",
+          "--timeout",
+          "4000",
+          "--",
+          "--model",
+          "fixture/worker-scripted",
+          "--thinking",
+          "off",
+          "-e",
+          "<REPO>/scripts/probes/liveness-extension.ts",
+          "--no-approve"
+        ],
+        "status": 1,
+        "stdout": "",
+        "stderr": "{\"error\":{\"code\":\"timeout\",\"message\":\"timed out waiting for agent startup\"},\"id\":\"cli:agent:start\"}\n"
+      }
+    ],
+    "carrierEvents": [
+      {
+        "type": "worker",
+        "worker": "never-worker",
+        "membershipId": "<ID_65>",
+        "phase": "prepared",
+        "cursor": "34",
+        "at": "2026-10-13T03:06:11.079Z"
+      },
+      {
+        "type": "worker",
+        "worker": "never-worker",
+        "membershipId": "<ID_65>",
+        "phase": "carrier",
+        "carrier": {
+          "membership": "<ID_65>",
+          "launchId": "<ID_63>",
+          "field": "binding",
+          "from": "unknown",
+          "to": "unbound",
+          "cause": {
+            "source": "membership",
+            "fact": "unbound"
+          },
+          "observedAt": 1791860772490,
+          "paneId": "<HERDR_26>",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_26>"
+          },
+          "suspectedHumanStop": false,
+          "nextActionHint": "wait"
+        },
+        "cursor": "35",
+        "at": "2026-10-13T03:06:12.490Z"
+      },
+      {
+        "type": "worker",
+        "worker": "never-worker",
+        "membershipId": "<ID_65>",
+        "phase": "carrier",
+        "carrier": {
+          "membership": "<ID_65>",
+          "launchId": "<ID_63>",
+          "field": "launch",
+          "from": "unknown",
+          "to": "requested",
+          "cause": {
+            "source": "launch",
+            "fact": "requested"
+          },
+          "observedAt": 1791860771059,
+          "paneId": "<HERDR_26>",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_26>"
+          },
+          "suspectedHumanStop": false,
+          "nextActionHint": "wait"
+        },
+        "cursor": "36",
+        "at": "2026-10-13T03:06:12.504Z"
+      },
+      {
+        "type": "worker",
+        "worker": "never-worker",
+        "membershipId": "<ID_65>",
+        "phase": "carrier",
+        "carrier": {
+          "membership": "<ID_65>",
+          "launchId": "<ID_63>",
+          "field": "terminal",
+          "from": "unknown",
+          "to": "present",
+          "cause": {
+            "source": "herdr_panes",
+            "fact": "present"
+          },
+          "observedAt": 1791860772446,
+          "paneId": "<HERDR_26>",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_26>"
+          },
+          "suspectedHumanStop": false,
+          "nextActionHint": "wait"
+        },
+        "cursor": "37",
+        "at": "2026-10-13T03:06:12.510Z"
+      },
+      {
+        "type": "worker",
+        "worker": "never-worker",
+        "membershipId": "<ID_65>",
+        "phase": "carrier",
+        "carrier": {
+          "membership": "<ID_65>",
+          "launchId": "<ID_63>",
+          "field": "launch",
+          "from": "requested",
+          "to": "unknown",
+          "cause": {
+            "source": "launch",
+            "fact": "malformed_start_reply"
+          },
+          "observedAt": 1791860775271,
+          "paneId": "<HERDR_26>",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_26>"
+          },
+          "suspectedHumanStop": false,
+          "nextActionHint": "wait"
+        },
+        "cursor": "38",
+        "at": "2026-10-13T03:06:15.452Z"
+      },
+      {
+        "type": "worker",
+        "worker": "never-worker",
+        "membershipId": "<ID_65>",
+        "phase": "carrier",
+        "carrier": {
+          "membership": "<ID_65>",
+          "launchId": "<ID_63>",
+          "field": "launch",
+          "from": "unknown",
+          "to": "unknown",
+          "cause": {
+            "source": "launch",
+            "fact": "launch_stalled"
+          },
+          "observedAt": 1791860788008,
+          "paneId": "<HERDR_26>",
+          "terminalTarget": {
+            "backend": "herdr",
+            "kind": "pane",
+            "targetId": "<HERDR_26>"
+          },
+          "suspectedHumanStop": false,
+          "nextActionHint": "ask_human"
+        },
+        "cursor": "39",
+        "at": "2026-10-13T03:06:28.008Z"
+      }
+    ],
+    "leadNotifications": [
+      {
+        "type": "extension_ui_request",
+        "id": "<ID_74>",
+        "method": "notify",
+        "message": "Worker never-worker: launch unknown (launch: launch_stalled); pane <HERDR_26>; ask_human.",
+        "notifyType": "warning"
+      }
+    ],
+    "cleanup": {
+      "ownedPaneIds": [
+        "<HERDR_23>",
+        "<HERDR_6>",
+        "<HERDR_24>",
+        "<HERDR_25>",
+        "<HERDR_26>"
+      ],
+      "closedPaneIds": [
+        "<HERDR_26>",
+        "<HERDR_25>",
+        "<HERDR_24>",
+        "<HERDR_6>",
+        "<HERDR_23>"
+      ],
+      "workspaceId": "<HERDR_13>",
+      "workspaceGone": true,
+      "sharedServerStopped": false
+    }
+  }
+}
