@@ -18,12 +18,14 @@ it("matches the recorded shell process-info wire and missing-pane error", () => 
   expect(refused.error.code).toBe(A6.observed.error.response.error.code);
 });
 
-it("keeps absent and inconclusive probes advisory without downgrading the six passing probes", () => {
+it("keeps inconclusive and unprobed scopes advisory without downgrading the passing probes", () => {
   for (const id of ["A1", "A2", "A3", "A4", "A5", "A6"] as const) {
     expect(assumptionEvidence(id, "recorded scope")).toMatchObject({ status: "probe-backed", fixture: `sim/fixtures/probes/${id}.json`, versions: { pi: "0.83.0" } });
   }
   expect(assumptionEvidence("A8", "partial agent list")).toMatchObject({ status: "advisory", reason: "inconclusive" });
-  expect(assumptionEvidence("A7", "PID reuse").status).toBe("advisory");
-  expect(assumptionEvidence("A9", "host crash").status).toBe("advisory");
+  for (const id of ["A7", "A9"] as const) {
+    expect(assumptionEvidence(id, "process crash and PID reuse")).toMatchObject({ status: "probe-backed", versions: { kernel: "6.8.0-124-generic" } });
+  }
+  expect(assumptionEvidence("A9", "host crash", "No host-crash probe").status).toBe("advisory");
   expect(assumptionEvidence("A6", "pane geometry", "No geometry probe").status).toBe("advisory");
 });

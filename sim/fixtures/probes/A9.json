@@ -1,0 +1,89 @@
+{
+  "assumption": "Filesystem rename, exclusive create, and fsync behave as the fake states.",
+  "verdict": "holds",
+  "command": "node probe.cjs a9 (production withLock and writeJsonAtomic; journal append mirrors appendTeamEvent)",
+  "observed": {
+    "environment": {
+      "date": "2026-10-13T10:41:05.435Z",
+      "platform": "linux",
+      "node": "v22.22.2",
+      "kernel": "6.8.0-124-generic",
+      "filesystem": "ext4",
+      "base": "9c7dd67037b8b238e547309ac912784ee3aedf05"
+    },
+    "linux": {
+      "exclusiveCreate": {
+        "workers": 16,
+        "rounds": 200,
+        "expected": 3200,
+        "counted": 3200,
+        "ms": 19529,
+        "leftovers": []
+      },
+      "staleOwnerRecovery": {
+        "lockLeftByKilledOwner": true,
+        "recovered": true,
+        "recoveryMs": 30006,
+        "leftovers": []
+      },
+      "atomicReplace": {
+        "kills": 150,
+        "reads": 11079,
+        "readErrors": {},
+        "regressions": 0,
+        "unparsableAfterKill": 0,
+        "lostCommits": 0,
+        "tempLeftovers": 96,
+        "finalSeq": 446
+      },
+      "journalAppend": {
+        "kills": 100,
+        "lines": 311,
+        "tornLines": 0,
+        "trailingPartial": false
+      },
+      "scope": "Process crash (SIGKILL) only, one ext4 host. Host crash, power loss and fsync durability are not tested. Leftover temp files after SIGKILL are recorded, not judged."
+    },
+    "darwin": {
+      "environment": {
+        "date": "2026-10-13T10:42:21.527Z",
+        "platform": "darwin",
+        "node": "v25.6.0",
+        "kernel": "27.0.0",
+        "filesystem": "apfs",
+        "base": "9c7dd67037b8b238e547309ac912784ee3aedf05"
+      },
+      "exclusiveCreate": {
+        "workers": 16,
+        "rounds": 200,
+        "expected": 3200,
+        "counted": 3200,
+        "ms": 31999,
+        "leftovers": []
+      },
+      "staleOwnerRecovery": {
+        "lockLeftByKilledOwner": true,
+        "recovered": true,
+        "recoveryMs": 30000,
+        "leftovers": []
+      },
+      "atomicReplace": {
+        "kills": 150,
+        "reads": 40668,
+        "readErrors": {},
+        "regressions": 0,
+        "unparsableAfterKill": 0,
+        "lostCommits": 0,
+        "tempLeftovers": 69,
+        "finalSeq": 365
+      },
+      "journalAppend": {
+        "kills": 100,
+        "lines": 258,
+        "tornLines": 0,
+        "trailingPartial": false
+      },
+      "scope": "Process crash (SIGKILL) only, one APFS host. Host crash, power loss and fsync durability are not tested. Leftover temp files after SIGKILL are recorded, not judged."
+    }
+  }
+}

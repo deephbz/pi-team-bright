@@ -68,7 +68,8 @@ all P/M/E properties. The campaign takes about 34 seconds and runs in the
 exhaustive lane.
 
 A1–A6 cite probe fixtures for Pi 0.83.0 and Herdr 0.9.3. They establish only the
-recorded paths and bounds. A8 is inconclusive; A7 and A9 remain unprobed.
+recorded paths and bounds. A8 is inconclusive. A7 and A9 cite Linux host probes on the production
+modules; A9 also covers macOS. Both cover process crash only.
 Pane geometry and pane-close process-tree effects remain advisory.
 
 The queue benchmark excludes module loading and real fs. Baseline tests also

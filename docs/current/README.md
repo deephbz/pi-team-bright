@@ -287,7 +287,8 @@ restating executable definitions.
   planner reason after process exit. The human can authorize `worker_stop`
   before retry.
   A missing Herdr row never authorizes another spawn.
-  Linux reads procfs, but Linux is unverified: probes A7 and A9 have not run. On
+  Linux reads procfs. Probes A7 and A9 pass on one Linux host; a full Linux
+  Team with real Pi and Herdr has not run. On
   macOS, npm `postinstall` builds the dependency-free
   helper from packaged source with `rustc` and Xcode Command Line Tools.
   `npm run build:process-generation` repairs installs with disabled lifecycle
@@ -740,7 +741,11 @@ owns the fake list. Probe policy (owner decision D3=B, 2026-10-13):
 Platform status:
 
 - macOS: probes A1–A6 cover their recorded versions and paths. A8 is inconclusive.
-- Linux: unverified. Probes A7 and A9 have not run (owner decision D4=C).
+- Linux: probes A7 and A9 hold on Ubuntu 24.04, kernel 6.8, ext4
+  ([journal](../journal/2026-10-13-linux-host-probes.md)). A9 covers process
+  crash only; host-crash durability is unclaimed. A full Linux Team with real Pi
+  and Herdr has not run.
+- macOS: A9 holds for process crash on APFS. The helper has no PID-reuse probe.
 
 ## Test lanes
 

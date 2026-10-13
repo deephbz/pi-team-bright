@@ -311,8 +311,8 @@ and emits one native warning per extension load when it is missing. Install
 Rust (`rustc`) and Xcode Command Line Tools, then run
 `npm run build:process-generation` from the installed
 `@hypercarrier/pi-team-bright` directory. Use the same command if install scripts
-were disabled. Linux uses procfs and needs no native build. Linux support is
-unverified: probes A7 and A9 have not run on Linux.
+were disabled. Linux uses procfs and needs no native build. Probes A7 and A9
+pass on one Linux host. A full Linux Team with real Pi and Herdr has not run.
 
 A missing helper returns `generation_helper_missing` attention with `ask_human`
 and this build command. Plain `/reload` in the same bound Pi process remains
