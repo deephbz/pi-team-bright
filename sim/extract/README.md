@@ -8,7 +8,7 @@ Production authority, delivery, and launch behavior do not change.
 Run from the package root:
 
 ```sh
-npx ts-node sim/extract/index.ts
+node sim/extract/run.mjs
 npx vitest run sim/extract/extract.test.ts
 ```
 
@@ -22,7 +22,12 @@ Never copy empirical output into a repository.
 `reconstruct.ts` owns the projection and incident rules. It replaces identities,
 paths, unknown keys, numbers used as identities, and all prose with opaque refs.
 It preserves known tool names, schema keys, enum values, and safe count fields.
-Refs remain stable within one trace. They have no reverse map in output.
+`shape.ts` preserves scalar types, string lengths, array cardinalities, version
+grammars, and repeated-value equality. It discovers public keys and enum values
+from the tool catalog. Unknown dictionary keys become synthetic refs. Refs remain
+stable within one trace. They have no reverse map in output. Different aliases
+remain different literals; a date-prefixed full Team name does not equal its
+short creation name. Actor coordinates use the creation name when available.
 Unknown tools do not enter traces. Historical PTB tool names remain unchanged.
 
 The report separates observed incidents from candidates. An aborted turn does
@@ -38,10 +43,25 @@ Otherwise config creation bounds the window. The first observation anchors
 suppress copied history per actor. Timestamps merge the remaining observations.
 These are partial histories, not a claim about the active Session branch.
 Assumption ids record lossy treatments in each trace. Redacted arguments do
-not guarantee executable replay against every historical tool version.
+not guarantee executable replay against every historical tool version. Historical
+schemas stay unchanged. Literal Task versions do not become result references.
+Private model roles do not acquire invented configuration.
+
+Replay synthesizes assumed Teams and Workers through the selected production
+version's public authorities before the first input. This creates consistent
+Team, Membership, Session, and runtime records. Setup history has `setup` origin;
+it is not an observed model action. It restores no pre-existing Task graph.
+The campaign excludes setup tool calls/results from monitor input but retains
+initial process and durable facts. Other consumers must make that choice explicit.
+
+The CLI uses Vite to load the tool schemas' ESM-only dependencies. Its loader
+provides the two extractor modules' CommonJS coordinates and disables their
+in-module CLI entry point. `--check` verifies loading without reading sources.
 
 The report contains counts for all step kinds, including zeros. It also reports
 missing sources, malformed records, snapshot coverage, and source digests.
+The private manifest also preserves incident counts per trace, so replay class
+counts do not depend on reconstructing labels from the reduced inputs.
 Task/runtime snapshots qualify evidence and provenance. They never become
 fabricated model calls. Live source reads are not an atomic snapshot.
 

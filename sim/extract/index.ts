@@ -67,7 +67,7 @@ export function extractCorpus(): { traces: number; incidents: Extraction["incide
     "os.kill", "os.pidReuse", "os.reboot", "herdr.agentState", "herdr.restart", "fault.set", "fault.clear",
   ].map(k => [k, 0]));
   const coverage = { sessionRows: 0, eventRows: 0, runtimeRows: 0, taskSnapshots: 0, duplicateEntries: 0, untimedRows: 0 };
-  const manifest: { id: string; steps: number; provenance: string }[] = [];
+  const manifest: { id: string; steps: number; provenance: string; incidents: ReturnType<typeof reconstruct>["incidents"] }[] = [];
   const toolActors = { lead: 0, worker: 0 };
   let clockGaps = 0;
   // A run directory prevents stale traces from being counted as current output.
@@ -142,12 +142,12 @@ export function extractCorpus(): { traces: number; incidents: Extraction["incide
       if (index > 0 && item.at > result.trace.steps[index - 1].at) clockGaps++;
     }
     writeExternal(runDirectory, `${result.trace.id}.json`, `${JSON.stringify(result.trace)}\n`);
-    manifest.push({ id: result.trace.id, steps: result.trace.steps.length, provenance: result.trace.provenance! });
+    manifest.push({ id: result.trace.id, steps: result.trace.steps.length, provenance: result.trace.provenance!, incidents: result.incidents });
   }
   let revision = "unavailable";
   try { revision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: path.resolve(__dirname, "../.."), encoding: "utf8" }).trim(); } catch { /* no source coordinates are emitted */ }
   const sourceDigest = createHash("sha256");
-  for (const file of ["index.ts", "reconstruct.ts", "validate.ts", "../trace-format.ts"])
+  for (const file of ["index.ts", "reconstruct.ts", "shape.ts", "validate.ts", "../trace-format.ts"])
     sourceDigest.update(fs.readFileSync(path.join(__dirname, file)));
   const receipt = { schema: 1, extractorRevision: revision, extractorSourceDigest: sourceDigest.digest("hex"), node: process.versions.node, run,
     traces: manifest.length, stats, coverage, stepKinds: kinds, toolActors, clockGaps, incidents: aggregate, manifest };
@@ -181,7 +181,7 @@ export function extractCorpus(): { traces: number; incidents: Extraction["incide
     "- Compaction records map to pi.compact; branch-summary parents map to pi.tree targets. Both treatments carry assumption ids. No fork destination is invented from a parentSession alone.",
     "- Assistant stop maps to settled turn.end; it does not prove agent.settled. Aborted and error outcomes remain distinct.",
     "- Only allowlisted PTB tool calls enter traces. Tool names remain version-specific. Source prose, paths, names, pane ids and PIDs become opaque refs.",
-    "- Redaction preserves equality and argument shape where keys are known. It does not preserve full executable Task/tool semantics.",
+    "- Redaction preserves public keys, scalar types, string lengths, array cardinalities, repeated-value equality, and version grammar. Unknown dictionary keys become synthetic refs. Different aliases remain different literals. Task versions are not rebound to replay results; historical schemas and private model roles are not translated.",
     "- Task and runtime snapshots contribute coverage and provenance, not fabricated world inputs. Missing or malformed records are counted.",
     "- No automatic inference promotes an incident candidate into a WorldStep. Synthetic fixtures cover unobservable OS/UI actions.", "",
     "## Coverage", "", "```json", JSON.stringify({ stats, coverage }, null, 2), "```", "",

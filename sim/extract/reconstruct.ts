@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { WorldStep, WorldTrace } from "../trace-format";
 import { validateWorldTrace } from "./validate";
+import { ShapeRedactor } from "./shape";
 
 type Row = Record<string, any>;
 export interface SessionInput { identity: string; actor: string; lead: boolean; rows: Row[] }
@@ -26,71 +27,24 @@ const tools = new Set([
   "task_read", "task_update", "alert_send", "task_create", "task_list", "task_link", "task_close",
   "worker_ensure", "spawn_teammate", "teammate_shutdown", "send_message", "broadcast_message", "check_teammate",
 ]);
-const keys = new Set(("team team_name name worker worker_name agent assignee to from actor session session_id sessionFile " +
-  "task task_id taskId id ref needs dependencies tasks changes nodes edges relations goal title description scope prompt text " +
-  "context current_context evidence reason operation_id expected_version expected_graph_version version cursor after_cursor " +
-  "view transition operation kind status model_role model thinking cwd path timeout timeout_ms limit count force cascade " +
-  "mode target source failure_route retry max_attempts on_failure repair cancel resume shutdown args metadata").split(" "));
-const enums: Record<string, string[]> = {
-  transition: ["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel"],
-  operation: ["claim", "block", "resume", "goal_achieved", "goal_failed", "cancel"],
-  view: ["snapshot", "updates"], kind: ["clarification", "attention", "announcement", "needs", "failure"],
-  status: ["ready", "in_progress", "blocked", "done", "failed", "cancelled", "open", "closed"],
-  thinking: ["off", "minimal", "low", "medium", "high", "xhigh"],
-};
-const numeric = new Set(["timeout", "timeout_ms", "limit", "count", "max_attempts"]);
+
 function record(x: unknown): x is Row { return !!x && typeof x === "object" && !Array.isArray(x); }
 function time(x: unknown): number | undefined {
   const n = typeof x === "number" ? x : typeof x === "string" ? Date.parse(x) : NaN;
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
-/** Per-Team references preserve equality without retaining a reversible identity map. */
-class Opaque {
-  private refs = new Map<string, string>();
-  private counters = new Map<string, number>();
-  bind(raw: unknown, token: string) { if (typeof raw === "string" && raw) this.refs.set(raw, token); }
-  ref(raw: unknown, prefix = "ref"): string {
-    const key = typeof raw === "string" ? raw : JSON.stringify(raw) ?? "missing";
-    const found = this.refs.get(key);
-    if (found) return found;
-    const n = (this.counters.get(prefix) ?? 0) + 1;
-    this.counters.set(prefix, n);
-    const token = `${prefix}-${n}`;
-    this.refs.set(key, token);
-    return token;
-  }
-  args(value: unknown, key = "", depth = 0): any {
-    if (depth > 40) return this.ref("depth-limit", "text");
-    if (value === null || typeof value === "boolean") return value;
-    if (typeof value === "number" && numeric.has(key) && Number.isFinite(value)) return value;
-    if (typeof value === "string" && Object.hasOwn(enums, key) && enums[key].includes(value)) return value;
-    if (Array.isArray(value)) return value.map(v => this.args(v, key, depth + 1));
-    if (record(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [
-      keys.has(k) ? k : this.ref(k, "key"), this.args(v, k, depth + 1),
-    ]));
-    const prefix = /task|^id$|^ref$|^needs$|dependencies/.test(key) ? "task"
-      : /version|cursor/.test(key) ? "version" : /pane/i.test(key) ? "pane"
-      : /session/i.test(key) ? "session" : /name|worker|assignee|actor|^to$|^from$/.test(key) ? "actor" : "text";
-    return this.ref(value, prefix);
-  }
-}
-
 /** Pure projection. Store snapshots qualify evidence; they never become model calls. */
 export function reconstruct(input: TeamInput): Extraction {
   if (!/^[a-f0-9]{64}$/.test(input.provenance)) throw new Error("Invalid source digest");
-  const opaque = new Opaque();
-  const team = "team-1";
-  opaque.bind(input.config.name, team);
-  if (typeof input.config.name === "string") opaque.bind(input.config.name.replace(/^\d{8}-/, ""), team);
-  opaque.bind(input.config.leadAgentId, "lead");
-  opaque.bind("team-lead", "lead");
+  const opaque = new ShapeRedactor();
+  // Actor coordinates use the creation name; full date-prefixed aliases stay separate literals.
+  const creationName = input.sessions.filter(s => s.lead).flatMap(s => s.rows).flatMap(row => Array.isArray(row.message?.content) ? row.message.content : [])
+    .find(block => block?.type === "toolCall" && block.name === "team_create" && typeof block.arguments?.name === "string"
+      && (block.arguments.name === input.config.name || block.arguments.name === input.config.name?.replace(/^\d{8}-/, "")))?.arguments.name;
+  const team = opaque.ref(creationName ?? input.config.name);
   const members = Array.isArray(input.config.members) ? input.config.members.filter(record) : [];
-  for (const s of input.sessions) if (s.lead) opaque.bind(s.actor, "lead");
-  for (const m of members) {
-    const actor = opaque.ref(m.name, "w");
-    opaque.bind(m.agentId, actor);
-  }
+  for (const m of members) if (m.name !== "team-lead") opaque.ref(m.name, "w");
   const incidents = Object.fromEntries(incidentNames.map(k => [k, { observed: 0, candidate: 0 }])) as Extraction["incidents"];
   const coverage = { sessionRows: 0, eventRows: input.events.length, runtimeRows: input.runtime.length,
     taskSnapshots: input.taskState.length, duplicateEntries: 0, untimedRows: 0 };
