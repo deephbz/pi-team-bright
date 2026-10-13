@@ -7,7 +7,8 @@ import { loadActorExtension } from "./actor-loader";
 import { SimWorld } from "./world";
 
 // This immutable C0 revision writes the legacy store. No hand-written runtime fixture.
-const BASELINE = "14d92fdc2c7cf0b21f6853ba495d828350901e03";
+// CI checks out full history (fetch-depth: 0) so this commit is available.
+const BASELINE = "a85f2c190fd98e77e5f1048157d504c4220dddcf";
 const names = ["lead", "w1", "w2", "w3"];
 const team = "team-1";
 
