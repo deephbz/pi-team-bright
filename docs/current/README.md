@@ -212,8 +212,10 @@ restating executable definitions.
 
 ## Decisions still in force
 
-- **Proposed:** [Decision 0022](../decisions/0022-carrier-harness-migration.md)
-  keeps multiplexer and agent-harness migration open. Owner ratification is pending.
+- Accepted [Decision 0022](../decisions/0022-carrier-harness-migration.md)
+  keeps multiplexer and agent-harness migration open. The generic layer holds
+  PTB's intrinsic ontology; adapters hold knowledge that depends on Herdr, Pi
+  or the OS, and migration replaces adapters.
 
 - Accepted [v3.1 Proposal B](../journal/2026-10-12-state-ownership-and-liveness-proposal.md)
   and its [lead rulings](../journal/2026-10-12-v31-implementation-plan.md)
