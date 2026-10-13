@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { nodeHostEnv } from "../env/host-env";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -80,7 +81,7 @@ function member(name: string, sessionFile: string, extra: Partial<Member> = {}):
 function context(sessionFile: string) {
   return {
     isIdle: vi.fn(() => false),
-    sessionManager: { getSessionFile: vi.fn(() => sessionFile) },
+    sessionManager: { getSessionFile: vi.fn(() => sessionFile), getBranch: () => [] },
     ui: { setStatus: vi.fn(), notify: vi.fn() },
   };
 }
@@ -428,22 +429,22 @@ describe("release P1 public contracts", () => {
     await teams.addMember(name, worker);
     const oldPid = 2_147_483_647;
     const newPid = 2_147_483_646;
-    await runtime.writeRuntimeStatus(name, "worker", { pid: oldPid, startedAt: 1 }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementation(((pid: number, signal?: NodeJS.Signals | number) => {
-      if (pid === oldPid && signal === 0) {
+    await runtime.writeRuntimeStatus(name, "worker", { pid: oldPid, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
+    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => {
+      if (pid === oldPid) {
         fs.writeFileSync(paths.runtimeStatusPath(name, "worker"), JSON.stringify({
           teamName: name,
           agentName: "worker",
           membershipId: worker.membershipId,
           pid: newPid,
           startedAt: 2,
+          osBirthToken: "new-birth",
+          bootId: "fixture-boot",
         }));
-        const error = new Error("old process exited") as NodeJS.ErrnoException;
-        error.code = "ESRCH";
-        throw error;
+        return { kind: "absent" };
       }
-      return true;
-    }) as typeof process.kill);
+      return { kind: "found", generation: { pid, osBirthToken: "new-birth", bootId: "fixture-boot" } };
+    });
     const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown", {
@@ -468,12 +469,9 @@ describe("release P1 public contracts", () => {
     await teams.createTeam(name, leadSession, "lead-agent");
     const worker = member("worker", workerSession);
     await teams.addMember(name, worker);
-    await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: 1 }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementationOnce(() => {
-      const error = new Error("gone") as NodeJS.ErrnoException;
-      error.code = "ESRCH";
-      throw error;
-    });
+    await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
+    const generation = nodeHostEnv.process.generation;
+    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
     const handlers = registerSessionExtension();
 
     let releaseLease!: () => void;
