@@ -25,7 +25,6 @@ async function run(trace: WorldTrace, seed: number): Promise<Outcome> {
       "synthetic-clock-gap": "Replay bound exceeded",
       "synthetic-pane-loss": "No such process",
       "synthetic-restart": "Unmodeled bd command: show",
-      "synthetic-shutdown-resume": "Actor is not live: team-1/lead",
       "synthetic-stale-binding": "Pi cross-Session fork allocation is not modeled yet",
     };
     if (message !== knownGaps[trace.id]) throw error;
@@ -50,6 +49,7 @@ it("records bounded synthetic and fast-check real-actor campaign outcomes withou
   console.info(JSON.stringify(report, null, 2));
   if (process.env.PI_SIM_RECORD_CAMPAIGN === "1") fs.writeFileSync(path.join(__dirname, "results/current-campaign.json"), JSON.stringify(report, null, 2) + "\n");
   expect(generated.every(result => result.status === "replayed")).toBe(true);
+  expect(fixtures.find(result => result.id === "synthetic-shutdown-resume")?.status).toBe("replayed");
   expect(fixtures.find(result => result.id === "synthetic-never-starts")?.status).toBe("replayed");
   expect(fixtures.find(result => result.id === "synthetic-bound-pi-dead")?.status).toBe("replayed");
 }, 120000);

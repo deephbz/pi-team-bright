@@ -1,0 +1,302 @@
+{
+  "sourceRevision": "045765850e71a6b449038751b52b9593b87796e7",
+  "runnerVersion": "sim-c1/5",
+  "bounds": {
+    "maxSteps": 100000,
+    "maxVirtualMs": 3600000
+  },
+  "monitorOptions": {
+    "E1": {
+      "deadlineMs": 60000
+    },
+    "E2": {
+      "latencyMs": 60000
+    },
+    "E3": {
+      "boundMs": 60000
+    },
+    "E4": {
+      "thresholdMs": 60000
+    },
+    "E5": {
+      "boundMs": 10000
+    }
+  },
+  "generated": {
+    "seed": 20261014,
+    "runs": 2,
+    "families": [
+      "pid-reuse",
+      "herdr-loss",
+      "reload-storm",
+      "compaction",
+      "contended-reservation",
+      "source-ttl",
+      "delayed-source",
+      "append-ambiguity",
+      "human-stop",
+      "crash-before-record",
+      "snapshot-hydration"
+    ],
+    "samples": [
+      {
+        "family": 1,
+        "seed": 15,
+        "gap": 200,
+        "repeats": 5
+      },
+      {
+        "family": 8,
+        "seed": 439827137,
+        "gap": 10,
+        "repeats": 6
+      }
+    ]
+  },
+  "scale": {
+    "isolatedTeams": 1,
+    "workersPerTeam": 2,
+    "sharedWorld": {
+      "teams": 3,
+      "workersPerTeam": 10
+    },
+    "gap": "20x50 shared-world scheduling remains untested"
+  },
+  "timings": {
+    "campaignMs": 46795.988874999995,
+    "totalIncludingShrinkAndScaleMs": 78109.768916
+  },
+  "outcomes": [
+    {
+      "id": "synthetic-bound-pi-dead",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "synthetic-clock-gap",
+      "seed": 42,
+      "status": "stopped-prefix",
+      "stopped": "Replay bound exceeded"
+    },
+    {
+      "id": "synthetic-cursor-replay",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "synthetic-escape",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "synthetic-never-starts",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "synthetic-pane-loss",
+      "seed": 42,
+      "status": "stopped-prefix",
+      "stopped": "No such process"
+    },
+    {
+      "id": "synthetic-pid-reuse",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "synthetic-restart",
+      "seed": 42,
+      "status": "stopped-prefix",
+      "stopped": "Unmodeled bd command: show"
+    },
+    {
+      "id": "synthetic-shutdown-resume",
+      "seed": 42,
+      "status": "stopped-prefix",
+      "stopped": "Actor is not live: team-1/lead"
+    },
+    {
+      "id": "synthetic-stale-binding",
+      "seed": 42,
+      "status": "stopped-prefix",
+      "stopped": "Pi cross-Session fork allocation is not modeled yet"
+    },
+    {
+      "id": "baseline-p4-minimal",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "baseline-p5-minimal",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "baseline-e5-minimal",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-pid-reuse",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-herdr-loss",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-reload-storm",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-compaction",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-contended-reservation",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-source-ttl",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-delayed-source",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-append-ambiguity",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-human-stop",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-crash-before-record",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-snapshot-hydration",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-generated-0",
+      "seed": 15,
+      "status": "completed"
+    },
+    {
+      "id": "v31-generated-1",
+      "seed": 439827137,
+      "status": "completed"
+    },
+    {
+      "id": "v31-scale-1-1x2",
+      "seed": 42,
+      "status": "completed"
+    },
+    {
+      "id": "v31-scale-1-3x10",
+      "seed": 42,
+      "status": "completed"
+    }
+  ],
+  "verdictCounts": {
+    "P1": {
+      "pass": 28
+    },
+    "P2": {
+      "pass": 9,
+      "not_applicable": 19
+    },
+    "P3": {
+      "not_applicable": 22,
+      "pass": 6
+    },
+    "P4": {
+      "pass": 26,
+      "not_applicable": 2
+    },
+    "P5": {
+      "not_applicable": 23,
+      "pass": 5
+    },
+    "P6": {
+      "pass": 26,
+      "not_applicable": 2
+    },
+    "P7": {
+      "not_applicable": 28
+    },
+    "P8": {
+      "not_applicable": 11,
+      "pass": 17
+    },
+    "P9": {
+      "not_applicable": 10,
+      "pass": 18
+    },
+    "P10": {
+      "not_applicable": 23,
+      "pass": 5
+    },
+    "E1": {
+      "pass": 9,
+      "not_applicable": 19
+    },
+    "E2": {
+      "not_applicable": 27,
+      "pass": 1
+    },
+    "E3": {
+      "pass": 22,
+      "not_applicable": 6
+    },
+    "E4": {
+      "not_applicable": 28
+    },
+    "E5": {
+      "pass": 26,
+      "not_applicable": 2
+    },
+    "S1": {
+      "absent": 25,
+      "witnessed": 3
+    },
+    "S2": {
+      "absent": 25,
+      "not_applicable": 2,
+      "witnessed": 1
+    },
+    "S3": {
+      "absent": 27,
+      "witnessed": 1
+    },
+    "S4": {
+      "absent": 24,
+      "not_applicable": 2,
+      "witnessed": 2
+    },
+    "S5": {
+      "not_applicable": 27,
+      "witnessed": 1
+    },
+    "S6": {
+      "absent": 16,
+      "not_applicable": 9,
+      "witnessed": 3
+    }
+  }
+}

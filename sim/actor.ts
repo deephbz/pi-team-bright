@@ -7,7 +7,7 @@ import type { RegisteredToolLike } from "../test/support/external-harness";
 import { createSimSession } from "./session";
 import { SimWorld } from "./world";
 import { assumptionEvidence } from "./assumptions";
-import { actorRef, json, type JsonObject, type ToolResultFact } from "./history";
+import { actorRef, json, type JsonObject, type ToolResultFact, type ProcessGeneration } from "./history";
 
 type Handler = (event: any, context: any) => unknown;
 
@@ -17,6 +17,7 @@ export class SimActor {
   readonly handlers = new Map<string, Handler[]>();
   readonly session;
   readonly context;
+  readonly generation: Readonly<ProcessGeneration>;
   readonly api: ExtensionAPI;
   readonly queuedMessages: Array<() => void> = [];
   idle = true;
@@ -26,6 +27,8 @@ export class SimActor {
 
   constructor(readonly world: SimWorld, readonly id: string, variables: Record<string, string> = {}, resumeFile?: string) {
     const env = world.envs.get(id) ?? world.createActor(id, variables);
+    const process = world.processes.actor(id)!;
+    this.generation = Object.freeze({ pid: process.pid, bootId: process.bootId, osBirthToken: process.osBirthToken });
     this.session = createSimSession(env, world.workspace.home, resumeFile);
     const pane = world.herdr.panes.get(env.process.env.HERDR_PANE_ID!);
     if (pane) pane.sessionFile = this.session.getSessionFile();
@@ -72,7 +75,7 @@ export class SimActor {
 
   initialize(factory: (pi: ExtensionAPI) => void = extension): void {
     if (this.initialized) throw new Error(`Extension already initialized: ${this.id}`);
-    this.world.enter(this.id, () => factory(this.api));
+    this.world.enter(this.id, () => factory(this.api), this.generation);
     this.initialized = true;
   }
   async emit(event: string, payload: unknown = {}): Promise<unknown[]> {
@@ -80,9 +83,13 @@ export class SimActor {
       const results: unknown[] = [];
       for (const handler of [...(this.handlers.get(event) ?? [])]) results.push(await handler(payload, this.context));
       return results;
-    });
+    }, this.generation);
+  }
+  private assertLive(): void {
+    if (!this.world.actorGenerationIsLive(this.id, this.generation)) throw new Error(`Actor is not live: ${this.id}`);
   }
   async tool(name: string, args: Record<string, unknown>): Promise<unknown> {
+    this.assertLive();
     const tool = this.tools.get(name);
     if (!tool) throw new Error(`Unregistered tool ${name} on ${this.id}`);
     const parameters = (tool as RegisteredToolLike & { parameters?: TSchema }).parameters;
@@ -93,7 +100,7 @@ export class SimActor {
       this.world.record({ kind: "tool.call", actor: actorRef(this.id), callId, name, args: json(args) as JsonObject });
       try {
         await this.emit("tool_call", { toolName: name, toolCallId: callId, input: args });
-        const result = await this.world.enter(this.id, () => tool.execute(callId, args, new AbortController().signal, undefined, this.context));
+        const result = await this.world.enter(this.id, () => tool.execute(callId, args, new AbortController().signal, undefined, this.context), this.generation);
         this.session.appendMessage({ role: "toolResult", toolCallId: callId, toolName: name, content: result.content ?? [], details: result.details, isError: result.isError ?? false, timestamp: this.world.scheduler.now } as any);
         this.world.record({ kind: "tool.result", actor: actorRef(this.id), callId, name, result: json(result) as ToolResultFact });
         await this.emit("tool_result", { toolName: name, toolCallId: callId, input: args, ...result });
@@ -105,6 +112,7 @@ export class SimActor {
     });
   }
   async settle(): Promise<void> {
+    this.assertLive();
     this.idle = true;
     for (const append of this.queuedMessages.splice(0)) this.world.enqueue(this.id, "pi.followUp", append);
     await this.emit("agent_settled");

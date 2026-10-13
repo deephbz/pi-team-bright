@@ -3,6 +3,7 @@ import { SimActor } from "./actor";
 import { loadActorExtension } from "./actor-loader";
 import { assumptionEvidence } from "./assumptions";
 import { SimWorld } from "./world";
+import { generationKey } from "./process-table";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
 export const RUNNER_VERSION = "sim-c1/5";
@@ -45,20 +46,22 @@ export class WorldReplay {
   }
   addActor(who: ActorRef, variables: Record<string, string> = {}, resumeFile?: string): SimActor {
     const id = actorKey(who);
-    if (this.actors.has(id)) {
-      if (this.world.actorGenerationIsLive(id)) throw new Error(`Actor already loaded: ${id}`);
-      // A dead carrier releases its environment. The replacement opens the exact Session.
-      this.world.envs.delete(id);
-    }
+    if (this.currentActor(who)) throw new Error(`Actor already loaded: ${id}`);
+    // A dead carrier releases its environment, but its actor remains generation-bound.
+    if (!this.world.actorGenerationIsLive(id)) this.world.envs.delete(id);
     const actor = new SimActor(this.world, id, { ...(who.actor === "lead" ? {} : { PI_TEAM_NAME: who.team }), PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor, ...variables }, resumeFile);
     const factory = this.factories.get(id);
     if (!factory) throw new Error(`Actor module graph was not prepared: ${id}`);
     actor.initialize(factory);
-    this.actors.set(id, actor);
+    this.actors.set(generationKey(actor.generation), actor);
     return actor;
   }
+  private currentActor(who: ActorRef): SimActor | undefined {
+    const process = this.world.processes.actor(actorKey(who));
+    return process?.alive ? this.actors.get(generationKey(process)) : undefined;
+  }
   private actor(who: ActorRef): SimActor {
-    const actor = this.actors.get(actorKey(who));
+    const actor = this.currentActor(who);
     if (!actor) throw new Error(`Unknown Pi actor: ${actorKey(who)}`);
     return actor;
   }
@@ -81,7 +84,9 @@ export class WorldReplay {
     switch (step.kind) {
       case "pi.start": {
         if (world.faults.get("pi.start")?.mode === "hang") break;
-        const actor = this.actors.get(actorKey(step.who)) ?? this.addActor(step.who);
+        const sessionId = step.reason === "resume" ? this.sessionRefs.get(step.session) : undefined;
+        const resumeFile = sessionId ? [...this.actors.values()].find(actor => actor.id === actorKey(step.who) && actor.session.getSessionId() === sessionId)?.session.getSessionFile() : undefined;
+        const actor = this.currentActor(step.who) ?? this.addActor(step.who, {}, resumeFile);
         this.sessionRefs.set(step.session, actor.session.getSessionId());
         if (world.faults.get("pi.start")?.mode === "exit_before_ready") { world.killPid(world.envs.get(actor.id)!.process.pid); break; }
         await actor.emit("session_start", { reason: step.reason });
@@ -215,7 +220,7 @@ export async function replayTrace(trace: WorldTrace, options: { seed?: number; r
       assumptions: [...world.evidence, ...world.herdr.evidence],
       processes: structuredClone(world.processes.history),
       panes: [...world.herdr.panes.values()].map(pane => ({ id: pane.id, shellPid: pane.shellPid, agentPid: pane.agentPid, agentLive: world.herdr.agentLive(pane) })),
-      actors: [...runner.actors.values()].map(actor => ({ id: actor.id, sessionId: actor.session.getSessionId(), tools: [...actor.tools.keys()], branch: actor.session.getBranch() })),
+      actors: [...runner.actors.values()].map(actor => ({ id: actor.id, generation: actor.generation, alive: world.actorGenerationIsLive(actor.id, actor.generation), sessionId: actor.session.getSessionId(), tools: [...actor.tools.keys()], branch: actor.session.getBranch() })),
     };
   } finally { world.dispose(); }
 }
