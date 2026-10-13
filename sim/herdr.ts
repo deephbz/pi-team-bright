@@ -123,7 +123,9 @@ export class HerdrFake {
       }
     } catch (error) {
       if (!(error instanceof Error) || !["pane_not_found", "agent_pane_not_found", "agent_pane_busy"].includes(error.message)) throw error;
-      return { stdout: JSON.stringify({ error: { code: error.message, message: error.message } }), stderr: "", status: 1 };
+      // Lead probe, 2026-10-13, Herdr 0.9.3: `herdr pane get w99:p999`
+      // exited 1 with empty stdout and {error:{code:"pane_not_found",...}} on stderr.
+      return { stdout: "", stderr: JSON.stringify({ error: { code: error.message, message: error.message } }), status: 1 };
     }
   }
 }

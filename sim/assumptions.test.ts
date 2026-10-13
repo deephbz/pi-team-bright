@@ -12,7 +12,9 @@ it("matches the recorded shell process-info wire and missing-pane error", () => 
   expect(shell.type).toBe(A1.observed.shell.type);
   expect(shell.process_info.foreground_processes[0].argv0).toBe(A1.observed.shell.process_info.foreground_processes[0]!.argv0);
   expect(shell.process_info.shell_pid).toBe(shell.process_info.foreground_process_group_id);
-  const refused = JSON.parse(fake.run(["agent", "start", "worker", "--pane", "absent"]).stdout);
+  const reply = fake.run(["agent", "start", "worker", "--pane", "absent"]);
+  expect(reply.stdout).toBe("");
+  const refused = JSON.parse(reply.stderr);
   expect(refused.error.code).toBe(A6.observed.error.response.error.code);
 });
 
