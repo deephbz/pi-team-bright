@@ -15,31 +15,14 @@ import { projectGraphTaskCards as cards } from "../task-authority/graph-card";
 import { writeJsonAtomic } from "../utils/atomic-json";
 import { withLock } from "../utils/lock";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../utils/paths";
+import { withCurrentSessionBinding } from "../utils/teams";
+import { GraphSnapshotCorruption } from "../task-authority/graph-authority-errors";
+import { missingGraphAuthority as missingAuthority } from "../utils/graph-authority-presence";
 
-export const UNSUPPORTED_BEADS_TEAM = "This Team keeps its Tasks in Beads. PTB 0.24 does not support it. The data stays in .beads/.";
-
-function missingAuthority(teamName: string): Error {
-  let config: { taskBackend?: string } = {};
-  try { config = JSON.parse(fs.readFileSync(configPath(teamName), "utf8")); } catch {}
-  return config.taskBackend === "beads" || fs.existsSync(path.join(teamDir(teamName), ".beads"))
-    ? new UnsupportedBeadsTeamError()
-    : new GraphSnapshotCorruption(`Team ${teamName} has no graph-native Task authority snapshot. Restore its graph authority before continuing.`);
-}
-
-/** Stored authority cannot be decoded or recovered; distinct from invalid graph input. */
-export class GraphSnapshotCorruption extends GraphControlRefusal {
-  constructor(message: string) {
-    super("invalid_graph", message);
-    this.name = "GraphSnapshotCorruption";
-  }
-}
-
-/** Unsupported stores cannot recover through delivery retry. */
-export class UnsupportedBeadsTeamError extends GraphSnapshotCorruption {
-  constructor() {
-    super(UNSUPPORTED_BEADS_TEAM);
-    this.name = "UnsupportedBeadsTeamError";
-  }
+export interface GraphMutationBinding {
+  agentName: string;
+  membershipId: string;
+  sessionFile: string;
 }
 
 export interface GraphAuthorityMutation<Result> {
@@ -105,6 +88,7 @@ export class DurableGraphTaskAuthority {
   /** Called only by new-Team creation while it owns the topology lease. */
   async initializeEmpty(teamName: string): Promise<void> {
     const file = graphTaskAuthorityPath(teamName);
+    if (!this.exists(teamName) && (fs.existsSync(configPath(teamName)) || fs.existsSync(path.join(teamDir(teamName), ".beads")))) throw missingAuthority(teamName);
     await withLock(file, async () => {
       if (this.exists(teamName)) { this.loadRequired(teamName); return; }
       if (fs.existsSync(configPath(teamName)) || fs.existsSync(path.join(teamDir(teamName), ".beads"))) {
@@ -114,15 +98,16 @@ export class DurableGraphTaskAuthority {
     });
   }
 
-  async applyGraph(teamName: string, input: GraphApplyInput): Promise<GraphAuthorityMutation<GraphApplyResult>> {
-    return this.mutate(teamName, input.operationId, (controller) => controller.applyGraph(input));
+  async applyGraph(teamName: string, input: GraphApplyInput, binding?: GraphMutationBinding): Promise<GraphAuthorityMutation<GraphApplyResult>> {
+    return this.mutate(teamName, input.operationId, (controller) => controller.applyGraph(input), binding);
   }
 
-  async transition(teamName: string, input: GraphTaskTransitionInput): Promise<GraphAuthorityMutation<GraphTransitionResult>> {
-    return this.mutate(teamName, input.operationId, (controller) => controller.transition(input));
+  async transition(teamName: string, input: GraphTaskTransitionInput, binding?: GraphMutationBinding): Promise<GraphAuthorityMutation<GraphTransitionResult>> {
+    return this.mutate(teamName, input.operationId, (controller) => controller.transition(input), binding);
   }
 
   async readTasks(teamName: string, taskIds?: readonly string[]): Promise<GraphTaskCard[]> {
+    if (!this.exists(teamName)) throw missingAuthority(teamName);
     return withLock(graphTaskAuthorityPath(teamName), async () => {
       const controller = this.loadRequired(teamName);
       const all = cards(controller);
@@ -137,6 +122,7 @@ export class DurableGraphTaskAuthority {
   }
 
   async readyFrontier(teamName: string, worker?: string): Promise<GraphTaskCard[]> {
+    if (!this.exists(teamName)) throw missingAuthority(teamName);
     return withLock(graphTaskAuthorityPath(teamName), async () => {
       const controller = this.loadRequired(teamName);
       const byId = new Map(cards(controller).map((task) => [task.id, task]));
@@ -147,6 +133,7 @@ export class DurableGraphTaskAuthority {
   }
 
   async trace(teamName: string): Promise<ReturnType<GraphTaskController["trace"]>> {
+    if (!this.exists(teamName)) throw missingAuthority(teamName);
     return withLock(graphTaskAuthorityPath(teamName), async () => this.loadRequired(teamName).trace());
   }
 
@@ -154,7 +141,13 @@ export class DurableGraphTaskAuthority {
     teamName: string,
     operationId: string,
     apply: (controller: GraphTaskController) => Result & { replayed: boolean },
+    binding?: GraphMutationBinding,
   ): Promise<GraphAuthorityMutation<Result>> {
+    // Lock order: exact Membership, brief TeamConfig recheck, graph authority.
+    // Release the Membership before downstream publication takes delivery locks.
+    if (binding) return withCurrentSessionBinding(teamName, binding.agentName, binding.sessionFile, binding.membershipId,
+      () => this.mutate(teamName, operationId, apply));
+    if (!this.exists(teamName)) throw missingAuthority(teamName);
     const file = graphTaskAuthorityPath(teamName);
     return withLock(file, async () => {
       const controller = this.loadRequired(teamName);

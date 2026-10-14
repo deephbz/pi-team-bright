@@ -1,8 +1,9 @@
 import { hostEnv } from "../env/host-env";
-import { deliveryRetryTime } from "./delivery-retry-time";
+import { deliveryRetryTime, TERMINAL_DELIVERY_NEXT_ACTION } from "./delivery-retry-time";
 import { stripVTControlCharacters } from "node:util";
 import { humanCarrierAttentionMessage, type CarrierView } from "../carrier-observation";
 import fs from "node:fs";
+import { UnsupportedBeadsTeamError } from "../task-authority/graph-authority-errors";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import * as paths from "./paths";
 import * as teams from "./teams";
@@ -20,7 +21,7 @@ export function formatCarrierStatus(view: CarrierView, taskIds?: string[]): { li
     const text = stripVTControlCharacters(fact).replace(/[\x00-\x1f\x7f-\x9f]/g, " ").replace(/\s+/g, " ").trim();
     return ` (${text.length > 120 ? `${text.slice(0, 119)}…` : text})`;
   };
-  return { line: `${view.worker}: process ${view.process}${suffix(facts.process)}; launch ${view.launch}${suffix(facts.launch)}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.${view.deliveryDegraded?.map(failure => ` ${failure.engine} delivery ${failure.retryAt === undefined ? "stopped" : "degraded"}${suffix(`${failure.operation}: ${failure.message}`)}; ${deliveryRetryTime(failure.retryAt)}.`).join("") ?? ""}`, facts };
+  return { line: `${view.worker}: process ${view.process}${suffix(facts.process)}; launch ${view.launch}${suffix(facts.launch)}; terminal ${view.terminal}; activity ${view.activity}; pane ${view.paneId ?? "unknown"}; lastStop=${view.lastStop?.piReason ?? "none"}; suspectedHumanStop=${view.lastStop?.suspectedHumanStop ?? false}; nonterminalTaskIds=${taskIds ? taskIds.join(",") || "none" : "unavailable"}.${view.deliveryDegraded?.map(failure => ` ${failure.engine} delivery ${failure.retryAt === undefined ? "stopped" : "degraded"}${suffix(`${failure.operation}: ${failure.message}`)}; ${deliveryRetryTime(failure.retryAt)}.${failure.retryAt === undefined ? ` ${TERMINAL_DELIVERY_NEXT_ACTION}` : ""}`).join("") ?? ""}`, facts };
 }
 
 export const PI_TEAMS_COMMAND_USAGE = "Usage: /pi-team-bright [status|help]";
@@ -72,10 +73,10 @@ export interface TeamStatusReport {
   storage: {
     teamDirectory: string;
     configPath: string;
-    graphPath: string;
+    graphPath?: string;
   };
   taskAuthority: {
-    backend: "graph";
+    backend: "graph" | "unsupported_beads_store";
     health: "verified" | "degraded";
     detail: string;
   };
@@ -107,11 +108,16 @@ export async function diagnoseTeam(teamName: string, options: DiagnoseTeamOption
   const currentWorkers = currentMembers.filter((member) => member.agentType === "teammate");
   let health: TeamStatusReport["taskAuthority"]["health"] = "verified";
   let detail = "Graph Task authority verified.";
+  let backend: TeamStatusReport["taskAuthority"]["backend"] = "graph";
   try {
     await (options.verifyGraphAuthority ?? ((name) => new DurableGraphTaskAuthority().readTasks(name)))(safeTeamName);
   } catch (error) {
     health = "degraded";
     detail = error instanceof Error ? error.message : String(error);
+    if (error instanceof UnsupportedBeadsTeamError) {
+      backend = "unsupported_beads_store";
+      detail += ` ${TERMINAL_DELIVERY_NEXT_ACTION}`;
+    }
   }
 
   return {
@@ -134,17 +140,16 @@ export async function diagnoseTeam(teamName: string, options: DiagnoseTeamOption
     storage: {
       teamDirectory,
       configPath: paths.configPath(safeTeamName),
-      graphPath: paths.graphTaskAuthorityPath(safeTeamName),
+      ...(backend === "graph" ? { graphPath: paths.graphTaskAuthorityPath(safeTeamName) } : {}),
     },
     taskAuthority: {
-      backend: "graph",
+      backend,
       health,
       detail,
     },
     externalAccess: {
       inspectTeam: `cd ${shellQuoted(teamDirectory)}`,
-      inspectTasks: "Use task_read or /ptb tasks.",
-      editTasks: "Use task_graph_apply and task_update.",
+      ...(backend === "graph" ? { inspectTasks: "Use task_read or /ptb tasks.", editTasks: "Use task_graph_apply and task_update." } : {}),
     },
   };
 }
@@ -164,7 +169,7 @@ export function formatTeamStatus(report: TeamStatusReport): string {
     `Team config: ${report.storage.configPath}`,
     `Task authority: ${authority.backend} · ${authority.health}`,
   ];
-  lines.push(`Task graph: ${report.storage.graphPath}`);
+  if (report.storage.graphPath) lines.push(`Task graph: ${report.storage.graphPath}`);
   lines.push(`Authority check: ${authority.detail}`);
   lines.push(`External Team view: ${report.externalAccess.inspectTeam}`);
   if (report.externalAccess.inspectTasks) lines.push(`External Task view: ${report.externalAccess.inspectTasks}`);

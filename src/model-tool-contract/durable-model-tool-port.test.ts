@@ -38,7 +38,7 @@ describe("durable graph Task application", () => {
 
   it("maps a committed graph apply to tasks keyed by the caller's graph keys", async () => {
     const task = { id: "task", title: "Task", goal: "Verify graph authority.", assignee: "worker", version: "v_0123456789abcdef" } as any;
-    vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "bound", teamName: "team" } as any);
+    vi.spyOn(teams, "resolveCurrentLeadSessionBinding").mockResolvedValue({ status: "bound", teamName: "team", member: { name: "team-lead", membershipId: "lead-membership" } } as any);
     vi.spyOn(teams, "readConfig").mockResolvedValue({ name: "team" } as any);
     vi.mocked(graph.applyGraph).mockResolvedValue({
       kind: "applied", operationId: "create", replayed: false, graphVersion: "g_0123456789abcdef",
@@ -54,6 +54,6 @@ describe("durable graph Task application", () => {
     expect(graph.applyGraph).toHaveBeenCalledWith("team", {
       operationId: "create",
       tasks: [{ key: "task", title: "Task", goal: "Verify graph authority.", assignee: "worker" }],
-    });
+    }, { agentName: "team-lead", membershipId: "lead-membership", sessionFile: "/tmp/leader.jsonl" });
   });
 });

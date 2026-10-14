@@ -167,7 +167,7 @@ describe("hardened coordination liveness boundaries", () => {
 
   it("distinguishes active to settled without a Task change and pending delivery", async () => {
     const name = teamName("runtime");
-    fs.mkdirSync(paths.teamDir(name), { recursive: true });
+    const config = await teams.createTeam(name, "leader-session", "lead");
     const current = member();
     vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => ({ kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }));
     await writeRuntimeStatus(name, "worker", { pid: process.pid, osBirthToken: "birth", bootId: "boot", startedAt: 1, runState: "active" }, current.membershipId);
@@ -175,7 +175,6 @@ describe("hardened coordination liveness boundaries", () => {
     await writeRuntimeStatus(name, "worker", { runState: "settled" }, current.membershipId);
     await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "settled", actuationPending: false });
 
-    const config = await teams.createTeam(name, "leader-session", "lead");
     config.members.push(current);
     config.logicalWorkers = [{ name: "worker", scope: "Verify liveness." }];
     teams.writeConfigAtomic(paths.configPath(name), config);

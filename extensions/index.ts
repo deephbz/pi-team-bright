@@ -394,7 +394,7 @@ export default function (pi: ExtensionAPI) {
             ...(params.current_context ? { currentContext: params.current_context } : {}),
             ...(params.evidence ? { evidence: params.evidence } : {}),
             ...(params.transition && params.transition !== "cancel" ? { worker: binding.member.name } : {}),
-          }, binding.member.name);
+          }, binding.member.name, { agentName: binding.member.name, membershipId: binding.member.membershipId!, sessionFile: binding.member.sessionFile! });
           const outcome = result.kind === "updated"
             ? {
               kind: "updated", input_index: 0, task_id: result.task.id, operation_id: result.operationId,

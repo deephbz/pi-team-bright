@@ -15,7 +15,7 @@ import { TeamLifecycleService } from "../team-authority/team-lifecycle-service";
 import { DirectMessageDelivery, DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
 import { sendAlert } from "../alert-authority/alerts";
 import { DurableAlertMembership } from "../adapters/durable-alert-membership";
-import { UNSUPPORTED_BEADS_TEAM } from "../adapters/durable-graph-task-authority";
+import { UNSUPPORTED_BEADS_TEAM } from "../task-authority/graph-authority-errors";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import { SyncNudgeConductor } from "./sync-nudge-conductor";
@@ -198,7 +198,7 @@ describe("registered Pi Session adapter characterization", () => {
     });
     const member = await teams.currentMembership(name, "worker");
     await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
-    fs.rmSync(paths.graphTaskAuthorityPath(name));
+    fs.rmSync(path.dirname(paths.graphTaskAuthorityPath(name)), { recursive: true });
     if (evidence === "config") {
       const config = JSON.parse(fs.readFileSync(paths.configPath(name), "utf8"));
       fs.writeFileSync(paths.configPath(name), JSON.stringify({ ...config, taskBackend: "beads" }));
@@ -221,7 +221,7 @@ describe("registered Pi Session adapter characterization", () => {
     await vi.advanceTimersByTimeAsync(61000);
     expect(taskStart).toHaveBeenCalledOnce();
     expect(directStart).toHaveBeenCalledOnce();
-    expect(ctx.ui.notify.mock.calls.filter(([text]: [string]) => text.startsWith("Task delivery"))).toEqual([[`Task delivery stopped: ${UNSUPPORTED_BEADS_TEAM} It will not retry.`, "warning"]]);
+    expect(ctx.ui.notify.mock.calls.filter(([text]: [string]) => text.startsWith("Task delivery"))).toEqual([[`Task delivery stopped: ${UNSUPPORTED_BEADS_TEAM} It will not retry. Finish this Team with its original PTB version or start a new Team.`, "warning"]]);
     await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
   });
 

@@ -1,5 +1,6 @@
+import { TERMINAL_DELIVERY_NEXT_ACTION } from "../src/utils/delivery-retry-time";
 import { adoptLegacyGeneration } from "../src/team-authority/legacy-generation-adoption";
-import { UnsupportedBeadsTeamError } from "../src/adapters/durable-graph-task-authority";
+import { UnsupportedBeadsTeamError } from "../src/task-authority/graph-authority-errors";
 import { CarrierObserver } from "../src/carrier-observation";
 import { hostEnv, type TimerHandle } from "../src/env/host-env";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -94,7 +95,7 @@ export function createPiTeamSessionAdapter(options: {
       const label = engine === "alert" ? "Alert" : "Task";
       deliveryContext?.ui?.notify?.(state.state === "degraded"
         ? state.retryAt === undefined
-          ? `${label} delivery stopped: ${state.message} It will not retry.`
+          ? `${label} delivery stopped: ${state.message} It will not retry. ${TERMINAL_DELIVERY_NEXT_ACTION}`
           : `${label} delivery is degraded: ${state.message}. Retry is scheduled.`
         : `${label} delivery recovered.`, state.state === "degraded" ? "warning" : "info");
     },

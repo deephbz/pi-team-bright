@@ -1,3 +1,4 @@
+import { missingGraphAuthority } from "./graph-authority-presence";
 import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
@@ -178,19 +179,23 @@ export function recordGraphRevisionRetirementLocked(input: GraphRevisionRetireme
   return snapshot;
 }
 
+/** A derived fence must not create graph-store evidence for an unsupported Team. */
+export async function withGraphRevisionLease<T>(teamName: string, action: () => Promise<T>): Promise<T> {
+  if (!fs.existsSync(graphTaskAuthorityPath(teamName))) throw missingGraphAuthority(teamName);
+  return withLock(graphRevisionRetirementPath(teamName), action);
+}
+
 /** Exact current graph coordinate while the caller owns the retirement lock. */
 export function taskIsCurrentInGraphLocked(teamName: string, taskId: string, taskVersion: TaskVersionRef): boolean {
   const current = readCurrentGraphTaskCoordinatesLocked(teamName);
-  return !current || current.has(`${taskId}\u0000${taskVersion}`);
+  return current.has(`${taskId}\u0000${taskVersion}`);
 }
 
 /** Read current Task coordinates while the caller owns the retirement lock. */
-export function readCurrentGraphTaskCoordinatesLocked(teamName: string): Set<string> | undefined {
-  const fence = readGraphRevisionRetirementLocked(teamName);
+export function readCurrentGraphTaskCoordinatesLocked(teamName: string): Set<string> {
   const authorityFile = graphTaskAuthorityPath(teamName);
   if (!fs.existsSync(authorityFile)) {
-    if (fence) throw new Error(`Graph authority for ${teamName} is missing after graph retirement.`);
-    return undefined;
+    throw missingGraphAuthority(teamName);
   }
   // The graph writer atomically replaces its snapshot. The fence is derived;
   // currentness must come from the committed authority when they disagree.
@@ -198,8 +203,7 @@ export function readCurrentGraphTaskCoordinatesLocked(teamName: string): Set<str
   return new Set(controller.readTasks().map((task) => `${task.id}\u0000${task.version}`));
 }
 
-/** Exact current graph coordinate. Only a Team without graph authority or fence uses the legacy path. */
+/** Exact current graph coordinate; derived delivery evidence cannot replace authority. */
 export async function taskIsCurrentInGraph(teamName: string, taskId: string, taskVersion: TaskVersionRef): Promise<boolean> {
-  const file = graphRevisionRetirementPath(teamName);
-  return withLock(file, async () => taskIsCurrentInGraphLocked(teamName, taskId, taskVersion));
+  return withGraphRevisionLease(teamName, async () => taskIsCurrentInGraphLocked(teamName, taskId, taskVersion));
 }

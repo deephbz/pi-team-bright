@@ -5,7 +5,8 @@ import { DurableGraphTaskStateDeliveryQuery } from "../adapters/durable-graph-ta
 import type { GraphTaskOrchestrationPort } from "../task-authority/graph-orchestration";
 import type { CoordinationQueryBundle, CoordinationTaskReadOutcome } from "./queries";
 import { readWorkerRunObservation } from "../utils/sync-liveness";
-import { taskDeliveryPath } from "../utils/paths";
+import { taskDeliveryPath, teamDir } from "../utils/paths";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { CoordinationObservationService } from "./observation-service";
 import { taskProjectionRevision } from "./task-projection-revision";
 import { projectToolResult } from "../model-tool-contract/result-projection";
@@ -42,10 +43,15 @@ describe("durable Coordination query equivalence", () => {
     const deliveryFile = taskDeliveryPath(deliveryTeam, "worker");
     const query = new DurableGraphTaskStateDeliveryQuery(emptyGraph);
     try {
+      await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: false, pending: false });
+      const graph = new DurableGraphTaskAuthority();
+      await graph.initializeEmpty(deliveryTeam);
+      await graph.applyGraph(deliveryTeam, { operationId: "apply", tasks: [{ key: "task-a", title: "Canonical Task", goal: "Retain delivery evidence.", assignee: "worker" }] });
+      const current = (await graph.readTasks(deliveryTeam))[0];
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: false });
 
       fs.mkdirSync(path.dirname(deliveryFile), { recursive: true });
-      const record = { taskProjection: task, ref: { kind: "task", taskId: task.id, version: task.version } };
+      const record = { taskProjection: current, ref: { kind: "task", taskId: current.id, version: current.version } };
       fs.writeFileSync(deliveryFile, JSON.stringify([{ ...record, deliveryId: "pending" }, { ...record, deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: true });
 
@@ -55,7 +61,7 @@ describe("durable Coordination query equivalence", () => {
       fs.writeFileSync(deliveryFile, "not-json");
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: false, pending: false });
     } finally {
-      fs.rmSync(path.dirname(deliveryFile), { recursive: true, force: true });
+      fs.rmSync(teamDir(deliveryTeam), { recursive: true, force: true });
     }
   });
 

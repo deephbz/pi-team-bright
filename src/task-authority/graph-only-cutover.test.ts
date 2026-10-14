@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DurableGraphTaskAuthority, UNSUPPORTED_BEADS_TEAM } from "../adapters/durable-graph-task-authority";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import { UNSUPPORTED_BEADS_TEAM } from "./graph-authority-errors";
 import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
 import { TeamLifecycleService } from "../team-authority/team-lifecycle-service";
 import { DurableGraphAssignedWorkGuard } from "../adapters/durable-graph-assigned-work";
@@ -60,7 +61,7 @@ describe("graph-only Task authority cutover", () => {
   });
 
   it("refuses graphless Beads reads, transitions and work guards without changing .beads", async () => {
-    const teamName = name(); const config = await team(teamName); fs.unlinkSync(graphTaskAuthorityPath(teamName));
+    const teamName = name(); const config = await team(teamName); fs.rmSync(path.dirname(graphTaskAuthorityPath(teamName)), { recursive: true });
     Object.assign(config, { taskBackend: "beads" }); writeConfigAtomic(configPath(teamName), config);
     const beads = path.join(teamDir(teamName), ".beads"); fs.mkdirSync(beads); const file = path.join(beads, "retained.json"); fs.writeFileSync(file, '{"tasks":["old"]}');
     const before = fs.readFileSync(file); const { graph, guard, authority } = composition();

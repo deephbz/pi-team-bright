@@ -2,7 +2,7 @@ import * as teams from "../utils/teams";
 import type { TeamConfig } from "../team-authority/contracts";
 import type { ExactLeaderSessionId, ModelToolLeaderLaunchContext } from "./model-tool-contracts";
 
-type BoundTeam = { teamName: string; config: TeamConfig; sessionFile: string };
+type BoundTeam = { teamName: string; config: TeamConfig; sessionFile: string; mutationBinding: import("../adapters/durable-graph-task-authority").GraphMutationBinding };
 
 /** Exact Session and launch-context binding. It owns no authority state. */
 export class DurableModelToolBindings {
@@ -17,6 +17,7 @@ export class DurableModelToolBindings {
     if (!sessionFile) return undefined;
     const binding = await teams.resolveCurrentLeadSessionBinding(sessionFile);
     if (binding.status !== "bound") return undefined;
-    return { teamName: binding.teamName, config: await teams.readConfig(binding.teamName), sessionFile };
+    return { teamName: binding.teamName, config: await teams.readConfig(binding.teamName), sessionFile,
+      mutationBinding: { agentName: binding.member.name, membershipId: binding.member.membershipId!, sessionFile } };
   }
 }

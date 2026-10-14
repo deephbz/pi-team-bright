@@ -6,7 +6,6 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { TeamConfig } from "../team-authority/contracts";
 import { withLock } from "./lock";
 import {
-  graphRevisionRetirementPath,
   taskDeliveryPath,
   taskDeliveryRecoveryPath,
   taskDeliveryTombstonePath,
@@ -19,6 +18,7 @@ import { TaskCardSchema, type CanonicalTaskCard } from "../task-authority/task-d
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { GraphRevisionRetirementInput } from "../task-authority/graph-revision-retirement";
 import {
+  withGraphRevisionLease,
   recordGraphRevisionRetirementLocked,
   taskIsCurrentInGraphLocked,
   readCurrentGraphTaskCoordinatesLocked,
@@ -286,7 +286,7 @@ async function enqueueTaskProjectionWithConfig(
   };
   const file = taskDeliveryPath(teamName, recipient);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  return withLock(graphRevisionRetirementPath(teamName), () => withLock(file, async () => {
+  return withGraphRevisionLease(teamName, () => withLock(file, async () => {
     if (!taskIsCurrentInGraphLocked(config.name, taskId, version)) return null;
     const records = readRecordsUnsafe(file);
     const tombstones = readTombstonesUnsafe(taskDeliveryTombstonePath(teamName, recipient));
@@ -379,15 +379,25 @@ export async function reconcileTaskChanges(
     const task = current.get(record.taskId);
     const binding = recipientBinding(config, recipient);
     let target = record.targets?.find(target => target.recipient === recipient);
-    // Pre-0.24 records have names only. Recover a fresh current assignment;
-    // never infer an old Membership from that record or replay its projection.
+    // Bind a targetless record once before publication. Replay must retain that
+    // exact target even when enqueue succeeds but recovery resolution fails.
     if (record.targets === undefined) {
       if (!task || task.version !== record.taskVersion || task.assignee !== recipient) {
         await retireRecoveryRecord(file, record, recipient, "Pre-0.24 recovery no longer matches the current graph assignment");
         continue;
       }
       if (!binding) continue;
-      target = { recipient, recipientMembershipId: binding.membershipId, recipientSessionFile: binding.sessionFile, changeKind: record.changeKind };
+      target = await withLock(file, async () => {
+        const latest = readRecoveryRecords(file);
+        const matched = latest.find(candidate => candidate?.taskId === record.taskId && candidate.taskVersion === record.taskVersion
+          && candidate.changeKind === record.changeKind && candidate.recordedAt === record.recordedAt);
+        if (!matched || matched.retiredAt || matched.resolvedRecipients?.includes(recipient)) return undefined;
+        if (matched.targets === undefined) {
+          matched.targets = [{ recipient, recipientMembershipId: binding.membershipId, recipientSessionFile: binding.sessionFile, changeKind: record.changeKind }];
+          writeJsonAtomic(file, latest);
+        }
+        return matched.targets.find(candidate => candidate.recipient === recipient);
+      });
     }
     if (!task || task.version !== record.taskVersion) continue;
     if (!target || !binding || binding.membershipId !== target.recipientMembershipId || binding.sessionFile !== target.recipientSessionFile) continue;
@@ -437,7 +447,7 @@ export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRec
   }) };
   const file = taskDeliveryRecoveryPath(record.teamName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  await withLock(graphRevisionRetirementPath(record.teamName), () => withLock(file, async () => {
+  await withGraphRevisionLease(record.teamName, () => withLock(file, async () => {
     if (!taskIsCurrentInGraphLocked(record.teamName, record.taskId, record.taskVersion)) return;
     const records: TaskDeliveryRecoveryRecord[] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
     const recipients = [...new Set(record.recipients)].sort();
@@ -467,14 +477,12 @@ export async function readTaskDeliveries(teamName: string, recipient: string): P
 async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
   const records = await readTaskDeliveries(teamName, recipient);
   const current = readCurrentGraphTaskCoordinatesLocked(teamName);
-  if (!current) return records.filter((record) => !record.retiredAt);
   return records.filter((record) => !record.retiredAt && current.has(`${record.ref.taskId}\u0000${record.ref.version}`));
 }
 
 /** Pending delivery records still actionable in the current complete graph. */
 export async function readCurrentTaskDeliveries(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
-  const fenceFile = graphRevisionRetirementPath(teamName);
-  return withLock(fenceFile, async () => readCurrentTaskDeliveriesLocked(teamName, recipient));
+  return withGraphRevisionLease(teamName, async () => readCurrentTaskDeliveriesLocked(teamName, recipient));
 }
 
 export async function readTaskDeliveryTombstones(teamName: string, recipient: string): Promise<TaskDeliveryTombstone[]> {
@@ -490,9 +498,7 @@ export async function readTaskDeliveryTombstones(teamName: string, recipient: st
  * cleanup, so a crash between files cannot make removed work actionable.
  */
 export async function retireGraphRevisionDeliveries(input: GraphRevisionRetirementInput): Promise<void> {
-  const fenceFile = graphRevisionRetirementPath(input.teamName);
-  fs.mkdirSync(path.dirname(fenceFile), { recursive: true });
-  await withLock(fenceFile, async () => {
+  await withGraphRevisionLease(input.teamName, async () => {
     const snapshot = recordGraphRevisionRetirementLocked(input);
     if (snapshot.current.authoritySequence !== input.authoritySequence) return;
     const current = new Set(snapshot.current.currentTasks.map((task) => `${task.taskId}\u0000${task.taskVersion}`));
@@ -650,8 +656,7 @@ export async function suppressTaskVersionForSession(
   const ref: TaskChangeRef = { kind: "task", taskId: task.id, version: assertTaskVersionRef(task.version) };
   const targetAgentRef = sessionRef(sessionFile);
   const deliveryId = `task_delivery_${digest({ ref, recipient, recipientMembershipId: binding.membershipId, targetAgentRef }).slice(0, 32)}`;
-  const fenceFile = graphRevisionRetirementPath(teamName);
-  await withLock(fenceFile, async () => {
+  await withGraphRevisionLease(teamName, async () => {
     if (!taskIsCurrentInGraphLocked(teamName, task.id, assertTaskVersionRef(task.version))) return;
     await persistTombstones(teamName, recipient, [{
       deliveryId,
@@ -792,8 +797,7 @@ export class TaskChangeDelivery {
     this.attempted.clear();
     this.acknowledged = acknowledgedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
     this.staged.clear();
-    const fenceFile = graphRevisionRetirementPath(this.options.teamName);
-    await withLock(fenceFile, async () => {
+    await withGraphRevisionLease(this.options.teamName, async () => {
       const observedRecords = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
         .filter((record) => this.acknowledged.has(record.deliveryId));
       await persistTombstones(this.options.teamName, this.options.recipient, observedRecords.map((record) => ({
@@ -828,7 +832,7 @@ export class TaskChangeDelivery {
         recipient: this.options.recipient,
         sessionFile: this.options.sessionFile,
         membershipId: this.resolvedMembershipId,
-      }, async () => withLock(fenceFile, async () => {
+      }, async () => withGraphRevisionLease(this.options.teamName, async () => {
         const currentIds = new Set(records.map((record) => record.deliveryId));
         const current = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
           .filter((record) => currentIds.has(record.deliveryId));
@@ -910,7 +914,7 @@ export class TaskChangeDelivery {
       sessionFile: this.options.sessionFile,
       membershipId: this.resolvedMembershipId,
     }, async () => {
-        return withLock(graphRevisionRetirementPath(this.options.teamName), async () => {
+        return withGraphRevisionLease(this.options.teamName, async () => {
           const currentRecords = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
             .filter((record) => ids.has(record.deliveryId));
           if (currentRecords.length === 0) return 0;
@@ -980,7 +984,7 @@ export class TaskChangeDelivery {
         recipient: this.options.recipient,
         sessionFile: this.options.sessionFile,
         membershipId: this.resolvedMembershipId,
-      }, async () => withLock(graphRevisionRetirementPath(this.options.teamName), async () => {
+      }, async () => withGraphRevisionLease(this.options.teamName, async () => {
         const ids = new Set(records.map((record) => record.deliveryId));
         const current = (await readCurrentTaskDeliveriesLocked(this.options.teamName, this.options.recipient))
           .filter((record) => ids.has(record.deliveryId));

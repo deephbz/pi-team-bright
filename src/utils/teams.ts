@@ -690,6 +690,8 @@ export async function withMembershipMutationLease<T>(
   );
 }
 
+export class StaleSessionBindingError extends Error {}
+
 /**
  * Hold one exact Membership generation's mutation lease, briefly revalidate
  * its Session binding under the TeamConfig lock, then release TeamConfig
@@ -704,12 +706,12 @@ export async function withCurrentSessionBinding<T>(
   expectedMembershipId: string,
   action: (config: TeamConfig, member: Member) => Promise<T>,
 ): Promise<T> {
-  if (!sessionFile || !expectedMembershipId) throw new Error("An exact Membership and durable Pi Session are required for a team-scoped mutation.");
+  if (!sessionFile || !expectedMembershipId) throw new StaleSessionBindingError("An exact Membership and durable Pi Session are required for a team-scoped mutation.");
   return withMembershipMutationLease(teamName, expectedMembershipId, async () => {
     const binding = await withCurrentConfig(teamName, async (config) => {
       const member = [...config.members].reverse().find((candidate) => candidate.name === agentName && candidate.isActive !== false);
       if (!member || member.membershipId !== expectedMembershipId || member.sessionFile !== sessionFile) {
-        throw new Error(`Membership ${expectedMembershipId} / Session ${sessionFile} is not the current binding for ${agentName} on team ${teamName}; stale processes cannot mutate authority state.`);
+        throw new StaleSessionBindingError(`Membership ${expectedMembershipId} / Session ${sessionFile} is not the current binding for ${agentName} on team ${teamName}; stale processes cannot mutate authority state.`);
       }
       return {
         config: structuredClone(config),

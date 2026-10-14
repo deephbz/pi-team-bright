@@ -129,13 +129,22 @@ Task backend and model-checker lane. Graph snapshots own all Task reads,
 transitions, views, lifecycle guards, and startup delivery recovery. New Teams
 persist an explicit empty snapshot before creation succeeds. Established Teams
 with a missing or corrupt snapshot remain unavailable; they never appear empty.
-Valid graph snapshots override obsolete backend fields.
+Valid graph snapshots override obsolete backend fields. A retained
+`task-authority/` directory or graph-revision retirement record identifies a
+lost graph even when obsolete backend fields remain. Restore that authority
+before continuing. Graph mutations hold the exact Membership lease and recheck
+its Session binding before commit. Delivery currentness requires the graph;
+a retained spool or derived fence cannot authorize presentation. Targetless
+recovery binds one exact recipient durably before enqueue and retains it across
+replay.
 
 Graphless Teams that keep Tasks in Beads are unsupported. The refusal states:
 “This Team keeps its Tasks in Beads. PTB 0.24 does not support it. The data stays
 in .beads/.” Runtime never reads or writes that Task data. No migration or export
 path remains. Historical native Session and delivery records retain their
-readers; they never authorize legacy Task mutations.
+readers; they never authorize legacy Task mutations. Registered Worker stop and
+Team shutdown return typed unavailable outcomes when Task guards cannot read
+authority. `/ptb status` names unsupported storage without a graph-path claim.
 
 Independent adversarial and process-recovery tests remain. The
 [purge record](../journal/2026-10-13-legacy-purge.md) owns removal scope and
@@ -382,7 +391,9 @@ restating executable definitions.
   unsettled results, and `/ptb status` expose that fact. Runtime diagnostics
   update on each retry. The recipient pane toasts when an engine first becomes
   degraded, when retries stop, and when it recovers. A terminal failure says
-  delivery stopped and will not retry.
+  delivery stopped and will not retry. The human toast and status detail direct
+  the owner to finish the Team with its original PTB version or start a new Team.
+  The model-facing refusal message remains unchanged.
   Initial create and resume activate delivery. Binding replacement, admission
   refusal, Session shutdown, and successful full Team shutdown stop both engines
   and their retries. Partial shutdown retains the current leader delivery.
