@@ -66,40 +66,13 @@ function extensionHarness(actor = "team-lead", teamName?: string) {
     sendMessage: vi.fn(),
     appendEntry: vi.fn(),
   } as never);
-  if (actor === "team-lead") {
-    for (const name of ["task_graph_apply", "task_read", "team_sync"]) {
-      const tool = tools.get(name);
-      if (!tool) continue;
-      const originalExecute = tool.execute;
-      tools.set(name, { ...tool, execute: async (id, params, signal, update, ctx) => {
-        const args: any = { ...params };
-        if (name === "task_graph_apply") {
-          const sourceTasks = args.tasks ?? [{ title: args.title, goal: args.acceptance_criteria || args.description || "Complete the requested Task.", ...(args.assignee ? { assignee: args.assignee } : {}) }];
-          args.operation_id = args.operation_id || sourceTasks[0]?.operation_id || `cleancut-${id}`;
-          args.tasks = sourceTasks.map((task: any, index: number) => ({
-            key: task.key || `task-${index + 1}`,
-            title: task.title,
-            goal: task.goal || task.acceptance_criteria || task.description || "Complete the requested Task.",
-            ...(task.assignee ? { assignee: task.assignee } : {}),
-            ...(task.needs ? { needs: [...task.needs] } : {}),
-          }));
-          for (const key of ["team_name", "title", "description", "acceptance_criteria", "assignee", "design", "idempotency_key"]) delete args[key];
-        } else if (name === "task_read" && args.task_id) {
-          args.task_ids = [args.task_id]; delete args.task_id; delete args.team_name;
-        } else if (name === "team_sync") {
-          args.view = args.view || (args.cursor ? "updates" : "snapshot"); delete args.team_name; delete args.cursor; delete args.wait_ms; delete args.event_types; delete args.task_ids; delete args.limit; delete args.continuation;
-        }
-        return originalExecute(id, args, signal, update, ctx);
-      } });
-    }
-  }
   return tools;
 }
 
 function context(teamName: string, actor: string) {
   return {
     sessionManager: {
-      getSessionFile: () => `/tmp/${teamName}-${actor}.jsonl`,
+      getSessionFile: () => `/tmp/${teamName}-${actor === "team-lead" ? "lead" : actor}.jsonl`,
       getBranch: () => [],
       buildContextEntries: () => [],
     },
@@ -119,18 +92,14 @@ function taskFrom(result: any): Record<string, any> {
     : undefined;
   const task = result?.details?.task || result?.details?.postState || outcome?.task || graphTask;
   if (!task || typeof task !== "object") throw new Error(`missing structured Task receipt: ${JSON.stringify(result)}`);
-  const projected = task.goal ? { ...task, description: task.goal, acceptanceCriteria: task.goal, relations: task.relations || [] } : { ...task };
-  if (task.current_context) projected.design = task.current_context;
-  if (outcome?.journal_entries) projected.notes = outcome.journal_entries.map((entry: any) => entry.text).join("\n");
-  else if (task.current_context) projected.notes = task.current_context;
-  return projected;
+  return task;
 }
 
 function assertCurrentTaskShape(task: Record<string, any>): void {
   expect(task).toEqual(expect.objectContaining({
     id: expect.any(String),
     title: expect.any(String),
-    description: expect.any(String),
+    goal: expect.any(String),
     status: expect.stringMatching(/^(dependency_waiting|ready|in_progress|blocked|goal_failed|goal_achieved|cancelled)$/),
     relations: expect.any(Array),
     version: expect.any(String),

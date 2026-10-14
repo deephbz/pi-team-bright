@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ControlledProcess, createIsolatedWorkspace } from "../../test/support/external-harness";
+import { GraphTaskController } from "../task-authority/graph-control";
 
 type PublicResult = {
   pid: number;
@@ -23,7 +24,8 @@ describe("registered Task tools across process loss", () => {
     const workerBSession = path.join(isolated.home, "worker-b.jsonl");
     const graphFile = path.join(teamRoot, "task-authority", "graph-control.json");
     const eventFile = path.join(teamRoot, "events", "team-events.jsonl");
-    fs.mkdirSync(teamRoot, { recursive: true });
+    fs.mkdirSync(path.dirname(graphFile), { recursive: true });
+    fs.writeFileSync(graphFile, JSON.stringify(new GraphTaskController().snapshot()));
     fs.writeFileSync(path.join(teamRoot, "config.json"), JSON.stringify({
       name: teamName,
       description: "Isolated public-tool recovery evidence.",

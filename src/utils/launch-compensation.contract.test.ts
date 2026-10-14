@@ -316,14 +316,16 @@ describe("receipt-first Worker launch", () => {
 
   it("reports partial shutdown once while preserving recovery evidence across projections", async () => {
     const f = await team("shutdown-partial-projection"); const tools = register(adapter({ alive: true }).terminal);
+    await teams.ensureLogicalWorker(f.name, { name: "delivery-broken", scope: "Retain unfinished work across partial shutdown." });
     await teams.addMember(f.name, {
       membershipId: teams.newMembershipId(), agentId: `delivery-broken@${f.name}`, name: "delivery-broken", agentType: "teammate",
       joinedAt: Date.now(), tmuxPaneId: "pane-worker", sessionFile: `/tmp/${f.name}-delivery-broken.jsonl`, cwd: process.cwd(), subscriptions: [], isActive: true,
     });
-    await tools.get("task_graph_apply")!.execute("shutdown-task", {
+    const applied = await tools.get("task_graph_apply")!.execute("shutdown-task", {
       operation_id: "shutdown-task",
       tasks: [{ key: "task-open", title: "Retained unfinished work", goal: "Keep this Task across partial shutdown.", assignee: "delivery-broken" }],
     }, undefined, undefined, context(f.leadSession));
+    expect(applied.details).toMatchObject({ kind: "task_graph_applied", tasks_by_key: { "task-open": { status: "ready" } } });
     const result = await tools.get("team_shutdown")!.execute("shutdown-partial", { team_name: f.name }, undefined, undefined, context(f.leadSession));
     expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     expect(result.details).toMatchObject({ kind: "partial", lifecycle: "active", stopped_workers: [], failed_workers: ["delivery-broken"], unfinished_task_ids: ["task-open"], state_changed: true });
