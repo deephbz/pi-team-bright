@@ -13,9 +13,14 @@ let tarball;
 try {
   const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--ignore-scripts"], { cwd: root, encoding: "utf8" }))[0];
   tarball = path.join(root, packed.filename);
+  if (packed.files.some(file => file.path.startsWith("formal/"))) throw new Error("package contains retired formal models");
   execFileSync("npm", ["init", "-y"], { cwd: work, stdio: "ignore" });
   execFileSync("npm", ["install", "--ignore-scripts", tarball], { cwd: work, stdio: "ignore" });
   const installedRoot = path.join(work, "node_modules", ...packageName.split("/"));
+  const installedManifest = JSON.parse(fs.readFileSync(path.join(installedRoot, "package.json"), "utf8"));
+  if (installedManifest.dependencies?.["@beads/bd"] || fs.existsSync(path.join(work, "node_modules", "@beads", "bd"))) {
+    throw new Error("package installs the retired Beads dependency");
+  }
   const examplePath = "docs/examples/pi-team-bright.settings.json";
   const installedExample = fs.readFileSync(path.join(installedRoot, examplePath), "utf8");
   if (installedExample !== fs.readFileSync(path.join(root, examplePath), "utf8")) {

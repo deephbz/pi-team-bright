@@ -18,12 +18,8 @@ const teamNames: string[] = [];
 async function team(defaultModel?: string) {
   const name = `profile-prepared-retry-${process.pid}-${Date.now()}`;
   teamNames.push(name);
-  const workspace = paths.teamDir(name);
-  fs.mkdirSync(path.join(workspace, ".beads"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".beads", "metadata.json"), JSON.stringify({ database: "dolt", backend: "dolt", dolt_database: name, project_id: name }));
-  await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead", "Prepared retry proof", defaultModel, undefined, workspace, `authority-${name}`, {
-    schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: name, projectId: name,
-  }, undefined, { backend: "profile-retry", leadTarget: { backend: "profile-retry", kind: "pane", targetId: "leader" } });
+  await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead", "Prepared retry proof", defaultModel, undefined, undefined,
+    { backend: "profile-retry", leadTarget: { backend: "profile-retry", kind: "pane", targetId: "leader" } });
   return name;
 }
 

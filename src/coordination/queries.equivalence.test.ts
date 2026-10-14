@@ -1,10 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DurableCoordinationTaskStateDeliveryQuery } from "../adapters/durable-coordination-task-state-delivery";
-import type { TaskAuthorityRecordEnvelope } from "../utils/beads";
-import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
-import { createReadOnlyBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
+import { DurableGraphTaskStateDeliveryQuery } from "../adapters/durable-graph-task-read";
+import type { GraphTaskOrchestrationPort } from "../task-authority/graph-orchestration";
 import type { CoordinationQueryBundle, CoordinationTaskReadOutcome } from "./queries";
 import { readWorkerRunObservation } from "../utils/sync-liveness";
 import { taskDeliveryPath } from "../utils/paths";
@@ -15,11 +13,7 @@ import { projectTui } from "../model-tool-contract/tui-projection";
 import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
 
 const teamName = "coordination-query-equivalence";
-const emptyReadFactory = createReadOnlyBeadsTaskAdapterFactory({
-  readTaskAuthorityRecordEnvelope: vi.fn(),
-  readTaskAuthorityRecordEnvelopes: vi.fn(async () => []),
-  listTaskIds: vi.fn(async () => []),
-});
+const emptyGraph = { readTasks: vi.fn(async () => []) } as unknown as GraphTaskOrchestrationPort;
 const task = {
   id: "task-a",
   title: "Canonical Task",
@@ -34,47 +28,28 @@ const task = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("durable Coordination query equivalence", () => {
-  it("preserves ordered multi-ID Task outcomes and typed hydration failure", async () => {
-    const outcomes: CoordinationTaskReadOutcome[] = [
-      { kind: "found", task: { ...task, version: "v_5ee07e909280ff0e" } },
-      {
-        kind: "contract_gap",
-        reason: "task_metadata_absent",
-        taskId: "task-b",
-        version: "v_5e86669cea4e8c4c" as any,
-        message: "Task task-b has no canonical pi_teams_task metadata; compatibility fields are not a Task definition.",
-      },
-      undefined,
-    ];
-    const records: Array<TaskAuthorityRecordEnvelope | undefined> = [
-      { task: { id: "task-a", title: task.title, description: "Compatibility", acceptanceCriteria: "Compatibility", status: "open", relations: [], version: "raw-a", provenance: { authority: "beads" as const, teamName } }, taskMetadata: { schema: "pi-teams-task/1", goal: task.goal, current_context: task.current_context } },
-      { task: { id: "task-b", title: "Task b", description: "Compatibility", acceptanceCriteria: "Compatibility", status: "open", relations: [], version: "raw-b", provenance: { authority: "beads" as const, teamName } } },
-      undefined,
-    ];
-    const readPort = {
-      readTaskAuthorityRecordEnvelope: vi.fn(),
-      readTaskAuthorityRecordEnvelopes: vi.fn(async () => records),
-      listTaskIds: vi.fn(),
-    };
-    const query = new DurableCoordinationTaskStateDeliveryQuery(createReadOnlyBeadsTaskAdapterFactory(readPort));
-
-    await expect(query.readTasks(teamName, ["task-a", "task-b", "task-c"])).resolves.toEqual(outcomes);
-    expect(readPort.readTaskAuthorityRecordEnvelopes).toHaveBeenCalledOnce();
-    expect(readPort.readTaskAuthorityRecordEnvelopes).toHaveBeenCalledWith(teamName, ["task-a", "task-b", "task-c"]);
+  it("preserves ordered multi-ID graph outcomes and propagates authority failure", async () => {
+    const readTasks = vi.fn(async () => [task]);
+    const query = new DurableGraphTaskStateDeliveryQuery({ readTasks } as unknown as GraphTaskOrchestrationPort);
+    await expect(query.readTasks(teamName, ["task-b", "task-a", "task-a"])).resolves.toEqual([undefined, { kind: "found", task }, { kind: "found", task }]);
+    expect(readTasks).toHaveBeenCalledWith(teamName, ["task-b", "task-a", "task-a"]);
+    readTasks.mockRejectedValueOnce(new Error("Graph unavailable"));
+    await expect(query.listTaskIds(teamName)).rejects.toThrow("Graph unavailable");
   });
 
   it("reads only Task-delivery evidence for Coordination and distinguishes absent, pending, settled, and malformed records", async () => {
     const deliveryTeam = `coordination-delivery-evidence-${process.pid}-${Date.now()}`;
     const deliveryFile = taskDeliveryPath(deliveryTeam, "worker");
-    const query = new DurableCoordinationTaskStateDeliveryQuery(emptyReadFactory);
+    const query = new DurableGraphTaskStateDeliveryQuery(emptyGraph);
     try {
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: false });
 
       fs.mkdirSync(path.dirname(deliveryFile), { recursive: true });
-      fs.writeFileSync(deliveryFile, JSON.stringify([{ deliveryId: "pending" }, { deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
+      const record = { taskProjection: task, ref: { kind: "task", taskId: task.id, version: task.version } };
+      fs.writeFileSync(deliveryFile, JSON.stringify([{ ...record, deliveryId: "pending" }, { ...record, deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: true });
 
-      fs.writeFileSync(deliveryFile, JSON.stringify([{ deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
+      fs.writeFileSync(deliveryFile, JSON.stringify([{ ...record, deliveryId: "settled", successfulTurnAckAt: "2026-08-10T00:00:00.000Z" }]));
       await expect(query.readDeliveryEvidence(deliveryTeam, "worker")).resolves.toEqual({ known: true, pending: false });
 
       fs.writeFileSync(deliveryFile, "not-json");
@@ -115,7 +90,7 @@ describe("durable Coordination query equivalence", () => {
     expect(() => composedDurableModelToolPort()).not.toThrow();
     const root = process.cwd();
     const extension = fs.readFileSync(path.join(root, "extensions/index.ts"), "utf8");
-    expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(taskReadAdapterFactory, graphTaskOrchestration\);/g)).toHaveLength(1);
+    expect(extension.match(/const coordinationQueries = createDurableCoordinationQueries\(graphTaskOrchestration\);/g)).toHaveLength(1);
     expect(extension).toContain("new DurableModelToolCoordinationApplication(modelToolBindings, coordinationObservationService)");
   });
 
@@ -124,15 +99,15 @@ describe("durable Coordination query equivalence", () => {
     const source = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
     const contracts = source("src/coordination/queries.ts");
     const teamRuntime = source("src/adapters/durable-coordination-team-runtime.ts");
-    const taskState = source("src/adapters/durable-coordination-task-state-delivery.ts");
+    const taskState = source("src/adapters/durable-graph-task-read.ts");
     const alertActuation = source("src/adapters/durable-coordination-alert-actuation.ts");
     const observationService = source("src/coordination/observation-service.ts");
 
     expect(contracts).not.toMatch(/(?:Beads|TaskAuthorityRecord|Member\b|AgentRuntimeStatus|InboxMessage)/);
     expect(teamRuntime).toMatch(/from "\.\.\/utils\/runtime"/);
     expect(teamRuntime).not.toMatch(/taskDeliveryPath|inboxPath|BeadsTaskAdapter/);
-    expect(taskState).toMatch(/BeadsTaskAdapter/);
-    expect(taskState).toMatch(/taskDeliveryPath/);
+    expect(taskState).toMatch(/GraphTaskOrchestrationPort/);
+    expect(taskState).toMatch(/readCurrentTaskDeliveries/);
     expect(taskState).not.toMatch(/inboxPath|readRuntimeStatus/);
     expect(alertActuation).toMatch(/inboxPath/);
     expect(alertActuation).not.toMatch(/taskDeliveryPath|readRuntimeStatus|BeadsTaskAdapter/);

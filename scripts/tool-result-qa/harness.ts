@@ -84,7 +84,7 @@ export interface QaBundle {
   executionBoundary: {
     piProcessLaunched: false;
     modelInvoked: false;
-    realTaskAuthority: "beads";
+    realTaskAuthority: "graph";
     terminal: "in-memory adapter";
   };
   fixtureTransitions: Array<{ action: string; evidence: unknown }>;

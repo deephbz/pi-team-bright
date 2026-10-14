@@ -12,7 +12,7 @@ describe("ModelToolJourneyPort", () => {
   it("routes each authority call through its named port without a transaction", async () => {
     const ports: any = {
       team: { createTeam: vi.fn().mockResolvedValue("team"), ensureWorker: vi.fn(), stopWorker: vi.fn(), shutdownTeam: vi.fn() },
-      task: { createTask: vi.fn().mockResolvedValue("task"), readTasks: vi.fn(), updateTasks: vi.fn(), linkTask: vi.fn() },
+      task: { createTaskGraph: vi.fn().mockResolvedValue("task"), readTasks: vi.fn(), updateTasks: vi.fn() },
       alert: { sendAlert: vi.fn().mockResolvedValue("alert") },
       coordination: {
         readSnapshot: vi.fn(), readTeamSync: vi.fn().mockResolvedValue("coordination"),
@@ -22,11 +22,11 @@ describe("ModelToolJourneyPort", () => {
     const journey = new ModelToolJourneyFacade(ports.team, ports.task, ports.alert, ports.coordination);
 
     await expect(journey.team.createTeam(session, { name: "team", purpose: "purpose" })).resolves.toBe("team");
-    await expect(journey.task.createTask(session, { operationId: "op", title: "task", goal: "goal" })).resolves.toBe("task");
+    await expect(journey.task.createTaskGraph(session, { operationId: "op", tasks: [{ key: "task", title: "task", goal: "goal", assignee: "worker" }] })).resolves.toBe("task");
     await expect(journey.alert.sendAlert(session, { target: { kind: "worker", name: "worker" }, kind: "attention", text: "review" })).resolves.toBe("alert");
     await expect(journey.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "call")).resolves.toBe("coordination");
     expect(ports.team.createTeam).toHaveBeenCalledOnce();
-    expect(ports.task.createTask).toHaveBeenCalledOnce();
+    expect(ports.task.createTaskGraph).toHaveBeenCalledOnce();
     expect(ports.alert.sendAlert).toHaveBeenCalledOnce();
     expect(ports.coordination.readTeamSync).toHaveBeenCalledOnce();
   });
@@ -35,7 +35,7 @@ describe("ModelToolJourneyPort", () => {
     const { world, ports, journey } = createInMemoryModelToolJourney();
     await journey.team.createTeam(session, { name: "team", purpose: "purpose" });
     await journey.team.ensureWorker(session, { name: "worker", scope: "scope" });
-    const task = await journey.task.createTask(session, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
+    const task = await journey.task.createTaskGraph(session, { operationId: "create", tasks: [{ key: "task", title: "task", goal: "goal", assignee: "worker" }] });
 
     expect(task.kind).toBe("created");
     expect(world.readDebugRevision()).toBe(3);
@@ -54,9 +54,11 @@ describe("ModelToolJourneyPort", () => {
     await named.ports.team.createTeam(leader, create);
     await legacy.ensureWorker(leader, worker);
     await named.ports.team.ensureWorker(leader, worker);
-    const legacyTask = await legacy.createTask(leader, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
-    const namedTask = await named.ports.task.createTask(leader, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
+    const legacyTask = await legacy.createTaskGraph(leader, { operationId: "create", tasks: [{ key: "task", title: "task", goal: "goal", assignee: "worker" }] });
+    const namedTask = await named.ports.task.createTaskGraph(leader, { operationId: "create", tasks: [{ key: "task", title: "task", goal: "goal", assignee: "worker" }] });
     if (legacyTask.kind !== "created" || namedTask.kind !== "created") throw new Error("Task fixtures must create.");
+    const legacyCard = legacyTask.tasksByKey.task;
+    const namedCard = namedTask.tasksByKey.task;
 
     const legacySnapshot = await legacy.readTeamSync(leader, "snapshot", new AbortController().signal, "snapshot");
     const namedSnapshot = await named.ports.coordination.readTeamSync(leader, "snapshot", new AbortController().signal, "snapshot");
@@ -66,9 +68,9 @@ describe("ModelToolJourneyPort", () => {
     persistPortObservation(named.ports.coordination, leader, "snapshot");
     persistPortObservation(legacy, leader, "snapshot");
 
-    const update = { taskId: legacyTask.task.id, operationId: "update", expectedVersion: legacyTask.task.version as `v_${string}`, currentContext: "Updated." };
+    const update = { taskId: legacyCard.id, operationId: "update", expectedVersion: legacyCard.version as `v_${string}`, currentContext: "Updated." };
     await legacy.updateTasks(leader, [update]);
-    await named.ports.task.updateTasks(leader, [{ ...update, taskId: namedTask.task.id, expectedVersion: namedTask.task.version as `v_${string}` }]);
+    await named.ports.task.updateTasks(leader, [{ ...update, taskId: namedCard.id, expectedVersion: namedCard.version as `v_${string}` }]);
     const legacyUpdates = await legacy.readTeamSync(leader, "updates", new AbortController().signal, "updates");
     const namedUpdates = await named.ports.coordination.readTeamSync(leader, "updates", new AbortController().signal, "updates");
     expect(namedUpdates).toEqual(legacyUpdates);

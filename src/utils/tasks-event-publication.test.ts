@@ -1,148 +1,65 @@
 import fs from "node:fs";
-import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BeadsTaskStore } from "./beads";
-import type { TaskAuthorityRecord } from "./beads";
-import { teamDir } from "./paths";
 import * as eventJournal from "../coordination/event-journal";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
-import * as failureHints from "./task-event-failure-hints";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
-import {
-  applySemanticTaskUpdate as applyRawSemanticTaskUpdate,
-  mutateTaskLink as mutateRawTaskLink,
-} from "../model-tool-contract/beads-authority-adapter";
+import * as paths from "./paths";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
-import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
+import type { GraphTaskCard } from "../task-authority/graph-control-schemas";
+import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 
-const createdTeams: string[] = [];
-const publicationPort = new DurableTaskMutationPublication();
-const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
-type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
-type TaskLinkArgs = Parameters<typeof mutateRawTaskLink>;
-const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
-const mutateTaskLink = (...args: [TaskLinkArgs[0], TaskLinkArgs[1], TaskLinkArgs[2], TaskLinkArgs[3]]) =>
-  mutateRawTaskLink(...args, publicationPort, taskAuthorityTeamPort);
-
-function task(teamName: string, overrides: Partial<TaskAuthorityRecord> = {}): TaskAuthorityRecord {
-  return {
-    id: "task-1",
-    title: "Verify publication",
-    description: "Verify typed Task-event publication.",
-    acceptanceCriteria: "The event has structured evidence.",
-    status: "open",
-    relations: [],
-    version: "beads_v1",
-    provenance: { authority: "beads", teamName },
-    ...overrides,
-  };
-}
-
-async function fixture(): Promise<string> {
-  const name = `task-event-publication-${process.pid}-${Date.now()}`;
-  const workspace = path.join("/tmp", name);
-  createdTeams.push(name);
-  fs.mkdirSync(path.join(workspace, ".beads"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".beads", "metadata.json"), JSON.stringify({
-    backend: "dolt",
-    database: "dolt",
-    dolt_database: name,
-    project_id: name,
-  }));
-  await teams.createTeam(name, "lead-session", "lead", "", undefined, undefined, workspace, "task-authority", {
-    schema: "pi-teams-beads-authority/1",
-    backend: "dolt",
-    database: "dolt",
-    doltDatabase: name,
-    projectId: name,
-  });
-  return name;
+const created: string[] = [];
+async function fixture() {
+  const name = `graph-task-event-${process.pid}-${Date.now()}-${created.length}`;
+  created.push(name);
+  await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, `lead@${name}`);
+  const config = await teams.readConfig(name);
+  config.logicalWorkers = [{ name: "worker", scope: "Complete the graph Task." }];
+  teams.writeConfigAtomic(paths.configPath(name), config);
+  await teams.addMember(name, { membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate", joinedAt: Date.now(), cwd: process.cwd(), subscriptions: [], sessionFile: `/tmp/${name}-worker.jsonl`, isActive: true });
+  const publication = new DurableTaskMutationPublication();
+  const authority = new DurableGraphTaskAuthority();
+  return { name, authority, graph: new DurableGraphTaskOrchestration(authority, publication, publication, publication) };
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const name of createdTeams.splice(0)) {
-    fs.rmSync(teamDir(name), { recursive: true, force: true });
-    fs.rmSync(path.join("/tmp", name), { recursive: true, force: true });
-  }
+  for (const name of created.splice(0)) fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
 });
 
-describe("Task-event publication", () => {
-  it("writes typed evidence for current Task updates and links", async () => {
-    const teamName = await fixture();
-    const before = task(teamName);
-    const afterStatus = task(teamName, { status: "in_progress", version: "beads_v2" });
-    const afterLink = task(teamName, {
-      status: "in_progress",
-      version: "beads_v3",
-      relations: [{ relation: "related", targetId: "task-2" }],
+describe("graph Task-event publication", () => {
+  it("writes typed evidence for graph Task transitions", async () => {
+    const { name, graph } = await fixture();
+    const applied = await graph.applyGraph(name, {
+      operationId: "apply-publication", tasks: [{ key: "work", title: "Verify publication", goal: "Verify typed Task-event publication.", assignee: "worker" }],
     });
-    vi.spyOn(BeadsTaskStore.prototype, "updateWithResult").mockResolvedValue({
-      before,
-      after: afterStatus,
-      appliedOperations: ["set:status"],
-    });
-    vi.spyOn(BeadsTaskStore.prototype, "mutateLinkWithResult").mockResolvedValue({
-      before: afterStatus,
-      after: afterLink,
-      appliedOperations: ["add:related"],
-    });
-
-    await applySemanticTaskUpdate(teamName, before.id, { status: "in_progress" }, { actor: "team-lead" });
-    await mutateTaskLink(teamName, before.id, { relation: "related", targetId: "task-2", action: "add" }, {
-      actor: "team-lead",
-      expectedVersion: afterStatus.version,
-    });
-
-    const events = teamEvents.readTeamEvents(teamName, { afterCursor: "0" }).events;
-    expect(events).toHaveLength(2);
-    expect(events.map(teamEvents.projectTaskEventEvidence)).toEqual([
-      expect.objectContaining({ kind: "status", text: "Task status changed to in_progress.", actor: "team-lead" }),
-      expect.objectContaining({ kind: "relation", text: "Task relation add related task-2.", actor: "team-lead" }),
-    ]);
+    if (applied.kind !== "applied") throw new Error(`Graph apply failed: ${JSON.stringify(applied)}`);
+    const before = applied.tasks[0] as GraphTaskCard;
+    const after = await graph.transition(name, {
+      taskId: before.id, operationId: "claim-publication", expectedVersion: before.version as TaskVersionRef, transition: "claim", worker: "worker",
+    }, "worker");
+    expect(after.kind).toBe("updated");
+    const events = teamEvents.readTeamEvents(name, { afterCursor: "0" }).events;
+    expect(events.length).toBeGreaterThan(0);
+    expect(events.map(teamEvents.projectTaskEventEvidence)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "status", text: "Task transition claim produced in_progress.", actor: "worker" }),
+    ]));
   });
 
-  it("records payload-light hints for Worker and leader event-append failures", async () => {
-    const teamName = await fixture();
-    const workerBefore = task(teamName, { id: "worker-task", assignee: "worker" });
-    const workerAfter = task(teamName, { id: "worker-task", assignee: "worker", version: "worker-v2", status: "in_progress" });
-    const leaderBefore = task(teamName, { id: "leader-task" });
-    const leaderAfter = task(teamName, { id: "leader-task", version: "leader-v2", status: "in_progress" });
-    vi.spyOn(BeadsTaskStore.prototype, "updateWithResult")
-      .mockResolvedValueOnce({ before: workerBefore, after: workerAfter, appliedOperations: ["set:status"] })
-      .mockResolvedValueOnce({ before: leaderBefore, after: leaderAfter, appliedOperations: ["set:status"] });
+  it("records payload-light hints when graph Task event publication fails", async () => {
+    const { name, graph } = await fixture();
+    const applied = await graph.applyGraph(name, {
+      operationId: "apply-failure-hints", tasks: [{ key: "work", title: "Failure hints", goal: "Record event failure evidence.", assignee: "worker" }],
+    });
+    if (applied.kind !== "applied") throw new Error(`Graph apply failed: ${JSON.stringify(applied)}`);
     vi.spyOn(eventJournal, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
-
-    const worker = await applySemanticTaskUpdate(teamName, workerBefore.id, { status: "in_progress" }, { actor: "worker" });
-    const leader = await applySemanticTaskUpdate(teamName, leaderBefore.id, { status: "in_progress" }, { actor: "team-lead" });
-    expect(worker.deliveryWarnings).toEqual(expect.arrayContaining([expect.stringContaining("Team event was not recorded")]));
-    expect(leader.deliveryWarnings).toEqual(expect.arrayContaining([expect.stringContaining("Team event was not recorded")]));
-    const epochId = (await teams.readConfig(teamName)).epochId!;
-    expect(failureHints.readTaskEventFailureHints(teamName, {
-      teamEpochId: epochId,
-      taskReferences: [
-        { taskId: workerAfter.id, taskVersion: taskVersionRef(workerAfter.version) },
-        { taskId: leaderAfter.id, taskVersion: taskVersionRef(leaderAfter.version) },
-      ],
-    })).toEqual([
-      { hint: expect.objectContaining({ taskId: workerAfter.id, actor: "worker" }), actorKind: "non-leader/external" },
-      { hint: expect.objectContaining({ taskId: leaderAfter.id, actor: "team-lead" }), actorKind: "team-lead" },
-    ]);
-  });
-
-  it("warns when failed-event hint persistence also fails", async () => {
-    const teamName = await fixture();
-    const before = task(teamName);
-    const after = task(teamName, { status: "in_progress", version: "hint-failure-v2" });
-    vi.spyOn(BeadsTaskStore.prototype, "updateWithResult").mockResolvedValue({ before, after, appliedOperations: ["set:status"] });
-    vi.spyOn(eventJournal, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
-    vi.spyOn(failureHints, "appendTaskEventFailureHint").mockRejectedValue(new Error("hint store unavailable"));
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-
-    const result = await applySemanticTaskUpdate(teamName, before.id, { status: "in_progress" }, { actor: "team-lead" });
-    expect(result.deliveryWarnings).toEqual(expect.arrayContaining([expect.stringContaining("hint persistence also failed")]));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("hint persistence also failed"));
+    const result = await graph.transition(name, {
+      taskId: applied.tasks[0].id, operationId: "claim-failure-hints", expectedVersion: applied.tasks[0].version as TaskVersionRef, transition: "claim", worker: "worker",
+    }, "worker");
+    expect(result.kind).toBe("updated");
+    if (result.kind !== "updated") return;
+    expect(result.deliveryWarnings).toEqual(expect.arrayContaining([expect.stringContaining("Team event was not recorded")]));
   });
 });

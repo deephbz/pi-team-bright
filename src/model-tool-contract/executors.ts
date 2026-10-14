@@ -17,8 +17,6 @@ import {
   WorkerStopResultSchema,
   TeamShutdownParametersSchema,
   TeamShutdownResultSchema,
-  TaskLinkParametersSchema,
-  TaskLinkResultSchema,
   AlertSendParametersSchema,
   AlertSendResultSchema,
 } from "./catalog";
@@ -44,8 +42,6 @@ export type WorkerStopParameters = Static<typeof WorkerStopParametersSchema>;
 export type WorkerStopResult = Static<typeof WorkerStopResultSchema>;
 export type TeamShutdownParameters = Static<typeof TeamShutdownParametersSchema>;
 export type TeamShutdownResult = Static<typeof TeamShutdownResultSchema>;
-export type TaskLinkParameters = Static<typeof TaskLinkParametersSchema>;
-export type TaskLinkResult = Static<typeof TaskLinkResultSchema>;
 export type AlertSendParameters = Static<typeof AlertSendParametersSchema>;
 export type AlertSendResult = Static<typeof AlertSendResultSchema>;
 
@@ -66,7 +62,6 @@ export interface ModelToolJourneyExecutors {
   taskUpdate(leaderSessionId: ExactLeaderSessionId, parameters: TaskUpdateParameters): Promise<TaskUpdateResult>;
   workerStop(leaderSessionId: ExactLeaderSessionId, parameters: WorkerStopParameters): Promise<WorkerStopResult>;
   teamShutdown(leaderSessionId: ExactLeaderSessionId, parameters: TeamShutdownParameters): Promise<TeamShutdownResult>;
-  taskLink(leaderSessionId: ExactLeaderSessionId, parameters: TaskLinkParameters): Promise<TaskLinkResult>;
   alertSend(leaderSessionId: ExactLeaderSessionId, parameters: AlertSendParameters): Promise<AlertSendResult>;
   teamSync(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult>;
   teamSyncNow(leaderSessionId: ExactLeaderSessionId, parameters: TeamSyncParameters, signal?: AbortSignal, toolCallId?: string): Promise<TeamSyncResult | { kind: "quiet" } | { kind: "indeterminate"; message: string; state_changed: false; observation_advanced: false }>;
@@ -378,27 +373,6 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
         stopped_workers: outcome.stoppedWorkers,
         unfinished_task_ids: outcome.unfinishedTaskIds,
       };
-    },
-
-    async taskLink(leaderSessionId, parameters) {
-      const outcome = await port.task.linkTask(leaderSessionId, {
-        taskId: parameters.task_id,
-        relation: parameters.relation,
-        targetId: parameters.target_id,
-        action: parameters.action,
-        expectedVersion: parameters.expected_version as TaskVersionRef,
-      });
-      if (outcome.kind === "linked") return {
-        kind: "task_linked",
-        task_id: outcome.taskId,
-        target_id: outcome.targetId,
-        relation: outcome.relation,
-        action: outcome.action,
-        changed: outcome.changed,
-        version: outcome.version,
-      };
-      if (outcome.kind === "unavailable") return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
-      return { kind: "refused", task_id: outcome.taskId, reason: outcome.reason, message: outcome.message, state_changed: false };
     },
 
     async alertSend(leaderSessionId, parameters) {

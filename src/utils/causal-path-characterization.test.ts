@@ -1,5 +1,3 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,8 +7,6 @@ import {
   captureTrioProjection,
   type RegisteredToolLike,
 } from "../../test/support/external-harness";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
-import { readBeadsAuthorityFingerprint } from "./beads";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
@@ -42,7 +38,6 @@ const inventory = JSON.parse(fs.readFileSync(
   path.join(process.cwd(), "src/utils/causal-path.inventory.json"),
   "utf8",
 )) as Inventory;
-const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 const createdTeams: string[] = [];
 const createdRoots: string[] = [];
 const startedSessions: Array<{ harness: Harness; ctx: TestContext }> = [];
@@ -60,20 +55,8 @@ function tempRoot(suffix: string): string {
   return root;
 }
 
-function initBeadsWorkspace(suffix: string): string {
-  const workspace = path.join(tempRoot(suffix), "workspace");
-  fs.mkdirSync(workspace, { recursive: true });
-  execFileSync("git", ["init", "-q"], { cwd: workspace });
-  execFileSync("bd", ["init", "--quiet", "--skip-agents", "--skip-hooks"], {
-    cwd: workspace,
-    stdio: "ignore",
-  });
-  return workspace;
-}
-
 async function fixture(suffix: string) {
   const teamName = uniqueName(suffix);
-  const workspace = initBeadsWorkspace(suffix);
   const sessions = tempRoot(`${suffix}-sessions`);
   const leaderSessionFile = path.join(sessions, "leader.jsonl");
   const workerSessionFile = path.join(sessions, "worker.jsonl");
@@ -82,11 +65,6 @@ async function fixture(suffix: string) {
     leaderSessionFile,
     `leader@${teamName}`,
     "Causal-path characterization fixture",
-    undefined,
-    undefined,
-    workspace,
-    `task_authority_${crypto.randomUUID()}`,
-    readBeadsAuthorityFingerprint(workspace),
   );
   await teams.ensureLogicalWorker(teamName, {
     name: "worker",
@@ -308,13 +286,5 @@ describe("causal-path characterization inventory", () => {
       }
     }
     expect(inventory.realRuntimeGaps.length).toBeGreaterThan(0);
-  });
-});
-
-describe.skipIf(!hasBd)("outside-in causal Task delivery through the registered extension", () => {
-  it.skip("retains the legacy Beads causal scenarios as historical characterization", () => {
-    // The graph-native public surface is verified by graph-control integration,
-    // replacement-coherence, and registered journey tests. This legacy Beads
-    // scenario cannot define graph authority or task_graph_apply semantics.
   });
 });

@@ -2,89 +2,14 @@ import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import type { BeadsAuthorityFingerprint, TeamConfig, Member, TerminalTarget, LogicalWorker } from "../team-authority/contracts";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import type { TeamConfig, Member, TerminalTarget, LogicalWorker } from "../team-authority/contracts";
 import { assertTerminalTargetShape } from "./terminal-target";
 import { configPath, leadSessionPath, sanitizeName, teamDir, taskDir, PI_DIR, TEAMS_DIR } from "./paths";
 import * as paths from "./paths";
 import { withLock } from "./lock";
 import { normalizeTeamPaneLayout, type TeamPaneLayout } from "./team-pane-layout";
 import { THINKING_LEVELS } from "../team-authority/contracts";
-
-export interface CutoverMarker {
-  state: "prepared" | "active";
-  teamName?: string;
-  inventoryPath: string;
-  inventorySha256: string;
-  workspace?: string;
-  markerPath?: string;
-  cutoverAt?: string;
-}
-
-function cutoverMarkerCandidates(teamName: string): string[] {
-  const sourceDir = taskDir(teamName);
-  const defaultPath = path.join(sourceDir, `.pi-teams-${teamName}-cutover.jsonl`);
-  if (!fs.existsSync(sourceDir)) return [defaultPath];
-
-  const additionalPaths = fs.readdirSync(sourceDir)
-    .filter(fileName => fileName.endsWith("-cutover.jsonl"))
-    .map(fileName => path.join(sourceDir, fileName));
-  return [...new Set([defaultPath, ...additionalPaths])];
-}
-
-function parseCutoverMarker(markerPath: string): CutoverMarker | undefined {
-  if (!fs.existsSync(markerPath)) return undefined;
-  let lines: string[];
-  try {
-    lines = fs.readFileSync(markerPath, "utf8").split("\n").filter(Boolean);
-  } catch (error) {
-    throw new Error(`Cannot read Beads cutover marker ${markerPath}; refusing to recreate the team until it is restored: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (lines.length === 0) {
-    throw new Error(`Beads cutover marker ${markerPath} is empty; refusing to recreate the team until the cutover record is restored.`);
-  }
-
-  const events = lines.map((line, index) => {
-    let event: Record<string, unknown>;
-    try {
-      event = JSON.parse(line) as Record<string, unknown>;
-    } catch {
-      throw new Error(`Beads cutover marker ${markerPath} is malformed at line ${index + 1}; refusing to recreate the team until it is restored.`);
-    }
-    if (!event || typeof event !== "object" || (event.state !== "prepared" && event.state !== "active")) {
-      throw new Error(`Beads cutover marker ${markerPath} has an invalid state at line ${index + 1}; refusing to recreate the team.`);
-    }
-    if (typeof event.inventoryPath !== "string" || !event.inventoryPath || typeof event.inventorySha256 !== "string" || !/^[a-f0-9]{64}$/i.test(event.inventorySha256)) {
-      throw new Error(`Beads cutover marker ${markerPath} lacks authenticated inventory evidence at line ${index + 1}; refusing to recreate the team.`);
-    }
-    if (event.workspace !== undefined && (typeof event.workspace !== "string" || !path.isAbsolute(event.workspace))) {
-      throw new Error(`Beads cutover marker ${markerPath} has an invalid workspace at line ${index + 1}; refusing to recreate the team.`);
-    }
-    return event as unknown as CutoverMarker;
-  });
-  return events[events.length - 1];
-}
-
-/** Read the latest validated event from a migration marker. */
-export function readLatestCutoverMarker(markerPath: string): CutoverMarker | undefined {
-  return parseCutoverMarker(markerPath);
-}
-
-function findCutoverEvidence(teamName: string): { markerPath: string; marker: CutoverMarker } | undefined {
-  for (const markerPath of cutoverMarkerCandidates(teamName)) {
-    const marker = parseCutoverMarker(markerPath);
-    if (marker) return { markerPath, marker };
-  }
-  return undefined;
-}
-
-/** Refuse any new authority initialization when migration evidence outlived TeamConfig. */
-export function assertNoOrphanedBeadsCutover(teamName: string): void {
-  if (fs.existsSync(configPath(teamName))) return;
-  const cutoverEvidence = findCutoverEvidence(teamName);
-  if (cutoverEvidence) {
-    throw new Error(`Team ${teamName} config is missing, but ${cutoverEvidence.marker.state} Beads cutover evidence exists at ${cutoverEvidence.markerPath}; refusing to initialize a new Task authority. Restore config.json from backup or perform an explicit Beads recovery review.`);
-  }
-}
 
 function malformedConfigError(configFile: string, detail: string): Error {
   return new Error(`Team config ${configFile} is malformed (${detail}); refusing to overwrite it. Restore the file or move it aside only after reviewing its contents.`);
@@ -170,40 +95,6 @@ function validateConfigShape(value: Record<string, unknown>, configFile: string)
       }
     }
   }
-  if (value.taskBackend !== undefined && value.taskBackend !== "legacy" && value.taskBackend !== "beads") {
-    throw malformedConfigError(configFile, "taskBackend must be legacy or beads");
-  }
-  if (value.taskWorkspace !== undefined && typeof value.taskWorkspace !== "string") {
-    throw malformedConfigError(configFile, "taskWorkspace must be a string");
-  }
-  if (value.taskAuthorityId !== undefined && typeof value.taskAuthorityId !== "string") {
-    throw malformedConfigError(configFile, "taskAuthorityId must be a string");
-  }
-  if (value.taskAuthorityFingerprint !== undefined) {
-    const fingerprint = value.taskAuthorityFingerprint as Partial<BeadsAuthorityFingerprint> | null;
-    if (
-      !fingerprint
-      || typeof fingerprint !== "object"
-      || fingerprint.schema !== "pi-teams-beads-authority/1"
-      || fingerprint.backend !== "dolt"
-      || fingerprint.database !== "dolt"
-      || typeof fingerprint.doltDatabase !== "string"
-      || !fingerprint.doltDatabase
-      || typeof fingerprint.projectId !== "string"
-      || !fingerprint.projectId
-    ) {
-      throw malformedConfigError(configFile, "taskAuthorityFingerprint must be a complete pi-teams-beads-authority/1 record");
-    }
-  }
-  if (value.taskCutover !== undefined) {
-    const cutover = value.taskCutover;
-    if (!cutover || typeof cutover !== "object" || Array.isArray(cutover)) throw malformedConfigError(configFile, "taskCutover must be an object");
-    const record = cutover as Record<string, unknown>;
-    if (typeof record.inventoryPath !== "string" || typeof record.inventorySha256 !== "string" || !/^[a-f0-9]{64}$/i.test(record.inventorySha256) || typeof record.cutoverAt !== "string") {
-      throw malformedConfigError(configFile, "taskCutover has invalid inventory evidence");
-    }
-    if (record.markerPath !== undefined && typeof record.markerPath !== "string") throw malformedConfigError(configFile, "taskCutover.markerPath must be a string");
-  }
 }
 
 export function teamExists(teamName: string) {
@@ -280,9 +171,6 @@ export async function createTeam(
   description = "",
   defaultModel?: string,
   separateWindows?: boolean,
-  taskWorkspace?: string,
-  taskAuthorityId?: string,
-  taskAuthorityFingerprint?: BeadsAuthorityFingerprint,
   topologyLease?: TeamTopologyLease,
   terminalBinding?: TeamTerminalBinding,
   implementationVersion?: string,
@@ -297,9 +185,6 @@ export async function createTeam(
       description,
       defaultModel,
       separateWindows,
-      taskWorkspace,
-      taskAuthorityId,
-      taskAuthorityFingerprint,
       lease,
       terminalBinding,
       implementationVersion,
@@ -322,16 +207,12 @@ export async function createTeam(
     throw new Error(`Lead terminal target uses ${terminalBinding.leadTarget.backend}, but Team ${name} is being bound to ${terminalBinding.backend}.`);
   }
   if (terminalBinding?.leadTarget) assertTerminalTargetShape(terminalBinding.leadTarget, "Lead terminal target");
-  if ([taskWorkspace, taskAuthorityId, taskAuthorityFingerprint].filter(Boolean).length !== 0
-    && [taskWorkspace, taskAuthorityId, taskAuthorityFingerprint].filter(Boolean).length !== 3) {
-    throw new Error("Beads taskWorkspace, taskAuthorityId, and taskAuthorityFingerprint must be configured together.");
-  }
   const dir = teamDir(name);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
   const priorConfigPath = configPath(name);
   return withLock(priorConfigPath, async () => {
-  let priorAuthority: Pick<TeamConfig, "taskBackend" | "taskWorkspace" | "taskAuthorityId" | "taskAuthorityFingerprint" | "taskCutover"> = {};
+  const graph = new DurableGraphTaskAuthority();
   let priorMembers: Member[] = [];
   let priorLogicalWorkers: LogicalWorker[] | undefined;
   if (fs.existsSync(priorConfigPath)) {
@@ -345,43 +226,9 @@ export async function createTeam(
     }
     priorMembers = structuredClone(prior.members);
     priorLogicalWorkers = prior.logicalWorkers === undefined ? undefined : structuredClone(prior.logicalWorkers);
-    const cutoverEvidence = findCutoverEvidence(name);
-    if (cutoverEvidence && prior.taskBackend !== "beads") {
-      throw new Error(`Team ${name} has a ${cutoverEvidence.marker.state} Beads cutover marker at ${cutoverEvidence.markerPath}, but its config is not Beads-authoritative; refusing to reconnect the team to legacy tasks. Restore the Beads TeamConfig or complete an explicit recovery review.`);
-    }
-    if (prior.taskBackend === "beads") {
-      if (!prior.taskWorkspace) {
-        throw new Error(`Team ${name} is marked Beads-authoritative but has no taskWorkspace; refusing to recreate it against legacy tasks. Restore the original TeamConfig and Beads workspace.`);
-      }
-      if (taskWorkspace && prior.taskWorkspace !== taskWorkspace) {
-        throw new Error(`Team ${name} already uses Beads workspace ${prior.taskWorkspace}; refusing to silently switch authority.`);
-      }
-      if (taskAuthorityId && prior.taskAuthorityId !== taskAuthorityId) {
-        throw new Error(`Team ${name} already has a different opaque Task authority identity; refusing to rebind it.`);
-      }
-      if (taskAuthorityFingerprint && JSON.stringify(prior.taskAuthorityFingerprint) !== JSON.stringify(taskAuthorityFingerprint)) {
-        throw new Error(`Team ${name} already has a different external Task authority fingerprint; refusing to rebind it.`);
-      }
-      priorAuthority = {
-        taskBackend: prior.taskBackend,
-        taskWorkspace: prior.taskWorkspace,
-        taskAuthorityId: prior.taskAuthorityId,
-        taskAuthorityFingerprint: prior.taskAuthorityFingerprint,
-        taskCutover: prior.taskCutover,
-      };
-      if (!priorAuthority.taskAuthorityId || !priorAuthority.taskAuthorityFingerprint) {
-        throw new Error(`Team ${name} has an incomplete Beads Task authority binding; restore taskAuthorityId and taskAuthorityFingerprint through an explicit recovery review.`);
-      }
-    } else if (taskWorkspace) {
-      throw new Error(`Team ${name} still uses legacy JSON Task authority. Run: npm run migrate:tasks -- ${name} ${taskWorkspace}`);
-    }
+    await graph.readTasks(name);
   } else {
-    assertNoOrphanedBeadsCutover(name);
-  }
-
-  if (!taskWorkspace) {
-    const tasksDir = taskDir(name);
-    if (!fs.existsSync(tasksDir)) fs.mkdirSync(tasksDir, { recursive: true });
+    await graph.initializeEmpty(name);
   }
 
   const leadMember: Member = {
@@ -412,8 +259,6 @@ export async function createTeam(
     separateWindows,
     ...(paneLayout ? { paneLayout } : {}),
     ...(syncLiveness ? { syncLiveness: structuredClone(syncLiveness) } : {}),
-    ...(taskWorkspace ? { taskBackend: "beads" as const, taskWorkspace, taskAuthorityId, taskAuthorityFingerprint } : {}),
-    ...priorAuthority,
   };
 
   writeConfigAtomic(configPath(name), config);
@@ -728,10 +573,6 @@ export async function resolveCurrentTeammateSessionBinding(
 export async function readConfig(teamName: string): Promise<TeamConfig> {
   const p = configPath(teamName);
   if (!fs.existsSync(p)) {
-    const cutoverEvidence = findCutoverEvidence(teamName);
-    if (cutoverEvidence) {
-      throw new Error(`Team ${teamName} config is missing, but ${cutoverEvidence.marker.state} Beads cutover evidence exists at ${cutoverEvidence.markerPath}; refusing to fall back to legacy tasks. Restore config.json from backup or perform an explicit Beads recovery review.`);
-    }
     throw new Error(`Team ${teamName} not found`);
   }
   return await withLock(p, async () => {
@@ -1095,32 +936,5 @@ export async function updateMembership(teamName: string, membershipId: string, u
     Object.assign(member, updates);
     writeConfigAtomic(p, config);
     return structuredClone(member);
-  });
-}
-
-export async function configureBeadsTaskBackend(
-  teamName: string,
-  taskWorkspace: string,
-  taskAuthorityFingerprint: BeadsAuthorityFingerprint,
-  taskCutover: NonNullable<TeamConfig["taskCutover"]>,
-): Promise<TeamConfig> {
-  const p = configPath(teamName);
-  if (!fs.existsSync(p)) throw new Error(`Team ${teamName} not found`);
-  return await withLock(p, async () => {
-    const config = readConfigRaw(p);
-    if (config.taskBackend === "beads" && config.taskWorkspace && config.taskWorkspace !== taskWorkspace) {
-      throw new Error(`Team ${teamName} is already cut over to Beads workspace ${config.taskWorkspace}; refusing to switch authority silently.`);
-    }
-    if (config.taskBackend === "beads" && config.taskAuthorityFingerprint
-      && JSON.stringify(config.taskAuthorityFingerprint) !== JSON.stringify(taskAuthorityFingerprint)) {
-      throw new Error(`Team ${teamName} is already bound to a different Beads authority fingerprint; refusing to switch authority silently.`);
-    }
-    config.taskBackend = "beads";
-    config.taskWorkspace = taskWorkspace;
-    config.taskAuthorityId ||= `task_authority_${hostEnv().random.uuid()}`;
-    config.taskAuthorityFingerprint = taskAuthorityFingerprint;
-    config.taskCutover = taskCutover;
-    writeConfigAtomic(p, config);
-    return config;
   });
 }

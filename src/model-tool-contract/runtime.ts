@@ -22,8 +22,6 @@ export {
   type WorkerStopResult,
   type TeamShutdownParameters,
   type TeamShutdownResult,
-  type TaskLinkParameters,
-  type TaskLinkResult,
   type AlertSendParameters,
   type AlertSendResult,
   type ModelToolJourneyExecutors,
@@ -35,13 +33,11 @@ export type {
   ModelToolLeaderLaunchContext,
   ReadTasksPortResult,
   ModelToolTaskJournalEntry,
-  ModelToolTaskUpdateInput,
+  ModelToolGraphTaskUpdateInput,
   TaskUpdatePortOutcome,
   UpdateTasksPortResult,
   WorkerStopPortResult,
   TeamShutdownPortResult,
-  TaskLinkPortInput,
-  TaskLinkPortResult,
   AlertSendPortResult,
 } from "./model-tool-contracts";
 export type { ModelToolTeamPort } from "./model-tool-contracts";

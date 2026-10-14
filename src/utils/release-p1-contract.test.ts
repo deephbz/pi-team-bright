@@ -4,35 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
-import { BeadsTaskStore } from "./beads";
 import * as messaging from "./messaging";
 import type { Member } from "./models";
-import type { TaskAuthorityRecord } from "./beads";
-import type { TaskCard } from "../model-tool-contract/task-domain";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
-import {
-  enqueueTaskChangeForRecipient,
-  readTaskDeliveries,
-  TaskChangeDelivery,
-} from "./task-delivery";
-import { migrateTeamTasks, type LegacyTaskAuthorityRecord } from "./task-migration";
-import { applySemanticTaskUpdate as applyRawSemanticTaskUpdate } from "../model-tool-contract/beads-authority-adapter";
-import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
-import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
-import { createTaskAuthorityTeamPort } from "../../test/support/task-authority-team-port";
-import * as taskAuthority from "../model-tool-contract/beads-authority-adapter";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
-
-const publicationPort = new DurableTaskMutationPublication();
-const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
-type SemanticUpdateArgs = Parameters<typeof applyRawSemanticTaskUpdate>;
-const applySemanticTaskUpdate = (...args: [SemanticUpdateArgs[0], SemanticUpdateArgs[1], SemanticUpdateArgs[2], SemanticUpdateArgs[3]]) =>
-  applyRawSemanticTaskUpdate(...args, publicationPort, taskAuthorityTeamPort);
 
 type RegisteredTool = {
   name: string;
@@ -41,7 +19,6 @@ type RegisteredTool = {
 };
 
 const testTeams: string[] = [];
-const testWorkspaces: string[] = [];
 
 function teamName(suffix: string): string {
   const name = `release-p1-${suffix}-${process.pid}-${Date.now()}-${testTeams.length}`;
@@ -49,18 +26,6 @@ function teamName(suffix: string): string {
   return name;
 }
 
-function workspace(suffix: string): string {
-  const value = fs.mkdtempSync(path.join(os.tmpdir(), `pi-teams-release-p1-${suffix}-`));
-  fs.mkdirSync(path.join(value, ".beads"), { recursive: true });
-  fs.writeFileSync(path.join(value, ".beads", "metadata.json"), JSON.stringify({
-    database: "dolt",
-    backend: "dolt",
-    dolt_database: `release_p1_${suffix}`,
-    project_id: `release-p1-${suffix}`,
-  }));
-  testWorkspaces.push(value);
-  return value;
-}
 
 function member(name: string, sessionFile: string, extra: Partial<Member> = {}): Member {
   return {
@@ -107,30 +72,7 @@ function registerSessionExtension(): Map<string, (...args: any[]) => any> {
 }
 
 async function createBeadsTeam(name: string, leadSession: string) {
-  const suffix = `lifecycle-${testWorkspaces.length}`;
-  const taskWorkspace = workspace(suffix);
-  vi.spyOn(DurableTaskAuthorityRead.prototype, "listTaskIds").mockResolvedValue([]);
-  vi.spyOn(DurableTaskAuthorityRead.prototype, "listNonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
-  return teams.createTeam(
-    name,
-    leadSession,
-    "lead-agent",
-    undefined,
-    undefined,
-    undefined,
-    taskWorkspace,
-    `task-authority-${name}`,
-    {
-      schema: "pi-teams-beads-authority/1",
-      backend: "dolt",
-      database: "dolt",
-      doltDatabase: `release_p1_${suffix}`,
-      projectId: `release-p1-${suffix}`,
-    },
-    undefined,
-    terminalBinding(),
-    undefined,
-  );
+  return teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, terminalBinding());
 }
 
 /**
@@ -151,82 +93,11 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
   }
 }
 
-function task(id: string, owner?: string): LegacyTaskAuthorityRecord {
-  return {
-    id,
-    subject: id,
-    description: "contract task",
-    activeForm: `Working on ${id}`,
-    status: "pending",
-    blocks: [],
-    blockedBy: [],
-    owner,
-  };
-}
-
-function currentTask(id: string, assignee?: string): TaskAuthorityRecord {
-  return {
-    id,
-    title: id,
-    description: "contract task",
-    acceptanceCriteria: "The contract is verified",
-    status: "open",
-    assignee,
-    relations: [],
-    version: "v1",
-    provenance: { authority: "beads", teamName: "release-p1-fixture" },
-  };
-}
-
-class MigrationFixture {
-  tasks = new Map<string, any>();
-  next = 1;
-  dropMetadata = false;
-
-  async findByLegacyId(id: string): Promise<any | undefined> {
-    return [...this.tasks.values()].find((item) => item.internalMetadata?.pi_teams_legacy_id === id);
-  }
-
-  async create(input: any): Promise<any> {
-    const created = {
-      id: `bd-${this.next++}`,
-      title: input.title,
-      description: input.description,
-      status: "open",
-      relations: [],
-      internalMetadata: this.dropMetadata ? {} : structuredClone(input.internalMetadata || {}),
-      version: `v${this.next}`,
-    };
-    this.tasks.set(created.id, created);
-    return structuredClone(created);
-  }
-
-  async update(id: string, updates: Partial<TaskAuthorityRecord>): Promise<any> {
-    const current = this.tasks.get(id)!;
-    const accepted = updates;
-    Object.assign(current, accepted, { version: `v${++this.next}` });
-    return structuredClone(current);
-  }
-
-  async mutateLink(id: string, link: { relation: string; targetId: string; action: string }): Promise<any> {
-    const current = this.tasks.get(id)!;
-    if (link.action === "add") current.relations.push({ relation: link.relation, targetId: link.targetId });
-    return structuredClone(current);
-  }
-
-  async list(): Promise<any[]> { return [...this.tasks.values()].map((item) => structuredClone(item)); }
-  async read(id: string): Promise<any> { return structuredClone(this.tasks.get(id)!); }
-}
-
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   clearAdapterCache();
-  for (const name of testTeams.splice(0)) {
-    fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
-    fs.rmSync(paths.taskDir(name), { recursive: true, force: true });
-  }
-  for (const value of testWorkspaces.splice(0)) fs.rmSync(value, { recursive: true, force: true });
+  for (const name of testTeams.splice(0)) fs.rmSync(paths.teamDir(name), { recursive: true, force: true });
 });
 
 describe("release P1 public contracts", () => {
@@ -248,7 +119,7 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("lead-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    const before = await teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    const before = await teams.createTeam(name, leadSession, "lead-agent");
     const tool = registerExtension().get("worker_stop")!;
 
     await expect(tool.execute("shutdown-lead", {
@@ -260,49 +131,6 @@ describe("release P1 public contracts", () => {
     expect(after.members.find((item) => item.membershipId === before.members[0].membershipId)).toMatchObject({
       name: "team-lead",
       isActive: true,
-    });
-  });
-
-  it("refuses duplicate legacy IDs and dangling dependency targets before Beads cutover", async () => {
-    const duplicateTeam = teamName("migration-duplicate");
-    const duplicateWorkspace = workspace("migration-duplicate");
-    await teams.createTeam(duplicateTeam, "/tmp/lead.jsonl", "lead-agent");
-    fs.writeFileSync(path.join(paths.taskDir(duplicateTeam), "1.json"), JSON.stringify(task("same")));
-    fs.writeFileSync(path.join(paths.taskDir(duplicateTeam), "2.json"), JSON.stringify({ ...task("same"), subject: "duplicate" }));
-    await expect(migrateTeamTasks({ teamName: duplicateTeam, workspace: duplicateWorkspace, beads: new MigrationFixture() as any }))
-      .rejects.toThrow(/duplicate legacy Task IDs/i);
-    expect((await teams.readConfig(duplicateTeam)).taskBackend).toBeUndefined();
-
-    const danglingTeam = teamName("migration-dangling");
-    const danglingWorkspace = workspace("migration-dangling");
-    await teams.createTeam(danglingTeam, "/tmp/lead.jsonl", "lead-agent");
-    fs.writeFileSync(path.join(paths.taskDir(danglingTeam), "1.json"), JSON.stringify({
-      ...task("1"),
-      blockedBy: ["missing"],
-    }));
-    await expect(migrateTeamTasks({ teamName: danglingTeam, workspace: danglingWorkspace, beads: new MigrationFixture() as any }))
-      .rejects.toThrow(/dependencies reference missing targets/i);
-    expect((await teams.readConfig(danglingTeam)).taskBackend).toBeUndefined();
-  });
-
-  it("preserves legacy metadata in the immutable inventory and migration mapping", async () => {
-    const name = teamName("migration-metadata");
-    const beadsWorkspace = workspace("migration-metadata");
-    await teams.createTeam(name, "/tmp/lead.jsonl", "lead-agent");
-    fs.writeFileSync(path.join(paths.taskDir(name), "1.json"), JSON.stringify({
-      ...task("1"),
-      metadata: { source: "legacy", nested: { retained: true } },
-    }));
-    const fixture = new MigrationFixture();
-    const report = await migrateTeamTasks({ teamName: name, workspace: beadsWorkspace, beads: fixture as any });
-
-    expect(report.cutover).toBe(true);
-    const inventory = JSON.parse(fs.readFileSync(report.inventoryPath, "utf8"));
-    expect(inventory.tasks[0].task.metadata).toEqual({ source: "legacy", nested: { retained: true } });
-    expect(fixture.tasks.get(report.mapping["1"])?.internalMetadata).toMatchObject({
-      source: "legacy",
-      nested: { retained: true },
-      pi_teams_legacy_id: "1",
     });
   });
 
@@ -543,54 +371,6 @@ describe("release P1 public contracts", () => {
     expect((await teams.readConfig(name)).members.find((item) => item.membershipId === worker.membershipId)?.isActive).toBe(true);
   });
 
-  it("never lets a replaced Membership or Session consume an older Task delivery", async () => {
-    const name = teamName("task-delivery-generation");
-    const oldSession = `/tmp/${name}-old.jsonl`;
-    const newSession = `/tmp/${name}-new.jsonl`;
-    await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead-agent", undefined, undefined, undefined, workspace("delivery"), "task-authority-contract", {
-      schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: "release_p1_delivery", projectId: "release-p1-delivery",
-    });
-    const oldMember = member("worker", oldSession);
-    await teams.addMember(name, oldMember);
-    const record = await enqueueTaskChangeForRecipient(name, {
-      id: "task-1",
-      title: "task-1",
-      goal: "Verify the release contract.",
-      current_context: "The release verification is ready.",
-      status: "in_progress",
-      assignee: "worker",
-      version: taskVersionRef("v1"),
-    } satisfies TaskCard, "worker", "assigned");
-    expect(record?.recipientMembershipId).toBe(oldMember.membershipId);
-
-    await teams.deactivateMember(name, "worker", "replaced");
-    const replacement = member("worker", newSession);
-    await teams.addMember(name, replacement);
-    const staleSend = vi.fn();
-    const stale = new TaskChangeDelivery({ sendMessage: staleSend, appendEntry: vi.fn() }, {
-      teamName: name,
-      recipient: "worker",
-      membershipId: oldMember.membershipId,
-      sessionFile: oldSession,
-      pollMs: 60_000,
-      membership: taskDeliveryMembership,
-      reconcile: async () => 0,
-    });
-
-    await stale.start([]);
-    await stale.scan();
-    stale.stop();
-
-    expect(staleSend).not.toHaveBeenCalled();
-    const remaining = await readTaskDeliveries(name, "worker");
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]).toMatchObject({
-      recipientMembershipId: oldMember.membershipId,
-      recipientSessionFile: oldSession,
-    });
-    expect(remaining[0].successfulTurnAckAt).toBeUndefined();
-  });
-
   it("serializes Message replacement against append and rejects the stale writer afterward", async () => {
     const name = teamName("message-race");
     await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead-agent");
@@ -629,59 +409,6 @@ describe("release P1 public contracts", () => {
       sessionFile: oldSession,
     })).rejects.toThrow(/refusing a stale Message append/i);
     expect(await messaging.readInbox(name, "peer", false, false)).toHaveLength(countAfterSerializedCommit);
-  });
-
-  it("serializes Task replacement against authority mutation and rejects the stale writer afterward", async () => {
-    const name = teamName("task-race");
-    const oldSession = `/tmp/${name}-old.jsonl`;
-    await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead-agent", undefined, undefined, undefined, workspace("task-race"), "task-authority-race", {
-      schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: "release_p1_task-race", projectId: "release-p1-task-race",
-    });
-    const oldMember = member("worker", oldSession);
-    await teams.addMember(name, oldMember);
-    const before = currentTask("task-race");
-    let enterMutation!: () => void;
-    let releaseMutation!: () => void;
-    const entered = new Promise<void>((resolve) => { enterMutation = resolve; });
-    const release = new Promise<void>((resolve) => { releaseMutation = resolve; });
-    const update = vi.spyOn(BeadsTaskStore.prototype, "updateWithResult").mockImplementation(async () => {
-      enterMutation();
-      await release;
-      return {
-        before,
-        after: { ...before, status: "in_progress", version: "v2" },
-        appliedOperations: ["set:status"],
-      };
-    });
-
-    const mutation = applySemanticTaskUpdate(name, before.id, { status: "in_progress" }, {
-      actor: "worker",
-      actingMembershipId: oldMember.membershipId,
-      actingSessionFile: oldSession,
-    });
-    await entered;
-    let replacementFinished = false;
-    const replacement = (async () => {
-      await teams.withCurrentMembershipLease(name, oldMember.membershipId!, async () => {
-        await teams.deactivateMembership(name, oldMember.membershipId!, "replaced");
-      });
-      await teams.addMember(name, member("worker", `/tmp/${name}-new.jsonl`));
-      replacementFinished = true;
-    })();
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(replacementFinished).toBe(false);
-
-    releaseMutation();
-    await expect(mutation).resolves.toMatchObject({ task: { status: "in_progress", version: "v2" } });
-    await replacement;
-    const callsBeforeStaleAttempt = update.mock.calls.length;
-
-    await expect(applySemanticTaskUpdate(name, before.id, { status: "in_progress" }, {
-      actor: "worker",
-      actingMembershipId: oldMember.membershipId,
-      actingSessionFile: oldSession,
-    })).rejects.toThrow(/stale processes cannot mutate authority state/i);
-    expect(update).toHaveBeenCalledTimes(callsBeforeStaleAttempt);
   });
 
   it("keeps graph edits in atomic task_graph_apply and out of task_update", () => {

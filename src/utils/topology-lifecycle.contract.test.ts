@@ -5,14 +5,12 @@ import piTeams from "../../extensions/index";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../model-tool-contract/tui-projection";
 import type { Member } from "./models";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teamEvents from "./team-events";
 import * as teams from "./teams";
-import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 
 type RegisteredTool = {
   name: string;
@@ -60,37 +58,8 @@ function registerExtension(): Map<string, RegisteredTool> {
   return tools;
 }
 
-async function createBeadsTeam(name: string, leadSession: string) {
-  const taskWorkspace = paths.teamDir(name);
-  fs.mkdirSync(`${taskWorkspace}/.beads`, { recursive: true });
-  fs.writeFileSync(`${taskWorkspace}/.beads/metadata.json`, JSON.stringify({
-    database: "dolt",
-    backend: "dolt",
-    dolt_database: "topology_contract",
-    project_id: `topology-${name}`,
-  }));
-  vi.spyOn(BeadsTaskAdapter.prototype, "list").mockResolvedValue([]);
-  vi.spyOn(DurableTaskAuthorityRead.prototype, "listNonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
-  return teams.createTeam(
-    name,
-    leadSession,
-    "lead",
-    undefined,
-    undefined,
-    undefined,
-    taskWorkspace,
-    `task-authority-${name}`,
-    {
-      schema: "pi-teams-beads-authority/1",
-      backend: "dolt",
-      database: "dolt",
-      doltDatabase: "topology_contract",
-      projectId: `topology-${name}`,
-    },
-    undefined,
-    terminalBinding(),
-    undefined,
-  );
+async function createGraphTeam(name: string, leadSession: string) {
+  return teams.createTeam(name, leadSession, "lead", undefined, undefined, undefined, undefined, terminalBinding());
 }
 
 /**
@@ -147,7 +116,7 @@ describe("Team topology/lifecycle lease", () => {
       default_model_role: "lifecycle",
     } }));
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
-    await createBeadsTeam(name, leadSession);
+    await createGraphTeam(name, leadSession);
     const old = member("old", `/tmp/${name}-old.jsonl`, "pane-old");
     await teams.addMember(name, old);
 
@@ -231,7 +200,7 @@ describe("Team topology/lifecycle lease", () => {
     });
     const name = uniqueTeam("public-lifecycle");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await createBeadsTeam(name, leadSession);
+    await createGraphTeam(name, leadSession);
     const guarded = member("guarded", `/tmp/${name}-guarded.jsonl`, "pane-guarded");
     const uncertain = member("uncertain", `/tmp/${name}-uncertain.jsonl`, "pane-uncertain");
     const ready = member("ready", `/tmp/${name}-ready.jsonl`, "pane-ready");
@@ -250,11 +219,11 @@ describe("Team topology/lifecycle lease", () => {
       assignee: "guarded",
       version: "v_0123456789abcdef",
     };
-    const taskBefore = structuredClone(guardedTask);
-    const listed = vi.mocked(BeadsTaskAdapter.prototype.list).mockResolvedValue([]);
-    vi.mocked(DurableTaskAuthorityRead.prototype.listNonterminalTaskIdsAssignedToWorker)
-      .mockImplementation(async (_teamName, workerName) => workerName === "guarded" ? [guardedTask.id] : []);
     const tools = registerExtension();
+    await tools.get("task_graph_apply")!.execute("guarded-task", {
+      operation_id: "guarded-task",
+      tasks: [{ key: guardedTask.id, title: guardedTask.title, goal: guardedTask.goal, assignee: guardedTask.assignee }],
+    }, undefined, undefined, context(leadSession));
     const stop = tools.get("worker_stop")!;
     const shutdown = tools.get("team_shutdown")!;
 
@@ -320,9 +289,6 @@ describe("Team topology/lifecycle lease", () => {
     expect((await teams.readConfig(name)).members.filter((candidate) => candidate.isActive !== false)).toEqual([]);
     expect(killed.slice(0, 2)).toEqual(["pane-uncertain", "pane-ready"]);
     expect(killed.slice(2).sort()).toEqual(["pane-fails", "pane-fails", "pane-guarded", "pane-succeeds", "pane-uncertain", "pane-uncertain"]);
-    expect(guardedTask).toEqual(taskBefore);
-    expect(listed).toHaveBeenCalledWith();
-    expect(listed).toHaveBeenLastCalledWith();
   });
 
   it("serializes one Team while allowing another Team to progress without deadlock", async () => {

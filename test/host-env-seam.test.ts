@@ -15,7 +15,6 @@ import { appendTeamEvent, waitForTeamEvents } from "../src/coordination/event-jo
 import { teamDir } from "../src/utils/paths";
 import { Iterm2Adapter } from "../src/adapters/iterm2-adapter";
 import { TmuxAdapter } from "../src/adapters/tmux-adapter";
-import { ExecBdRunner } from "../src/utils/beads";
 import { runHook } from "../src/utils/hooks";
 import { readMembershipObservation } from "../src/team-authority/membership-observation-reader";
 
@@ -27,7 +26,6 @@ const allowlist: Record<string, { count: number; reason: string }> = {
   "src/adapters/iterm2-adapter.ts": { count: 1, reason: "AppleScript needs stdin input; entry fails closed for simulated actors." },
   "src/adapters/tmux-adapter.ts": { count: 1, reason: "Legacy shell probe retains execSync errors; entry fails closed for simulated actors." },
   "src/cli/render-model-tool-contract.ts": { count: 1, reason: "Offline documentation generation runs git with an explicit cwd." },
-  "src/utils/beads.ts": { count: 2, reason: "Legacy Beads needs streams, cwd and process groups; entry fails closed for simulated actors." },
   "src/utils/hooks.ts": { count: 1, reason: "User hooks need a custom environment; entry fails closed for simulated actors." },
   "src/coordination/event-journal.ts": { count: 1, reason: "Coalesced scans preserve native microtask ordering and actor context; HostClock.yield is a later event-loop turn." },
   "src/cli/ptb-palette-gallery.ts": { count: 1, reason: "Interactive gallery redraw preserves native microtask ordering; this offline CLI is outside simulation." },
@@ -223,8 +221,6 @@ describe("host capability seam", () => {
   it.each(["actor", "actorless", "native"] as const)("refuses legacy subprocess entry in %s simulation context", async context => {
     const a = actor(); const release = enterSimulation();
     const iterm = new Iterm2Adapter(); const tmux = new TmuxAdapter();
-    const executable = vi.fn(() => { throw new Error("must not resolve executable"); });
-    const bd = new ExecBdRunner(executable);
     const spawn = { name: "fixture", cwd: "/fixture", env: {} };
     const syncEntries = [
       () => tmux.isAlive("%fixture"),
@@ -237,8 +233,6 @@ describe("host capability seam", () => {
     try {
       for (const entry of syncEntries) expect(() => invoke(entry)).toThrow(message);
       await expect(invoke(() => runHook("fixture", "fixture", {}))).rejects.toThrow(message);
-      await expect(invoke(() => bd.run([], { cwd: "/fixture", timeoutMs: 10 }))).rejects.toThrow(message);
-      expect(executable).not.toHaveBeenCalled();
       expect(a.env.exec.runSync).not.toHaveBeenCalled();
       expect(a.env.exec.run).not.toHaveBeenCalled();
     } finally { release(); }

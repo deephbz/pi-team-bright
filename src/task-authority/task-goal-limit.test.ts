@@ -46,7 +46,6 @@ describe("Task goal settings", () => {
       vi.resetModules();
       const { TaskGraphApplyParametersSchema, GraphTaskCardSchema } = await import("./graph-control-schemas.js");
       const { TaskCardCompleteSchema, isTaskCardGoal } = await import("./task-domain.js");
-      const { assertTaskMetadataContext } = await import("../utils/beads.js");
       const limit = config?.pi_team_bright.task.goal_max_length ?? 1600;
       const card = {
         id: "task", title: "Task", assignee: "builder", needs: [], status: "ready", state: { kind: "ready" },
@@ -59,9 +58,6 @@ describe("Task goal settings", () => {
         expect(Check(GraphTaskCardSchema, { ...card, goal })).toBe(accepted);
         expect(Check(TaskCardCompleteSchema, { id: "task", title: "Task", goal, status: "open", current_context: "Not started.", version: card.version })).toBe(accepted);
         expect(isTaskCardGoal(goal)).toBe(accepted);
-        const write = () => assertTaskMetadataContext({ current_context: "Not started.", goal });
-        if (accepted) expect(write).not.toThrow();
-        else expect(write).toThrow("Task goal must contain");
       }
       // Editing the file cannot change runtime validation without changing the advertised schema.
       fs.writeFileSync(path.join(process.env.PI_CODING_AGENT_DIR!, "settings.json"), JSON.stringify({ pi_team_bright: { task: { goal_max_length: 1 } } }));

@@ -1,10 +1,7 @@
 import { hostEnv } from "../env/host-env";
 import {
-  completeOwnerTransitionIntent,
   enqueueTaskChangeForRecipient,
-  prepareOwnerTransitionIntent,
   recordTaskDeliveryRecovery,
-  suppressTaskVersionForSession,
   readCurrentTaskDeliveries,
   readTaskDeliveryTombstones,
   retireGraphRevisionDeliveries,
@@ -21,10 +18,7 @@ import type {
   TaskMutationEventEvidenceInput,
   TaskMutationPublicationInput,
   TaskMutationPublicationPort,
-  TaskMutationSuppressionInput,
   TaskMutationPublicationRecoveryInput,
-  TaskOwnerTransitionCompletionInput,
-  TaskOwnerTransitionPreparationInput,
   TaskPublicationEvidence,
 } from "../task-authority/publication";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
@@ -61,25 +55,13 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
     return retireGraphRevisionDeliveries(input);
   }
 
-  prepareOwnerTransitionIntent(input: TaskOwnerTransitionPreparationInput): Promise<boolean> {
-    return prepareOwnerTransitionIntent(input);
-  }
-
-  suppressTaskVersionForSession(input: TaskMutationSuppressionInput): Promise<void> {
-    return suppressTaskVersionForSession(input.teamName, input.recipient, input.sessionFile, input.task);
-  }
-
-  completeOwnerTransitionIntent(input: TaskOwnerTransitionCompletionInput): Promise<string[]> {
-    return completeOwnerTransitionIntent(input.teamName, input.operationId, input.task, {});
-  }
-
   async hasTaskMutationPublication(input: TaskMutationPublicationRecoveryInput): Promise<boolean> {
     let cursor: string | undefined;
     do {
       const batch = readTeamEvents(input.teamName, cursor === undefined ? {} : { afterCursor: cursor });
       if (batch.events.some((event) => event.type === "task"
         && event.ref.taskId === input.taskId
-        && (input.versionScope !== "task_version" || event.ref.version === input.taskVersion)
+        && event.ref.version === input.taskVersion
         && projectTaskEventEvidence(event)?.kind === input.evidenceKind
         && projectTaskEventEvidence(event)?.text === input.evidenceText)) return true;
       if (!batch.truncated) return false;

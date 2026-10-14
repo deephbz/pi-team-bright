@@ -8,9 +8,7 @@ import {
 import { projectTui } from "./tui-projection";
 import { InMemoryModelToolTeamPort, exactLeaderSessionId, type ModelToolTeamPort } from "./in-memory-team-port";
 import { registerModelToolJourney, type ModelToolRegistration } from "./pi-registration";
-import { BeadsTaskAdapter, type TaskAdapterAuthority } from "./beads-task-adapter";
-import type { TaskAuthorityRecord } from "../utils/beads";
-import { taskVersionRef } from "./task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 
 const task = {
   id: "task-1",
@@ -21,7 +19,7 @@ const task = {
   status: "ready" as const,
   state: { kind: "ready" as const },
   current_context: "Work has not started.",
-  version: taskVersionRef("beads_task_1"),
+  version: taskVersionRef("v_0123456789abcdef"),
   attempts_started: 0,
   relations: [],
   dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
@@ -67,53 +65,6 @@ describe("task semantic-result totality", () => {
       { kind: "unavailable", input_index: 0, task_id: task.id, operation_id: "update-down", reason: "task_authority_unavailable", message: "Authority is unavailable.", state_changed: false },
     ];
     for (const outcome of update) assertTotal("task_update", outcome);
-  });
-
-  it("labels a post-create authority exception as an unknown outcome with its same-operation coordinate", async () => {
-    type PublishingAuthority = Extract<TaskAdapterAuthority, { mode: "publishing" }>;
-    const authorityTask: TaskAuthorityRecord = {
-      id: "task-1",
-      title: "Verify",
-      description: "Verify the release.",
-      acceptanceCriteria: "",
-      status: "open",
-      relations: [],
-      version: "beads_task_1",
-      provenance: { authority: "beads", teamName: "totality-team" },
-    };
-    const read = vi.fn<PublishingAuthority["read"]>().mockRejectedValue(new Error("post-create authority read failed"));
-    const authority: PublishingAuthority = {
-      mode: "publishing",
-      read,
-      readMany: vi.fn<PublishingAuthority["readMany"]>(),
-      list: vi.fn<PublishingAuthority["list"]>(),
-      create: vi.fn<PublishingAuthority["create"]>().mockResolvedValue({
-        task: authorityTask,
-        changed: true,
-        appliedOperations: [],
-        deliveryDegraded: false,
-        deliveryWarnings: [],
-        publication: {
-          teamEvent: { appended: true },
-          delivery: {
-            attemptedRecipients: [],
-            failedRecipients: [],
-            recoveryRecordedFor: [],
-            recoveryRecordFailedFor: [],
-          },
-        },
-      }),
-      update: vi.fn<PublishingAuthority["update"]>(),
-      link: vi.fn<PublishingAuthority["link"]>(),
-    };
-    const adapter = new BeadsTaskAdapter("totality-team", "team-lead", authority);
-    await expect(adapter.create({ operationId: "create-unknown", title: "Verify", goal: "Verify the release." })).resolves.toMatchObject({
-      kind: "unknown_outcome",
-      operationId: "create-unknown",
-      message: expect.stringContaining("outcome is unknown"),
-    });
-    expect(authority.create).toHaveBeenCalledOnce();
-    expect(read).toHaveBeenCalledWith("task-1");
   });
 
   it("keeps every expected port outcome semantic through Pi registration", async () => {

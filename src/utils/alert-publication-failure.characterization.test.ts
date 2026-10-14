@@ -1,5 +1,3 @@
-import { execFileSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,7 +7,6 @@ import {
   assertCursorAdvanced,
   assertCursorUnchanged,
 } from "../../test/support/external-harness";
-import { readBeadsAuthorityFingerprint, resolveBdExecutable } from "./beads";
 import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -39,17 +36,6 @@ function tempRoot(suffix: string): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `alert-publication-${suffix}-`));
   createdRoots.push(root);
   return root;
-}
-
-function initBeadsWorkspace(): string {
-  const workspace = path.join(tempRoot("beads"), "workspace");
-  fs.mkdirSync(workspace, { recursive: true });
-  execFileSync("git", ["init", "-q"], { cwd: workspace });
-  execFileSync(resolveBdExecutable(), ["init", "--quiet", "--skip-agents", "--skip-hooks"], {
-    cwd: workspace,
-    stdio: "ignore",
-  });
-  return workspace;
 }
 
 function sessionContext(sessionFile: string, entries: any[] = []) {
@@ -126,7 +112,6 @@ function workerHarness(teamName: string) {
 async function fixture() {
   const teamName = `alert-publication-${process.pid}-${Date.now()}-${sequence++}`;
   createdTeams.push(teamName);
-  const workspace = initBeadsWorkspace();
   const sessionRoot = tempRoot("sessions");
   const leaderSessionFile = path.join(sessionRoot, "leader.jsonl");
   await teams.createTeam(
@@ -134,11 +119,6 @@ async function fixture() {
     leaderSessionFile,
     `leader@${teamName}`,
     "Alert publication failure characterization",
-    undefined,
-    undefined,
-    workspace,
-    `task_authority_${crypto.randomUUID()}`,
-    readBeadsAuthorityFingerprint(workspace),
   );
   const membershipIds: Record<string, string> = {};
   for (const worker of ["worker-a", "worker-b"]) {

@@ -1,19 +1,15 @@
 import { createDurableCoordinationQueries } from "../../src/adapters/durable-coordination-queries";
+import { DurableGraphTaskAuthority } from "../../src/adapters/durable-graph-task-authority";
+import { DurableTaskMutationPublication } from "../../src/adapters/durable-task-mutation-publication";
+import { DurableGraphTaskOrchestration, type GraphTaskOrchestrationPort } from "../../src/task-authority/graph-orchestration";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../../src/coordination/observation-service";
-import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges, type BeadsTaskAdapterFactory } from "../../src/model-tool-contract/beads-task-adapter";
+import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/coordination/task-change-projection";
 import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-model-tool-port";
-import { DurableTaskAuthorityProvisioning } from "../../src/adapters/durable-task-authority-provisioning";
 
-const emptyFactory = createReadOnlyBeadsTaskAdapterFactory({
-  readTaskAuthorityRecordEnvelope: async () => undefined as any,
-  readTaskAuthorityRecordEnvelopes: async () => [],
-  listTaskIds: async () => [],
-});
-
-/** Builds the legacy facade with explicit Task read and Coordination dependencies. */
-export function composedDurableModelToolPort(factory: BeadsTaskAdapterFactory = emptyFactory): DurableModelToolTeamPort {
-  const queries = createDurableCoordinationQueries(factory);
-  return new DurableModelToolTeamPort(undefined, undefined, factory, undefined,
-    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore()),
-    new DurableTaskAuthorityProvisioning());
+export function composedDurableModelToolPort(graph?: GraphTaskOrchestrationPort): DurableModelToolTeamPort {
+  const publication = new DurableTaskMutationPublication();
+  graph ??= new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
+  const queries = createDurableCoordinationQueries(graph);
+  return new DurableModelToolTeamPort(undefined, undefined, graph, undefined,
+    new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore()));
 }

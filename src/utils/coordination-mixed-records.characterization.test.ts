@@ -2,9 +2,7 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { captureTrioProjection, type RegisteredToolLike } from "../../test/support/external-harness";
-import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
-import { TASK_METADATA_SCHEMA } from "./beads";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { configPath, taskDir, taskEventFailureHintPath, teamDir } from "./paths";
 import { readTaskEventFailureHintRecords } from "./task-event-failure-hints";
 import * as teamEvents from "./team-events";
@@ -16,26 +14,6 @@ function fixtureName(): string {
   const name = `coordination-mixed-records-${process.pid}-${Date.now()}-${fixtures.length}`;
   fixtures.push(name);
   return name;
-}
-
-function taskEnvelope(teamName: string, version: string) {
-  return {
-    task: {
-      id: "current-task",
-      title: "Current Task",
-      description: "Compatibility description.",
-      acceptanceCriteria: "Compatibility acceptance criteria.",
-      status: "open" as const,
-      relations: [],
-      version,
-      provenance: { authority: "beads" as const, teamName },
-    },
-    taskMetadata: {
-      schema: TASK_METADATA_SCHEMA,
-      goal: "Keep Coordination observations complete.",
-      current_context: "Current Task evidence.",
-    },
-  };
 }
 
 function sessionContext(sessionFile: string) {
@@ -102,8 +80,7 @@ describe("native team_sync tool results", () => {
     config.logicalWorkers = [{ name: "worker", scope: "work" }];
     teams.writeConfigAtomic(configPath(name), config);
     vi.stubEnv("PI_TEAM_NAME", ""); vi.stubEnv("PI_AGENT_NAME", "");
-    vi.spyOn(DurableTaskAuthorityRead.prototype, "listTaskIds").mockResolvedValue(["current-task"]);
-    vi.spyOn(DurableTaskAuthorityRead.prototype, "readTaskAuthorityRecordEnvelopes").mockResolvedValue([taskEnvelope(name, "v1")]);
+    vi.spyOn(DurableGraphTaskAuthority.prototype, "readTasks").mockResolvedValue([]);
     const harness = registeredLeaderHarness(), context = sessionContext(sessionFile);
     const snapshot = await invoke(harness, context, "snapshot", "snapshot");
     expect(snapshot.machine?.details).toMatchObject({ kind: "snapshot", observation: { team: name, epoch: config.epochId, binding: config.members[0].membershipId, from: 0, through: 0 } });

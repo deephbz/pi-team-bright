@@ -1,12 +1,8 @@
-import { execFileSync, spawnSync } from "node:child_process";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { defaultBdRunner, readBeadsAuthorityFingerprint } from "./beads";
-import type { TeamConfig } from "./models";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
@@ -27,7 +23,6 @@ type RegisteredTool = {
   ) => Promise<any>;
 };
 
-const hasBd = spawnSync("bd", ["--version"], { stdio: "ignore" }).status === 0;
 const testTeams: string[] = [];
 const testRoots: string[] = [];
 
@@ -45,46 +40,16 @@ function tempRoot(suffix: string): string {
   return root;
 }
 
-function initBeadsWorkspace(): string {
-  const workspace = path.join(tempRoot("task-surface-beads"), "workspace");
-  fs.mkdirSync(workspace, { recursive: true });
-  execFileSync("git", ["init", "-q"], { cwd: workspace });
-  execFileSync("bd", ["init", "--quiet", "--skip-agents", "--skip-hooks"], {
-    cwd: workspace,
-    stdio: "ignore",
-  });
-  return workspace;
-}
-
-function writeTeam(name: string, workspace: string): TeamConfig {
-  fs.mkdirSync(paths.teamDir(name), { recursive: true });
-  const config: TeamConfig = {
-    name,
-    description: "clean-cut Task-surface E2E",
-    createdAt: Date.now(),
-    epochId: teams.newTeamEpochId(),
-    leadAgentId: `lead@${name}`,
-    leadSessionId: `/tmp/${name}-lead.jsonl`,
-    taskBackend: "beads",
-    taskWorkspace: workspace,
-    taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
-    taskAuthorityFingerprint: readBeadsAuthorityFingerprint(workspace),
-    logicalWorkers: ["worker-a", "worker-b"].map((worker) => ({ name: worker, scope: "task-surface worker capability" })),
-    members: ["team-lead", "worker-a", "worker-b"].map((member, index) => ({
-      membershipId: `membership_${member}_${name}`,
-      agentId: `${member}@${name}`,
-      name: member,
-      agentType: member === "team-lead" ? "lead" : "teammate",
-      joinedAt: Date.now() + index,
-      tmuxPaneId: "",
-      cwd: process.cwd(),
-      subscriptions: [],
-      sessionFile: `/tmp/${name}-${member}.jsonl`,
-      isActive: true,
-    })),
-  };
-  teams.writeConfigAtomic(paths.configPath(name), config);
-  return config;
+async function writeTeam(name: string): Promise<void> {
+  await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, `lead@${name}`, "clean-cut Task-surface E2E");
+  for (const worker of ["worker-a", "worker-b"]) {
+    await teams.ensureLogicalWorker(name, { name: worker, scope: "task-surface worker capability" });
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `${worker}@${name}`, name: worker, agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", cwd: process.cwd(), subscriptions: [],
+      sessionFile: `/tmp/${name}-${worker}.jsonl`, isActive: true,
+    });
+  }
 }
 
 function extensionHarness(actor = "team-lead", teamName?: string) {
@@ -234,13 +199,9 @@ describe("clean-cut Task public surface", () => {
     ]) expect(serialized).not.toContain(`\"${removed}\"`);
   });
 
-  it("removes registered Team and Beads roots after an injected setup error", () => {
-    expect(hasBd, "The clean-cut E2E requires the sole Task authority CLI (`bd`) to be installed.").toBe(true);
+  it("removes the registered Team after an injected setup error", async () => {
     const teamName = uniqueTeam("cleanup-error");
-    const workspace = initBeadsWorkspace();
-    const root = path.dirname(workspace);
-    writeTeam(teamName, workspace);
-
+    await writeTeam(teamName);
     try {
       throw new Error("injected setup failure");
     } catch (error) {
@@ -248,19 +209,13 @@ describe("clean-cut Task public surface", () => {
     } finally {
       cleanupTestArtifacts();
     }
-
     expect(fs.existsSync(paths.teamDir(teamName))).toBe(false);
-    expect(fs.existsSync(root)).toBe(false);
   });
 
+
   it("supports complete graph apply, exact singleton claims, stale-write rejection, context, and derived waiting", async () => {
-    expect(hasBd, "The clean-cut E2E requires the sole Task authority CLI (`bd`) to be installed.").toBe(true);
-    const runBd = defaultBdRunner.run.bind(defaultBdRunner);
-    vi.spyOn(defaultBdRunner, "run").mockImplementation((args, options) =>
-      runBd(args, { ...options, timeoutMs: Math.max(options.timeoutMs, 30_000) }));
     const teamName = uniqueTeam("workflow");
-    const taskWorkspace = initBeadsWorkspace();
-    writeTeam(teamName, taskWorkspace);
+    await writeTeam(teamName);
     const lead = extensionHarness("team-lead", teamName);
     const workerA = extensionHarness("worker-a", teamName);
     const workerB = extensionHarness("worker-b", teamName);

@@ -8,12 +8,10 @@ import { projectionLines } from "../model-tool-contract/tui-message-projection";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import piTeams from "../../extensions/index";
 import { DurableModelToolTeamPort } from "../model-tool-contract/durable-model-tool-port";
-import { DurableTaskOrchestration } from "../adapters/durable-task-orchestration";
 import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
 import { TeamLifecycleService } from "../team-authority/team-lifecycle-service";
-import { DurableTaskAuthorityProvisioning } from "../adapters/durable-task-authority-provisioning";
 import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -108,13 +106,6 @@ async function createTeam(name: string, sessionFile: string) {
   return teams.createTeam(name, sessionFile, "lead-agent", "Session adapter characterization.");
 }
 
-function provisionTeamAuthority() {
-  return vi.spyOn(DurableTaskAuthorityProvisioning.prototype, "resolve").mockImplementation(async (name) => ({
-    workspace: `/tmp/${name}-beads`, authorityId: `authority-${name}`,
-    fingerprint: { schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: "test", projectId: "test" },
-  }));
-}
-
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
@@ -177,7 +168,7 @@ describe("registered Pi Session adapter characterization", () => {
     const event = vi.spyOn(teamEvents, "appendTeamEvent");
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockImplementation(async () => { order.push("direct"); });
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockImplementation(async () => { order.push("task"); });
-    vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady").mockImplementation(async () => {
+    vi.spyOn(DurableGraphTaskOrchestration.prototype, "reconcileReady").mockImplementation(async () => {
       order.push("ready");
       return ["Task task-1 remains queued."];
     });
@@ -192,9 +183,9 @@ describe("registered Pi Session adapter characterization", () => {
     expect(event).not.toHaveBeenCalled();
   });
 
-  it.each(["legacy", "graph"] as const)("reconciles a ready Task that predates first Worker Session binding through the %s authority", async (authorityKind) => {
+  it("reconciles a ready graph Task that predates first Worker Session binding", async () => {
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    const name = teamName(`worker-first-binding-${authorityKind}`);
+    const name = teamName("worker-first-binding-graph");
     vi.stubEnv("PI_TEAM_NAME", name);
     const sessionFile = `/tmp/${name}-worker.jsonl`;
     const membershipId = teams.newMembershipId();
@@ -207,18 +198,11 @@ describe("registered Pi Session adapter characterization", () => {
     setAdapter(terminal());
     await createTeam(name, `/tmp/${name}-lead.jsonl`);
     await teams.addMember(name, {
-      membershipId,
-      pendingLaunchId: launchId,
-      agentId: `worker@${name}`,
-      name: "worker",
-      agentType: "teammate",
-      joinedAt: Date.now(),
-      tmuxPaneId: "",
-      cwd: process.cwd(),
-      subscriptions: [],
+      membershipId, pendingLaunchId: launchId, agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", cwd: process.cwd(), subscriptions: [],
     });
 
-    const readyTaskId = `${authorityKind}-ready-before-binding`;
+    const readyTaskId = "graph-ready-before-binding";
     const queuedTaskIds: string[] = [];
     const reconcile = vi.fn(async (teamName: string, worker?: string) => {
       if (teamName !== name) return [];
@@ -228,9 +212,7 @@ describe("registered Pi Session adapter characterization", () => {
       queuedTaskIds.push(readyTaskId);
       return [];
     });
-    const legacyReconciliation = vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady").mockImplementation(reconcile);
     const graphReconciliation = vi.spyOn(DurableGraphTaskOrchestration.prototype, "reconcileReady").mockImplementation(reconcile);
-    vi.spyOn(DurableGraphTaskOrchestration.prototype, "hasGraph").mockImplementation((teamName) => authorityKind === "graph" && teamName === name);
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     const bind = vi.spyOn(teams, "bindMemberSession");
@@ -239,13 +221,7 @@ describe("registered Pi Session adapter characterization", () => {
 
     expect(bind).toHaveBeenCalledWith(name, "worker", sessionFile, launchId, {}, membershipId);
     expect(queuedTaskIds).toEqual([readyTaskId]);
-    if (authorityKind === "legacy") {
-      expect(legacyReconciliation).toHaveBeenCalledWith(name, "worker");
-      expect(graphReconciliation).not.toHaveBeenCalled();
-    } else {
-      expect(graphReconciliation).toHaveBeenCalledWith(name, "worker");
-      expect(legacyReconciliation).not.toHaveBeenCalled();
-    }
+    expect(graphReconciliation).toHaveBeenCalledWith(name, "worker");
     const traces = fs.readFileSync(traceFile, "utf8").trim().split("\n").filter(Boolean)
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(traces).toEqual(expect.arrayContaining([
@@ -287,23 +263,14 @@ describe("registered Pi Session adapter characterization", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("projection-boundaries");
     const sessionFile = "/private/sessions/lead-secret.jsonl";
-    const taskWorkspace = "/shown/task-workspace";
     const config = await createTeam(name, sessionFile);
     const lead = config.members[0];
-    config.taskBackend = "beads";
-    config.taskWorkspace = taskWorkspace;
-    config.taskAuthorityId = "private-task-authority";
-    config.taskAuthorityFingerprint = {
-      schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt",
-      doltDatabase: "private-database", projectId: "private-project",
-    };
     config.members[0].tmuxPaneId = "%private-pane";
     teams.writeConfigAtomic(paths.configPath(name), config);
     await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: 1 }, lead.membershipId);
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     const ctx = context(sessionFile);
-    ctx.sessionManager.getCwd.mockReturnValue(taskWorkspace);
     const harness = extension();
 
     await harness.get("session_start")!({ reason: "resume" }, ctx);
@@ -316,9 +283,7 @@ describe("registered Pi Session adapter characterization", () => {
     await harness.commands.get("pi-team-bright")!.handler("status", ctx);
     const statusText = harness.appendEntry.mock.calls.find(call => call[0] === "ptb.status")?.[1].lines.join("\n") as string;
 
-    expect(statusText).toContain("Task authority: beads · degraded");
-    expect(statusText).toContain(`Beads workspace: ${taskWorkspace}`);
-    expect(footerText).toContain(taskWorkspace);
+    expect(statusText).not.toMatch(/Beads|Dolt|task authority: beads/i);
     for (const privateValue of [sessionFile, lead.membershipId!, "%private-pane"]) {
       expect(footerText).not.toContain(privateValue);
       expect(statusText).not.toContain(privateValue);
@@ -429,7 +394,6 @@ describe("registered Pi Session adapter characterization", () => {
     const directStart = vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     const taskStart = vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     setAdapter(terminal());
-    provisionTeamAuthority();
     const ctx = context(sessionFile);
     const harness = extension();
 
@@ -451,7 +415,6 @@ describe("registered Pi Session adapter characterization", () => {
     const name = teamName("full");
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     setAdapter(terminal());
-    provisionTeamAuthority();
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     const directStop = vi.spyOn(DirectMessageDelivery.prototype, "stop");
@@ -477,7 +440,6 @@ describe("registered Pi Session adapter characterization", () => {
     const name = teamName("partial");
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     setAdapter(terminal());
-    provisionTeamAuthority();
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
     const directStop = vi.spyOn(DirectMessageDelivery.prototype, "stop");
@@ -505,7 +467,6 @@ describe("registered Pi Session adapter characterization", () => {
     const directStart = vi.spyOn(DirectMessageDelivery.prototype, "start");
     const taskStart = vi.spyOn(TaskChangeDelivery.prototype, "start");
     setAdapter(terminal());
-    provisionTeamAuthority();
     const ctx = context(sessionFile);
     const harness = extension();
 

@@ -86,6 +86,8 @@ export type HistoryFact =
   | { kind: "durable.launch"; team: string; path: string; source: "file" | "member"; record: LaunchFact | null }
   | { kind: "durable.team"; team: string; path: string; record: JsonObject | null }
   | { kind: "durable.record"; team: string; path: string; record: Json }
+  | { kind: "authority.write"; path: string }
+  | { kind: "authority.tracing" }
   | { kind: "disk.invalid"; team: string; path: string; text: string; message: string }
   | { kind: "lead.branch"; actor: ActorRef; sessionId: string; entryIds: string[] }
   | { kind: "lead.entry"; actor: ActorRef; sessionId: string; entryId: string; entry: JsonObject; stamp?: ObservationStamp; toolCallId?: string }
