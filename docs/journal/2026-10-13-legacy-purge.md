@@ -114,6 +114,30 @@ and mocked the obsolete PID-only seam. The corrected fixture supplies a syntheti
 exact generation and mocks generation absence through `hostEnv`. Its assertions
 stay unchanged. Production stop policy stays unchanged.
 
+The exhaustive preflight found additional fixture gaps. Process-recovery and
+adversarial CAS fixtures now persist an explicit empty graph. Lifecycle fixtures
+now create logical Workers and assert the graph-apply receipt before testing
+stop guards. They verify that shutdown retains the unfinished Task unchanged.
+The Task-surface fixture now uses its exact bound lead Session and calls the
+registered tools without legacy argument or result rewriting. A description
+assertion now matches the accepted current `team_sync` contract.
+
+The full v3.1 campaign passed on base `e5c93a8` in 751 seconds and on cutover
+`9f5750e` in 705 seconds. Both used the same no-backend PATH and no installed
+`native/bin`. The first base launch failed before Vitest started and supplies
+no timing evidence. The earlier 240-second outer cutoff was too short; the
+measured duration is pre-existing. The final gate reruns the full campaign at
+the final source revision without reducing seeds, runs, or schedule families.
+Generated campaign results remain outside this change.
+
+Known limit: `npm run probe:model-tools` fails before script execution with
+`ERR_PACKAGE_PATH_NOT_EXPORTED`: `No "exports" main defined` for the installed
+`@earendil-works/pi-ai` package under the existing ts-node loader. The lead
+confirmed that loader failure is pre-existing. This purge retargets the probe's
+fixture but does not redesign its loader. Registered-tool tests remain the
+executable interface evidence. The accepted Task result records the final
+aggregate, package, lane, privacy, and line-count receipts.
+
 ## Change size and architecture
 
 The shared-owner commit `c2a70a9` changed 7 files (+200/-197 lines). The coherent

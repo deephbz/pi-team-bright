@@ -5,6 +5,7 @@ import piTeams from "../../extensions/index";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { projectTui } from "../model-tool-contract/tui-projection";
 import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
@@ -207,6 +208,7 @@ describe("Team topology/lifecycle lease", () => {
     const fails = member("fails", `/tmp/${name}-fails.jsonl`, "pane-fails");
     const succeeds = member("succeeds", `/tmp/${name}-succeeds.jsonl`, "pane-succeeds");
     for (const candidate of [guarded, uncertain, ready, fails, succeeds]) {
+      await teams.ensureLogicalWorker(name, { name: candidate.name, scope: "Exercise lifecycle guards." });
       await teams.addMember(name, candidate);
     }
 
@@ -220,10 +222,13 @@ describe("Team topology/lifecycle lease", () => {
       version: "v_0123456789abcdef",
     };
     const tools = registerExtension();
-    await tools.get("task_graph_apply")!.execute("guarded-task", {
+    const applied = await tools.get("task_graph_apply")!.execute("guarded-task", {
       operation_id: "guarded-task",
       tasks: [{ key: guardedTask.id, title: guardedTask.title, goal: guardedTask.goal, assignee: guardedTask.assignee }],
     }, undefined, undefined, context(leadSession));
+    expect(applied.details).toMatchObject({ kind: "task_graph_applied", tasks_by_key: { "task-guarded": { status: "ready" } } });
+    const graphAuthority = new DurableGraphTaskAuthority();
+    const tasksBeforeStop = await graphAuthority.readTasks(name);
     const stop = tools.get("worker_stop")!;
     const shutdown = tools.get("team_shutdown")!;
 
@@ -265,12 +270,12 @@ describe("Team topology/lifecycle lease", () => {
 
     const partial = await shutdown.execute("shutdown-partial", { team_name: name }, undefined, undefined, context(leadSession));
     expect(partial.details).toMatchObject({
-      kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: [], state_changed: true,
+      kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: ["task-guarded"], state_changed: true,
     });
     expect(projectTui({ tool: "team_shutdown", details: partial.details, expanded: false })).toEqual([
       "PTB · Team shutdown",
       "! Partial",
-      "Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: none.",
+      "Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: task-guarded.",
       "Next: resolve the named Worker stop failures, then retry Team shutdown.",
       "▸ Details",
     ]);
@@ -279,14 +284,15 @@ describe("Team topology/lifecycle lease", () => {
     alive.delete("pane-fails");
     alive.delete("pane-uncertain");
     const final = await shutdown.execute("shutdown-final", { team_name: name }, undefined, undefined, context(leadSession));
-    expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: [] });
+    expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: ["task-guarded"] });
     expect(projectTui({ tool: "team_shutdown", details: final.details, expanded: false })).toEqual([
       "PTB · Team shutdown",
       "✓ Team shutdown",
-      "Team stopped · 2 Workers stopped · 0 unfinished Tasks retained.",
+      "Team stopped · 2 Workers stopped · 1 unfinished Task retained.",
       "▸ Details",
     ]);
     expect((await teams.readConfig(name)).members.filter((candidate) => candidate.isActive !== false)).toEqual([]);
+    expect(await graphAuthority.readTasks(name)).toEqual(tasksBeforeStop);
     expect(killed.slice(0, 2)).toEqual(["pane-uncertain", "pane-ready"]);
     expect(killed.slice(2).sort()).toEqual(["pane-fails", "pane-fails", "pane-guarded", "pane-succeeds", "pane-uncertain", "pane-uncertain"]);
   });

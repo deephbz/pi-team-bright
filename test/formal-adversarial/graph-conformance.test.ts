@@ -113,6 +113,7 @@ describe("independent bounded graph adversary", () => {
     const team = `formal-cas-${process.pid}-${Date.now()}`;
     teams.push(team);
     const authority = new DurableGraphTaskAuthority();
+    await authority.initializeEmpty(team);
     await authority.applyGraph(team, { operationId: "initial", tasks: [twoTaskGraph[0]] });
     const before = (await authority.readTask(team, "a"))!;
     const commands = ["left", "right"].map(operationId => authority.transition(team, {

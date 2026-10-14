@@ -166,7 +166,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const tools = registerTools();
 
     expect([...tools.keys()].sort()).toEqual([...PUBLIC_TOOLS].sort());
-    expect(tools.get("team_sync")!.description).toMatch(/snapshot|updates|context/i);
+    expect(tools.get("team_sync")!.description).toMatch(/observe current Team state/i);
     expect(tools.get("ensure_worker")!.description).toMatch(/reuse/i);
     expect(tools.get("alert_send")!.description).toMatch(/exceptional/i);
     for (const retired of [
