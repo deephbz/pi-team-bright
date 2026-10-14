@@ -6,8 +6,8 @@ import { taskDeliveryMembership } from "../../test/support/task-delivery-members
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig } from "../team-authority/contracts";
-import type { TaskCard } from "../task-authority/task-domain";
-import { taskVersionRef } from "../task-authority/task-version-ref";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { DurableAlertMembership } from "../adapters/durable-alert-membership";
 import {
   DIRECT_MESSAGE_ACK_ENTRY_TYPE,
@@ -52,23 +52,9 @@ function member(team: string, name: string, sessionFile: string): Member {
   };
 }
 
-function configureTeam(team: string, workerSession: string): TeamConfig {
-  const config: TeamConfig = {
-    name: team,
-    description: "Round 3 delivery evaluator fixture",
-    createdAt: Date.now(),
-    leadAgentId: "team-lead",
-    leadSessionId: "lead-session",
-    members: [
-      member(team, "team-lead", `/tmp/${team}-lead.jsonl`),
-      member(team, "worker", workerSession),
-    ],
-    taskBackend: "beads",
-    taskWorkspace: `/tmp/${team}-declared-workspace`,
-    taskAuthorityId: `task_authority_${crypto.randomUUID()}`,
-    taskAuthorityFingerprint: { schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: `delivery_${team}`, projectId: `delivery-${team}` },
-  };
-  fs.mkdirSync(paths.teamDir(team), { recursive: true });
+async function configureTeam(team: string, workerSession: string): Promise<TeamConfig> {
+  const config = await teams.createTeam(team, `/tmp/${team}-lead.jsonl`, "lead");
+  config.members.push(member(team, "worker", workerSession));
   teams.writeConfigAtomic(paths.configPath(team), config);
   return config;
 }
@@ -133,16 +119,12 @@ function messageHarness(messages = [inboxMessage()]) {
   return { delivery, sink, markRead };
 }
 
-function taskCard(id: string, assignee = "worker"): TaskCard {
-  return {
-    id,
-    title: "Task delivery",
-    goal: "Deliver the canonical Task card.",
-    status: "in_progress",
-    current_context: "The Task is ready for delivery.",
-    assignee,
-    version: taskVersionRef(`version-${id}`),
-  };
+async function taskCard(team: string, id: string) {
+  const graph = new DurableGraphTaskAuthority();
+  await graph.applyGraph(team, { operationId: "apply", tasks: [{ key: id, title: "Task delivery", goal: "Deliver the canonical Task card.", assignee: "worker" }] });
+  const ready = (await graph.readTasks(team))[0];
+  await graph.transition(team, { taskId: id, operationId: "claim", expectedVersion: ready.version as TaskVersionRef, transition: "claim", worker: "worker", currentContext: "The Task is ready for delivery." });
+  return (await graph.readTasks(team))[0];
 }
 
 function taskDelivery(team: string, sessionFile: string) {
@@ -243,8 +225,8 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
   it("keeps an error-stopped presented Task change pending and replays it on restart", async () => {
     const team = teamName("task-error");
     const sessionFile = `/tmp/${team}-worker.jsonl`;
-    configureTeam(team, sessionFile);
-    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-error"), "worker", "assigned");
+    await configureTeam(team, sessionFile);
+    const record = await enqueueTaskChangeForRecipient(team, await taskCard(team, "task-error"), "worker", "assigned");
     expect(record).not.toBeNull();
 
     const first = taskDelivery(team, sessionFile);
@@ -274,8 +256,8 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
   it("keeps a cancelled presented Task change pending", async () => {
     const team = teamName("task-aborted");
     const sessionFile = `/tmp/${team}-worker.jsonl`;
-    configureTeam(team, sessionFile);
-    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-aborted"), "worker", "assigned");
+    await configureTeam(team, sessionFile);
+    const record = await enqueueTaskChangeForRecipient(team, await taskCard(team, "task-aborted"), "worker", "assigned");
     const current = taskDelivery(team, sessionFile);
     await current.delivery.start([]);
     const presented = current.sink.sendMessage.mock.calls[0][0];
@@ -296,8 +278,8 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
   it("retries a failed exact-Session Task presentation with its stable delivery ID", async () => {
     const team = teamName("task-send-failure");
     const sessionFile = `/tmp/${team}-worker.jsonl`;
-    configureTeam(team, sessionFile);
-    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-send-failure"), "worker", "assigned");
+    await configureTeam(team, sessionFile);
+    const record = await enqueueTaskChangeForRecipient(team, await taskCard(team, "task-send-failure"), "worker", "assigned");
     const failed = new TaskChangeDelivery({
       sendMessage: vi.fn(() => { throw new Error("injected Session delivery failure"); }),
       appendEntry: vi.fn(),
@@ -319,8 +301,8 @@ describe("Round 3 successful-turn Task acknowledgement", () => {
   it("commits successful Task delivery exactly once, including toolUse before later error", async () => {
     const team = teamName("task-success");
     const sessionFile = `/tmp/${team}-worker.jsonl`;
-    configureTeam(team, sessionFile);
-    const record = await enqueueTaskChangeForRecipient(team, taskCard("task-success"), "worker", "assigned");
+    await configureTeam(team, sessionFile);
+    const record = await enqueueTaskChangeForRecipient(team, await taskCard(team, "task-success"), "worker", "assigned");
     const current = taskDelivery(team, sessionFile);
     await current.delivery.start([]);
     const presented = current.sink.sendMessage.mock.calls[0][0];

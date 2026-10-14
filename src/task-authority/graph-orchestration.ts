@@ -1,9 +1,10 @@
-import { DurableGraphTaskAuthority, GraphSnapshotCorruption } from "../adapters/durable-graph-task-authority";
+import { GraphSnapshotCorruption } from "./graph-authority-errors";
+import { DurableGraphTaskAuthority, type GraphMutationBinding } from "../adapters/durable-graph-task-authority";
 import type {
   TaskMutationCoordinates,
   TaskMutationPublicationPort,
 } from "./publication";
-import { readConfig } from "../utils/teams";
+import { readConfig, StaleSessionBindingError } from "../utils/teams";
 import {
   GraphControlRefusal,
   type GraphApplyInput,
@@ -65,8 +66,8 @@ export type GraphTransitionOrchestrationOutcome =
   | { kind: "unavailable"; operationId: string; taskId: string; reason: "task_authority_unavailable"; message: string };
 
 export interface GraphTaskOrchestrationPort {
-  applyGraph(teamName: string, input: GraphApplyInput): Promise<GraphApplyOrchestrationOutcome>;
-  transition(teamName: string, input: GraphTaskTransitionInput, actor: string): Promise<GraphTransitionOrchestrationOutcome>;
+  applyGraph(teamName: string, input: GraphApplyInput, binding?: GraphMutationBinding): Promise<GraphApplyOrchestrationOutcome>;
+  transition(teamName: string, input: GraphTaskTransitionInput, actor: string, binding?: GraphMutationBinding): Promise<GraphTransitionOrchestrationOutcome>;
   readTasks(teamName: string, taskIds?: readonly string[]): Promise<GraphTaskCard[]>;
   hasGraph(teamName: string): boolean;
   reconcileReady(teamName: string, worker?: string): Promise<string[]>;
@@ -160,7 +161,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
     });
   }
 
-  async applyGraph(teamName: string, input: GraphApplyInput): Promise<GraphApplyOrchestrationOutcome> {
+  async applyGraph(teamName: string, input: GraphApplyInput, binding?: GraphMutationBinding): Promise<GraphApplyOrchestrationOutcome> {
     try {
       const config = await readConfig(teamName);
       const workers = new Set((config.logicalWorkers ?? []).map((worker) => worker.name));
@@ -173,7 +174,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
           message: `Assigned Workers are not current in Team ${teamName}: ${missing.join(", ")}.`,
         };
       }
-      const mutation = await this.authority.applyGraph(teamName, input);
+      const mutation = await this.authority.applyGraph(teamName, input, binding);
       const warnings: string[] = [];
       const current = new Map(mutation.after.map((task) => [task.id, task]));
       if (mutation.operationAuthoritySequence === mutation.authoritySequence) try {
@@ -228,6 +229,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
         deliveryWarnings: [...new Set(warnings)].sort(),
       };
     } catch (error) {
+      if (error instanceof StaleSessionBindingError) return { kind: "refused", operationId: input.operationId, reason: "invalid_graph", message: error.message };
       if (error instanceof GraphSnapshotCorruption) {
         return {
           kind: "unavailable",
@@ -254,9 +256,9 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
     }
   }
 
-  async transition(teamName: string, input: GraphTaskTransitionInput, actor: string): Promise<GraphTransitionOrchestrationOutcome> {
+  async transition(teamName: string, input: GraphTaskTransitionInput, actor: string, binding?: GraphMutationBinding): Promise<GraphTransitionOrchestrationOutcome> {
     try {
-      const mutation = await this.authority.transition(teamName, input);
+      const mutation = await this.authority.transition(teamName, input, binding);
       const warnings: string[] = [];
       const current = new Map(mutation.after.map((task) => [task.id, task]));
       {
@@ -316,6 +318,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
         deliveryWarnings: [...new Set(warnings)].sort(),
       };
     } catch (error) {
+      if (error instanceof StaleSessionBindingError) return { kind: "refused", operationId: input.operationId, taskId: input.taskId, reason: "worker_mismatch", message: error.message };
       if (error instanceof GraphSnapshotCorruption) {
         return {
           kind: "unavailable",

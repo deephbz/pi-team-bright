@@ -1,3 +1,4 @@
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { nodeHostEnv } from "../env/host-env";
 import fs from "node:fs";
 import os from "node:os";
@@ -37,6 +38,7 @@ describe("exact Worker run-state evidence", () => {
     process.env.PI_CODING_AGENT_DIR = root;
     const team = "liveness-test";
     fs.mkdirSync(teamDir(team), { recursive: true });
+    await new DurableGraphTaskAuthority().initializeEmpty(team);
     vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => ({ kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }));
     await writeRuntimeStatus(team, "worker", { pid: process.pid, osBirthToken: "birth", bootId: "boot", startedAt: 10, runState: "active" }, "membership-1");
     await expect(readWorkerRunObservation(team, member(), queries)).resolves.toMatchObject({ state: "active", generation: { membershipId: "membership-1", pid: process.pid, startedAt: 10 } });
@@ -50,6 +52,7 @@ describe("exact Worker run-state evidence", () => {
     process.env.PI_CODING_AGENT_DIR = root;
     const team = "liveness-test";
     fs.mkdirSync(teamDir(team), { recursive: true });
+    await new DurableGraphTaskAuthority().initializeEmpty(team);
     await writeRuntimeStatus(team, "worker", { pid: process.pid, startedAt: 10, runState: "settled" }, "other-membership");
     const result = await readWorkerRunObservation(team, member(), queries);
     expect(result.state).toBe("unknown");
@@ -62,6 +65,7 @@ describe("exact Worker run-state evidence", () => {
     fs.rmSync(teamDir(team), { recursive: true, force: true });
     fs.mkdirSync(teamDir(team), { recursive: true });
     roots.push(teamDir(team));
+    await new DurableGraphTaskAuthority().initializeEmpty(team);
     fs.mkdirSync(path.dirname(taskDeliveryPath(team, "worker")), { recursive: true });
     fs.writeFileSync(taskDeliveryPath(team, "worker"), "not-json");
     fs.mkdirSync(path.dirname(inboxPath(team, "worker")), { recursive: true });

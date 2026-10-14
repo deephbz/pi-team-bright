@@ -28,7 +28,7 @@ export class DurableModelToolTaskApplication implements ModelToolTaskApplication
         ...(task.needs ? { needs: [...task.needs] } : {}),
         ...(task.onGoalFailed ? { onGoalFailed: { ...task.onGoalFailed } } : {}),
       })),
-    });
+    }, bound.mutationBinding);
     if (outcome.kind !== "applied") return outcome;
     return {
       kind: "created", operationId: outcome.operationId, replayed: outcome.replayed,
@@ -67,7 +67,7 @@ export class DurableModelToolTaskApplication implements ModelToolTaskApplication
         ...(input.currentContext ? { currentContext: input.currentContext } : {}),
         ...(input.evidence ? { evidence: input.evidence } : {}),
         ...(input.transition && input.transition !== "cancel" ? { worker: actor } : {}),
-      }, actor);
+      }, actor, bound.mutationBinding);
       if (result.kind === "updated") {
         outcomes.push({
           kind: "updated", taskId: result.task.id, operationId: result.operationId,

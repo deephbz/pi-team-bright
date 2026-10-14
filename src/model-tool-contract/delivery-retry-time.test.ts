@@ -15,9 +15,12 @@ describe("human delivery retry time", () => {
     const status = formatCarrierStatus({ worker: "worker", membership: "member-1", binding: "bound", launch: "none", process: "live", terminal: "present", activity: "idle", evidence: [], deliveryDegraded: [failure] }).line;
     expect(status).toContain("task delivery stopped");
     expect(status).toContain("no automatic retry");
+    expect(status).toContain("Finish this Team with its original PTB version or start a new Team.");
     const receipt = { kind: "alert_sent" as const, alert_id: "alert-1", accepted_recipients: ["worker"], failed_recipients: [], task_state_changed: false as const, delivery_degraded: [{ recipient: "worker", engines: [failure] }] };
     const model = JSON.parse(assembleToolResult("alert_send", receipt).content[0].text);
     expect(model.delivery_degraded[0].engines[0]).not.toHaveProperty("retryAt");
+    expect(model.delivery_degraded[0].engines[0].message).toBe(failure.message);
+    expect(JSON.stringify(model)).not.toContain("Finish this Team");
     const tui = projectToolTuiMessage({ tool: "alert_send", details: receipt, expanded: false }).body!.join("\n");
     expect(tui).toContain("task delivery stopped");
     expect(tui).toContain("no automatic retry");

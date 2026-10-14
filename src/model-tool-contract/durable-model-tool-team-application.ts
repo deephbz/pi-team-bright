@@ -1,3 +1,4 @@
+import { GraphSnapshotCorruption } from "../task-authority/graph-authority-errors";
 import { hostEnv } from "../env/host-env";
 import { getTerminalAdapter } from "../adapters/terminal-registry";
 import * as paths from "../utils/paths";
@@ -100,6 +101,24 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
       return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) };
     }
   }
-  async stopWorker(id: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult> { const bound = await this.bindings.boundTeam(id); if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." }; return this.lifecycle ? this.lifecycle.stopWorker(bound.teamName, worker) : { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." }; }
-  async shutdownTeam(id: ExactLeaderSessionId): Promise<TeamShutdownPortResult> { const bound = await this.bindings.boundTeam(id); if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." }; return this.lifecycle ? this.lifecycle.shutdownTeam(bound.teamName) : { kind: "unavailable", reason: "team_authority_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." }; }
+  async stopWorker(id: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult> {
+    const bound = await this.bindings.boundTeam(id);
+    if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
+    try {
+      return this.lifecycle ? await this.lifecycle.stopWorker(bound.teamName, worker) : { kind: "unavailable", reason: "carrier_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." };
+    } catch (error) {
+      if (error instanceof GraphSnapshotCorruption) return { kind: "unavailable", reason: "team_authority_unavailable", message: error.message };
+      throw error;
+    }
+  }
+  async shutdownTeam(id: ExactLeaderSessionId): Promise<TeamShutdownPortResult> {
+    const bound = await this.bindings.boundTeam(id);
+    if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
+    try {
+      return this.lifecycle ? await this.lifecycle.shutdownTeam(bound.teamName) : { kind: "unavailable", reason: "team_authority_unavailable", message: "The model-tool lifecycle adapter is not attached to the main extension." };
+    } catch (error) {
+      if (error instanceof GraphSnapshotCorruption) return { kind: "unavailable", reason: "team_authority_unavailable", message: error.message };
+      throw error;
+    }
+  }
 }

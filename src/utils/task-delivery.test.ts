@@ -5,9 +5,9 @@ import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import { taskDeliveryRecoveryPath } from "./paths";
 import * as teams from "./teams";
-import type { TaskCard } from "../task-authority/task-domain";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import type { TaskDeliveryRecoveryRecord } from "./task-delivery";
-import { taskVersionRef } from "../task-authority/task-version-ref";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import {
   enqueueTaskChange,
   recordTaskDeliveryRecovery,
@@ -27,9 +27,6 @@ async function fixture(suffix: string) {
   paths.ensureDirs();
   const authorityId = `task_authority_${suffix}`;
   await teams.createTeam(teamName, "lead-session", "lead-agent");
-  // This suite isolates historical native spool/ACK behavior. Graph startup
-  // and required authority are covered by graph-only-cutover.test.ts.
-  fs.unlinkSync(paths.graphTaskAuthorityPath(teamName));
   const sessionFile = `/tmp/${teamName}-worker.jsonl`;
   await teams.addMember(teamName, {
     agentId: `worker@${teamName}`,
@@ -41,15 +38,11 @@ async function fixture(suffix: string) {
     cwd: process.cwd(),
     subscriptions: [],
   });
-  const task: TaskCard = {
-    id: "1",
-    title: "Investigate",
-    goal: "Find the cause",
-    current_context: "Work has not started.",
-    status: "in_progress",
-    assignee: "worker",
-    version: taskVersionRef("v2"),
-  };
+  const graph = new DurableGraphTaskAuthority();
+  await graph.applyGraph(teamName, { operationId: "apply", tasks: [{ key: "1", title: "Investigate", goal: "Find the cause", assignee: "worker" }] });
+  const ready = (await graph.readTasks(teamName))[0];
+  await graph.transition(teamName, { taskId: ready.id, operationId: "claim", expectedVersion: ready.version as TaskVersionRef, transition: "claim", worker: "worker", currentContext: "Work has not started." });
+  const task = (await graph.readTasks(teamName))[0];
   return {
     teamName,
     sessionFile,
@@ -69,7 +62,7 @@ afterEach(() => {
 describe("Task-native delivery", () => {
   it("coalesces an identical unresolved delivery recovery obligation", async () => {
     const { teamName, task } = await fixture("recovery-coalesce");
-    const version = taskVersionRef(task.version);
+    const version = task.version as TaskVersionRef;
     const record: TaskDeliveryRecoveryRecord = {
       teamName,
       taskId: task.id,
@@ -78,7 +71,7 @@ describe("Task-native delivery", () => {
       changeKind: "assigned" as const,
       recordedAt: "2026-08-12T00:00:00.000Z",
       reason: "enqueue-failed" as const,
-      taskProjection: { ...task, version, relations: [], dependency_state: { kind: "ready", active_blocker_ids: [] } },
+      taskProjection: task,
     };
 
     await recordTaskDeliveryRecovery(record);
@@ -86,17 +79,7 @@ describe("Task-native delivery", () => {
       ...record,
       recipients: ["reviewer", "worker", "worker"],
       recordedAt: "2026-08-12T00:00:01.000Z",
-      taskProjection: {
-        id: record.taskProjection.id,
-        title: record.taskProjection.title,
-        status: record.taskProjection.status,
-        assignee: record.taskProjection.assignee,
-        current_context: record.taskProjection.current_context,
-        version: record.taskProjection.version,
-        goal: "goal" in record.taskProjection ? record.taskProjection.goal : undefined,
-        dependency_state: record.taskProjection.dependency_state,
-        relations: record.taskProjection.relations,
-      } as TaskDeliveryRecoveryRecord["taskProjection"],
+      taskProjection: Object.fromEntries(Object.entries(task).reverse()) as TaskDeliveryRecoveryRecord["taskProjection"],
     });
 
     const records = JSON.parse(fs.readFileSync(taskDeliveryRecoveryPath(teamName), "utf8"));
@@ -294,7 +277,7 @@ describe("Task-native delivery", () => {
     expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
   });
 
-  it("scopes Beads Task references to the configured authority without exposing its path", async () => {
+  it("keeps obsolete workspace paths out of graph Task delivery references", async () => {
     const { teamName, task } = await fixture("beads-authority");
     const config = await teams.readConfig(teamName);
     const workspace = `/tmp/${teamName}-beads-workspace`;

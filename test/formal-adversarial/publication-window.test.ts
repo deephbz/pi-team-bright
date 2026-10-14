@@ -58,7 +58,7 @@ describe("authority commit and publication windows", () => {
     expect(applied.kind).toBe("applied");
     expect(await readCurrentTaskDeliveries(teamName, "worker")).toHaveLength(1);
     fs.unlinkSync(graphTaskAuthorityPath(teamName));
-    await expect(readCurrentTaskDeliveries(teamName, "worker")).rejects.toThrow(/Graph authority.*missing/);
+    await expect(readCurrentTaskDeliveries(teamName, "worker")).rejects.toThrow(/Restore its graph authority/);
   });
 
   it("rechecks a selected delivery after graph replacement at the final send boundary", async () => {
