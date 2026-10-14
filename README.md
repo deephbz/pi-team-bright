@@ -280,11 +280,9 @@ signal contract and executable checks.
   window evidence is bounded evidence about those things only. Likewise,
   `/ptb status` and `/ptb help` provide bounded local
   diagnosis; they are not Worker health, readiness, or progress checks.
-- **Beads list contention is unresolved.** While live Workers settle Tasks,
-  ordinary `team_sync` can intermittently time out in the underlying Beads
-  `list` command. Do not interpret that timeout as an empty Task set, Worker
-  failure, or lack of progress; preserve the last valid cursor and reconcile
-  from authoritative state when the read is available.
+- **Task authority must be available.** A missing or corrupt graph snapshot
+  blocks Task reads and work-dependent stop or shutdown. An unavailable read
+  never means an empty Task set.
 - **The packaged operating skill is named `pi-team-bright`.** Its discovery
   name now matches the product, command, and npm package.
 
@@ -301,6 +299,19 @@ The carrier-liveness prerelease is on npm `next`:
 ```sh
 pi install npm:@hypercarrier/pi-team-bright@0.24.0-rc.2
 ```
+
+### Graph-only Task authority (current source)
+
+New Teams persist an explicit empty graph snapshot before creation succeeds.
+The first `task_graph_apply` creates its first graph revision. All Task reads,
+transitions, views, delivery recovery, and work-dependent lifecycle guards use
+that snapshot. Old backend fields do not override a valid graph.
+
+PTB 0.24 does not support graphless Teams that keep Tasks in Beads. It refuses
+Task operations and work-dependent stop or shutdown. It leaves `.beads/` data
+unchanged and supplies no export, migration, or fallback reader. Finish those
+Teams with their original version or preserve their stores and start new Teams.
+This source change does not claim a published package update.
 
 ### Carrier-liveness upgrade (0.24.0-rc.2)
 
@@ -370,9 +381,6 @@ escalations to end with `team_sync({view:"updates"})` while assigned nonterminal
 Tasks remain. This is operating guidance, not runtime enforcement. These patches
 do not change Team storage, Task graph, model-tool, or Worker protocol contracts.
 Do not recreate a Team for these updates.
-
-The package owns its local Task backend through the exact runtime dependency
-`@beads/bd@1.1.0`; a separate global `bd` installation is not required.
 
 For an upgrade or rollback, restart each Pi process that must load the chosen
 extension. Follow that release's Team boundary. Compatible patches do not
@@ -556,7 +564,7 @@ observations do not become accidental authority:
 |---|---|
 | **Team and Membership** | The durable roster, lifecycle, current Membership generation, and Team-wide placement policy. |
 | **Pi Session identity** | The exact conversational Session bound to a current Membership; a matching name, process, pane, or environment variable is not identity proof. |
-| **Task authority** | Durable graph revisions, Task goals, assignments, Attempts, versions, outcomes, and evidence. The graph-native path uses a Team-scoped snapshot; Beads remains a legacy pre-graph fallback. |
+| **Task authority** | Durable graph revisions, Task goals, assignments, Attempts, versions, outcomes, and evidence. A Team-scoped graph snapshot is the only Task authority. |
 | **Delivery** | Presentation of a Task change or Alert to one exact Session. A delivery receipt never changes Task state. |
 | **Runtime observation** | Bounded evidence that an exact Membership process generation was observed. It does not prove readiness or progress. |
 | **Terminal surface** | An adapter-owned pane or window carrying a Worker process. It is replaceable and is neither Worker identity nor work state. |
@@ -574,7 +582,7 @@ Bright is not a sandbox: review the package and release before installing it,
 and only run Workers in directories they should be allowed to access.
 
 Team/Membership configuration, event and delivery records, runtime observations,
-and the Team-owned Beads Task data are local machine state. Terminal adapters
+and the Team-owned Task graph snapshot are local machine state. Terminal adapters
 also control processes and surfaces in their host applications. Treat those
 files, processes, prompts, and Task evidence according to the sensitivity of
 the project.
@@ -627,7 +635,7 @@ From a source checkout, run `npm run review:tui` to inspect PTB message scenes
 one by one. Run `npm run review:graph` for the production DAG pane with mock
 Tasks, or `npm run review:graph -- --view timeline` for mock Attempt bars.
 Both programs use production rendering with fixed local fixtures. They need no
-model, Team, Beads database, or terminal multiplexer.
+model, Team store, or terminal multiplexer.
 
 The [TUI review guide](docs/maintainers/tui-review.md) explains the controls,
 text exports, reusable components, coverage, and required fixture updates when
@@ -647,10 +655,6 @@ npm run verify:package
 `npm test` is the fast deterministic lane; `npm run test:full` includes the
 broader suite, and `npm run verify:package` probes the packed public artifact.
 
-`npm run verify:formal` runs bounded TLA+ models and negative controls. It needs
-Java and the pinned TLC jar. See [formal verification](formal/README.md) for
-setup, bounds, source mapping, and limits.
-
 For current stage, constraints, and open work, read the
 [maintained context](docs/current/README.md). For one-hop links to tool schemas,
 authority implementations, types, event semantics, adapters, and focused tests,
@@ -667,4 +671,4 @@ by Victor (`cs50victor`). The original MIT copyright notice is retained in
 ## TODO
 
 - Isolate Task projection availability from valid Team and Worker carrier state
-  when the underlying Beads list read is contended.
+  when Task authority is unavailable.

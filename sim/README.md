@@ -14,12 +14,10 @@ Earlier baseline and integration measurements below describe earlier trials.
 WorldTrace + ReplayReceipt -> real extension tools/events
                           -> SimWorld -> single Scheduler -> Entropy log
                                       -> isolated real HOME
-                                      -> process / Herdr / bd wire fakes
+                                      -> process / Herdr wire fakes
 ```
 
 Run `npx vitest run sim --reporter=verbose` and `npm run typecheck`.
-Run the owned bd differential check separately:
-`npx vitest run --config vitest.exhaustive.config.ts sim/bd-wire.external.test.ts`.
 Run the bounded campaign with
 `npx vitest run --config vitest.exhaustive.config.ts sim/campaign.test.ts`.
 Set `PI_SIM_RECORD_CAMPAIGN=1` to write `results/current-campaign.json`.
@@ -45,11 +43,8 @@ No provider or real Herdr process runs in these lanes.
 - Real synchronous filesystem operations are atomic inside one queued callback.
   Guards reject real timers, subprocesses, async fs, filesystem escape, symlink
   escape and unowned descriptors. Swallowed violations still fail the world.
-- The actor loader replaces only `ExecBdRunner.run`. Scheduled bd wire supports
-  empty-store init/where/list. Provisioning, BeadsTaskStore and Team authority
-  remain real. Other bd commands fail closed. The differential lane compares
-  normalized outputs and authority fingerprints against owned bd 1.1.0.
-  It normalizes workspace paths and generated database/project identities.
+- Task operations use the real graph authority. No external Task backend or
+  Task wire fake participates in Team creation or hydration.
 
 ## Evidence and limits
 
@@ -85,31 +80,21 @@ Expected failures in other lanes do not prove the v3.1 properties.
 `host-calls.base.json` records 331 direct-host candidates on the original base
 `a992f086017b8924c5c448456573c16452ca655d`. Regenerate an inventory with
 `npx ts-node sim/host-call-audit.ts`. C0's executable residual allowlist lives in
-`test/host-env-seam.test.ts`. The bd transport override covers its reachable
-legacy spawn exception. Diagnostic duration measurements remain nondeterministic
-and are not decision inputs.
+`test/host-env-seam.test.ts`. Diagnostic duration measurements remain
+nondeterministic and are not decision inputs.
 
 Entropy tapes contain 65536 fast-check draws. Every choice logs its bound;
 scheduler choices also log enabled operations. Invalid receipts and exhausted
 tapes fail. Promise jobs drain for 64 checkpoints between queue choices.
 Instruction-level process interleaving and host-crash durability are unclaimed.
 
-`migration.v31.test.ts` builds a legacy store through real baseline tools at
-`14d92fdc2c7cf0b21f6853ba495d828350901e03`. It extracts production sources into
-ignored `dist/sim-migration-baseline`; it excludes baseline tests. Git must contain
-that revision, and `tar` must be available. The test preloads separate legacy and
-current extension graphs. One world retains the filesystem, processes, panes and
-native Session branches across lead-first reloads. Three in-progress Tasks and
-exactly 50 baseline journal events precede migration. Assertions cover snapshot
-watermarking without replay, token re-admission, Session and Attempt continuity,
-carrier reuse, no pane closure, and a stopped-epoch fallback with new Worker
-Sessions. An ongoing lead turn stays ongoing across reload; this keeps the first
-explicit sync ahead of the idle automatic publisher. Human-action attention
-excludes `wait` hints.
+The archived-source migration lane was removed under Decision 0024. It imported
+an unsupported Task backend. The live rc.1/rc.2 migrations replace that lane's
+evidence; the [purge record](../docs/journal/2026-10-13-legacy-purge.md) identifies
+the boundary. Historical result files remain unchanged.
 
 The trace runner still rejects nonempty declarative Team setup. Cross-Session
-forks, arbitrary shell execution and nonempty Beads task operations remain
-unsupported. Worker module graphs preload from actor coordinates and literal
+forks and arbitrary shell execution remain unsupported. Worker module graphs preload from actor coordinates and literal
 ensure_worker names. Human input is opaque terminal text. Full P/M/E campaigns are unclaimed.
 
 ## Oracle history
@@ -132,6 +117,12 @@ ids. They do not claim to cite PTB's decision evidence.
   It emits `journal.append/reset`, `durable.runtime/launch/team/record`, and
   `disk.invalid`. Member-held launch fields retain `source: member` and a
   `#members/` location. Separate launch files retain `source: file`.
+- `authority.tracing` declares exact graph-write tracing. `authority.write`
+  records a graph snapshot write with its runtime origin. Journal fsync captures
+  appended rows before a commit-then-error fault. P7 compares only carrier
+  publications and graph writes with the same actor coordinates and tool-call ID.
+  Missing attribution yields N/A with `insufficient_attribution`; time overlap
+  never establishes a violation. A graph apply with its Task event is allowed.
 - `lead.branch` records the current public Pi branch ids. `lead.entry` retains
   each new entry, Team-update observation stamps, and tool-result call ids.
   No PTB store, pending observation map, or in-memory authority is inspected.
