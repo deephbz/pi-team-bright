@@ -10,18 +10,9 @@ npm test
 npm run verify:package
 ```
 
-`@beads/bd@1.1.0` is an exact runtime dependency, not a machine prerequisite.
-The Beads adapter resolves its package-local executable so extension subprocesses
-do not depend on the parent Pi PATH or a separately installed global `bd`. The
-package acquires a platform-native binary during a normal npm/Git install; if
-that binary is missing or unsupported, the adapter reports a typed unavailable
-`bd` error rather than falling back to an ambient executable. GitHub CI sets
-`CI`, which makes the upstream postinstall intentionally skip that acquisition,
-so [`materialize-beads-linux-amd64.cjs`](../../scripts/materialize-beads-linux-amd64.cjs)
-fetches the official v1.1.0 linux-amd64 archive, verifies its pinned SHA-256,
-and materializes it at the owned package path before tests. Both CI and the
-manual publish workflow invoke that one script after `npm ci`; neither relies
-on ambient PATH. `npm test` type-checks and runs only the fast, non-exhaustive lane. `npm run verify:package` builds the
+Task authority uses the Team-scoped graph snapshot and needs no external Task
+backend. Tests isolate HOME and preserve live Team stores.
+`npm test` type-checks and runs only the fast, non-exhaustive lane. `npm run verify:package` builds the
 observation entry point, packs the artifact, installs that tarball in a clean
 temporary project, and runs CommonJS and TypeScript probes against
 `@hypercarrier/pi-team-bright/observation`. Keep `pi-teams-observation/1`
@@ -36,7 +27,7 @@ private journal evidence to the artifact.
 
 ## Test lanes
 
-`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for external runtime diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.
 
 ## Task hydration benchmark
 

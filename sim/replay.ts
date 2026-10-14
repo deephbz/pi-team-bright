@@ -31,7 +31,7 @@ export class WorldReplay {
   readonly results = new Map<number, unknown>();
   readonly sessionRefs = new Map<string, string>();
   private readonly factories = new Map<string, Awaited<ReturnType<typeof loadActorExtension>>>();
-  constructor(readonly world: SimWorld, readonly options: { sourceRoot?: string } = {}) {
+  constructor(readonly world: SimWorld) {
     world.herdr.onStart = (pane, argv) => {
       const who = { team: pane.env.PI_TEAM_NAME || "team", actor: pane.env.PI_AGENT_NAME || pane.name! };
       const generation = world.processes.current(pane.agentPid!);
@@ -202,7 +202,7 @@ export class WorldReplay {
     if (trace.version !== WORLD_TRACE_VERSION) throw new Error("Unsupported WorldTrace version");
     // Native module loading finishes before the deterministic scheduler starts.
     const prepare = async (who: ActorRef) => {
-      if (!this.factories.has(actorKey(who))) this.factories.set(actorKey(who), await loadActorExtension({ PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor }, this.options.sourceRoot));
+      if (!this.factories.has(actorKey(who))) this.factories.set(actorKey(who), await loadActorExtension({ PI_AGENT_NAME: who.actor === "lead" ? "team-lead" : who.actor }));
     };
     for (const initial of trace.setup.teams) for (const actor of ["lead", ...initial.workers]) await prepare({ team: initial.team, actor });
     for (const { step } of trace.steps) if ("who" in step) {
@@ -242,13 +242,13 @@ export class WorldReplay {
   }
 }
 
-export async function replayTrace(trace: WorldTrace, options: { seed?: number; receipt?: ReplayReceipt; choices?: readonly Choice[]; setup?: (runner: WorldReplay) => void; sourceRoot?: string } = {}) {
+export async function replayTrace(trace: WorldTrace, options: { seed?: number; receipt?: ReplayReceipt; choices?: readonly Choice[]; setup?: (runner: WorldReplay) => void } = {}) {
   if (options.receipt && (options.receipt.traceId !== trace.id || options.receipt.runnerVersion !== RUNNER_VERSION)) throw new Error("Receipt does not identify this trace and runner");
   const seed = options.receipt?.seed ?? options.seed ?? 0;
   const bounds = options.receipt?.bounds ?? { maxSteps: 10000, maxVirtualMs: 3600000 };
   const world = new SimWorld(seed, { replay: options.choices, scheduleChoices: options.receipt?.choices });
   try {
-    const runner = new WorldReplay(world, { sourceRoot: options.sourceRoot });
+    const runner = new WorldReplay(world);
     options.setup?.(runner);
     await runner.run(trace, bounds);
     const receipt: ReplayReceipt = { traceId: trace.id, runnerVersion: RUNNER_VERSION, seed, choices: world.entropy.choices.filter(choice => choice.label === "schedule").map(choice => choice.value), bounds };

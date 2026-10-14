@@ -50,7 +50,7 @@ exhaustive parameter reference.
 
 ## Read-only status diagnosis
 
-- [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/Beads diagnostic model and human projection.
+- [`src/utils/team-status.ts`](../src/utils/team-status.ts) owns the `pi-teams-status/1` read-only TeamConfig/graph diagnostic model and human projection.
 - [`pi-team-session-adapter.ts`](../extensions/pi-team-session-adapter.ts) registers `/ptb`; the command grammar lives in [`ptb-command.ts`](../src/utils/ptb-command.ts).
 
 ## Read-only Task views
@@ -76,8 +76,11 @@ exhaustive parameter reference.
 
 ## Domain and authority
 
-- [`src/utils/models.ts`](../src/utils/models.ts) owns Team, Membership, Task,
-  Alert, delivery, runtime, and event types.
+- [`src/team-authority/contracts.ts`](../src/team-authority/contracts.ts) owns
+  Team and Membership types. [`src/coordination/contracts.ts`](../src/coordination/contracts.ts)
+  owns event types. [`src/alert-authority/contracts.ts`](../src/alert-authority/contracts.ts)
+  and [`delivery-contracts.ts`](../src/alert-authority/delivery-contracts.ts) own
+  Alert and inbox contracts.
 - [`@hypercarrier/pi-team-bright/observation`](../src/public/observation.ts) exports the one
   read-only `pi-teams-observation/1` projector, canonical types, and JSON
   Schema; its authority and privacy boundary are enforced by that executable
@@ -89,7 +92,7 @@ exhaustive parameter reference.
   the exact current teammate Membership-generation and durable-Session resolver
   in `teams.ts`; it exposes no general policy registry.
 - [`src/task-authority/task-domain.ts`](../src/task-authority/task-domain.ts)
-  owns the legacy/graph card boundary and bounded card schema.
+  owns bounded Task card schemas and historical native-record decoding.
   [`task-version-ref.ts`](../src/task-authority/task-version-ref.ts) owns opaque
   public TaskVersionRef values.
 - [`src/task-authority/graph-control.ts`](../src/task-authority/graph-control.ts)
@@ -99,19 +102,14 @@ exhaustive parameter reference.
   [`durable-graph-task-authority.ts`](../src/adapters/durable-graph-task-authority.ts)
   owns the Team-scoped snapshot, while
   [`graph-orchestration.ts`](../src/task-authority/graph-orchestration.ts) owns
-  publication and ready delivery. The older [`dag.ts`](../src/task-authority/dag.ts),
-  [`mechanical-dispatch.ts`](../src/task-authority/mechanical-dispatch.ts), and
-  [`beads-graph-adapter.ts`](../src/task-authority/beads-graph-adapter.ts) remain
-  the legacy Beads graph path.
-- [`src/model-tool-contract/beads-task-adapter.ts`](../src/model-tool-contract/beads-task-adapter.ts)
-  and [`beads-authority-adapter.ts`](../src/model-tool-contract/beads-authority-adapter.ts)
-  form the Beads adapter boundary for native records, metadata, revisions, and
-  mutations. [`legacy-graph-task-transition-adapter.ts`](../src/model-tool-contract/legacy-graph-task-transition-adapter.ts)
-  maps graph-shaped Worker commands to that legacy authority before first graph
-  apply and refuses meanings that Beads cannot preserve.
-  [`src/utils/tasks.ts`](../src/utils/tasks.ts) exposes only semantic Task
-  operations; the delivery stopped-epoch migration is
-  [`src/utils/task-delivery-migration.ts`](../src/utils/task-delivery-migration.ts).
+  publication and ready delivery. Graph authority initializes new Teams with
+  an explicit empty snapshot and refuses missing or corrupt established stores.
+- [`publication.ts`](../src/task-authority/publication.ts)
+  owns Task mutation publication contracts.
+  [`durable-task-mutation-publication.ts`](../src/adapters/durable-task-mutation-publication.ts)
+  implements the Coordination and delivery bridge.
+  [`graph-recovery-records.test.ts`](../src/task-authority/graph-recovery-records.test.ts)
+  checks graph-owned startup recovery and exact recipient fences.
 - [`src/coordination/event-journal.ts`](../src/coordination/event-journal.ts) owns cursor ordering,
   waits, filters, bounded pages, and snapshot continuations.
 - [`src/utils/worker-resource-projection.ts`](../src/utils/worker-resource-projection.ts)
@@ -129,8 +127,8 @@ exhaustive parameter reference.
   owns the bounded exact-Membership startup observation used after a new or
   recovered carrier launch; `session_bound` generation evidence correlates the
   exact runtime process tuple, and it is not a readiness or progress protocol.
-- [`src/utils/alerts.ts`](../src/utils/alerts.ts) owns typed exceptional Alert
-  acceptance and event publication.
+- [`src/alert-authority/alerts.ts`](../src/alert-authority/alerts.ts) owns typed
+  exceptional Alert acceptance through injected Membership and publication ports.
 - [`src/adapters/terminal-registry.ts`](../src/adapters/terminal-registry.ts)
   selects the terminal lifecycle adapter; adapter implementations own their
   platform capabilities and stop evidence.
@@ -139,8 +137,8 @@ exhaustive parameter reference.
 
 - `npm run typecheck` checks the executable type contract.
 - `npm test` runs only the fast deterministic lane; `test:exhaustive-only` is
-  its CI complement, `test:full` runs all tests, `test:external` is the real
-  Beads/Dolt diagnostic subset, `qa:agent-surface` is the artifact lane,
+  its CI complement, `test:full` runs all tests, `test:external` is the external
+  runtime diagnostic subset, `qa:agent-surface` is the artifact lane,
   `qa:tool-results` is receipt QA, and `test:lanes` checks closure.
 - `npm run verify:package` packs the public artifact and probes the scoped
   observation import from a clean temporary project.
@@ -152,4 +150,4 @@ For current stage, decisions, constraints, and next steps, read the
 
 ## Test lanes
 
-`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for real Beads/Dolt diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for external runtime diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.

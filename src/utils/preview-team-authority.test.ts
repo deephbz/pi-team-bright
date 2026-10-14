@@ -14,7 +14,7 @@ import {
   resolveCurrentTeammateSessionBinding,
   writeConfigAtomic,
 } from "./teams";
-import type { TeamConfig } from "./models";
+import type { TeamConfig } from "../team-authority/contracts";
 
 const roots: string[] = [];
 

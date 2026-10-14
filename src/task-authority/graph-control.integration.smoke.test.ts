@@ -70,6 +70,7 @@ afterEach(() => fs.rmSync(teamDir(teamName), { recursive: true, force: true }));
 describe("durable graph-control integration", () => {
   it("recovers Attempts and dispatch while a failed review stays closed to verification", async () => {
     fs.mkdirSync(teamDir(teamName), { recursive: true });
+    await new DurableGraphTaskAuthority().initializeEmpty(teamName);
     writeConfigAtomic(configPath(teamName), config());
     const publication = new DurableTaskMutationPublication();
     const orchestration = new DurableGraphTaskOrchestration(

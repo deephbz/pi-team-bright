@@ -58,8 +58,8 @@ describe("minimal PiTeams agent-facing surface", () => {
       "extensions/index.ts",
       "src/model-tool-contract/result-projection.ts",
       "src/model-tool-contract/tui-projection.ts",
-      "src/utils/models.ts",
-      "src/utils/tasks.ts",
+      "src/team-authority/contracts.ts",
+      "src/task-authority/graph-control.ts",
       "src/coordination/event-journal.ts",
       "src/utils/tool-surface.test.ts",
     ]) {

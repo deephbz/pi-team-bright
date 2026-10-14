@@ -2,12 +2,13 @@ import { snapshotEntry } from "../support/branch-observation";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { GraphTaskController } from "../../src/task-authority/graph-control";
 import { DurableGraphTaskAuthority } from "../../src/adapters/durable-graph-task-authority";
 import { DurableTaskMutationPublication } from "../../src/adapters/durable-task-mutation-publication";
 import { DurableGraphTaskOrchestration } from "../../src/task-authority/graph-orchestration";
 import { readTeamEvents } from "../../src/coordination/event-journal";
 import { CoordinationObservationService } from "../../src/coordination/observation-service";
-import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/model-tool-contract/beads-task-adapter";
+import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/coordination/task-change-projection";
 import { readGraphRevisionRetirement } from "../../src/utils/graph-revision-retirement";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../../src/utils/paths";
 import { readCurrentTaskDeliveries, TaskChangeDelivery } from "../../src/utils/task-delivery";
@@ -33,7 +34,8 @@ function fixture(suffix: string) {
       joinedAt: 0, sessionFile, cwd: process.cwd(), subscriptions: [],
     }],
   };
-  fs.mkdirSync(teamDir(teamName), { recursive: true });
+  fs.mkdirSync(path.dirname(graphTaskAuthorityPath(teamName)), { recursive: true });
+  fs.writeFileSync(graphTaskAuthorityPath(teamName), JSON.stringify(new GraphTaskController().snapshot()));
   writeConfigAtomic(configPath(teamName), config);
   const authority = new DurableGraphTaskAuthority();
   const publication = new DurableTaskMutationPublication();
@@ -83,7 +85,7 @@ describe("authority commit and publication windows", () => {
           return action();
         },
       },
-      reconcile: async () => 0, reconcileOwnerOutbox: async () => [], reconcileReady: async () => [],
+      reconcile: async () => 0, reconcileRecovery: async () => 0, reconcileReady: async () => [],
     });
     await delivery.start([]);
     expect(replaced).toBe(true);
@@ -117,7 +119,7 @@ describe("authority commit and publication windows", () => {
         currentRecipient: async () => ({ membershipId: "membership-worker" }),
         withCurrentRecipient: async <T>(_input: unknown, action: () => Promise<T>) => action(),
       },
-      reconcile: async () => 0, reconcileOwnerOutbox: async () => [], reconcileReady: async () => [],
+      reconcile: async () => 0, reconcileRecovery: async () => 0, reconcileReady: async () => [],
     });
     await delivery.start([]);
     expect((await readCurrentTaskDeliveries(teamName, "worker")).some(record =>

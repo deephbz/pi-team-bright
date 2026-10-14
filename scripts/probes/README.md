@@ -16,7 +16,25 @@ The runner defaults to the package-local real Pi CLI. Set `PI_PROBE_CLI` to
 an absolute `dist/cli.js` path to probe another version. Fixtures record the
 Pi, Herdr, Node, OS architecture, date, and source base. The committed run
 used Pi 0.83.0 and Herdr 0.9.3. It does not establish behavior for Pi 1.1.0.
-A7 and A9 are deliberately skipped.
+A7 and A9 use the separate host-OS lane below.
+
+## A7 and A9 host-OS lane
+
+`host-os/probe.ts` runs the production process-generation, lock, and atomic
+JSON modules. `host-os/pidwrap.c` forces PID reuse by cycling the PID space with
+short-lived forks; it needs no privilege. Bundle the probe, copy both files to
+the host, and use a throwaway HOME:
+
+```sh
+npx esbuild scripts/probes/host-os/probe.ts --bundle --platform=node --format=cjs --outfile=/tmp/host-os/probe.cjs
+cc -O2 -o /tmp/host-os/pidwrap scripts/probes/host-os/pidwrap.c   # on the host
+HOME=$(mktemp -d) node /tmp/host-os/probe.cjs a7 > A7.json        # Linux only
+HOME=$(mktemp -d) node /tmp/host-os/probe.cjs a9 > A9.json
+```
+
+A7 takes about 72 seconds per trial at pid_max 4194304. A9 takes about two
+minutes, mostly the 30-second stale-lock recovery. Replace boot IDs with
+aliases before committing a fixture. Neither probe covers a host crash.
 
 ## D5 real-Team campaign
 

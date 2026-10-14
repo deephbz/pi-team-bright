@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import type { TeamEventWaitResult } from "./team-events";
-import type { TeamEvent } from "./models";
+import type { TeamEventWaitResult } from "../coordination/event-journal";
+import type { TeamEvent } from "../coordination/contracts";
 import {
   observeWorkerStartup,
   resolveWorkerStartupObservationTimeoutMs,

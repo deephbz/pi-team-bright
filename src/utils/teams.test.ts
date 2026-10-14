@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { addMember, configureBeadsTaskBackend, createTeam, deactivateMembership, findLeadTeamForSession } from "./teams";
+import { addMember, createTeam, deactivateMembership, findLeadTeamForSession } from "./teams";
 import * as paths from "./paths";
 
 const testDir = path.join(os.tmpdir(), `pi-teams-authority-${process.pid}`);
@@ -117,19 +117,13 @@ describe("TeamConfig authority recovery", () => {
     expect(fs.statSync(configFile).mode & 0o7777).toBe(0o640);
   });
 
-  it.each(["active", "prepared"] as const)("does not initialize legacy authority when config is missing and marker is %s", async state => {
-    fs.mkdirSync(tasksDir, { recursive: true });
-    fs.writeFileSync(path.join(tasksDir, `.pi-teams-${teamName}-cutover.jsonl`), `${JSON.stringify(marker(state))}\n`);
 
-    await expect(createTeam(teamName, "new-session", "lead")).rejects.toThrow(/config is missing.*refusing to initialize a new Task authority/i);
-    expect(fs.existsSync(configFile)).toBe(false);
-  });
 
   it("persists the resolved pane policy in TeamConfig", async () => {
     const policy = { leader_share: 0.7, worker_tiling: "linear" as const };
     const created = await createTeam(
-      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
-      undefined, undefined, { backend: "tmux", leadTarget: { backend: "tmux", kind: "pane", targetId: "%leader" } },
+      teamName, "session", "lead", "", undefined, undefined, undefined,
+      { backend: "tmux", leadTarget: { backend: "tmux", kind: "pane", targetId: "%leader" } },
       "model-tools", policy,
     );
 
@@ -139,8 +133,8 @@ describe("TeamConfig authority recovery", () => {
 
   it("counts current Worker Memberships for the optional capacity limit and frees stopped capacity", async () => {
     await createTeam(
-      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
-      undefined, undefined, { backend: "tmux" }, "model-tools",
+      teamName, "session", "lead", "", undefined, undefined, undefined,
+      { backend: "tmux" }, "model-tools",
       { leader_share: 0.6, worker_tiling: "linear", worker_limit: 1 },
     );
     const member = (name: string) => ({
@@ -163,8 +157,8 @@ describe("TeamConfig authority recovery", () => {
 
   it("serializes competing capacity admissions and allows reuse after stop", async () => {
     await createTeam(
-      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
-      undefined, undefined, { backend: "tmux" }, "model-tools",
+      teamName, "session", "lead", "", undefined, undefined, undefined,
+      { backend: "tmux" }, "model-tools",
       { leader_share: 0.6, worker_tiling: "linear", worker_limit: 1 },
     );
     const member = (name: string) => ({
@@ -191,8 +185,8 @@ describe("TeamConfig authority recovery", () => {
 
   it("characterizes inactive insertion at a full current Worker limit", async () => {
     await createTeam(
-      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
-      undefined, undefined, { backend: "tmux" }, "model-tools",
+      teamName, "session", "lead", "", undefined, undefined, undefined,
+      { backend: "tmux" }, "model-tools",
       { leader_share: 0.6, worker_tiling: "linear", worker_limit: 1 },
     );
     const historical = {
@@ -231,8 +225,8 @@ describe("TeamConfig authority recovery", () => {
 
   it("refuses an invalid pane policy before writing TeamConfig", async () => {
     await expect(createTeam(
-      teamName, "session", "lead", "", undefined, undefined, undefined, undefined,
-      undefined, undefined, { backend: "tmux" }, "model-tools",
+      teamName, "session", "lead", "", undefined, undefined, undefined,
+      { backend: "tmux" }, "model-tools",
       { leader_share: 0.7, worker_tiling: "grid" as const },
     )).rejects.toThrow(/unsupported.*tmux/i);
     expect(fs.existsSync(configFile)).toBe(false);
@@ -262,44 +256,5 @@ describe("TeamConfig authority recovery", () => {
     expect(fs.readdirSync(testDir).some(name => name.endsWith(".tmp"))).toBe(false);
   });
 
-  it("preserves Beads authority, workspace, cutover evidence, and permissions across recreation", async () => {
-    await createTeam(teamName, "session", "lead");
-    fs.chmodSync(configFile, 0o640);
-    const cutover = {
-      inventoryPath: path.join(tasksDir, "inventory.json"),
-      inventorySha256,
-      markerPath: path.join(tasksDir, `.pi-teams-${teamName}-cutover.jsonl`),
-      cutoverAt: new Date(0).toISOString(),
-    };
-    await configureBeadsTaskBackend(teamName, path.join(testDir, "beads-workspace"), {
-      schema: "pi-teams-beads-authority/1",
-      backend: "dolt",
-      database: "dolt",
-      doltDatabase: "teams_test",
-      projectId: "teams-test-project",
-    }, cutover);
-    const current = JSON.parse(fs.readFileSync(configFile, "utf8"));
-    await deactivateMembership(teamName, current.members[0].membershipId, "team_shutdown");
 
-    const recreated = await createTeam(teamName, "recreated-session", "new-lead");
-
-    expect(recreated.taskBackend).toBe("beads");
-    expect(recreated.taskWorkspace).toBe(path.join(testDir, "beads-workspace"));
-    expect(recreated.taskCutover).toEqual(cutover);
-    expect(recreated.leadSessionId).toBe("recreated-session");
-    expect(fs.statSync(configFile).mode & 0o7777).toBe(0o640);
-  });
-
-  it("never reconnects a reused team name to legacy after a Beads cutover marker", async () => {
-    const legacy = await createTeam(teamName, "session", "lead");
-    await deactivateMembership(teamName, legacy.members[0].membershipId!, "team_shutdown");
-    const closed = JSON.parse(fs.readFileSync(configFile, "utf8"));
-    fs.writeFileSync(configFile, JSON.stringify({ ...closed, taskBackend: undefined, taskWorkspace: undefined, taskCutover: undefined }, null, 2));
-    fs.mkdirSync(tasksDir, { recursive: true });
-    fs.writeFileSync(path.join(tasksDir, `.pi-teams-${teamName}-cutover.jsonl`), `${JSON.stringify(marker("active"))}\n`);
-    const before = fs.readFileSync(configFile, "utf8");
-
-    await expect(createTeam(teamName, "recreated-session", "new-lead")).rejects.toThrow(/refusing to reconnect.*legacy tasks/i);
-    expect(fs.readFileSync(configFile, "utf8")).toBe(before);
-  });
 });

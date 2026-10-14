@@ -5,8 +5,3 @@ export interface AssignedWorkGuard {
   /** Exact-Worker query used before one Worker carrier can stop. */
   nonterminalTaskIdsAssignedToWorker(teamName: string, workerName: string): Promise<string[]>;
 }
-
-/** Native authority query for one Worker's nonterminal assigned Tasks. */
-export interface NonterminalAssignedTaskQuery {
-  nonterminalTaskIdsAssignedToWorker(teamName: string, workerName: string): Promise<string[]>;
-}

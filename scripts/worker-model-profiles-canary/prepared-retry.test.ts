@@ -3,7 +3,7 @@ import { writeRuntimeStatus } from "../../src/utils/runtime";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkerLaunchBridge } from "../../src/utils/worker-launch-bridge";
+import { createWorkerLaunchBridge } from "../../src/team-authority/worker-launch-bridge";
 import { DurableModelToolBindings } from "../../src/model-tool-contract/durable-model-tool-bindings";
 import { DurableModelToolTeamApplication } from "../../src/model-tool-contract/durable-model-tool-team-application";
 import { exactLeaderSessionId } from "../../src/model-tool-contract/model-tool-contracts";
@@ -18,12 +18,8 @@ const teamNames: string[] = [];
 async function team(defaultModel?: string) {
   const name = `profile-prepared-retry-${process.pid}-${Date.now()}`;
   teamNames.push(name);
-  const workspace = paths.teamDir(name);
-  fs.mkdirSync(path.join(workspace, ".beads"), { recursive: true });
-  fs.writeFileSync(path.join(workspace, ".beads", "metadata.json"), JSON.stringify({ database: "dolt", backend: "dolt", dolt_database: name, project_id: name }));
-  await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead", "Prepared retry proof", defaultModel, undefined, workspace, `authority-${name}`, {
-    schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: name, projectId: name,
-  }, undefined, { backend: "profile-retry", leadTarget: { backend: "profile-retry", kind: "pane", targetId: "leader" } });
+  await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, "lead", "Prepared retry proof", defaultModel, undefined, undefined,
+    { backend: "profile-retry", leadTarget: { backend: "profile-retry", kind: "pane", targetId: "leader" } });
   return name;
 }
 

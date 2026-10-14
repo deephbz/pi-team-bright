@@ -3,14 +3,8 @@ import type { CanonicalTaskCard, TaskCard, TaskCardWarning } from "../task-autho
 import type { GraphTaskTransition, GraphVersionRef } from "../task-authority/graph-control";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
 import type { CoordinationPendingPresentation, CoordinationSnapshotResult, CoordinationSyncResult, CoordinationTeamCurrent, CoordinationWorkerCurrent } from "../coordination/observation-contracts";
-import type {
-  ModelToolTaskJournalEntry,
-  ModelToolTaskUpdateInput,
-} from "../task-authority/contracts";
-export type {
-  ModelToolTaskJournalEntry,
-  ModelToolTaskUpdateInput,
-} from "../task-authority/contracts";
+import type { ModelToolTaskJournalEntry } from "../task-authority/contracts";
+export type { ModelToolTaskJournalEntry } from "../task-authority/contracts";
 
 declare const exactLeaderSessionIdBrand: unique symbol;
 
@@ -81,15 +75,6 @@ export type CreateTaskGraphPortResult =
   | { kind: "unavailable"; operationId: string; reason: "task_authority_unavailable"; message: string }
   | { kind: "no_active_team"; operationId: string };
 
-/** Compatibility result for non-model one-Task callers. */
-export type CreateTaskPortResult =
-  | { kind: "created"; operationId: string; task: TaskCard; deliveryWarnings?: string[] }
-  | { kind: "operation_conflict"; operationId: string; message: string }
-  | { kind: "unknown_outcome"; operationId: string; message: string }
-  | { kind: "worker_unavailable"; operationId: string }
-  | { kind: "unavailable"; operationId: string; reason: "task_authority_unavailable"; message: string }
-  | { kind: "no_active_team"; operationId: string };
-
 export type ReadTaskContractGap = {
   kind: "contract_gap";
   reason: "task_metadata_absent" | "task_metadata_invalid";
@@ -125,19 +110,6 @@ export type TeamShutdownPortResult =
   | { kind: "partial"; stoppedWorkers: string[]; failedWorkers: string[]; unfinishedTaskIds: string[] }
   | { kind: "unavailable"; reason: "no_active_team" | "team_authority_unavailable"; message: string };
 
-export interface TaskLinkPortInput {
-  taskId: string;
-  relation: "blocked_by" | "parent" | "related";
-  targetId: string;
-  action: "add" | "remove";
-  expectedVersion?: TaskVersionRef;
-}
-
-export type TaskLinkPortResult =
-  | { kind: "linked"; taskId: string; targetId: string; relation: TaskLinkPortInput["relation"]; action: TaskLinkPortInput["action"]; changed: boolean; version: TaskVersionRef }
-  | { kind: "refused"; taskId: string; reason: "task_not_found" | "version_conflict" | "graph_conflict"; message: string }
-  | { kind: "unavailable"; reason: "no_active_team" | "task_authority_unavailable"; message: string };
-
 export type AlertSendPortResult =
   | { kind: "sent"; alertId: string; acceptedRecipients: string[]; failedRecipients: string[]; deliveryDegraded?: import("../alert-authority/contracts").RecipientDeliveryDegradation[] }
   | { kind: "refused"; reason: "recipient_not_current" | "no_eligible_recipients" | "invalid_fanout"; message: string }
@@ -172,13 +144,11 @@ export interface ModelToolTeamPort {
   createTeam(leaderSessionId: ExactLeaderSessionId, input: { name: string; purpose: string; pane_layout?: TeamPaneLayout }): Promise<CreateTeamPortResult>;
   ensureWorker(leaderSessionId: ExactLeaderSessionId, input: { name: string; scope: string; model_role?: string }, context?: EnsureWorkerExecutionContext): Promise<EnsureWorkerPortResult>;
   readSnapshot(leaderSessionId: ExactLeaderSessionId): Promise<TeamSnapshotPortResult>;
-  createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
   createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;
   readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult>;
-  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: Array<ModelToolTaskUpdateInput | ModelToolGraphTaskUpdateInput>, actor?: string): Promise<UpdateTasksPortResult>;
+  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolGraphTaskUpdateInput[], actor?: string): Promise<UpdateTasksPortResult>;
   stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult>;
   shutdownTeam(leaderSessionId: ExactLeaderSessionId): Promise<TeamShutdownPortResult>;
-  linkTask(leaderSessionId: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult>;
   sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult>;
   readTeamSync(leaderSessionId: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, toolCallId: string): Promise<TeamSyncPortResult>;
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void;

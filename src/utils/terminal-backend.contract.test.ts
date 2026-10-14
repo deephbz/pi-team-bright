@@ -44,9 +44,6 @@ async function createBoundTeam(teamName: string, backend: string, leadTargetId =
     undefined,
     undefined,
     undefined,
-    undefined,
-    undefined,
-    undefined,
     {
       backend,
       leadTarget: terminalTarget(backend, "pane", leadTargetId),

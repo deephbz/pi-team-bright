@@ -76,8 +76,7 @@ export type Fault =
   | { source: "herdr.start"; mode: "refused" | "invalid_params" | "timeout" }
   | { source: "pi.start"; mode: "hang" | "exit_before_ready" }
   | { source: "generation"; mode: "unavailable" | "slow"; delayMs?: number }
-  | { source: "journal"; mode: "commit_then_error" }
-  | { source: "bd"; mode: "unavailable" | "slow" };
+  | { source: "journal"; mode: "commit_then_error" };
 
 export interface TimedStep {
   /**

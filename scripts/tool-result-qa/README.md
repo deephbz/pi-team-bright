@@ -1,7 +1,7 @@
 # Headless tool-result QA
 
 This suite runs the real PiTeams extension, Team persistence, event journal,
-identity checks, and Beads Task adapter without launching Pi, a model, tmux, or
+identity checks, and graph Task authority without launching Pi, a model, tmux, or
 the interactive TUI.
 
 ```mermaid
@@ -38,10 +38,9 @@ privacy-safe design input derived from real Session evidence. A case becomes
 reproducible only when implemented in `suite.test.ts`; the catalog itself is
 not executable input.
 
-The executable suite currently emits 39 immutable case records. Its boundary
-catalog includes future cursors, event overflow, zero-recipient Alerts,
-post-commit Task-create delivery degradation, duplicate relation no-ops, and
-idle-Worker reuse guidance in addition to the normal lifecycle paths. Each
+The executable suite owns its case inventory. Its boundary catalog includes
+stale graph revisions, recovery after delivery failure, zero-recipient Alerts,
+and idle-Worker reuse guidance in addition to the normal lifecycle paths. Each
 scenario produces exactly one `cases[]` record; deterministic fixture cleanup
 is recorded separately in `fixtureTransitions` and never overwrites that case.
 
@@ -94,7 +93,7 @@ Real:
 
 - the registered nine-tool surface from `extensions/index.ts`;
 - Team config, Membership generation, launch capability, and Session binding;
-- Beads Task creation, mutation, relations, versions, and queries;
+- graph apply, Worker transitions, versions, and Task queries;
 - Alert delivery records and Team event cursors;
 - lifecycle guards and stop/shutdown transitions.
 

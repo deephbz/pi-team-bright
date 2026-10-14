@@ -1,7 +1,6 @@
 import { hostEnv, type TimerHandle, type HostWatcher } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
-import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import { readTaskActivity } from "../coordination/event-journal";
 import { teamEventJournalPath } from "../utils/paths";
 import {
@@ -13,7 +12,6 @@ import {
 import {
   parseTaskGraphLimit,
   projectGraphControlTaskGraphViewSource,
-  projectTaskGraphViewSource,
   type TaskGraphControlTrace,
   type TaskGraphRecentLimit,
   type TaskGraphViewSource,
@@ -28,8 +26,7 @@ export interface TaskGraphControlReadSource {
 }
 
 export interface TaskGraphPaneServiceOptions {
-  taskReadAdapterFactory: BeadsTaskAdapterFactory;
-  graphControlSource?: TaskGraphControlReadSource;
+  graphControlSource: TaskGraphControlReadSource;
   cliPath?: string;
   host?: HerdrCliTaskGraphPaneHost;
 }
@@ -53,17 +50,8 @@ export class TaskGraphPaneService {
 
   private async source(teamName: string, actor: string): Promise<TaskGraphViewSource> {
     const activity = readTaskActivity(teamName);
-    const graphControl = this.options.graphControlSource?.hasGraph(teamName)
-      ? await this.options.graphControlSource.trace(teamName)
-      : undefined;
-    if (graphControl) {
-      return projectGraphControlTaskGraphViewSource({ teamName, trace: graphControl, activity });
-    }
-    const tasks = await this.options.taskReadAdapterFactory(teamName, actor).listCurrentTasks();
-    // The durable graph-control adapter is not integrated yet. Keep this
-    // fallback explicit: legacy closed records are unresolved completion, not
-    // graph-control goal achievement.
-    return projectTaskGraphViewSource({ teamName, tasks, activity });
+    const trace = await this.options.graphControlSource.trace(teamName);
+    return projectGraphControlTaskGraphViewSource({ teamName, trace, activity });
   }
 
   private notifyRefresh(): void {
@@ -93,7 +81,7 @@ export class TaskGraphPaneService {
       try {
         if (fs.statSync(candidate).isDirectory()) return candidate;
       } catch {
-        // A missing authority path is normal before the first graph apply.
+        // Watch the nearest existing parent after authority storage moves.
       }
       const parent = path.dirname(candidate);
       if (parent === candidate) return undefined;

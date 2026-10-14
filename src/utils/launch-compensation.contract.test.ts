@@ -8,10 +8,9 @@ import type { TerminalAdapter } from "./terminal-adapter";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
 import { projectTui } from "../model-tool-contract/tui-projection";
 import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
-import { createWorkerLaunchBridge as createRuntimeWorkerLaunchBridge, WorkerLegacyTeamModelDefaultError, type WorkerLaunchBridgeDependencies, type WorkerLaunchRequest } from "./worker-launch-bridge";
+import { createWorkerLaunchBridge as createRuntimeWorkerLaunchBridge, WorkerLegacyTeamModelDefaultError, type WorkerLaunchBridgeDependencies, type WorkerLaunchRequest } from "../team-authority/worker-launch-bridge";
 import { materializeWorkerAggregate } from "./worker-resource-projection";
 import type { ModelRoleSettings } from "./model-role-settings";
 
@@ -69,8 +68,8 @@ async function team(suffix: string, defaultModel?: string, terminalBackend = "la
   const name = `launch-comp-${suffix}-${process.pid}-${Date.now()}-${created.length}`;
   created.push(name);
   const leadSession = `/tmp/${name}-lead.jsonl`;
-  const taskWorkspace = paths.teamDir(name);
-  const agentDir = path.join(taskWorkspace, "agent");
+  const teamDirectory = paths.teamDir(name);
+  const agentDir = path.join(teamDirectory, "agent");
   fs.mkdirSync(agentDir, { recursive: true });
   fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: {
     model_roles: { fixture: { model: "fixture/model", thinking: "low", use: "Carrier lifecycle tests" } }, default_model_role: "fixture",
@@ -79,14 +78,8 @@ async function team(suffix: string, defaultModel?: string, terminalBackend = "la
   if (terminalBackend === "herdr") {
     vi.stubEnv("HERDR_ENV", "1"); vi.stubEnv("HERDR_PANE_ID", "pane-leader"); vi.stubEnv("HERDR_TAB_ID", "tab-fixture");
   }
-  fs.mkdirSync(`${taskWorkspace}/.beads`, { recursive: true });
-  fs.writeFileSync(`${taskWorkspace}/.beads/metadata.json`, JSON.stringify({
-    database: "dolt", backend: "dolt", dolt_database: "launch_compensation_contract", project_id: `launch-compensation-${name}`,
-  }));
-  vi.spyOn(BeadsTaskAdapter.prototype, "list").mockResolvedValue([]);
-  await teams.createTeam(name, leadSession, "lead", undefined, defaultModel, undefined, taskWorkspace, `task-authority-${name}`, {
-    schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: "launch_compensation_contract", projectId: `launch-compensation-${name}`,
-  }, undefined, { backend: terminalBackend, leadTarget: { backend: terminalBackend, kind: "pane", targetId: "pane-leader" } });
+  await teams.createTeam(name, leadSession, "lead", undefined, defaultModel, undefined, undefined,
+    { backend: terminalBackend, leadTarget: { backend: terminalBackend, kind: "pane", targetId: "pane-leader" } });
   return { name, leadSession };
 }
 function bridge(lifecyclePublication = new DurableTeamLifecyclePublication()) {
@@ -323,13 +316,16 @@ describe("receipt-first Worker launch", () => {
 
   it("reports partial shutdown once while preserving recovery evidence across projections", async () => {
     const f = await team("shutdown-partial-projection"); const tools = register(adapter({ alive: true }).terminal);
+    await teams.ensureLogicalWorker(f.name, { name: "delivery-broken", scope: "Retain unfinished work across partial shutdown." });
     await teams.addMember(f.name, {
       membershipId: teams.newMembershipId(), agentId: `delivery-broken@${f.name}`, name: "delivery-broken", agentType: "teammate",
       joinedAt: Date.now(), tmuxPaneId: "pane-worker", sessionFile: `/tmp/${f.name}-delivery-broken.jsonl`, cwd: process.cwd(), subscriptions: [], isActive: true,
     });
-    vi.mocked(BeadsTaskAdapter.prototype.list).mockResolvedValue([{
-      id: "task-open", title: "Retained unfinished work", goal: "Keep this Task across partial shutdown.", current_context: "Work has not started.", status: "open", version: "v_0123456789abcdef",
-    }]);
+    const applied = await tools.get("task_graph_apply")!.execute("shutdown-task", {
+      operation_id: "shutdown-task",
+      tasks: [{ key: "task-open", title: "Retained unfinished work", goal: "Keep this Task across partial shutdown.", assignee: "delivery-broken" }],
+    }, undefined, undefined, context(f.leadSession));
+    expect(applied.details).toMatchObject({ kind: "task_graph_applied", tasks_by_key: { "task-open": { status: "ready" } } });
     const result = await tools.get("team_shutdown")!.execute("shutdown-partial", { team_name: f.name }, undefined, undefined, context(f.leadSession));
     expect(() => JSON.parse(result.content[0].text)).not.toThrow();
     expect(result.details).toMatchObject({ kind: "partial", lifecycle: "active", stopped_workers: [], failed_workers: ["delivery-broken"], unfinished_task_ids: ["task-open"], state_changed: true });

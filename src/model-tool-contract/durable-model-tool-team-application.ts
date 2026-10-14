@@ -3,7 +3,6 @@ import { getTerminalAdapter } from "../adapters/terminal-registry";
 import * as paths from "../utils/paths";
 import { datePrefixedTeamName, loadTeamDatePrefix, teamTerminalTitle } from "../utils/team-labels";
 import * as teams from "../utils/teams";
-import type { TaskAuthorityProvisioningPort } from "../task-authority/contracts";
 import { loadWorkerResourcePolicy, resolveWorkerLaunchResources } from "../utils/worker-resource-projection";
 import { WorkerModelRoleConfigurationError } from "../utils/model-role-settings";
 import { loadTeamPaneLayoutSettings, resolveTeamPaneLayout, type TeamPaneLayout } from "../utils/team-pane-layout";
@@ -23,7 +22,7 @@ function compactModelRoles(settings: NonNullable<ReturnType<typeof loadWorkerRes
 export class DurableModelToolTeamApplication implements ModelToolTeamApplicationPort {
   setLeaderSessionFile: NonNullable<ModelToolTeamApplicationPort["setLeaderSessionFile"]>;
   setLeaderLaunchContext: NonNullable<ModelToolTeamApplicationPort["setLeaderLaunchContext"]>;
-  constructor(private readonly bindings: DurableModelToolBindings, private readonly launchBridge?: WorkerLaunchBridge, private readonly lifecycle?: ModelToolLifecycle, private readonly taskAuthority?: TaskAuthorityProvisioningPort) {
+  constructor(private readonly bindings: DurableModelToolBindings, private readonly launchBridge?: WorkerLaunchBridge, private readonly lifecycle?: ModelToolLifecycle) {
     this.setLeaderSessionFile = bindings.setLeaderSessionFile.bind(bindings);
     this.setLeaderLaunchContext = bindings.setLeaderLaunchContext.bind(bindings);
   }
@@ -41,13 +40,11 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
     let paneLayout: TeamPaneLayout; let syncLiveness: TeamConfig["syncLiveness"];
     let modelRoles: Array<{ name: string; use: string }> = []; let defaultModelRole: string | undefined;
     try { const context = this.bindings.launchContext(id); const leaderCwd = context?.cwd ?? hostEnv().process.cwd(); const settings = loadTeamPaneLayoutSettings({ cwd: leaderCwd, projectTrusted: context?.projectTrusted ?? true }); paneLayout = resolveTeamPaneLayout({ explicit: input.pane_layout, project: settings.project, global: settings.global, backend: terminal.name }); const workerPolicy = loadWorkerResourcePolicy({ cwd: leaderCwd, projectTrusted: context?.projectTrusted === true }); modelRoles = compactModelRoles(workerPolicy.modelRoleSettings); defaultModelRole = workerPolicy.modelRoleSettings.defaultRole; const policy = loadSyncLivenessSettings(); syncLiveness = { waitSeconds: policy.waitSeconds, autoSyncEnabled: policy.autoSyncEnabled, autoSyncDelaySeconds: policy.autoSyncDelaySeconds, autoSyncUpdateThreshold: policy.autoSyncUpdateThreshold, policyVersion: policy.policyVersion, ...(policy.diagnostics.length ? { diagnostics: policy.diagnostics } : {}) }; } catch (error) { return { kind: "unavailable", reason: "carrier_unavailable", message: error instanceof Error ? error.message : String(error) }; }
-    let authority; try { authority = await this.taskAuthority?.resolve(teamName); } catch (error) { return { kind: "unavailable", reason: "task_authority_unavailable", message: error instanceof Error ? error.message : String(error) }; }
-    if (!authority) return { kind: "unavailable", reason: "task_authority_unavailable", message: "The Team Task authority resolver is not attached to this port." };
     try {
       const leaderPaneId = terminal.currentTargetId?.();
       const config = await teams.withTeamTopologyLease(teamName, (lease) => teams.createTeam(
         teamName, sessionFile, "lead-agent", input.purpose, undefined, undefined,
-        authority.workspace, authority.authorityId, authority.fingerprint, lease,
+        lease,
         { backend: terminal.name, ...(leaderPaneId ? { leadTarget: { backend: terminal.name, kind: "pane", targetId: leaderPaneId } } : {}) },
         undefined, paneLayout, syncLiveness,
       ));

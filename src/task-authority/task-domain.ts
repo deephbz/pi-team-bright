@@ -52,8 +52,8 @@ export const TaskCardIncompleteSchema = Type.Object({
 }, { additionalProperties: false });
 
 /**
- * Delivery and Coordination accept legacy cards during cutover, while the
- * graph-native Task application writes GraphTaskCard only.
+ * Historical native Session and delivery records remain readable.
+ * Current Task authority writes GraphTaskCard only.
  */
 export const TaskCardSchema = Type.Union([TaskCardCompleteSchema, TaskCardIncompleteSchema, GraphTaskCardSchema]);
 
@@ -72,16 +72,11 @@ export type TaskCardWarning = {
   message: string;
 };
 
-/** DAG fields are optional only for stored pre-DAG cards during migration. */
+/** Historical cards remain readable in native Session and delivery records. */
 export type LegacyTaskCard = Static<typeof TaskCardCompleteSchema> | Static<typeof TaskCardIncompleteSchema>;
-/** Historical source alias retained for legacy Beads consumers. */
 export type TaskCard = LegacyTaskCard;
-/** Current delivery and observation boundary during graph cutover. */
+/** Current graph cards and historical native-record cards share this boundary. */
 export type CanonicalTaskCard = LegacyTaskCard | GraphTaskCard;
-
-export function isGraphTaskCard(task: CanonicalTaskCard): task is GraphTaskCard {
-  return "state" in task && "model" in task && "attempts_started" in task;
-}
 
 /** Terminal means no more assigned work can run without a graph revision. */
 export function isTaskTerminal(task: CanonicalTaskCard): boolean {

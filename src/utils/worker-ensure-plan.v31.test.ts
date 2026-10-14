@@ -65,7 +65,7 @@
  *       exists for it to test against.
  */
 import { describe, expect, it } from "vitest";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import {
   normalizeWorkerCarrier,
   planWorkerEnsure,

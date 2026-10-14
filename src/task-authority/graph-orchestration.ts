@@ -2,7 +2,7 @@ import { DurableGraphTaskAuthority, GraphSnapshotCorruption } from "../adapters/
 import type {
   TaskMutationCoordinates,
   TaskMutationPublicationPort,
-} from "../model-tool-contract/beads-authority-adapter";
+} from "./publication";
 import { readConfig } from "../utils/teams";
 import {
   GraphControlRefusal,
@@ -155,7 +155,6 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
       teamName,
       taskId: task.id,
       taskVersion: task.version as TaskVersionRef,
-      versionScope: "task_version",
       evidenceKind: evidence.kind,
       evidenceText: evidence.text,
     });
@@ -348,7 +347,6 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
   }
 
   async reconcileReady(teamName: string, worker?: string): Promise<string[]> {
-    if (!this.hasGraph(teamName)) return [];
     const frontier = await this.authority.readyFrontier(teamName, worker);
     const warnings: string[] = [];
     for (const task of frontier) {

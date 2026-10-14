@@ -546,9 +546,6 @@ export function projectTeamCurrentState(config: TeamConfig, tasks: ReadonlyArray
       name: config.name,
       description: config.description,
       lifecycle,
-      ...(config.taskBackend === "beads" && config.taskAuthorityId
-        ? { taskAuthority: { backend: "beads" as const, authorityId: config.taskAuthorityId } }
-        : {}),
     },
     workers,
     tasks: taskSummaries,

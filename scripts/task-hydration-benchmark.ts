@@ -1,7 +1,5 @@
 import { performance } from "node:perf_hooks";
-import { DurableTaskAuthorityRead } from "../src/adapters/durable-task-authority-read";
-import { DurableTaskAuthorityReadTeam } from "../src/adapters/durable-task-authority-read-team";
-import { BeadsError, DEFAULT_BD_TIMEOUT_MS } from "../src/utils/beads";
+import { DurableGraphTaskAuthority } from "../src/adapters/durable-graph-task-authority";
 
 export const TASK_HYDRATION_BENCHMARK_SCHEMA = "pi-team-bright/task-hydration-benchmark/1" as const;
 
@@ -26,7 +24,7 @@ export interface MeasurementSummary {
 export interface TaskHydrationBenchmarkResult {
   schema: typeof TASK_HYDRATION_BENCHMARK_SCHEMA;
   status: "complete" | "partial";
-  productionTimeoutMs: number;
+  productionTimeoutMs: null;
   workload: {
     samples: number;
     hydrationCounts: number[];
@@ -52,10 +50,10 @@ export interface BenchmarkDependencies {
   now(): number;
 }
 
-const productionRead = new DurableTaskAuthorityRead(new DurableTaskAuthorityReadTeam());
+const productionRead = new DurableGraphTaskAuthority();
 const productionDependencies: BenchmarkDependencies = {
-  list: (teamName) => productionRead.listTaskIds(teamName),
-  hydrate: (teamName, taskIds) => productionRead.readTaskAuthorityRecordEnvelopes(teamName, taskIds),
+  list: async (teamName) => (await productionRead.readTasks(teamName)).map(task => task.id),
+  hydrate: (teamName, taskIds) => productionRead.readTasks(teamName, taskIds),
   now: () => performance.now(),
 };
 
@@ -138,7 +136,6 @@ function emptyMeasurement(): MutableMeasurement {
 }
 
 function isTimeout(error: unknown): boolean {
-  if (error instanceof BeadsError) return error.kind === "timeout";
   if (!error || typeof error !== "object") return false;
   const candidate = error as { kind?: unknown; code?: unknown };
   return candidate.kind === "timeout" || candidate.code === "ETIMEDOUT";
@@ -206,7 +203,7 @@ export async function runTaskHydrationBenchmark(
   return {
     schema: TASK_HYDRATION_BENCHMARK_SCHEMA,
     status: complete ? "complete" : "partial",
-    productionTimeoutMs: DEFAULT_BD_TIMEOUT_MS,
+    productionTimeoutMs: null,
     workload: {
       samples: args.samples,
       hydrationCounts: [...args.hydrationCounts],

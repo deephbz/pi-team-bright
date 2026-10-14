@@ -131,21 +131,19 @@ export function p6OneOutstandingReservation(history: readonly HistoryEntry[]): V
   return pass();
 }
 
-const TASK_WRITES = new Set(["create", "update", "close", "reopen", "dep", "delete"]);
-
-/** P7 (always): carrier publication never writes Task authority (same PTB operation). */
+/** P7: exact carrier-observation publication operations never write Task authority. */
 export function p7PublicationNeverWritesTasks(history: readonly HistoryEntry[]): Verdict {
-  const published = new Set<string>();
-  for (const entry of ofKind(history, "journal.append")) {
-    if (entry.origin.kind === "ptb" && entry.origin.toolCallId !== undefined) published.add(entry.origin.toolCallId);
+  const publications = ofKind(history, "journal.append").filter(entry => entry.event.carrier !== undefined);
+  if (!publications.length) return notApplicable("no_carrier_observation_publication");
+  const coordinate = (entry: HistoryEntry): string | undefined => entry.origin.kind === "ptb" && entry.origin.toolCallId
+    ? `${actorKey(entry.origin.actor)}|${entry.origin.toolCallId}` : undefined;
+  const writes = ofKind(history, "authority.write");
+  if (!ofKind(history, "authority.tracing").length || publications.some(entry => !coordinate(entry)) || writes.some(entry => !coordinate(entry))) {
+    return notApplicable("insufficient_attribution");
   }
-  if (!published.size) return notApplicable("journal appends with PTB tool call ids");
-  for (const exec of ofKind(history, "exec.call")) {
-    if (exec.command !== "bd" || !TASK_WRITES.has(String(exec.args[0]))) continue;
-    const origin = exec.origin;
-    if (origin.kind === "ptb" && origin.toolCallId !== undefined && published.has(origin.toolCallId)) {
-      return violation(exec.sequence, `bd ${String(exec.args[0])} in the publication operation ${origin.toolCallId}`);
-    }
+  const published = new Set(publications.map(coordinate));
+  for (const write of writes) {
+    if (published.has(coordinate(write))) return violation(write.sequence, `Task authority write ${write.path} in carrier-observation publication ${coordinate(write)}`);
   }
   return pass();
 }

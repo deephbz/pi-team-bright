@@ -38,7 +38,7 @@ vi.mock("../utils/task-delivery", () => ({
 }));
 
 import { DurableTaskMutationPublication } from "./durable-task-mutation-publication";
-import type { TaskMutationCoordinates, TaskMutationPublicationInput } from "../model-tool-contract/beads-authority-adapter";
+import type { TaskMutationCoordinates, TaskMutationPublicationInput } from "../task-authority/publication";
 import type { TaskCard } from "../task-authority/task-domain";
 
 const before: TaskCard & TaskMutationCoordinates = {
@@ -109,7 +109,7 @@ describe("DurableTaskMutationPublication", () => {
     });
   });
 
-  it("matches operation evidence across Task versions unless exact graph scope is requested", async () => {
+  it("matches publication evidence only at the exact committed graph Task version", async () => {
     const event = {
       type: "task", ref: { taskId: "task-1", version: before.version },
       taskEvidence: { kind: "created", text: "Created by operation op-1." },
@@ -122,8 +122,8 @@ describe("DurableTaskMutationPublication", () => {
       evidenceKind: "created" as const, evidenceText: "Created by operation op-1.",
     };
 
-    await expect(bridge.hasTaskMutationPublication(query)).resolves.toBe(true);
-    await expect(bridge.hasTaskMutationPublication({ ...query, versionScope: "task_version" })).resolves.toBe(false);
+    await expect(bridge.hasTaskMutationPublication(query)).resolves.toBe(false);
+    await expect(bridge.hasTaskMutationPublication({ ...query, taskVersion: before.version })).resolves.toBe(true);
   });
 
   it("records an rc.10 failed-event hint before serial delivery and inline recovery", async () => {
@@ -242,26 +242,15 @@ describe("DurableTaskMutationPublication", () => {
     });
   });
 
-  it("delegates lease-time preparation, suppression, and completion without retained state", async () => {
-    const bridge = new DurableTaskMutationPublication();
-    await bridge.prepareOwnerTransitionIntent({ operationId: "op-1", teamName: "publication-team", before, afterOwner: "bob" });
-    await bridge.suppressTaskVersionForSession({ teamName: "publication-team", recipient: "alice", sessionFile: "/tmp/alice.jsonl", task: before });
-    await bridge.completeOwnerTransitionIntent({ teamName: "publication-team", operationId: "op-1", task: after });
-
-    expect(calls.prepare).toHaveBeenCalledWith({ operationId: "op-1", teamName: "publication-team", before, afterOwner: "bob" });
-    expect(calls.suppress).toHaveBeenCalledWith("publication-team", "alice", "/tmp/alice.jsonl", before);
-    expect(calls.complete).toHaveBeenCalledWith("publication-team", "op-1", after, {});
-    expect(Object.keys(bridge)).toEqual([]);
-  });
 });
 
 describe("Task mutation publication import fence", () => {
   it("keeps Task authority free of concrete publication imports and injects one factory", () => {
-    const authority = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/beads-authority-adapter.ts"), "utf8");
-    const taskAdapter = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/beads-task-adapter.ts"), "utf8");
+    const authority = fs.readFileSync(path.join(process.cwd(), "src/adapters/durable-graph-task-authority.ts"), "utf8");
+    const taskAdapter = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-task-application.ts"), "utf8");
     const bridge = fs.readFileSync(path.join(process.cwd(), "src/adapters/durable-task-mutation-publication.ts"), "utf8");
     const durablePort = fs.readFileSync(path.join(process.cwd(), "src/model-tool-contract/durable-model-tool-port.ts"), "utf8");
-    const orchestration = fs.readFileSync(path.join(process.cwd(), "src/adapters/durable-task-orchestration.ts"), "utf8");
+    const orchestration = fs.readFileSync(path.join(process.cwd(), "src/task-authority/graph-orchestration.ts"), "utf8");
     const extension = fs.readFileSync(path.join(process.cwd(), "extensions/index.ts"), "utf8");
     const sessionAdapter = fs.readFileSync(path.join(process.cwd(), "extensions/pi-team-session-adapter.ts"), "utf8");
 
@@ -273,14 +262,10 @@ describe("Task mutation publication import fence", () => {
     expect(bridge).toMatch(/from ["'][^"']*coordination\/event-journal["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-delivery["']/);
     expect(bridge).toMatch(/from ["'][^"']*task-event-failure-hints["']/);
-    expect(durablePort).toContain("new DurableModelToolTaskApplication(bindings, taskAdapterFactory, taskOrchestration)");
-    expect(extension).toContain("const taskAuthorityTeam = new DurableTaskAuthorityTeam()");
-    expect(extension).toContain("new DurableTaskOrchestration(taskPublication, taskPublication)");
-    expect(extension).toContain("createPublishingBeadsTaskAdapterFactory(taskPublication, taskAuthorityTeam, taskAuthorityRead, taskOrchestration)");
-    expect(extension).toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning)");
-    expect(extension).not.toContain("new DurableModelToolTeamApplication(modelToolBindings, workerLaunchBridge, lifecycle, taskAuthorityProvisioning, taskOrchestration)");
-    expect(extension).toContain("new DurableModelToolTaskApplication(modelToolBindings, taskAdapterFactory, taskOrchestration, graphTaskOrchestration)");
-    expect(extension).toMatch(/taskAdapterFactory\(binding\.teamName, binding\.member\.name\)\.read/);
+    expect(durablePort).toContain("new DurableModelToolTaskApplication(bindings, graph)");
+    expect(extension).toContain("new DurableGraphTaskOrchestration(graphTaskAuthority, taskPublication, taskPublication, taskPublication)");
+    expect(extension).toContain("new DurableModelToolTaskApplication(modelToolBindings, graphTaskOrchestration)");
+    expect(extension).toContain("graphTaskOrchestration.readTasks(binding.teamName");
     // The paired recipient actuator retains both Worker ready-reconciliation
     // paths: periodic reconciliation is injected into Task delivery, while
     // session reconciliation runs only after that task engine has started.

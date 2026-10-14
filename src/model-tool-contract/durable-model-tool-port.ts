@@ -1,7 +1,6 @@
 import type { AlertSender } from "../alert-authority/contracts";
 import type { WorkerLaunchBridge } from "../team-authority/worker-launch-bridge";
-import type { BeadsTaskAdapterFactory } from "./beads-task-adapter";
-import type { TaskAuthorityProvisioningPort } from "../task-authority/contracts";
+import type { GraphTaskOrchestrationPort } from "../task-authority/graph-orchestration";
 import { CoordinationObservationService } from "../coordination/observation-service";
 import { DurableModelToolBindings } from "./durable-model-tool-bindings";
 import { DurableModelToolTeamApplication, type ModelToolLifecycle } from "./durable-model-tool-team-application";
@@ -11,7 +10,6 @@ import { DurableModelToolCoordinationApplication } from "./durable-model-tool-co
 import { exactLeaderSessionId } from "./model-tool-contracts";
 import type { ExactLeaderSessionId, ModelToolTeamPort } from "./model-tool-contracts";
 import type { ModelToolJourneyPort } from "./model-tool-journey-port";
-import type { TaskOrchestrationPort } from "../task-authority/orchestration";
 
 export { DurableModelToolBindings } from "./durable-model-tool-bindings";
 export { DurableModelToolTeamApplication, type ModelToolLifecycle } from "./durable-model-tool-team-application";
@@ -32,15 +30,13 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
   constructor(
     launchBridge: WorkerLaunchBridge | undefined,
     lifecycle: ModelToolLifecycle | undefined,
-    taskAdapterFactory: BeadsTaskAdapterFactory,
+    graph: GraphTaskOrchestrationPort,
     alertSender: AlertSender | undefined,
     observationService: CoordinationObservationService,
-    taskAuthority?: TaskAuthorityProvisioningPort,
-    taskOrchestration?: TaskOrchestrationPort,
   ) {
     const bindings = new DurableModelToolBindings();
-    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle, taskAuthority);
-    this.task = new DurableModelToolTaskApplication(bindings, taskAdapterFactory, taskOrchestration);
+    this.team = new DurableModelToolTeamApplication(bindings, launchBridge, lifecycle);
+    this.task = new DurableModelToolTaskApplication(bindings, graph);
     this.alert = new DurableModelToolAlertApplication(bindings, alertSender);
     this.coordination = new DurableModelToolCoordinationApplication(bindings, observationService);
   }
@@ -51,11 +47,9 @@ export class DurableModelToolTeamPort implements ModelToolTeamPort, ModelToolJou
   shutdownTeam(...args: Parameters<DurableModelToolTeamApplication["shutdownTeam"]>) { return this.team.shutdownTeam(...args); }
   setLeaderSessionFile(...args: Parameters<NonNullable<DurableModelToolTeamApplication["setLeaderSessionFile"]>>) { return this.team.setLeaderSessionFile(...args); }
   setLeaderLaunchContext(...args: Parameters<NonNullable<DurableModelToolTeamApplication["setLeaderLaunchContext"]>>) { return this.team.setLeaderLaunchContext(...args); }
-  createTask(...args: Parameters<DurableModelToolTaskApplication["createTask"]>) { return this.task.createTask(...args); }
   createTaskGraph(...args: Parameters<DurableModelToolTaskApplication["createTaskGraph"]>) { return this.task.createTaskGraph(...args); }
   readTasks(...args: Parameters<DurableModelToolTaskApplication["readTasks"]>) { return this.task.readTasks(...args); }
   updateTasks(...args: Parameters<DurableModelToolTaskApplication["updateTasks"]>) { return this.task.updateTasks(...args); }
-  linkTask(...args: Parameters<DurableModelToolTaskApplication["linkTask"]>) { return this.task.linkTask(...args); }
   sendAlert(...args: Parameters<DurableModelToolAlertApplication["sendAlert"]>) { return this.alert.sendAlert(...args); }
   readSnapshot(...args: Parameters<DurableModelToolCoordinationApplication["readSnapshot"]>) { return this.coordination.readSnapshot(...args); }
   readTeamSync(...args: Parameters<DurableModelToolCoordinationApplication["readTeamSync"]>) { return this.coordination.readTeamSync(...args); }

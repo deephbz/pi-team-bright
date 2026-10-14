@@ -16,9 +16,6 @@ jobs:
     environment: npm
     steps:
       - uses: actions/checkout@v4
-        with:
-          # sim/migration.v31.test.ts archives a baseline commit.
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24.x
@@ -32,7 +29,6 @@ jobs:
           case "$version" in *-*) dist_tag=next ;; *) dist_tag=latest ;; esac
           echo "NPM_DIST_TAG=$dist_tag" >> "$GITHUB_ENV"
       - run: npm ci
-      - run: node scripts/materialize-beads-linux-amd64.cjs
       # Keep the same deterministic carrier surface as CI.
       - run: TERM_PROGRAM=iTerm.app npm run test:full
       - run: npm run test:lanes

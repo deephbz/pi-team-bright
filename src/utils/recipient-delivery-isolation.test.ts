@@ -13,6 +13,9 @@ import { projectToolTuiMessage } from "../model-tool-contract/tui-projection";
 import { snapshotEntry } from "../../test/support/branch-observation";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import { enqueueTaskChange, TaskChangeDelivery, TASK_CHANGE_CUSTOM_TYPE } from "./task-delivery";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import { readRuntimeStatus, writeRuntimeStatus, ownBirthIdentity } from "./runtime";
 import * as teams from "./teams";
 import { teamDir, taskDir } from "./paths";
@@ -25,18 +28,24 @@ const sessionService = new TeamSessionLifecycleService({} as never);
 
 async function fixture(failed: "alert" | "task") {
   const config = await teams.createTeam(team, leadSession, "lead-agent", "Test independent delivery");
+  await teams.ensureLogicalWorker(team, { name: "worker", scope: "Delivery isolation fixture." });
   await teams.addMember(team, { membershipId: "membership-worker", agentId: "worker-agent", name: "worker", agentType: "teammate", joinedAt: 1, tmuxPaneId: "", sessionFile: workerSession, cwd: "/project", subscriptions: [] });
   const member = await teams.currentMembership(team, "worker");
   await writeRuntimeStatus(team, "worker", { pid: process.pid, ...ownBirthIdentity(), startedAt: 1, runState: "settled" }, member.membershipId);
   const accepted = await sendAlert({ teamName: team, from: "team-lead", to: "worker", kind: "clarification", text: "Clarify the evidence." }, membership, { appendAcceptedAlert: async () => ({ cursor: "0" }) });
-  const task = await enqueueTaskChange(team, { id: "task-one", title: "Inspect", goal: "Inspect the artifact", current_context: "Inspect next", status: "in_progress", assignee: "worker", version: "v_0123456789abcdef", relations: [], dependency_state: { kind: "ready", active_blocker_ids: [] } }, "assigned");
+  const publication = new DurableTaskMutationPublication();
+  const graph = new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
+  const applied = await graph.applyGraph(team, { operationId: "apply-isolation", tasks: [{ key: "task-one", title: "Inspect", goal: "Inspect the artifact", assignee: "worker" }] });
+  if (applied.kind !== "applied") throw new Error(`Graph fixture apply failed: ${JSON.stringify(applied)}`);
+  const [card] = await graph.readTasks(team, ["task-one"]);
+  const task = await enqueueTaskChange(team, card, "assigned");
   expect(task).not.toBeNull();
   const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
   const binding: RecipientDeliveryBinding = { teamName: team, recipient: "worker", membershipId: member.membershipId!, sessionFile: workerSession };
   const direct = new DirectMessageDelivery(sink, { ...binding, membership, pollMs: 60000,
     ...(failed === "alert" ? { dependencies: { readUnread: async () => { throw new Error("Alert inbox unavailable"); } } } : {}) });
   const taskEngine = new TaskChangeDelivery(sink, { ...binding, membership: taskDeliveryMembership, pollMs: 60000,
-    reconcile: async () => { if (failed === "task") throw new Error("Task authority unavailable"); return 0; }, reconcileOwnerOutbox: async () => [] });
+    reconcile: async () => { if (failed === "task") throw new Error("Task authority unavailable"); return 0; } });
   const wrap = (engine: DirectMessageDelivery | TaskChangeDelivery): RecipientDeliveryPair["direct"] => ({ start: () => engine.start([]), stop: () => engine.stop(), observeContext: messages => engine.observeContext(messages as any), commitPresentedAfterSuccessfulTurn: reason => engine.commitPresentedAfterSuccessfulTurn(reason) });
   const lifecycle: RecipientDeliveryLifecycle = new RecipientDeliveryLifecycle({ makePair: () => ({ direct: wrap(direct), task: wrap(taskEngine) }),
     isCurrentBinding: value => membership.isCurrentSessionBinding(value),

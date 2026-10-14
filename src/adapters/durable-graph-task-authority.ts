@@ -1,25 +1,44 @@
 import fs from "node:fs";
+import path from "node:path";
 import {
   GraphControlRefusal,
   GraphTaskController,
   type GraphApplyInput,
   type GraphApplyResult,
-  type GraphAttemptView,
   type GraphControlSnapshot,
   type GraphTaskTransitionInput,
   type GraphVersionRef,
   type GraphTransitionResult,
 } from "../task-authority/graph-control";
 import type { GraphTaskCard } from "../task-authority/graph-control-schemas";
+import { projectGraphTaskCards as cards } from "../task-authority/graph-card";
 import { writeJsonAtomic } from "../utils/atomic-json";
 import { withLock } from "../utils/lock";
-import { graphTaskAuthorityPath } from "../utils/paths";
+import { configPath, graphTaskAuthorityPath, teamDir } from "../utils/paths";
+
+export const UNSUPPORTED_BEADS_TEAM = "This Team keeps its Tasks in Beads. PTB 0.24 does not support it. The data stays in .beads/.";
+
+function missingAuthority(teamName: string): Error {
+  let config: { taskBackend?: string } = {};
+  try { config = JSON.parse(fs.readFileSync(configPath(teamName), "utf8")); } catch {}
+  return config.taskBackend === "beads" || fs.existsSync(path.join(teamDir(teamName), ".beads"))
+    ? new UnsupportedBeadsTeamError()
+    : new GraphSnapshotCorruption(`Team ${teamName} has no graph-native Task authority snapshot. Restore its graph authority before continuing.`);
+}
 
 /** Stored authority cannot be decoded or recovered; distinct from invalid graph input. */
 export class GraphSnapshotCorruption extends GraphControlRefusal {
   constructor(message: string) {
     super("invalid_graph", message);
     this.name = "GraphSnapshotCorruption";
+  }
+}
+
+/** Unsupported stores cannot recover through delivery retry. */
+export class UnsupportedBeadsTeamError extends GraphSnapshotCorruption {
+  constructor() {
+    super(UNSUPPORTED_BEADS_TEAM);
+    this.name = "UnsupportedBeadsTeamError";
   }
 }
 
@@ -39,72 +58,6 @@ export interface GraphAuthorityMutation<Result> {
   operationGraphSequence: number;
   operationAuthoritySequence: number;
   operationGraphVersion: GraphVersionRef;
-}
-
-function toCard(task: ReturnType<GraphTaskController["readTask"]>, attempts: GraphAttemptView[]): GraphTaskCard {
-  const currentAttempt = attempts.find((attempt) => attempt.current);
-  const prerequisiteIds = task.state.kind === "dependency_waiting"
-    ? task.state.prerequisiteTaskIds
-    : task.state.kind === "goal_failed" && "prerequisiteTaskIds" in task.state
-      ? task.state.prerequisiteTaskIds
-      : [];
-  const terminal = ["goal_achieved", "goal_failed", "cancelled"].includes(task.state.kind);
-  return {
-    id: task.id,
-    title: task.title,
-    goal: task.goal,
-    assignee: task.assignee,
-    needs: [...task.needs],
-    ...(task.onGoalFailed ? { on_goal_failed: { target: task.onGoalFailed.target, max_traversals: task.onGoalFailed.maxTraversals } } : {}),
-    status: task.state.kind,
-    state: task.state.kind === "dependency_waiting"
-      ? { kind: "dependency_waiting", prerequisite_task_ids: [...task.state.prerequisiteTaskIds] }
-      : task.state.kind === "in_progress"
-        ? { kind: "in_progress", attempt_id: task.state.attemptId }
-        : task.state.kind === "blocked"
-          ? { kind: "blocked", attempt_id: task.state.attemptId, evidence: task.state.evidence }
-          : task.state.kind === "goal_achieved"
-            ? { kind: "goal_achieved", attempt_id: task.state.attemptId }
-            : task.state.kind === "goal_failed" && task.state.reason === "criterion_failed"
-              ? { kind: "goal_failed", reason: "criterion_failed", attempt_id: task.state.attemptId }
-              : task.state.kind === "goal_failed" && task.state.reason === "failure_edge_exhausted"
-                ? {
-                  kind: "goal_failed",
-                  reason: "failure_edge_exhausted",
-                  attempt_id: task.state.attemptId,
-                  target_task_id: task.state.targetTaskId,
-                  traversals: task.state.traversals,
-                  exhaustion_reason: task.state.exhaustionReason,
-                }
-                : task.state.kind === "goal_failed"
-                  ? { kind: "goal_failed", reason: task.state.reason, prerequisite_task_ids: [...task.state.prerequisiteTaskIds] }
-                  : task.state.kind === "cancelled"
-                    ? { kind: "cancelled", reason: task.state.reason }
-                    : { kind: "ready" },
-    current_context: task.currentContext,
-    version: task.version,
-    ...(task.activationKey ? { activation_key: task.activationKey } : {}),
-    ...(task.acceptedAttemptId ? { accepted_attempt_id: task.acceptedAttemptId } : {}),
-    ...(currentAttempt ? {
-      current_attempt: {
-        id: currentAttempt.id,
-        ordinal: currentAttempt.ordinal,
-        input_attempt_ids: { ...currentAttempt.inputAttemptIds },
-      },
-    } : {}),
-    attempts_started: task.attemptsStarted,
-    relations: task.needs.map((target_task_id) => ({ relation: "blocked_by" as const, target_task_id })),
-    dependency_state: terminal || task.state.kind === "blocked"
-      ? { kind: "terminal", active_blocker_ids: prerequisiteIds }
-      : prerequisiteIds.length
-        ? { kind: "waiting", active_blocker_ids: prerequisiteIds }
-        : { kind: "ready", active_blocker_ids: [] },
-  };
-}
-
-function cards(controller: GraphTaskController): GraphTaskCard[] {
-  const attempts = controller.readAttempts();
-  return controller.readTasks().map((task) => toCard(task, attempts.filter((attempt) => attempt.taskId === task.id)));
 }
 
 function atSequence(snapshot: GraphControlSnapshot, sequence: number): GraphTaskController {
@@ -147,6 +100,18 @@ export class DurableGraphTaskAuthority {
 
   exists(teamName: string): boolean {
     return fs.existsSync(graphTaskAuthorityPath(teamName));
+  }
+
+  /** Called only by new-Team creation while it owns the topology lease. */
+  async initializeEmpty(teamName: string): Promise<void> {
+    const file = graphTaskAuthorityPath(teamName);
+    await withLock(file, async () => {
+      if (this.exists(teamName)) { this.loadRequired(teamName); return; }
+      if (fs.existsSync(configPath(teamName)) || fs.existsSync(path.join(teamDir(teamName), ".beads"))) {
+        throw missingAuthority(teamName);
+      }
+      writeJsonAtomic(file, new GraphTaskController().snapshot());
+    });
   }
 
   async applyGraph(teamName: string, input: GraphApplyInput): Promise<GraphAuthorityMutation<GraphApplyResult>> {
@@ -192,7 +157,7 @@ export class DurableGraphTaskAuthority {
   ): Promise<GraphAuthorityMutation<Result>> {
     const file = graphTaskAuthorityPath(teamName);
     return withLock(file, async () => {
-      const controller = this.load(teamName);
+      const controller = this.loadRequired(teamName);
       const before = cards(controller);
       const existingReceipt = controller.hasOperationReceipt(operationId);
       let result: Result & { replayed: boolean };
@@ -238,13 +203,13 @@ export class DurableGraphTaskAuthority {
   }
 
   private loadRequired(teamName: string): GraphTaskController {
-    if (!this.exists(teamName)) throw new GraphControlRefusal("invalid_graph", `Team ${teamName} has no graph-native Task authority snapshot.`);
+    if (!this.exists(teamName)) throw missingAuthority(teamName);
     return this.load(teamName);
   }
 
   private load(teamName: string): GraphTaskController {
     const file = graphTaskAuthorityPath(teamName);
-    if (!fs.existsSync(file)) return new GraphTaskController();
+    if (!fs.existsSync(file)) throw missingAuthority(teamName);
     let snapshot: GraphControlSnapshot;
     try {
       snapshot = JSON.parse(fs.readFileSync(file, "utf8")) as GraphControlSnapshot;

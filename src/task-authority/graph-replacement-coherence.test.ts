@@ -17,7 +17,8 @@ import {
 import { writeConfigAtomic } from "../utils/teams";
 import { readGraphRevisionRetirement, recordGraphRevisionRetirement } from "../utils/graph-revision-retirement";
 import type { TeamConfig } from "../team-authority/contracts";
-import type { GraphApplyInput, GraphControlSnapshot } from "./graph-control";
+import { GraphTaskController, type GraphApplyInput, type GraphControlSnapshot } from "./graph-control";
+import { writeJsonAtomic } from "../utils/atomic-json";
 import { DurableGraphTaskOrchestration } from "./graph-orchestration";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 
@@ -47,6 +48,7 @@ function fixture(suffix: string) {
     }],
   };
   fs.mkdirSync(teamDir(teamName), { recursive: true });
+  writeJsonAtomic(graphTaskAuthorityPath(teamName), new GraphTaskController().snapshot());
   writeConfigAtomic(configPath(teamName), config);
   const publication = new DurableTaskMutationPublication();
   const authority = new DurableGraphTaskAuthority();
@@ -173,7 +175,7 @@ describe("complete graph replacement coherence", () => {
       sessionFile,
       membership: membership(),
       reconcile: async () => 0,
-      reconcileOwnerOutbox: async () => [],
+      reconcileRecovery: async () => [],
       reconcileReady: async () => [],
     });
     await delivery.start([]);
@@ -204,7 +206,7 @@ describe("complete graph replacement coherence", () => {
       sessionFile,
       membership: membership(),
       reconcile: async () => 0,
-      reconcileOwnerOutbox: async () => [],
+      reconcileRecovery: async () => [],
       reconcileReady: async () => [],
     });
     await delivery.start([]);
@@ -232,7 +234,7 @@ describe("complete graph replacement coherence", () => {
       sessionFile,
       membership: membership(),
       reconcile: async () => 0,
-      reconcileOwnerOutbox: async () => [],
+      reconcileRecovery: async () => [],
       reconcileReady: async () => [],
     });
     await delivery.start([]);
@@ -291,7 +293,7 @@ describe("complete graph replacement coherence", () => {
       sessionFile,
       membership: membership(),
       reconcile: async () => 0,
-      reconcileOwnerOutbox: async () => [],
+      reconcileRecovery: async () => [],
       reconcileReady: async () => [],
     });
     await delivery.start([]);
@@ -335,16 +337,10 @@ describe("complete graph replacement coherence", () => {
       relations: [],
       dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
     };
-    await recordTaskDeliveryRecovery({
-      teamName,
-      taskId: task.id,
-      taskVersion: version,
-      recipients: ["worker"],
-      changeKind: "assigned",
-      recordedAt: "2026-08-13T00:00:00.000Z",
-      reason: "enqueue-failed",
-      taskProjection: task,
-    });
+    writeJsonAtomic(taskDeliveryRecoveryPath(teamName), [{
+      teamName, taskId: task.id, taskVersion: version, recipients: ["worker"], changeKind: "assigned",
+      recordedAt: "2026-08-13T00:00:00.000Z", reason: "enqueue-failed", taskProjection: task,
+    }]);
     fs.mkdirSync(path.dirname(taskOwnerTransitionOutboxPath(teamName)), { recursive: true });
     fs.writeFileSync(taskOwnerTransitionOutboxPath(teamName), JSON.stringify([{
       operationId: "owner-op",
@@ -378,16 +374,10 @@ describe("complete graph replacement coherence", () => {
     const { teamName } = fixture("derived-version-stores");
     const stale = deliveryTask("retained", "retained-derived-v1");
     const current = deliveryTask("retained", "retained-derived-v2", { goal: "Use the revised retained contract." });
-    await recordTaskDeliveryRecovery({
-      teamName,
-      taskId: stale.id,
-      taskVersion: stale.version,
-      recipients: ["worker"],
-      changeKind: "assigned",
-      recordedAt: "2026-08-13T00:00:00.000Z",
-      reason: "enqueue-failed",
-      taskProjection: stale,
-    });
+    writeJsonAtomic(taskDeliveryRecoveryPath(teamName), [{
+      teamName, taskId: stale.id, taskVersion: stale.version, recipients: ["worker"], changeKind: "assigned",
+      recordedAt: "2026-08-13T00:00:00.000Z", reason: "enqueue-failed", taskProjection: stale,
+    }]);
     fs.mkdirSync(path.dirname(taskOwnerTransitionOutboxPath(teamName)), { recursive: true });
     fs.writeFileSync(taskOwnerTransitionOutboxPath(teamName), JSON.stringify([{
       operationId: "owner-version-op",

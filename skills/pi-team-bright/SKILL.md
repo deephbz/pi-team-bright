@@ -205,6 +205,11 @@ with the original operation ID and unchanged input, including the expected versi
 A conflict requires reconciliation, not a blind retry. Treat a changed request as a
 new operation; a delivery warning does not undo an accepted Task mutation.
 
+A graphless Beads Team is unsupported in PTB 0.24. Preserve its store and ask
+the owner to finish it under its original version or start a new Team. No Task
+export, migration, or fallback reader exists. A missing or corrupt graph is
+unavailable; never treat it as an empty Task set or bypass its stop guard.
+
 Use Team tools for normal authority changes. If create reports an active Team while
 both sync and shutdown report none, use [stale Team rescue](references/team-rescue.md)
 only with explicit owner authorization and its required absence evidence.
