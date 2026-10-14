@@ -99,39 +99,30 @@ describe("clean-cut Team recreation", () => {
 
   it("rejects recreation while any Membership is current without changing TeamConfig", async () => {
     const name = uniqueTeam("current");
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-recreation-beads-"));
-    const fingerprint = { schema: "pi-teams-beads-authority/1" as const, backend: "dolt" as const, database: "dolt" as const, doltDatabase: "recreation_current", projectId: "recreation-current" };
-    const first = await createTeam(name, "/tmp/lead-old.jsonl", "lead-old", "old", undefined, undefined, workspace, "authority-stable", fingerprint);
+    const first = await createTeam(name, "/tmp/lead-old.jsonl", "lead-old", "old");
     const before = fs.readFileSync(configPath(name), "utf8");
 
-    await expect(createTeam(name, "/tmp/lead-new.jsonl", "lead-new", "new", undefined, undefined, workspace, "authority-stable", fingerprint))
+    await expect(createTeam(name, "/tmp/lead-new.jsonl", "lead-new", "new"))
       .rejects.toThrow(/current Memberships.*team_shutdown.*never implicitly stops processes or replaces live identities/i);
 
     expect(fs.readFileSync(configPath(name), "utf8")).toBe(before);
     expect(first.members.find((member) => member.name === "team-lead")?.isActive).toBe(true);
-    fs.rmSync(workspace, { recursive: true, force: true });
   });
 
-  it("recreates only after explicit closure and preserves history plus Beads authority", async () => {
+  it("recreates only after explicit closure and preserves Membership history", async () => {
     const name = uniqueTeam("closed");
-    const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-recreation-beads-"));
-    const fingerprint = { schema: "pi-teams-beads-authority/1" as const, backend: "dolt" as const, database: "dolt" as const, doltDatabase: "recreation_closed", projectId: "recreation-closed" };
-    const first = await createTeam(name, "/tmp/lead-old.jsonl", "lead-old", "old", undefined, undefined, workspace, "authority-stable", fingerprint);
+    const first = await createTeam(name, "/tmp/lead-old.jsonl", "lead-old", "old");
     const oldLead = first.members.find((member) => member.name === "team-lead")!;
     await deactivateMembership(name, oldLead.membershipId!, "team_shutdown");
 
-    const recreated = await createTeam(name, "/tmp/lead-new.jsonl", "lead-new", "new", undefined, undefined, workspace, "authority-stable", fingerprint);
+    const recreated = await createTeam(name, "/tmp/lead-new.jsonl", "lead-new", "new");
     const persisted = await readConfig(name);
     const historical = persisted.members.find((member) => member.membershipId === oldLead.membershipId);
     const current = persisted.members.filter((member) => member.isActive !== false);
 
-    expect(recreated.taskBackend).toBe("beads");
-    expect(recreated.taskWorkspace).toBe(workspace);
-    expect(recreated.taskAuthorityId).toBe("authority-stable");
     expect(historical).toMatchObject({ isActive: false, deactivationReason: "team_shutdown" });
     expect(current).toHaveLength(1);
     expect(current[0]).toMatchObject({ name: "team-lead", sessionFile: "/tmp/lead-new.jsonl" });
     expect(current[0].membershipId).not.toBe(oldLead.membershipId);
-    fs.rmSync(workspace, { recursive: true, force: true });
   });
 });

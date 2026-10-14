@@ -60,15 +60,16 @@ describe("isolated in-memory authority fakes", () => {
     const { ports } = createInMemoryModelToolJourney();
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });
     await ports.team.ensureWorker(session, { name: "worker", scope: "scope" });
-    const created = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
+    const created = await ports.task.createTaskGraph(session, { operationId: "create", tasks: [{ key: "task", title: "task", goal: "goal", assignee: "worker" }] });
     if (created.kind !== "created") throw new Error("Task creation must succeed in the fixture.");
     const snapshot = await ports.coordination.readTeamSync(session, "snapshot", new AbortController().signal, "snapshot");
     expect(snapshot.kind).toBe("snapshot");
     ports.coordination.setBranchContext(session, ["entry"]);
     persistPortObservation(ports.coordination, session, "entry");
     ports.coordination.failNextPublication("task");
-    await expect(ports.task.updateTasks(session, [{ taskId: created.task.id, operationId: "update", expectedVersion: created.task.version as TaskVersionRef, currentContext: "Committed before publication." }])).resolves.toMatchObject({ kind: "batch", outcomes: [{ kind: "updated", task: { current_context: "Committed before publication." } }] });
-    const read = await ports.task.readTasks(session, [created.task.id]);
+    const task = created.tasksByKey.task;
+    await expect(ports.task.updateTasks(session, [{ taskId: task.id, operationId: "update", expectedVersion: task.version as TaskVersionRef, currentContext: "Committed before publication." }])).resolves.toMatchObject({ kind: "batch", outcomes: [{ kind: "updated", task: { current_context: "Committed before publication." } }] });
+    const read = await ports.task.readTasks(session, [task.id]);
     expect(read).toMatchObject({ kind: "read", tasks: [{ current_context: "Committed before publication." }] });
     await expect(ports.coordination.readTeamSync(session, "updates", new AbortController().signal, "updates")).resolves.toMatchObject({ kind: "updates", taskChanges: [{ current: { current_context: "Committed before publication." } }] });
   });
@@ -78,10 +79,11 @@ describe("isolated in-memory authority fakes", () => {
     await ports.team.createTeam(session, { name: "team", purpose: "purpose" });
     await ports.team.ensureWorker(session, { name: "worker", scope: "scope" });
     ports.coordination.failNextPublication("task");
-    const created = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
+    const graph = { operationId: "create", tasks: [{ key: "task", title: "task", goal: "goal", assignee: "worker" }] };
+    const created = await ports.task.createTaskGraph(session, graph);
     expect(created).toMatchObject({ kind: "created", deliveryWarnings: ["Injected task publication failure."] });
-    const replay = await ports.task.createTask(session, { operationId: "create", title: "task", goal: "goal", assignee: "worker" });
-    expect(replay).toEqual(created);
+    const replay = await ports.task.createTaskGraph(session, graph);
+    expect(replay).toMatchObject({ kind: "created", replayed: true, tasksByKey: { task: { id: "task" } } });
     expect(debug.readRevision()).toBe(3);
   });
 

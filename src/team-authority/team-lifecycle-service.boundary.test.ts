@@ -347,15 +347,9 @@ describe("Team lifecycle service boundary", () => {
   it("does not expose concrete Task or adapter imports from Team authority", () => {
     const root = path.join(__dirname, "team-lifecycle-service.ts");
     const source = fs.readFileSync(root, "utf8");
-    const adapter = fs.readFileSync(path.join(__dirname, "../adapters/durable-assigned-work-guard.ts"), "utf8");
+
     expect(source).not.toMatch(/utils\/tasks|model-tool-contract|team-events|extensions\/|\.\.\/adapters/);
     expect(source).toContain("assignedWorkGuard: AssignedWorkGuard");
     expect(source).toContain("lifecyclePublication: TeamLifecyclePublication");
-    expect(adapter).not.toMatch(/utils\/tasks/);
-    expect(adapter).not.toMatch(/import\s*\{\s*BeadsTaskAdapter\s*\}/);
-    expect(adapter).toContain('import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter"');
-    expect(adapter).toContain("private readonly factory: BeadsTaskAdapterFactory");
-    expect(adapter).toContain("private readonly assignedTaskQuery: NonterminalAssignedTaskQuery");
-    expect(adapter).toContain('import type { AssignedWorkGuard, NonterminalAssignedTaskQuery } from "../team-authority/assigned-work-guard"');
   });
 });

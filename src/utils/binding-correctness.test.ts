@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { DurableNonterminalAssignedTaskQuery } from "../adapters/durable-nonterminal-assigned-task-query";
+import { DurableGraphAssignedWorkGuard } from "../adapters/durable-graph-assigned-work";
 import * as messaging from "./messaging";
 import * as canonicalMessaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
@@ -77,7 +77,7 @@ describe("current team binding correctness", () => {
 
   it("alert_send binds native delivery to the exact current recipient generation", async () => {
     const teamName = testTeamName("recipient");
-    await teams.createTeam(teamName, "session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(teamName, "session", "lead-agent");
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
       name: "worker",
@@ -174,7 +174,7 @@ describe("current team binding correctness", () => {
 
   it("alert_send exposes a partial announcement without claiming every native delivery succeeded", async () => {
     const teamName = testTeamName("partial-alert");
-    await teams.createTeam(teamName, "receipt-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(teamName, "receipt-session", "lead-agent");
     vi.spyOn(canonicalMessaging, "broadcastMessage").mockResolvedValue({
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
@@ -199,7 +199,7 @@ describe("current team binding correctness", () => {
 
   it("distinguishes an announcement with no eligible recipients from a bad recipient name", async () => {
     const teamName = testTeamName("zero-recipient-alert");
-    await teams.createTeam(teamName, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(teamName, "lead-session", "lead-agent");
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("zero", {
@@ -221,7 +221,7 @@ describe("current team binding correctness", () => {
 
   it("never signals a numeric PID from a stale per-name pid file", async () => {
     vi.stubEnv("TMUX", "");
-    vi.spyOn(DurableNonterminalAssignedTaskQuery.prototype, "nonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
+    vi.spyOn(DurableGraphAssignedWorkGuard.prototype, "nonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
     const teamName = testTeamName("stale-pid");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
     await teams.createTeam(teamName, leadSession, "lead-agent");

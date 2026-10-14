@@ -13,7 +13,7 @@ async function fixture(autoSyncEnabled: boolean) {
   names.push(name);
   const sessionFile = `/tmp/${name}.jsonl`;
   const config = await teams.createTeam(name, sessionFile, "lead-agent", "Framework sync test.",
-    undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+    undefined, undefined, undefined, undefined, undefined, undefined,
     { waitSeconds: 120, autoSyncEnabled, autoSyncDelaySeconds: 0, autoSyncUpdateThreshold: 1, policyVersion: "test" });
   config.logicalWorkers = [{ name: "worker", scope: "test scope" }];
   teams.writeConfigAtomic(paths.configPath(name), config);

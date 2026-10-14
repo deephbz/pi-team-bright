@@ -20,11 +20,10 @@ import type { PiSessionCurrentWorkerMember, PiSessionTeamQueryPort } from "../sr
 import { placeSessionTerminal, type TeamIdentitySource, type TeamSessionAdmission } from "../src/utils/session-terminal";
 import { exactLeaderSessionId } from "../src/model-tool-contract/runtime";
 import type { ModelToolLifecycle } from "../src/model-tool-contract/durable-model-tool-port";
-import { BeadsTaskReconciliationQuery } from "../src/task-authority/beads-reconciliation-query";
-import type { BeadsTaskAdapterFactory } from "../src/model-tool-contract/beads-task-adapter";
+import type { GraphTaskRecoveryQuery } from "../src/utils/task-delivery";
 import type { TeamLifecycleService } from "../src/team-authority/team-lifecycle-service";
 import type { TeamSessionLifecycleService } from "../src/team-authority/team-session-lifecycle-service";
-import type { TaskOrchestrationPort } from "../src/task-authority/orchestration";
+import type { GraphTaskOrchestrationPort } from "../src/task-authority/graph-orchestration";
 import { diagnoseTeam, formatTeamStatus, formatCarrierStatus, isLegacyAdoptionCandidate, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { collectPtbDoctorContext, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbAction, type PtbSettingsScope } from "../src/utils/ptb-command";
@@ -54,18 +53,18 @@ export function createPiTeamSessionAdapter(options: {
   lifecyclePublication: { recordWorkerFailed(input: { teamName: string; workerName: string; membershipId: string }): Promise<unknown> };
   alertMembership: AlertMembershipPort;
   taskDeliveryMembership: TaskDeliveryMembershipPort;
-  taskReadAdapterFactory: BeadsTaskAdapterFactory;
+  graphTaskAuthority: GraphTaskRecoveryQuery;
   teamQuery: PiSessionTeamQueryPort;
   leaderToolNames: ReadonlySet<string>;
   workerToolNames: ReadonlySet<string>;
   refreshAlertToolProjection: () => void;
   registerRecoveredWorkerTools: () => void;
-  taskReadyReconciliation?: Pick<TaskOrchestrationPort, "reconcileReady">;
-  taskGraphControlSource?: TaskGraphControlReadSource;
+  taskReadyReconciliation?: Pick<GraphTaskOrchestrationPort, "reconcileReady">;
+  taskGraphControlSource: TaskGraphControlReadSource;
 }): PiTeamSessionAdapter {
-  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, taskReadAdapterFactory, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
+  const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, graphTaskAuthority, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
   const terminal = getTerminalAdapter();
-  const taskGraphPane = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: taskGraphControlSource });
+  const taskGraphPane = new TaskGraphPaneService({ graphControlSource: taskGraphControlSource });
   let isTeammate = !!hostEnv().process.env.PI_AGENT_NAME && hostEnv().process.env.PI_AGENT_NAME !== "team-lead";
   const envAgentName = hostEnv().process.env.PI_AGENT_NAME;
   let agentName = envAgentName || "team-lead";
@@ -394,7 +393,7 @@ registerCommand?.("pi-team-bright", {
     const command = parsePiTeamsCommand(args);
     if (!command.ok) { presentCommand(ctx, command.usage, "warning"); return; }
     if (command.subcommand === "help") {
-      presentCommand(ctx, `${PI_TEAMS_COMMAND_USAGE}\nstatus is the default and reads TeamConfig plus exact Beads-root diagnostics.`);
+      presentCommand(ctx, `${PI_TEAMS_COMMAND_USAGE}\nstatus is the default and reads TeamConfig plus graph authority diagnostics.`);
       return;
     }
     await runStatus(ctx);
@@ -592,7 +591,7 @@ function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any) {
   const task = new TaskChangeDelivery(messageSink, {
     teamName: binding.teamName, recipient: binding.recipient, membershipId: binding.membershipId, sessionFile: binding.sessionFile,
     pollMs: taskPollMs(), membership: taskDeliveryMembership,
-    reconciliationQuery: new BeadsTaskReconciliationQuery(binding.teamName, taskReadAdapterFactory),
+    graphAuthority: graphTaskAuthority,
     ...(isTeammate && taskReadyReconciliation ? {
       // One Team lease selects the entire ready frontier, so any bound Worker
       // can repair delivery for quiet siblings without a per-Worker scan.

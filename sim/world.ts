@@ -10,7 +10,6 @@ import { Scheduler } from "./scheduler";
 import { generationKey, ProcessTable } from "./process-table";
 import { ExecRouter, HerdrFake } from "./herdr";
 import { HostGuard } from "./host-guard";
-import { emptyBdWire } from "./bd-wire";
 import { assumptionEvidence, type FakeEvidence } from "./assumptions";
 
 export class ActorExit extends Error {
@@ -55,13 +54,14 @@ export class SimWorld {
     this.entropy = new Entropy(seed, options.tape, options.replay, options.scheduleChoices);
     this.scheduler = new Scheduler(this.entropy);
     this.guard = new HostGuard(this.workspace.root, file => this.notifyFile(file), file => {
+      if (path.basename(file) === "team-events.jsonl") this.observer.sampleJournal(file, fact => this.record(fact));
       if (path.basename(file) === "team-events.jsonl" && this.faults.get("journal")?.mode === "commit_then_error") {
         this.record({ kind: "fault.effect", source: "journal", detail: "fsync committed journal bytes before injected EIO" });
         throw Object.assign(new Error("Injected journal commit-then-error"), { code: "EIO" });
       }
     });
-    this.exec.register("bd", emptyBdWire);
     this.observer = new HistoryObserver(home, fact => this.record(fact, { kind: "observer" }));
+    this.record({ kind: "authority.tracing" }, { kind: "setup" });
     this.processes.onChange = (kind, process) => this.record({ kind, process: {
       actorKey: process.actor, command: process.command, parentPid: process.parentPid,
       ...(process.processKind === "worker_pi" ? { processKind: process.processKind, membershipId: process.membershipId } : { processKind: process.processKind }),
@@ -174,6 +174,9 @@ export class SimWorld {
     return { close: () => { registration.closed = true; this.watches.delete(registration); }, onError: listener => { registration.errors.push(listener); } };
   }
   notifyFile(file: string): void {
+    if (path.basename(file) === "graph-control.json" && path.basename(path.dirname(file)) === "task-authority") {
+      this.record({ kind: "authority.write", path: path.relative(this.workspace.home, file) });
+    }
     for (const watch of this.watches) if (!watch.closed && watch.directory === path.dirname(file)) {
       this.enqueue(watch.actor, `watch:${path.basename(file)}`, () => { if (!watch.closed) return watch.listener(path.basename(file)); });
     }
@@ -207,8 +210,6 @@ export class SimWorld {
   private execute(command: string, args: readonly string[]) {
     const binary = path.basename(command);
     if (binary === "herdr" && this.faults.get("herdr")?.mode === "slow") this.scheduler.advance(100); // S-sync-block
-    if (binary === "bd" && this.faults.get("bd")?.mode === "unavailable") return { status: 127, stdout: "", stderr: "bd unavailable" };
-    if (binary === "bd" && this.faults.get("bd")?.mode === "slow") this.scheduler.advance(100); // S-sync-block
     if (binary === "herdr" && args[0] === "agent" && args[1] === "start") {
       const fault = this.faults.get("herdr.start");
       if (fault?.mode === "timeout") this.scheduler.advance(300000); // S-sync-block baseline readiness wait.
@@ -251,7 +252,7 @@ export class SimWorld {
             }
             // Slow async calls delay completion without freezing other actors.
             const binary = path.basename(command);
-            const slow = (binary === "herdr" || binary === "bd") && this.faults.get(binary)?.mode === "slow";
+            const slow = binary === "herdr" && this.faults.get(binary)?.mode === "slow";
             const result = slow ? this.exec.runSync(command, args) : this.execute(command, args);
             effect = { kind: "exited", ...result };
             this.record({ kind: "exec.effect", actor: actorRef(actor), callId, result });

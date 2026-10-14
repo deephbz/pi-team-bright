@@ -2,9 +2,7 @@ import { hostEnv } from "../env/host-env";
 import { stripVTControlCharacters } from "node:util";
 import { humanCarrierAttentionMessage, type CarrierView } from "../carrier-observation";
 import fs from "node:fs";
-import path from "node:path";
-import type { BeadsAuthorityFingerprint, TeamConfig } from "../team-authority/contracts";
-import { verifyTaskAuthority } from "../model-tool-contract/beads-authority-adapter";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import * as paths from "./paths";
 import * as teams from "./teams";
 
@@ -27,7 +25,7 @@ export function formatCarrierStatus(view: CarrierView, taskIds?: string[]): { li
 export const PI_TEAMS_COMMAND_USAGE = "Usage: /pi-team-bright [status|help]";
 
 const COMMANDS = [
-  { value: "status", label: "status", description: "Diagnose the current Team and its Beads authority" },
+  { value: "status", label: "status", description: "Diagnose the current Team and its graph authority" },
   { value: "help", label: "help", description: "Show Pi Team Bright command usage" },
 ] as const;
 
@@ -73,15 +71,11 @@ export interface TeamStatusReport {
   storage: {
     teamDirectory: string;
     configPath: string;
-    taskWorkspace?: string;
-    beadsMetadataPath?: string;
+    graphPath: string;
   };
   taskAuthority: {
-    backend: "beads" | "legacy" | "unconfigured";
-    health: "verified" | "degraded" | "unconfigured";
-    authorityId?: string;
-    database?: string;
-    projectId?: string;
+    backend: "graph";
+    health: "verified" | "degraded";
     detail: string;
   };
   externalAccess: {
@@ -95,7 +89,7 @@ export interface DiagnoseTeamOptions {
   role: string;
   sessionBinding: TeamSessionBindingStatus;
   sessionDetail?: string;
-  verifyBeadsAuthority?: (config: TeamConfig) => Promise<BeadsAuthorityFingerprint>;
+  verifyGraphAuthority?: (teamName: string) => Promise<unknown>;
   now?: () => Date;
 }
 
@@ -103,31 +97,20 @@ function shellQuoted(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-const verifyConfiguredBeads = verifyTaskAuthority;
-
-/** Build a read-only diagnosis from TeamConfig plus an exact `bd where` check. */
+/** Build a read-only diagnosis from TeamConfig and required graph authority. */
 export async function diagnoseTeam(teamName: string, options: DiagnoseTeamOptions): Promise<TeamStatusReport> {
   const safeTeamName = paths.sanitizeName(teamName);
   const config = await teams.readConfig(safeTeamName);
   const teamDirectory = paths.teamDir(safeTeamName);
   const currentMembers = config.members.filter((member) => member.isActive !== false);
   const currentWorkers = currentMembers.filter((member) => member.agentType === "teammate");
-  const workspace = config.taskWorkspace;
-  const fingerprint = config.taskAuthorityFingerprint;
-  let health: TeamStatusReport["taskAuthority"]["health"] = "unconfigured";
-  let detail = config.taskBackend === "legacy"
-    ? "Legacy JSON Task authority is configured; migrate before relying on Beads diagnostics."
-    : "No Task authority is configured.";
-
-  if (config.taskBackend === "beads") {
-    try {
-      const observed = await (options.verifyBeadsAuthority ?? verifyConfiguredBeads)(config);
-      health = "verified";
-      detail = `Exact Beads authority root verified (${observed.backend}/${observed.database}).`;
-    } catch (error) {
-      health = "degraded";
-      detail = error instanceof Error ? error.message : String(error);
-    }
+  let health: TeamStatusReport["taskAuthority"]["health"] = "verified";
+  let detail = "Graph Task authority verified.";
+  try {
+    await (options.verifyGraphAuthority ?? ((name) => new DurableGraphTaskAuthority().readTasks(name)))(safeTeamName);
+  } catch (error) {
+    health = "degraded";
+    detail = error instanceof Error ? error.message : String(error);
   }
 
   return {
@@ -150,24 +133,17 @@ export async function diagnoseTeam(teamName: string, options: DiagnoseTeamOption
     storage: {
       teamDirectory,
       configPath: paths.configPath(safeTeamName),
-      ...(workspace ? {
-        taskWorkspace: workspace,
-        beadsMetadataPath: path.join(workspace, ".beads", "metadata.json"),
-      } : {}),
+      graphPath: paths.graphTaskAuthorityPath(safeTeamName),
     },
     taskAuthority: {
-      backend: config.taskBackend ?? "unconfigured",
+      backend: "graph",
       health,
-      ...(config.taskAuthorityId ? { authorityId: config.taskAuthorityId } : {}),
-      ...(fingerprint ? { database: fingerprint.doltDatabase, projectId: fingerprint.projectId } : {}),
       detail,
     },
     externalAccess: {
       inspectTeam: `cd ${shellQuoted(teamDirectory)}`,
-      ...(workspace ? {
-        inspectTasks: `bd --directory ${shellQuoted(workspace)} list --all`,
-        editTasks: `Run bd --directory ${shellQuoted(workspace)} …; Beads writes there are authoritative.`,
-      } : {}),
+      inspectTasks: "Use task_read or /ptb tasks.",
+      editTasks: "Use task_graph_apply and task_update.",
     },
   };
 }
@@ -187,10 +163,7 @@ export function formatTeamStatus(report: TeamStatusReport): string {
     `Team config: ${report.storage.configPath}`,
     `Task authority: ${authority.backend} · ${authority.health}`,
   ];
-  if (report.storage.taskWorkspace) lines.push(`Beads workspace: ${report.storage.taskWorkspace}`);
-  if (report.storage.beadsMetadataPath) lines.push(`Beads metadata: ${report.storage.beadsMetadataPath}`);
-  if (authority.database) lines.push(`Beads database: ${authority.database} · Project: ${authority.projectId ?? "unavailable"}`);
-  if (authority.authorityId) lines.push(`Task authority ID: ${authority.authorityId}`);
+  lines.push(`Task graph: ${report.storage.graphPath}`);
   lines.push(`Authority check: ${authority.detail}`);
   lines.push(`External Team view: ${report.externalAccess.inspectTeam}`);
   if (report.externalAccess.inspectTasks) lines.push(`External Task view: ${report.externalAccess.inspectTasks}`);

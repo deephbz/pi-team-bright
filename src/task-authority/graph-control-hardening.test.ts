@@ -73,6 +73,7 @@ describe("graph control adversarial regressions", () => {
     const teamName = `graph-operation-boundary-${process.pid}-${Date.now()}`;
     try {
       const authority = new DurableGraphTaskAuthority();
+      await authority.initializeEmpty(teamName);
       const firstInput = { operationId: "apply-first", tasks: [{ key: "task", title: "Task", goal: "Original goal.", assignee: "worker" }] };
       const first = await authority.applyGraph(teamName, firstInput);
       await authority.applyGraph(teamName, {

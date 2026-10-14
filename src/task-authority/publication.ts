@@ -47,42 +47,16 @@ export interface TaskMutationPublicationInput {
   taskCard?: CanonicalTaskCard;
 }
 
-export interface TaskOwnerTransitionPreparationInput {
-  operationId: string;
-  teamName: string;
-  before: CanonicalTaskCard;
-  afterOwner?: string;
-  previousOperationId?: string;
-}
-
-export interface TaskMutationSuppressionInput {
-  teamName: string;
-  recipient: string;
-  sessionFile: string;
-  task: CanonicalTaskCard | TaskMutationCoordinates;
-}
-
-export interface TaskOwnerTransitionCompletionInput {
-  teamName: string;
-  operationId: string;
-  task: CanonicalTaskCard;
-}
-
 export interface TaskMutationPublicationRecoveryInput {
   teamName: string;
   taskId: string;
   taskVersion: TaskVersionRef;
-  /** Legacy operation evidence follows a Task across versions; graph evidence requires the exact committed version. */
-  versionScope?: "task" | "task_version";
   evidenceKind: "created" | "relation" | "goal" | "status" | "note" | "blocker" | "decision" | "result";
   evidenceText: string;
 }
 
 export interface TaskMutationPublicationPort {
-  prepareOwnerTransitionIntent(input: TaskOwnerTransitionPreparationInput): Promise<boolean>;
-  suppressTaskVersionForSession(input: TaskMutationSuppressionInput): Promise<void>;
   publishTaskMutation(input: TaskMutationPublicationInput): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }>;
-  completeOwnerTransitionIntent(input: TaskOwnerTransitionCompletionInput): Promise<string[]>;
   /** Optional recovery query used after an atomic graph receipt is replayed. */
   hasTaskMutationPublication?(input: TaskMutationPublicationRecoveryInput): Promise<boolean>;
 }

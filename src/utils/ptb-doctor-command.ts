@@ -116,14 +116,8 @@ export async function collectPtbDoctorContext(coordinates: PtbDoctorCoordinates)
         team.epoch_id = typeof record.epochId === "string" ? bounded(record.epochId, 128) ?? "omitted_over_limit" : "unavailable";
         team.sampled_active_member_entries = active.length;
         team.sampled_worker_entries = active.filter((member) => (member as Record<string, unknown>).agentType === "teammate").length;
-        team.task_backend = record.taskBackend === "beads" || record.taskBackend === "legacy" ? record.taskBackend : "unconfigured_or_invalid";
-        if (typeof record.taskWorkspace === "string" && path.isAbsolute(record.taskWorkspace)) {
-          const workspace = bounded(record.taskWorkspace, 512);
-          if (workspace) {
-            team.task_workspace = workspace;
-            team.beads_metadata_path = bounded(path.join(workspace, ".beads/metadata.json"), 512) ?? "omitted_over_limit";
-          }
-        }
+        team.task_backend = "graph";
+        if (graphRead.state === "missing" && record.taskBackend === "beads") team.unsupported_beads_store = true;
         if (selected === coordinates.boundTeamName && coordinates.sessionFile && coordinates.membershipId) {
           team.session_binding = active.some((member) => {
             const value = member as Record<string, unknown>;
@@ -138,8 +132,7 @@ export async function collectPtbDoctorContext(coordinates: PtbDoctorCoordinates)
     team.session_binding ??= selected !== coordinates.boundTeamName ? "not_bound_to_selected_team" : "unavailable";
     team.effective_authority = graphRead.state === "unreadable" ? "graph_unavailable"
       : graphRead.state !== "missing" ? "graph_snapshot_present"
-      : team.task_backend === "beads" ? "beads_configured"
-        : team.task_backend === "legacy" ? "legacy_configured" : "unconfigured_or_unknown";
+      : team.unsupported_beads_store ? "unsupported_beads_store" : "graph_unavailable";
     metadata.team = team;
   }
   return formatted();

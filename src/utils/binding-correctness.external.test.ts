@@ -87,7 +87,7 @@ describe("external current-binding contract", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_AGENT_NAME", "");
     const name = teamName("recipients");
-    await teams.createTeam(name, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(name, "lead-session", "lead-agent");
     await teams.addMember(name, {
       agentId: `worker@${name}`,
       name: "worker",
