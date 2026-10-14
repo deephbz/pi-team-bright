@@ -58,7 +58,7 @@ function workerMember(teamName: string, sessionFile: string): Member {
   };
 }
 
-async function createBoundTeam(teamName: string, workerSession: string): Promise<void> {
+async function createBoundTeam(teamName: string, workerSession: string): Promise<string> {
   const leadSession = `/tmp/${teamName}-lead.jsonl`;
   await teams.createTeam(
     teamName,
@@ -66,8 +66,10 @@ async function createBoundTeam(teamName: string, workerSession: string): Promise
     `lead@${teamName}`,
     "Worker binding contract",
   );
-  await teams.addMember(teamName, workerMember(teamName, workerSession));
+  const worker = workerMember(teamName, workerSession);
+  await teams.addMember(teamName, worker);
   createdTeams.push(teamName);
+  return worker.membershipId!;
 }
 
 function context(sessionFile: string) {
@@ -170,7 +172,7 @@ describe("narrow Worker Team binding surface", () => {
     const teamA = `worker-binding-a-${process.pid}-${Date.now()}`;
     const teamB = `worker-binding-b-${process.pid}-${Date.now()}`;
     const sessionA = `/tmp/${teamA}-worker.jsonl`;
-    await createBoundTeam(teamA, sessionA);
+    const membershipA = await createBoundTeam(teamA, sessionA);
     await createBoundTeam(teamB, `/tmp/${teamB}-worker.jsonl`);
     const graphTask = { ...task, status: "open" as const, dependency_state: { kind: "ready" as const, active_blocker_ids: [] as [] } };
     const read = vi.spyOn(DurableGraphTaskOrchestration.prototype, "readTasks").mockResolvedValue([graphTask as any]);
@@ -207,7 +209,7 @@ describe("narrow Worker Team binding surface", () => {
     expect(claim).toHaveBeenCalledWith(teamA, expect.objectContaining({
       taskId: task.id, operationId: "claim-without-graph", expectedVersion: task.version,
       currentContext: "Claim context remains atomic.", transition: "claim",
-    }), "worker");
+    }), "worker", { agentName: "worker", membershipId: membershipA, sessionFile: sessionA });
     expect(claimed.details).toMatchObject({
       kind: "updated",
       task_id: task.id,
