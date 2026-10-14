@@ -31,16 +31,12 @@ explicitly when changing observation or publication:
 npx vitest run --config vitest.full.config.ts test/coord-liveness-e2e/sync-liveness.test.ts test/formal-adversarial/publication-window.test.ts src/utils/formal-hardening-public-recovery.test.ts
 ```
 
-[`PublicationObservation`](../../formal/PublicationObservation.tla) and
-[`MembershipFence`](../../formal/MembershipFence.tla) retain their bounded
-claims. Run `npm run verify:formal` with the pinned jar described in
-[`formal/README.md`](../../formal/README.md). `SyncPresentation` is retired
-under `formal/retired/`; its provider-acknowledgement model is obsolete and makes no current claim.
-Formal checks do not prove Pi hook or queue timing.
+The adversarial tests run production code. They do not prove every Pi hook
+or queue schedule.
 
 ## Real-Pi checks
 
-Install dependencies with `npm ci`. Put Node, tmux, and `bd` on PATH.
+Install dependencies with `npm ci`. Put Node and tmux on PATH.
 
 ```sh
 npm run e2e:team-sync-scenarios

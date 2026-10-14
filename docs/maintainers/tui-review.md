@@ -2,7 +2,7 @@
 
 These source-checkout programs let maintainers review PTB-owned rendering with
 synthetic inputs. They use the production message projections and graph pane.
-They do not read or change live Teams and need no model or Beads process.
+They do not read or change live Teams and need no model or external Task backend.
 
 ## Message browser
 
