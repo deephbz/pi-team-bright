@@ -57,7 +57,6 @@
     "qa:tui-messages:gallery": "ts-node --transpile-only src/cli/tui-message-gallery.ts",
     "qa:tui-messages:check": "vitest run src/model-tool-contract/tui-message-gallery.test.ts src/model-tool-contract/tui-message-projection.test.ts",
     "test:lanes": "node scripts/verify-test-lanes.cjs",
-    "verify:formal": "bash scripts/formal-check.sh",
     "review:tui": "npm run qa:tui-messages:gallery --",
     "review:palette": "ts-node --transpile-only src/cli/ptb-palette-gallery.ts",
     "review:graph": "npm run task-dag-islands:gallery --",
