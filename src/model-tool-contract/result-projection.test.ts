@@ -16,7 +16,7 @@ import {
   serializeToolResult,
 } from "./result-projection";
 import { projectTui } from "./tui-projection";
-import { taskVersionRef } from "./task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 
 function captureError(action: () => unknown): Error {
   try {

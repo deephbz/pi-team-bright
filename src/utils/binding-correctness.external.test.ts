@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import * as messaging from "./messaging";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";

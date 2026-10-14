@@ -16,6 +16,7 @@ vi.mock("./lock", async (importOriginal) => {
 });
 import path from "node:path";
 import os from "node:os";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
 import {
   appendMessage,
   readInbox,
@@ -25,11 +26,12 @@ import {
   markMessagesRead,
   markMessagesReadForMembership,
   RecipientNotCurrentMemberError,
-} from "./messaging";
+} from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 
 // Mock the paths to use a temporary directory
 const testDir = path.join(os.tmpdir(), "pi-teams-test-" + Date.now());
+const alertMembership = new DurableAlertMembership();
 
 describe("Messaging Utilities", () => {
   beforeEach(() => {
@@ -90,7 +92,7 @@ describe("Messaging Utilities", () => {
     const numMessages = 100;
     const promises = [];
     for (let i = 0; i < numMessages; i++) {
-      promises.push(sendPlainMessage("test-team", `sender-${i}`, "receiver", `msg-${i}`, `summary-${i}`));
+      promises.push(sendPlainMessage("test-team", `sender-${i}`, "receiver", `msg-${i}`, `summary-${i}`, undefined, undefined, alertMembership));
     }
     
     await Promise.all(promises);
@@ -106,7 +108,7 @@ describe("Messaging Utilities", () => {
   }, 30_000);
 
   it("rejects a direct message to an address absent from the current roster", async () => {
-    await expect(sendPlainMessage("test-team", "sender", "former-member", "body", "summary"))
+    await expect(sendPlainMessage("test-team", "sender", "former-member", "body", "summary", undefined, undefined, alertMembership))
       .rejects.toEqual(expect.objectContaining<Partial<RecipientNotCurrentMemberError>>({
         name: "RecipientNotCurrentMemberError",
         teamName: "test-team",
@@ -116,7 +118,7 @@ describe("Messaging Utilities", () => {
   });
 
   it("stamps exact sender and recipient membership generations", async () => {
-    const accepted = await sendPlainMessage("test-team", "sender", "receiver", "body", "summary");
+    const accepted = await sendPlainMessage("test-team", "sender", "receiver", "body", "summary", undefined, undefined, alertMembership);
     expect(accepted).toMatchObject({
       senderMembershipId: "membership_sender",
       recipientMembershipId: "membership_receiver",
@@ -137,6 +139,7 @@ describe("Messaging Utilities", () => {
       "stale",
       undefined,
       { membershipId: "membership_sender", sessionFile: "/tmp/stale-sender.jsonl" },
+      alertMembership,
     )).rejects.toThrow(/refusing a stale Message append/);
     expect(fs.existsSync(path.join(testDir, "inboxes", "receiver.json"))).toBe(false);
   });
@@ -161,7 +164,7 @@ describe("Messaging Utilities", () => {
         read: false,
       },
     ]));
-    const current = await sendPlainMessage("test-team", "sender", "receiver", "current generation", "current");
+    const current = await sendPlainMessage("test-team", "sender", "receiver", "current generation", "current", undefined, undefined, alertMembership);
 
     expect((await readInbox("test-team", "receiver", false, false)).map((message) => message.id))
       .toEqual(["message_old", "message_legacy", current.id]);
@@ -186,8 +189,8 @@ describe("Messaging Utilities", () => {
   });
 
   it("should mark messages as read", async () => {
-    await sendPlainMessage("test-team", "sender", "receiver", "msg1", "summary1");
-    await sendPlainMessage("test-team", "sender", "receiver", "msg2", "summary2");
+    await sendPlainMessage("test-team", "sender", "receiver", "msg1", "summary1", undefined, undefined, alertMembership);
+    await sendPlainMessage("test-team", "sender", "receiver", "msg2", "summary2", undefined, undefined, alertMembership);
     
     // Read only unread messages
     const unread = await readInbox("test-team", "receiver", true, true);
@@ -200,8 +203,8 @@ describe("Messaging Utilities", () => {
   });
 
   it("should acknowledge only explicitly selected Message IDs", async () => {
-    const first = await sendPlainMessage("test-team", "sender", "receiver", "msg1", "summary1");
-    const second = await sendPlainMessage("test-team", "sender", "receiver", "msg2", "summary2");
+    const first = await sendPlainMessage("test-team", "sender", "receiver", "msg1", "summary1", undefined, undefined, alertMembership);
+    const second = await sendPlainMessage("test-team", "sender", "receiver", "msg2", "summary2", undefined, undefined, alertMembership);
 
     expect(await markMessagesRead("test-team", "receiver", [second.id])).toBe(1);
     const all = await readInbox("test-team", "receiver", false, false);
@@ -222,7 +225,7 @@ describe("Messaging Utilities", () => {
     const configFilePath = path.join(testDir, "config.json");
     fs.writeFileSync(configFilePath, JSON.stringify(config));
     
-    const result = await broadcastMessage("test-team", "sender", "broadcast text", "summary");
+    const result = await broadcastMessage("test-team", "sender", "broadcast text", "summary", undefined, undefined, alertMembership);
     expect(result.failures).toEqual([]);
     expect(result.accepted).toEqual([
       { recipient: "member1", messageId: expect.stringMatching(/^message_/) },
@@ -282,7 +285,7 @@ describe("Messaging Utilities", () => {
     };
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    const resultPromise = broadcastMessage("test-team", "sender", "broadcast text", "summary");
+    const resultPromise = broadcastMessage("test-team", "sender", "broadcast text", "summary", undefined, undefined, alertMembership);
     await allStarted;
     expect(started).toEqual(["worker-a", "worker-b", "worker-c"]);
 
@@ -316,7 +319,7 @@ describe("Messaging Utilities", () => {
     const brokenPath = path.join(testDir, "inboxes", "broken.json");
     fs.mkdirSync(brokenPath, { recursive: true });
 
-    const result = await broadcastMessage("test-team", "sender", "broadcast text", "summary");
+    const result = await broadcastMessage("test-team", "sender", "broadcast text", "summary", undefined, undefined, alertMembership);
 
     expect(result.accepted).toEqual([
       { recipient: "accepted", messageId: expect.stringMatching(/^message_/) },

@@ -10,8 +10,8 @@ import {
 import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
-import { DIRECT_MESSAGE_CUSTOM_TYPE, DIRECT_MESSAGE_RESUME_TYPE } from "./message-delivery";
-import { readTeamEventCursor, readTeamEvents } from "./team-events";
+import { DIRECT_MESSAGE_CUSTOM_TYPE, DIRECT_MESSAGE_RESUME_TYPE } from "../alert-authority/direct-delivery";
+import { readTeamEventCursor, readTeamEvents } from "../coordination/event-journal";
 import * as teams from "./teams";
 
 type RegisteredTool = {

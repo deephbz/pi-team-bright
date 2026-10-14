@@ -5,10 +5,13 @@ import { DurableTaskMutationPublication } from "../adapters/durable-task-mutatio
 import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import { enqueueTaskChange, readTaskDeliveries, TASK_CHANGE_CUSTOM_TYPE, TASK_CHANGE_ACK_ENTRY_TYPE, TaskChangeDelivery } from "./task-delivery";
-import * as messaging from "./messaging";
+
+const alertMembership = new DurableAlertMembership();
 
 const names: string[] = [];
 async function fixture(suffix: string) {
@@ -33,7 +36,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); for (const name of n
 describe("graph-only public contracts", () => {
   it("preserves direct Message acceptance without changing Task authority", async () => {
     const { name } = await fixture("messages");
-    const accepted = await messaging.sendPlainMessage(name, "team-lead", "worker", "The Task remains authoritative.", "inspect");
+    const accepted = await messaging.sendPlainMessage(name, "team-lead", "worker", "The Task remains authoritative.", "inspect", undefined, undefined, alertMembership);
     expect(accepted.text).toBe("The Task remains authoritative.");
     expect(await messaging.readInbox(name, "worker", false, false)).toEqual([expect.objectContaining({ id: accepted.id })]);
   });

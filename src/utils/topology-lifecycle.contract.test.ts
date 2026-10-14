@@ -6,10 +6,10 @@ import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/t
 import type { TerminalAdapter } from "./terminal-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
 import { projectTui } from "../model-tool-contract/tui-projection";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
 
 type RegisteredTool = {

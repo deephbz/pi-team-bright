@@ -7,14 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as teamEvents from "../coordination/event-journal";
 import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import * as runtime from "./runtime";
 import * as workerResources from "./worker-resource-projection";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 
 type RegisteredTool = {
   name: string;

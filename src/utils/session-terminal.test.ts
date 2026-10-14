@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { TeamConfig } from "./models";
+import type { TeamConfig } from "../team-authority/contracts";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { admitTeamSession, placeSessionTerminal } from "./session-terminal";
 

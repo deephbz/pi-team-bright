@@ -8,7 +8,7 @@ import {
   answerAutomaticSummaryPolicyQuery,
   registerAutomaticSummaryPolicyProvider,
 } from "./automatic-summary-policy";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 
 const testTeams: string[] = [];
 

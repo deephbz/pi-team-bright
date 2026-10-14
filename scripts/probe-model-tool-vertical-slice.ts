@@ -30,7 +30,7 @@ registerModelToolJourney({
 }, port);
 
 assert.deepEqual([...tools.keys()], [
-  "team_create", "team_sync", "ensure_worker", "task_create", "task_read", "task_update",
+  "team_create", "team_sync", "ensure_worker", "task_graph_apply", "task_read", "task_update",
   "worker_stop", "team_shutdown", "alert_send",
 ]);
 assert.equal(tools.get("team_create")?.parameters, TeamCreateParametersSchema);
@@ -40,7 +40,7 @@ assert.equal(tools.get("ensure_worker")?.parameters, EnsureWorkerParametersSchem
 assert.equal(Check(TeamCreateParametersSchema, {
   name: "release-team",
   purpose: "Prepare the release.",
-  backend: "beads",
+  backend: "unsupported",
 }), false);
 assert.equal(Check(EnsureWorkerParametersSchema, {
   name: "verifier",

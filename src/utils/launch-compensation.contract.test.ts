@@ -10,7 +10,7 @@ import * as runtime from "./runtime";
 import * as teams from "./teams";
 import { projectTui } from "../model-tool-contract/tui-projection";
 import { DurableTeamLifecyclePublication } from "../adapters/durable-team-lifecycle-publication";
-import { createWorkerLaunchBridge as createRuntimeWorkerLaunchBridge, WorkerLegacyTeamModelDefaultError, type WorkerLaunchBridgeDependencies, type WorkerLaunchRequest } from "./worker-launch-bridge";
+import { createWorkerLaunchBridge as createRuntimeWorkerLaunchBridge, WorkerLegacyTeamModelDefaultError, type WorkerLaunchBridgeDependencies, type WorkerLaunchRequest } from "../team-authority/worker-launch-bridge";
 import { materializeWorkerAggregate } from "./worker-resource-projection";
 import type { ModelRoleSettings } from "./model-role-settings";
 

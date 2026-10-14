@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as eventJournal from "../coordination/event-journal";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
 import * as paths from "./paths";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";

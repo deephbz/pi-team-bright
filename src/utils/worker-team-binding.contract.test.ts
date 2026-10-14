@@ -4,11 +4,11 @@ import { Check } from "typebox/value";
 import piTeams from "../../extensions/index";
 import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import { AlertSendParametersSchema, TaskReadParametersSchema, TaskUpdateParametersSchema } from "../model-tool-contract/catalog";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import * as paths from "./paths";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 
 type Tool = {
   name: string;

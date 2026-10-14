@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import {
   appendTaskEventFailureHint,
   readTaskEventFailureHintRecords,

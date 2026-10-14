@@ -15,7 +15,7 @@ import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-
 import { exactLeaderSessionId } from "../../src/model-tool-contract/in-memory-team-port";
 import { decodeHistoricalTeamSyncResult, projectToolResult } from "../../src/model-tool-contract/result-projection";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../../src/utils/sync-nudge-conductor";
 import {
@@ -35,7 +35,7 @@ import {
   waitForLivenessHint,
 } from "../../src/utils/sync-liveness";
 import * as paths from "../../src/utils/paths";
-import * as teamEvents from "../../src/utils/team-events";
+import * as teamEvents from "../../src/coordination/event-journal";
 import * as teams from "../../src/utils/teams";
 import { writeRuntimeStatus } from "../../src/utils/runtime";
 

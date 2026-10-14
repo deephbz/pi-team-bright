@@ -17,7 +17,7 @@ import * as paths from "./paths";
 import * as runtime from "./runtime";
 import { SyncNudgeConductor } from "./sync-nudge-conductor";
 import { TaskChangeDelivery } from "./task-delivery";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
 import * as teamLabels from "./team-labels";
 
