@@ -1,4 +1,5 @@
 import type { Member } from "../team-authority/contracts";
+import type { DeliveryDegradation, DeliveryEngineName, DeliveryEngineState } from "./recipient-delivery-lifecycle";
 /**
  * Runtime constants for health checking.
  * Exported for configurability and testing.
@@ -26,6 +27,10 @@ export interface AgentRuntimeStatus {
     ready?: boolean;
     /** Exact Pi 0.83 agent lifecycle evidence for the current generation. */
     runState?: "active" | "settled";
+    delivery?: {
+        sessionFile: string;
+        engines: Partial<Record<DeliveryEngineName, DeliveryEngineState>>;
+    };
     lastError?: RuntimeError;
     lastStop?: {
         stopId?: string;
@@ -36,6 +41,8 @@ export interface AgentRuntimeStatus {
     };
     stopRequested?: "worker_stop" | "team_shutdown" | "compensation";
 }
+/** Delivery observations apply only to this bound, verified process generation. */
+export declare function currentDeliveryDegradations(member: Pick<Member, "membershipId" | "sessionFile">, status: AgentRuntimeStatus | null, verified?: "unknown" | "live" | "gone"): DeliveryDegradation[];
 /** Exact ephemeral process generation within one durable Membership. */
 export interface RuntimeGeneration {
     membershipId: string;

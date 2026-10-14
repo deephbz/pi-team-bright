@@ -365,11 +365,29 @@ restating executable definitions.
   never OS liveness.
 - Team topology and lifecycle mutations are lead-only. Shutdown deactivates a
   Membership only after exact stop evidence. Task history and authority remain.
-  Direct-Message and Task-change delivery form one exact recipient Session pair.
-  Initial create and resume activate it; binding replacement, admission refusal,
-  Session shutdown, and successful full Team shutdown stop it. Partial shutdown
-  retains the current leader pair. Full shutdown ends only the exact lead
-  runtime generation and fails closed around malformed or foreign evidence.
+  Alert and Task delivery share one exact recipient Session fence. Each engine
+  has an independent failure and retry outcome. Initial starts retain Alert-first
+  ordering for the shared lease. A failed start, context observation,
+  acknowledgement, or background scan stops only that engine. Retries use
+  capped backoff while the binding stays current. The runtime record carries
+  each engine's degradation for its exact generation. `team_sync` snapshots,
+  unsettled results, and `/ptb status` expose that fact. Runtime diagnostics
+  update on each retry. The recipient pane toasts once when an engine becomes
+  degraded and once when it recovers.
+  Initial create and resume activate delivery. Binding replacement, admission
+  refusal, Session shutdown, and successful full Team shutdown stop both engines
+  and their retries. Partial shutdown retains the current leader delivery.
+  Full shutdown ends only the exact lead runtime generation and fails closed
+  around malformed or foreign evidence.
+- An accepted Alert is stored for its recipient. The receipt proves neither
+  presentation nor processing. It includes known current-generation delivery
+  degradation as diagnostic evidence. Missing or degraded delivery never refuses
+  durable acceptance. Diagnostic evidence does not enter the inbox payload.
+- Coordination advice for an idle Worker with an `in_progress` Task names that
+  Task and asks the lead to inspect its blocker and evidence before deciding.
+  Carrier facts stay unchanged. Idle alone authorizes no spawn or replacement.
+  Known limit: this advice appears only on the activity-change event. A snapshot
+  after compaction does not repeat it.
 - `team_sync` preserves `caught_up` for current quiescence. `unsettled` names
   Workers whose activity or missing runtime/delivery evidence needs attention.
   Both advance the lead's branch cursor once the native entry commits. Pi `>=0.83`

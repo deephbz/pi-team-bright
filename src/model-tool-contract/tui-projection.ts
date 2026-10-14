@@ -1,3 +1,5 @@
+import { deliveryRetryTime } from "../utils/delivery-retry-time";
+import { ALERT_ACCEPTANCE_DESCRIPTION } from "./catalog";
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { decodeHistoricalTeamSyncResult, projectToolResult, type ProjectedTool } from "./result-projection";
 import { piTeamBrightSettingsExamplePath } from "../utils/package-example-path";
@@ -106,6 +108,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
         : model.alerts_unavailable ? `Alert history unavailable: ${compact(model.alerts_unavailable.message)}` : "Alert history unavailable";
       lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}, ${alerts}.`);
       for (const worker of model.workers.filter((worker: any) => worker.attention)) lines.push(`Worker ${quoted(worker.name)} · ${worker.attention.reason} · ${worker.attention.nextActionHint}: ${worker.attention.message}`);
+      for (const worker of model.workers) for (const failure of worker.delivery_degraded ?? []) lines.push(`Worker ${quoted(worker.name)} · ${failure.engine} delivery degraded (${failure.operation}): ${compact(failure.message)} · retry scheduled.`);
     }
     else if (model.kind === "updates") {
       lines.push(`Updates: ${model.team_changes.length} Team change${model.team_changes.length === 1 ? "" : "s"}, ${model.task_changes.length} Task change${model.task_changes.length === 1 ? "" : "s"}, ${model.worker_changes.length} Worker change${model.worker_changes.length === 1 ? "" : "s"}, ${model.alerts.length} Alert${model.alerts.length === 1 ? "" : "s"}.`);
@@ -118,7 +121,10 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
     } else if (model.kind === "caught_up") lines.push("Caught up: no current Worker producer requires a wait.");
     else if (model.kind === "unsettled") {
       lines.push("No new Team change; Worker evidence needs attention.");
-      for (const worker of model.workers) lines.push(`Worker ${quoted(worker.name)} · ${worker.reason.replaceAll("_", " ")}.`);
+      for (const worker of model.workers) {
+        lines.push(`Worker ${quoted(worker.name)} · ${worker.reason.replaceAll("_", " ")}.`);
+        for (const failure of worker.delivery_degraded ?? []) lines.push(`${failure.engine} delivery (${failure.operation}): ${compact(failure.message)} · retry scheduled.`);
+      }
     }
     else lines.push(model.message ? compact(model.message) : `${model.reason ?? "Observation did not advance."}`);
     const retry = recoveryLine(model);
@@ -131,8 +137,12 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
   } else if (tool === "alert_send") {
     if (model.kind === "alert_sent") {
       lines.push(model.failed_recipients.length > 0
-        ? `Alert partially accepted by ${model.accepted_recipients.join(", ") || "no recipients"}; failed recipients: ${model.failed_recipients.join(", ")}. Task state unchanged.`
-        : `Alert accepted by ${model.accepted_recipients.join(", ") || "no recipients"}; Task state unchanged.`);
+        ? `Alert partially accepted for ${model.accepted_recipients.join(", ") || "no recipients"}; failed recipients: ${model.failed_recipients.join(", ")}.`
+        : `Alert accepted for ${model.accepted_recipients.join(", ") || "no recipients"}.`);
+      lines.push(`${ALERT_ACCEPTANCE_DESCRIPTION} Task state unchanged.`);
+      for (const recipient of model.delivery_degraded ?? []) for (const engine of recipient.engines) {
+        lines.push(`⚠ ${recipient.recipient}: ${engine.engine} delivery degraded (${engine.operation}: ${compact(engine.message)}); ${deliveryRetryTime(engine.retryAt)}.`);
+      }
     } else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "worker_stop") {
     if (model.kind === "worker_stopped") lines.push(`Worker ${quoted(model.worker)} stopped; Task state unchanged.`);

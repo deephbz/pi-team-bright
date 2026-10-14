@@ -976,6 +976,7 @@ export class TaskChangeDelivery {
       membershipId?: string;
       sessionFile: string;
       pollMs?: number;
+      onError?: (error: unknown) => void;
       /** Consumer-owned exact-recipient binding implementation supplied by composition. */
       membership: TaskDeliveryMembershipPort;
       /** Task-owned query implementation supplied by the composition root. */
@@ -1032,8 +1033,8 @@ export class TaskChangeDelivery {
     if (this.stopped || generation !== this.generation) return;
     const presented = presentedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
     for (const id of presented) this.attempted.add(id);
-    this.stopWatch = watchFile(this.options.teamName, this.options.recipient, () => void this.scan().catch(() => undefined));
-    this.interval = hostEnv().clock.setInterval(() => void this.scan().catch(() => undefined), this.options.pollMs ?? DEFAULT_TASK_POLL_MS);
+    this.stopWatch = watchFile(this.options.teamName, this.options.recipient, () => this.scanInBackground());
+    this.interval = hostEnv().clock.setInterval(() => this.scanInBackground(), this.options.pollMs ?? DEFAULT_TASK_POLL_MS);
     if (presented.size > 0) {
       const records = (await this.eligible()).filter((record) => presented.has(record.deliveryId));
       if (this.stopped || generation !== this.generation) return;
@@ -1083,6 +1084,13 @@ export class TaskChangeDelivery {
     } finally {
       if (this.scanPromise === promise) this.scanPromise = null;
     }
+  }
+
+  private scanInBackground(): void {
+    const generation = this.generation;
+    void this.scan().catch(error => {
+      if (!this.stopped && generation === this.generation) this.options.onError?.(error);
+    });
   }
 
   private async scanLoop(generation: number): Promise<void> {

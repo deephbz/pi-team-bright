@@ -268,22 +268,25 @@ export async function sendPlainMessage(
   color: string | undefined,
   expectedSender: ExpectedSenderBinding | undefined,
   membership: AlertMembershipPort,
-): Promise<IdentifiedInboxMessage> {
+): Promise<IdentifiedInboxMessage & { deliveryDegraded?: import("../utils/recipient-delivery-lifecycle").DeliveryDegradation[] }> {
   const outcome = await membership.withCurrentDelivery({
     teamName,
     from: fromName,
     to: toName,
     expectedSender,
-  }, async (delivery) => appendMessage(teamName, toName, {
-    recipientMembershipId: delivery.recipientMembershipId,
-    ...(delivery.senderMembershipId ? { senderMembershipId: delivery.senderMembershipId } : {}),
-    from: fromName,
-    text,
-    timestamp: nowIso(),
-    read: false,
-    summary,
-    color,
-  }));
+  }, async (delivery) => {
+    const message = await appendMessage(teamName, toName, {
+      recipientMembershipId: delivery.recipientMembershipId,
+      ...(delivery.senderMembershipId ? { senderMembershipId: delivery.senderMembershipId } : {}),
+      from: fromName,
+      text,
+      timestamp: nowIso(),
+      read: false,
+      summary,
+      color,
+    });
+    return { ...message, ...(delivery.deliveryDegraded?.length ? { deliveryDegraded: delivery.deliveryDegraded } : {}) };
+  });
   if (outcome.kind === "delivered") return outcome.value;
   if (outcome.kind === "team_absent") throw new MessageTeamDoesNotExistError(teamName);
   if (outcome.kind === "recipient_absent") throw new RecipientNotCurrentMemberError(teamName, toName);
@@ -324,7 +327,7 @@ export async function broadcastMessage(
   results.forEach((result, index) => {
     const recipient = recipients[index];
     if (result.status === "fulfilled") {
-      accepted.push({ recipient, messageId: result.value.id });
+      accepted.push({ recipient, messageId: result.value.id, ...(result.value.deliveryDegraded?.length ? { deliveryDegraded: result.value.deliveryDegraded } : {}) });
     } else {
       failures.push({
         recipient,

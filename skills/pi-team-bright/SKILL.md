@@ -175,6 +175,9 @@ Use terminal evidence for exceptional diagnosis, not as Task progress. State the
 blocker and next actor when no actor can progress. Explicit owner pause or stop
 instructions remain authoritative.
 
+If a Worker stays at `actuation_pending` after an accepted Alert, use `team_sync`
+and involve the human if recovery needs intervention.
+
 Report the requested outcome with evidence, or identify the blocker and next action.
 Keep reusable Workers and the Team available. Stop a Worker only after its assigned
 nonterminal Tasks resolve and its capacity is no longer needed. Shut down the Team
