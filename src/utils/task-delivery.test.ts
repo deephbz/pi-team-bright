@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
-import * as messaging from "./messaging";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import { taskDeliveryRecoveryPath } from "./paths";
 import * as teams from "./teams";
-import type { TaskCard } from "../model-tool-contract/task-domain";
+import type { TaskCard } from "../task-authority/task-domain";
 import type { TaskDeliveryRecoveryRecord } from "./task-delivery";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import {
   enqueueTaskChange,
   recordTaskDeliveryRecovery,

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { IdentifiedInboxMessage } from "./models";
+import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
 import {
   DEFAULT_MESSAGE_POLL_MS,
   DIRECT_MESSAGE_CUSTOM_TYPE,
@@ -9,10 +10,11 @@ import {
   DirectMessageDelivery,
   messagePollMs,
   acknowledgedMessageIdsFromEntries,
-} from "./message-delivery";
+} from "../alert-authority/direct-delivery";
 
 const MEMBERSHIP_ID = "membership_worker_current";
 const SESSION_FILE = "/sessions/worker-current.jsonl";
+const alertMembership = new DurableAlertMembership();
 
 function inboxMessage(id: string, text: string): IdentifiedInboxMessage {
   return {
@@ -82,6 +84,7 @@ function harness(unread: IdentifiedInboxMessage[]) {
     membershipId: MEMBERSHIP_ID,
     sessionFile: SESSION_FILE,
     pollMs: 60_000,
+    membership: alertMembership,
     dependencies: {
       readUnread: vi.fn(async () => unread),
       markRead,
@@ -113,6 +116,7 @@ describe("DirectMessageDelivery", () => {
     const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
     const delivery = new DirectMessageDelivery(sink, {
       teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: { readUnread: async () => [], markRead: async () => 0, isCurrentBinding: () => binding, watch },
     });
 
@@ -134,6 +138,7 @@ describe("DirectMessageDelivery", () => {
     const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
     const delivery = new DirectMessageDelivery(sink, {
       teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: { readUnread: () => { readStarted(); return unread; }, markRead: async () => 0, isCurrentBinding: () => Promise.resolve(++calls <= 2), watch: () => () => undefined },
     });
 
@@ -155,6 +160,7 @@ describe("DirectMessageDelivery", () => {
     const watch = vi.fn(() => () => undefined);
     const delivery = new DirectMessageDelivery({ sendMessage: vi.fn(), appendEntry: vi.fn() }, {
       teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: {
         readUnread: () => ++reads === 1 ? (firstRead(), oldRead) : Promise.resolve([]),
         markRead: async () => 0,
@@ -180,6 +186,7 @@ describe("DirectMessageDelivery", () => {
     const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
     const delivery = new DirectMessageDelivery(sink, {
       teamName: "alpha", recipient: "worker", membershipId: MEMBERSHIP_ID, sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: { readUnread: async () => [], markRead: async () => 0, isCurrentBinding: () => ++calls <= 2 ? Promise.resolve(true) : recovery, watch: () => () => undefined },
     });
     await delivery.start([]);
@@ -383,6 +390,7 @@ describe("DirectMessageDelivery", () => {
       recipient: "worker",
       membershipId: "membership_worker_old",
       sessionFile: "/sessions/worker-old.jsonl",
+      membership: alertMembership,
       dependencies: {
         readUnread: vi.fn(async () => [inboxMessage("message_current", "new generation")]),
         markRead: vi.fn(async () => 0),
@@ -407,6 +415,7 @@ describe("DirectMessageDelivery", () => {
       recipient: "worker",
       membershipId: MEMBERSHIP_ID,
       sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: {
         readUnread,
         markRead,
@@ -452,6 +461,7 @@ describe("DirectMessageDelivery", () => {
       recipient: "worker",
       membershipId: MEMBERSHIP_ID,
       sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: {
         readUnread,
         markRead,
@@ -502,6 +512,7 @@ describe("DirectMessageDelivery", () => {
       recipient: "worker",
       membershipId: MEMBERSHIP_ID,
       sessionFile: SESSION_FILE,
+      membership: alertMembership,
       dependencies: {
         readUnread,
         markRead,

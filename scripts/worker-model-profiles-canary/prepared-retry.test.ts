@@ -3,7 +3,7 @@ import { writeRuntimeStatus } from "../../src/utils/runtime";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkerLaunchBridge } from "../../src/utils/worker-launch-bridge";
+import { createWorkerLaunchBridge } from "../../src/team-authority/worker-launch-bridge";
 import { DurableModelToolBindings } from "../../src/model-tool-contract/durable-model-tool-bindings";
 import { DurableModelToolTeamApplication } from "../../src/model-tool-contract/durable-model-tool-team-application";
 import { exactLeaderSessionId } from "../../src/model-tool-contract/model-tool-contracts";

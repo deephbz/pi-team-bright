@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
-import { TaskCardSchema } from "./task-domain";
+import { TaskCardSchema } from "../task-authority/task-domain";
 import { taskVersionRef, type TaskVersionRef } from "../task-authority/task-version-ref";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";

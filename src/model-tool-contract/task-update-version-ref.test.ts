@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Check } from "typebox/value";
 import { TaskUpdateParametersSchema, TaskUpdateResultSchema } from "./catalog";
 import { projectToolResult } from "./result-projection";
-import { taskVersionRef } from "./task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 
 describe("Task update version refs", () => {
   it("accepts graph transitions or context changes and projects opaque refs", () => {

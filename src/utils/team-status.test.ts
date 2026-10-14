@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import type { TeamConfig } from "./models";
+import type { TeamConfig } from "../team-authority/contracts";
 import { deriveCarrierView, type CarrierView } from "../carrier-observation";
 import * as paths from "./paths";
 import {

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TeamConfig } from "./models";
-import type { TaskCard } from "../model-tool-contract/task-domain";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { TeamConfig } from "../team-authority/contracts";
+import type { TaskCard } from "../task-authority/task-domain";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import { configPath, teamDir } from "./paths";
 import {
   InvalidTeamSnapshotContinuationError,
@@ -12,7 +12,7 @@ import {
   pageTeamCurrentProjection,
   projectTeamCurrentState,
   readTeamEvents,
-} from "./team-events";
+} from "../coordination/event-journal";
 
 describe("Team event cursor and pagination contract", () => {
   const teamName = `event-page-${process.pid}-${Date.now()}`;

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as teams from "./teams";
 

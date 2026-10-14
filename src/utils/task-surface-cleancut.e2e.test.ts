@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 
 function expectedVersionRef(value: string): string {
   return /^v_[0-9a-f]{16}$/.test(value) ? value : taskVersionRef(value);

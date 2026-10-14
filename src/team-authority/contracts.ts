@@ -53,9 +53,6 @@ export interface Member {
   deactivationReason?: "team_shutdown" | "process_shutdown" | "replaced";
 }
 
-/** Historical Team import path for Task-owned Beads identity evidence. */
-export type { BeadsAuthorityFingerprint } from "../task-authority/team-config-task-authority";
-
 export interface LogicalWorker {
   /** Stable Worker identity within one Team, independent of carrier generations. */
   name: string;

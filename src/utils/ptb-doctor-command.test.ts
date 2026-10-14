@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import type { TeamConfig } from "./models";
+import type { TeamConfig } from "../team-authority/contracts";
 import * as doctor from "./ptb-doctor-command";
 
 type Command = {

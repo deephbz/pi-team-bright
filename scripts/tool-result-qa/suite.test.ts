@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "vitest";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 import { parseObservationContent } from "../../src/coordination/observation-content";
 import { projectToolResult } from "../../src/model-tool-contract/result-projection";
 import {
@@ -76,7 +76,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     const runtime = await import("../../src/utils/runtime");
     const { DurableGraphTaskAuthority } = await import("../../src/adapters/durable-graph-task-authority");
     const graphTaskAuthority = new DurableGraphTaskAuthority();
-    const teamEvents = await import("../../src/utils/team-events");
+    const teamEvents = await import("../../src/coordination/event-journal");
     const terminalRegistry = await import("../../src/adapters/terminal-registry");
 
     const livePanes = new Map<string, boolean>([["qa-pane-lead", true]]);

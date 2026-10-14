@@ -5,7 +5,7 @@ import { captureTrioProjection, type RegisteredToolLike } from "../../test/suppo
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { configPath, taskDir, taskEventFailureHintPath, teamDir } from "./paths";
 import { readTaskEventFailureHintRecords } from "./task-event-failure-hints";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
 
 const fixtures: string[] = [];

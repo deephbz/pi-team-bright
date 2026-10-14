@@ -3,11 +3,13 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import { DurableGraphAssignedWorkGuard } from "../adapters/durable-graph-assigned-work";
-import * as messaging from "./messaging";
-import * as canonicalMessaging from "../alert-authority/inbox-delivery";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as runtime from "./runtime";
+
+const alertMembership = new DurableAlertMembership();
 
 type RegisteredTool = {
   name: string;
@@ -134,7 +136,7 @@ describe("current team binding correctness", () => {
       cwd: process.cwd(),
       subscriptions: [],
     });
-    const accepted = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "inspect only", "foreign inspection");
+    const accepted = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "inspect only", "foreign inspection", undefined, undefined, alertMembership);
     const inspected = await messaging.readInbox(teamName, "worker", true, false);
 
     expect(inspected[0].id).toBe(accepted.id);
@@ -159,7 +161,7 @@ describe("current team binding correctness", () => {
     }
     fs.mkdirSync(paths.inboxPath(teamName, "worker-b"), { recursive: true });
 
-    const result = await messaging.broadcastMessage(teamName, "team-lead", "body", "summary");
+    const result = await messaging.broadcastMessage(teamName, "team-lead", "body", "summary", undefined, undefined, alertMembership);
 
     expect(result.accepted).toEqual([
       { recipient: "worker-a", messageId: expect.stringMatching(/^message_/) },
@@ -175,7 +177,7 @@ describe("current team binding correctness", () => {
   it("alert_send exposes a partial announcement without claiming every native delivery succeeded", async () => {
     const teamName = testTeamName("partial-alert");
     await teams.createTeam(teamName, "receipt-session", "lead-agent");
-    vi.spyOn(canonicalMessaging, "broadcastMessage").mockResolvedValue({
+    vi.spyOn(messaging, "broadcastMessage").mockResolvedValue({
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
     });

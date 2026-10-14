@@ -4,13 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import * as messaging from "./messaging";
-import type { Member } from "./models";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import * as messaging from "../alert-authority/inbox-delivery";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import * as teams from "./teams";
+
+const alertMembership = new DurableAlertMembership();
 
 type RegisteredTool = {
   name: string;
@@ -227,15 +230,13 @@ describe("release P1 public contracts", () => {
     await createBeadsTeam(name, leadSession);
     const worker = member("worker", `/tmp/${name}-worker.jsonl`, { tmuxPaneId: "zellij_worker" });
     await teams.addMember(name, worker);
-    await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: Date.now() }, worker.membershipId);
-    vi.spyOn(process, "kill").mockImplementation(((pid: number, signal?: NodeJS.Signals | number) => {
-      if (pid === 2_147_483_647 && signal === 0) {
-        const error = new Error("gone") as NodeJS.ErrnoException;
-        error.code = "ESRCH";
-        throw error;
-      }
-      return true;
-    }) as typeof process.kill);
+    await runtime.writeRuntimeStatus(name, "worker", {
+      pid: 2_147_483_647, startedAt: Date.now(),
+      osBirthToken: "synthetic-stopped-generation", bootId: "synthetic-boot",
+    }, worker.membershipId);
+    const generation = nodeHostEnv.process.generation;
+    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid =>
+      pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
     const tool = registerExtension().get("worker_stop")!;
 
     const result = await tool.execute("shutdown", {
@@ -386,7 +387,7 @@ describe("release P1 public contracts", () => {
     const send = messaging.sendPlainMessage(name, "worker", "peer", "before replacement", "race", undefined, {
       membershipId: oldMember.membershipId!,
       sessionFile: oldSession,
-    });
+    }, alertMembership);
     await waitFor(() => fs.existsSync(`${paths.configPath(name)}.lock`));
     let replacementFinished = false;
     const replacement = (async () => {
@@ -407,7 +408,7 @@ describe("release P1 public contracts", () => {
     await expect(messaging.sendPlainMessage(name, "worker", "peer", "stale", "must reject", undefined, {
       membershipId: oldMember.membershipId!,
       sessionFile: oldSession,
-    })).rejects.toThrow(/refusing a stale Message append/i);
+    }, alertMembership)).rejects.toThrow(/refusing a stale Message append/i);
     expect(await messaging.readInbox(name, "peer", false, false)).toHaveLength(countAfterSerializedCommit);
   });
 

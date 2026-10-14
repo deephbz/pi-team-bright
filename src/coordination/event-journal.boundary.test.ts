@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as journal from "./event-journal";
-import * as legacyJournal from "../utils/team-events";
 import { configPath, teamDir, teamEventJournalPath } from "../utils/paths";
 
 function productionTypeScriptPaths(directory: string): string[] {
@@ -25,15 +24,15 @@ describe("Coordination event-journal ownership boundary", () => {
     fs.rmSync(teamDir(teamName), { recursive: true, force: true });
   });
 
-  it("keeps the legacy facade on the canonical ordered journal", async () => {
+  it("preserves journal order across bounded continuation reads", async () => {
     await journal.appendTeamEvent(teamName, {
       type: "alert", alertId: "first", from: "team-lead", to: "worker", kind: "attention", text: "first",
     });
-    await legacyJournal.appendTeamEvent(teamName, {
+    await journal.appendTeamEvent(teamName, {
       type: "alert", alertId: "second", from: "team-lead", to: "worker", kind: "attention", text: "second",
     });
 
-    expect(legacyJournal.readTeamEvents(teamName, { afterCursor: "0", limit: 1 })).toMatchObject({
+    expect(journal.readTeamEvents(teamName, { afterCursor: "0", limit: 1 })).toMatchObject({
       cursor: "1", headCursor: "2", truncated: true, remaining: 1,
     });
     expect(journal.readTeamEvents(teamName, { afterCursor: "1" })).toMatchObject({
@@ -87,13 +86,8 @@ describe("Coordination event-journal ownership boundary", () => {
     expect(journal.readTeamEventPages(teamName, { afterCursor: "100" }).map((page) => page.cursor)).toEqual(["121"]);
   });
 
-  it("keeps the historical utility path as a re-export only", () => {
-    const facade = fs.readFileSync(path.resolve("src/utils/team-events.ts"), "utf8");
-    expect(facade).toMatch(/^\/\*\* @deprecated Coordination owns the event journal/m);
-    expect(facade).toContain('export * from "../coordination/event-journal";');
-
+  it("keeps consumers on the canonical journal path", () => {
     for (const sourcePath of productionTypeScriptPaths(path.resolve("src"))) {
-      if (sourcePath.endsWith("src/utils/team-events.ts")) continue;
       expect(fs.readFileSync(sourcePath, "utf8")).not.toMatch(/utils\/team-events/);
     }
   });
