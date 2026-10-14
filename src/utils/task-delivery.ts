@@ -17,7 +17,6 @@ import { writeJsonAtomic } from "./atomic-json";
 import { Check } from "typebox/value";
 import { TaskCardSchema, type CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
-import type { TaskReconciliationQuery } from "../task-authority/contracts";
 import type { GraphRevisionRetirementInput } from "../task-authority/graph-revision-retirement";
 import {
   recordGraphRevisionRetirementLocked,
@@ -91,6 +90,8 @@ export interface TaskDeliveryRecoveryRecord {
   taskId: string;
   taskVersion: TaskVersionRef;
   recipients: string[];
+  /** Exact Membership targets captured when recovery evidence is persisted. */
+  targets?: OwnerTransitionTarget[];
   changeKind: TaskChangeKind;
   recordedAt: string;
   reason: "enqueue-failed";
@@ -105,7 +106,7 @@ export interface OwnerTransitionTarget {
   recipient: string;
   recipientMembershipId: string;
   recipientSessionFile: string;
-  changeKind: "ownership_lost" | "assigned";
+  changeKind: TaskChangeKind;
 }
 
 export interface OwnerTransitionIntent {
@@ -125,16 +126,6 @@ export interface OwnerTransitionIntent {
   resolvedTargetKeys?: string[];
   retiredAt?: string;
   retiredByGraphVersion?: string;
-}
-
-export interface OwnerTransitionOutboxDependencies {
-  /** Consumer-owned Task query. Composition supplies the Beads adapter. */
-  query?: TaskReconciliationQuery;
-  enqueueExact?: (
-    config: TeamConfig,
-    task: CanonicalTaskCard,
-    target: OwnerTransitionTarget,
-  ) => Promise<TaskDeliveryRecord | null>;
 }
 
 export interface TaskChangeBatchDetails {
@@ -345,300 +336,93 @@ function compactOwnerTransitionIntents(records: OwnerTransitionIntent[]): OwnerT
   return [...incomplete, ...settled];
 }
 
-function ownerTransitionTargets(
-  config: TeamConfig,
-  beforeOwner: string | undefined,
-  afterOwner: string | undefined,
-): OwnerTransitionTarget[] {
-  const targets: OwnerTransitionTarget[] = [];
-  const append = (recipient: string | undefined, changeKind: OwnerTransitionTarget["changeKind"]) => {
-    if (!recipient) return;
-    const binding = recipientBinding(config, recipient);
-    if (!binding) return;
-    targets.push({
-      recipient,
-      recipientMembershipId: binding.membershipId,
-      recipientSessionFile: binding.sessionFile,
-      changeKind,
-    });
-  };
-  append(beforeOwner, "ownership_lost");
-  append(afterOwner, "assigned");
-  return targets;
-}
-
-/**
- * Persist adapter delivery intent before the authoritative assignee mutation.
- * The returned boolean controls whether the operation ID is embedded in the
- * same Beads command. A same-assignee write is not an ownership transition.
- */
-export async function prepareOwnerTransitionIntent(input: {
-  operationId: string;
-  teamName: string;
-  before: CanonicalTaskCard;
-  afterOwner?: string;
-  previousOperationId?: string;
-}): Promise<boolean> {
-  const afterOwner = input.afterOwner || undefined;
-  if (input.before.assignee === afterOwner) {
-    if (!input.previousOperationId) return false;
-    const file = taskOwnerTransitionOutboxPath(input.teamName);
-    if (!fs.existsSync(file)) return false;
-    await withLock(file, async () => {
-      const records = readOwnerTransitionIntentsUnsafe(file);
-      const prior = records.find((record) =>
-        record.taskId === input.before.id
-        && record.state === "prepared"
-        && record.operationId === input.previousOperationId
-        && record.afterOwner === input.before.assignee
-      );
-      if (prior) {
-        prior.state = "committed";
-        prior.committedTaskVersion = assertTaskVersionRef(input.before.version);
-        prior.committedTaskProjection = projectTaskForAgent(input.before);
-        writeJsonAtomic(file, compactOwnerTransitionIntents(records));
-      }
-    });
-    await deliverCommittedOwnerTransitionIntents(input.teamName);
-    return false;
-  }
-  const config = await readConfig(input.teamName);
-  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
-    throw new Error(`Team ${config.name} has no configured Beads Task authority; Task delivery refuses legacy fallback.`);
-  }
-  const file = taskOwnerTransitionOutboxPath(input.teamName);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  await withLock(file, async () => {
-    const records = readOwnerTransitionIntentsUnsafe(file);
-    for (const record of records) {
-      if (record.taskId !== input.before.id || record.state !== "prepared") continue;
-      if (
-        record.operationId === input.previousOperationId
-        && record.afterOwner === input.before.assignee
-      ) {
-        record.state = "committed";
-        record.committedTaskVersion = assertTaskVersionRef(input.before.version);
-        record.committedTaskProjection = projectTaskForAgent(input.before);
-      } else if (
-        record.beforeVersion === assertTaskVersionRef(input.before.version)
-        && record.beforeOwner === input.before.assignee
-      ) {
-        record.state = "abandoned";
-      }
-    }
-    if (!records.some((record) => record.operationId === input.operationId)) {
-      records.push({
-        operationId: input.operationId,
-        teamName: input.teamName,
-        taskId: input.before.id,
-        beforeVersion: assertTaskVersionRef(input.before.version),
-        beforeOwner: input.before.assignee,
-        afterOwner,
-        targets: ownerTransitionTargets(config, input.before.assignee, afterOwner),
-        createdAt: new Date(hostEnv().clock.now()).toISOString(),
-        state: "prepared",
-      });
-    }
-    writeJsonAtomic(file, compactOwnerTransitionIntents(records));
-  });
-  // A later assignee mutation is the last safe point to settle the previous
-  // marker before the authority overwrites it. Delivery failure stays pending.
-  await deliverCommittedOwnerTransitionIntents(input.teamName);
-  return true;
-}
-
-/** Mark a known authority commit and attempt both exact-recipient deliveries. */
-export async function completeOwnerTransitionIntent(
-  teamName: string,
-  operationId: string,
-  task: CanonicalTaskCard,
-  dependencies: OwnerTransitionOutboxDependencies = {},
-): Promise<string[]> {
-  const postStateCard = projectTaskForAgent(task);
-  const file = taskOwnerTransitionOutboxPath(teamName);
-  if (!fs.existsSync(file)) return [`Owner transition ${operationId} committed without a local delivery intent`];
-  await withLock(file, async () => {
-    const records = readOwnerTransitionIntentsUnsafe(file);
-    const record = records.find((candidate) => candidate.operationId === operationId);
-    if (!record) return;
-    if (record.taskId !== task.id || record.afterOwner !== task.assignee) {
-      throw new Error(`Owner transition ${operationId} post-state does not match its prepared intent.`);
-    }
-    record.state = "committed";
-    record.committedTaskVersion = assertTaskVersionRef(postStateCard.version);
-    record.committedTaskProjection = structuredClone(postStateCard);
-    writeJsonAtomic(file, compactOwnerTransitionIntents(records));
-  });
-  return deliverCommittedOwnerTransitionIntents(teamName, dependencies);
-}
-
-/**
- * Recover prepared intents only when Beads confirms the embedded operation ID.
- * An unchanged pre-state can be an in-flight writer, so it remains prepared.
- * Only a matching authority marker proves commit; all other evidence is retained.
- */
-export async function reconcileOwnerTransitionOutbox(
-  teamName: string,
-  dependencies: OwnerTransitionOutboxDependencies = {},
-): Promise<string[]> {
-  const config = await readConfig(teamName);
-  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) return [];
-  const file = taskOwnerTransitionOutboxPath(teamName);
-  if (!fs.existsSync(file)) return [];
-  const prepared = readOwnerTransitionIntentsUnsafe(file).filter((record) => record.state === "prepared");
-  if (prepared.length > 0 && !dependencies.query) {
-    throw new Error("Task owner-transition recovery requires an injected TaskReconciliationQuery.");
-  }
-  const evidence = new Map<string, { task: CanonicalTaskCard; operationId?: string }>();
-  for (const record of prepared) {
-    if (!evidence.has(record.taskId)) {
-      evidence.set(
-        record.taskId,
-        await dependencies.query!.readOwnerTransitionEvidence(record.taskId),
-      );
-    }
-  }
-  await withLock(file, async () => {
-    const records = readOwnerTransitionIntentsUnsafe(file);
-    for (const record of records) {
-      if (record.state !== "prepared") continue;
-      const current = evidence.get(record.taskId);
-      if (!current) continue;
-      if (
-        current.operationId === record.operationId
-        && current.task.assignee === record.afterOwner
-      ) {
-        record.state = "committed";
-        record.committedTaskVersion = assertTaskVersionRef(current.task.version);
-        record.committedTaskProjection = projectTaskForAgent(current.task);
-      }
-    }
-    writeJsonAtomic(file, compactOwnerTransitionIntents(records));
-  });
-  return deliverCommittedOwnerTransitionIntents(teamName, dependencies);
-}
-
-async function deliverCommittedOwnerTransitionIntents(
-  teamName: string,
-  dependencies: OwnerTransitionOutboxDependencies = {},
-): Promise<string[]> {
-  const file = taskOwnerTransitionOutboxPath(teamName);
-  if (!fs.existsSync(file)) return [];
-  const config = await readConfig(teamName);
-  const warnings: string[] = [];
-  await withLock(file, async () => {
-    const records = readOwnerTransitionIntentsUnsafe(file);
-    for (const record of records) {
-      if (record.state !== "committed" || record.retiredAt) continue;
-      const projection = record.committedTaskProjection;
-      if (!projection) continue;
-      for (const target of record.targets) {
-        const key = ownerTargetKey(target);
-        if (record.resolvedTargetKeys?.includes(key)) continue;
-        const current = recipientBinding(config, target.recipient);
-        if (
-          !current
-          || current.membershipId !== target.recipientMembershipId
-          || current.sessionFile !== target.recipientSessionFile
-        ) {
-          record.resolvedTargetKeys = [...new Set([...(record.resolvedTargetKeys || []), key])];
-          continue;
-        }
-        try {
-          if (dependencies.enqueueExact) {
-            await dependencies.enqueueExact(config, projection, target);
-          } else {
-            await enqueueTaskProjectionWithConfig(
-              config,
-              projection,
-              target.recipient,
-              target.changeKind,
-              { membershipId: target.recipientMembershipId, sessionFile: target.recipientSessionFile },
-            );
-          }
-          record.resolvedTargetKeys = [...new Set([...(record.resolvedTargetKeys || []), key])];
-        } catch (error) {
-          warnings.push(
-            `Owner transition ${record.operationId} committed but delivery enqueue for ${target.recipient} failed: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
-    }
-    writeJsonAtomic(file, compactOwnerTransitionIntents(records));
-  });
-  return warnings;
-}
-
 export async function readOwnerTransitionIntents(teamName: string): Promise<OwnerTransitionIntent[]> {
   const file = taskOwnerTransitionOutboxPath(teamName);
   if (!fs.existsSync(file)) return [];
   return withLock(file, async () => readOwnerTransitionIntentsUnsafe(file));
 }
 
-/** Rebuild latest assignee-addressed delivery intent after a commit/spool crash gap. */
+export interface GraphTaskRecoveryQuery {
+  readTasks(teamName: string): Promise<CanonicalTaskCard[]>;
+}
+
+/** Recover committed graph publications, including non-ready Task states. */
 export async function reconcileTaskChanges(
   teamName: string,
   recipient: string,
-  query?: TaskReconciliationQuery,
+  graph?: GraphTaskRecoveryQuery,
 ): Promise<number> {
+  if (!graph) throw new Error("Task delivery recovery requires graph authority.");
+  const tasks = await graph.readTasks(teamName);
+  const current = new Map(tasks.map(task => [task.id, task]));
   const config = await readConfig(teamName);
-  if (config.taskBackend !== "beads" || !config.taskWorkspace || !config.taskAuthorityId || !config.taskAuthorityFingerprint) {
-    return 0;
-  }
-  if (!query) throw new Error("Task delivery reconciliation requires an injected TaskReconciliationQuery.");
-  await reconcileOwnerTransitionOutbox(teamName, { query });
-  const hydrated = await query.readCurrentTasks();
-  const existing = await readTaskDeliveries(teamName, recipient);
-  const tombstones = await readTaskDeliveryTombstones(teamName, recipient);
-  const known = new Set([...existing.map((record) => record.deliveryId), ...tombstones.map((record) => record.deliveryId)]);
-  let reconciled = 0;
-  for (const result of hydrated) {
-    if (!result || result.kind === "contract_gap") {
-      if (result?.kind === "contract_gap") throw upgradeRequired(`Task ${result.taskId} cannot be reconciled without canonical Task metadata.`);
+  const file = taskDeliveryRecoveryPath(teamName);
+  if (!fs.existsSync(file)) return 0;
+  // Never hold the recovery lock while acquiring the graph retirement fence.
+  const records = await withLock(file, async () => readRecoveryRecords(file));
+  let count = 0;
+  for (const record of records) {
+    if (record?.retiredAt) continue;
+    const valid = record && Check(TaskCardSchema, record.taskProjection) && isTaskVersionRef(record.taskVersion)
+      && record.taskProjection.version === record.taskVersion && record.taskProjection.id === record.taskId
+      && Array.isArray(record.recipients) && record.recipients.every(name => typeof name === "string")
+      && ["assigned", "ownership_lost", "status_changed", "relation_changed", "note_appended", "task_changed"].includes(record.changeKind)
+      && record.teamName === teamName
+      && (record.resolvedRecipients === undefined || Array.isArray(record.resolvedRecipients))
+      && (record.targets === undefined || (Array.isArray(record.targets) && record.targets.every(target => target
+        && typeof target.recipient === "string" && typeof target.recipientMembershipId === "string" && typeof target.recipientSessionFile === "string")));
+    if (!valid) {
+      await retireRecoveryRecord(file, record, recipient, "Malformed recovery record");
       continue;
     }
-    const task = result.task;
-    if (task.assignee !== recipient) continue;
-    const record = await enqueueTaskChangeWithConfig(config, task, recipient, "task_changed");
-    if (record && !known.has(record.deliveryId)) {
-      known.add(record.deliveryId);
-      reconciled += 1;
+    if (!record.recipients.includes(recipient) || record.resolvedRecipients?.includes(recipient)) continue;
+    const task = current.get(record.taskId);
+    const binding = recipientBinding(config, recipient);
+    let target = record.targets?.find(target => target.recipient === recipient);
+    // Pre-0.24 records have names only. Recover a fresh current assignment;
+    // never infer an old Membership from that record or replay its projection.
+    if (record.targets === undefined) {
+      if (!task || task.version !== record.taskVersion || task.assignee !== recipient) {
+        await retireRecoveryRecord(file, record, recipient, "Pre-0.24 recovery no longer matches the current graph assignment");
+        continue;
+      }
+      if (!binding) continue;
+      target = { recipient, recipientMembershipId: binding.membershipId, recipientSessionFile: binding.sessionFile, changeKind: record.changeKind };
     }
+    if (!task || task.version !== record.taskVersion) continue;
+    if (!target || !binding || binding.membershipId !== target.recipientMembershipId || binding.sessionFile !== target.recipientSessionFile) continue;
+    const delivered = await enqueueTaskProjectionWithConfig(config, task, recipient, record.changeKind,
+      { membershipId: target.recipientMembershipId, sessionFile: target.recipientSessionFile });
+    if (!delivered) continue;
+    await withLock(file, async () => {
+      const latest = readRecoveryRecords(file);
+      const matched = latest.find(candidate => candidate?.taskId === record.taskId && candidate.taskVersion === record.taskVersion
+        && candidate.changeKind === record.changeKind && candidate.recordedAt === record.recordedAt);
+      if (!matched || matched.retiredAt || matched.resolvedRecipients?.includes(recipient)) return;
+      matched.resolvedRecipients = [...(matched.resolvedRecipients ?? []), recipient];
+      writeJsonAtomic(file, latest);
+      count += 1;
+    });
   }
-  reconciled += await reconcileRecoveryRecords(config, recipient);
-  return reconciled;
+  return count;
 }
 
-async function reconcileRecoveryRecords(config: TeamConfig, recipient: string): Promise<number> {
-  const file = taskDeliveryRecoveryPath(config.name);
-  if (!fs.existsSync(file)) return 0;
-  return withLock(file, async () => {
-    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-    const records: TaskDeliveryRecoveryRecord[] = Array.isArray(raw)
-      ? raw.map((record) => {
-        if (!record?.taskProjection || !isTaskVersionRef(record?.taskVersion) || !Check(TaskCardSchema, record.taskProjection) || record.taskProjection.version !== record.taskVersion) throw upgradeRequired(file);
-        return record as TaskDeliveryRecoveryRecord;
-      })
-      : [];
-    let count = 0;
-    let changed = false;
-    for (const record of records) {
-      if (record.retiredAt || !record.recipients.includes(recipient) || record.resolvedRecipients?.includes(recipient)) continue;
-      const delivered = record.taskProjection
-        ? await enqueueTaskProjectionWithConfig(config, record.taskProjection, recipient, record.changeKind)
-        : null;
-      if (!delivered) continue;
-      record.resolvedRecipients = [...new Set([...(record.resolvedRecipients || []), recipient])];
-      changed = true;
-      count += 1;
-    }
-    if (changed) {
-      // Unresolved records are never evicted. Fully resolved evidence is bounded.
-      const unresolved = records.filter((record) => record.recipients.some((name) => !record.resolvedRecipients?.includes(name)));
-      const resolved = records.filter((record) => record.recipients.every((name) => record.resolvedRecipients?.includes(name))).slice(-128);
-      writeJsonAtomic(file, [...unresolved, ...resolved]);
-    }
-    return count;
+function readRecoveryRecords(file: string): TaskDeliveryRecoveryRecord[] {
+  const source = fs.readFileSync(file, "utf8");
+  let raw: unknown;
+  try { raw = JSON.parse(source); } catch { raw = { malformedSource: source }; }
+  return (Array.isArray(raw) ? raw : [raw]) as TaskDeliveryRecoveryRecord[];
+}
+
+async function retireRecoveryRecord(file: string, record: TaskDeliveryRecoveryRecord, recipient: string, reason: string): Promise<void> {
+  await withLock(file, async () => {
+    const records = readRecoveryRecords(file);
+    const index = records.findIndex(candidate => JSON.stringify(candidate) === JSON.stringify(record));
+    if (index < 0 || records[index]?.retiredAt) return;
+    const diagnostic = `${reason}: Task ${record?.taskId ?? "unknown"}, version ${record?.taskVersion ?? "unknown"}, recipient ${recipient}.`;
+    records[index] = { ...records[index], retiredAt: new Date(hostEnv().clock.now()).toISOString(), recoveryDiagnostic: diagnostic } as TaskDeliveryRecoveryRecord;
+    writeJsonAtomic(file, records);
+    console.warn(`[pi-teams] ${diagnostic}`);
   });
 }
 
@@ -646,6 +430,11 @@ export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRec
   if (!Check(TaskCardSchema, record.taskProjection) || !isTaskVersionRef(record.taskVersion) || record.taskProjection.version !== record.taskVersion) {
     throw upgradeRequired(taskDeliveryRecoveryPath(record.teamName));
   }
+  const config = await readConfig(record.teamName);
+  record = { ...record, targets: record.targets ?? record.recipients.flatMap(recipient => {
+    const binding = recipientBinding(config, recipient);
+    return binding ? [{ recipient, recipientMembershipId: binding.membershipId, recipientSessionFile: binding.sessionFile, changeKind: record.changeKind }] : [];
+  }) };
   const file = taskDeliveryRecoveryPath(record.teamName);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   await withLock(graphRevisionRetirementPath(record.teamName), () => withLock(file, async () => {
@@ -980,15 +769,11 @@ export class TaskChangeDelivery {
       /** Consumer-owned exact-recipient binding implementation supplied by composition. */
       membership: TaskDeliveryMembershipPort;
       /** Task-owned query implementation supplied by the composition root. */
-      reconciliationQuery?: TaskReconciliationQuery;
+      graphAuthority?: GraphTaskRecoveryQuery;
       /** Test/embedding seam; production uses the injected latest-state query. */
       reconcile?: () => Promise<number>;
-      /**
-       * Narrow periodic recovery seam. Unlike `reconcile`, this inspects only
-       * the local assignee-transition outbox and reads individual Beads Tasks
-       * only when a prepared intent needs commit evidence.
-       */
-      reconcileOwnerOutbox?: () => Promise<string[]>;
+      /** Periodic publication recovery seam for tests and embedding. */
+      reconcileRecovery?: () => Promise<unknown>;
       /** Periodic Task-authority ready-front recovery for this stable Worker. */
       reconcileReady?: () => Promise<string[]>;
     },
@@ -1028,7 +813,7 @@ export class TaskChangeDelivery {
     await (this.options.reconcile?.() ?? reconcileTaskChanges(
       this.options.teamName,
       this.options.recipient,
-      this.options.reconciliationQuery,
+      this.options.graphAuthority,
     ));
     if (this.stopped || generation !== this.generation) return;
     const presented = presentedTaskDeliveryIdsFromEntries(entries, this.options.teamName, this.options.recipient, this.resolvedMembershipId);
@@ -1166,17 +951,13 @@ export class TaskChangeDelivery {
     if (this.stopped || generation !== this.generation) return;
     try {
       await (
-        this.options.reconcileOwnerOutbox?.()
-        ?? reconcileOwnerTransitionOutbox(this.options.teamName, {
-          query: this.options.reconciliationQuery,
-        })
+        this.options.reconcileRecovery?.()
+        ?? reconcileTaskChanges(this.options.teamName, this.options.recipient, this.options.graphAuthority)
       );
     } catch (error) {
-      // Owner-transition recovery is independent of already-persisted recipient
-      // delivery. A transient Beads/outbox failure must not head-of-line block
-      // unrelated records that are ready in the local spool.
+      // Publication recovery cannot block records already in the local spool.
       console.error(
-        `[pi-teams] assignee-transition recovery failed for team ${this.options.teamName}; continuing local Task delivery:`,
+        `[pi-teams] graph publication recovery failed for team ${this.options.teamName}; continuing local Task delivery:`,
         error,
       );
     }

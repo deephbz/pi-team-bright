@@ -8,7 +8,8 @@ lifecycle surface:
 
 This split can occur when an old Team still binds the Session, but the current
 Pi Team Bright version fences that Team from normal model-tool operations. A
-normal active Team is not a rescue candidate.
+normal active Team is not a rescue candidate. An unsupported Task backend or
+missing graph alone does not authorize this procedure.
 
 ## Preconditions
 
@@ -39,7 +40,7 @@ Ask the owner to fork the Pi Session instead.
    mutation functions to deactivate the exact current Memberships with
    `team_shutdown` as the reason. Do not overwrite JSON directly when those
    functions are available.
-6. Preserve Beads data, Task records, event journals, deliveries, runtime
+6. Preserve all Task stores, Task records, event journals, deliveries, runtime
    records, Session files, and terminal evidence. They remain historical
    evidence.
 7. Write an external rescue receipt with the time, Team name, before and after

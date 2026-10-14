@@ -1,59 +1,6 @@
-import type { TaskVersionRef } from "../task-authority/task-version-ref";
-import type { TeamPaneLayout } from "../utils/team-pane-layout";
-import type {
-  AlertSendPortResult,
-  AlertTarget,
-  CreateTaskPortResult,
-  CreateTeamPortResult,
-  EnsureWorkerPortResult,
-  ExactLeaderSessionId,
-  ModelToolLeaderLaunchContext,
-  ModelToolTaskJournalEntry,
-  ModelToolTaskUpdateInput,
-  ModelToolTeamCurrent,
-  ModelToolTeamEvent,
-  ModelToolWorkerCurrent,
-  PendingObservation,
-  ReadTaskContractGap,
-  ReadTasksPortResult,
-  TaskLinkPortInput,
-  TaskLinkPortResult,
-  TaskUpdatePortOutcome,
-  TeamShutdownPortResult,
-  TeamSnapshotPortResult,
-  TeamSyncPortResult,
-  UpdateTasksPortResult,
-  WorkerStopPortResult,
-  ModelToolTeamPort as LegacyModelToolTeamPort,
-} from "./model-tool-contracts";
+import type { ExactLeaderSessionId, ModelToolWorkerCurrent, ModelToolTeamPort as LegacyModelToolTeamPort } from "./model-tool-contracts";
 export { exactLeaderSessionId } from "./model-tool-contracts";
-export type {
-  AlertSendPortResult,
-  AlertTarget,
-  CreateTaskPortResult,
-  CreateTeamPortResult,
-  EnsureWorkerPortResult,
-  ExactLeaderSessionId,
-  ModelToolLeaderLaunchContext,
-  ModelToolTaskJournalEntry,
-  ModelToolTaskUpdateInput,
-  ModelToolTeamCurrent,
-  ModelToolTeamEvent,
-  ModelToolWorkerCurrent,
-  PendingObservation,
-  ReadTaskContractGap,
-  ReadTasksPortResult,
-  TaskLinkPortInput,
-  TaskLinkPortResult,
-  TaskUpdatePortOutcome,
-  TeamShutdownPortResult,
-  TeamSnapshotPortResult,
-  TeamSyncPortResult,
-  UpdateTasksPortResult,
-  WorkerStopPortResult,
-} from "./model-tool-contracts";
-
-export type { ModelToolTeamPort } from "./model-tool-contracts";
+export type * from "./model-tool-contracts";
 
 export interface InMemoryModelToolTeamDebugState { revision: number; bindings: Array<{ leaderSessionId: string; teamId: string; teamName: string }>; teams: Array<{ id: string; name: string; purpose: string; lifecycle: "active"; leaderSessionId: string; workers: ModelToolWorkerCurrent[] }>; }
 
@@ -69,13 +16,11 @@ export class InMemoryModelToolTeamPort implements LegacyModelToolTeamPort {
   createTeam(...args: Parameters<LegacyModelToolTeamPort["createTeam"]>) { return this.ports.team.createTeam(...args); }
   ensureWorker(...args: Parameters<LegacyModelToolTeamPort["ensureWorker"]>) { return this.ports.team.ensureWorker(...args); }
   readSnapshot(...args: Parameters<LegacyModelToolTeamPort["readSnapshot"]>) { return this.ports.coordination.readSnapshot(...args); }
-  createTask(...args: Parameters<LegacyModelToolTeamPort["createTask"]>) { return this.ports.task.createTask(...args); }
   createTaskGraph(...args: Parameters<LegacyModelToolTeamPort["createTaskGraph"]>) { return this.ports.task.createTaskGraph(...args); }
   readTasks(...args: Parameters<LegacyModelToolTeamPort["readTasks"]>) { return this.ports.task.readTasks(...args); }
-  updateTasks(session: ExactLeaderSessionId, updates: Parameters<LegacyModelToolTeamPort["updateTasks"]>[1], _actor?: string) { return this.ports.task.updateTasks(session, updates); }
+  updateTasks(session: ExactLeaderSessionId, updates: Parameters<LegacyModelToolTeamPort["updateTasks"]>[1], actor?: string) { return this.ports.task.updateTasks(session, updates, actor); }
   stopWorker(...args: Parameters<LegacyModelToolTeamPort["stopWorker"]>) { return this.ports.team.stopWorker(...args); }
   shutdownTeam(...args: Parameters<LegacyModelToolTeamPort["shutdownTeam"]>) { return this.ports.team.shutdownTeam(...args); }
-  linkTask(...args: Parameters<LegacyModelToolTeamPort["linkTask"]>) { return this.ports.task.linkTask(...args); }
   sendAlert(...args: Parameters<LegacyModelToolTeamPort["sendAlert"]>) { return this.ports.alert.sendAlert(...args); }
   readTeamSync(...args: Parameters<LegacyModelToolTeamPort["readTeamSync"]>) { return this.ports.coordination.readTeamSync(...args); }
   setPendingObservationResult(...args: Parameters<LegacyModelToolTeamPort["setPendingObservationResult"]>) { return this.ports.coordination.setPendingObservationResult(...args); }

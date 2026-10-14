@@ -7,15 +7,10 @@ import { deriveWorkerRunObservation, readWorkerRunObservation, livenessIsComplet
 import { writeRuntimeStatus } from "./runtime";
 import { inboxPath, taskDeliveryPath, teamDir } from "./paths";
 import { createDurableCoordinationQueries } from "../adapters/durable-coordination-queries";
-import { createReadOnlyBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 
 const roots: string[] = [];
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-const queries = createDurableCoordinationQueries(createReadOnlyBeadsTaskAdapterFactory({
-  readTaskAuthorityRecordEnvelope: async () => undefined as any,
-  readTaskAuthorityRecordEnvelopes: async () => [],
-  listTaskIds: async () => [],
-}));
+const queries = createDurableCoordinationQueries({ readTasks: async () => [] } as any);
 afterEach(() => {
   vi.restoreAllMocks();
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });

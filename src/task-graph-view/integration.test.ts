@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GraphTaskController } from "../task-authority/graph-control";
-import type { BeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
 import type { TaskGraphPaneHost } from "./herdr-pane";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "./integration";
 
@@ -39,7 +38,7 @@ function graphTrace() {
 }
 
 describe("Task graph pane authority refresh", () => {
-  it("reads graph authority before Beads and watches its exact snapshot coordinate", async () => {
+  it("reads only graph authority and watches its exact snapshot coordinate", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "task-graph-service-"));
     directories.push(root);
     const authorityPath = path.join(root, "task-authority", "graph-control.json");
@@ -50,8 +49,6 @@ describe("Task graph pane authority refresh", () => {
       trace: vi.fn(async () => graphTrace()),
       watchPath: vi.fn(() => authorityPath),
     };
-    const listCurrentTasks = vi.fn(async () => []);
-    const taskReadAdapterFactory = (() => ({ listCurrentTasks })) as unknown as BeadsTaskAdapterFactory;
     const host = new Host();
     const prior = {
       HERDR_ENV: process.env.HERDR_ENV,
@@ -65,14 +62,13 @@ describe("Task graph pane authority refresh", () => {
       HERDR_TAB_ID: "tab",
       HERDR_WORKSPACE_ID: "workspace",
     });
-    const service = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: graphSource, host: host as never });
+    const service = new TaskGraphPaneService({ graphControlSource: graphSource, host: host as never });
     try {
       await service.toggle({ teamName: "team", actor: "team-lead", cwd: root, limitText: "25" });
       const source = JSON.parse(fs.readFileSync(host.sourcePath!, "utf8"));
       expect(source).toMatchObject({ authority: "graph_control", graph_version: expect.stringMatching(/^g_/) });
       expect(graphSource.trace).toHaveBeenCalledWith("team");
       expect(graphSource.watchPath).toHaveBeenCalledWith("team");
-      expect(listCurrentTasks).not.toHaveBeenCalled();
     } finally {
       service.shutdown();
       for (const [name, value] of Object.entries(prior)) {
@@ -82,17 +78,16 @@ describe("Task graph pane authority refresh", () => {
     }
   });
 
-  it("watches a missing authority through an existing ancestor without creating authority storage", async () => {
+  it("refuses a missing authority without creating an empty view or authority storage", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "task-graph-read-only-"));
     directories.push(root);
     const authorityDirectory = path.join(root, "missing", "task-authority");
     const authorityPath = path.join(authorityDirectory, "graph-control.json");
     const graphSource: TaskGraphControlReadSource = {
       hasGraph: vi.fn(() => false),
-      trace: vi.fn(async () => graphTrace()),
+      trace: vi.fn(async () => { throw new Error("Graph unavailable"); }),
       watchPath: vi.fn(() => authorityPath),
     };
-    const taskReadAdapterFactory = (() => ({ listCurrentTasks: async () => [] })) as unknown as BeadsTaskAdapterFactory;
     const host = new Host();
     const prior = {
       HERDR_ENV: process.env.HERDR_ENV,
@@ -106,11 +101,12 @@ describe("Task graph pane authority refresh", () => {
       HERDR_TAB_ID: "tab",
       HERDR_WORKSPACE_ID: "workspace",
     });
-    const service = new TaskGraphPaneService({ taskReadAdapterFactory, graphControlSource: graphSource, host: host as never });
+    const service = new TaskGraphPaneService({ graphControlSource: graphSource, host: host as never });
     try {
-      await service.toggle({ teamName: "team", actor: "team-lead", cwd: root });
+      await expect(service.toggle({ teamName: "team", actor: "team-lead", cwd: root })).rejects.toThrow("Graph unavailable");
       expect(fs.existsSync(authorityDirectory)).toBe(false);
-      expect(graphSource.trace).not.toHaveBeenCalled();
+      expect(graphSource.trace).toHaveBeenCalledWith("team");
+      expect(host.sourcePath).toBeUndefined();
     } finally {
       service.shutdown();
       for (const [name, value] of Object.entries(prior)) {

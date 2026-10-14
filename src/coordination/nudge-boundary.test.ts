@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { DurableCoordinationNudgeRecord } from "../adapters/durable-coordination-nudge-record";
 import { CoordinationObservationService } from "./observation-service";
 import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
 
@@ -43,6 +42,5 @@ describe("Coordination automatic sync boundary", () => {
     expect(pi).toContain("latest.scopeKey !== candidate.scopeKey");
     expect(pi).toContain('const result = await frameworkSync.execute(teamName!, "automatic", candidate.requestedView)');
     expect(pi).toContain('return result === "published"');
-    expect(() => new DurableCoordinationNudgeRecord()).not.toThrow();
   });
 });

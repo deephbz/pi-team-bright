@@ -8,7 +8,7 @@ import { CoordinationObservationService } from "./observation-service";
 import { waitForLivenessHint } from "../utils/sync-liveness";
 import { teamDir } from "../utils/paths";
 import { composedDurableModelToolPort } from "../../test/support/durable-model-tool-port";
-import { createReadOnlyBeadsTaskAdapterFactory } from "../model-tool-contract/beads-task-adapter";
+import type { GraphTaskOrchestrationPort } from "../task-authority/graph-orchestration";
 import type { CoordinationSyncResult } from "./observation-contracts";
 
 function modelToolAlias(result: CoordinationSyncResult): TeamSyncPortResult {
@@ -175,12 +175,8 @@ describe("Coordination observation service equivalence fences", () => {
     const source = fs.readFileSync(path.join(root, "src/coordination/observation-service.ts"), "utf8");
     expect(source).not.toMatch(/from ["'][^"']*(?:model-tool-contract|trio)[^"']*["']/);
     expect(() => composedDurableModelToolPort()).not.toThrow();
-    const factory = createReadOnlyBeadsTaskAdapterFactory({
-      readTaskAuthorityRecordEnvelope: async () => undefined as any,
-      readTaskAuthorityRecordEnvelopes: async () => [],
-      listTaskIds: async () => [],
-    });
-    expect(() => new CoordinationObservationService(createDurableCoordinationQueries(factory), {
+    const graph = { readTasks: async () => [] } as unknown as GraphTaskOrchestrationPort;
+    expect(() => new CoordinationObservationService(createDurableCoordinationQueries(graph), {
       projectNonterminalTaskIds: () => [],
       projectTaskChanges: () => ({ kind: "projected", changes: [] }),
     }, {

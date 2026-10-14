@@ -1,20 +1,17 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
-import * as messaging from "./messaging";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import { taskDeliveryRecoveryPath } from "./paths";
 import * as teams from "./teams";
-import type { TaskCard } from "../model-tool-contract/task-domain";
-import type { TaskReconciliationQuery } from "../task-authority/contracts";
+import type { TaskCard } from "../task-authority/task-domain";
 import type { TaskDeliveryRecoveryRecord } from "./task-delivery";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import {
   enqueueTaskChange,
-  prepareOwnerTransitionIntent,
   recordTaskDeliveryRecovery,
   readTaskDeliveries,
-  reconcileOwnerTransitionOutbox,
   TASK_CHANGE_CUSTOM_TYPE,
   TASK_CHANGE_ACK_ENTRY_TYPE,
   TASK_CHANGE_RESUME_TYPE,
@@ -24,23 +21,15 @@ import {
 
 const created: string[] = [];
 
-function reconciliationQuery(
-  readOwnerTransitionEvidence: TaskReconciliationQuery["readOwnerTransitionEvidence"],
-): TaskReconciliationQuery {
-  return {
-    readOwnerTransitionEvidence,
-    readCurrentTasks: async () => [],
-  };
-}
-
 async function fixture(suffix: string) {
   const teamName = `task-delivery-${suffix}-${process.pid}-${Date.now()}`;
   created.push(teamName);
   paths.ensureDirs();
   const authorityId = `task_authority_${suffix}`;
-  await teams.createTeam(teamName, "lead-session", "lead-agent", "", undefined, undefined, `/tmp/${teamName}-beads`, authorityId, {
-    schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: `task_delivery_${suffix}`, projectId: `task-delivery-${suffix}`,
-  });
+  await teams.createTeam(teamName, "lead-session", "lead-agent");
+  // This suite isolates historical native spool/ACK behavior. Graph startup
+  // and required authority are covered by graph-only-cutover.test.ts.
+  fs.unlinkSync(paths.graphTaskAuthorityPath(teamName));
   const sessionFile = `/tmp/${teamName}-worker.jsonl`;
   await teams.addMember(teamName, {
     agentId: `worker@${teamName}`,
@@ -111,7 +100,7 @@ describe("Task-native delivery", () => {
     });
 
     const records = JSON.parse(fs.readFileSync(taskDeliveryRecoveryPath(teamName), "utf8"));
-    expect(records).toEqual([record]);
+    expect(records).toEqual([expect.objectContaining(record)]);
   });
 
   it("persists an authority-scoped Session-targeted change without creating a Message", async () => {
@@ -365,96 +354,26 @@ describe("Task-native delivery", () => {
     delivery.stop();
   });
 
-  it("recovers a committed assignee transition on a running recipient's fallback scan and acknowledges it once", async () => {
-    const { teamName, sessionFile, task } = await fixture("live-assignee-outbox");
-    const before = {
-      ...task,
-      assignee: "team-lead",
-      version: taskVersionRef("assignee-v1"),
-    };
-    const committed = {
-      ...before,
-      assignee: "worker",
-      version: taskVersionRef("assignee-v2"),
-    };
-    const operationId = "assignee-transition-after-mutator-crash";
-    let evidence = { task: before, operationId: undefined as string | undefined };
-    const readEvidence = vi.fn(async () => evidence);
-    const sendMessage = vi.fn();
-    const appendEntry = vi.fn();
+  it("recovers a committed publication on the running recipient scan and acknowledges it once", async () => {
+    const { teamName, sessionFile, task } = await fixture("live-publication-recovery");
+    let committed = false;
+    const sendMessage = vi.fn(); const appendEntry = vi.fn();
     const delivery = new TaskChangeDelivery({ sendMessage, appendEntry }, {
-      teamName,
-      recipient: "worker",
-      sessionFile,
-      pollMs: 60_000,
-      membership: taskDeliveryMembership,
-      reconcile: async () => 0,
-      reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, {
-        query: reconciliationQuery(readEvidence),
-      }),
+      teamName, recipient: "worker", sessionFile, pollMs: 60_000,
+      membership: taskDeliveryMembership, reconcile: async () => 0,
+      reconcileRecovery: async () => { if (committed) await enqueueTaskChange(teamName, task, "task_changed"); },
     });
-
     await delivery.start([]);
     expect(sendMessage).not.toHaveBeenCalled();
-
-    await prepareOwnerTransitionIntent({
-      operationId,
-      teamName,
-      before,
-      afterOwner: "worker",
-    });
-    evidence = { task: committed, operationId };
-
-    // This is the same scan invoked by the fallback interval. The mutating
-    // process never calls completeOwnerTransitionIntent and no recipient
-    // process is restarted.
-    await delivery.scan();
-    expect(readEvidence).toHaveBeenCalledTimes(1);
-    expect(sendMessage).toHaveBeenCalledTimes(1);
-    expect(sendMessage.mock.calls[0][0]).toMatchObject({
-      customType: TASK_CHANGE_CUSTOM_TYPE,
-      details: {
-        changes: [{
-          changeKind: "assigned",
-          ref: expect.objectContaining({ taskId: task.id, version: expect.stringMatching(/^v_[0-9a-f]{16}$/) }),
-        }],
-      },
-    });
-    expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
-
-    await delivery.scan();
-    expect(readEvidence).toHaveBeenCalledTimes(1);
+    committed = true;
+    await delivery.scan(); await delivery.scan();
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(await readTaskDeliveries(teamName, "worker")).toHaveLength(1);
-
     const batch = sendMessage.mock.calls[0][0];
     await delivery.observeContext([{ role: "custom", customType: batch.customType, details: batch.details }]);
     await delivery.commitPresentedAfterSuccessfulTurn("stop");
     expect(appendEntry).toHaveBeenCalledTimes(1);
     expect((await readTaskDeliveries(teamName, "worker"))[0].successfulTurnAckAt).toEqual(expect.any(String));
-    delivery.stop();
-  });
-
-  it("performs no authority read on fallback scans when no assignee intent is prepared", async () => {
-    const { teamName, sessionFile } = await fixture("empty-assignee-outbox");
-    const readEvidence = vi.fn(async () => {
-      throw new Error("authority evidence must not be read without a prepared intent");
-    });
-    const delivery = new TaskChangeDelivery({ sendMessage: vi.fn(), appendEntry: vi.fn() }, {
-      teamName,
-      recipient: "worker",
-      sessionFile,
-      pollMs: 60_000,
-      membership: taskDeliveryMembership,
-      reconcile: async () => 0,
-      reconcileOwnerOutbox: () => reconcileOwnerTransitionOutbox(teamName, {
-        query: reconciliationQuery(readEvidence),
-      }),
-    });
-
-    await delivery.start([]);
-    await delivery.scan();
-    expect(readEvidence).not.toHaveBeenCalled();
     delivery.stop();
   });
 
@@ -511,7 +430,7 @@ describe("Task-native delivery", () => {
     expect(consumer).not.toContain("withCurrentSessionBinding");
   });
 
-  it("does not let assignee-outbox recovery failure block an existing recipient spool", async () => {
+  it("does not let graph publication recovery failure block an existing recipient spool", async () => {
     const { teamName, sessionFile, task } = await fixture("outbox-recovery-degraded");
     await enqueueTaskChange(teamName, task, "assigned");
     const sendMessage = vi.fn();
@@ -523,7 +442,7 @@ describe("Task-native delivery", () => {
       pollMs: 60_000,
       membership: taskDeliveryMembership,
       reconcile: async () => 0,
-      reconcileOwnerOutbox: async () => { throw new Error("Beads temporarily unavailable"); },
+      reconcileRecovery: async () => { throw new Error("Graph recovery temporarily unavailable"); },
     });
 
     await delivery.start([]);
@@ -531,7 +450,7 @@ describe("Task-native delivery", () => {
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(diagnostic).toHaveBeenCalledWith(
       expect.stringMatching(/continuing local Task delivery/),
-      expect.objectContaining({ message: "Beads temporarily unavailable" }),
+      expect.objectContaining({ message: "Graph recovery temporarily unavailable" }),
     );
     delivery.stop();
   });

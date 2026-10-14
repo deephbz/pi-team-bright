@@ -134,16 +134,24 @@ describe("P6 one outstanding reservation per membership", () => {
 });
 
 describe("P7 publication never writes Task authority", () => {
-  const exec = (at: number, args: string[], origin: HistoryOrigin): Step => [
-    at,
-    { kind: "exec.call", actor: lead, callId: `x${at}`, mode: "sync", command: "bd", args },
-    origin,
-  ];
-  it("passes when the publication operation only reads Tasks", () => {
-    expect(p7PublicationNeverWritesTasks(h(row(0, { field: "process", to: "live" }, ptb("t1")), exec(1, ["show", "x"], ptb("t2"))))).toEqual({ status: "pass" });
+  const tracing: Step = [0, { kind: "authority.tracing" }];
+  const publication = (origin = ptb("sync")): Step => row(1, { carrier: { field: "process", to: "live" } }, origin);
+  const write = (origin: HistoryOrigin): Step => [2, { kind: "authority.write", path: "/team/task-authority/graph-control.json" }, origin];
+  it("passes when an overlapping graph write belongs to another exact operation", () => {
+    expect(p7PublicationNeverWritesTasks(h(tracing, publication(), write(ptb("apply"))))).toEqual({ status: "pass" });
   });
-  it("violates when the publication operation also updates a Task", () => {
-    expect(p7PublicationNeverWritesTasks(h(row(0, { field: "process", to: "live" }, ptb("t1")), exec(1, ["update", "x"], ptb("t1"))))).toMatchObject({ status: "violation" });
+  it("violates when the carrier publication operation also writes graph authority", () => {
+    expect(p7PublicationNeverWritesTasks(h(tracing, publication(), write(ptb("sync"))))).toMatchObject({ status: "violation" });
+  });
+  it("does not classify a legitimate task_graph_apply and its Task event as carrier publication", () => {
+    const call: Step = [0, { kind: "tool.call", actor: lead, callId: "apply", name: "task_graph_apply", args: {} }, ptb("apply")];
+    const event: Step = [3, { kind: "journal.append", team, path: journalPath, line: 1, event: { type: "task", raw: { type: "task" } } }, ptb("apply")];
+    expect(p7PublicationNeverWritesTasks(h(tracing, call, publication(), write(ptb("apply")), event))).toEqual({ status: "pass" });
+  });
+  it("returns N/A when history lacks exact write or publication attribution", () => {
+    for (const history of [h(publication()), h(tracing, publication({ kind: "observer" })), h(tracing, publication(), write({ kind: "observer" }))]) {
+      expect(p7PublicationNeverWritesTasks(history)).toMatchObject({ status: "not_applicable", missing: "insufficient_attribution" });
+    }
   });
 });
 

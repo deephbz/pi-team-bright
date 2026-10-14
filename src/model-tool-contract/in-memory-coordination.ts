@@ -2,7 +2,7 @@ import { hostEnv } from "../env/host-env";
 import { CoordinationObservationService } from "../coordination/observation-service";
 import type { BranchEntry } from "../coordination/branch-observation";
 import type { TeamEvent } from "../coordination/contracts";
-import { projectNonterminalTaskIds, projectTaskChanges } from "./beads-task-adapter";
+import { projectNonterminalTaskIds, projectTaskChanges } from "../coordination/task-change-projection";
 import type { ExactLeaderSessionId } from "./model-tool-contracts";
 import type { InMemoryCoordinationState, InMemoryEvent } from "./in-memory-state";
 import type { InMemoryCoordinationPublication, InMemoryPublicationResult, InMemoryTeamQuery, InMemoryTaskQuery, InMemorySupportRevision } from "./in-memory-authority-ports";

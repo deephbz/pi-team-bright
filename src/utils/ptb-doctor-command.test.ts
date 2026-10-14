@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import type { TeamConfig } from "./models";
+import type { TeamConfig } from "../team-authority/contracts";
 import * as doctor from "./ptb-doctor-command";
 
 type Command = {
@@ -285,8 +285,9 @@ describe("doctor failure and ownership boundaries", () => {
     const report = metadata(run);
     expect(report.selection.runtime_bound_team).toBe("none");
     expect(report.team.session_binding).toBe("not_bound_to_selected_team");
-    expect(report.team.effective_authority).toBe("beads_configured");
-    expect(report.team.task_workspace).toContain("PRIVATE_WORKSPACE_TOKEN");
+    expect(report.team.effective_authority).toBe("unsupported_beads_store");
+    expect(report.team.unsupported_beads_store).toBe(true);
+    expect(report.team.task_workspace).toBeUndefined();
     expect(run.sendMessage.mock.calls[0][0].content).not.toContain("PRIVATE_MEMBER_PROMPT_TOKEN");
     expect(run.sendMessage.mock.calls[0][0].content).not.toContain("PRIVATE_DATABASE_TOKEN");
     expect(treeBytes(paths.teamDir(name))).toEqual(before);

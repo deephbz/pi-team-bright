@@ -24,7 +24,7 @@ it.each([neverStarts, deadPi])("records observable oracle inputs for $id", async
     expect(receipt.at).toBeGreaterThanOrEqual(call.at);
   }
   const execs = history.filter(event => event.kind === "exec.call");
-  expect(execs.some(event => event.command === "bd")).toBe(true);
+  expect(execs.some(event => event.command === "bd")).toBe(false);
   expect(execs.some(event => event.command === "herdr")).toBe(true);
   for (const call of execs) expect(history.some(event => event.kind === "exec.result" && event.callId === call.callId)).toBe(true);
   const bound = history.find(event => event.kind === "journal.append" && event.event.type === "worker" && event.event.raw.phase === "session_bound");

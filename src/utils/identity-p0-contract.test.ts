@@ -2,12 +2,16 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { DIRECT_MESSAGE_CUSTOM_TYPE, DirectMessageDelivery } from "./message-delivery";
-import type { InboxMessage, Member } from "./models";
-import * as messaging from "./messaging";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import { DIRECT_MESSAGE_CUSTOM_TYPE, DirectMessageDelivery } from "../alert-authority/direct-delivery";
+import * as messaging from "../alert-authority/inbox-delivery";
+import type { InboxMessage } from "../alert-authority/delivery-contracts";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
+
+const alertMembership = new DurableAlertMembership();
 
 type IdentityMember = Member & {
   membershipId: string;
@@ -246,14 +250,14 @@ describe("identity P0: generation-scoped Communication and runtime projections",
     const oldMember = await addPrepared(teamName);
     const oldSession = `/tmp/${teamName}-old.jsonl`;
     await bindMemberSession(teamName, "worker", oldSession, oldMember.pendingLaunchId);
-    const oldMessage = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "old generation", "old");
+    const oldMessage = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "old generation", "old", undefined, undefined, alertMembership);
     expect(oldMessage).toMatchObject({ recipientMembershipId: oldMember.membershipId });
 
     await teams.deactivateMember(teamName, "worker", "process_shutdown");
     const newMember = await addPrepared(teamName);
     const newSession = `/tmp/${teamName}-new.jsonl`;
     await bindMemberSession(teamName, "worker", newSession, newMember.pendingLaunchId);
-    const newMessage = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "new generation", "new");
+    const newMessage = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "new generation", "new", undefined, undefined, alertMembership);
     expect(newMessage).toMatchObject({ recipientMembershipId: newMember.membershipId });
 
     const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
@@ -263,7 +267,8 @@ describe("identity P0: generation-scoped Communication and runtime projections",
       membershipId: newMember.membershipId,
       sessionFile: newSession,
       pollMs: 60_000,
-    } as any);
+      membership: alertMembership,
+    });
     await delivery.start([]);
     expect(sink.sendMessage).toHaveBeenCalledTimes(1);
     const batch = sink.sendMessage.mock.calls[0][0];
@@ -297,7 +302,8 @@ describe("identity P0: generation-scoped Communication and runtime projections",
       membershipId: oldMember.membershipId,
       sessionFile: oldSession,
       pollMs: 60_000,
-    } as any);
+      membership: alertMembership,
+    });
     await stale.start([]);
     expect(staleSink.sendMessage).not.toHaveBeenCalled();
     stale.stop();
@@ -327,7 +333,8 @@ describe("identity P0: generation-scoped Communication and runtime projections",
       membershipId: member.membershipId,
       sessionFile,
       pollMs: 60_000,
-    } as any);
+      membership: alertMembership,
+    });
     await delivery.start([]);
     expect(sink.sendMessage).not.toHaveBeenCalled();
     delivery.stop();

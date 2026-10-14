@@ -1,9 +1,10 @@
 import type { ExactLeaderSessionId, ModelToolTeamCurrent, ModelToolWorkerCurrent, ModelToolTeamEvent, PendingObservation, TeamSyncPortResult } from "./model-tool-contracts";
-import type { TaskCard } from "../task-authority/task-domain";
+import type { CanonicalTaskCard } from "../task-authority/task-domain";
+import type { GraphTaskController } from "../task-authority/graph-control";
 import type { ModelToolTaskJournalEntry } from "../task-authority/contracts";
 
 export type InMemoryTeamRecord = { id: string; leaderSessionId: ExactLeaderSessionId; name: string; purpose: string; workers: Map<string, ModelToolWorkerCurrent> };
-export type InMemoryTaskRecord = { tasks: Map<string, TaskCard>; journals: Map<string, ModelToolTaskJournalEntry[]>; updates: Map<string, { fingerprint: string; outcome: unknown }>; creates: Map<string, { fingerprint: string; taskIdsByKey: Record<string, string>; deliveryWarnings?: string[] }> };
+export type InMemoryTaskRecord = { controller: GraphTaskController; tasks: Map<string, CanonicalTaskCard>; journals: Map<string, ModelToolTaskJournalEntry[]> };
 export type InMemoryAlertDelivery = { id: string; teamId: string; recipients: string[]; kind: "clarification" | "attention" | "announcement"; text: string };
 export type InMemoryEvent = ModelToolTeamEvent & { teamId: string };
 

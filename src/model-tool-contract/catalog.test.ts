@@ -25,8 +25,8 @@ import {
   modelToolCatalog,
   MODEL_TOOL_LIMITS,
 } from "./catalog";
-import { TaskCardSchema } from "./task-domain";
-import { taskVersionRef } from "./task-version-ref";
+import { TaskCardSchema } from "../task-authority/task-domain";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import {
   ModelResultSchemas,
   parseToolResult,

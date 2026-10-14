@@ -3,11 +3,14 @@ import fs from "node:fs";
 import piTeams from "../../extensions/index";
 import * as paths from "./paths";
 import * as teams from "./teams";
-import * as messaging from "./messaging";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as runtime from "./runtime";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import { observeWorkerStartup } from "./worker-startup-observation";
-import { DIRECT_MESSAGE_ACK_ENTRY_TYPE, DIRECT_MESSAGE_CUSTOM_TYPE } from "./message-delivery";
+import { DIRECT_MESSAGE_ACK_ENTRY_TYPE, DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
+
+const alertMembership = new DurableAlertMembership();
 
 type Handler = (event: unknown, ctx: SessionContext) => Promise<void>;
 
@@ -273,8 +276,8 @@ describe("Pi session lifecycle", () => {
     await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, startedAt: Date.now() }, boundWorker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    const first = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "first full body", "first");
-    const second = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "second full body", "second");
+    const first = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "first full body", "first", undefined, undefined, alertMembership);
+    const second = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "second full body", "second", undefined, undefined, alertMembership);
 
     const handlers = new Map<string, Handler>();
     const sendMessage = vi.fn();
@@ -343,7 +346,7 @@ describe("Pi session lifecycle", () => {
     await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, startedAt: Date.now() }, boundWorker.membershipId);
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "must remain recoverable", "ack fault");
+    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "must remain recoverable", "ack fault", undefined, undefined, alertMembership);
 
     const handlers = new Map<string, Handler>();
     const sendMessage = vi.fn();
@@ -394,7 +397,7 @@ describe("Pi session lifecycle", () => {
     });
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
-    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "source-only pending", "open");
+    await messaging.sendPlainMessage(teamName, "team-lead", "worker", "source-only pending", "open", undefined, undefined, alertMembership);
 
     const handlers = new Map<string, Handler>();
     const sendMessage = vi.fn();

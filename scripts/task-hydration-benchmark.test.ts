@@ -66,7 +66,7 @@ describe("Task hydration benchmark", () => {
     ]);
     expect(result.schema).toBe("pi-team-bright/task-hydration-benchmark/1");
     expect(result.status).toBe("complete");
-    expect(result.productionTimeoutMs).toBe(10_000);
+    expect(result.productionTimeoutMs).toBeNull();
     expect(result.measurements.exactBatchHydration.map(({ taskCount, successes }) => ({ taskCount, successes }))).toEqual([
       { taskCount: 1, successes: 1 },
       { taskCount: 2, successes: 1 },

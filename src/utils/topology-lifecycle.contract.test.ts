@@ -5,14 +5,13 @@ import piTeams from "../../extensions/index";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
 import type { TerminalAdapter } from "./terminal-adapter";
 import type { TaskCard } from "../task-authority/task-domain";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { projectTui } from "../model-tool-contract/tui-projection";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
-import { DurableTaskAuthorityRead } from "../adapters/durable-task-authority-read";
 
 type RegisteredTool = {
   name: string;
@@ -60,37 +59,8 @@ function registerExtension(): Map<string, RegisteredTool> {
   return tools;
 }
 
-async function createBeadsTeam(name: string, leadSession: string) {
-  const taskWorkspace = paths.teamDir(name);
-  fs.mkdirSync(`${taskWorkspace}/.beads`, { recursive: true });
-  fs.writeFileSync(`${taskWorkspace}/.beads/metadata.json`, JSON.stringify({
-    database: "dolt",
-    backend: "dolt",
-    dolt_database: "topology_contract",
-    project_id: `topology-${name}`,
-  }));
-  vi.spyOn(BeadsTaskAdapter.prototype, "list").mockResolvedValue([]);
-  vi.spyOn(DurableTaskAuthorityRead.prototype, "listNonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
-  return teams.createTeam(
-    name,
-    leadSession,
-    "lead",
-    undefined,
-    undefined,
-    undefined,
-    taskWorkspace,
-    `task-authority-${name}`,
-    {
-      schema: "pi-teams-beads-authority/1",
-      backend: "dolt",
-      database: "dolt",
-      doltDatabase: "topology_contract",
-      projectId: `topology-${name}`,
-    },
-    undefined,
-    terminalBinding(),
-    undefined,
-  );
+async function createGraphTeam(name: string, leadSession: string) {
+  return teams.createTeam(name, leadSession, "lead", undefined, undefined, undefined, undefined, terminalBinding());
 }
 
 /**
@@ -147,7 +117,7 @@ describe("Team topology/lifecycle lease", () => {
       default_model_role: "lifecycle",
     } }));
     vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
-    await createBeadsTeam(name, leadSession);
+    await createGraphTeam(name, leadSession);
     const old = member("old", `/tmp/${name}-old.jsonl`, "pane-old");
     await teams.addMember(name, old);
 
@@ -231,13 +201,14 @@ describe("Team topology/lifecycle lease", () => {
     });
     const name = uniqueTeam("public-lifecycle");
     const leadSession = `/tmp/${name}-lead.jsonl`;
-    await createBeadsTeam(name, leadSession);
+    await createGraphTeam(name, leadSession);
     const guarded = member("guarded", `/tmp/${name}-guarded.jsonl`, "pane-guarded");
     const uncertain = member("uncertain", `/tmp/${name}-uncertain.jsonl`, "pane-uncertain");
     const ready = member("ready", `/tmp/${name}-ready.jsonl`, "pane-ready");
     const fails = member("fails", `/tmp/${name}-fails.jsonl`, "pane-fails");
     const succeeds = member("succeeds", `/tmp/${name}-succeeds.jsonl`, "pane-succeeds");
     for (const candidate of [guarded, uncertain, ready, fails, succeeds]) {
+      await teams.ensureLogicalWorker(name, { name: candidate.name, scope: "Exercise lifecycle guards." });
       await teams.addMember(name, candidate);
     }
 
@@ -250,11 +221,14 @@ describe("Team topology/lifecycle lease", () => {
       assignee: "guarded",
       version: "v_0123456789abcdef",
     };
-    const taskBefore = structuredClone(guardedTask);
-    const listed = vi.mocked(BeadsTaskAdapter.prototype.list).mockResolvedValue([]);
-    vi.mocked(DurableTaskAuthorityRead.prototype.listNonterminalTaskIdsAssignedToWorker)
-      .mockImplementation(async (_teamName, workerName) => workerName === "guarded" ? [guardedTask.id] : []);
     const tools = registerExtension();
+    const applied = await tools.get("task_graph_apply")!.execute("guarded-task", {
+      operation_id: "guarded-task",
+      tasks: [{ key: guardedTask.id, title: guardedTask.title, goal: guardedTask.goal, assignee: guardedTask.assignee }],
+    }, undefined, undefined, context(leadSession));
+    expect(applied.details).toMatchObject({ kind: "task_graph_applied", tasks_by_key: { "task-guarded": { status: "ready" } } });
+    const graphAuthority = new DurableGraphTaskAuthority();
+    const tasksBeforeStop = await graphAuthority.readTasks(name);
     const stop = tools.get("worker_stop")!;
     const shutdown = tools.get("team_shutdown")!;
 
@@ -296,12 +270,12 @@ describe("Team topology/lifecycle lease", () => {
 
     const partial = await shutdown.execute("shutdown-partial", { team_name: name }, undefined, undefined, context(leadSession));
     expect(partial.details).toMatchObject({
-      kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: [], state_changed: true,
+      kind: "partial", lifecycle: "active", stopped_workers: ["guarded", "succeeds"], failed_workers: ["fails", "uncertain"], unfinished_task_ids: ["task-guarded"], state_changed: true,
     });
     expect(projectTui({ tool: "team_shutdown", details: partial.details, expanded: false })).toEqual([
       "PTB · Team shutdown",
       "! Partial",
-      "Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: none.",
+      "Team remains active · stopped guarded, succeeds; failed fails, uncertain; unfinished Tasks: task-guarded.",
       "Next: resolve the named Worker stop failures, then retry Team shutdown.",
       "▸ Details",
     ]);
@@ -310,19 +284,17 @@ describe("Team topology/lifecycle lease", () => {
     alive.delete("pane-fails");
     alive.delete("pane-uncertain");
     const final = await shutdown.execute("shutdown-final", { team_name: name }, undefined, undefined, context(leadSession));
-    expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: [] });
+    expect(final.details).toEqual({ kind: "team_shutdown", lifecycle: "stopped", stopped_workers: ["fails", "uncertain"], unfinished_task_ids: ["task-guarded"] });
     expect(projectTui({ tool: "team_shutdown", details: final.details, expanded: false })).toEqual([
       "PTB · Team shutdown",
       "✓ Team shutdown",
-      "Team stopped · 2 Workers stopped · 0 unfinished Tasks retained.",
+      "Team stopped · 2 Workers stopped · 1 unfinished Task retained.",
       "▸ Details",
     ]);
     expect((await teams.readConfig(name)).members.filter((candidate) => candidate.isActive !== false)).toEqual([]);
+    expect(await graphAuthority.readTasks(name)).toEqual(tasksBeforeStop);
     expect(killed.slice(0, 2)).toEqual(["pane-uncertain", "pane-ready"]);
     expect(killed.slice(2).sort()).toEqual(["pane-fails", "pane-fails", "pane-guarded", "pane-succeeds", "pane-uncertain", "pane-uncertain"]);
-    expect(guardedTask).toEqual(taskBefore);
-    expect(listed).toHaveBeenCalledWith();
-    expect(listed).toHaveBeenLastCalledWith();
   });
 
   it("serializes one Team while allowing another Team to progress without deadlock", async () => {

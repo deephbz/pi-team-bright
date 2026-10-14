@@ -5,14 +5,17 @@ import os from "node:os";
 import path from "node:path";
 import piTeams from "../../extensions/index";
 import { createDurableCoordinationQueries } from "../../src/adapters/durable-coordination-queries";
-import { createReadOnlyBeadsTaskAdapterFactory, projectNonterminalTaskIds, projectTaskChanges } from "../../src/model-tool-contract/beads-task-adapter";
+import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/coordination/task-change-projection";
+import { DurableGraphTaskAuthority } from "../../src/adapters/durable-graph-task-authority";
+import { DurableGraphTaskOrchestration } from "../../src/task-authority/graph-orchestration";
+import { DurableTaskMutationPublication } from "../../src/adapters/durable-task-mutation-publication";
 import { snapshotEntry } from "../support/branch-observation";
 import { CoordinationObservationService, createDurableCoordinationObservationStore } from "../../src/coordination/observation-service";
 import { DurableModelToolTeamPort } from "../../src/model-tool-contract/durable-model-tool-port";
 import { exactLeaderSessionId } from "../../src/model-tool-contract/in-memory-team-port";
 import { decodeHistoricalTeamSyncResult, projectToolResult } from "../../src/model-tool-contract/result-projection";
 import { projectTui } from "../../src/model-tool-contract/tui-projection";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 import { DEFAULT_AUTO_SYNC_DELAY_SECONDS, DEFAULT_AUTO_SYNC_UPDATE_THRESHOLD, loadSyncLivenessSettings } from "../../src/utils/sync-liveness-settings";
 import { SyncNudgeConductor, type SyncNudgeDebt } from "../../src/utils/sync-nudge-conductor";
 import {
@@ -32,20 +35,14 @@ import {
   waitForLivenessHint,
 } from "../../src/utils/sync-liveness";
 import * as paths from "../../src/utils/paths";
-import * as teamEvents from "../../src/utils/team-events";
+import * as teamEvents from "../../src/coordination/event-journal";
 import * as teams from "../../src/utils/teams";
 import { writeRuntimeStatus } from "../../src/utils/runtime";
-import { TASK_METADATA_SCHEMA } from "../../src/utils/beads";
 
 const createdTeams: string[] = [];
 const temporaryRoots: string[] = [];
-const readPort = {
-  readTaskAuthorityRecordEnvelope: vi.fn(),
-  readTaskAuthorityRecordEnvelopes: vi.fn(),
-  listTaskIds: vi.fn(),
-};
-const readFactory = createReadOnlyBeadsTaskAdapterFactory(readPort);
-const livenessQueries = createDurableCoordinationQueries(readFactory);
+const readPort = { readTasks: vi.fn(async () => []) };
+const livenessQueries = createDurableCoordinationQueries(readPort);
 
 class FakeClock {
   now = 0;
@@ -114,40 +111,27 @@ function nudge(overrides: Partial<Parameters<typeof createSyncNudgeRecord>[0]> =
   });
 }
 
-function taskEnvelope(id = "task-1", context = "Work has not started."): any {
-  return {
-    task: {
-      id,
-      title: "Task title",
-      description: "Compatibility description.",
-      acceptanceCriteria: "Compatibility acceptance.",
-      status: "open",
-      relations: [],
-      version: "beads-version",
-      provenance: { authority: "beads", teamName: "liveness-team" },
-    },
-    taskMetadata: {
-      schema: TASK_METADATA_SCHEMA,
-      goal: "Verify liveness.",
-      current_context: context,
-    },
-  };
+function taskCard(id = "task-1", context = "Work has not started."): any {
+  return { id, title: "Task title", goal: "Verify liveness.", current_context: context,
+    assignee: "worker", needs: [], status: "ready", state: { kind: "ready" }, attempts_started: 0,
+    version: taskVersionRef("graph-version") };
 }
 
 async function durableFixture(policy: TeamConfigSyncLiveness = { waitSeconds: 120, nudgeEnabled: true, nudgeDelaySeconds: 5, policyVersion: "1" }) {
   const name = teamName("durable");
   const sessionFile = path.join(paths.teamDir(name), "leader-session.jsonl");
-  const queries = createDurableCoordinationQueries(readFactory);
+  const queries = createDurableCoordinationQueries(readPort);
+  const publication = new DurableTaskMutationPublication();
+  const graph = new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
   const port = new DurableModelToolTeamPort(
     { ensureWorker: vi.fn() } as any,
     { stopWorker: vi.fn(), shutdownTeam: vi.fn() },
-    readFactory,
+    graph,
     undefined,
     new CoordinationObservationService(queries, { projectNonterminalTaskIds, projectTaskChanges }, createDurableCoordinationObservationStore()),
   );
-  readPort.listTaskIds.mockResolvedValue([]);
-  readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([]);
-  await teams.createTeam(name, sessionFile, "leader-agent", "Liveness fixture", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, policy);
+  readPort.readTasks.mockResolvedValue([]);
+  await teams.createTeam(name, sessionFile, "leader-agent", "Liveness fixture", undefined, undefined, undefined, undefined, undefined, undefined, policy);
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "liveness" }];
   teams.writeConfigAtomic(paths.configPath(name), config);
@@ -191,8 +175,13 @@ describe("hardened coordination liveness boundaries", () => {
     await writeRuntimeStatus(name, "worker", { runState: "settled" }, current.membershipId);
     await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "settled", actuationPending: false });
 
-    fs.mkdirSync(path.dirname(paths.taskDeliveryPath(name, "worker")), { recursive: true });
-    fs.writeFileSync(paths.taskDeliveryPath(name, "worker"), JSON.stringify([{ id: "delivery-1" }]));
+    const config = await teams.createTeam(name, "leader-session", "lead");
+    config.members.push(current);
+    config.logicalWorkers = [{ name: "worker", scope: "Verify liveness." }];
+    teams.writeConfigAtomic(paths.configPath(name), config);
+    const publication = new DurableTaskMutationPublication();
+    const graph = new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
+    expect(await graph.applyGraph(name, { operationId: "assign", tasks: [{ key: "work", title: "Work", goal: "Verify liveness.", assignee: "worker" }] })).toMatchObject({ kind: "applied" });
     await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "settled", actuationPending: true });
     const pending = await readWorkerRunObservation(name, current, livenessQueries);
     expect(livenessIsComplete([pending])).toBe(false);
@@ -418,13 +407,11 @@ describe("hardened coordination liveness boundaries", () => {
 
     // An old revision coordinate alone does not create a canonical unseen Task.
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({ kind: "none" });
-    readPort.listTaskIds.mockResolvedValue(["task-1"]);
-    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([taskEnvelope()]);
-    readPort.readTaskAuthorityRecordEnvelope.mockResolvedValue(taskEnvelope());
-    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") }, change: "status", actor: "team-lead" });
+    readPort.readTasks.mockResolvedValue([taskCard()]);
+    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("graph-version") }, change: "status", actor: "team-lead" });
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({ kind: "none" });
 
-    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") }, change: "status", actor: "worker" });
+    await teamEvents.appendTeamEvent(fixture.name, { type: "task", ref: { taskId: "task-1", version: taskVersionRef("graph-version") }, change: "status", actor: "worker" });
     const postSettle = await fixture.port.readSyncNudgeDebt(fixture.session, branch);
     expect(postSettle).toMatchObject({ kind: "eligible", requestedView: "updates", updateCount: 1 });
   });
@@ -439,17 +426,15 @@ describe("hardened coordination liveness boundaries", () => {
     const fixture = await durableFixture();
     const branch = ["root", "branch"];
     fixture.port.setBranchEntries(fixture.session, [{ id: "root", type: "unknown" }, snapshotEntry("branch", fixture.name, fixture.config.epochId!, fixture.config.members.find(member => member.name === "team-lead")!.membershipId!)]);
-    readPort.listTaskIds.mockResolvedValue(["task-1"]);
-    readPort.readTaskAuthorityRecordEnvelopes.mockResolvedValue([taskEnvelope()]);
-    readPort.readTaskAuthorityRecordEnvelope.mockResolvedValue(taskEnvelope());
+    readPort.readTasks.mockResolvedValue([taskCard()]);
     for (let index = 0; index < 55; index++) {
       await teamEvents.appendTeamEvent(fixture.name, {
-        type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") },
+        type: "task", ref: { taskId: "task-1", version: taskVersionRef("graph-version") },
         change: "status", actor: "team-lead",
       });
     }
     await teamEvents.appendTeamEvent(fixture.name, {
-      type: "task", ref: { taskId: "task-1", version: taskVersionRef("beads-version") },
+      type: "task", ref: { taskId: "task-1", version: taskVersionRef("graph-version") },
       change: "status", actor: "worker",
     });
     await expect(fixture.port.readSyncNudgeDebt(fixture.session, branch)).resolves.toMatchObject({

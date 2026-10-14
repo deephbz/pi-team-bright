@@ -7,15 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { clearAdapterCache, getTerminalAdapter, setAdapter } from "../adapters/terminal-registry";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as teamEvents from "../coordination/event-journal";
-import * as taskAuthority from "./tasks";
+import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import * as runtime from "./runtime";
 import * as workerResources from "./worker-resource-projection";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
-import { DurableTaskOrchestration } from "../adapters/durable-task-orchestration";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 
 type RegisteredTool = {
   name: string;
@@ -136,9 +135,6 @@ function createBoundTeam(name: string, leadSession: string, separateWindows?: bo
     undefined,
     separateWindows,
     undefined,
-    undefined,
-    undefined,
-    undefined,
     detected ? { backend: detected.name, leadTarget: { backend: detected.name, kind: "pane", targetId: "pane-leader" } } : undefined,
     undefined,
   );
@@ -170,7 +166,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const tools = registerTools();
 
     expect([...tools.keys()].sort()).toEqual([...PUBLIC_TOOLS].sort());
-    expect(tools.get("team_sync")!.description).toMatch(/snapshot|updates|context/i);
+    expect(tools.get("team_sync")!.description).toMatch(/observe current Team state/i);
     expect(tools.get("ensure_worker")!.description).toMatch(/reuse/i);
     expect(tools.get("alert_send")!.description).toMatch(/exceptional/i);
     for (const retired of [
@@ -350,8 +346,8 @@ describe("ergonomic agent-facing Team contracts", () => {
       scope: "Review interfaces and verify contract tests.",
       cwd: process.cwd(),
     };
-    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("ensure_worker must not read Task authority"));
-    const readyReconciliation = vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady")
+    const taskReads = vi.spyOn(DurableGraphTaskOrchestration.prototype, "readTasks").mockRejectedValue(new Error("ensure_worker must not read Task authority"));
+    const readyReconciliation = vi.spyOn(DurableGraphTaskOrchestration.prototype, "reconcileReady")
       .mockRejectedValue(new Error("ensure_worker must not schedule ready Task reconciliation"));
     const unhandled: unknown[] = [];
     const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
@@ -527,7 +523,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       terminalTarget: { backend: adapter.name, kind: "pane", targetId: "pane-missing" },
     };
     await teams.addMember(team, worker);
-    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate prepared relaunch"));
+    const taskReads = vi.spyOn(DurableGraphTaskOrchestration.prototype, "readTasks").mockRejectedValue(new Error("Task authority must not gate prepared relaunch"));
 
     const result = await registerTools().get("ensure_worker")!.execute(
       "ensure-prepared-retried",
@@ -704,7 +700,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
     await teams.addMember(team, worker);
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
-    const taskReads = vi.spyOn(taskAuthority, "listTasksWithVersions").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
+    const taskReads = vi.spyOn(DurableGraphTaskOrchestration.prototype, "readTasks").mockRejectedValue(new Error("Task authority must not gate carrier recovery"));
     const leaderAdmission = vi.spyOn(runtime, "admitRuntimeStartup");
 
     const result = await registerTools().get("ensure_worker")!.execute(
@@ -913,7 +909,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const team = uniqueTeam("worker-authority");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     const workerSession = `/tmp/${team}-worker.jsonl`;
-    await teams.createTeam(team, leadSession, "lead", "", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(team, leadSession, "lead", "");
     await teams.addMember(team, member("worker", workerSession));
     setAdapter(terminal());
     vi.stubEnv("PI_AGENT_NAME", "worker");

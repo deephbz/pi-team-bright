@@ -2,12 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import { DurableNonterminalAssignedTaskQuery } from "../adapters/durable-nonterminal-assigned-task-query";
-import * as messaging from "./messaging";
-import * as canonicalMessaging from "../alert-authority/inbox-delivery";
+import { DurableGraphAssignedWorkGuard } from "../adapters/durable-graph-assigned-work";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as teams from "./teams";
 import * as runtime from "./runtime";
+
+const alertMembership = new DurableAlertMembership();
 
 type RegisteredTool = {
   name: string;
@@ -77,7 +79,7 @@ describe("current team binding correctness", () => {
 
   it("alert_send binds native delivery to the exact current recipient generation", async () => {
     const teamName = testTeamName("recipient");
-    await teams.createTeam(teamName, "session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(teamName, "session", "lead-agent");
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
       name: "worker",
@@ -134,7 +136,7 @@ describe("current team binding correctness", () => {
       cwd: process.cwd(),
       subscriptions: [],
     });
-    const accepted = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "inspect only", "foreign inspection");
+    const accepted = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "inspect only", "foreign inspection", undefined, undefined, alertMembership);
     const inspected = await messaging.readInbox(teamName, "worker", true, false);
 
     expect(inspected[0].id).toBe(accepted.id);
@@ -159,7 +161,7 @@ describe("current team binding correctness", () => {
     }
     fs.mkdirSync(paths.inboxPath(teamName, "worker-b"), { recursive: true });
 
-    const result = await messaging.broadcastMessage(teamName, "team-lead", "body", "summary");
+    const result = await messaging.broadcastMessage(teamName, "team-lead", "body", "summary", undefined, undefined, alertMembership);
 
     expect(result.accepted).toEqual([
       { recipient: "worker-a", messageId: expect.stringMatching(/^message_/) },
@@ -174,8 +176,8 @@ describe("current team binding correctness", () => {
 
   it("alert_send exposes a partial announcement without claiming every native delivery succeeded", async () => {
     const teamName = testTeamName("partial-alert");
-    await teams.createTeam(teamName, "receipt-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
-    vi.spyOn(canonicalMessaging, "broadcastMessage").mockResolvedValue({
+    await teams.createTeam(teamName, "receipt-session", "lead-agent");
+    vi.spyOn(messaging, "broadcastMessage").mockResolvedValue({
       accepted: [{ recipient: "worker-a", messageId: "message_a" }],
       failures: [{ recipient: "worker-b", error: "disk full" }],
     });
@@ -199,7 +201,7 @@ describe("current team binding correctness", () => {
 
   it("distinguishes an announcement with no eligible recipients from a bad recipient name", async () => {
     const teamName = testTeamName("zero-recipient-alert");
-    await teams.createTeam(teamName, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(teamName, "lead-session", "lead-agent");
     const sendAlert = registerExtension(true).toolsByName.get("alert_send")!;
 
     const result: any = await sendAlert.execute("zero", {
@@ -221,7 +223,7 @@ describe("current team binding correctness", () => {
 
   it("never signals a numeric PID from a stale per-name pid file", async () => {
     vi.stubEnv("TMUX", "");
-    vi.spyOn(DurableNonterminalAssignedTaskQuery.prototype, "nonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
+    vi.spyOn(DurableGraphAssignedWorkGuard.prototype, "nonterminalTaskIdsAssignedToWorker").mockResolvedValue([]);
     const teamName = testTeamName("stale-pid");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
     await teams.createTeam(teamName, leadSession, "lead-agent");

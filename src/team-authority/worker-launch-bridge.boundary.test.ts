@@ -50,11 +50,9 @@ describe("Team Worker carrier publication boundary", () => {
 
   it("keeps Team carrier realization free of concrete Coordination imports", () => {
     const source = fs.readFileSync(path.join(__dirname, "worker-launch-bridge.ts"), "utf8");
-    const compatibility = fs.readFileSync(path.join(__dirname, "../utils/worker-launch-bridge.ts"), "utf8");
 
     expect(source).toMatch(/lifecyclePublication: TeamLifecyclePublication/);
     expect(source).not.toMatch(/lifecyclePublication\?|requires a TeamLifecyclePublication|DurableTeamLifecyclePublication/);
     expect(source).not.toMatch(/team-events|worker-startup-observation|coordination\//);
-    expect(compatibility).toContain('export * from "../team-authority/worker-launch-bridge"');
   });
 });

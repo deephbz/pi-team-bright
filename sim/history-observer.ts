@@ -66,12 +66,19 @@ export class HistoryObserver {
       || typeof value.from !== "number" || typeof value.through !== "number") return undefined;
     return { team: value.team, epoch: value.epoch, binding: value.binding, from: value.from, through: value.through };
   }
-  private journal(team: string, file: string, text: string): void {
+  /** Sample the exact journal fsync before another operation can append. */
+  sampleJournal(file: string, emit: (fact: HistoryFact) => void): void {
+    const relative = path.relative(this.root, file);
+    const text = fs.readFileSync(file, "utf8");
+    this.files.set(relative, text);
+    this.journal(relative.split(path.sep)[2]!, relative, text, emit);
+  }
+  private journal(team: string, file: string, text: string, emit = this.emit): void {
     const lines = text.split("\n");
     if (lines.at(-1) === "") lines.pop();
     let previous = this.journals.get(file) ?? [];
     if (previous.some((line, index) => lines[index] !== line)) {
-      this.emit({ kind: "journal.reset", team, path: file });
+      emit({ kind: "journal.reset", team, path: file });
       previous = [];
     }
     for (let index = previous.length; index < lines.length; index++) {
@@ -91,7 +98,7 @@ export class HistoryObserver {
         } : undefined;
         const cursorSeq = typeof raw.cursor === "string" && /^\d+$/.test(raw.cursor) ? Number(raw.cursor) : undefined;
         const seq = typeof raw.seq === "number" ? raw.seq : Number.isSafeInteger(cursorSeq) ? cursorSeq : undefined;
-        this.emit({ kind: "journal.append", team, path: file, line: index + 1, event: {
+        emit({ kind: "journal.append", team, path: file, line: index + 1, event: {
           raw, ...(carrier ? { carrier } : {}), ...(seq === undefined ? {} : { seq }), type: raw.type, ...(typeof raw.cursor === "string" ? { cursor: raw.cursor } : {}),
           ...(typeof raw.at === "string" ? { at: raw.at } : {}), ...(typeof raw.phase === "string" ? { phase: raw.phase } : {}),
           ...(typeof raw.cause === "string" ? { cause: raw.cause } : {}), ...(typeof raw.paneId === "string" ? { paneId: raw.paneId } : {}),
@@ -99,7 +106,7 @@ export class HistoryObserver {
           ...(typeof raw.worker === "string" ? { worker: raw.worker } : {}),
           ...(typeof raw.membershipId === "string" ? { membershipId: raw.membershipId } : {}), ...(object(raw.generation) ? { generation: object(raw.generation)! } : {}),
         } });
-      } catch (error) { this.emit({ kind: "disk.invalid", team, path: file, text: lines[index]!, message: (error as Error).message }); }
+      } catch (error) { emit({ kind: "disk.invalid", team, path: file, text: lines[index]!, message: (error as Error).message }); }
     }
     this.journals.set(file, lines);
   }

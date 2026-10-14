@@ -2,7 +2,9 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import type { TaskCard } from "../task-authority/task-domain";
-import { taskVersionRef } from "../task-authority/task-version-ref";
+import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
+import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
+import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import {
   enqueueTaskChange,
   enqueueTaskChangeForExactRecipient,
@@ -18,26 +20,13 @@ import * as teams from "./teams";
 
 const created: string[] = [];
 
-function card(assignee = "worker"): TaskCard {
-  return {
-    id: "task-1",
-    title: "Characterize delivery",
-    goal: "Preserve Task delivery behavior before its boundary moves.",
-    current_context: "The delivery behavior needs an executable characterization.",
-    status: "in_progress",
-    assignee,
-    version: taskVersionRef("delivery-v1"),
-  };
-}
-
 async function fixture(suffix: string) {
   const teamName = `task-change-delivery-characterization-${suffix}-${process.pid}-${Date.now()}`;
   created.push(teamName);
   paths.ensureDirs();
   const sessionFile = `/tmp/${teamName}-worker.jsonl`;
-  await teams.createTeam(teamName, `/tmp/${teamName}-lead.jsonl`, "lead-agent", "", undefined, undefined, `/tmp/${teamName}-beads`, "task-authority", {
-    schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: teamName, projectId: teamName,
-  });
+  await teams.createTeam(teamName, `/tmp/${teamName}-lead.jsonl`, "lead-agent");
+  await teams.ensureLogicalWorker(teamName, { name: "worker", scope: "Task delivery characterization." });
   const member = {
     agentId: `worker@${teamName}`,
     name: "worker",
@@ -51,7 +40,12 @@ async function fixture(suffix: string) {
   await teams.addMember(teamName, member);
   const config = await teams.readConfig(teamName);
   const current = config.members.find((candidate) => candidate.name === "worker" && candidate.isActive !== false)!;
-  return { teamName, sessionFile, current, task: card() };
+  const publication = new DurableTaskMutationPublication();
+  const graph = new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
+  const applied = await graph.applyGraph(teamName, { operationId: `apply-${teamName}`, tasks: [{ key: "task-1", title: "Characterize delivery", goal: "Preserve Task delivery behavior.", assignee: "worker" }, { key: "task-2", title: "Second delivery", goal: "Preserve another current Task coordinate.", assignee: "worker" }] });
+  if (applied.kind !== "applied") throw new Error(`Graph fixture apply failed: ${JSON.stringify(applied)}`);
+  const [task, secondTask] = await graph.readTasks(teamName, ["task-1", "task-2"]);
+  return { teamName, sessionFile, current, task, secondTask, graph };
 }
 
 function delivery(teamName: string, sessionFile: string, sink = { sendMessage: vi.fn(), appendEntry: vi.fn() }) {
@@ -63,6 +57,7 @@ function delivery(teamName: string, sessionFile: string, sink = { sendMessage: v
       sessionFile,
       pollMs: 60_000,
       membership: taskDeliveryMembership,
+      graphAuthority: { readTasks: async (name: string) => new DurableGraphTaskAuthority().readTasks(name) },
       reconcile: async () => 0,
     }),
   };
@@ -79,7 +74,7 @@ afterEach(() => {
 describe("TaskChangeDelivery current behavior characterization", () => {
   it("resolves an assignee to its active binding and refuses an exact stale target", async () => {
     const { teamName, sessionFile, current, task } = await fixture("recipient");
-    const normal = await enqueueTaskChange(teamName, task, "assigned");
+    const normal = await enqueueTaskChange(teamName, task, "status_changed");
     expect(normal).toMatchObject({
       recipient: "worker",
       recipientMembershipId: current.membershipId,
@@ -99,13 +94,13 @@ describe("TaskChangeDelivery current behavior characterization", () => {
       subscriptions: [],
     });
     const config = await teams.readConfig(teamName);
-    const stale = await enqueueTaskChangeForExactRecipient(config, card(), {
+    const stale = await enqueueTaskChangeForExactRecipient(config, task, {
       recipient: "worker",
       recipientMembershipId: current.membershipId!,
       recipientSessionFile: sessionFile,
-      changeKind: "assigned",
+      changeKind: "status_changed",
     });
-    const replacement = await enqueueTaskChange(teamName, card(), "assigned");
+    const replacement = await enqueueTaskChange(teamName, task, "status_changed");
 
     expect(stale).toBeNull();
     expect(replacement).toMatchObject({ recipientSessionFile: replacementSession });
@@ -113,7 +108,7 @@ describe("TaskChangeDelivery current behavior characterization", () => {
 
   it("sends before context staging, then appends acknowledgement before durable acknowledgement", async () => {
     const { teamName, sessionFile, task } = await fixture("order");
-    const record = await enqueueTaskChange(teamName, task, "assigned");
+    const record = await enqueueTaskChange(teamName, task, "status_changed");
     let acknowledgementWasDurableAtAppend: unknown;
     const current = delivery(teamName, sessionFile, {
       sendMessage: vi.fn(),
@@ -139,7 +134,7 @@ describe("TaskChangeDelivery current behavior characterization", () => {
 
   it("does not acknowledge a staged delivery after its Membership is replaced", async () => {
     const { teamName, sessionFile, task } = await fixture("replacement");
-    await enqueueTaskChange(teamName, task, "assigned");
+    await enqueueTaskChange(teamName, task, "status_changed");
     const current = delivery(teamName, sessionFile);
     await current.delivery.start([]);
     const batch = current.sink.sendMessage.mock.calls[0][0];
@@ -163,11 +158,10 @@ describe("TaskChangeDelivery current behavior characterization", () => {
   });
 
   it("replays concurrent assigned backlog coordinates when a Worker is reused", async () => {
-    const { teamName, sessionFile, task } = await fixture("concurrent-backlog");
-    const next = { ...task, current_context: "A later assigned Task coordinate is ready.", version: taskVersionRef("delivery-v2") };
+    const { teamName, sessionFile, task, secondTask } = await fixture("concurrent-backlog");
     const queued = await Promise.all([
-      enqueueTaskChange(teamName, task, "assigned"),
-      enqueueTaskChange(teamName, next, "status_changed"),
+      enqueueTaskChange(teamName, task, "status_changed"),
+      enqueueTaskChange(teamName, secondTask, "status_changed"),
     ]);
 
     const reused = delivery(teamName, sessionFile);
@@ -179,7 +173,7 @@ describe("TaskChangeDelivery current behavior characterization", () => {
         deliveryIds: expect.arrayContaining(queued.map((record) => record!.deliveryId)),
         changes: expect.arrayContaining([
           expect.objectContaining({ ref: expect.objectContaining({ taskId: task.id, version: task.version }), changeKind: "assigned" }),
-          expect.objectContaining({ ref: expect.objectContaining({ taskId: next.id, version: next.version }), changeKind: "status_changed" }),
+          expect.objectContaining({ ref: expect.objectContaining({ taskId: secondTask.id, version: secondTask.version }), changeKind: "status_changed" }),
         ]),
       },
     });
@@ -187,30 +181,30 @@ describe("TaskChangeDelivery current behavior characterization", () => {
   });
 
   it("keeps concurrent self-observed backlog versions suppressed when a Worker is reused", async () => {
-    const { teamName, sessionFile, task } = await fixture("concurrent-reuse");
-    const first = await enqueueTaskChange(teamName, task, "assigned");
-    const next = { ...task, current_context: "A newer assigned Task coordinate is ready.", version: taskVersionRef("delivery-v2") };
-    const second = await enqueueTaskChange(teamName, next, "status_changed");
+    const { teamName, sessionFile, task, secondTask } = await fixture("concurrent-reuse");
+    const first = await enqueueTaskChange(teamName, task, "status_changed");
+    const second = await enqueueTaskChange(teamName, secondTask, "status_changed");
     expect([first?.deliveryId, second?.deliveryId]).toHaveLength(2);
 
     // Two Task mutations can suppress their own post-state delivery while the
     // Worker is down. A reused Session must not replay either version.
     await Promise.all([
       suppressTaskVersionForSession(teamName, "worker", sessionFile, task),
-      suppressTaskVersionForSession(teamName, "worker", sessionFile, next),
+      suppressTaskVersionForSession(teamName, "worker", sessionFile, secondTask),
     ]);
 
     const reused = delivery(teamName, sessionFile);
     await reused.delivery.start([]);
     expect(reused.sink.sendMessage).not.toHaveBeenCalled();
-    expect((await readTaskDeliveries(teamName, "worker")).map((record) => record.deliveryId))
-      .toEqual([first!.deliveryId, second!.deliveryId]);
+    const replayedIds = (await readTaskDeliveries(teamName, "worker")).map((record) => record.deliveryId);
+    expect(replayedIds).toHaveLength(2);
+    expect(replayedIds).toEqual(expect.arrayContaining([first!.deliveryId, second!.deliveryId]));
     reused.delivery.stop();
   });
 
   it("keeps failed and error-stopped presentation pending, then replays its stable ID until one acknowledgement", async () => {
     const { teamName, sessionFile, task } = await fixture("replay");
-    const record = await enqueueTaskChange(teamName, task, "assigned");
+    const record = await enqueueTaskChange(teamName, task, "status_changed");
     const failed = delivery(teamName, sessionFile, { sendMessage: vi.fn(() => { throw new Error("send cut"); }), appendEntry: vi.fn() });
     await expect(failed.delivery.start([])).rejects.toThrow("send cut");
     failed.delivery.stop();

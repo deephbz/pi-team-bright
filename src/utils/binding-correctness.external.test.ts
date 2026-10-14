@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
-import * as messaging from "./messaging";
+import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import * as teams from "./teams";
@@ -87,7 +87,7 @@ describe("external current-binding contract", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_AGENT_NAME", "");
     const name = teamName("recipients");
-    await teams.createTeam(name, "lead-session", "lead-agent", undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined);
+    await teams.createTeam(name, "lead-session", "lead-agent");
     await teams.addMember(name, {
       agentId: `worker@${name}`,
       name: "worker",

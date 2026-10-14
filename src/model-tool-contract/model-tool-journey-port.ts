@@ -1,6 +1,5 @@
 import type {
   AlertSendPortResult,
-  CreateTaskPortResult,
   CreateTaskGraphPortResult,
   ModelToolTaskGraphInput,
   ModelToolGraphTaskUpdateInput,
@@ -11,8 +10,6 @@ import type {
   ModelToolLeaderLaunchContext,
   PendingObservation,
   ReadTasksPortResult,
-  TaskLinkPortInput,
-  TaskLinkPortResult,
   TeamShutdownPortResult,
   TeamSnapshotPortResult,
   TeamSyncPortResult,
@@ -21,7 +18,6 @@ import type {
   AlertTarget,
 } from "./model-tool-contracts";
 import type { TeamPaneLayout } from "../utils/team-pane-layout";
-import type { ModelToolTaskUpdateInput } from "../task-authority/contracts";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import type { SyncNudgeDebt } from "../utils/sync-nudge-conductor";
 import type { CoordinationSyncProbe, CoordinationSyncNowResult } from "../coordination/observation-contracts";
@@ -36,11 +32,9 @@ export interface ModelToolTeamApplicationPort {
 }
 
 export interface ModelToolTaskApplicationPort {
-  createTask(leaderSessionId: ExactLeaderSessionId, input: { operationId: string; title: string; goal: string; assignee?: string }): Promise<CreateTaskPortResult>;
   createTaskGraph(leaderSessionId: ExactLeaderSessionId, input: ModelToolTaskGraphInput): Promise<CreateTaskGraphPortResult>;
   readTasks(leaderSessionId: ExactLeaderSessionId, taskIds: string[]): Promise<ReadTasksPortResult>;
-  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: Array<ModelToolTaskUpdateInput | ModelToolGraphTaskUpdateInput>, actor?: string): Promise<UpdateTasksPortResult>;
-  linkTask(leaderSessionId: ExactLeaderSessionId, input: TaskLinkPortInput): Promise<TaskLinkPortResult>;
+  updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolGraphTaskUpdateInput[], actor?: string): Promise<UpdateTasksPortResult>;
 }
 
 export interface ModelToolAlertApplicationPort {

@@ -2,13 +2,13 @@ import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Check } from "typebox/value";
 import piTeams from "../../extensions/index";
-import { BeadsTaskAdapter } from "../model-tool-contract/beads-task-adapter";
+import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestration";
 import { AlertSendParametersSchema, TaskReadParametersSchema, TaskUpdateParametersSchema } from "../model-tool-contract/catalog";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 import * as paths from "./paths";
-import * as teamEvents from "./team-events";
+import * as teamEvents from "../coordination/event-journal";
 import * as teams from "./teams";
-import type { Member } from "./models";
+import type { Member } from "../team-authority/contracts";
 
 type Tool = {
   name: string;
@@ -65,14 +65,6 @@ async function createBoundTeam(teamName: string, workerSession: string): Promise
     leadSession,
     `lead@${teamName}`,
     "Worker binding contract",
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
   );
   await teams.addMember(teamName, workerMember(teamName, workerSession));
   createdTeams.push(teamName);
@@ -89,7 +81,7 @@ const task = {
   status: "in_progress" as const,
   assignee: "worker",
   current_context: "Worker is verifying the exact binding.",
-  version: taskVersionRef("beads_binding_version"),
+  version: taskVersionRef("v_0123456789abcdef"),
 };
 
 afterEach(() => {
@@ -180,27 +172,12 @@ describe("narrow Worker Team binding surface", () => {
     const sessionA = `/tmp/${teamA}-worker.jsonl`;
     await createBoundTeam(teamA, sessionA);
     await createBoundTeam(teamB, `/tmp/${teamB}-worker.jsonl`);
-    const legacyTask = {
-      ...task,
-      status: "open" as const,
-      dependency_state: { kind: "ready" as const, active_blocker_ids: [] as [] },
-    };
-    const read = vi.spyOn(BeadsTaskAdapter.prototype, "read").mockResolvedValue({
-      kind: "found",
-      task: legacyTask,
-    });
-    const claim = vi.spyOn(BeadsTaskAdapter.prototype, "claim").mockResolvedValue({
-      kind: "updated",
-      taskId: task.id,
-      operationId: "claim-without-graph",
-      task: {
-        ...legacyTask,
-        status: "in_progress" as const,
-        current_context: "Claim context remains atomic.",
-        version: taskVersionRef("beads_binding_claimed"),
-      },
-      journalEntries: [],
-      deliveryWarnings: [],
+    const graphTask = { ...task, status: "open" as const, dependency_state: { kind: "ready" as const, active_blocker_ids: [] as [] } };
+    const read = vi.spyOn(DurableGraphTaskOrchestration.prototype, "readTasks").mockResolvedValue([graphTask as any]);
+    const claim = vi.spyOn(DurableGraphTaskOrchestration.prototype, "transition").mockResolvedValue({
+      kind: "updated", operationId: "claim-without-graph", replayed: false, transition: "claim",
+      task: { ...graphTask, status: "in_progress", current_context: "Claim context remains atomic.", version: taskVersionRef("v_1123456789abcdef") } as any,
+      readyTaskIds: [], deliveryWarnings: [],
     });
     const tools = registerWorker(teamA);
 
@@ -212,8 +189,7 @@ describe("narrow Worker Team binding surface", () => {
       context(sessionA),
     );
 
-    expect(read).toHaveBeenCalledOnce();
-    expect(read.mock.instances[0]).toMatchObject({ teamName: teamA, actor: "worker" });
+    expect(read).toHaveBeenCalledWith(teamA, [task.id]);
     expect(readResult.details).toMatchObject({ kind: "task_read_batch", outcomes: [{ kind: "found", task_id: task.id }] });
     const claimed = await tools.get("task_update")!.execute(
       "claim-without-graph",
@@ -228,12 +204,10 @@ describe("narrow Worker Team binding surface", () => {
       undefined,
       context(sessionA),
     );
-    expect(claim).toHaveBeenCalledWith({
-      taskId: task.id,
-      operationId: "claim-without-graph",
-      expectedVersion: task.version,
-      currentContext: "Claim context remains atomic.",
-    });
+    expect(claim).toHaveBeenCalledWith(teamA, expect.objectContaining({
+      taskId: task.id, operationId: "claim-without-graph", expectedVersion: task.version,
+      currentContext: "Claim context remains atomic.", transition: "claim",
+    }), "worker");
     expect(claimed.details).toMatchObject({
       kind: "updated",
       task_id: task.id,

@@ -1,4 +1,4 @@
-/** Versioned external identity evidence for one Beads 1.1 authority. */
+/** Historical identity evidence retained for decoding old Team records. */
 export interface BeadsAuthorityFingerprint {
   schema: "pi-teams-beads-authority/1";
   backend: "dolt";
@@ -7,9 +7,9 @@ export interface BeadsAuthorityFingerprint {
   projectId: string;
 }
 
-/** Task-authority binding persisted on the Team record. */
+/** Retired Team fields. A valid graph is authoritative regardless of these values. */
 export interface TeamConfigTaskAuthority {
-  /** Task authority. Omitted means the historical local JSON store. */
+  /** Used only to identify an unsupported graphless Team. */
   taskBackend?: "legacy" | "beads";
   /** Stable opaque authority identity; independent of workspace path spelling. */
   taskAuthorityId?: string;
@@ -17,7 +17,7 @@ export interface TeamConfigTaskAuthority {
   taskAuthorityFingerprint?: BeadsAuthorityFingerprint;
   /** Absolute working directory containing the team's initialized Beads repo. */
   taskWorkspace?: string;
-  /** Durable evidence for the one-way legacy -> Beads cutover. */
+  /** Historical cutover evidence; current runtime never performs this operation. */
   taskCutover?: {
     inventoryPath: string;
     inventorySha256: string;

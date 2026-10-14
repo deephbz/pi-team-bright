@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { expect, test } from "vitest";
-import { taskVersionRef } from "../../src/model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../../src/task-authority/task-version-ref";
 import { parseObservationContent } from "../../src/coordination/observation-content";
 import { projectToolResult } from "../../src/model-tool-contract/result-projection";
 import {
@@ -37,8 +36,6 @@ function brief(
 }
 
 test("captures real nine-tool results for agent, machine, and TUI QA", async () => {
-  expect(spawnSync("bd", ["--version"], { stdio: "ignore" }).status, "headless QA requires the real Beads CLI").toBe(0);
-
   const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-tool-result-qa-"));
   const previousEnv = {
     HOME: process.env.HOME,
@@ -67,7 +64,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
   const cases: QaCase[] = [];
   const fixtureTransitions: QaBundle["fixtureTransitions"] = [];
   // Each call completes before the next starts, so the prior verified post-state
-  // is the next call's pre-state. This removes redundant Beads snapshot reads.
+  // is the next call's pre-state.
   let previousSnapshot: unknown;
 
   try {
@@ -77,22 +74,9 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
     const paths = await import("../../src/utils/paths");
     const teams = await import("../../src/utils/teams");
     const runtime = await import("../../src/utils/runtime");
-    const tasks = await import("../../src/utils/tasks");
-    const authorityAdapter = await import("../../src/model-tool-contract/beads-authority-adapter");
-    const taskAdapter = await import("../../src/model-tool-contract/beads-task-adapter");
-    const { DurableTaskMutationPublication } = await import("../../src/adapters/durable-task-mutation-publication");
-    const { createTaskAuthorityTeamPort } = await import("../../test/support/task-authority-team-port");
-    const { DurableTaskAuthorityRead } = await import("../../src/adapters/durable-task-authority-read");
-    const { createReadOnlyBeadsTaskAdapterFactory } = await import("../../src/model-tool-contract/beads-task-adapter");
-    const { DurableTaskAuthorityReadTeam } = await import("../../src/adapters/durable-task-authority-read-team");
     const { DurableGraphTaskAuthority } = await import("../../src/adapters/durable-graph-task-authority");
-    const publicationPort = new DurableTaskMutationPublication();
     const graphTaskAuthority = new DurableGraphTaskAuthority();
-    const taskAuthorityTeamPort = createTaskAuthorityTeamPort();
-    const taskAuthorityReadTeamPort = new DurableTaskAuthorityReadTeam();
-    const taskAuthorityRead = new DurableTaskAuthorityRead(taskAuthorityReadTeamPort);
-    const taskReadFactory = createReadOnlyBeadsTaskAdapterFactory(taskAuthorityRead);
-    const teamEvents = await import("../../src/utils/team-events");
+    const teamEvents = await import("../../src/coordination/event-journal");
     const terminalRegistry = await import("../../src/adapters/terminal-registry");
 
     const livePanes = new Map<string, boolean>([["qa-pane-lead", true]]);
@@ -178,7 +162,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       if (!teams.teamExists(teamName)) return { team: { name: teamName, lifecycle: "absent" }, workers: [], tasks: [] };
       const [config, taskList] = await Promise.all([
         teams.readConfig(teamName),
-        graphTaskAuthority.exists(teamName) ? graphTaskAuthority.readTasks(teamName) : tasks.listTasks(teamName, taskReadFactory),
+        graphTaskAuthority.readTasks(teamName),
       ]);
       return {
         team: {
@@ -330,7 +314,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       args: { name: teamName, purpose: "Headless projection QA fixture" },
       ctx: leadCtx,
       qaBrief: brief(
-        "No Team exists; the call creates the durable Team, lead Membership, and Beads authority.",
+        "No Team exists; the call creates the durable Team, lead Membership, and empty graph authority.",
         "Create a Worker or the first Task.",
         "Was the Team created and what can I do next?",
         ["created outcome", "Team name", "Task authority ready", "next action"],
@@ -683,7 +667,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
 
     const malformedEvent = await teamEvents.appendTeamEvent(teamName, {
       type: "task",
-      ref: { authorityId: (await teams.readConfig(teamName)).taskAuthorityId!, taskId: taskCreated.id, version: currentTask.version },
+      ref: { authorityId: "historical-authority", taskId: taskCreated.id, version: currentTask.version },
       change: "note",
       actor: "external-fixture",
     });
@@ -1320,7 +1304,7 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       executionBoundary: {
         piProcessLaunched: false,
         modelInvoked: false,
-        realTaskAuthority: "beads",
+        realTaskAuthority: "graph",
         terminal: "in-memory adapter",
       },
       fixtureTransitions,

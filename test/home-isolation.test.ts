@@ -22,8 +22,6 @@ describe("Vitest HOME isolation", () => {
     expect(testHome).not.toBe(operatorHome);
     expect(os.homedir()).toBe(testHome);
     expect(isWithin(testHome!, testRoot!)).toBe(true);
-    expect(process.env.BD_DISABLE_EVENT_FLUSH).toBe("1");
-    expect(process.env.BD_DISABLE_METRICS).toBe("1");
 
     const userScopedPaths = [
       PI_DIR,

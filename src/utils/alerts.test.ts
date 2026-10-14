@@ -5,14 +5,14 @@ vi.mock("../alert-authority/inbox-delivery", () => ({
   broadcastMessage: vi.fn(),
 }));
 
-vi.mock("../utils/team-events", () => ({
+vi.mock("../coordination/event-journal", () => ({
   appendTeamEvent: vi.fn(),
 }));
 
 import * as messaging from "../alert-authority/inbox-delivery";
-import { appendTeamEvent } from "../utils/team-events";
+import { appendTeamEvent } from "../coordination/event-journal";
 import { createAlertSender } from "../alert-authority/alerts";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import { taskVersionRef } from "../task-authority/task-version-ref";
 
 const membership = {
   currentRecipients: vi.fn(),

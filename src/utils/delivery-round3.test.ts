@@ -4,15 +4,17 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { taskDeliveryMembership } from "../../test/support/task-delivery-membership";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import type { IdentifiedInboxMessage, Member, TeamConfig } from "./models";
-import type { TaskCard } from "../model-tool-contract/task-domain";
-import { taskVersionRef } from "../model-tool-contract/task-version-ref";
+import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
+import type { Member, TeamConfig } from "../team-authority/contracts";
+import type { TaskCard } from "../task-authority/task-domain";
+import { taskVersionRef } from "../task-authority/task-version-ref";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
 import {
   DIRECT_MESSAGE_ACK_ENTRY_TYPE,
   DIRECT_MESSAGE_CUSTOM_TYPE,
   DIRECT_MESSAGE_RESUME_TYPE,
   DirectMessageDelivery,
-} from "./message-delivery";
+} from "../alert-authority/direct-delivery";
 import * as paths from "./paths";
 import {
   TASK_CHANGE_ACK_ENTRY_TYPE,
@@ -24,6 +26,7 @@ import {
 } from "./task-delivery";
 import * as teams from "./teams";
 
+const alertMembership = new DurableAlertMembership();
 const createdTeams: string[] = [];
 const MESSAGE_MEMBERSHIP_ID = "membership_round3_worker";
 const MESSAGE_SESSION_FILE = "/tmp/round3-message-worker.jsonl";
@@ -119,6 +122,7 @@ function messageHarness(messages = [inboxMessage()]) {
     membershipId: MESSAGE_MEMBERSHIP_ID,
     sessionFile: MESSAGE_SESSION_FILE,
     pollMs: 60_000,
+    membership: alertMembership,
     dependencies: {
       readUnread: vi.fn(async () => messages),
       markRead,

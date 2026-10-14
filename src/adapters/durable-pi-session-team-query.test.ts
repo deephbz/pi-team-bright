@@ -17,9 +17,7 @@ describe("DurablePiSessionTeamQuery", () => {
     created.push(teamName);
     const leaderSessionFile = `/tmp/${teamName}-lead.jsonl`;
     const workerSessionFile = `/tmp/${teamName}-worker.jsonl`;
-    await teams.createTeam(teamName, leaderSessionFile, "lead", "", undefined, undefined, `/tmp/${teamName}-beads`, "authority", {
-      schema: "pi-teams-beads-authority/1", backend: "dolt", database: "dolt", doltDatabase: teamName, projectId: teamName,
-    });
+    await teams.createTeam(teamName, leaderSessionFile, "lead");
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`, name: "worker", agentType: "teammate", joinedAt: Date.now(),
       tmuxPaneId: "", sessionFile: workerSessionFile, cwd: process.cwd(), subscriptions: [],
