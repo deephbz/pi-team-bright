@@ -1,3 +1,4 @@
+import type { DeliveryDegradation } from "../utils/recipient-delivery-lifecycle";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 export declare const ALERT_KINDS: readonly ["clarification", "attention", "announcement"];
 export type AlertKind = (typeof ALERT_KINDS)[number];
@@ -29,6 +30,11 @@ export interface ExpectedSenderBinding {
 export interface AcceptedAlertDelivery {
     recipient: string;
     messageId: string;
+    deliveryDegraded?: DeliveryDegradation[];
+}
+export interface RecipientDeliveryDegradation {
+    recipient: string;
+    engines: DeliveryDegradation[];
 }
 export interface SendAlertInput {
     teamName: string;
@@ -43,6 +49,7 @@ export interface SendAlertInput {
 export interface SendAlertResult {
     alertId: string;
     cursor: string;
+    deliveryDegraded?: RecipientDeliveryDegradation[];
     accepted: AcceptedAlertDelivery[];
     failures: Array<{
         recipient: string;
@@ -73,6 +80,8 @@ export interface AlertDeliveryLeaseInput {
 export interface AlertCurrentDelivery {
     recipientMembershipId: string;
     senderMembershipId?: string;
+    /** Best-effort current-generation evidence; never an acceptance gate. */
+    deliveryDegraded?: DeliveryDegradation[];
 }
 export type AlertDeliveryLeaseResult<T> = {
     kind: "team_absent";

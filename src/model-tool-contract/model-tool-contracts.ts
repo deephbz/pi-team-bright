@@ -139,7 +139,7 @@ export type TaskLinkPortResult =
   | { kind: "unavailable"; reason: "no_active_team" | "task_authority_unavailable"; message: string };
 
 export type AlertSendPortResult =
-  | { kind: "sent"; alertId: string; acceptedRecipients: string[]; failedRecipients: string[] }
+  | { kind: "sent"; alertId: string; acceptedRecipients: string[]; failedRecipients: string[]; deliveryDegraded?: import("../alert-authority/contracts").RecipientDeliveryDegradation[] }
   | { kind: "refused"; reason: "recipient_not_current" | "no_eligible_recipients" | "invalid_fanout"; message: string }
   | { kind: "unavailable"; reason: "no_active_team" | "team_authority_unavailable"; message: string };
 

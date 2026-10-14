@@ -54,11 +54,20 @@ export const CarrierAttentionSchema = Type.Object({
   message: Type.String(),
 }, { additionalProperties: false });
 
+export const DeliveryDegradedSchema = Type.Array(Type.Object({
+  engine: Type.Enum(["alert", "task"]),
+  operation: Type.Enum(["start", "context", "acknowledgement", "scan"]),
+  message: Type.String(),
+  observedAt: Type.Number(),
+  retryAt: Type.Number(),
+}, { additionalProperties: false }), { minItems: 1, maxItems: 2, description: "Known delivery failures for this exact recipient generation. Retries use capped backoff. Absence does not prove presentation." });
+
 export const WorkerCurrentSchema = Type.Object({
   name: WorkerName,
   scope: Type.String({ minLength: 1, description: "Concise semantic area owned by this Worker, not its current Task." }),
   carrier: WorkerCarrier,
   attention: Type.Optional(CarrierAttentionSchema),
+  delivery_degraded: Type.Optional(DeliveryDegradedSchema),
   nonterminal_task_ids: Type.Array(TaskId),
   model_role: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
 }, { additionalProperties: false });
@@ -338,7 +347,7 @@ export const TeamSyncUnsettledResultSchema = Type.Object({
   observation: Type.Optional(ObservationStampSchema),
   head: Type.Integer({ minimum: 0 }),
   epoch_id: Type.String({ minLength: 1 }),
-  workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown"]) }, { additionalProperties: false }), { minItems: 1 }),
+  workers: Type.Array(Type.Object({ name: WorkerName, reason: Type.Enum(["still_active", "actuation_pending", "run_state_unknown", "delivery_state_unknown", "delivery_degraded"]), delivery_degraded: Type.Optional(DeliveryDegradedSchema) }, { additionalProperties: false }), { minItems: 1 }),
   state_changed: Type.Literal(false),
   observation_advanced: Type.Literal(true),
 }, { additionalProperties: false });
@@ -517,14 +526,19 @@ export const AlertSendParametersSchema = Type.Object({
   task_version: Type.Optional(TaskVersionRefSchema),
 }, { additionalProperties: false });
 
+export const ALERT_ACCEPTANCE_DESCRIPTION = "Stored for the recipient. Presentation and processing are unconfirmed.";
+
+export const AlertReceiptDegradationSchema = Type.Array(Type.Object({ recipient: WorkerName, engines: DeliveryDegradedSchema }, { additionalProperties: false }), { minItems: 1 });
+
 export const AlertSendResultSchema = Type.Union([
   Type.Object({
     kind: Type.Literal("alert_sent"),
     alert_id: Type.String({ minLength: 1, maxLength: 128 }),
     accepted_recipients: Type.Array(WorkerName),
     failed_recipients: Type.Array(WorkerName),
+    delivery_degraded: Type.Optional(AlertReceiptDegradationSchema),
     task_state_changed: Type.Literal(false),
-  }, { additionalProperties: false }),
+  }, { additionalProperties: false, description: ALERT_ACCEPTANCE_DESCRIPTION }),
   Type.Object({
     kind: Type.Literal("refused"),
     reason: Type.Enum(["recipient_not_current", "no_eligible_recipients", "invalid_fanout"]),
@@ -991,7 +1005,7 @@ export const modelToolCatalog = {
     {
       name: "alert_send",
       label: "Send Alert",
-      responsibility: "Send exceptional clarification or attention to one Worker, or an announcement to *. Never changes Task state.",
+      responsibility: "Send exceptional Alerts to a Worker or announce to *. Accepted means stored, not presented or processed. Task state stays unchanged.",
       actors: ["leader"],
       commonUseCases: ["Escalate exceptional coordination to one current Worker or announce to the Team."],
       whenNotToUse: ["Do not use an Alert to assign, advance, block, or complete a Task."],

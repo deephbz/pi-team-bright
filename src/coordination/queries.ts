@@ -22,6 +22,7 @@ export interface CoordinationRuntimeGeneration {
 }
 
 export interface CoordinationRuntimeEvidence {
+  deliveryDegraded?: import("../utils/recipient-delivery-lifecycle").DeliveryDegradation[];
   attention?: import("../carrier-observation").CarrierAttention;
   membershipId?: string;
   pid?: number;

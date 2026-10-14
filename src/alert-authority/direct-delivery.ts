@@ -50,6 +50,7 @@ export interface DirectMessageDeliveryOptions {
   pollMs?: number;
   membership: AlertMembershipPort;
   dependencies?: Partial<DeliveryDependencies>;
+  onError?: (error: unknown) => void;
 }
 
 export function messagePollMs(env: NodeJS.ProcessEnv = hostEnv().process.env): number {
@@ -229,7 +230,7 @@ export class DirectMessageDelivery {
   /** Fences asynchronous binding/ack recovery against a later stop or start. */
   private generation = 0;
 
-  constructor(sink: DirectMessageDeliverySink, options: DirectMessageDeliveryOptions) {
+  constructor(sink: DirectMessageDeliverySink, private readonly options: DirectMessageDeliveryOptions) {
     this.sink = sink;
     this.teamName = options.teamName;
     this.recipient = options.recipient;
@@ -299,7 +300,7 @@ export class DirectMessageDelivery {
     for (const id of presented) this.attempted.add(id);
     if (!this.isCurrent(generation)) return;
     this.stopWatch = this.dependencies.watch(() => this.scheduleHintScan());
-    this.interval = hostEnv().clock.setInterval(() => void this.scan().catch(() => undefined), this.pollMs);
+    this.interval = hostEnv().clock.setInterval(() => this.scanInBackground(), this.pollMs);
     if (presented.size > 0) {
       const messageIds = [...presented];
       this.sink.sendMessage({
@@ -383,11 +384,16 @@ export class DirectMessageDelivery {
     }
   }
 
+  private scanInBackground(): void {
+    const generation = this.generation;
+    void this.scan().catch(error => { if (this.isCurrent(generation)) this.options.onError?.(error); });
+  }
+
   private scheduleHintScan(): void {
     if (this.stopped || this.hintTimer) return;
     this.hintTimer = hostEnv().clock.setTimeout(() => {
       this.hintTimer = null;
-      void this.scan().catch(() => undefined);
+      this.scanInBackground();
     }, 20);
   }
 

@@ -1,5 +1,6 @@
 import * as teamEvents from "./event-journal";
 import { humanCarrierAttentionMessage } from "../carrier-observation";
+import type { DeliveryDegradation } from "../utils/recipient-delivery-lifecycle";
 import { deriveWorkerRunObservation, type WorkerRunObservation } from "../utils/sync-liveness";
 import { hostEnv, type TimerHandle } from "../env/host-env";
 import type { CanonicalTaskCard, TaskCardWarning } from "../task-authority/task-domain";
@@ -188,8 +189,13 @@ export class CoordinationObservationService {
         const worker = bound.config.logicalWorkers!.find(worker => worker.name === event.worker);
         const c = event.carrier;
         const taskIds = worker ? this.projection.projectNonterminalTaskIds(tasks.tasks, worker.name) : [];
+        const unfinished = c?.field === "activity" && c.to === "idle"
+          ? tasks.tasks.filter(task => task.assignee === worker?.name && task.status === "in_progress").map(task => task.id) : [];
+        const advice = unfinished.length
+          ? `Inspect in_progress Task ${unfinished.join(", ")} and its blocker and evidence; then decide whether to send a clarification Alert`
+          : `nextActionHint=${c?.nextActionHint}`;
         return worker ? [{ worker: worker.name, scope: worker.scope, kind: event.phase === "prepared" ? "created" : event.phase === "session_bound" ? "connected" : event.phase, text: c
-          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; nextActionHint=${c.nextActionHint}; ${c.attention ? `${humanCarrierAttentionMessage(c.attention)} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
+          ? `Worker ${worker.name}: ${c.field} ${c.to}; ${c.cause.source}: ${c.cause.fact}; pane ${c.paneId ?? "unknown"}; suspectedHumanStop=${c.suspectedHumanStop}; ${advice}; ${c.attention ? `${humanCarrierAttentionMessage(c.attention)} ` : ""}nonterminalTaskIds=${taskIds.join(",") || "none"}.`
           : `Worker ${worker.name}: ${event.phase === "failed" ? "startup admission refused" : event.phase.replaceAll("_", " ")}.` }] : [];
       });
       const teamChanges = page.events.flatMap(event => event.type === "alert" && event.alertId.startsWith("herdr-observation:") && event.from === "team-lead" && event.to === "team-lead"
@@ -208,7 +214,10 @@ export class CoordinationObservationService {
     }
     if (automatic) return { kind: "quiet" };
     const observations = await this.workerRunObservations(bound);
-    const workers = observations.flatMap<Extract<CoordinationSyncResult, { kind: "unsettled" }>["workers"][number]>(item => item.state === "active" ? [{ name: item.worker, reason: "still_active" }] : item.actuationPending ? [{ name: item.worker, reason: "actuation_pending" }] : item.state === "unknown" ? (item.unknownReasons ?? ["run_state_unknown"]).map(reason => ({ name: item.worker, reason })) : []);
+    const workers = observations.flatMap<Extract<CoordinationSyncResult, { kind: "unsettled" }>["workers"][number]>(item => [
+      ...(item.deliveryDegraded?.length ? [{ name: item.worker, reason: "delivery_degraded" as const, delivery_degraded: item.deliveryDegraded }] : []),
+      ...(item.state === "active" ? [{ name: item.worker, reason: "still_active" as const }] : item.actuationPending ? [{ name: item.worker, reason: "actuation_pending" as const }] : item.state === "unknown" ? (item.unknownReasons ?? ["run_state_unknown" as const]).map(reason => ({ name: item.worker, reason })) : []),
+    ]);
     const common = { head: Number(pages.at(-1)!.cursor), epochId: bound.config.epochId };
     return workers.length ? { kind: "unsettled", ...common, workers } : { kind: "caught_up", ...common };
   }
@@ -262,15 +271,16 @@ export class CoordinationObservationService {
       const runtime = member?.sessionFile ? await this.coordinationQueries.teamRuntime.readRuntime(bound.teamName, member) : null;
       return { name: worker.name, scope: worker.scope, carrier: !member ? "absent" as const : member.sessionFile ? "connected" as const : member.pendingLaunchId ? "starting" as const : "absent" as const,
         ...(runtime?.attention ? { attention: runtime.attention } : {}),
+        ...(runtime?.deliveryDegraded?.length ? { deliveryDegraded: runtime.deliveryDegraded } : {}),
         ...(worker.modelProfile?.alias ? { modelRole: worker.modelProfile.alias } : {}), nonterminalTaskIds: this.projection.projectNonterminalTaskIds(tasks, worker.name) };
     }))).sort((a, b) => a.name.localeCompare(b.name));
   }
-  private async workerRunObservations(bound: BoundTeam): Promise<WorkerRunObservation[]> {
+  private async workerRunObservations(bound: BoundTeam): Promise<Array<WorkerRunObservation & { deliveryDegraded?: DeliveryDegradation[] }>> {
     return Promise.all(bound.config.logicalWorkers!.map(async worker => {
       const member = [...bound.config.members].reverse().find(candidate => candidate.name === worker.name && candidate.isActive !== false);
       if (!member) return { worker: worker.name, state: "absent" as const, actuationPending: false };
       const [taskDelivery, alertInbox, runtime] = await Promise.all([this.coordinationQueries.taskStateDelivery.readDeliveryEvidence(bound.teamName, member.name), this.coordinationQueries.alertActuation.readInboxEvidence(bound.teamName, member.name), this.coordinationQueries.teamRuntime.readRuntime(bound.teamName, member).catch(() => null)]);
-      return deriveWorkerRunObservation(member, { runtime, taskDelivery, alertInbox });
+      return { ...deriveWorkerRunObservation(member, { runtime, taskDelivery, alertInbox }), ...(runtime?.deliveryDegraded?.length ? { deliveryDegraded: runtime.deliveryDegraded } : {}) };
     }));
   }
 }

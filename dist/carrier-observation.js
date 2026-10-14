@@ -56,6 +56,7 @@ function deriveCarrierView(member, status, now = (0, host_env_1.hostEnv)().clock
     const probe = observed ?? (exact?.pid ? (0, host_env_1.hostEnv)().process.generation(exact.pid) : { kind: "unknown", reason: "runtime_missing" });
     const verified = (0, runtime_1.verifyRuntimeGeneration)(exact, probe);
     const attention = legacyCarrierAttention(member, exact, probe);
+    const deliveryDegraded = (0, runtime_1.currentDeliveryDegradations)(member, exact, verified);
     const processFact = probe.kind === "unknown" && probe.reason === "generation_helper_missing" ? probe.reason
         : !exact?.osBirthToken && exact?.pid ? "birth_token_missing" : probe.kind === "unknown" ? probe.reason : verified;
     const process = status === null && member.launch?.state === "refused" && !member.launch.priorGeneration ? "none"
@@ -65,6 +66,7 @@ function deriveCarrierView(member, status, now = (0, host_env_1.hostEnv)().clock
         launch: member.launch?.state ?? (member.pendingLaunchId ? "unknown" : "none"), process,
         terminal: "unknown", activity: "unknown", lastStop: exact?.lastStop,
         ...(attention ? { attention } : {}),
+        ...(deliveryDegraded.length ? { deliveryDegraded } : {}),
         ...(exact?.pid ? { processSample: { pid: exact.pid, probe } } : {}),
         paneId: member.terminalTarget?.targetId ?? member.tmuxPaneId, terminalTarget: member.terminalTarget,
         evidence: [{ source: "process_generation", fact: processFact, observedAt: now },

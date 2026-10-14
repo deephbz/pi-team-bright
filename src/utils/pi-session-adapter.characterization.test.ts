@@ -192,6 +192,52 @@ describe("registered Pi Session adapter characterization", () => {
     expect(event).not.toHaveBeenCalled();
   });
 
+  it.each(["retry", "reload"] as const)("toasts once per delivery episode across %s recovery while persisting each retry", async recovery => {
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const name = teamName("delivery-episodes");
+    vi.stubEnv("PI_TEAM_NAME", name);
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
+    });
+    const member = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
+    vi.useFakeTimers();
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    const start = vi.spyOn(TaskChangeDelivery.prototype, "start")
+      .mockRejectedValueOnce(new Error("storage fault"))
+      .mockRejectedValueOnce(new Error("storage fault"))
+      .mockRejectedValueOnce(new Error("storage fault"))
+      .mockResolvedValue(undefined);
+    vi.spyOn(DurableTaskOrchestration.prototype, "reconcileReady").mockResolvedValue([]);
+    const publish = vi.spyOn(TeamSessionLifecycleService.prototype, "writeDeliveryState");
+    const ctx = context(sessionFile), harness = extension();
+    await harness.get("session_start")!({ reason: "resume" }, ctx);
+    await vi.advanceTimersByTimeAsync(1000 + 2000);
+    const notices = () => ctx.ui.notify.mock.calls.filter(([text]: [string]) => /^Task delivery (is degraded|recovered)/.test(text));
+    expect(start).toHaveBeenCalledTimes(3);
+    expect(notices()).toEqual([["Task delivery is degraded: storage fault. Retry is scheduled.", "warning"]]);
+    const failures = publish.mock.calls.filter(([, engine, state]) => engine === "task" && state.state === "degraded");
+    expect(failures).toHaveLength(3);
+    expect(new Set(failures.map(([, , state]) => state.state === "degraded" && state.retryAt)).size).toBe(3);
+    expect((await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task).toEqual(failures[2][2]);
+    if (recovery === "retry") await vi.advanceTimersByTimeAsync(4000);
+    else await harness.get("session_start")!({ reason: "reload" }, ctx);
+    expect(notices()).toHaveLength(2);
+    expect(notices()[1]).toEqual(["Task delivery recovered.", "info"]);
+    expect((await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task?.state).toBe("running");
+    vi.spyOn(TaskChangeDelivery.prototype, "observeContext").mockRejectedValueOnce(new Error("second fault"));
+    await harness.get("context")!({ messages: [] }, ctx);
+    expect(notices()).toHaveLength(3);
+    expect(notices()[2]).toEqual(["Task delivery is degraded: second fault. Retry is scheduled.", "warning"]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(notices()).toHaveLength(4);
+    expect(notices()[3]).toEqual(["Task delivery recovered.", "info"]);
+    await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
+  });
+
   it.each(["legacy", "graph"] as const)("reconciles a ready Task that predates first Worker Session binding through the %s authority", async (authorityKind) => {
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const name = teamName(`worker-first-binding-${authorityKind}`);

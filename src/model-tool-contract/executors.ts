@@ -120,7 +120,7 @@ function projectSyncOutcome(port: ModelToolJourneyPort, leaderSessionId: ExactLe
           team: outcome.team,
           ...(outcome.modelRoles ? { model_roles: outcome.modelRoles } : {}),
           ...(outcome.defaultModelRole ? { default_model_role: outcome.defaultModelRole } : {}),
-          workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, ...(worker.attention ? { attention: worker.attention } : {}), ...(worker.modelRole ? { model_role: worker.modelRole } : {}), nonterminal_task_ids: worker.nonterminalTaskIds })),
+          workers: outcome.workers.map((worker) => ({ name: worker.name, scope: worker.scope, carrier: worker.carrier, ...(worker.attention ? { attention: worker.attention } : {}), ...(worker.deliveryDegraded ? { delivery_degraded: worker.deliveryDegraded } : {}), ...(worker.modelRole ? { model_role: worker.modelRole } : {}), nonterminal_task_ids: worker.nonterminalTaskIds })),
           tasks: outcome.tasks,
           ...(outcome.alerts ? {
             alerts: outcome.alerts.map(alert => ({
@@ -435,6 +435,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
         alert_id: outcome.alertId,
         accepted_recipients: outcome.acceptedRecipients,
         failed_recipients: outcome.failedRecipients,
+        ...(outcome.deliveryDegraded?.length ? { delivery_degraded: outcome.deliveryDegraded } : {}),
         task_state_changed: false,
       };
       if (outcome.kind === "unavailable") return { kind: "unavailable", reason: outcome.reason, message: outcome.message, state_changed: false };
