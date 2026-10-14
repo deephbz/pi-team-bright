@@ -142,9 +142,10 @@ export class TeamSessionLifecycleService {
       await runtime.writeRuntimeStatus(binding.teamName, binding.recipient, {
         delivery: { sessionFile: binding.sessionFile, engines: { ...engines, [engine]: state } },
       }, binding.membershipId);
-      const previous = engines[engine]?.state;
-      if (state.state === "degraded" && previous !== "degraded") return "degraded";
-      if (state.state === "running" && previous === "degraded") return "recovered";
+      const previous = engines[engine];
+      if (state.state === "degraded" && (previous?.state !== "degraded"
+        || (previous.retryAt !== undefined && state.retryAt === undefined))) return "degraded";
+      if (state.state === "running" && previous?.state === "degraded") return "recovered";
     });
   }
 

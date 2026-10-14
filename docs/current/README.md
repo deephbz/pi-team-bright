@@ -374,11 +374,15 @@ restating executable definitions.
   has an independent failure and retry outcome. Initial starts retain Alert-first
   ordering for the shared lease. A failed start, context observation,
   acknowledgement, or background scan stops only that engine. Retries use
-  capped backoff while the binding stays current. The runtime record carries
-  each engine's degradation for its exact generation. `team_sync` snapshots,
+  capped backoff while the binding stays current. Unsupported Beads Task storage
+  is terminal for that engine. It publishes degradation without `retryAt`, which
+  means no automatic retry. Alert delivery continues. A later Session activation
+  can try Task delivery once again. The runtime record carries each engine's
+  degradation for its exact generation. `team_sync` snapshots,
   unsettled results, and `/ptb status` expose that fact. Runtime diagnostics
-  update on each retry. The recipient pane toasts once when an engine becomes
-  degraded and once when it recovers.
+  update on each retry. The recipient pane toasts when an engine first becomes
+  degraded, when retries stop, and when it recovers. A terminal failure says
+  delivery stopped and will not retry.
   Initial create and resume activate delivery. Binding replacement, admission
   refusal, Session shutdown, and successful full Team shutdown stop both engines
   and their retries. Partial shutdown retains the current leader delivery.

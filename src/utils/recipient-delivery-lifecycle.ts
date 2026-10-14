@@ -14,7 +14,8 @@ export interface DeliveryDegradation {
   operation: DeliveryOperation;
   message: string;
   observedAt: number;
-  retryAt: number;
+  /** Absent when the engine will not retry automatically. */
+  retryAt?: number;
 }
 export type DeliveryEngineState = { state: "running"; observedAt: number }
   | ({ state: "degraded" } & DeliveryDegradation);
@@ -31,7 +32,7 @@ export interface RecipientDeliveryPair {
   task: RecipientDeliveryEngine;
 }
 
-type Slot = { engine: RecipientDeliveryEngine; running: boolean; generation: number; failures: number; retry?: TimerHandle };
+type Slot = { engine: RecipientDeliveryEngine; running: boolean; generation: number; failures: number; terminal?: boolean; retry?: TimerHandle };
 type Activation = { binding: RecipientDeliveryBinding; slots: Record<DeliveryEngineName, Slot>; publication: Promise<void>; checking?: Promise<boolean> };
 
 /** One exact recipient fence; each delivery engine owns an independent failure and retry. */
@@ -41,6 +42,7 @@ export class RecipientDeliveryLifecycle {
   constructor(private readonly dependencies: {
     makePair(binding: RecipientDeliveryBinding, failed: (engine: DeliveryEngineName, error: unknown) => void): RecipientDeliveryPair;
     isCurrentBinding(binding: RecipientDeliveryBinding): Promise<boolean>;
+    isTerminal?(error: unknown): boolean;
     publishState?(binding: RecipientDeliveryBinding, engine: DeliveryEngineName, state: DeliveryEngineState): Promise<void>;
   }) {}
 
@@ -55,7 +57,7 @@ export class RecipientDeliveryLifecycle {
     } };
     this.active = activation;
     // Preserve initial lease ordering. Each start catches its own failure and
-    // schedules its own retry before activation proceeds to the next engine.
+    // selects its retry policy before activation proceeds to the next engine.
     await this.start(activation, "alert");
     await this.start(activation, "task");
   }
@@ -120,17 +122,22 @@ export class RecipientDeliveryLifecycle {
   private async fail(active: Activation, name: DeliveryEngineName, operation: DeliveryOperation, error: unknown): Promise<void> {
     if (this.active !== active) return;
     const slot = active.slots[name];
-    if (slot.retry) return;
+    if (slot.retry || slot.terminal) return;
+    slot.terminal = this.dependencies.isTerminal?.(error) === true;
     this.stop(slot);
-    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(slot.failures++, 5));
     const observedAt = hostEnv().clock.now();
-    slot.retry = hostEnv().clock.setTimeout(() => {
-      slot.retry = undefined;
-      void this.start(active, name, true);
-    }, delay);
-    if ("unref" in slot.retry) slot.retry.unref();
+    let retryAt: number | undefined;
+    if (!slot.terminal) {
+      const delay = Math.min(30_000, 1_000 * 2 ** Math.min(slot.failures++, 5));
+      retryAt = observedAt + delay;
+      slot.retry = hostEnv().clock.setTimeout(() => {
+        slot.retry = undefined;
+        void this.start(active, name, true);
+      }, delay);
+      if ("unref" in slot.retry) slot.retry.unref();
+    }
     await this.publish(active, name, { state: "degraded", engine: name, operation,
-      message: error instanceof Error ? error.message : String(error), observedAt, retryAt: observedAt + delay });
+      message: error instanceof Error ? error.message : String(error), observedAt, ...(retryAt === undefined ? {} : { retryAt }) });
   }
 
   private stop(slot: Slot): void {

@@ -5,11 +5,11 @@ const binding: RecipientDeliveryBinding = { teamName: "recipient-delivery", reci
 function engine(): RecipientDeliveryEngine {
   return { start: vi.fn(async () => {}), stop: vi.fn(), observeContext: vi.fn(async () => 1), commitPresentedAfterSuccessfulTurn: vi.fn(async () => 1) };
 }
-function fixture() {
+function fixture(isTerminal: (error: unknown) => boolean = () => false) {
   const pair: RecipientDeliveryPair = { direct: engine(), task: engine() };
   const isCurrentBinding = vi.fn(async () => true), publishState = vi.fn(async () => {});
   let backgroundFailure!: (engine: "alert" | "task", error: unknown) => void;
-  const lifecycle = new RecipientDeliveryLifecycle({ makePair: (_binding, failed) => { backgroundFailure = failed; return pair; }, isCurrentBinding, publishState });
+  const lifecycle = new RecipientDeliveryLifecycle({ makePair: (_binding, failed) => { backgroundFailure = failed; return pair; }, isCurrentBinding, isTerminal, publishState });
   return { pair, lifecycle, isCurrentBinding, publishState, failInBackground: (name: "alert" | "task") => backgroundFailure(name, new Error("scan failed")) };
 }
 beforeEach(() => vi.useFakeTimers());
@@ -30,6 +30,47 @@ describe("independent recipient delivery lifecycle", () => {
     expect(other.observeContext).toHaveBeenCalledOnce();
     expect(other.commitPresentedAfterSuccessfulTurn).toHaveBeenCalledOnce();
     expect(fx.publishState).toHaveBeenCalledWith(binding, failed === "direct" ? "alert" : "task", expect.objectContaining({ state: "degraded", operation: "start", message: "start failed" }));
+  });
+
+  it.each(["direct", "task"] as const)("stops terminal %s failure without retry or a second publication and keeps its sibling running", async failed => {
+    const error = new Error("Unsupported delivery source");
+    const fx = fixture(value => value === error);
+    vi.mocked(fx.pair[failed].start).mockRejectedValue(error);
+    await fx.lifecycle.activate(binding);
+    const name = failed === "direct" ? "alert" : "task";
+    const other = failed === "direct" ? fx.pair.task : fx.pair.direct;
+    const publications = () => fx.publishState.mock.calls.filter(call => (call as unknown[])[1] === name);
+    expect(publications()).toHaveLength(1);
+    expect(publications()[0]).toEqual([binding, name, { state: "degraded", engine: name, operation: "start", message: error.message, observedAt: expect.any(Number) }]);
+    expect(vi.getTimerCount()).toBe(0);
+    fx.failInBackground(name);
+    await vi.advanceTimersByTimeAsync(61000);
+    expect(fx.pair[failed].start).toHaveBeenCalledOnce();
+    expect(publications()).toHaveLength(1);
+    await fx.lifecycle.observeContext([]);
+    await fx.lifecycle.commitPresentedAfterSuccessfulTurn("stop");
+    expect(other.observeContext).toHaveBeenCalledOnce();
+    expect(other.commitPresentedAfterSuccessfulTurn).toHaveBeenCalledOnce();
+    expect(other.stop).not.toHaveBeenCalled();
+    await fx.lifecycle.activate(binding);
+    expect(fx.pair[failed].start).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(0);
+    fx.lifecycle.deactivate();
+  });
+
+  it("ends a transient retry episode when the next failure is terminal", async () => {
+    const terminal = new Error("Unsupported delivery source");
+    const fx = fixture(value => value === terminal);
+    vi.mocked(fx.pair.task.start).mockRejectedValueOnce(new Error("temporary")).mockRejectedValue(terminal);
+    await fx.lifecycle.activate(binding);
+    expect(vi.getTimerCount()).toBe(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(fx.publishState).toHaveBeenLastCalledWith(binding, "task", { state: "degraded", engine: "task", operation: "start", message: terminal.message, observedAt: expect.any(Number) });
+    await vi.advanceTimersByTimeAsync(61000);
+    expect(fx.pair.task.start).toHaveBeenCalledTimes(2);
+    expect(fx.pair.direct.stop).not.toHaveBeenCalled();
+    fx.lifecycle.deactivate();
   });
 
   it("retries only the failed engine with capped backoff and clears degradation after recovery", async () => {
