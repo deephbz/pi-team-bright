@@ -108,7 +108,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
         : model.alerts_unavailable ? `Alert history unavailable: ${compact(model.alerts_unavailable.message)}` : "Alert history unavailable";
       lines.push(`Snapshot: ${model.workers.length} Worker${model.workers.length === 1 ? "" : "s"}, ${model.tasks.length} Task${model.tasks.length === 1 ? "" : "s"}, ${alerts}.`);
       for (const worker of model.workers.filter((worker: any) => worker.attention)) lines.push(`Worker ${quoted(worker.name)} · ${worker.attention.reason} · ${worker.attention.nextActionHint}: ${worker.attention.message}`);
-      for (const worker of model.workers) for (const failure of worker.delivery_degraded ?? []) lines.push(`Worker ${quoted(worker.name)} · ${failure.engine} delivery degraded (${failure.operation}): ${compact(failure.message)} · retry scheduled.`);
+      for (const worker of model.workers) for (const failure of worker.delivery_degraded ?? []) lines.push(`Worker ${quoted(worker.name)} · ${failure.engine} delivery ${failure.retryAt === undefined ? "stopped" : "degraded"} (${failure.operation}): ${compact(failure.message)} · ${deliveryRetryTime(failure.retryAt)}.`);
     }
     else if (model.kind === "updates") {
       lines.push(`Updates: ${model.team_changes.length} Team change${model.team_changes.length === 1 ? "" : "s"}, ${model.task_changes.length} Task change${model.task_changes.length === 1 ? "" : "s"}, ${model.worker_changes.length} Worker change${model.worker_changes.length === 1 ? "" : "s"}, ${model.alerts.length} Alert${model.alerts.length === 1 ? "" : "s"}.`);
@@ -123,7 +123,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
       lines.push("No new Team change; Worker evidence needs attention.");
       for (const worker of model.workers) {
         lines.push(`Worker ${quoted(worker.name)} · ${worker.reason.replaceAll("_", " ")}.`);
-        for (const failure of worker.delivery_degraded ?? []) lines.push(`${failure.engine} delivery (${failure.operation}): ${compact(failure.message)} · retry scheduled.`);
+        for (const failure of worker.delivery_degraded ?? []) lines.push(`${failure.engine} delivery ${failure.retryAt === undefined ? "stopped" : "degraded"} (${failure.operation}): ${compact(failure.message)} · ${deliveryRetryTime(failure.retryAt)}.`);
       }
     }
     else lines.push(model.message ? compact(model.message) : `${model.reason ?? "Observation did not advance."}`);
@@ -141,7 +141,7 @@ function toolLines(tool: ProjectedTool, model: any): string[] {
         : `Alert accepted for ${model.accepted_recipients.join(", ") || "no recipients"}.`);
       lines.push(`${ALERT_ACCEPTANCE_DESCRIPTION} Task state unchanged.`);
       for (const recipient of model.delivery_degraded ?? []) for (const engine of recipient.engines) {
-        lines.push(`⚠ ${recipient.recipient}: ${engine.engine} delivery degraded (${engine.operation}: ${compact(engine.message)}); ${deliveryRetryTime(engine.retryAt)}.`);
+        lines.push(`⚠ ${recipient.recipient}: ${engine.engine} delivery ${engine.retryAt === undefined ? "stopped" : "degraded"} (${engine.operation}: ${compact(engine.message)}); ${deliveryRetryTime(engine.retryAt)}.`);
       }
     } else lines.push(`${model.kind} · ${model.reason}: ${compact(model.message)}`);
   } else if (tool === "worker_stop") {

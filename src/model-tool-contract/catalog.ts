@@ -59,7 +59,7 @@ export const DeliveryDegradedSchema = Type.Array(Type.Object({
   operation: Type.Enum(["start", "context", "acknowledgement", "scan"]),
   message: Type.String(),
   observedAt: Type.Number(),
-  retryAt: Type.Number(),
+  retryAt: Type.Optional(Type.Number({ description: "Next automatic retry time in epoch milliseconds. Absence means no automatic retry." })),
 }, { additionalProperties: false }), { minItems: 1, maxItems: 2, description: "Known delivery failures for this exact recipient generation. Retries use capped backoff. Absence does not prove presentation." });
 
 export const WorkerCurrentSchema = Type.Object({

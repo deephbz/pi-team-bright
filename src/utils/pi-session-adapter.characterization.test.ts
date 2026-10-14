@@ -12,7 +12,10 @@ import { DurableGraphTaskOrchestration } from "../task-authority/graph-orchestra
 import { clearAdapterCache, setAdapter } from "../adapters/terminal-registry";
 import { TeamSessionLifecycleService } from "../team-authority/team-session-lifecycle-service";
 import { TeamLifecycleService } from "../team-authority/team-lifecycle-service";
-import { DirectMessageDelivery } from "../alert-authority/direct-delivery";
+import { DirectMessageDelivery, DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
+import { sendAlert } from "../alert-authority/alerts";
+import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import { UNSUPPORTED_BEADS_TEAM } from "../adapters/durable-graph-task-authority";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
 import { SyncNudgeConductor } from "./sync-nudge-conductor";
@@ -181,6 +184,45 @@ describe("registered Pi Session adapter characterization", () => {
     expect(claim).not.toHaveBeenCalled();
     expect(bind).not.toHaveBeenCalled();
     expect(event).not.toHaveBeenCalled();
+  });
+
+  it.each(["config", "directory"] as const)("stops unsupported Beads Task delivery once from %s evidence while presenting Alerts", async evidence => {
+    vi.stubEnv("PI_AGENT_NAME", "worker");
+    const name = teamName(`unsupported-${evidence}`);
+    vi.stubEnv("PI_TEAM_NAME", name);
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
+    });
+    const member = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
+    fs.rmSync(paths.graphTaskAuthorityPath(name));
+    if (evidence === "config") {
+      const config = JSON.parse(fs.readFileSync(paths.configPath(name), "utf8"));
+      fs.writeFileSync(paths.configPath(name), JSON.stringify({ ...config, taskBackend: "beads" }));
+    } else fs.mkdirSync(path.join(paths.teamDir(name), ".beads"));
+    const accepted = await sendAlert({ teamName: name, from: "team-lead", to: "worker", kind: "attention", text: "Alert survives unsupported Task storage." },
+      new DurableAlertMembership(), { appendAcceptedAlert: async () => ({ cursor: "0" }) });
+    expect(accepted.accepted).toHaveLength(1);
+    if (evidence === "directory") await new TeamSessionLifecycleService({} as never).writeDeliveryState({
+      teamName: name, recipient: "worker", membershipId: member.membershipId!, sessionFile,
+    }, "task", { state: "degraded", engine: "task", operation: "start", message: "Earlier transient failure", observedAt: Date.now(), retryAt: Date.now() + 1000 }, () => true);
+    const taskStart = vi.spyOn(TaskChangeDelivery.prototype, "start");
+    const directStart = vi.spyOn(DirectMessageDelivery.prototype, "start");
+    vi.useFakeTimers();
+    const ctx = context(sessionFile), harness = extension();
+    await harness.get("session_start")!({ reason: "resume" }, ctx);
+    expect(harness.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: DIRECT_MESSAGE_CUSTOM_TYPE, content: expect.stringContaining("Alert survives unsupported Task storage.") }), expect.objectContaining({ triggerTurn: true }));
+    const state = (await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task;
+    expect(state).toMatchObject({ state: "degraded", operation: "start", message: UNSUPPORTED_BEADS_TEAM });
+    expect(state).not.toHaveProperty("retryAt");
+    await vi.advanceTimersByTimeAsync(61000);
+    expect(taskStart).toHaveBeenCalledOnce();
+    expect(directStart).toHaveBeenCalledOnce();
+    expect(ctx.ui.notify.mock.calls.filter(([text]: [string]) => text.startsWith("Task delivery"))).toEqual([[`Task delivery stopped: ${UNSUPPORTED_BEADS_TEAM} It will not retry.`, "warning"]]);
+    await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
   });
 
   it.each(["retry", "reload"] as const)("toasts once per delivery episode across %s recovery while persisting each retry", async recovery => {
