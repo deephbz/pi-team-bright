@@ -1,7 +1,7 @@
 {
   "assumption": "Filesystem rename, exclusive create, and fsync behave as the fake states.",
   "verdict": "holds",
-  "command": "node probe.cjs a9 (production withLock and writeJsonAtomicAsync; journal append mirrors appendTeamEvent)",
+  "command": "node probe.cjs a9 (production withLock and writeJsonAtomic; journal append mirrors appendTeamEvent)",
   "observed": {
     "environment": {
       "date": "2026-10-13T10:41:05.435Z",
