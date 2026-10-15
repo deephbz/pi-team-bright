@@ -66,12 +66,21 @@ export interface TaskActivityProjection {
   tasks: TaskActivityCoordinate[];
 }
 
+type DeepReadonly<T> = T extends readonly (infer Item)[]
+  ? readonly DeepReadonly<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T;
+
+export type ReadonlyTeamEvent = DeepReadonly<TeamEvent>;
+
 export interface TeamEventBatch {
   /** Safe continuation position. It advances to journal head unless truncated. */
   cursor: string;
   /** Current global journal head, which can be ahead of cursor when truncated. */
   headCursor: string;
-  events: TeamEvent[];
+  /** Cached event records are deeply immutable; clone explicitly to edit. */
+  events: ReadonlyTeamEvent[];
   truncated: boolean;
   /** Matching records after the returned page, not a numeric cursor gap. */
   remaining: number;
@@ -283,6 +292,15 @@ function cacheJournalRead(journal: string, cache: JournalReadCache): void {
   }
 }
 
+function freezeEvent(event: TeamEvent): ReadonlyTeamEvent {
+  const freeze = (value: unknown): unknown => {
+    if (!value || typeof value !== "object") return value;
+    for (const nested of Object.values(value)) freeze(nested);
+    return Object.freeze(value);
+  };
+  return freeze(event) as ReadonlyTeamEvent;
+}
+
 function parseJournalLines(raw: string, priorEvents: readonly TeamEvent[] = [], priorCursor?: bigint): TeamEvent[] {
   const events = [...priorEvents];
   let previous = priorCursor ?? (events.length ? parseCursor(events.at(-1)!.cursor) : 0n);
@@ -294,7 +312,7 @@ function parseJournalLines(raw: string, priorEvents: readonly TeamEvent[] = [], 
       throw new Error(`Malformed Team event journal at line ${events.length + 1}: cursors must increase monotonically.`);
     }
     previous = cursor;
-    events.push(event);
+    events.push(freezeEvent(event));
   }
   return events;
 }
@@ -537,7 +555,7 @@ export function readTeamEvents(teamName: string, options: TeamEventReadOptions =
   return {
     cursor: truncated ? matching.at(-1)!.cursor : headCursor,
     headCursor,
-    events: structuredClone(matching),
+    events: matching,
     truncated,
     remaining,
   };
@@ -561,7 +579,7 @@ export function readTeamEventPages(teamName: string, options: Pick<TeamEventRead
     const selected = unseen.slice(offset, offset + limit);
     const remaining = unseen.length - offset - selected.length;
     pages.push({
-      events: structuredClone(selected),
+      events: selected,
       cursor: remaining > 0 ? selected.at(-1)!.cursor : headCursor,
       headCursor,
       truncated: remaining > 0,
