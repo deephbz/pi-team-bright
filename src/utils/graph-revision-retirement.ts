@@ -192,14 +192,14 @@ export function taskIsCurrentInGraphLocked(teamName: string, taskId: string, tas
 }
 
 /** Read current Task coordinates while the caller owns the retirement lock. */
-export function readCurrentGraphTaskCoordinatesLocked(teamName: string): Set<string> {
+export function readCurrentGraphTaskCoordinatesLocked(teamName: string, mode: "observation" | "commit" = "commit"): Set<string> {
   const authorityFile = graphTaskAuthorityPath(teamName);
   if (!fs.existsSync(authorityFile)) {
     throw missingGraphAuthority(teamName);
   }
   // The graph writer atomically replaces its snapshot. The fence is derived;
   // currentness must come from the committed authority when they disagree.
-  return readGraphTaskCoordinates(teamName);
+  return readGraphTaskCoordinates(teamName, mode);
 }
 
 /** Exact current graph coordinate; derived delivery evidence cannot replace authority. */

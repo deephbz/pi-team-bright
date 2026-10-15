@@ -13,7 +13,7 @@ import {
 import type { GraphTaskCard } from "../task-authority/graph-control-schemas";
 import { projectGraphTaskCards as cards } from "../task-authority/graph-card";
 import { writeJsonAtomic } from "../utils/atomic-json";
-import { loadGraphController, readGraphTaskCards } from "../utils/graph-read-view";
+import { loadGraphController, readGraphTaskCards, readGraphReadyCards } from "../utils/graph-read-view";
 import { withLock } from "../utils/lock";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../utils/paths";
 import { withCurrentSessionBinding } from "../utils/teams";
@@ -124,11 +124,7 @@ export class DurableGraphTaskAuthority {
   async readyFrontier(teamName: string, worker?: string): Promise<GraphTaskCard[]> {
     if (!this.exists(teamName)) throw missingAuthority(teamName);
     return withLock(graphTaskAuthorityPath(teamName), async () => {
-      const controller = this.loadRequired(teamName);
-      const byId = new Map(cards(controller).map((task) => [task.id, task]));
-      return controller.selectReadyFrontier()
-        .flatMap((task) => byId.get(task.id) ?? [])
-        .filter((task) => !worker || task.assignee === worker);
+      return readGraphReadyCards(teamName).filter((task) => !worker || task.assignee === worker);
     });
   }
 

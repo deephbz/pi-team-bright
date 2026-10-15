@@ -474,15 +474,15 @@ export async function readTaskDeliveries(teamName: string, recipient: string): P
 }
 
 /** Read current records while the caller owns the graph-revision fence lock. */
-async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
+async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string, mode: "observation" | "commit" = "commit"): Promise<TaskDeliveryRecord[]> {
   const records = await readTaskDeliveries(teamName, recipient);
-  const current = readCurrentGraphTaskCoordinatesLocked(teamName);
+  const current = readCurrentGraphTaskCoordinatesLocked(teamName, mode);
   return records.filter((record) => !record.retiredAt && current.has(`${record.ref.taskId}\u0000${record.ref.version}`));
 }
 
 /** Pending delivery records still actionable in the current complete graph. */
 export async function readCurrentTaskDeliveries(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
-  return withGraphRevisionLease(teamName, async () => readCurrentTaskDeliveriesLocked(teamName, recipient));
+  return withGraphRevisionLease(teamName, async () => readCurrentTaskDeliveriesLocked(teamName, recipient, "observation"));
 }
 
 export async function readTaskDeliveryTombstones(teamName: string, recipient: string): Promise<TaskDeliveryTombstone[]> {

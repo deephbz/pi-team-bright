@@ -2,7 +2,8 @@ import fs from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { GraphTaskController } from "../task-authority/graph-control";
-import { readGraphTaskCards, withGraphReadView } from "./graph-read-view";
+import type { TaskVersionRef } from "../task-authority/task-version-ref";
+import { readGraphTaskCards, readGraphTaskCoordinates, withGraphReadView } from "./graph-read-view";
 import { graphTaskAuthorityPath, teamDir } from "./paths";
 import { readCurrentGraphTaskCoordinatesLocked } from "./graph-revision-retirement";
 import { writeJsonAtomic } from "./atomic-json";
@@ -33,11 +34,11 @@ it("shares one recovered projection between Task hydration and delivery evidence
     const second = await authority.readTasks(team);
     expect(second[0]!.title).toBe("Task");
     expect(second[0]!.needs).toEqual([]);
-    expect(readCurrentGraphTaskCoordinatesLocked(team)).toEqual(new Set([`task\u0000${second[0]!.version}`]));
+    expect(readCurrentGraphTaskCoordinatesLocked(team, "observation")).toEqual(new Set([`task\u0000${second[0]!.version}`]));
   });
   expect(recover).toHaveBeenCalledTimes(1);
   await withGraphReadView(() => authority.readTasks(team));
-  expect(recover).toHaveBeenCalledTimes(2);
+  expect(recover).toHaveBeenCalledTimes(1);
 });
 it.each(["reuse", "completion"])("refuses replaced authority at %s even when bytes are identical", async phase => {
   await fixture();
@@ -55,7 +56,7 @@ it("refuses deleted authority instead of serving the cached projection", async (
     readGraphTaskCards(team);
   })).rejects.toThrow();
 });
-it("isolates overlapping operation scopes", async () => {
+it("shares immutable projections across overlapping operation scopes", async () => {
   await fixture();
   const recover = vi.spyOn(GraphTaskController, "recover");
   await Promise.all([1, 2].map(() => withGraphReadView(async () => {
@@ -63,7 +64,7 @@ it("isolates overlapping operation scopes", async () => {
     await Promise.resolve();
     readGraphTaskCards(team);
   })));
-  expect(recover).toHaveBeenCalledTimes(2);
+  expect(recover).toHaveBeenCalledTimes(1);
 });
 it("discards the native observation reservation when authority changes after hydration", async () => {
   const authority = await fixture();
@@ -89,9 +90,108 @@ it("discards the native observation reservation when authority changes after hyd
   expect(await service.readTeamSync(file, "snapshot", new AbortController().signal, "fresh")).toMatchObject({ kind: "snapshot" });
   service.clearPending(file);
 });
-it("does not retain a view after a failed scope", async () => {
+it("does not serve a failed scope after its source becomes corrupt", async () => {
   await fixture();
   await expect(withGraphReadView(async () => { readGraphTaskCards(team); throw new Error("abort"); })).rejects.toThrow("abort");
   fs.writeFileSync(graphTaskAuthorityPath(team), "malformed");
   await expect(withGraphReadView(async () => readGraphTaskCards(team))).rejects.toThrow("cannot be decoded");
+});
+it("shares Task, ready-front and observation-coordinate reads across operations", async () => {
+  const authority = await fixture();
+  const recover = vi.spyOn(GraphTaskController, "recover");
+  const first = await authority.readTasks(team);
+  expect(await authority.readyFrontier(team, "worker")).toEqual(first);
+  readGraphTaskCoordinates(team, "observation");
+  await withGraphReadView(() => authority.readTasks(team));
+  expect(recover).toHaveBeenCalledTimes(1);
+});
+it("keeps mutation and commit checks fresh even with a warm read memo", async () => {
+  const authority = await fixture();
+  const before = (await authority.readTasks(team))[0]!;
+  const recover = vi.spyOn(GraphTaskController, "recover");
+  readGraphTaskCoordinates(team);
+  await withGraphReadView(async () => { readGraphTaskCoordinates(team); });
+  expect(recover).toHaveBeenCalledTimes(2);
+  await authority.transition(team, { operationId: "claim", taskId: before.id, expectedVersion: before.version as TaskVersionRef, transition: "claim", worker: "worker" });
+  expect(recover).toHaveBeenCalledTimes(3);
+  const after = (await authority.readTasks(team))[0]!;
+  expect(recover).toHaveBeenCalledTimes(4);
+  expect(after.status).toBe("in_progress");
+  expect(after.version).not.toBe(before.version);
+  expect(await authority.readyFrontier(team)).toEqual([]);
+  expect((await authority.readTasks(team))[0]).toEqual(after);
+  expect(recover).toHaveBeenCalledTimes(4);
+  await expect(authority.transition(team, { operationId: "stale", taskId: before.id, expectedVersion: before.version as TaskVersionRef, transition: "claim", worker: "worker" })).rejects.toThrow("changed");
+  expect(recover).toHaveBeenCalledTimes(5);
+});
+it("refuses corruption at commit even if metadata appears unchanged", async () => {
+  const authority = await fixture();
+  const file = graphTaskAuthorityPath(team);
+  await authority.readTasks(team);
+  const identity = fs.statSync(file, { bigint: true });
+  fs.writeFileSync(file, "corrupt");
+  // A commit must recover bytes, independent of the observation fast-path fence.
+  vi.spyOn(fs, "statSync").mockReturnValue(identity as any);
+  expect(() => readGraphTaskCoordinates(team)).toThrow("cannot be decoded");
+});
+it("revalidates identical-byte atomic replacements between operations", async () => {
+  const authority = await fixture();
+  const first = await authority.readTasks(team);
+  const recover = vi.spyOn(GraphTaskController, "recover");
+  replaceFile();
+  expect(await authority.readTasks(team)).toEqual(first);
+  expect(recover).toHaveBeenCalledTimes(1);
+  await authority.readTasks(team);
+  expect(recover).toHaveBeenCalledTimes(1);
+});
+it("refuses same-size in-place corruption even when mtime is restored", async () => {
+  const authority = await fixture();
+  const file = graphTaskAuthorityPath(team);
+  const valid = fs.readFileSync(file, "utf8");
+  await authority.readTasks(team);
+  const stat = fs.statSync(file);
+  const corrupt = valid.replace('"title": "Task"', '"title": "Tusk"');
+  expect(corrupt).not.toBe(valid);
+  expect(corrupt.length).toBe(valid.length);
+  fs.writeFileSync(file, corrupt);
+  fs.utimesSync(file, stat.atime, stat.mtime);
+  await expect(authority.readTasks(team)).rejects.toThrow("cannot be recovered");
+  await expect(authority.readyFrontier(team)).rejects.toThrow("cannot be recovered");
+  fs.writeFileSync(file, valid);
+  expect((await authority.readTasks(team))[0]!.title).toBe("Task");
+});
+it("invalidates the memo after uncertain file identity", async () => {
+  const authority = await fixture();
+  await authority.readTasks(team);
+  const recover = vi.spyOn(GraphTaskController, "recover");
+  const stat = vi.spyOn(fs, "statSync").mockImplementationOnce(() => { throw new Error("injected stat failure"); });
+  expect(() => readGraphTaskCards(team)).toThrow("injected stat failure");
+  stat.mockRestore();
+  await authority.readTasks(team);
+  expect(recover).toHaveBeenCalledTimes(1);
+});
+it("never installs a projection if authority changes during validation", async () => {
+  const authority = await fixture();
+  const original = GraphTaskController.recover;
+  const recover = vi.spyOn(GraphTaskController, "recover").mockImplementationOnce((snapshot, clock) => {
+    const controller = original(snapshot, clock);
+    replaceFile();
+    return controller;
+  });
+  await expect(authority.readTasks(team)).rejects.toThrow("Graph authority changed");
+  await authority.readTasks(team);
+  expect(recover).toHaveBeenCalledTimes(2);
+});
+it("bounds the idle memo to one authority file", async () => {
+  const authority = await fixture();
+  const other = "other-graph-view";
+  try {
+    await authority.initializeEmpty(other);
+    await authority.applyGraph(other, { operationId: "other-initial", tasks: [{ key: "other", title: "Other", goal: "Other work", assignee: "worker", needs: [] }] });
+    const recover = vi.spyOn(GraphTaskController, "recover");
+    expect((await authority.readTasks(team))[0]!.id).toBe("task");
+    expect((await authority.readTasks(other))[0]!.id).toBe("other");
+    expect((await authority.readTasks(team))[0]!.id).toBe("task");
+    expect(recover).toHaveBeenCalledTimes(3);
+  } finally { fs.rmSync(teamDir(other), { recursive: true, force: true }); }
 });
