@@ -13,6 +13,7 @@ const failure = (code: string, message: string, status = 1) => ({
 });
 
 const leaderLayout = (paneId: string, width = 82) => success({ type: "pane_layout", layout: {
+  tab_id: "tab-origin", workspace_id: "workspace-origin",
   panes: [{ pane_id: paneId, rect: { width } }],
 } });
 const renamed = success({ type: "ok" });
@@ -629,7 +630,8 @@ describe("HerdrAdapter", () => {
     ])("refuses query failure for %s without splitting", async (target, reply, message) => {
       placementReplies(["worker-b"]);
       const normal = exec.getMockImplementation()!;
-      exec.mockImplementation((command, args) => args[1] === "get" && args[2] === target ? reply : normal(command, args));
+      exec.mockImplementation((command, args) => (args[1] === "get" && args[2] === target)
+        || (target === "pane-leader" && args[1] === "layout") ? reply : normal(command, args));
       expect(() => adapter.prepareSpawn(options())).toThrow(message);
       await expect(adapter.prepareSpawnAsync(options())).rejects.toThrow(message);
       expect(exec.mock.calls.some(([, args]) => args[1] === "split")).toBe(false);

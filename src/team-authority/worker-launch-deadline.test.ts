@@ -50,6 +50,9 @@ it.each([false, true])("bounds post-split target CAS and fences later reconcilia
   const start = vi.spyOn(terminal, "startPrepared");
   const completion = vi.spyOn(f.bridge, "completeLaunch");
   vi.useFakeTimers(); const receipt = f.bridge.ensureWorker(f.request);
+  // Reach the post-split lease before advancing the receipt clock. Real async
+  // persistence must finish; timer advancement alone does not drain filesystem I/O.
+  await acquired.promise;
   await vi.advanceTimersByTimeAsync(10000);
   expect(await receipt).toMatchObject({ action: "attention", reason: "receipt_deadline", paneId: "prepared-pane", launch: "unknown" });
   release.resolve(); await lease; await vi.advanceTimersByTimeAsync(100);
