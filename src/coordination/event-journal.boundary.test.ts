@@ -128,7 +128,7 @@ describe("Coordination event-journal ownership boundary", () => {
     fs.writeFileSync(teamEventJournalPath(teamName), `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
     const clone = vi.spyOn(globalThis, "structuredClone");
     const pages = journal.readTeamEventPages(teamName, { afterCursor: "0" });
-    expect(clone.mock.calls.map(([events]) => (events as unknown[]).length)).toEqual([50, 50, 21]);
+    expect(clone.mock.calls.filter(([value]) => Array.isArray(value))).toEqual([]);
     clone.mockRestore();
     expect(pages.map((page) => page.events.length)).toEqual([50, 50, 21]);
     expect(pages.map((page) => page.cursor)).toEqual(["50", "100", "121"]);
@@ -136,7 +136,7 @@ describe("Coordination event-journal ownership boundary", () => {
     expect(journal.readTeamEventPages(teamName, { afterCursor: "100" }).map((page) => page.cursor)).toEqual(["121"]);
   });
 
-  it.each(["events", "pages"] as const)("keeps %s results caller-owned across warm and appended reads", async (boundary) => {
+  it.each(["events", "pages"] as const)("keeps cached %s events immutable across warm and appended reads", async (boundary) => {
     await journal.appendTaskEvidenceEvents(teamName, [
       { type: "task", ref: { taskId: "original", version: "v_0000000000000001" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "original evidence" } },
       { type: "task", ref: { taskId: "second", version: "v_0000000000000002" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "second evidence" } },
@@ -148,18 +148,20 @@ describe("Coordination event-journal ownership boundary", () => {
     const disk = fs.readFileSync(teamEventJournalPath(teamName), "utf8");
     const returned = structuredClone(original);
     const event = returned[0].events[0];
-    const nested = original[0].events[0];
+    const nested = original[0].events[0] as any;
     if (nested.type !== "task" || !("taskEvidence" in nested)) throw new Error("Expected Task evidence fixture.");
-    nested.cursor = "900";
-    nested.ref.taskId = "caller";
-    nested.ref.version = "v_0000000000000900";
-    (nested.taskEvidence as { text: string }).text = "caller evidence";
+    expect(() => { nested.cursor = "900"; }).toThrow(TypeError);
+    expect(() => { nested.ref.taskId = "caller"; }).toThrow(TypeError);
+    expect(() => { nested.ref.version = "v_0000000000000900"; }).toThrow(TypeError);
+    expect(() => { nested.taskEvidence.text = "caller evidence"; }).toThrow(TypeError);
     expect(read()).toEqual(returned);
     expect(journal.readTeamEventCursor(teamName)).toBe("2");
     expect(fs.readFileSync(teamEventJournalPath(teamName), "utf8")).toBe(disk);
     await journal.appendTeamEvent(teamName, { type: "alert", alertId: "third", from: "team-lead", to: "worker", kind: "attention", text: "third" });
-    expect(journal.readTeamEvents(teamName).events[0]).toEqual(event);
+    const afterAppend = journal.readTeamEvents(teamName);
+    expect(afterAppend.events[0]).toEqual(event);
     expect(journal.readTeamEventCursor(teamName)).toBe("3");
+    expect(() => { (afterAppend.events.at(-1) as any).text = "caller changed appended record"; }).toThrow(TypeError);
   });
 
   it("reads a 10,000-event paging loop from one journal image", () => {
@@ -179,14 +181,14 @@ describe("Coordination event-journal ownership boundary", () => {
     do {
       const page = journal.readTeamEvents(teamName, { afterCursor: cursor, limit: 100 });
       expect(page.events).toHaveLength(100);
+      expect(page.events.every((event) => Object.isFrozen(event))).toBe(true);
       pages++;
       cursor = page.cursor;
       if (!page.truncated) break;
     } while (true);
 
     expect(pages).toBe(100);
-    expect(clone).toHaveBeenCalledTimes(100);
-    expect(clone.mock.calls.every(([events]) => (events as unknown[]).length === 100)).toBe(true);
+    expect(clone.mock.calls.filter(([value]) => Array.isArray(value))).toEqual([]);
     clone.mockRestore();
     expect(cursor).toBe("10000");
     expect(read).toHaveBeenCalledTimes(1);
