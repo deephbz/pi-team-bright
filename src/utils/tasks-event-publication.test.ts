@@ -54,7 +54,7 @@ describe("graph Task-event publication", () => {
       operationId: "apply-failure-hints", tasks: [{ key: "work", title: "Failure hints", goal: "Record event failure evidence.", assignee: "worker" }],
     });
     if (applied.kind !== "applied") throw new Error(`Graph apply failed: ${JSON.stringify(applied)}`);
-    vi.spyOn(eventJournal, "appendTaskEvidenceEvent").mockRejectedValue(new Error("event journal unavailable"));
+    vi.spyOn(eventJournal, "appendTaskEvidenceEvents").mockRejectedValue(new Error("event journal unavailable"));
     const result = await graph.transition(name, {
       taskId: applied.tasks[0].id, operationId: "claim-failure-hints", expectedVersion: applied.tasks[0].version as TaskVersionRef, transition: "claim", worker: "worker",
     }, "worker");

@@ -192,6 +192,7 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
       }
       {
         const before = new Map(mutation.operationBefore.map((task) => [task.id, task]));
+        const pending: Array<{ task: GraphTaskCard; input: Parameters<TaskMutationPublicationPort["publishTaskMutation"]>[0] }> = [];
         for (const task of mutation.operationAfter) {
           const prior = before.get(task.id);
           if (prior && JSON.stringify(prior) === JSON.stringify(task)) continue;
@@ -199,21 +200,25 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
             const evidence = { kind: prior ? "goal" as const : "created" as const,
               text: `${prior ? "Task graph definition changed in" : "Task created by"} graph revision ${mutation.result.graphVersion}.` };
             if (mutation.result.replayed && !await this.needsReplayPublication(teamName, task, current, evidence)) continue;
-            const publication = await this.publication.publishTaskMutation({
-              teamName,
-              before: coordinates(prior ?? task),
-              after: coordinates(task),
-              created: !prior,
-              kind: prior ? "task_changed" : "assigned",
-              actor: "team-lead",
-              taskEventEvidence: [evidence],
-              deliver: false,
-              taskCard: task,
-            });
-            warnings.push(...publication.warnings);
+            pending.push({ task, input: {
+              teamName, before: coordinates(prior ?? task), after: coordinates(task), created: !prior,
+              kind: prior ? "task_changed" : "assigned", actor: "team-lead", taskEventEvidence: [evidence],
+              deliver: false, taskCard: task,
+            } });
           } catch (error) {
             warnings.push(`Task ${task.id} committed but graph publication failed: ${error instanceof Error ? error.message : String(error)}`);
           }
+        }
+        if (pending.length && this.publication.publishTaskMutations) {
+          try {
+            const results = await this.publication.publishTaskMutations(pending.map(({ input }) => input));
+            for (const result of results) warnings.push(...result.warnings);
+          } catch (error) {
+            for (const { task } of pending) warnings.push(`Task ${task.id} committed but graph publication failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        } else for (const { task, input } of pending) {
+          try { warnings.push(...(await this.publication.publishTaskMutation(input)).warnings); }
+          catch (error) { warnings.push(`Task ${task.id} committed but graph publication failed: ${error instanceof Error ? error.message : String(error)}`); }
         }
       }
       warnings.push(...await this.reconcileReady(teamName).catch((error) => [
@@ -263,30 +268,34 @@ export class DurableGraphTaskOrchestration implements GraphTaskOrchestrationPort
       const current = new Map(mutation.after.map((task) => [task.id, task]));
       {
         const before = new Map(mutation.operationBefore.map((task) => [task.id, task]));
+        const pending: Array<{ task: GraphTaskCard; input: Parameters<TaskMutationPublicationPort["publishTaskMutation"]>[0] }> = [];
         for (const task of mutation.operationAfter) {
           const prior = before.get(task.id);
           if (!prior || JSON.stringify(prior) === JSON.stringify(task)) continue;
-          const direct = task.id === input.taskId;
           try {
-            const evidence = direct
+            const evidence = task.id === input.taskId
               ? changeEvidence(input, task)
               : { kind: "status" as const, text: `Graph control derived ${task.status} after operation ${input.operationId}.` };
             if (mutation.result.replayed && !await this.needsReplayPublication(teamName, task, current, evidence)) continue;
-            const publication = await this.publication.publishTaskMutation({
-              teamName,
-              before: coordinates(prior),
-              after: coordinates(task),
-              created: false,
-              kind: prior.status === task.status ? "note_appended" : "status_changed",
-              actor,
-              taskEventEvidence: [evidence],
-              deliver: false,
-              taskCard: task,
-            });
-            warnings.push(...publication.warnings);
+            pending.push({ task, input: {
+              teamName, before: coordinates(prior), after: coordinates(task), created: false,
+              kind: prior.status === task.status ? "note_appended" : "status_changed", actor,
+              taskEventEvidence: [evidence], deliver: false, taskCard: task,
+            } });
           } catch (error) {
             warnings.push(`Task ${task.id} committed but transition publication failed: ${error instanceof Error ? error.message : String(error)}`);
           }
+        }
+        if (pending.length && this.publication.publishTaskMutations) {
+          try {
+            const results = await this.publication.publishTaskMutations(pending.map(({ input }) => input));
+            for (const result of results) warnings.push(...result.warnings);
+          } catch (error) {
+            for (const { task } of pending) warnings.push(`Task ${task.id} committed but transition publication failed: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        } else for (const { task, input: publicationInput } of pending) {
+          try { warnings.push(...(await this.publication.publishTaskMutation(publicationInput)).warnings); }
+          catch (error) { warnings.push(`Task ${task.id} committed but transition publication failed: ${error instanceof Error ? error.message : String(error)}`); }
         }
       }
       if (mutation.operationAuthoritySequence === mutation.authoritySequence) try {

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as journal from "./event-journal";
 import { configPath, teamDir, teamEventJournalPath } from "../utils/paths";
 
@@ -39,6 +39,48 @@ describe("Coordination event-journal ownership boundary", () => {
       cursor: "2", headCursor: "2", truncated: false, remaining: 0,
       events: [expect.objectContaining({ alertId: "second", cursor: "2" })],
     });
+  });
+
+  it("appends a Task batch with consecutive cursors and one journal flush", async () => {
+    const journalPath = teamEventJournalPath(teamName);
+    const order: string[] = [];
+    const realFsync = fs.fsyncSync.bind(fs);
+    const realRename = fs.renameSync.bind(fs);
+    const fsync = vi.spyOn(fs, "fsyncSync").mockImplementation((fd) => {
+      order.push("fsync");
+      return realFsync(fd);
+    });
+    const rename = vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+      order.push("rename");
+      return realRename(from, to);
+    });
+    const fullRead = vi.spyOn(fs, "readFileSync");
+    const events = await journal.appendTaskEvidenceEvents(teamName, [
+      { type: "task", ref: { taskId: "batch-a", version: "v_0000000000000001" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "A" } },
+      { type: "task", ref: { taskId: "batch-b", version: "v_0000000000000002" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "B" } },
+    ]);
+    expect(events.map((event) => event.cursor)).toEqual(["1", "2"]);
+    expect(fsync).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["fsync", "rename"]);
+    expect(fullRead.mock.calls.filter(([file]) => file === journalPath)).toHaveLength(0);
+    fullRead.mockRestore();
+    rename.mockRestore();
+    expect(journal.readTeamEvents(teamName).events).toHaveLength(2);
+    fsync.mockRestore();
+    expect(fs.existsSync(journalPath)).toBe(true);
+  });
+
+  it("drops only a torn unterminated tail before appending", async () => {
+    const journalPath = teamEventJournalPath(teamName);
+    await journal.appendTeamEvent(teamName, {
+      type: "alert", alertId: "prior", from: "team-lead", to: "worker", kind: "attention", text: "prior",
+    });
+    fs.appendFileSync(journalPath, '{"cursor":"2","type":"task"');
+    const appended = await journal.appendTeamEvent(teamName, {
+      type: "alert", alertId: "after", from: "team-lead", to: "worker", kind: "attention", text: "after",
+    });
+    expect(appended.cursor).toBe("2");
+    expect(journal.readTeamEvents(teamName).events.map((event) => event.cursor)).toEqual(["1", "2"]);
   });
 
   it("projects latest per-Task activity in one newest-first read", async () => {
