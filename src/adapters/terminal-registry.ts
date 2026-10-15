@@ -1,12 +1,5 @@
-/**
- * Terminal Registry
- *
- * Manages terminal adapters and provides automatic selection based on
- * the current environment.
- */
-
 import { hostEnv, type HostEnv } from "../env/host-env";
-import { TerminalAdapter } from "../utils/terminal-adapter";
+import type { SynchronousTerminalAdapter, TerminalAdapter, SpawnOptions } from "../utils/terminal-adapter";
 import { HerdrAdapter } from "./herdr-adapter";
 import { TmuxAdapter } from "./tmux-adapter";
 import { ZellijAdapter } from "./zellij-adapter";
@@ -16,46 +9,54 @@ import { WezTermAdapter } from "./wezterm-adapter";
 import { WindowsAdapter } from "./windows-adapter";
 
 /**
- * Available terminal adapters, ordered by priority
- *
- * Detection order (first match wins):
- * 1. Herdr - if this process has a live Herdr pane identity
- * 2. tmux - if TMUX env is set
- * 3. Zellij - if ZELLIJ env is set and not in tmux
- * 4. cmux - if CMUX_SOCKET_PATH or CMUX_WORKSPACE_ID env is set
- * 5. iTerm2 - if TERM_PROGRAM=iTerm.app and not in tmux/zellij/cmux
- * 6. WezTerm - if WEZTERM_PANE env is set and not in tmux/zellij/cmux
- * 7. Windows - if platform is win32 and not in tmux/zellij/cmux/iTerm2/WezTerm
+ * Preserve one-stage backends: their process starts during prepare. Target CAS
+ * fences Herdr launches only. These Promise methods do not make synchronous
+ * backend internals nonblocking.
  */
-const actorAdapters = new WeakMap<HostEnv, TerminalAdapter[]>();
+function normalize(backend: SynchronousTerminalAdapter): TerminalAdapter {
+  function prepare(options: SpawnOptions): void {
+    if (backend instanceof Iterm2Adapter) {
+      const last = options.panePlacement?.workerPaneIds.at(-1);
+      backend.setSpawnContext(last?.startsWith("iterm_") ? { lastSessionId: last.replace("iterm_", "") } : {});
+    }
+  }
+  return {
+    name: backend.name,
+    currentTargetId: () => backend.currentTargetId?.() ?? null,
+    isDirectCarrier: () => backend.isDirectCarrier(),
+    detect: async () => backend.detect(),
+    renamePane: async (id, label) => { backend.renamePane?.(id, label); },
+    prepareSpawn: async options => { prepare(options); return backend.spawn(options); },
+    prepareWindow: async options => { prepare(options); return backend.spawnWindow(options); },
+    startPrepared: async () => ({ state: "started", fact: "carrier_start_accepted" }),
+    kill: async id => backend.kill(id),
+    isAlive: async id => backend.isAlive(id),
+    setTitle: title => backend.setTitle(title),
+    supportsWindows: () => backend.supportsWindows(),
+    killWindow: async id => backend.killWindow(id),
+    isWindowAlive: async id => backend.isWindowAlive(id),
+  };
+}
 
+const actorAdapters = new WeakMap<HostEnv, TerminalAdapter[]>();
 function adapters(): TerminalAdapter[] {
   const env = hostEnv();
   const existing = actorAdapters.get(env);
   if (existing) return existing;
-  const created: TerminalAdapter[] = [
-    // Herdr can intentionally carry nested TMUX variables, so pane-local Herdr
-    // identity must win before tmux detection.
-    new HerdrAdapter(),
-    new TmuxAdapter(),
-    new ZellijAdapter(),
-    new CmuxAdapter(),
-    new Iterm2Adapter(),
-    new WezTermAdapter(),
-    new WindowsAdapter(),
-  ];
+  // Pane-local Herdr identity wins over inherited nested tmux variables.
+  const created = [new HerdrAdapter(), ...[
+    new TmuxAdapter(), new ZellijAdapter(), new CmuxAdapter(),
+    new Iterm2Adapter(), new WezTermAdapter(), new WindowsAdapter(),
+  ].map(normalize)];
   actorAdapters.set(env, created);
   return created;
 }
 
-/**
- * Cached detected adapter per actor
- */
 const cachedAdapters = new WeakMap<HostEnv, TerminalAdapter>();
 const pendingAdapters = new WeakMap<HostEnv, Promise<TerminalAdapter | null>>();
 
-/** Coalesce cold detection without blocking Herdr callers. Cache only positive evidence. */
-export async function getTerminalAdapterAsync(): Promise<TerminalAdapter | null> {
+/** Coalesce cold detection. Cache only positive evidence within this host. */
+export async function getTerminalAdapter(): Promise<TerminalAdapter | null> {
   const env = hostEnv();
   const cached = cachedAdapters.get(env);
   if (cached) return cached;
@@ -63,7 +64,7 @@ export async function getTerminalAdapterAsync(): Promise<TerminalAdapter | null>
   if (pending) return pending;
   const read = Promise.resolve().then(async () => {
     for (const adapter of adapters()) {
-      if (await (adapter.detectAsync ? adapter.detectAsync() : adapter.detect())) {
+      if (await adapter.detect()) {
         if (pendingAdapters.get(env) === read) cachedAdapters.set(env, adapter);
         return adapter;
       }
@@ -75,91 +76,19 @@ export async function getTerminalAdapterAsync(): Promise<TerminalAdapter | null>
   finally { if (pendingAdapters.get(env) === read) pendingAdapters.delete(env); }
 }
 
-/**
- * Detect and return the appropriate terminal adapter for the current environment.
- *
- * Detection order (first match wins): Herdr, tmux, Zellij, cmux, iTerm2,
- * WezTerm, then Windows. Herdr deliberately wins over inherited nested tmux
- * identity.
- *
- * @returns The detected terminal adapter, or null if none detected
- */
-export function getTerminalAdapter(): TerminalAdapter | null {
-  const env = hostEnv();
-  const cachedAdapter = cachedAdapters.get(env);
-  if (cachedAdapter) return cachedAdapter;
-
-  for (const adapter of adapters()) {
-    if (adapter.detect()) {
-      cachedAdapters.set(env, adapter);
-      return adapter;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Get a specific terminal adapter by name.
- *
- * @param name - The adapter name (e.g., "tmux", "zellij", "cmux", "iTerm2", "WezTerm", "Windows")
- * @returns The adapter instance, or undefined if not found
- */
+/** Resolve persisted backend authority without ambient detection. */
 export function getAdapterByName(name: string): TerminalAdapter | undefined {
   const cachedAdapter = cachedAdapters.get(hostEnv());
   if (cachedAdapter?.name === name) return cachedAdapter;
   return adapters().find(a => a.name === name);
 }
 
-/**
- * Get all available adapters.
- *
- * @returns Array of all registered adapters
- */
-export function getAllAdapters(): TerminalAdapter[] {
-  return [...adapters()];
-}
-
-/**
- * Clear the cached adapter (useful for testing or environment changes)
- */
 export function clearAdapterCache(): void {
   pendingAdapters.delete(hostEnv());
   cachedAdapters.delete(hostEnv());
 }
 
-/**
- * Set a specific adapter (useful for testing or forced selection)
- */
 export function setAdapter(adapter: TerminalAdapter): void {
   pendingAdapters.delete(hostEnv());
   cachedAdapters.set(hostEnv(), adapter);
-}
-
-/**
- * Check if any terminal adapter is available.
- *
- * @returns true if a terminal adapter was detected
- */
-export function hasTerminalAdapter(): boolean {
-  return getTerminalAdapter() !== null;
-}
-
-/**
- * Check if the current terminal supports spawning separate OS windows.
- *
- * @returns true if the detected terminal supports windows (iTerm2, WezTerm, Windows, cmux)
- */
-export function supportsWindows(): boolean {
-  const adapter = getTerminalAdapter();
-  return adapter?.supportsWindows() ?? false;
-}
-
-/**
- * Get the name of the currently detected terminal adapter.
- *
- * @returns The adapter name, or null if none detected
- */
-export function getTerminalName(): string | null {
-  return getTerminalAdapter()?.name ?? null;
 }

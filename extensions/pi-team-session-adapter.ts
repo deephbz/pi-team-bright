@@ -29,7 +29,7 @@ import type { GraphTaskOrchestrationPort } from "../src/task-authority/graph-orc
 import { diagnoseTeam, formatTeamStatus, formatCarrierStatus, isLegacyAdoptionCandidate, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { collectPtbDoctorContext, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbAction, type PtbSettingsScope } from "../src/utils/ptb-command";
-import { getTerminalAdapterAsync } from "../src/adapters/terminal-registry";
+import { getTerminalAdapter } from "../src/adapters/terminal-registry";
 import type { TerminalAdapter } from "../src/utils/terminal-adapter";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
@@ -713,7 +713,7 @@ function registerSessionHooks() {
   pi.on("session_start", async (event, ctx) => {
   workerPromptAddition = undefined;
   const startupGeneration = ++doctorGeneration;
-  const [detected] = await Promise.all([getTerminalAdapterAsync(), warnMissingGenerationHelper(ctx)]);
+  const [detected] = await Promise.all([getTerminalAdapter(), warnMissingGenerationHelper(ctx)]);
   if (startupGeneration !== doctorGeneration) return;
   terminal = detected;
   compactionGate.reset();

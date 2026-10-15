@@ -11,7 +11,7 @@ beforeEach(() => {
   f.rows = [{ name: "team-worker", pane_id: "pane", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" } }];
   f.beforeLease = undefined; f.write.mockReset();
 });
-const adopt = (generation = vi.fn(() => ({ kind: "found" as const, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } }))) => runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, generation } }, () => adoptLegacyGeneration("team", "worker", "m"));
+const adopt = (generation = vi.fn(() => ({ kind: "found" as const, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } }))) => runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, generations: async pids => new Map(pids.map(pid => [pid, generation()])) } }, () => adoptLegacyGeneration("team", "worker", "m"));
 it("adopts a tokenless generation only after exact Herdr and process checks", async () => {
   expect(await adopt()).toBe(true);
   expect(f.write).toHaveBeenCalledWith("team", "worker", { osBirthToken: "birth", bootId: "boot" }, "m");

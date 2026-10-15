@@ -12,12 +12,12 @@ import { hostEnv } from "../env/host-env";
  *   4. `cmux respawn-pane --surface <id> --command <cmd>` to run the command
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, validateLegacyCommand } from "../utils/terminal-adapter";
+import { SynchronousTerminalAdapter, SpawnOptions, execCommand, shellCommand, validateLegacyCommand } from "../utils/terminal-adapter";
 
 const SURFACE_POLL_ATTEMPTS = 20;
 const SURFACE_POLL_DELAY_MS = 150;
 
-export class CmuxAdapter implements TerminalAdapter {
+export class CmuxAdapter implements SynchronousTerminalAdapter {
   readonly name = "cmux";
 
   isDirectCarrier(): boolean {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { mockGenerations } from "../../test/process-fixture";
 import { nodeHostEnv } from "../env/host-env";
 import type { Member } from "./contracts";
 import * as runtime from "../utils/runtime";
@@ -19,14 +20,14 @@ vi.mock("../utils/team-pane-placement", () => ({ teamPanePlacement: () => ({ lea
 vi.mock("../utils/team-terminal", async () => {
   const { HerdrAdapter } = await import("../adapters/herdr-adapter.js");
   const terminal = new HerdrAdapter();
-  terminal.prepareSpawnAsync = async () => { expect(fixture.leased).toBe(false); fixture.splits++; return "pane"; };
+  terminal.prepareSpawn = async () => { expect(fixture.leased).toBe(false); fixture.splits++; return "pane"; };
   terminal.startPrepared = () => {
     expect(fixture.leased).toBe(false);
     expect(fixture.members[0].terminalTarget?.targetId).toBe("pane");
     fixture.starts++;
     return new Promise(resolve => { fixture.release = resolve; });
   };
-  return { currentTerminalForTeamAsync: async () => terminal };
+  return { currentTerminalForTeam: async () => terminal };
 });
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
 import { deriveCarrierView } from "../carrier-observation";
@@ -59,7 +60,7 @@ it.each(["missing", "prior"])("reports a hung recovery with %s runtime as stalle
     launch: { launchId: "recovery", state: "started", requestedAt: Date.now() - 16000, priorGeneration } } as Member];
   vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue(runtimeKind === "missing" ? null
     : { teamName: "team", agentName: "worker", membershipId: "membership", startedAt: 1, ...priorGeneration });
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+  mockGenerations({ kind: "absent" });
   vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
   expect(await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" }))
@@ -73,7 +74,7 @@ it("rechecks recovery admission under the Membership lease after the Herdr read"
     launch: { launchId: "recovery", state: "started", requestedAt: Date.now() - 16000, priorGeneration } } as Member];
   let status = { teamName: "team", agentName: "worker", membershipId: "membership", startedAt: 1, ...priorGeneration };
   vi.spyOn(runtime, "readRuntimeStatus").mockImplementation(async () => status);
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+  mockGenerations({ kind: "absent" });
   vi.spyOn(nodeHostEnv.exec, "run").mockImplementation(async () => {
     status = { ...status, pid: 322, osBirthToken: "successor", startedAt: 2 };
     return { kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" };
@@ -90,7 +91,7 @@ it.each(["pid", "osBirthToken", "bootId"] as const)("preserves successor stop at
     launch: { launchId: "recovery", state: "started", requestedAt: Date.now() - 16000, priorGeneration } } as Member];
   vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue({ teamName: "team", agentName: "worker", membershipId: "membership", startedAt: 2,
     ...priorGeneration, [changed]: changed === "pid" ? 322 : "successor", lastStop: { piReason: "new", observedAt: 3, suspectedHumanStop: true } });
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+  mockGenerations({ kind: "absent" });
   const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
   expect(await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" }))
@@ -110,7 +111,7 @@ it.each([
     launch: { launchId: "launch", state: "started", requestedAt: Date.now() - 16000 } } as Member];
   vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue({ teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1,
     osBirthToken: "birth", bootId: "boot", ...(stop ? { lastStop: { piReason: stop, observedAt: 2, suspectedHumanStop: true } } : {}) });
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue(process === "gone" ? { kind: "absent" }
+  mockGenerations(process === "gone" ? { kind: "absent" }
     : process === "live" ? { kind: "found", generation: { pid: 321, osBirthToken: "birth", bootId: "boot" } }
     : { kind: "unknown", reason: "probe_unavailable" });
   const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
@@ -146,11 +147,11 @@ it.each(["absent", "found", "unknown"] as const)("ensure_worker preserves the ca
   vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue(status);
   const probe = kind === "found" ? { kind, generation: { pid: 321, osBirthToken: "birth", bootId: "boot" } }
     : kind === "unknown" ? { kind, reason: "probe_unavailable" } : { kind };
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue(probe);
+  mockGenerations(probe);
   const run = vi.spyOn(nodeHostEnv.exec, "run");
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
   const result = await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" });
-  expect(result).toMatchObject({ action: "attention", reason: "legacy_unverified", nextActionHint: "ask_human", message: deriveCarrierView(member, status).attention!.message });
+  expect(result).toMatchObject({ action: "attention", reason: "legacy_unverified", nextActionHint: "ask_human", message: deriveCarrierView(member, status, Date.now(), probe).attention!.message });
   const executors = createModelToolJourneyExecutors({ team: { ensureWorker: async () => ({ ...result, kind: "attention", worker: { name: "worker" } }) } } as any);
   const model = projectToolResult("ensure_worker", await executors.ensureWorker("lead" as any, { name: "worker", scope: "test" })) as any;
   expect(model.message).toMatch(kind === "absent" ? /^Restart.*or stop the Worker/ : kind === "found" ? /^Reload.*or adopt it/ : /^Verify/);
@@ -165,7 +166,7 @@ it.each([true, false])("missing macOS helper gives actionable attention without 
     launch: { launchId: "launch", state: "started", requestedAt: Date.now() - 16000 } } as Member];
   vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue({ teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1,
     ...(tokened ? { osBirthToken: "1:2", bootId: "3:4" } : {}) });
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "unknown", reason: "generation_helper_missing" });
+  mockGenerations({ kind: "unknown", reason: "generation_helper_missing" });
   const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
   const result = await bridge.ensureWorker({ teamName: "team", workerName: "worker", cwd: "/fixture", scope: "test" });
@@ -188,7 +189,7 @@ it.each(["create", "prepared recovery", "bound recovery"])("refuses unsupported 
     launch: { launchId: "prior-launch", state: "refused", requestedAt: 1 } } as Member];
   vi.spyOn(runtime, "readRuntimeStatus").mockResolvedValue(scenario === "bound recovery"
     ? { teamName: "team", agentName: "worker", membershipId: "membership", pid: 321, startedAt: 1, osBirthToken: "birth", bootId: "boot" } : null);
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+  mockGenerations({ kind: "absent" });
   const prior = structuredClone(fixture.members);
   const aggregate = vi.fn(() => ({ projectTrusted: false }));
   const publish = vi.fn(async () => ({ cursor: "1" }));

@@ -54,7 +54,7 @@ export class TeamSessionLifecycleService {
       const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
       const [observed, own] = await Promise.all([readProcessGeneration(status?.pid ?? 0), readProcessGeneration(hostEnv().process.pid)]);
       if (this.stopSequence !== stopSequence || JSON.stringify(status?.lastStop) !== stopAtEntry) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
-      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, status, hostEnv().process.pid, undefined, input.launchId, observed);
+      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, status, hostEnv().process.pid, observed, input.launchId);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
@@ -92,7 +92,7 @@ export class TeamSessionLifecycleService {
       const status = await runtime.readRuntimeStatus(input.teamName, "team-lead");
       const [observed, own] = await Promise.all([readProcessGeneration(status?.pid ?? 0), readProcessGeneration(hostEnv().process.pid)]);
       if (this.stopSequence !== stopSequence || JSON.stringify(status?.lastStop) !== stopAtEntry) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
-      const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status, hostEnv().process.pid, undefined, undefined, observed);
+      const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status, hostEnv().process.pid, observed);
       if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
       if (runtimeAdmission.action === "already_current") {
         const identity = runtime.ownBirthIdentity(own);

@@ -5,7 +5,6 @@ import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { enterSimulation, hostEnv, nodeHostEnv, runWithHostEnv, type HostEnv, type TimerHandle } from "../src/env/host-env";
 import { withLock } from "../src/utils/lock";
-import { probePidPresence } from "../src/utils/runtime";
 import { newMembershipId } from "../src/utils/teams";
 import { execCommand } from "../src/utils/terminal-adapter";
 import { getAdapterByName, getTerminalAdapter } from "../src/adapters/terminal-registry";
@@ -21,7 +20,7 @@ import { readMembershipObservation } from "../src/team-authority/membership-obse
 // Each exception pins its access count. Remove or lower it when routing an
 // access through HostEnv; new exceptions require an explicit reason.
 const allowlist: Record<string, { count: number; reason: string }> = {
-  "src/env/process-generation.ts": { count: 5, reason: "The production generation capability reads procfs or the native macOS helper." },
+  "src/env/process-generation.ts": { count: 2, reason: "The production generation capability reads procfs or the native macOS helper." },
   "src/env/host-env.ts": { count: 25, reason: "The production capability implementation owns Node primitives." },
   "src/adapters/iterm2-adapter.ts": { count: 1, reason: "AppleScript needs stdin input; entry fails closed for simulated actors." },
   "src/adapters/tmux-adapter.ts": { count: 1, reason: "Legacy shell probe retains execSync errors; entry fails closed for simulated actors." },
@@ -109,7 +108,7 @@ function actor(pid = 7101) {
       pid, platform: "linux", argv: ["/fixture/node", "/fixture/pi.mjs"], execPath: "/fixture/node", cwd: () => "/fixture", env: { PI_AGENT_NAME: `worker-${pid}`, TMUX: "fixture", TMUX_PANE: `%${pid}` },
       pidExists: other => other === pid,
       kill: vi.fn((other: number) => { if (other !== pid) throw Object.assign(new Error("absent"), { code: "ESRCH" }); }),
-      generation: () => ({ kind: "unknown", reason: "fixture" }),
+      generations: async pids => new Map(pids.map(pid => [pid, { kind: "unknown", reason: "fixture" }])),
       exit: () => { throw new Error("actor exited"); },
     },
     exec: {
@@ -262,18 +261,12 @@ describe("host capability seam", () => {
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 
-  it("does not reuse one actor's detected terminal in another actor", () => {
+  it("does not reuse one actor's detected terminal in another actor", async () => {
     const a = actor(); const b = actor(7102);
     b.env.process = { ...b.env.process, env: { ZELLIJ: "fixture" } };
-    expect(runWithHostEnv(a.env, () => getTerminalAdapter()?.name)).toBe("tmux");
-    expect(runWithHostEnv(b.env, () => getTerminalAdapter()?.name)).toBe("zellij");
+    expect((await runWithHostEnv(a.env, getTerminalAdapter))?.name).toBe("tmux");
+    expect((await runWithHostEnv(b.env, getTerminalAdapter))?.name).toBe("zellij");
     expect(runWithHostEnv(a.env, () => getAdapterByName("iTerm2"))).not.toBe(runWithHostEnv(b.env, () => getAdapterByName("iTerm2")));
-  });
-
-  it.each(["ESRCH", "EPERM", "EIO"])("keeps conservative PID probe semantics for %s", code => {
-    const a = actor();
-    a.env.process.kill = () => { throw Object.assign(new Error(code), { code }); };
-    expect(runWithHostEnv(a.env, () => probePidPresence(99))).toBe(code === "ESRCH" ? "absent" : "occupied");
   });
 
   it("uses one clock for lock creation, stale recovery, and heartbeat mtime", async () => {

@@ -1,3 +1,4 @@
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -24,8 +25,7 @@ function fixture(lifecycle: ModelToolLifecycle = { stopWorker: vi.fn(), shutdown
   fs.writeFileSync(path.join(agentDir, "settings.json"), JSON.stringify({ pi_team_bright: { team: { date_prefix: false } } }));
   vi.stubEnv("PI_CODING_AGENT_DIR", agentDir);
   const renamePane = vi.fn();
-  setAdapter({ name: "herdr", isDirectCarrier: () => true, detect: () => true, currentTargetId: () => "leader-pane", spawn: () => "worker-pane", kill() {}, isAlive: () => true, setTitle() {}, renamePane,
-    supportsWindows: () => false, spawnWindow: () => { throw new Error("unused"); }, setWindowTitle() {}, killWindow() {}, isWindowAlive: () => false });
+  setAdapter(terminalFixture({ name: "herdr", isAlive: async () => true, renamePane }));
   const publication = new DurableTaskMutationPublication();
   const authority = new DurableGraphTaskAuthority();
   const graph = new DurableGraphTaskOrchestration(authority, publication, publication, publication);

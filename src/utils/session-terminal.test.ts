@@ -1,24 +1,13 @@
+import { terminalFixture } from "../../test/terminal-fixture";
 import { describe, expect, it, vi } from "vitest";
 import type { TeamConfig } from "../team-authority/contracts";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { admitTeamSession, placeSessionTerminal } from "./session-terminal";
 
 function adapter(name: string, currentTargetId: string | null = "surface-current", direct = true): TerminalAdapter {
-  return {
-    name,
-    detect: vi.fn(() => true),
-    currentTargetId: () => currentTargetId,
-    isDirectCarrier: () => direct,
-    spawn: () => "surface-worker",
-    kill() {},
-    isAlive: () => true,
-    setTitle() {},
-    supportsWindows: () => false,
-    spawnWindow: () => { throw new Error("unsupported"); },
-    setWindowTitle() {},
-    killWindow() {},
-    isWindowAlive: () => false,
-  };
+  return terminalFixture({ name, detect: vi.fn(async () => true),
+    currentTargetId: () => currentTargetId, isDirectCarrier: () => direct,
+    prepareSpawn: async () => "surface-worker", isAlive: async () => true });
 }
 
 function config(overrides: Partial<TeamConfig> = {}): TeamConfig {

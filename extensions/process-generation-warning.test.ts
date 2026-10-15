@@ -9,7 +9,7 @@ it.each([
   { kind: "unknown", reason: "generation_helper_unavailable" },
 ] satisfies GenerationProbe[])("does not claim the helper is missing for $kind evidence", async probe => {
   const notify = vi.fn(), stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
-  await runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, platform: "darwin", generation: () => probe } }, async () => {
+  await runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, platform: "darwin", generations: async pids => new Map(pids.map(pid => [pid, probe])) } }, async () => {
     await createProcessGenerationWarning()({ ui: { notify } });
   });
   expect(notify).not.toHaveBeenCalled(); expect(stderr).not.toHaveBeenCalled();
@@ -20,7 +20,7 @@ it.each(["headless", "UI failure"])("uses one stderr diagnostic on %s and never 
   const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
   await runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, platform: "darwin",
-    generation: () => ({ kind: "unknown", reason: "generation_helper_missing" }) } }, async () => {
+    generations: async pids => new Map(pids.map(pid => [pid, { kind: "unknown", reason: "generation_helper_missing" }])) } }, async () => {
     const warn = createProcessGenerationWarning(), ctx = { hasUI: mode !== "headless", ui: { notify } };
     await warn(ctx); await warn(ctx);
     expect(stderr).toHaveBeenCalledOnce();

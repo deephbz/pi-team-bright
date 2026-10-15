@@ -12,9 +12,7 @@ const fixture = vi.hoisted(() => ({
   deactivateFailure: undefined as Error | undefined,
   deactivateNull: false,
   kill: vi.fn(),
-  asyncPane: false,
-  killAsync: vi.fn(),
-  isAliveAsync: vi.fn(),
+  isAlive: vi.fn(),
   killWindow: vi.fn(),
   paneAlive: false,
   windowAlive: false,
@@ -61,13 +59,12 @@ vi.mock("../utils/terminal-target", () => ({
 }));
 vi.mock("../utils/team-terminal", async importOriginal => ({
   ...await importOriginal<any>(),
-  terminalForTeamAsync: async () => ({
+  terminalForTeam: async () => ({
     name: "fake-terminal",
-    ...(fixture.asyncPane ? { killAsync: fixture.killAsync, isAliveAsync: fixture.isAliveAsync } : {}),
-    kill: (...args: unknown[]) => fixture.kill(...args),
-    killWindow: (...args: unknown[]) => fixture.killWindow(...args),
-    isAlive: () => fixture.paneAlive,
-    isWindowAlive: () => fixture.windowAlive,
+    kill: async (...args: unknown[]) => fixture.kill(...args),
+    killWindow: async (...args: unknown[]) => fixture.killWindow(...args),
+    isAlive: fixture.isAlive,
+    isWindowAlive: async () => fixture.windowAlive,
     supportsWindows: () => fixture.windowsSupported,
   }),
 }));
@@ -120,8 +117,7 @@ function reset() {
   fixture.deactivateFailure = undefined;
   fixture.deactivateNull = false;
   fixture.kill.mockReset();
-  fixture.asyncPane = false;
-  fixture.killAsync.mockReset(); fixture.isAliveAsync.mockReset();
+  fixture.isAlive.mockReset().mockImplementation(async () => fixture.paneAlive);
   fixture.killWindow.mockReset();
   fixture.paneAlive = false;
   fixture.windowAlive = false;
@@ -132,21 +128,21 @@ function reset() {
 
 describe("Team lifecycle service boundary", () => {
   it.each([false, true])("awaits async stop evidence before deactivation (unavailable=%s)", async unavailable => {
-    reset(); fixture.config.members = [member("worker")]; fixture.asyncPane = true;
+    reset(); fixture.config.members = [member("worker")];
     let finish!: () => void;
     let fail!: (error: Error) => void;
     let entered!: () => void;
     const stopping = new Promise<void>(resolve => { entered = resolve; });
-    fixture.killAsync.mockImplementation(() => new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; entered(); }));
-    fixture.isAliveAsync.mockResolvedValue(false);
+    fixture.kill.mockImplementation(() => new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; entered(); }));
+    fixture.isAlive.mockResolvedValue(false);
     const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
     const result = service.stopWorker("team", "worker"); await stopping;
-    expect(fixture.deactivate).toEqual([]); expect(fixture.isAliveAsync).not.toHaveBeenCalled();
+    expect(fixture.deactivate).toEqual([]); expect(fixture.isAlive).not.toHaveBeenCalled();
     if (unavailable) fail(new Error("herdr_close_timeout")); else finish();
     expect(await result).toMatchObject(unavailable ? { kind: "refused", reason: "stop_not_confirmed" } : { kind: "stopped" });
     expect(fixture.deactivate).toEqual(unavailable ? [] : ["worker"]);
-    expect(fixture.kill).not.toHaveBeenCalled();
-    expect(fixture.isAliveAsync).toHaveBeenCalledTimes(unavailable ? 0 : 1);
+    expect(fixture.kill).toHaveBeenCalledOnce();
+    expect(fixture.isAlive).toHaveBeenCalledTimes(unavailable ? 0 : 1);
   });
   it.each(["new", "resume", "fork"])("deactivates a %s-switched Membership without closing its pane", async piReason => {
     reset(); fixture.config.members = [member("worker")]; fixture.paneAlive = true;

@@ -39,7 +39,7 @@ describe("exact Worker run-state evidence", () => {
     const team = "liveness-test";
     fs.mkdirSync(teamDir(team), { recursive: true });
     await new DurableGraphTaskAuthority().initializeEmpty(team);
-    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => ({ kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }));
+    vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => new Map(pids.map(pid => [pid, { kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }])));
     await writeRuntimeStatus(team, "worker", { pid: process.pid, osBirthToken: "birth", bootId: "boot", startedAt: 10, runState: "active" }, "membership-1");
     await expect(readWorkerRunObservation(team, member(), queries)).resolves.toMatchObject({ state: "active", generation: { membershipId: "membership-1", pid: process.pid, startedAt: 10 } });
     await writeRuntimeStatus(team, "worker", { runState: "settled" }, "membership-1");

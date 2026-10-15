@@ -6,9 +6,9 @@ import { hostEnv } from "../env/host-env";
  * Uses wezterm cli split-pane for pane management.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, powershellCommand } from "../utils/terminal-adapter";
+import { SynchronousTerminalAdapter, SpawnOptions, execCommand, shellCommand, powershellCommand } from "../utils/terminal-adapter";
 
-export class WezTermAdapter implements TerminalAdapter {
+export class WezTermAdapter implements SynchronousTerminalAdapter {
   readonly name = "WezTerm";
 
   isDirectCarrier(): boolean {

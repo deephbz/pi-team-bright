@@ -6,9 +6,9 @@ import { hostEnv } from "../env/host-env";
  * Uses wt (Windows Terminal) CLI for pane management and PowerShell for command execution.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand, powershellCommand } from "../utils/terminal-adapter";
+import { SynchronousTerminalAdapter, SpawnOptions, execCommand, powershellCommand } from "../utils/terminal-adapter";
 
-export class WindowsAdapter implements TerminalAdapter {
+export class WindowsAdapter implements SynchronousTerminalAdapter {
   readonly name = "Windows";
 
   isDirectCarrier(): boolean {

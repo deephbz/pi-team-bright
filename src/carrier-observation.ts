@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { readProcessGeneration } from "./env/async-process-generation";
+import { readProcessGeneration, readProcessGenerations } from "./env/async-process-generation";
 import { herdrPiSessionPath } from "./adapters/herdr-session";
 import { herdrCarrierName } from "./adapters/herdr-adapter";
 import { hostEnv, type TimerHandle, type GenerationProbe } from "./env/host-env";
@@ -84,9 +84,8 @@ export interface CarrierEvent {
   nextActionHint: NextActionHint;
   attention?: CarrierAttention;
 }
-export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | null, now = hostEnv().clock.now(), observed?: GenerationProbe): CarrierView {
+export function deriveCarrierView(member: Member, status: AgentRuntimeStatus | null, now: number, probe: GenerationProbe): CarrierView {
   const exact = status?.membershipId === member.membershipId ? status : null;
-  const probe = observed ?? (exact?.pid ? hostEnv().process.generation(exact.pid) : { kind: "unknown" as const, reason: "runtime_missing" });
   const verified = verifyRuntimeGeneration(exact, probe);
   const attention = legacyCarrierAttention(member, exact, probe);
   const deliveryDegraded = currentDeliveryDegradations(member, exact, verified);
@@ -216,7 +215,7 @@ export class CarrierObserver {
     const statuses = new Map(await Promise.all(members.map(async member => [member.name, await readRuntimeStatus(this.teamName, member.name)] as const)));
     const pids = [...statuses.values()].flatMap(status => status?.pid ? [status.pid] : []);
     const priorViews = new Map([...this.views].map(([key, value]) => [key, structuredClone(value)]));
-    const generationRead = this.sample("process_generation", () => hostEnv().process.generations?.(pids) ?? Promise.resolve(new Map(pids.map(pid => [pid, hostEnv().process.generation(pid)]))));
+    const generationRead = this.sample("process_generation", () => readProcessGenerations(pids));
     const herdrReads = config.terminalBackend === "herdr" ? Promise.all([this.sample("herdr_agents", () => herdrList("agent")), this.sample("herdr_panes", () => herdrList("pane"))]) : Promise.resolve([undefined, undefined] as const);
     const generationSample = await generationRead;
     const generations = generationSample.value ?? new Map<number, GenerationProbe>();
@@ -225,7 +224,7 @@ export class CarrierObserver {
     for (const member of members) {
       const status = statuses.get(member.name) ?? null;
       const probe = status?.pid ? generations.get(status.pid) ?? { kind: "unknown" as const, reason: generationSample.fact ?? "missing_batch_result" } : undefined;
-      const view = deriveCarrierView(member, status, generationSample.observedAt, probe);
+      const view = deriveCarrierView(member, status, generationSample.observedAt, probe ?? { kind: "unknown", reason: "runtime_missing" });
       const prior = priorViews.get(view.membership);
       if (prior) {
         view.terminal = prior.terminal; view.activity = prior.activity;
@@ -252,7 +251,7 @@ export class CarrierObserver {
       if (this.stopped) return;
       const status = statuses.get(member.name) ?? null;
       const probe = status?.pid ? generations.get(status.pid) ?? { kind: "unknown" as const, reason: generationSample.fact ?? "missing_batch_result" } : undefined;
-      const view = deriveCarrierView(member, status, generationSample.observedAt, probe);
+      const view = deriveCarrierView(member, status, generationSample.observedAt, probe ?? { kind: "unknown", reason: "runtime_missing" });
       if (probe && probe.kind !== "unknown") this.lastGood.set(`generation:${view.membership}`, generationSample.observedAt);
       view.evidence[0].lastGoodAt = this.lastGood.get(`generation:${view.membership}`);
       if (panes && view.paneId) view.terminal = panes.some(row => row.pane_id === view.paneId) ? "present" : "absent";

@@ -1,8 +1,10 @@
 import { writeJsonFixture } from "./test-write-json";
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CarrierObserver } from "../carrier-observation";
+import { readProcessGeneration } from "../env/async-process-generation";
 import { nodeHostEnv, runWithHostEnv } from "../env/host-env";
 import { projectStatusEntry } from "../model-tool-contract/custom-message-projection";
 import { projectionLines } from "../model-tool-contract/tui-message-projection";
@@ -37,21 +39,9 @@ function teamName(suffix: string): string {
 }
 
 function terminal(name = "fake", titles: string[] = []) {
-  return {
-    name,
-    detect: () => true,
-    isDirectCarrier: () => true,
-    currentTargetId: () => "pane-current",
-    spawn: () => "pane-worker",
-    kill() {},
-    isAlive: () => true,
-    setTitle: (title: string) => titles.push(title),
-    supportsWindows: () => false,
-    spawnWindow: () => { throw new Error("unused"); },
-    setWindowTitle() {},
-    killWindow() {},
-    isWindowAlive: () => false,
-  } as any;
+  return terminalFixture({ name, currentTargetId: () => "pane-current",
+    prepareSpawn: async () => "pane-worker", isAlive: async () => true,
+    setTitle: title => { titles.push(title); } });
 }
 
 function context(sessionFile: string) {
@@ -188,7 +178,7 @@ describe("registered Pi Session adapter characterization", () => {
       joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
     });
     const member = await teams.currentMembership(name, "worker");
-    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(await readProcessGeneration(process.pid)), startedAt: 1 }, member.membershipId);
     const order: string[] = [];
     const claim = vi.spyOn(runtime, "writeRuntimeStatus");
     const bind = vi.spyOn(teams, "bindMemberSession");
@@ -221,7 +211,7 @@ describe("registered Pi Session adapter characterization", () => {
       joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
     });
     const member = await teams.currentMembership(name, "worker");
-    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(await readProcessGeneration(process.pid)), startedAt: 1 }, member.membershipId);
     fs.rmSync(path.dirname(paths.graphTaskAuthorityPath(name)), { recursive: true });
     if (evidence === "config") {
       const config = JSON.parse(fs.readFileSync(paths.configPath(name), "utf8"));
@@ -260,7 +250,7 @@ describe("registered Pi Session adapter characterization", () => {
       joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
     });
     const member = await teams.currentMembership(name, "worker");
-    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1 }, member.membershipId);
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(await readProcessGeneration(process.pid)), startedAt: 1 }, member.membershipId);
     vi.useFakeTimers();
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     const start = vi.spyOn(TaskChangeDelivery.prototype, "start")
@@ -469,7 +459,7 @@ describe("registered Pi Session adapter characterization", () => {
   it.each(["darwin", "linux"] as const)("warns once per extension load about a missing helper only on macOS (%s), without model history", async platform => {
     vi.stubEnv("PI_AGENT_NAME", ""); vi.stubEnv("PI_TEAM_NAME", "");
     await runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, platform,
-      generation: () => ({ kind: "unknown", reason: "generation_helper_missing" }) } }, async () => {
+      generations: async pids => new Map(pids.map(pid => [pid, { kind: "unknown", reason: "generation_helper_missing" }])) } }, async () => {
       const ctx = context("/tmp/helper-warning-session.jsonl"), harness = extension();
       await harness.get("session_start")!({ reason: "fork" }, ctx);
       await harness.get("session_start")!({ reason: "fork" }, ctx);

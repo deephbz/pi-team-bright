@@ -2,7 +2,6 @@ import { hostEnv } from "../env/host-env";
 import {
   TerminalAdapter,
   SpawnOptions,
-  execCommand,
   spawnArgv,
   validateSpawnOptions,
 } from "../utils/terminal-adapter";
@@ -91,10 +90,6 @@ export class HerdrAdapter implements TerminalAdapter {
     return currentHerdrPane();
   }
 
-  renamePane(paneId: string, label: string): void {
-    this.invoke(["pane", "rename", paneId, label]);
-  }
-
   /**
    * Herdr identity may be inherited by an inner tmux server. That preserves
    * surface discovery but does not make tmux a valid carrier for a Herdr Team.
@@ -103,16 +98,7 @@ export class HerdrAdapter implements TerminalAdapter {
     return !hostEnv().process.env.TMUX && !hostEnv().process.env.TMUX_PANE;
   }
 
-  detect(): boolean {
-    if (hostEnv().process.env.HERDR_ENV !== "1" || !currentHerdrPane() || !currentHerdrTab()) return false;
-    try {
-      return execCommand("herdr", ["status", "server"]).status === 0;
-    } catch {
-      return false;
-    }
-  }
-
-  async detectAsync(): Promise<boolean> {
+  async detect(): Promise<boolean> {
     if (hostEnv().process.env.HERDR_ENV !== "1" || !currentHerdrPane() || !currentHerdrTab()) return false;
     try {
       const result = await hostEnv().exec.run("herdr", ["status", "server"], { timeoutMs: 2000 });
@@ -120,15 +106,11 @@ export class HerdrAdapter implements TerminalAdapter {
     } catch { return false; }
   }
 
-  async renamePaneAsync(paneId: string, label: string): Promise<void> {
+  async renamePane(paneId: string, label: string): Promise<void> {
     await this.invokeAsync(["pane", "rename", paneId, label]);
   }
 
-  private invoke(args: string[]): Record<string, unknown> {
-    return readHerdrReply(execCommand("herdr", args));
-  }
-
-  private paneRecord(paneId: string, query: HerdrQuery = this.invoke.bind(this)): Record<string, unknown> {
+  private paneRecord(paneId: string, query: HerdrQuery): Record<string, unknown> {
     const pane = query(["pane", "get", paneId]).pane;
     if (!pane || typeof pane !== "object" || Array.isArray(pane)
       || (pane as Record<string, unknown>).pane_id !== paneId) {
@@ -137,7 +119,7 @@ export class HerdrAdapter implements TerminalAdapter {
     return pane as Record<string, unknown>;
   }
 
-  private paneLayout(leaderPaneId: string, query: HerdrQuery = this.invoke.bind(this)): { record: Record<string, unknown>; panes: Record<string, unknown>[] } {
+  private paneLayout(leaderPaneId: string, query: HerdrQuery): { record: Record<string, unknown>; panes: Record<string, unknown>[] } {
     const layout = query(["pane", "layout", "--pane", leaderPaneId]).layout;
     if (!layout || typeof layout !== "object" || Array.isArray(layout)) {
       throw new Error(`Herdr leader pane ${leaderPaneId} returned no layout; refusing Worker spawn.`);
@@ -276,12 +258,6 @@ export class HerdrAdapter implements TerminalAdapter {
     return { targetPaneId: selected.paneId, direction: selected.direction };
   }
 
-  spawn(options: SpawnOptions): string {
-    const paneId = this.prepareSpawn(options);
-    void this.startPrepared(paneId, options);
-    return paneId;
-  }
-
   /** Create location only. The caller records it before it starts Pi. */
   private splitArgs(options: SpawnOptions, query: HerdrQuery): string[] {
     if (!options.argv) throw new Error("Herdr spawn requires structured argv; legacy command strings are unsupported.");
@@ -334,22 +310,6 @@ export class HerdrAdapter implements TerminalAdapter {
     ];
   }
 
-  prepareSpawn(options: SpawnOptions): string {
-    const split = this.invoke(this.splitArgs(options, this.invoke.bind(this)));
-    const pane = split.pane;
-    const paneId = pane && typeof pane === "object" && !Array.isArray(pane)
-      ? (pane as Record<string, unknown>).pane_id
-      : undefined;
-    if (typeof paneId !== "string" || !paneId) {
-      throw new Error("Herdr pane split response did not include pane.pane_id.");
-    }
-
-    try { this.renamePane(paneId, options.name); } catch (error) {
-      console.warn(`[pi-teams] Herdr Worker pane ${paneId} could not be named: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    return paneId;
-  }
-
   private async invokeAsync(args: string[], deadline = hostEnv().clock.now() + 2000): Promise<Record<string, unknown>> {
     const timeoutMs = Math.min(2000, deadline - hostEnv().clock.now());
     if (timeoutMs <= 0) throw new Error("herdr_preparation_budget_expired");
@@ -358,8 +318,8 @@ export class HerdrAdapter implements TerminalAdapter {
     return readHerdrReply(result);
   }
 
-  /** Snapshot placement asynchronously; geometry uses the same algorithm as legacy callers. */
-  async prepareSpawnAsync(options: SpawnOptions, deadline = hostEnv().clock.now() + 9000): Promise<string> {
+  /** Create the exact location. The caller persists its target before starting Pi. */
+  async prepareSpawn(options: SpawnOptions, deadline = hostEnv().clock.now() + 9000): Promise<string> {
     if (!options.panePlacement) throw new Error("Herdr Worker spawn requires exact Team pane placement.");
     const { leaderPaneId, workerPaneIds } = options.panePlacement;
     const layoutArgs = ["pane", "layout", "--pane", leaderPaneId];
@@ -429,7 +389,7 @@ export class HerdrAdapter implements TerminalAdapter {
   }
 
   /** Keep each destructive query ordered; timeout never establishes absence. */
-  async killAsync(paneId: string): Promise<void> {
+  async kill(paneId: string): Promise<void> {
     if (!paneId) return;
     try {
       const target = await this.invokeAsync(["pane", "get", paneId]);
@@ -440,7 +400,7 @@ export class HerdrAdapter implements TerminalAdapter {
     } catch (error) { if (!isPaneNotFound(error)) throw error; }
   }
 
-  async isAliveAsync(paneId: string): Promise<boolean> {
+  async isAlive(paneId: string): Promise<boolean> {
     if (!paneId) return false;
     try {
       this.assertExactPane(paneId, await this.invokeAsync(["pane", "get", paneId]));
@@ -481,28 +441,6 @@ export class HerdrAdapter implements TerminalAdapter {
     return true;
   }
 
-  kill(paneId: string): void {
-    if (!paneId) return;
-    try {
-      const workspaceId = this.closeWorkspace(paneId, this.invoke(["pane", "get", paneId]));
-      this.assertNotFinalPane(paneId, workspaceId, this.invoke(["pane", "list", "--workspace", workspaceId]));
-      this.invoke(["pane", "close", paneId]);
-    } catch (error) {
-      if (!isPaneNotFound(error)) throw error;
-    }
-  }
-
-  isAlive(paneId: string): boolean {
-    if (!paneId) return false;
-    try {
-      this.assertExactPane(paneId, this.invoke(["pane", "get", paneId]));
-      return this.hasShell(paneId, this.invoke(["pane", "process-info", "--pane", paneId]));
-    } catch (error) {
-      if (isPaneNotFound(error)) return false;
-      throw error;
-    }
-  }
-
   setTitle(_title: string): void {
     // Herdr owns recognized-agent lifecycle while `agent start` waits for Pi.
     // Do not mutate pane or display metadata from inside that startup window.
@@ -512,19 +450,15 @@ export class HerdrAdapter implements TerminalAdapter {
     return false;
   }
 
-  spawnWindow(_options: SpawnOptions): string {
+  async prepareWindow(_options: SpawnOptions): Promise<string> {
     throw new Error("Herdr does not support spawning separate OS windows.");
   }
 
-  setWindowTitle(_windowId: string, _title: string): void {
+  async killWindow(_windowId: string): Promise<void> {
     // Herdr Teams stay within one originating tab.
   }
 
-  killWindow(_windowId: string): void {
-    // Herdr Teams stay within one originating tab.
-  }
-
-  isWindowAlive(_windowId: string): boolean {
+  async isWindowAlive(_windowId: string): Promise<boolean> {
     return false;
   }
 }

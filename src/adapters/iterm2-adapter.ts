@@ -6,7 +6,7 @@ import { hostEnv, nodeHostEnv } from "../env/host-env";
  * Uses AppleScript for all operations.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand, shellCommand, shellQuote, appleScriptQuote } from "../utils/terminal-adapter";
+import { SynchronousTerminalAdapter, SpawnOptions, execCommand, shellCommand, shellQuote, appleScriptQuote } from "../utils/terminal-adapter";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as paths from "../utils/paths";
@@ -23,7 +23,7 @@ function assertNativeAppleScript(): void {
   if (hostEnv() !== nodeHostEnv) throw new Error("Legacy iTerm subprocesses are unavailable in simulation.");
 }
 
-export class Iterm2Adapter implements TerminalAdapter {
+export class Iterm2Adapter implements SynchronousTerminalAdapter {
   readonly name = "iTerm2";
 
   isDirectCarrier(): boolean {
