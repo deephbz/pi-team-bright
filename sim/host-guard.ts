@@ -7,11 +7,74 @@ import timers from "node:timers";
 import timerPromises from "node:timers/promises";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
-import { createNodeDurableFileSystem, type DurableFileSystem } from "../src/env/host-env";
+import type { DurableFileHandle, DurableFileSystem } from "../src/env/host-env";
 
-interface Scope { root: string; canonicalRoot: string; actor?: string; generation?: object; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Map<number, string>; afterFsync: (file: string) => void; generationForActor: (actor: string) => object | undefined; generationIsLive: (actor: string, generation: object) => boolean; scheduleFs: (actor: string, generation: object, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> }
+interface DescriptorOwner { file: string; actor: string; generation: object }
+interface Scope {
+  root: string;
+  canonicalRoot: string;
+  actor?: string;
+  generation?: object;
+  violations: string[];
+  failures: Error[];
+  changed: (file: string) => void;
+  fds: Map<number, DescriptorOwner>;
+  afterFsync: (file: string) => void;
+  generationForActor: (actor: string) => object | undefined;
+  generationIsLive: (actor: string, generation: object) => boolean;
+  scheduleFs: (actor: string, generation: object, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown>;
+}
+interface EffectOptions {
+  paths?: readonly unknown[];
+  descriptors?: readonly number[];
+  openPathIndex?: number;
+  closeDescriptor?: number;
+  syncDescriptor?: number;
+  mutatePaths?: boolean;
+  mutateDescriptors?: boolean;
+}
+interface SimulatedFileHandle extends DurableFileHandle { readonly fd: number }
 const active = new AsyncLocalStorage<Scope>();
-const real = { exists: fs.existsSync, realpath: fs.realpathSync, lstat: fs.lstatSync };
+const real = {
+  exists: fs.existsSync,
+  realpath: fs.realpathSync,
+  lstat: fs.lstatSync,
+  close: fs.closeSync,
+  access: fs.accessSync,
+  appendFile: fs.appendFileSync,
+  chmod: fs.chmodSync,
+  chown: fs.chownSync,
+  copyFile: fs.copyFileSync,
+  cp: fs.cpSync,
+  link: fs.linkSync,
+  mkdir: fs.mkdirSync,
+  mkdtemp: fs.mkdtempSync,
+  open: fs.openSync,
+  opendir: fs.opendirSync,
+  readdir: fs.readdirSync,
+  readFile: fs.readFileSync,
+  readlink: fs.readlinkSync,
+  rename: fs.renameSync,
+  rm: fs.rmSync,
+  rmdir: fs.rmdirSync,
+  stat: fs.statSync,
+  symlink: fs.symlinkSync,
+  truncate: fs.truncateSync,
+  unlink: fs.unlinkSync,
+  utimes: fs.utimesSync,
+  writeFile: fs.writeFileSync,
+  read: fs.readSync,
+  write: fs.writeSync,
+  writev: fs.writevSync,
+  readv: fs.readvSync,
+  fstat: fs.fstatSync,
+  fsync: fs.fsyncSync,
+  fdatasync: fs.fdatasyncSync,
+  ftruncate: fs.ftruncateSync,
+  fchmod: fs.fchmodSync,
+  fchown: fs.fchownSync,
+  futimes: fs.futimesSync,
+};
 let users = 0;
 let undo: Array<() => void> = [];
 
@@ -25,18 +88,19 @@ function inside(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
+function assertGeneration(scope: Scope): { actor: string; generation: object } {
+  const { actor, generation } = scope;
+  if (!actor || !generation) return fail(scope, "Filesystem effect has no actor generation");
+  if (!scope.generationIsLive(actor, generation)) return fail(scope, "Stale actor generation attempted a filesystem effect");
+  return { actor, generation };
+}
 function checkPath(scope: Scope, input: unknown): string {
-  if (typeof input === "number") {
-    if (!scope.fds.has(input)) fail(scope, "Unowned filesystem descriptor");
-    return "";
-  }
   const name = input instanceof URL ? fileURLToPath(input) : Buffer.isBuffer(input) ? input.toString() : input;
   if (typeof name !== "string") return fail(scope, "Unsupported filesystem path");
   const target = path.resolve(name);
   if (!inside(scope.root, target) && !inside(scope.canonicalRoot, target)) return fail(scope, "Filesystem access outside world root");
   let ancestor = target;
   while (!real.exists(ancestor)) {
-    // A dangling symlink must not become a future escape.
     try { if (real.lstat(ancestor).isSymbolicLink()) return fail(scope, "Dangling world symlink"); } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
@@ -47,13 +111,41 @@ function checkPath(scope: Scope, input: unknown): string {
   if (!inside(scope.canonicalRoot, real.realpath(ancestor))) return fail(scope, "Filesystem symlink escapes world root");
   return target;
 }
-function patch(object: any, key: string, wrap: (original: (...args: any[]) => any) => (...args: any[]) => any): void {
-  const original = object[key];
-  if (typeof original !== "function") return;
-  object[key] = wrap(original);
-  undo.push(() => { object[key] = original; });
+function checkDescriptor(scope: Scope, fd: number, current: { actor: string; generation: object }): string {
+  const owner = scope.fds.get(fd);
+  if (!owner) return fail(scope, "Unowned filesystem descriptor");
+  if (owner.actor !== current.actor || owner.generation !== current.generation) {
+    return fail(scope, "Filesystem descriptor belongs to another actor generation");
+  }
+  return checkPath(scope, owner.file);
 }
-function reject(object: any, key: string, reason: string): void {
+
+/** The single policy boundary for every guarded synchronous filesystem effect. */
+function performFsEffect<T>(scope: Scope, options: EffectOptions, action: () => T): T {
+  const current = assertGeneration(scope);
+  const files = (options.paths ?? []).map(file => checkPath(scope, file));
+  const descriptorFiles = (options.descriptors ?? []).map(fd => checkDescriptor(scope, fd, current));
+  const result = action();
+  if (options.openPathIndex !== undefined) {
+    const fd = result as number;
+    const file = files[options.openPathIndex];
+    if (file === undefined) return fail(scope, "Opened descriptor has no guarded path");
+    scope.fds.set(fd, { file, ...current });
+  }
+  if (options.closeDescriptor !== undefined) scope.fds.delete(options.closeDescriptor);
+  if (options.syncDescriptor !== undefined) scope.afterFsync(scope.fds.get(options.syncDescriptor)!.file);
+  if (options.mutatePaths) for (const file of files) scope.changed(file);
+  if (options.mutateDescriptors) for (const file of descriptorFiles) scope.changed(file);
+  return result;
+}
+function patch(object: object, key: string, wrap: (original: (...args: any[]) => any) => (...args: any[]) => any): void {
+  const target = object as Record<string, unknown>;
+  const original = target[key];
+  if (typeof original !== "function") return;
+  target[key] = wrap(original as (...args: any[]) => any);
+  undo.push(() => { target[key] = original; });
+}
+function reject(object: object, key: string, reason: string): void {
   patch(object, key, original => function(this: unknown, ...args: any[]) {
     const scope = active.getStore();
     if (scope) fail(scope, `${reason}: ${key}`);
@@ -75,77 +167,113 @@ function install(): void {
   for (const [name, indices] of Object.entries(paths)) {
     patch(fs, name, original => function(this: unknown, ...args: any[]) {
       const scope = active.getStore();
-      const checked = scope ? indices.map(index => checkPath(scope, args[index])) : [];
-      const result = original.apply(this, args);
-      if (scope && name === "openSync") scope.fds.set(result, checked[0]!);
-      if (scope && mutations.has(name)) for (const file of checked) if (file) scope.changed(file);
-      return result;
+      if (!scope) return original.apply(this, args);
+      const paths = indices.flatMap(index => typeof args[index] === "number" ? [] : [args[index]]);
+      const descriptors = indices.flatMap(index => typeof args[index] === "number" ? [args[index] as number] : []);
+      const openPathIndex = name === "openSync" ? 0 : undefined;
+      return performFsEffect(scope, {
+        paths,
+        descriptors,
+        ...(openPathIndex === undefined ? {} : { openPathIndex }),
+        mutatePaths: mutations.has(name),
+        mutateDescriptors: mutations.has(name) && descriptors.length > 0,
+      }, () => original.apply(this, args));
     });
     reject(fs, name.slice(0, -4), "Async filesystem completion is not scheduled");
   }
-  for (const name of ["readSync", "writeSync", "writevSync", "readvSync", "fstatSync", "fsyncSync", "fdatasyncSync", "ftruncateSync", "fchmodSync", "fchownSync", "futimesSync", "closeSync"]) {
+  const descriptorOperations: Record<string, { mutation?: boolean; sync?: boolean; close?: boolean }> = {
+    readSync: {}, writeSync: { mutation: true }, writevSync: { mutation: true }, readvSync: {}, fstatSync: {},
+    fsyncSync: { sync: true }, fdatasyncSync: { sync: true }, ftruncateSync: { mutation: true },
+    fchmodSync: { mutation: true }, fchownSync: { mutation: true }, futimesSync: { mutation: true }, closeSync: { close: true },
+  };
+  for (const [name, operation] of Object.entries(descriptorOperations)) {
     patch(fs, name, original => function(this: unknown, ...args: any[]) {
       const scope = active.getStore();
-      if (scope) checkPath(scope, args[0]);
-      const result = original.apply(this, args);
-      if (scope && name === "fsyncSync") scope.afterFsync(scope.fds.get(args[0])!);
-      if (scope && name === "closeSync") scope.fds.delete(args[0]);
-      return result;
+      if (!scope) return original.apply(this, args);
+      const fd = args[0] as number;
+      return performFsEffect(scope, {
+        descriptors: [fd],
+        ...(operation.close ? { closeDescriptor: fd } : {}),
+        ...(operation.sync ? { syncDescriptor: fd } : {}),
+        mutateDescriptors: operation.mutation,
+      }, () => original.apply(this, args));
     });
     reject(fs, name.slice(0, -4), "Async filesystem completion is not scheduled");
   }
-  const scheduled = new Set(["mkdir", "stat", "open", "writeFile", "rename", "unlink", "chmod", "appendFile"]);
-  for (const name of scheduled) patch(fsp, name, original => function(this: unknown, ...args: any[]) {
+  const scheduled: Record<string, (scope: Scope, args: unknown[]) => Promise<unknown>> = {
+    mkdir: (scope, [file, options]) => scheduledEffect(scope, "fs.promises.mkdir", { paths: [file], mutatePaths: true }, () => real.mkdir(file as fs.PathLike, options as fs.MakeDirectoryOptions)),
+    stat: (scope, [file]) => scheduledEffect(scope, "fs.promises.stat", { paths: [file] }, () => real.stat(file as fs.PathLike)),
+    open: async (scope, [file, flags, mode]) => {
+      const fd = await scheduledEffect(scope, "fs.promises.open", { paths: [file], openPathIndex: 0 }, () => real.open(file as fs.PathLike, flags as string, mode as number | undefined));
+      return scheduledFileHandle(scope, fd);
+    },
+    writeFile: (scope, [file, data, options]) => scheduledEffect(scope, "fs.promises.writeFile", { paths: [file], mutatePaths: true }, () => real.writeFile(file as fs.PathLike, data as string | Uint8Array, options as fs.WriteFileOptions)),
+    rename: (scope, [from, to, beforeCommit]) => scheduledEffect(scope, "fs.promises.rename", { paths: [from, to], mutatePaths: true }, () => {
+      if (typeof beforeCommit === "function") (beforeCommit as () => void)();
+      return real.rename(from as fs.PathLike, to as fs.PathLike);
+    }),
+    unlink: (scope, [file]) => scheduledEffect(scope, "fs.promises.unlink", { paths: [file], mutatePaths: true }, () => real.unlink(file as fs.PathLike)),
+    chmod: (scope, [file, mode]) => scheduledEffect(scope, "fs.promises.chmod", { paths: [file], mutatePaths: true }, () => real.chmod(file as fs.PathLike, mode as fs.Mode)),
+    appendFile: (scope, [file, data, options]) => scheduledEffect(scope, "fs.promises.appendFile", { paths: [file], mutatePaths: true }, () => real.appendFile(file as fs.PathLike, data as string | Uint8Array, options as fs.WriteFileOptions)),
+  };
+  for (const [name, invoke] of Object.entries(scheduled)) patch(fsp, name, original => function(this: unknown, ...args: unknown[]) {
     const scope = active.getStore();
     if (!scope) return original.apply(this, args);
-    const actor = scope.actor;
-    const generation = scope.generation;
-    if (!actor || !generation) return fail(scope, `Async filesystem operation has no actor generation: ${name}`);
-    if (!scope.generationIsLive(actor, generation)) return fail(scope, `Stale actor generation requested filesystem operation: ${name}`);
-    return scope.scheduleFs(actor, generation, `fs.promises.${name}`, () => {
-      if (typeof args[0] !== "number") checkPath(scope, args[0]);
-      if (name === "rename" && typeof args[2] === "function") args[2]();
-      const result = (fs as any)[`${name}Sync`](...args.slice(0, 2));
-      if (name === "open") return scheduledFileHandle(scope, result);
-      return result;
-    }, () => Object.assign(new Error("Scheduled filesystem operation cancelled with its actor"), { code: "ECANCELED" }));
+    return invoke(scope, args);
   });
-  for (const name of Object.keys(fsp)) if (!scheduled.has(name)) reject(fsp, name, "Async filesystem completion is not scheduled");
+  for (const name of Object.keys(fsp)) if (!(name in scheduled)) reject(fsp, name, "Async filesystem completion is not scheduled");
   syncBuiltinESMExports();
 }
 
-function scheduledFileHandle(scope: Scope, fd: number): object {
-  const run = (name: string, action: () => unknown) => {
-    const actor = scope.actor;
-    const generation = scope.generation;
-    if (!actor || !generation) return Promise.reject(new Error(`Async filesystem handle has no actor generation: ${name}`));
-    if (!scope.generationIsLive(actor, generation)) return Promise.reject(fail(scope, `Stale actor generation requested file handle operation: ${name}`));
-    return scope.scheduleFs(actor, generation, `fs.FileHandle.${name}`, () => active.run(scope, action), () => Object.assign(new Error("Scheduled file handle operation cancelled with its actor"), { code: "ECANCELED" }));
-  };
+function scheduleCurrent<T>(label: string, options: EffectOptions, action: () => T): Promise<T> {
+  const scope = active.getStore();
+  if (!scope) return Promise.reject(new Error(`Durable filesystem operation has no actor scope: ${label}`));
+  return scheduledEffect(scope, label, options, action);
+}
+
+function scheduledEffect<T>(scope: Scope, label: string, options: EffectOptions, action: () => T): Promise<T> {
+  let current: { actor: string; generation: object };
+  try { current = assertGeneration(scope); } catch (error) { return Promise.reject(error); }
+  return scope.scheduleFs(current.actor, current.generation, label, () => performFsEffect(scope, options, action), () => Object.assign(new Error("Scheduled filesystem operation cancelled with its actor"), { code: "ECANCELED" })) as Promise<T>;
+}
+function scheduledFileHandle(scope: Scope, fd: number): SimulatedFileHandle {
+  const run = <T>(name: string, action: () => T, options: EffectOptions = { descriptors: [fd] }): Promise<T> =>
+    scheduledEffect(scope, `fs.FileHandle.${name}`, options, action);
   return {
-    writeFile: (data: any, options?: any) => run("writeFile", () => fs.writeFileSync(fd, data, options)),
-    write: (...args: any[]) => run("write", () => {
-      const result = (fs.writeSync as any)(fd, ...args);
-      return typeof args[0] === "string" ? result : { bytesWritten: result, buffer: args[0] };
-    }),
-    read: (...args: any[]) => run("read", () => {
-      const result = (fs.readSync as any)(fd, ...args);
-      return { bytesRead: result, buffer: args[0] };
-    }),
-    sync: () => run("sync", () => fs.fsyncSync(fd)),
-    datasync: () => run("datasync", () => fs.fdatasyncSync(fd)),
-    stat: () => run("stat", () => fs.fstatSync(fd)),
-    truncate: (length?: number) => run("truncate", () => fs.ftruncateSync(fd, length)),
-    chmod: (mode: number) => run("chmod", () => fs.fchmodSync(fd, mode)),
-    close: () => run("close", () => { try { fs.closeSync(fd); } finally { scope.fds.delete(fd); } }),
+    fd,
+    writeFile: data => run("writeFile", () => real.writeFile(fd, data), { descriptors: [fd], mutateDescriptors: true }),
+    write: async (buffer, offset, length, position) => {
+      const bytesWritten = await run("write", () => real.write(fd, buffer, offset, length, position), { descriptors: [fd], mutateDescriptors: true });
+      return { bytesWritten, buffer };
+    },
+    read: async (buffer, offset, length, position) => {
+      const bytesRead = await run("read", () => real.read(fd, buffer, offset, length, position));
+      return { bytesRead, buffer };
+    },
+    sync: () => run("sync", () => real.fsync(fd), { descriptors: [fd], syncDescriptor: fd }),
+    stat: () => run("stat", () => real.fstat(fd)),
+    truncate: length => run("truncate", () => real.ftruncate(fd, length), { descriptors: [fd], mutateDescriptors: true }),
+    chmod: mode => run("chmod", () => real.fchmod(fd, mode), { descriptors: [fd], mutateDescriptors: true }),
+    close: () => run("close", () => real.close(fd), { descriptors: [fd], closeDescriptor: fd }),
   };
 }
 
-/** The simulator adapter uses the same typed operations; HostGuard schedules each underlying Node operation. */
+/** The simulator schedules each typed DurableFileSystem operation with all interface arguments intact. */
 export function createSimulatedDurableFileSystem(): DurableFileSystem {
   return {
-    ...createNodeDurableFileSystem(),
-    rename: (from, to, beforeCommit) => (fsp.rename as any)(from, to, beforeCommit),
+    mkdir: (file, options) => scheduleCurrent("fs.promises.mkdir", { paths: [file], mutatePaths: true }, () => { real.mkdir(file, options); }),
+    stat: file => scheduleCurrent("fs.promises.stat", { paths: [file] }, () => real.stat(file)),
+    open: async (file, flags, mode) => {
+      const scope = active.getStore()!;
+      const fd = await scheduledEffect(scope, "fs.promises.open", { paths: [file], openPathIndex: 0 }, () => real.open(file, flags, mode));
+      return scheduledFileHandle(scope, fd);
+    },
+    writeFile: (file, data, options) => scheduleCurrent("fs.promises.writeFile", { paths: [file], mutatePaths: true }, () => { real.writeFile(file, data, options); }),
+    rename: (from, to, beforeCommit) => scheduleCurrent("fs.promises.rename", { paths: [from, to], mutatePaths: true }, () => {
+      beforeCommit?.();
+      return real.rename(from, to);
+    }),
+    unlink: file => scheduleCurrent("fs.promises.unlink", { paths: [file], mutatePaths: true }, () => real.unlink(file)),
   };
 }
 
@@ -155,19 +283,37 @@ export class HostGuard {
   private readonly failures: Error[] = [];
   private readonly scope: Scope;
   private disposed = false;
-  constructor(root: string, changed: (file: string) => void, afterFsync: (file: string) => void = () => {}, generationForActor: (actor: string) => object | undefined = () => undefined, generationIsLive: (actor: string, generation: object) => boolean = () => false, scheduleFs: (actor: string, generation: object, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> = (_actor, _generation, label) => Promise.reject(new Error(`Async filesystem completion has no scheduler: ${label}`))) {
+  constructor(
+    root: string,
+    changed: (file: string) => void,
+    afterFsync: (file: string) => void = () => {},
+    generationForActor: (actor: string) => object | undefined = () => undefined,
+    generationIsLive: (actor: string, generation: object) => boolean = () => false,
+    scheduleFs: (actor: string, generation: object, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> = (_actor, _generation, label) => Promise.reject(new Error(`Async filesystem completion has no scheduler: ${label}`)),
+  ) {
     this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Map(), afterFsync, generationForActor, generationIsLive, scheduleFs };
     if (users++ === 0) install();
   }
   run<T>(action: () => T, actor?: string): T {
     if (this.disposed) throw new Error("World is disposed");
-    const generation = actor ? this.scope.generationForActor?.(actor) : undefined;
+    const generation = actor ? this.scope.generationForActor(actor) : undefined;
     return active.run({ ...this.scope, actor, generation }, action);
   }
-  assertClean(): void { if (this.violations.length) throw new Error(`Host escape: ${this.violations.join("; ")}`, { cause: this.failures[0] }); }
+  releaseGeneration(actor: string, generation: object): void {
+    for (const [fd, owner] of this.scope.fds) {
+      if (owner.actor !== actor || owner.generation !== generation) continue;
+      try { real.close(fd); } catch {}
+      this.scope.fds.delete(fd);
+    }
+  }
+  assertClean(): void {
+    if (this.violations.length) throw new Error(`Host escape: ${this.violations.join("; ")}`, { cause: this.failures[0] });
+  }
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const fd of this.scope.fds.keys()) try { real.close(fd); } catch {}
+    this.scope.fds.clear();
     if (--users === 0) { for (const restore of undo.reverse()) restore(); undo = []; syncBuiltinESMExports(); }
   }
 }

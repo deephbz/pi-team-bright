@@ -165,6 +165,7 @@ export class SimWorld {
   }
   killPid(pid: number): void {
     const process = this.processes.current(pid);
+    if (process) this.guard.releaseGeneration(process.actor, process);
     this.processes.kill(pid);
     if (process) {
       this.scheduler.cancelActor(process.actor);
