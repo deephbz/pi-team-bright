@@ -51,9 +51,8 @@ export interface HostProcess {
     /** `kill(pid, 0)` semantics: true when the pid exists or EPERM. */
     pidExists(pid: number): boolean;
     kill(pid: number, signal: NodeJS.Signals | number): void;
-    /** Read the generation of `pid` now. Unsupported platforms answer `unknown`. */
-    generation(pid: number): GenerationProbe;
-    generations?(pids: readonly number[]): Promise<Map<number, GenerationProbe>>;
+    /** Read fresh generation evidence. Unsupported platforms answer `unknown`. */
+    generations(pids: readonly number[]): Promise<Map<number, GenerationProbe>>;
     /** Terminate this actor. Simulated actors stop scheduling instead of exiting the test process. */
     exit(code: number): never;
 }
@@ -94,13 +93,50 @@ export interface HostWatcher {
 export interface HostWatch {
     watchDirectory(directory: string, listener: (filename: string | null) => void): HostWatcher;
 }
+/** Narrow async filesystem capability for durable replacement and journal append. */
+export interface DurableStats {
+    readonly size: number;
+    readonly mode: number;
+    isFile(): boolean;
+}
+export interface DurableFileSystem {
+    mkdir(path: string, options: {
+        recursive: true;
+    }): Promise<void>;
+    stat(path: string): Promise<DurableStats>;
+    open(path: string, flags: string, mode?: number): Promise<DurableFileHandle>;
+    writeFile(path: string, data: string | Uint8Array, options: {
+        flag: string;
+        mode: number;
+    }): Promise<void>;
+    rename(from: string, to: string, beforeCommit?: () => void): Promise<void>;
+    unlink(path: string): Promise<void>;
+}
+export interface DurableFileHandle {
+    writeFile(data: string | Uint8Array): Promise<void>;
+    write(buffer: Buffer, offset: number, length: number, position: number | null): Promise<{
+        bytesWritten: number;
+        buffer: Buffer;
+    }>;
+    read(buffer: Buffer, offset: number, length: number, position: number): Promise<{
+        bytesRead: number;
+        buffer: Buffer;
+    }>;
+    sync(): Promise<void>;
+    stat(): Promise<DurableStats>;
+    truncate(length?: number): Promise<void>;
+    chmod(mode: number): Promise<void>;
+    close(): Promise<void>;
+}
 export interface HostEnv {
     clock: HostClock;
     random: HostRandom;
     process: HostProcess;
     exec: HostExec;
     watch: HostWatch;
+    durableFs: DurableFileSystem;
 }
+export declare function createNodeDurableFileSystem(): DurableFileSystem;
 export declare const nodeHostEnv: HostEnv;
 /** The current actor's host capabilities. */
 export declare function hostEnv(): HostEnv;

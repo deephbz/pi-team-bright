@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.nodeHostEnv = void 0;
+exports.createNodeDurableFileSystem = createNodeDurableFileSystem;
 exports.hostEnv = hostEnv;
 exports.enterSimulation = enterSimulation;
 exports.runWithHostEnv = runWithHostEnv;
@@ -17,14 +18,16 @@ exports.runWithHostEnv = runWithHostEnv;
  * that actor's capabilities through every await, so PTB algorithms run
  * unchanged against a simulated clock, process table and terminal.
  *
- * The filesystem is deliberately absent. Every actor on one host shares the
- * real `~/.pi` tree. A simulated world uses the process HOME that the test
- * runner isolates before any import, runs worlds one at a time and wipes the
- * tree between worlds. The simulator guards fs calls fail-closed to that
- * tree. File timestamps never serve as time evidence; code compares only
- * `clock.now()` values. Crash-torn writes are out of scope; atomic writes use
- * rename. One Node loop serializes synchronous fs sequences that separate
- * processes could interleave; that limit is stated, not modelled.
+ * `durableFs` exposes only the asynchronous operations used by durable
+ * replacement and journal append. Every actor on one host shares the real
+ * `~/.pi` tree. A simulated world uses the process HOME that the test runner
+ * isolates before any import, runs worlds one at a time and wipes the tree
+ * between worlds. HostGuard schedules filesystem steps, fences each step to
+ * its requesting actor generation, and fails closed outside that tree. File
+ * timestamps never serve as time evidence; code compares only `clock.now()`
+ * values. Crash-torn writes are out of scope; atomic writes use rename. One
+ * Node loop serializes synchronous fs sequences that separate processes could
+ * interleave; that limit is stated, not modelled.
  *
  * Rules for this interface:
  * - Each member is an OS primitive or an external authority's wire surface.
@@ -43,7 +46,18 @@ const node_async_hooks_1 = require("node:async_hooks");
 const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = __importDefault(require("node:crypto"));
 const node_fs_1 = __importDefault(require("node:fs"));
-const promises_1 = require("node:timers/promises");
+const promises_1 = __importDefault(require("node:fs/promises"));
+const promises_2 = require("node:timers/promises");
+function createNodeDurableFileSystem() {
+    return {
+        mkdir: async (path, options) => { await promises_1.default.mkdir(path, options); },
+        stat: (path) => promises_1.default.stat(path),
+        open: async (path, flags, mode) => await promises_1.default.open(path, flags, mode),
+        writeFile: async (path, data, options) => { await promises_1.default.writeFile(path, data, options); },
+        rename: async (from, to, beforeCommit) => { beforeCommit?.(); await promises_1.default.rename(from, to); },
+        unlink: async (path) => { await promises_1.default.unlink(path); },
+    };
+}
 function runNode(command, args, options) {
     return new Promise((resolve) => {
         if (options.signal?.aborted)
@@ -70,13 +84,14 @@ function runNode(command, args, options) {
     });
 }
 exports.nodeHostEnv = {
+    durableFs: createNodeDurableFileSystem(),
     clock: {
         now: () => Date.now(),
         setTimeout: (callback, ms) => setTimeout(callback, ms),
         clearTimeout: (handle) => clearTimeout(handle),
         setInterval: (callback, ms) => setInterval(callback, ms),
         clearInterval: (handle) => clearInterval(handle),
-        sleep: (ms, signal) => (0, promises_1.setTimeout)(ms, undefined, { signal }),
+        sleep: (ms, signal) => (0, promises_2.setTimeout)(ms, undefined, { signal }),
         sleepSync: (ms) => { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.max(0, ms)); },
         yield: () => new Promise((resolve) => setImmediate(resolve)),
     },
@@ -102,7 +117,6 @@ exports.nodeHostEnv = {
             }
         },
         kill: (pid, signal) => { process.kill(pid, signal); },
-        generation: process_generation_1.probeProcessGeneration,
         generations: process_generation_1.probeProcessGenerations,
         exit: (code) => process.exit(code),
     },
