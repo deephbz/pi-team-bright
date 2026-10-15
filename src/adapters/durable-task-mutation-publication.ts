@@ -8,6 +8,7 @@ import {
 } from "../utils/task-delivery";
 import {
   appendTaskEvidenceEvent,
+  appendTaskEvidenceEvents,
   projectTaskEventEvidence,
   readTeamEvents,
 } from "../coordination/event-journal";
@@ -104,6 +105,63 @@ export class DurableTaskMutationPublication implements TaskMutationPublicationPo
       }
       throw error;
     }
+  }
+
+  async publishTaskMutations(inputs: readonly TaskMutationPublicationInput[]): Promise<Array<{ warnings: string[]; evidence: TaskPublicationEvidence }>> {
+    if (!inputs.length) return [];
+    if (inputs.some((input) => input.teamName !== inputs[0].teamName)) throw new Error("Batched Task publication requires one Team.");
+    if (inputs.some((input) => input.deliver)) throw new Error("Batched Task publication does not support delivery.");
+    const events = inputs.flatMap((input) => {
+      const change = input.kind === "assigned" || input.kind === "ownership_lost" ? "assigned" as const
+        : input.kind === "status_changed" ? "status" as const
+        : input.kind === "note_appended" ? "note" as const
+        : input.kind === "relation_changed" ? "relation" as const
+        : "goal" as const;
+      const evidenceEntries = input.taskEventEvidence.length > 0 ? input.taskEventEvidence : [defaultTaskEventEvidence(input)];
+      return evidenceEntries.map((evidence, index) => ({
+        input,
+        event: {
+          type: "task" as const,
+          ref: { taskId: input.after.id, version: (input.taskCard?.version ?? input.after.version) as TaskVersionRef },
+          change: index === 0 ? change : "note" as const,
+          actor: input.actor ?? "external",
+          taskEvidence: evidence,
+        },
+      }));
+    });
+    let appendError: unknown;
+    try {
+      await appendTaskEvidenceEvents(inputs[0].teamName, events.map(({ event }) => event));
+    } catch (error) {
+      appendError = error;
+    }
+    const warnings = inputs.map(() => [] as string[]);
+    if (appendError) {
+      for (const [index, input] of inputs.entries()) {
+        const taskId = input.after.id;
+        const version = (input.taskCard?.version ?? input.after.version) as TaskVersionRef;
+        const actor = input.actor ?? "external";
+        warnings[index].push(`Task ${taskId} committed but its Team event was not recorded: ${appendError instanceof Error ? appendError.message : String(appendError)}`);
+        try {
+          const config = await readConfig(input.teamName);
+          await appendTaskEventFailureHint(input.teamName, {
+            teamEpochId: config.epochId ?? "", taskId, taskVersion: version, actor,
+            at: new Date(hostEnv().clock.now()).toISOString(),
+          });
+        } catch (hintError) {
+          const warning = `Task ${taskId} committed but failed-event hint persistence also failed: ${hintError instanceof Error ? hintError.message : String(hintError)}`;
+          warnings[index].push(warning);
+          console.warn(`[pi-teams] ${warning}`);
+        }
+      }
+    }
+    return inputs.map((_, index) => ({
+      warnings: warnings[index],
+      evidence: {
+        teamEvent: { appended: !appendError },
+        delivery: { attemptedRecipients: [], failedRecipients: [], recoveryRecordedFor: [], recoveryRecordFailedFor: [] },
+      },
+    }));
   }
 
   async publishTaskMutation(input: TaskMutationPublicationInput): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }> {

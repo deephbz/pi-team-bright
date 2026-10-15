@@ -210,10 +210,10 @@ describe("authority commit and publication windows", () => {
 
   it("repairs a missing Task event on exact current graph replay", async () => {
     const { teamName, publication, orchestration } = fixture("event-replay");
-    const publish = publication.publishTaskMutation.bind(publication);
-    vi.spyOn(publication, "publishTaskMutation")
+    const publish = publication.publishTaskMutations.bind(publication);
+    vi.spyOn(publication, "publishTaskMutations")
       .mockImplementationOnce(async () => { throw new Error("injected failure before event append"); })
-      .mockImplementation(input => publish(input));
+      .mockImplementation(inputs => publish(inputs));
     const input = graph("apply", "Complete the Task.");
     const committed = await orchestration.applyGraph(teamName, input);
     expect(committed.kind).toBe("applied");

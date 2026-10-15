@@ -277,6 +277,47 @@ function readJournal(teamName: string): TeamEvent[] {
   });
 }
 
+function readJournalTailCursor(teamName: string): bigint {
+  const journal = teamEventJournalPath(teamName);
+  if (!fs.existsSync(journal)) return 0n;
+  const fd = fs.openSync(journal, "r+");
+  try {
+    const size = fs.fstatSync(fd).size;
+    if (size === 0) return 0n;
+    const chunkSize = 4096;
+    let end = size;
+    let bytes = Buffer.alloc(0);
+    let newlineCount = 0;
+    while (end > 0 && newlineCount < 2) {
+      const start = Math.max(0, end - chunkSize);
+      const chunk = Buffer.alloc(end - start);
+      fs.readSync(fd, chunk, 0, chunk.length, start);
+      bytes = Buffer.concat([chunk, bytes]);
+      newlineCount = [...bytes].filter((byte) => byte === 10).length;
+      end = start;
+    }
+    const complete = bytes.at(-1) === 10;
+    const lines = bytes.toString("utf8").split("\n");
+    const finalLine = complete ? lines.at(-2) ?? "" : lines.at(-1) ?? "";
+    if (!finalLine) return 0n;
+    try {
+      const event = parseEvent(finalLine, 0);
+      if (!complete) fs.writeSync(fd, Buffer.from("\n"), 0, 1, size);
+      return parseCursor(event.cursor);
+    } catch (error) {
+      if (complete) throw error;
+      // A malformed unterminated suffix is a torn write. Drop only that suffix.
+      const priorLine = lines.at(-2) ?? "";
+      const truncateAt = size - Buffer.byteLength(finalLine);
+      fs.ftruncateSync(fd, Math.max(0, truncateAt));
+      if (!priorLine) return 0n;
+      return parseCursor(parseEvent(priorLine, 0).cursor);
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function writeCursorProjection(teamName: string, cursor: string): void {
   const target = teamEventCursorStatePath(teamName);
   const directory = path.dirname(target);
@@ -292,27 +333,42 @@ function writeCursorProjection(teamName: string, cursor: string): void {
  * Append one observation after its owning authority commits. The JSONL is the
  * evidence authority; cursor.json is only a rebuildable latest-position view.
  */
-export async function appendTeamEvent(teamName: string, input: TeamEventInput): Promise<TeamEvent> {
+export async function appendTeamEvents(teamName: string, inputs: readonly TeamEventInput[]): Promise<TeamEvent[]> {
+  if (!inputs.length) return [];
   if (!fs.existsSync(configPath(teamName))) throw new Error(`Team ${teamName} not found`);
   const journal = teamEventJournalPath(teamName);
   fs.mkdirSync(path.dirname(journal), { recursive: true });
   return withLock(journal, async () => {
-    const events = readJournal(teamName);
-    const cursor = ((events.length ? parseCursor(events[events.length - 1].cursor) : 0n) + 1n).toString();
-    const event = { ...input, cursor, at: new Date(hostEnv().clock.now()).toISOString() } as TeamEvent;
-    // Validate before committing so a structurally invalid internal caller
-    // cannot poison the append-only journal.
-    parseEvent(JSON.stringify(event), events.length + 1);
+    let cursor = readJournalTailCursor(teamName);
+    const events = inputs.map((input) => {
+      cursor += 1n;
+      const event = { ...input, cursor: cursor.toString(), at: new Date(hostEnv().clock.now()).toISOString() } as TeamEvent;
+      // Validate every record before writing any part of the batch.
+      parseEvent(JSON.stringify(event), 0);
+      return event;
+    });
     const fd = fs.openSync(journal, "a", 0o600);
     try {
-      fs.writeSync(fd, `${JSON.stringify(event)}\n`);
+      fs.writeSync(fd, `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
       fs.fsyncSync(fd);
     } finally {
       fs.closeSync(fd);
     }
-    writeCursorProjection(teamName, cursor);
-    return event;
+    writeCursorProjection(teamName, cursor.toString());
+    return events;
   });
+}
+
+export async function appendTeamEvent(teamName: string, input: TeamEventInput): Promise<TeamEvent> {
+  return (await appendTeamEvents(teamName, [input]))[0];
+}
+
+/** Append structured Task evidence as one durable journal batch. */
+export async function appendTaskEvidenceEvents(
+  teamName: string,
+  inputs: readonly (Omit<TaskTeamEvent, "cursor" | "at"> & { taskEvidence: TaskEventEvidenceInput })[],
+): Promise<TaskEvidenceTeamEvent[]> {
+  return await appendTeamEvents(teamName, inputs as readonly TeamEventInput[]) as TaskEvidenceTeamEvent[];
 }
 
 /** Append structured Task evidence and return its committed identity/time. */

@@ -57,6 +57,7 @@ export interface TaskMutationPublicationRecoveryInput {
 
 export interface TaskMutationPublicationPort {
   publishTaskMutation(input: TaskMutationPublicationInput): Promise<{ warnings: string[]; evidence: TaskPublicationEvidence }>;
+  publishTaskMutations?(inputs: readonly TaskMutationPublicationInput[]): Promise<Array<{ warnings: string[]; evidence: TaskPublicationEvidence }>>;
   /** Optional recovery query used after an atomic graph receipt is replayed. */
   hasTaskMutationPublication?(input: TaskMutationPublicationRecoveryInput): Promise<boolean>;
 }
