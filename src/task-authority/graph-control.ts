@@ -356,9 +356,9 @@ export class GraphTaskController {
     this.receipts = new Map((snapshot?.receipts ?? []).map(receipt => [receipt.operationId, clone(receipt)]));
   }
 
-  static recover(snapshot: GraphControlSnapshot, clock?: () => Date, validation?: GraphSnapshotValidator): GraphTaskController {
+  static recover(snapshot: GraphControlSnapshot, clock?: () => Date): GraphTaskController {
     try {
-      (validation ?? new GraphSnapshotValidator()).validate(snapshot);
+      validateSnapshot(snapshot, 0, validateGraphRevision);
     } catch (error) {
       if (error instanceof GraphControlRefusal) throw error;
       throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot is malformed: ${error instanceof Error ? error.message : String(error)}`);
@@ -957,19 +957,18 @@ export class GraphTaskController {
   }
 }
 
-/** Optional read-side reuse of a fully validated JSON revision prefix. Store only
- * fingerprints. Every recovery still checks global structure, events and receipts.
- * A changed/truncated prefix or any failure discards reuse and validates in full.
+export type GraphTaskReadState = Pick<GraphTaskController, "readTasks" | "readAttempts" | "selectReadyFrontier">;
+
+/** Read-only recovery owns revision reuse. Commit recovery always validates fully.
+ * Retain fingerprints only; changed prefixes and failures require full validation.
  */
-export class GraphSnapshotValidator {
+export class GraphObservationRecovery {
   private accepted?: string[];
 
-  constructor(private readonly reuseRevisions = false) {}
-
-  validate(snapshot: GraphControlSnapshot): void {
+  recover(snapshot: GraphControlSnapshot): GraphTaskReadState {
     try {
       let fingerprints: string[] | undefined;
-      if (this.reuseRevisions && Array.isArray(snapshot?.graphRevisions)) {
+      if (Array.isArray(snapshot?.graphRevisions)) {
         try { fingerprints = snapshot.graphRevisions.map(revision => this.revisionFingerprint(revision)); }
         catch { this.accepted = undefined; }
       }
@@ -978,8 +977,18 @@ export class GraphSnapshotValidator {
         && prior.every((fingerprint, index) => fingerprint === fingerprints[index]);
       validateSnapshot(snapshot, unchangedPrefix ? prior.length : 0,
         (revision, previous) => this.validateRevision(revision, previous));
+      const controller = new GraphTaskController(snapshot);
       this.accepted = fingerprints;
-    } catch (error) { this.accepted = undefined; throw error; }
+      return {
+        readTasks: () => controller.readTasks(),
+        readAttempts: () => controller.readAttempts(),
+        selectReadyFrontier: () => controller.selectReadyFrontier(),
+      };
+    } catch (error) {
+      this.accepted = undefined;
+      if (error instanceof GraphControlRefusal) throw error;
+      throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot is malformed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   private revisionFingerprint(revision: GraphRevision): string {

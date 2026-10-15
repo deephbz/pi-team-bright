@@ -187,19 +187,8 @@ export async function withGraphRevisionLease<T>(teamName: string, action: () => 
 
 /** Exact current graph coordinate while the caller owns the retirement lock. */
 export function taskIsCurrentInGraphLocked(teamName: string, taskId: string, taskVersion: TaskVersionRef): boolean {
-  const current = readCurrentGraphTaskCoordinatesLocked(teamName);
+  const current = readGraphTaskCoordinates(teamName);
   return current.has(`${taskId}\u0000${taskVersion}`);
-}
-
-/** Read current Task coordinates while the caller owns the retirement lock. */
-export function readCurrentGraphTaskCoordinatesLocked(teamName: string, mode: "observation" | "commit" = "commit"): Set<string> {
-  const authorityFile = graphTaskAuthorityPath(teamName);
-  if (!fs.existsSync(authorityFile)) {
-    throw missingGraphAuthority(teamName);
-  }
-  // The graph writer atomically replaces its snapshot. The fence is derived;
-  // currentness must come from the committed authority when they disagree.
-  return readGraphTaskCoordinates(teamName, mode);
 }
 
 /** Exact current graph coordinate; derived delivery evidence cannot replace authority. */

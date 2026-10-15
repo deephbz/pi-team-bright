@@ -7,7 +7,7 @@ import { DurableGraphTaskAuthority } from "../../src/adapters/durable-graph-task
 import { DurableGraphTaskStateDeliveryQuery } from "../../src/adapters/durable-graph-task-read";
 import { DurableGraphTaskOrchestration } from "../../src/task-authority/graph-orchestration";
 import { DurableTaskMutationPublication } from "../../src/adapters/durable-task-mutation-publication";
-import { GraphTaskController } from "../../src/task-authority/graph-control";
+import { GraphTaskController, GraphObservationRecovery } from "../../src/task-authority/graph-control";
 import type { GraphTaskOrchestrationPort } from "../../src/task-authority/graph-orchestration";
 import { CoordinationObservationService } from "../../src/coordination/observation-service";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/coordination/task-change-projection";
@@ -41,8 +41,8 @@ it.skipIf(!process.env.PTB_GRAPH_BENCH_OUTPUT)("measures copied W=17 graph opera
   service.setBranchEntries(file, [snapshotEntry("base", team, "probe", "lead", tasks)]);
   const methods = ["recover", "readTasks", "readAttempts", "derive"] as const;
   const counts: Record<string, { count: number; ms: number }> = {};
-  for (const method of methods) {
-    const target = (method === "recover" ? GraphTaskController : GraphTaskController.prototype) as any;
+  for (const method of methods) for (const target of (method === "recover"
+    ? [GraphTaskController, GraphObservationRecovery.prototype] : [GraphTaskController.prototype]) as any[]) {
     const original = target[method];
     vi.spyOn(target, method).mockImplementation(function(this: unknown, ...args: unknown[]) {
       const start = performance.now();

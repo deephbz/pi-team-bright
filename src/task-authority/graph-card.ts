@@ -1,8 +1,8 @@
-import type { GraphTaskController } from "./graph-control";
+import type { GraphTaskReadState } from "./graph-control";
 import type { GraphTaskCard } from "./graph-control-schemas";
 
 /** Project controller state into the public Task card. */
-export function projectGraphTaskCards(controller: GraphTaskController): GraphTaskCard[] {
+export function projectGraphTaskCards(controller: GraphTaskReadState): GraphTaskCard[] {
   const attempts = controller.readAttempts();
   return controller.readTasks().map(task => {
     const currentAttempt = attempts.find(attempt => attempt.taskId === task.id && attempt.current);

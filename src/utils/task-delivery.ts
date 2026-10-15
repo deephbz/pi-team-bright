@@ -13,6 +13,7 @@ import {
 } from "./paths";
 import { readConfig } from "./teams";
 import { writeJsonAtomicAsync } from "./atomic-json";
+import { observeGraphTaskCoordinates, readGraphTaskCoordinates } from "./graph-read-view";
 import { Check } from "typebox/value";
 import { TaskCardSchema, type CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
@@ -21,7 +22,6 @@ import {
   withGraphRevisionLease,
   recordGraphRevisionRetirementLocked,
   taskIsCurrentInGraphLocked,
-  readCurrentGraphTaskCoordinatesLocked,
 } from "./graph-revision-retirement";
 
 export const TASK_CHANGE_CUSTOM_TYPE = "pi-team-bright.task-change";
@@ -473,16 +473,22 @@ export async function readTaskDeliveries(teamName: string, recipient: string): P
   return withLock(file, async () => readRecordsUnsafe(file));
 }
 
-/** Read current records while the caller owns the graph-revision fence lock. */
-async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string, mode: "observation" | "commit" = "commit"): Promise<TaskDeliveryRecord[]> {
-  const records = await readTaskDeliveries(teamName, recipient);
-  const current = readCurrentGraphTaskCoordinatesLocked(teamName, mode);
+function currentDeliveries(records: TaskDeliveryRecord[], current: Set<string>): TaskDeliveryRecord[] {
   return records.filter((record) => !record.retiredAt && current.has(`${record.ref.taskId}\u0000${record.ref.version}`));
 }
 
-/** Pending delivery records still actionable in the current complete graph. */
+/** Fresh commit check while the caller owns the graph-revision fence lock. */
+async function readCurrentTaskDeliveriesLocked(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
+  const records = await readTaskDeliveries(teamName, recipient);
+  return currentDeliveries(records, readGraphTaskCoordinates(teamName));
+}
+
+/** Observational delivery evidence cannot authorize a commit. */
 export async function readCurrentTaskDeliveries(teamName: string, recipient: string): Promise<TaskDeliveryRecord[]> {
-  return withGraphRevisionLease(teamName, async () => readCurrentTaskDeliveriesLocked(teamName, recipient, "observation"));
+  return withGraphRevisionLease(teamName, async () => {
+    const records = await readTaskDeliveries(teamName, recipient);
+    return currentDeliveries(records, observeGraphTaskCoordinates(teamName));
+  });
 }
 
 export async function readTaskDeliveryTombstones(teamName: string, recipient: string): Promise<TaskDeliveryTombstone[]> {
