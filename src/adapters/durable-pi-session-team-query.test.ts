@@ -42,7 +42,7 @@ describe("DurablePiSessionTeamQuery", () => {
       member: { name: "worker", membershipId: workerMembershipId, sessionFile: workerSessionFile },
     });
     await expect(query.terminalPlacement(teamName)).resolves.toEqual({ name: teamName, terminalBackend: undefined });
-    await expect(query.workerProfile(teamName, "worker")).resolves.toEqual({ prompt: "Keep evidence.", model: "test/model", thinking: "high" });
+    await expect(query.workerProfile(teamName, "worker")).resolves.toEqual({ prompt: "Keep evidence." });
     await expect(query.activeMembershipId(teamName, "worker")).resolves.toEqual(expect.any(String));
     await expect(query.matchesSyncNudgeCandidate({
       teamName, teamEpochId: config.epochId!, leaderSessionFile, leaderMembershipId,

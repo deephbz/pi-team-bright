@@ -75,6 +75,7 @@ export function createPiTeamSessionAdapter(options: {
   const envMembershipId = hostEnv().process.env.PI_TEAM_MEMBERSHIP_ID;
   let teamName: string | null = envTeamName || teamQuery.findLeadTeamForSession();
   let currentMembershipId: string | undefined;
+  let workerPromptAddition: string | undefined;
   let syncNudgeConductor: SyncNudgeConductor | null = null;
   let stopSyncNudgeMonitor: (() => void) | null = null;
   let leaderRunSettled = false;
@@ -709,6 +710,7 @@ function registerSessionHooks() {
   // Pi 0.83 lacks this event; the gate's hold limit covers that version.
   (pi.on as (event: string, handler: () => void) => void)("session_compact_failed", () => { compactionGate.end(); });
   pi.on("session_start", async (event, ctx) => {
+  workerPromptAddition = undefined;
   warnMissingGenerationHelper(ctx);
   compactionGate.reset();
   doctorGeneration++;
@@ -955,28 +957,25 @@ pi.on("before_agent_start", async (event, ctx) => {
       });
     }
 
-    let modelInfo = "";
+    if (workerPromptAddition !== undefined) {
+      return { systemPrompt: event.systemPrompt + workerPromptAddition };
+    }
+
     let profileInfo = "";
+    let profileReadSucceeded = !teamName;
     if (teamName) {
       try {
         const member = await teamQuery.workerProfile(teamName, agentName);
         if (member?.prompt) profileInfo = `\nYour standing Worker profile: ${member.prompt}`;
-        if (member?.model || member?.modelAlias) {
-          modelInfo = `\nYour configured initial model assignment: ${member.modelAlias ? `profile '${member.modelAlias}'` : member.model}`;
-        }
+        profileReadSucceeded = true;
       } catch {
-        // Ignore unavailable Worker evidence.
+        // Retry unavailable Worker evidence until the first successful capture.
       }
     }
-    const currentModel = ctx.model;
-    if (currentModel?.provider && currentModel?.id) {
-      modelInfo += `\nYour current Pi model selection is ${currentModel.provider}/${currentModel.id} with thinking level ${ctx.thinkingLevel}. This is runtime Session evidence.`;
-    }
-
     const taskInstruction = "Assigned Tasks are your work contracts. Canonical Task changes are delivered in context, but presentation never changes Task state. Waiting and ready are derived. Claim a ready Task before work. When the goal passes its external criteria, call task_update with goal_achieved and exact evidence. Use goal_failed when criteria fail; Task authority then applies any bounded failure edge. Use block only for an external blocker, and include blocker evidence. Use alert_send only for exceptional clarification or escalation; an alert never changes Task state. Re-read Task authority before a conflicting write.";
-    return {
-      systemPrompt: event.systemPrompt + `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${modelInfo}${profileInfo}\n${taskInstruction}`,
-    };
+    const addition = `\n\nYou are Worker '${agentName}' on Team '${teamName}'.\nYour lead is 'team-lead'.${profileInfo}\n${taskInstruction}`;
+    if (profileReadSucceeded) workerPromptAddition = addition;
+    return { systemPrompt: event.systemPrompt + addition };
   }
 });
 }

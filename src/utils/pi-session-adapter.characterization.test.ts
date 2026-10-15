@@ -15,6 +15,7 @@ import { TeamLifecycleService } from "../team-authority/team-lifecycle-service";
 import { DirectMessageDelivery, DIRECT_MESSAGE_CUSTOM_TYPE } from "../alert-authority/direct-delivery";
 import { sendAlert } from "../alert-authority/alerts";
 import { DurableAlertMembership } from "../adapters/durable-alert-membership";
+import { DurablePiSessionTeamQuery } from "../adapters/durable-pi-session-team-query";
 import { UNSUPPORTED_BEADS_TEAM } from "../task-authority/graph-authority-errors";
 import * as paths from "./paths";
 import * as runtime from "./runtime";
@@ -580,7 +581,7 @@ describe("registered Pi Session adapter characterization", () => {
     expect(task).not.toHaveBeenCalled();
   });
 
-  it("uses the exact resumed Worker binding for delivery and preserves its profile prompt", async () => {
+  it("preserves the exact resumed Worker binding and stable prompt across model and thinking changes", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const name = teamName("worker-profile-binding");
@@ -590,6 +591,7 @@ describe("registered Pi Session adapter characterization", () => {
       membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
       joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
       prompt: "Keep Task evidence exact.", model: "test/model", thinking: "high",
+      modelProfile: { alias: "fixture-model-role", provider: "test", model: "model", thinking: "high" },
     });
     const member = await teams.currentMembership(name, "worker");
     await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1 }, member.membershipId);
@@ -600,12 +602,75 @@ describe("registered Pi Session adapter characterization", () => {
     const handlers = extension();
 
     await handlers.get("session_start")!({ reason: "resume" }, ctx);
+    ctx.thinkingLevel = "high";
     const prompt = await handlers.get("before_agent_start")!({ systemPrompt: "base" }, ctx) as any;
 
     expect(bound).toHaveBeenCalledWith(name, "worker", sessionFile);
     expect(prompt.systemPrompt).toContain("Your standing Worker profile: Keep Task evidence exact.");
-    expect(prompt.systemPrompt).toContain("Your configured initial model assignment: test/model");
-    expect(prompt.systemPrompt).toContain("Your current Pi model selection is test/test");
+    expect(prompt.systemPrompt).toContain(`You are Worker 'worker' on Team '${name}'.`);
+    expect(prompt.systemPrompt).toContain("Your lead is 'team-lead'.");
+    expect(prompt.systemPrompt).toContain("Assigned Tasks are your work contracts.");
+
+    ctx.model = { ...ctx.model, provider: "changed-provider", id: "changed-model" };
+    const afterModelChange = await handlers.get("before_agent_start")!({ systemPrompt: "base" }, ctx) as any;
+    expect(afterModelChange.systemPrompt).toBe(prompt.systemPrompt);
+
+    ctx.thinkingLevel = "low";
+    const afterThinkingChange = await handlers.get("before_agent_start")!({ systemPrompt: "base" }, ctx) as any;
+    expect(afterThinkingChange.systemPrompt).toBe(prompt.systemPrompt);
+    for (const text of ["test/model", "fixture-model-role", "test/test", "changed-provider", "changed-model", "high", "low", "thinking level", "model assignment", "model selection"]) {
+      expect(prompt.systemPrompt).not.toContain(text);
+    }
+  });
+
+  it.each(["read failure between runs", "profile change mid-Session", "first-read failure then success"])("captures the Worker prompt per Session: %s", async (scenario) => {
+    vi.stubEnv("PI_AGENT_NAME", "");
+    vi.stubEnv("PI_TEAM_NAME", "");
+    const name = teamName("worker-prompt-capture");
+    const sessionFile = `/tmp/${name}-worker.jsonl`;
+    await createTeam(name, `/tmp/${name}-lead.jsonl`);
+    await teams.addMember(name, {
+      membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
+      joinedAt: Date.now(), tmuxPaneId: "", sessionFile, cwd: process.cwd(), subscriptions: [],
+      prompt: "Keep Task evidence exact.",
+    });
+    const member = await teams.currentMembership(name, "worker");
+    await runtime.writeRuntimeStatus(name, "worker", { pid: process.pid, startedAt: 1 }, member.membershipId);
+    vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
+    vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
+    let unavailable = scenario === "first-read failure then success";
+    let profile = "Keep Task evidence exact.";
+    const query = vi.spyOn(DurablePiSessionTeamQuery.prototype, "workerProfile").mockImplementation(async () => {
+      if (unavailable) throw new Error("Temporary profile read failure");
+      return { prompt: profile };
+    });
+    const ctx = context(sessionFile);
+    const handlers = extension();
+    await handlers.get("session_start")!({ reason: "resume" }, ctx);
+    const run = async () => (await handlers.get("before_agent_start")!({ systemPrompt: "base" }, ctx) as any).systemPrompt;
+    const first = await run();
+
+    if (scenario === "first-read failure then success") {
+      expect(first).not.toContain("Your standing Worker profile:");
+      unavailable = false;
+      const captured = await run();
+      expect(captured).toContain("Your standing Worker profile: Keep Task evidence exact.");
+      expect(await run()).toBe(captured);
+      expect(query).toHaveBeenCalledTimes(2);
+    } else {
+      expect(first).toContain("Your standing Worker profile: Keep Task evidence exact.");
+      if (scenario === "read failure between runs") unavailable = true;
+      else profile = "Use the revised standing profile.";
+      expect(await run()).toBe(first);
+      unavailable = false;
+      expect(await run()).toBe(first);
+      expect(query).toHaveBeenCalledTimes(1);
+      if (scenario === "profile change mid-Session") {
+        await handlers.get("session_start")!({ reason: "resume" }, ctx);
+        expect(await run()).toContain("Your standing Worker profile: Use the revised standing profile.");
+        expect(query).toHaveBeenCalledTimes(2);
+      }
+    }
   });
 
   it("keeps nudge actuation suppressed when the current Team policy disables it", async () => {
