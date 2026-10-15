@@ -1,4 +1,5 @@
 import { Check } from "typebox/value";
+import { Compile } from "typebox/compile";
 import { Type, type Static, type TSchema } from "typebox";
 import {
   AlertSendResultSchema,
@@ -272,6 +273,17 @@ function modelSchemaFor(tool: ProjectedTool): TSchema {
   return ModelResultSchemas[tool];
 }
 
+// Schemas are module constants. Cache validators, never mutable result values.
+const resultValidators = new WeakMap<TSchema, ReturnType<typeof Compile>>();
+function checkResult(schema: TSchema, value: unknown): boolean {
+  let validator = resultValidators.get(schema);
+  if (!validator) {
+    validator = Compile(schema);
+    resultValidators.set(schema, validator);
+  }
+  return validator.Check(value);
+}
+
 function taskSummary(task: any): Record<string, unknown> {
   return {
     id: task.id,
@@ -445,9 +457,9 @@ export function projectToolResult<TTool extends ProjectedTool>(tool: TTool, resu
 export function projectToolResult(tool: ProjectedTool, result: unknown): unknown;
 export function projectToolResult(tool: ProjectedTool, result: unknown): unknown {
   assertCanonicalResultVersions(result);
-  if (!Check(schemaFor(tool), result)) throw new Error(`Invalid semantic result for ${tool}.`);
+  if (!checkResult(schemaFor(tool), result)) throw new Error(`Invalid semantic result for ${tool}.`);
   const projected = projectOutcome(tool, result);
-  if (!Check(modelSchemaFor(tool), projected)) throw new Error(`Invalid model projection for ${tool}.`);
+  if (!checkResult(modelSchemaFor(tool), projected)) throw new Error(`Invalid model projection for ${tool}.`);
   return projected;
 }
 
