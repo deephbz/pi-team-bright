@@ -2,6 +2,7 @@ import { hostEnv } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { writeJsonAtomicAsync } from "./atomic-json";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import type { TeamConfig, Member, TerminalTarget, LogicalWorker } from "../team-authority/contracts";
 import { assertTerminalTargetShape } from "./terminal-target";
@@ -261,7 +262,7 @@ export async function createTeam(
     ...(syncLiveness ? { syncLiveness: structuredClone(syncLiveness) } : {}),
   };
 
-  writeConfigAtomic(configPath(name), config);
+  await writeConfigAtomicAsync(configPath(name), config);
   return config;
   });
 }
@@ -294,6 +295,10 @@ function fsyncDirectory(dir: string): void {
 }
 
 /** Persist TeamConfig without exposing a truncated target file. */
+export async function writeConfigAtomicAsync(p: string, config: TeamConfig): Promise<void> {
+  await writeJsonAtomicAsync(p, config);
+}
+
 export function writeConfigAtomic(p: string, config: TeamConfig): void {
   const dir = path.dirname(p);
   const existing = fs.existsSync(p) ? fs.statSync(p) : undefined;
@@ -655,7 +660,7 @@ export async function ensureLogicalWorker(
     }
     const worker = structuredClone(input);
     config.logicalWorkers!.push(worker);
-    writeConfigAtomic(p, config);
+    await writeConfigAtomicAsync(p, config);
     return { kind: "created", worker: structuredClone(worker) };
   });
 }
@@ -794,7 +799,7 @@ export async function bindMemberSession(
       }
     }
     Object.assign(member, updates);
-    writeConfigAtomic(p, config);
+    await writeConfigAtomicAsync(p, config);
     return structuredClone(member);
   });
 }
@@ -844,7 +849,7 @@ export async function addMember(teamName: string, member: Member) {
       throw new Error(`Team Worker limit ${workerLimit} has been reached; stop a current Worker before ensuring another.`);
     }
     config.members.push(next);
-    writeConfigAtomic(p, config);
+    await writeConfigAtomicAsync(p, config);
   });
 }
 
@@ -861,7 +866,7 @@ export async function deactivateMember(
     member.isActive = false;
     member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
     member.deactivationReason = reason;
-    writeConfigAtomic(p, config);
+    await writeConfigAtomicAsync(p, config);
     return structuredClone(member);
   });
 }
@@ -880,7 +885,7 @@ export async function deactivateMembership(
     member.isActive = false;
     member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
     member.deactivationReason = reason;
-    writeConfigAtomic(p, config);
+    await writeConfigAtomicAsync(p, config);
     return structuredClone(member);
   });
 }
@@ -900,7 +905,7 @@ export async function deactivateCurrentMembers(
       member.deactivatedAt = at;
       member.deactivationReason = reason;
     }
-    if (current.length > 0) writeConfigAtomic(p, config);
+    if (current.length > 0) await writeConfigAtomicAsync(p, config);
     return { deactivated: structuredClone(current), staleBindings: structuredClone(staleBindings) };
   });
 }
@@ -918,7 +923,7 @@ export async function updateMember(teamName: string, agentName: string, updates:
         }
       }
       Object.assign(m, updates);
-      writeConfigAtomic(p, config);
+      await writeConfigAtomicAsync(p, config);
     }
   });
 }
@@ -936,7 +941,7 @@ export async function updateMembership(teamName: string, membershipId: string, u
       }
     }
     Object.assign(member, updates);
-    writeConfigAtomic(p, config);
+    await writeConfigAtomicAsync(p, config);
     return structuredClone(member);
   });
 }

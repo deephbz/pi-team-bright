@@ -49,8 +49,8 @@ it.each([false, true])("refuses live delivery after graph removal with derived f
 it("does not enqueue when the selected recovery target cannot persist", async () => {
   const f = await fixture(), recovery = paths.taskDeliveryRecoveryPath(f.name);
   atomic.writeJsonAtomic(recovery, [{ teamName: f.name, taskId: f.task.id, taskVersion: f.task.version, recipients: ["worker"], changeKind: "assigned", recordedAt: "2026-10-14T00:00:00Z", reason: "enqueue-failed", taskProjection: f.task }]);
-  const original = atomic.writeJsonAtomic;
-  vi.spyOn(atomic, "writeJsonAtomic").mockImplementation((file, value) => {
+  const original = atomic.writeJsonAtomicAsync;
+  vi.spyOn(atomic, "writeJsonAtomicAsync").mockImplementation(async (file, value) => {
     if (file === recovery) throw new Error("Target persistence failed");
     return original(file, value);
   });
@@ -63,8 +63,8 @@ it("persists the target before enqueue and reuses it after resolution failure an
   const f = await fixture(), recovery = paths.taskDeliveryRecoveryPath(f.name);
   const old = f.engine(); await old.delivery.start([]);
   atomic.writeJsonAtomic(recovery, [{ teamName: f.name, taskId: f.task.id, taskVersion: f.task.version, recipients: ["worker"], changeKind: "assigned", recordedAt: "2026-10-14T00:00:00Z", reason: "enqueue-failed", taskProjection: f.task }]);
-  const original = atomic.writeJsonAtomic;
-  const fault = vi.spyOn(atomic, "writeJsonAtomic").mockImplementation((file, value) => {
+  const original = atomic.writeJsonAtomicAsync;
+  const fault = vi.spyOn(atomic, "writeJsonAtomicAsync").mockImplementation(async (file, value) => {
     if (file === recovery && (value as any[])[0].resolvedRecipients?.length) throw new Error("Crash before recovery resolution");
     if (file === paths.taskDeliveryPath(f.name, "worker")) expect(JSON.parse(fs.readFileSync(recovery, "utf8"))[0].targets).toEqual([expect.objectContaining({ recipientMembershipId: "old" })]);
     return original(file, value);

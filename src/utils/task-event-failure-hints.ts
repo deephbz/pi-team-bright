@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { withLock } from "./lock";
 import { taskEventFailureHintPath } from "./paths";
@@ -120,17 +121,17 @@ export async function appendTaskEventFailureHint(
   const file = taskEventFailureHintPath(teamName);
   let hint!: TaskEventFailureHint;
   await withLock(`${file}.lock`, async () => {
-    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    await fsp.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
     const cursor = (currentEpochHead(readLines(file), input.teamEpochId) + 1n).toString();
     hint = { schema: TASK_EVENT_FAILURE_HINT_SCHEMA, ...input, cursor };
-    const fd = fs.openSync(file, "a", 0o600);
+    const handle = await fsp.open(file, "a", 0o600);
     try {
-      fs.writeSync(fd, `${JSON.stringify(hint)}\n`);
-      fs.fsyncSync(fd);
+      await handle.writeFile(`${JSON.stringify(hint)}\n`);
+      await handle.sync();
     } finally {
-      fs.closeSync(fd);
+      await handle.close();
     }
-    fs.chmodSync(file, 0o600);
+    await fsp.chmod(file, 0o600);
   });
   return hint;
 }

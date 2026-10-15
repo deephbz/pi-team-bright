@@ -1,6 +1,7 @@
 import { hostEnv } from "../env/host-env";
 import { MISSING_GENERATION_HELPER_MESSAGE } from "../env/process-generation";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { withLock } from "./lock";
 import { runtimeStatusPath, teamDir } from "./paths";
@@ -207,7 +208,7 @@ export async function writeRuntimeStatus(
 ): Promise<AgentRuntimeStatus> {
   const p = runtimeStatusPath(teamName, agentName);
   const dir = path.dirname(p);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  await fsp.mkdir(dir, { recursive: true });
 
   return await withLock(p, async () => {
     let current: AgentRuntimeStatus = {
@@ -240,17 +241,17 @@ export async function writeRuntimeStatus(
     // Readers deliberately do not join producer locks. Publish a complete,
     // restrictive replacement so they observe either generation, never JSON mid-write.
     const temporary = path.join(dir, `.${path.basename(p)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
-    let fd: number | undefined;
+    let handle: Awaited<ReturnType<typeof fsp.open>> | undefined;
     try {
-      fd = fs.openSync(temporary, "wx", 0o600);
-      fs.writeFileSync(fd, JSON.stringify(next, null, 2));
-      fs.fsyncSync(fd);
-      fs.closeSync(fd);
-      fd = undefined;
-      fs.renameSync(temporary, p);
+      handle = await fsp.open(temporary, "wx", 0o600);
+      await handle.writeFile(JSON.stringify(next, null, 2));
+      await handle.sync();
+      await handle.close();
+      handle = undefined;
+      await fsp.rename(temporary, p);
     } finally {
-      if (fd !== undefined) try { fs.closeSync(fd); } catch {}
-      try { fs.unlinkSync(temporary); } catch {}
+      if (handle) try { await handle.close(); } catch {}
+      try { await fsp.unlink(temporary); } catch {}
     }
     return next;
   });
