@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { probeProcessGeneration, probeProcessGenerations, linuxStartToken } from "../../../src/env/process-generation";
-import { writeJsonAtomic } from "../../../src/utils/atomic-json";
+import { writeJsonAtomicAsync } from "../../../src/utils/atomic-json";
 import { withLock } from "../../../src/utils/lock";
 
 const here = path.dirname(process.argv[1]!);
@@ -84,7 +84,7 @@ async function lockWorker(dir: string, rounds: number) {
     await withLock(counter, async () => {
       const value = JSON.parse(fs.readFileSync(counter, "utf8")).value as number;
       if (i % 7 === 0) await sleep(1);
-      writeJsonAtomic(counter, { value: value + 1 });
+      await writeJsonAtomicAsync(counter, { value: value + 1 });
     }, 100000);
   }
 }
@@ -93,10 +93,10 @@ async function crashHolder(dir: string) {
   await withLock(path.join(dir, "stale"), async () => { process.kill(process.pid, "SIGKILL"); await sleep(10000); });
 }
 
-function atomicWriter(file: string) {
+async function atomicWriter(file: string) {
   let seq = (() => { try { return JSON.parse(fs.readFileSync(file, "utf8")).seq as number; } catch { return 0; } })();
   const pad = "x".repeat(256 * 1024);
-  for (;;) { seq++; writeJsonAtomic(file, { seq, pad }); fs.writeFileSync(file + ".committed", String(seq)); }
+  for (;;) { seq++; await writeJsonAtomicAsync(file, { seq, pad }); fs.writeFileSync(file + ".committed", String(seq)); }
 }
 
 function appendWriter(file: string) {
@@ -119,7 +119,7 @@ async function a9() {
 
   // 1. Exclusive create: 16 processes increment one counter under the production lock.
   const lockDir = path.join(root, "lock"); fs.mkdirSync(lockDir);
-  writeJsonAtomic(path.join(lockDir, "counter.json"), { value: 0 });
+  await writeJsonAtomicAsync(path.join(lockDir, "counter.json"), { value: 0 });
   const workers = 16, rounds = 200, t0 = Date.now();
   await Promise.all(Array.from({ length: workers }, () => new Promise(r => self(["lock-worker", lockDir, String(rounds)]).once("exit", r))));
   const counted = JSON.parse(fs.readFileSync(path.join(lockDir, "counter.json"), "utf8")).value;
@@ -134,10 +134,10 @@ async function a9() {
   try { await withLock(path.join(staleDir, "stale"), async () => { recovered = true; }, 1000); } catch (e) { recovered = false; }
   const staleResult = { lockLeftByKilledOwner: staleLeft, recovered, recoveryMs: Date.now() - t1, leftovers: fs.readdirSync(staleDir) };
 
-  // 3. writeJsonAtomic under random SIGKILL with concurrent readers.
+  // 3. Async atomic replacement under random SIGKILL with concurrent readers.
   const atomicDir = path.join(root, "atomic"); fs.mkdirSync(atomicDir);
   const target = path.join(atomicDir, "state.json");
-  writeJsonAtomic(target, { seq: 0, pad: "" });
+  await writeJsonAtomicAsync(target, { seq: 0, pad: "" });
   let reads = 0, readErrors: Record<string, number> = {}, regressions = 0, last = 0, stop = false;
   const reader = (async () => {
     while (!stop) {
@@ -179,7 +179,7 @@ async function a9() {
   const holds = counted === workers * rounds && staleLeft && recovered && reads > 0 && Object.keys(readErrors).length === 0 && regressions === 0
     && unparsableAfterKill === 0 && lostCommits === 0 && torn === 0 && tail === "";
   return { assumption: "Filesystem rename, exclusive create, and fsync behave as the fake states.", verdict: holds ? "holds" : "refuted",
-    command: "node probe.cjs a9 (production withLock and writeJsonAtomic; journal append mirrors appendTeamEvent)",
+    command: "node probe.cjs a9 (production withLock and writeJsonAtomicAsync; journal append mirrors appendTeamEvent)",
     observed: { environment, exclusiveCreate: lockResult, staleOwnerRecovery: staleResult, atomicReplace: atomicResult, journalAppend: appendResult,
       scope: "Process crash (SIGKILL) only, one ext4 host. Host crash, power loss and fsync durability are not tested. Leftover temp files after SIGKILL are recorded, not judged." } };
 }
