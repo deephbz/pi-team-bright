@@ -121,11 +121,40 @@ describe("Coordination event-journal ownership boundary", () => {
     }));
     fs.mkdirSync(path.dirname(teamEventJournalPath(teamName)), { recursive: true });
     fs.writeFileSync(teamEventJournalPath(teamName), `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
+    const clone = vi.spyOn(globalThis, "structuredClone");
     const pages = journal.readTeamEventPages(teamName, { afterCursor: "0" });
+    expect(clone.mock.calls.map(([events]) => (events as unknown[]).length)).toEqual([50, 50, 21]);
+    clone.mockRestore();
     expect(pages.map((page) => page.events.length)).toEqual([50, 50, 21]);
     expect(pages.map((page) => page.cursor)).toEqual(["50", "100", "121"]);
     expect(pages.map((page) => page.remaining)).toEqual([71, 21, 0]);
     expect(journal.readTeamEventPages(teamName, { afterCursor: "100" }).map((page) => page.cursor)).toEqual(["121"]);
+  });
+
+  it.each(["events", "pages"] as const)("keeps %s results caller-owned across warm and appended reads", async (boundary) => {
+    await journal.appendTaskEvidenceEvents(teamName, [
+      { type: "task", ref: { taskId: "original", version: "v_0000000000000001" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "original evidence" } },
+      { type: "task", ref: { taskId: "second", version: "v_0000000000000002" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "second evidence" } },
+    ]);
+    const read = () => boundary === "events"
+      ? [journal.readTeamEvents(teamName, { limit: 1 })]
+      : journal.readTeamEventPages(teamName, { limit: 1 });
+    const original = read();
+    const disk = fs.readFileSync(teamEventJournalPath(teamName), "utf8");
+    const returned = structuredClone(original);
+    const event = returned[0].events[0];
+    const nested = original[0].events[0];
+    if (nested.type !== "task" || !("taskEvidence" in nested)) throw new Error("Expected Task evidence fixture.");
+    nested.cursor = "900";
+    nested.ref.taskId = "caller";
+    nested.ref.version = "v_0000000000000900";
+    (nested.taskEvidence as { text: string }).text = "caller evidence";
+    expect(read()).toEqual(returned);
+    expect(journal.readTeamEventCursor(teamName)).toBe("2");
+    expect(fs.readFileSync(teamEventJournalPath(teamName), "utf8")).toBe(disk);
+    await journal.appendTeamEvent(teamName, { type: "alert", alertId: "third", from: "team-lead", to: "worker", kind: "attention", text: "third" });
+    expect(journal.readTeamEvents(teamName).events[0]).toEqual(event);
+    expect(journal.readTeamEventCursor(teamName)).toBe("3");
   });
 
   it("reads a 10,000-event paging loop from one journal image", () => {
@@ -138,6 +167,7 @@ describe("Coordination event-journal ownership boundary", () => {
     fs.mkdirSync(path.dirname(journalPath), { recursive: true });
     fs.writeFileSync(journalPath, image);
     const read = vi.spyOn(fs, "readSync");
+    const clone = vi.spyOn(globalThis, "structuredClone");
 
     let cursor = "0";
     let pages = 0;
@@ -150,6 +180,9 @@ describe("Coordination event-journal ownership boundary", () => {
     } while (true);
 
     expect(pages).toBe(100);
+    expect(clone).toHaveBeenCalledTimes(100);
+    expect(clone.mock.calls.every(([events]) => (events as unknown[]).length === 100)).toBe(true);
+    clone.mockRestore();
     expect(cursor).toBe("10000");
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith(expect.any(Number), expect.any(Buffer), 0, Buffer.byteLength(image), 0);
