@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DurableTaskChangeDeliveryMembership } from "../../src/adapters/durable-task-change-delivery-membership";
 import type { TeamConfig } from "../../src/team-authority/contracts";
 import { configPath, teamDir } from "../../src/utils/paths";
-import { writeConfigAtomic } from "../../src/utils/teams";
+import { writeJsonFixture } from "../../src/utils/test-write-json";
 
 const teams: string[] = [];
 afterEach(() => {
@@ -27,7 +27,7 @@ describe("exact Membership and Session delivery fence", () => {
       }],
     };
     fs.mkdirSync(teamDir(teamName), { recursive: true });
-    writeConfigAtomic(configPath(teamName), config);
+    writeJsonFixture(configPath(teamName), config);
     const adapter = new DurableTaskChangeDeliveryMembership();
     expect(await adapter.currentRecipient({ teamName, recipient: "worker", sessionFile: oldSession }))
       .toEqual({ membershipId: "m-old" });
@@ -37,7 +37,7 @@ describe("exact Membership and Session delivery fence", () => {
       membershipId: "m-new", agentId: "new-agent", name: "worker", agentType: "teammate",
       joinedAt: 1, sessionFile: newSession, cwd: process.cwd(), subscriptions: [],
     });
-    writeConfigAtomic(configPath(teamName), config);
+    writeJsonFixture(configPath(teamName), config);
     const staleEffect = vi.fn(async () => "stale write");
     await expect(adapter.withCurrentRecipient({
       teamName, recipient: "worker", sessionFile: oldSession, membershipId: "m-old",
