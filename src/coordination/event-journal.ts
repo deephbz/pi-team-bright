@@ -536,7 +536,7 @@ export function readTeamEvents(teamName: string, options: TeamEventReadOptions =
   return {
     cursor: truncated ? matching.at(-1)!.cursor : headCursor,
     headCursor,
-    events: matching,
+    events: structuredClone(matching),
     truncated,
     remaining,
   };
@@ -560,7 +560,7 @@ export function readTeamEventPages(teamName: string, options: Pick<TeamEventRead
     const selected = unseen.slice(offset, offset + limit);
     const remaining = unseen.length - offset - selected.length;
     pages.push({
-      events: selected,
+      events: structuredClone(selected),
       cursor: remaining > 0 ? selected.at(-1)!.cursor : headCursor,
       headCursor,
       truncated: remaining > 0,
