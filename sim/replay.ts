@@ -41,7 +41,7 @@ export class WorldReplay {
         const actor = this.addActor(who, { ...pane.env, HERDR_PANE_ID: pane.id }, resumeIndex >= 0 ? argv[resumeIndex + 1] : undefined);
         if (world.faults.get("pi.start")?.mode === "exit_before_ready") { world.killPid(world.envs.get(actor.id)!.process.pid); return; }
         return actor.emit("session_start", { reason: "startup" });
-      });
+      }, { actor: actorKey(who) });
     };
   }
   addActor(who: ActorRef, variables: Record<string, string> = {}, resumeFile?: string): SimActor {
@@ -178,6 +178,11 @@ export class WorldReplay {
       }
       if (!complete) throw new Error("Setup bound exceeded");
       await this.world.drain({ maxSteps: 10000 });
+      for (let i = 0; this.world.scheduler.pendingCount() > 0 && i < 10000; i++) {
+        if (!await this.world.scheduler.step(true)) throw new Error("Setup has a pending operation without a scheduled completion");
+      }
+      if (this.world.scheduler.pendingCount() > 0) throw new Error("Setup pending-operation bound exceeded");
+      await this.world.drain({ maxSteps: 10000 });
       return result;
     };
     for (const initial of trace.setup.teams) {
@@ -214,7 +219,7 @@ export class WorldReplay {
     const epoch = this.world.scheduler.now;
     const initialOperations = this.world.scheduler.decisions.length;
     const check = () => {
-      if (this.world.scheduler.decisions.length - initialOperations > bounds.maxSteps || this.world.scheduler.now - epoch > bounds.maxVirtualMs) throw new Error("Replay bound exceeded");
+      if (this.world.scheduler.decisions.length - initialOperations > bounds.maxSteps || this.world.scheduler.now - epoch > bounds.maxVirtualMs) throw new Error(`Replay bound exceeded (${this.world.scheduler.decisions.length - initialOperations}/${bounds.maxSteps} steps, ${this.world.scheduler.now - epoch}/${bounds.maxVirtualMs} ms; last ${this.world.scheduler.decisions.at(-1)?.selected ?? "none"})`);
     };
     let previous = 0;
     for (const [index, input] of trace.steps.entries()) {

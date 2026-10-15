@@ -59,7 +59,11 @@ export class SimWorld {
         this.record({ kind: "fault.effect", source: "journal", detail: "fsync committed journal bytes before injected EIO" });
         throw Object.assign(new Error("Injected journal commit-then-error"), { code: "EIO" });
       }
-    });
+    }, (actor, label, action, onCancel) => new Promise((resolve, reject) => {
+      this.enqueue(actor, label, () => {
+        try { resolve(action()); } catch (error) { reject(error); }
+      }, 0, () => reject(onCancel?.() ?? new Error("Scheduled filesystem operation cancelled")));
+    }));
     this.observer = new HistoryObserver(home, fact => this.record(fact, { kind: "observer" }));
     this.record({ kind: "authority.tracing" }, { kind: "setup" });
     this.processes.onChange = (kind, process) => this.record({ kind, process: {
@@ -148,15 +152,15 @@ export class SimWorld {
     if (!env || !process?.alive || process !== this.generations.get(actor) || !this.actorGenerationIsLive(actor, expected)) throw new Error(`Actor is not live: ${actor}`);
     const origin = this.origins.getStore();
     return this.withOrigin(origin?.kind === "ptb" && origin.actor.team === actorRef(actor).team && origin.actor.actor === actorRef(actor).actor
-      ? origin : { kind: "ptb", actor: actorRef(actor) }, () => runWithHostEnv(env, () => this.guard.run(action)));
+      ? origin : { kind: "ptb", actor: actorRef(actor) }, () => runWithHostEnv(env, () => this.guard.run(action, actor)));
   }
-  enqueue(actor: string, label: string, action: () => unknown, delay = 0): number {
+  enqueue(actor: string, label: string, action: () => unknown, delay = 0, onCancel?: () => void): number {
     const generation = this.generations.get(actor);
     const origin = this.origins.getStore() ?? { kind: "ptb" as const, actor: actorRef(actor) };
     return this.scheduler.enqueue(label, () => {
       if (!generation?.alive || this.generations.get(actor) !== generation) return;
       return this.withOrigin(origin, () => this.enter(actor, action));
-    }, { actor, delay });
+    }, { actor, delay, onCancel });
   }
   killPid(pid: number): void {
     const process = this.processes.current(pid);

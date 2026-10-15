@@ -39,6 +39,8 @@ it("wakes an exact recovered Session for its ACKed in-progress Task without a ne
     { at: 2000, step: { kind: "os.kill", who: worker, signal: "SIGKILL" } },
     { at: 2001, step: { kind: "tool.call", who: lead, tool: "ensure_worker", args: { name: "w1", scope: "text-1" } } },
     { at: 2002, step: { kind: "tool.call", who: worker, tool: "task_update", args: { task_id: ref(4, "details.tasks_by_key.work.id"), operation_id: "after-recovery", expected_version: ref(6, "details.task.version"), current_context: "Resumed the same Attempt after recovery" } } },
+    { at: 2500, step: { kind: "turn.end", who: worker, outcome: "settled" } },
+    { at: 2600, step: { kind: "agent.settled", who: worker } },
     { at: 3000, step: { kind: "pi.shutdown", who: worker, reason: "quit" } },
     { at: 3001, step: { kind: "pi.shutdown", who: lead, reason: "quit" } },
   ] };
