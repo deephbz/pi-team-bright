@@ -5,7 +5,7 @@ import path from "node:path";
 import { writeJsonAtomic } from "./atomic-json";
 import { withLock } from "./lock";
 import { graphRevisionRetirementPath, graphTaskAuthorityPath } from "./paths";
-import { GraphTaskController, type GraphControlSnapshot } from "../task-authority/graph-control";
+import { readGraphTaskCoordinates } from "./graph-read-view";
 import type {
   GraphRevisionRetirementInput,
   GraphTaskCoordinate,
@@ -199,8 +199,7 @@ export function readCurrentGraphTaskCoordinatesLocked(teamName: string): Set<str
   }
   // The graph writer atomically replaces its snapshot. The fence is derived;
   // currentness must come from the committed authority when they disagree.
-  const controller = GraphTaskController.recover(JSON.parse(fs.readFileSync(authorityFile, "utf8")) as GraphControlSnapshot);
-  return new Set(controller.readTasks().map((task) => `${task.id}\u0000${task.version}`));
+  return readGraphTaskCoordinates(teamName);
 }
 
 /** Exact current graph coordinate; derived delivery evidence cannot replace authority. */

@@ -81,6 +81,8 @@ export interface CoordinationTeamRuntimeQuery {
 
 /** Task authority state plus its pending delivery evidence. */
 export interface CoordinationTaskStateDeliveryQuery {
+  /** One complete read observation; a changed authority must refuse its result. */
+  withReadView?<T>(action: () => Promise<T>): Promise<T>;
   /** True when listTaskIds is the complete current set, not an eventually consistent index. */
   completeTaskSet?(teamName: string): boolean;
   listTaskIds(teamName: string): Promise<string[]>;
