@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as journal from "./event-journal";
 import { configPath, teamDir, teamEventJournalPath } from "../utils/paths";
+import { nodeHostEnv } from "../env/host-env";
 
 function productionTypeScriptPaths(directory: string): string[] {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -45,9 +45,9 @@ describe("Coordination event-journal ownership boundary", () => {
   it("appends a Task batch with consecutive cursors and one journal flush", async () => {
     const journalPath = teamEventJournalPath(teamName);
     const order: string[] = [];
-    const realOpen = fsp.open.bind(fsp);
-    const realRename = fsp.rename.bind(fsp);
-    const open = vi.spyOn(fsp, "open").mockImplementation(async (...args) => {
+    const realOpen = nodeHostEnv.durableFs.open.bind(nodeHostEnv.durableFs);
+    const realRename = nodeHostEnv.durableFs.rename.bind(nodeHostEnv.durableFs);
+    const open = vi.spyOn(nodeHostEnv.durableFs, "open").mockImplementation(async (...args) => {
       const handle = await realOpen(...args);
       const realSync = handle.sync.bind(handle);
       vi.spyOn(handle, "sync").mockImplementation(async () => {
@@ -56,9 +56,9 @@ describe("Coordination event-journal ownership boundary", () => {
       });
       return handle;
     });
-    const rename = vi.spyOn(fsp, "rename").mockImplementation(async (from, to) => {
+    const rename = vi.spyOn(nodeHostEnv.durableFs, "rename").mockImplementation(async (from, to, beforeCommit) => {
       order.push("rename");
-      return realRename(from, to);
+      return realRename(from, to, beforeCommit);
     });
     const fullRead = vi.spyOn(fs, "readFileSync");
     const events = await journal.appendTaskEvidenceEvents(teamName, [

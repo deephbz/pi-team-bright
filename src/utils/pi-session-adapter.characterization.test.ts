@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -380,7 +381,7 @@ describe("registered Pi Session adapter characterization", () => {
     const config = await createTeam(name, sessionFile);
     const lead = config.members[0];
     config.members[0].tmuxPaneId = "%private-pane";
-    teams.writeConfigAtomic(paths.configPath(name), config);
+    writeJsonFixture(paths.configPath(name), config);
     await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: 1 }, lead.membershipId);
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
@@ -705,7 +706,7 @@ describe("registered Pi Session adapter characterization", () => {
     const sessionFile = `/tmp/${name}-lead.jsonl`;
     const config = await createTeam(name, sessionFile);
     config.syncLiveness = { waitSeconds: 120, nudgeEnabled: false, nudgeDelaySeconds: 0, policyVersion: "characterization" };
-    teams.writeConfigAtomic(paths.configPath(name), config);
+    writeJsonFixture(paths.configPath(name), config);
     const start = vi.spyOn(SyncNudgeConductor.prototype, "start");
     vi.spyOn(DirectMessageDelivery.prototype, "start").mockResolvedValue(undefined);
     vi.spyOn(TaskChangeDelivery.prototype, "start").mockResolvedValue(undefined);
@@ -723,7 +724,7 @@ describe("registered Pi Session adapter characterization", () => {
     const sessionFile = `/tmp/${name}-worker.jsonl`;
     const config = await createTeam(name, `/tmp/${name}-lead.jsonl`);
     config.terminalBackend = "herdr";
-    teams.writeConfigAtomic(paths.configPath(name), config);
+    writeJsonFixture(paths.configPath(name), config);
     await teams.addMember(name, {
       membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate",
       joinedAt: Date.now(), terminalTarget: { backend: "herdr", kind: "pane", targetId: "herdr-worker" },
@@ -751,7 +752,7 @@ describe("registered Pi Session adapter characterization", () => {
     const config = await createTeam(name, sessionFile);
     config.terminalBackend = "herdr";
     config.members[0].terminalTarget = { backend: "herdr", kind: "pane", targetId: "herdr-pane" };
-    teams.writeConfigAtomic(paths.configPath(name), config);
+    writeJsonFixture(paths.configPath(name), config);
     const direct = vi.spyOn(DirectMessageDelivery.prototype, "start");
     const task = vi.spyOn(TaskChangeDelivery.prototype, "start");
     const nudge = vi.spyOn(SyncNudgeConductor.prototype, "start");

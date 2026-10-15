@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -55,7 +56,7 @@ function member(team: string, name: string, sessionFile: string): Member {
 async function configureTeam(team: string, workerSession: string): Promise<TeamConfig> {
   const config = await teams.createTeam(team, `/tmp/${team}-lead.jsonl`, "lead");
   config.members.push(member(team, "worker", workerSession));
-  teams.writeConfigAtomic(paths.configPath(team), config);
+  writeJsonFixture(paths.configPath(team), config);
   return config;
 }
 

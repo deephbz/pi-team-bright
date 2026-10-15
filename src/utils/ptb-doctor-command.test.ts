@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -92,7 +93,7 @@ function team(name: string, sessionFile: string, backend: "graph" | "beads" = "g
     } : {}),
   };
   fs.mkdirSync(paths.teamDir(name), { recursive: true });
-  teams.writeConfigAtomic(paths.configPath(name), config);
+  writeJsonFixture(paths.configPath(name), config);
   return config;
 }
 

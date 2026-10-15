@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "../utils/test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +10,7 @@ import { DurableGraphAssignedWorkGuard } from "../adapters/durable-graph-assigne
 import { DurableGraphTaskStateDeliveryQuery } from "../adapters/durable-graph-task-read";
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 import { DurableGraphTaskOrchestration } from "./graph-orchestration";
-import { createTeam, readConfig, writeConfigAtomic } from "../utils/teams";
+import { createTeam, readConfig } from "../utils/teams";
 import { configPath, graphTaskAuthorityPath, taskDeliveryPath, taskDeliveryRecoveryPath, teamDir } from "../utils/paths";
 import { readTaskDeliveries, reconcileTaskChanges, TaskChangeDelivery } from "../utils/task-delivery";
 import * as atomic from "../utils/atomic-json";
@@ -28,7 +29,7 @@ async function team(teamName: string) {
   const config = await createTeam(teamName, "synthetic-lead-session", "lead");
   config.logicalWorkers = [{ name: "worker", scope: "Complete the criterion." }];
   config.members.push({ membershipId: "membership-worker", agentId: "worker-agent", name: "worker", agentType: "teammate", joinedAt: 0, cwd: "/synthetic", sessionFile: "synthetic-worker-session", subscriptions: [], isActive: true });
-  writeConfigAtomic(configPath(teamName), config);
+  writeJsonFixture(configPath(teamName), config);
   return config;
 }
 const definition = { operationId: "apply", tasks: [{ key: "work", title: "Work", goal: "Criterion passes.", assignee: "worker" }] };
@@ -50,7 +51,7 @@ describe("graph-only Task authority cutover", () => {
   it("uses a valid graph with obsolete Beads fields for reads, transitions and delivery without bd", async () => {
     const teamName = name(); const config = await team(teamName); const { graph, query } = composition();
     Object.assign(config, { taskBackend: "beads", taskWorkspace: "/absent-workspace", taskAuthorityId: "obsolete", taskAuthorityFingerprint: { obsolete: true } });
-    writeConfigAtomic(configPath(teamName), config);
+    writeJsonFixture(configPath(teamName), config);
     const exec = vi.spyOn(hostEnv().exec, "run");
     const applied = await graph.applyGraph(teamName, definition); expect(applied.kind).toBe("applied");
     const task = (await graph.readTasks(teamName))[0];
@@ -62,7 +63,7 @@ describe("graph-only Task authority cutover", () => {
 
   it("refuses graphless Beads reads, transitions and work guards without changing .beads", async () => {
     const teamName = name(); const config = await team(teamName); fs.rmSync(path.dirname(graphTaskAuthorityPath(teamName)), { recursive: true });
-    Object.assign(config, { taskBackend: "beads" }); writeConfigAtomic(configPath(teamName), config);
+    Object.assign(config, { taskBackend: "beads" }); writeJsonFixture(configPath(teamName), config);
     const beads = path.join(teamDir(teamName), ".beads"); fs.mkdirSync(beads); const file = path.join(beads, "retained.json"); fs.writeFileSync(file, '{"tasks":["old"]}');
     const before = fs.readFileSync(file); const { graph, guard, authority } = composition();
     await expect(graph.readTasks(teamName)).rejects.toThrow(UNSUPPORTED_BEADS_TEAM);

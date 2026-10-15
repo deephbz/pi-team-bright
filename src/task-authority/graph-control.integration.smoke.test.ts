@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "../utils/test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -5,7 +6,6 @@ import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-author
 import { DurableTaskMutationPublication } from "../adapters/durable-task-mutation-publication";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../utils/paths";
 import { readTaskDeliveries } from "../utils/task-delivery";
-import { writeConfigAtomic } from "../utils/teams";
 import { DurableGraphTaskOrchestration } from "./graph-orchestration";
 import type { GraphTaskCard } from "./graph-control-schemas";
 import type { TeamConfig } from "../team-authority/contracts";
@@ -71,7 +71,7 @@ describe("durable graph-control integration", () => {
   it("recovers Attempts and dispatch while a failed review stays closed to verification", async () => {
     fs.mkdirSync(teamDir(teamName), { recursive: true });
     await new DurableGraphTaskAuthority().initializeEmpty(teamName);
-    writeConfigAtomic(configPath(teamName), config());
+    writeJsonFixture(configPath(teamName), config());
     const publication = new DurableTaskMutationPublication();
     const orchestration = new DurableGraphTaskOrchestration(
       new DurableGraphTaskAuthority(),

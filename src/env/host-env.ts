@@ -8,14 +8,16 @@
  * that actor's capabilities through every await, so PTB algorithms run
  * unchanged against a simulated clock, process table and terminal.
  *
- * The filesystem is deliberately absent. Every actor on one host shares the
- * real `~/.pi` tree. A simulated world uses the process HOME that the test
- * runner isolates before any import, runs worlds one at a time and wipes the
- * tree between worlds. The simulator guards fs calls fail-closed to that
- * tree. File timestamps never serve as time evidence; code compares only
- * `clock.now()` values. Crash-torn writes are out of scope; atomic writes use
- * rename. One Node loop serializes synchronous fs sequences that separate
- * processes could interleave; that limit is stated, not modelled.
+ * `durableFs` exposes only the asynchronous operations used by durable
+ * replacement and journal append. Every actor on one host shares the real
+ * `~/.pi` tree. A simulated world uses the process HOME that the test runner
+ * isolates before any import, runs worlds one at a time and wipes the tree
+ * between worlds. HostGuard schedules filesystem steps, fences each step to
+ * its requesting actor generation, and fails closed outside that tree. File
+ * timestamps never serve as time evidence; code compares only `clock.now()`
+ * values. Crash-torn writes are out of scope; atomic writes use rename. One
+ * Node loop serializes synchronous fs sequences that separate processes could
+ * interleave; that limit is stated, not modelled.
  *
  * Rules for this interface:
  * - Each member is an OS primitive or an external authority's wire surface.
@@ -34,6 +36,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import { setTimeout as sleepNode } from "node:timers/promises";
 
 export type TimerHandle = { readonly __timer: unique symbol } | ReturnType<typeof setTimeout>;
@@ -126,12 +129,51 @@ export interface HostWatch {
   watchDirectory(directory: string, listener: (filename: string | null) => void): HostWatcher;
 }
 
+/** Narrow async filesystem capability for durable replacement and journal append. */
+export interface DurableStats {
+  readonly size: number;
+  readonly mode: number;
+  isFile(): boolean;
+}
+
+export interface DurableFileSystem {
+  mkdir(path: string, options: { recursive: true }): Promise<void>;
+  stat(path: string): Promise<DurableStats>;
+  open(path: string, flags: string, mode?: number): Promise<DurableFileHandle>;
+  writeFile(path: string, data: string | Uint8Array, options: { flag: string; mode: number }): Promise<void>;
+  rename(from: string, to: string, beforeCommit?: () => void): Promise<void>;
+  unlink(path: string): Promise<void>;
+}
+
+export interface DurableFileHandle {
+  writeFile(data: string | Uint8Array): Promise<void>;
+  write(buffer: Buffer, offset: number, length: number, position: number | null): Promise<{ bytesWritten: number; buffer: Buffer }>;
+  read(buffer: Buffer, offset: number, length: number, position: number): Promise<{ bytesRead: number; buffer: Buffer }>;
+  sync(): Promise<void>;
+  stat(): Promise<DurableStats>;
+  truncate(length?: number): Promise<void>;
+  chmod(mode: number): Promise<void>;
+  close(): Promise<void>;
+}
+
 export interface HostEnv {
   clock: HostClock;
   random: HostRandom;
   process: HostProcess;
   exec: HostExec;
   watch: HostWatch;
+  durableFs: DurableFileSystem;
+}
+
+export function createNodeDurableFileSystem(): DurableFileSystem {
+  return {
+    mkdir: async (path, options) => { await fsp.mkdir(path, options); },
+    stat: (path) => fsp.stat(path),
+    open: async (path, flags, mode) => await fsp.open(path, flags, mode),
+    writeFile: async (path, data, options) => { await fsp.writeFile(path, data, options); },
+    rename: async (from, to, beforeCommit) => { beforeCommit?.(); await fsp.rename(from, to); },
+    unlink: async (path) => { await fsp.unlink(path); },
+  };
 }
 
 function runNode(command: string, args: readonly string[], options: { timeoutMs: number; signal?: AbortSignal }): Promise<ExecOutcome> {
@@ -159,6 +201,7 @@ function runNode(command: string, args: readonly string[], options: { timeoutMs:
 }
 
 export const nodeHostEnv: HostEnv = {
+  durableFs: createNodeDurableFileSystem(),
   clock: {
     now: () => Date.now(),
     setTimeout: (callback, ms) => setTimeout(callback, ms),
