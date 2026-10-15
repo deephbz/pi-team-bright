@@ -26,7 +26,7 @@ vi.mock("../utils/team-terminal", async () => {
     fixture.starts++;
     return new Promise(resolve => { fixture.release = resolve; });
   };
-  return { currentTerminalForTeam: () => terminal };
+  return { currentTerminalForTeamAsync: async () => terminal };
 });
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
 import { deriveCarrierView } from "../carrier-observation";

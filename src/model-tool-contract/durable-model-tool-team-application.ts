@@ -1,6 +1,6 @@
 import { GraphSnapshotCorruption } from "../task-authority/graph-authority-errors";
 import { hostEnv } from "../env/host-env";
-import { getTerminalAdapter } from "../adapters/terminal-registry";
+import { getTerminalAdapterAsync } from "../adapters/terminal-registry";
 import * as paths from "../utils/paths";
 import { datePrefixedTeamName, loadTeamDatePrefix, teamTerminalTitle } from "../utils/team-labels";
 import * as teams from "../utils/teams";
@@ -36,7 +36,7 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
     let teamName: string;
     try { teamName = datePrefixedTeamName(paths.sanitizeName(input.name), loadTeamDatePrefix()); }
     catch (error) { return { kind: "unavailable", reason: "team_authority_unavailable", message: error instanceof Error ? error.message : String(error) }; }
-    const terminal = getTerminalAdapter();
+    const terminal = await getTerminalAdapterAsync();
     if (!terminal) return { kind: "unavailable", reason: "carrier_unavailable", message: "No supported terminal carrier is available for the model-tool Worker." };
     let paneLayout: TeamPaneLayout; let syncLiveness: TeamConfig["syncLiveness"];
     let modelRoles: Array<{ name: string; use: string }> = []; let defaultModelRole: string | undefined;
@@ -52,9 +52,10 @@ export class DurableModelToolTeamApplication implements ModelToolTeamApplication
       await this.lifecycle?.teamCreated?.(teamName, sessionFile);
       const leader = config.members.find((member) => member.agentType === "lead" && member.isActive !== false);
       const target = leader?.terminalTarget;
-      if (target?.kind === "pane" && target.backend === terminal.name && terminal.renamePane) {
+      if (target?.kind === "pane" && target.backend === terminal.name && (terminal.renamePaneAsync || terminal.renamePane)) {
         try {
-          terminal.renamePane(target.targetId, teamTerminalTitle(config.name, "team-lead"));
+          if (terminal.renamePaneAsync) await terminal.renamePaneAsync(target.targetId, teamTerminalTitle(config.name, "team-lead"));
+          else terminal.renamePane!(target.targetId, teamTerminalTitle(config.name, "team-lead"));
         } catch (error) {
           // Naming is presentation; the committed Team remains usable.
           console.warn(`[pi-teams] Team leader pane could not be named: ${error instanceof Error ? error.message : String(error)}`);

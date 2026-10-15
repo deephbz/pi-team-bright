@@ -52,6 +52,28 @@ function adapters(): TerminalAdapter[] {
  * Cached detected adapter per actor
  */
 const cachedAdapters = new WeakMap<HostEnv, TerminalAdapter>();
+const pendingAdapters = new WeakMap<HostEnv, Promise<TerminalAdapter | null>>();
+
+/** Coalesce cold detection without blocking Herdr callers. Cache only positive evidence. */
+export async function getTerminalAdapterAsync(): Promise<TerminalAdapter | null> {
+  const env = hostEnv();
+  const cached = cachedAdapters.get(env);
+  if (cached) return cached;
+  const pending = pendingAdapters.get(env);
+  if (pending) return pending;
+  const read = Promise.resolve().then(async () => {
+    for (const adapter of adapters()) {
+      if (await (adapter.detectAsync ? adapter.detectAsync() : adapter.detect())) {
+        if (pendingAdapters.get(env) === read) cachedAdapters.set(env, adapter);
+        return adapter;
+      }
+    }
+    return null;
+  });
+  pendingAdapters.set(env, read);
+  try { return await read; }
+  finally { if (pendingAdapters.get(env) === read) pendingAdapters.delete(env); }
+}
 
 /**
  * Detect and return the appropriate terminal adapter for the current environment.
@@ -102,6 +124,7 @@ export function getAllAdapters(): TerminalAdapter[] {
  * Clear the cached adapter (useful for testing or environment changes)
  */
 export function clearAdapterCache(): void {
+  pendingAdapters.delete(hostEnv());
   cachedAdapters.delete(hostEnv());
 }
 
@@ -109,6 +132,7 @@ export function clearAdapterCache(): void {
  * Set a specific adapter (useful for testing or forced selection)
  */
 export function setAdapter(adapter: TerminalAdapter): void {
+  pendingAdapters.delete(hostEnv());
   cachedAdapters.set(hostEnv(), adapter);
 }
 

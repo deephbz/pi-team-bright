@@ -3,7 +3,7 @@ import { hostEnv } from "../env/host-env";
 import * as runtime from "../utils/runtime";
 import * as teamEvents from "../coordination/event-journal";
 import * as teams from "../utils/teams";
-import { terminalForTeam } from "../utils/team-terminal";
+import { terminalForTeamAsync } from "../utils/team-terminal";
 import { memberTerminalTarget } from "../utils/terminal-target";
 import {
   observeWorkerStartup,
@@ -72,10 +72,11 @@ export class DurableTeamLifecyclePublication implements TeamLifecyclePublication
           const current = await teams.currentMembership(input.teamName, input.workerName);
           // Never inspect a replacement carrier for this launch.
           if (current.membershipId !== input.membershipId) return false;
-          const adapter = terminalForTeam(config);
+          const adapter = await terminalForTeamAsync(config);
           const target = memberTerminalTarget(current, adapter.name);
           if (!target) return undefined;
-          return target.kind === "window" ? adapter.isWindowAlive(target.targetId) : adapter.isAlive(target.targetId);
+          return target.kind === "window" ? adapter.isWindowAlive(target.targetId)
+            : adapter.isAliveAsync ? await adapter.isAliveAsync(target.targetId) : adapter.isAlive(target.targetId);
         } catch {
           // Read errors and CLI failures cannot prove carrier absence.
           return undefined;

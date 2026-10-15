@@ -7,7 +7,7 @@ import { writeRuntimeStatus } from "../utils/runtime";
 import { nodeHostEnv } from "../env/host-env";
 import { HerdrAdapter } from "../adapters/herdr-adapter";
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
-vi.mock("../utils/team-terminal", () => ({ currentTerminalForTeam: () => terminal }));
+vi.mock("../utils/team-terminal", () => ({ currentTerminalForTeamAsync: async () => terminal }));
 vi.mock("../utils/team-pane-placement", () => ({ teamPanePlacement: () => ({ leaderPaneId: "leader", workerPaneIds: [] }) }));
 const terminal = new HerdrAdapter();
 const created: string[] = [];

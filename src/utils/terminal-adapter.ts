@@ -55,6 +55,7 @@ export interface TerminalAdapter {
 
   /** Set a presentation label on an exact pane without changing its identity. */
   renamePane?(paneId: string, label: string): void;
+  renamePaneAsync?(paneId: string, label: string): Promise<void>;
 
   /**
    * Whether this process is directly carried by this backend rather than by a
@@ -70,6 +71,8 @@ export interface TerminalAdapter {
    * @returns true if this terminal should be used
    */
   detect(): boolean;
+  /** Bounded nonblocking companion; legacy backends can keep synchronous detection. */
+  detectAsync?(): Promise<boolean>;
 
   /**
    * Spawn a new terminal pane with the given options.
@@ -87,6 +90,7 @@ export interface TerminalAdapter {
    * @param paneId - The pane ID returned from spawn()
    */
   kill(paneId: string): void;
+  killAsync?(paneId: string): Promise<void>;
 
   /**
    * Check if a terminal pane is still alive/active.
@@ -95,6 +99,8 @@ export interface TerminalAdapter {
    * @returns true if pane exists and is active
    */
   isAlive(paneId: string): boolean;
+  /** Only decisive absence returns false; unavailable evidence throws. */
+  isAliveAsync?(paneId: string): Promise<boolean>;
 
   /**
    * Set the title of the current terminal pane/window.
