@@ -60,7 +60,9 @@
     "review:tui": "npm run qa:tui-messages:gallery --",
     "review:palette": "ts-node --transpile-only src/cli/ptb-palette-gallery.ts",
     "review:graph": "npm run task-dag-islands:gallery --",
-    "review:check": "npm run typecheck && vitest run src/model-tool-contract/tui-message-gallery.test.ts src/model-tool-contract/tui-message-gallery-component.test.ts src/model-tool-contract/tui-message-projection.test.ts src/task-graph-view/gallery-config.test.ts src/task-graph-view/gallery-component.test.ts src/task-graph-view/sentinel.test.ts src/task-graph-view/task-timeline.integration.test.ts extensions/ptb-palette.test.ts extensions/ptb-command-palette.test.ts src/utils/ptb-command.test.ts src/utils/ptb-settings-editor.test.ts"
+    "review:check": "npm run typecheck && vitest run src/model-tool-contract/tui-message-gallery.test.ts src/model-tool-contract/tui-message-gallery-component.test.ts src/model-tool-contract/tui-message-projection.test.ts src/task-graph-view/gallery-config.test.ts src/task-graph-view/gallery-component.test.ts src/task-graph-view/sentinel.test.ts src/task-graph-view/task-timeline.integration.test.ts extensions/ptb-palette.test.ts extensions/ptb-command-palette.test.ts src/utils/ptb-command.test.ts src/utils/ptb-settings-editor.test.ts",
+    "probe:leader-responsiveness": "node scripts/leader-responsiveness/run.mjs",
+    "test:freeze-diagnostics": "node --test scripts/leader-responsiveness/diagnostic.selftest.cjs"
   },
   "main": "extensions/index.ts",
   "exports": {

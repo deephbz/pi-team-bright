@@ -1,0 +1,95 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+ RUN  v4.1.10 /workspace/scratch/f5647232df6e/pi-team-bright
+
+ ✓ src/env/async-process-generation.test.ts > coalesces 17 same-turn PID reads without blocking or a synchronous probe 7ms
+ ✓ src/env/async-process-generation.test.ts > coalesces 50 same-turn PID reads without blocking or a synchronous probe 2ms
+ ✓ src/env/async-process-generation.test.ts > does not share observations across hosts or reuse a completed batch 1ms
+ ✓ src/env/async-process-generation.test.ts > starts a fresh probe after a fence even while the prior batch is pending 1ms
+ ✓ src/env/async-process-generation.test.ts > keeps omitted or failed batch evidence unknown and rejects invalid PIDs without probing 1ms
+ ✓ src/adapters/herdr-async.test.ts > coalesces cold detection, yields the main thread, and preserves Herdr precedence 5ms
+ ✓ src/adapters/herdr-async.test.ts > does not cache a detection that completed after cache invalidation 1ms
+ ✓ src/adapters/herdr-async.test.ts > closes only the exact non-final pane and verifies absence asynchronously 1ms
+ ✓ src/adapters/herdr-async.test.ts > does not treat command timeout at stop step 0 as absence or retry 2ms
+ ✓ src/adapters/herdr-async.test.ts > does not treat command timeout at stop step 1 as absence or retry 1ms
+ ✓ src/adapters/herdr-async.test.ts > does not treat command timeout at stop step 2 as absence or retry 0ms
+ ✓ src/adapters/herdr-async.test.ts > rejects uncertain or foreign targets before close: 'requested pane' 1ms
+ ✓ src/adapters/herdr-async.test.ts > rejects uncertain or foreign targets before close: 'permission_denied' 1ms
+ ✓ src/adapters/herdr-async.test.ts > rejects uncertain or foreign targets before close: 'malformed JSON' 1ms
+ ✓ src/adapters/herdr-async.test.ts > preserves unavailable liveness and close outcomes: 'timeout' 1ms
+ ✓ src/adapters/herdr-async.test.ts > preserves unavailable liveness and close outcomes: 'aborted' 0ms
+ ✓ src/adapters/herdr-async.test.ts > preserves unavailable liveness and close outcomes: 'spawn_failed' 0ms
+ ✓ src/adapters/herdr-async.test.ts > refuses the final workspace pane and does not close it 0ms
+ ✓ src/adapters/herdr-async.test.ts > keeps malformed shell evidence undefined unknown 1ms
+ ✓ src/adapters/herdr-async.test.ts > keeps malformed shell evidence 42 unknown 0ms
+ ✓ src/adapters/herdr-async.test.ts > keeps malformed shell evidence 0 unknown 0ms
+ ✓ src/adapters/herdr-async.test.ts > keeps malformed shell evidence -1 unknown 0ms
+ ✓ src/adapters/herdr-async.test.ts > preserves explicit shell evidence 42 0ms
+ ✓ src/adapters/herdr-async.test.ts > preserves explicit shell evidence null 0ms
+ ✓ sim/durable-fs-parity.test.ts > keeps exclusive-create behavior equal across Node and simulator 89ms
+ ✓ sim/durable-fs-parity.test.ts > keeps open creation modes equal across Node and simulator 78ms
+ ✓ sim/durable-fs-parity.test.ts > preserves offsets and short-I/O progress across Node and simulator 64ms
+ ✓ sim/durable-fs-parity.test.ts > keeps file sync and rename callback order equal across Node and simulator 67ms
+ ✓ sim/durable-fs-parity.test.ts > cancels queued simulator I/O before its effect while Node I/O completes normally 68ms
+ ✓ src/utils/graph-read-view.test.ts > shares one recovered projection between Task hydration and delivery evidence without exposing mutable cache state 31ms
+ ✓ src/utils/graph-read-view.test.ts > refuses replaced authority at reuse even when bytes are identical 16ms
+ ✓ src/utils/graph-read-view.test.ts > refuses replaced authority at completion even when bytes are identical 8ms
+ ✓ src/utils/graph-read-view.test.ts > classifies deleted authority at reuse instead of serving cached cards 4ms
+ ✓ src/utils/graph-read-view.test.ts > classifies deleted authority at completion instead of serving cached cards 4ms
+ ✓ src/utils/graph-read-view.test.ts > classifies graph removal during the observation source read 4ms
+ ✓ src/utils/graph-read-view.test.ts > classifies graph removal during the commit source read 3ms
+ ✓ src/utils/graph-read-view.test.ts > shares immutable projections across overlapping operation scopes 4ms
+ ✓ src/utils/graph-read-view.test.ts > discards the native observation reservation when authority changes after hydration 10ms
+ ✓ src/utils/graph-read-view.test.ts > does not serve a failed scope after its source becomes corrupt 5ms
+ ✓ src/utils/graph-read-view.test.ts > shares Task, ready-front and observation-coordinate reads across operations 5ms
+ ✓ src/utils/graph-read-view.test.ts > keeps mutation and commit checks fresh even with a warm read memo 11ms
+ ✓ src/utils/graph-read-view.test.ts > reuses revision validation only for reads while writes and commit checks stay full 15ms
+ ✓ src/utils/graph-read-view.test.ts > refuses corruption at commit even if metadata appears unchanged 4ms
+ ✓ src/utils/graph-read-view.test.ts > revalidates identical-byte atomic replacements between operations 4ms
+ ✓ src/utils/graph-read-view.test.ts > refuses same-size in-place corruption even when mtime is restored 10ms
+ ✓ src/utils/graph-read-view.test.ts > invalidates the memo after uncertain file identity 4ms
+ ✓ src/utils/graph-read-view.test.ts > never installs a projection if authority changes during validation 5ms
+ ✓ src/utils/graph-read-view.test.ts > bounds the idle memo to one authority file 7ms
+ ✓ sim/async-host.test.ts > bounded host operations > separates command arrival, effect, and completion and keeps timeout effects unknown 78ms
+ ✓ sim/async-host.test.ts > bounded host operations > rejects sleeps on queued abort and drops a dead generation's completion 65ms
+ ✓ sim/async-host.test.ts > bounded host operations > models synchronous blocking without running another actor 65ms
+ ✓ sim/async-host.test.ts > bounded host operations > resolves result references but never refreshes a literal version 1ms
+
+ Test Files  5 passed (5)
+      Tests  52 passed (52)
+   Start at  22:45:23
+   Duration  2.54s (transform 1.79s, setup 169ms, import 4.53s, tests 760ms, environment 1ms)
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+ RUN  v4.1.10 /workspace/scratch/f5647232df6e/pi-team-bright
+
+stdout | scripts/leader-responsiveness/workload.test.ts > runs real durable coordination against the declared high-load fixture
+{"iteration":0,"dimensions":{"workers":10,"tasks":300,"initialJournalEvents":10000,"realWorkerProcesses":0},"rows":[{"operation":"journal_append","result":"appended","wallMs":3.0036780000000363},{"operation":"team_sync:updates","result":"unsettled","wallMs":60.66964200000007},{"operation":"team_sync:snapshot","result":"snapshot","wallMs":6.842225999999982},{"operation":"task_graph_apply:replay","result":"graph_applied","wallMs":57.990387000000055}]}
+
+stdout | scripts/leader-responsiveness/workload.test.ts > runs real durable coordination against the declared high-load fixture
+{"iteration":1,"dimensions":{"workers":10,"tasks":300,"initialJournalEvents":10000,"realWorkerProcesses":0},"rows":[{"operation":"journal_append","result":"appended","wallMs":2.318926000000147},{"operation":"team_sync:updates","result":"unsettled","wallMs":24.68210399999998},{"operation":"team_sync:snapshot","result":"snapshot","wallMs":4.516299000000117},{"operation":"task_graph_apply:replay","result":"graph_applied","wallMs":43.220343000000184}]}
+
+ ✓ scripts/leader-responsiveness/workload.test.ts > runs real durable coordination against the declared high-load fixture 380ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  22:45:34
+   Duration  1.81s (transform 374ms, setup 28ms, import 1.24s, tests 381ms, environment 0ms)
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+ RUN  v4.1.10 /workspace/scratch/f5647232df6e/pi-team-bright
+
+stdout | scripts/leader-responsiveness/workload.test.ts > runs real durable coordination against the declared high-load fixture
+{"iteration":0,"dimensions":{"workers":10,"tasks":300,"initialJournalEvents":10000,"realWorkerProcesses":0},"rows":[{"operation":"journal_append","result":"appended","wallMs":2.595642999999882},{"operation":"team_sync:updates","result":"unsettled","wallMs":63.202500999999984},{"operation":"team_sync:snapshot","result":"snapshot","wallMs":10.770708000000013},{"operation":"task_graph_apply:revision","result":"graph_applied","wallMs":62.769788999999946}]}
+
+stdout | scripts/leader-responsiveness/workload.test.ts > runs real durable coordination against the declared high-load fixture
+{"iteration":1,"dimensions":{"workers":10,"tasks":300,"initialJournalEvents":10000,"realWorkerProcesses":0},"rows":[{"operation":"journal_append","result":"appended","wallMs":2.044593000000077},{"operation":"team_sync:updates","result":"unsettled","wallMs":46.96993599999996},{"operation":"team_sync:snapshot","result":"snapshot","wallMs":4.729401000000053},{"operation":"task_graph_apply:revision","result":"graph_applied","wallMs":52.302907000000005}]}
+
+ ✓ scripts/leader-responsiveness/workload.test.ts > runs real durable coordination against the declared high-load fixture 370ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  22:46:05
+   Duration  1.96s (transform 372ms, setup 28ms, import 1.37s, tests 371ms, environment 0ms)

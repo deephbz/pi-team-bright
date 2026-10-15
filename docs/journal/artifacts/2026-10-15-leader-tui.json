@@ -1,0 +1,145 @@
+{
+  "evidence": "real Pi TUI in Linux PTY; scripted provider; synthetic carrier bindings",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "node": "v24.19.0",
+  "pi": "0.83.0",
+  "base": "0f39e060035d3e113c34deab1e1bd845a8e4e818",
+  "loadavg": [
+    0.1650390625,
+    0.1435546875,
+    0.0576171875
+  ],
+  "startup": [
+    {
+      "pair": 0,
+      "cache": "cold",
+      "ready_ms": 3157.16645899415,
+      "first_echo_ms": 10.895170003175735,
+      "cache_files": 128
+    },
+    {
+      "pair": 0,
+      "cache": "warm",
+      "ready_ms": 1153.2577599957585,
+      "first_echo_ms": 12.701323002576828,
+      "cache_files": 128
+    },
+    {
+      "pair": 1,
+      "cache": "cold",
+      "ready_ms": 3272.811213001609,
+      "first_echo_ms": 12.388892002403736,
+      "cache_files": 128
+    },
+    {
+      "pair": 1,
+      "cache": "warm",
+      "ready_ms": 1121.0086529999971,
+      "first_echo_ms": 12.310564003884792,
+      "cache_files": 128
+    },
+    {
+      "pair": 2,
+      "cache": "cold",
+      "ready_ms": 3197.3459959998727,
+      "first_echo_ms": 11.726853996515274,
+      "cache_files": 128
+    },
+    {
+      "pair": 2,
+      "cache": "warm",
+      "ready_ms": 1093.2566469982266,
+      "first_echo_ms": 11.562945999205112,
+      "cache_files": 128
+    }
+  ],
+  "samples": [
+    {
+      "mode": "async",
+      "key_echo_ms": 2.7806169986724854,
+      "escape_dispatch_ms": 10.864612996578217,
+      "escape_abort_signal_ms": 11.684589996933937,
+      "escape_agent_end_ms": 1928.782880999148,
+      "tool_wall_ms": 2000.518335,
+      "iterations": 0
+    },
+    {
+      "mode": "async",
+      "key_echo_ms": 2.809420995414257,
+      "escape_dispatch_ms": 10.55960900336504,
+      "escape_abort_signal_ms": 10.984260000288486,
+      "escape_agent_end_ms": 1926.9697569981217,
+      "tool_wall_ms": 2000.0568239999998,
+      "iterations": 0
+    },
+    {
+      "mode": "async",
+      "key_echo_ms": 2.581106998026371,
+      "escape_dispatch_ms": 10.139415003359318,
+      "escape_abort_signal_ms": 10.461901001632214,
+      "escape_agent_end_ms": 1928.0563910007477,
+      "tool_wall_ms": 1999.4228589999993,
+      "iterations": 0
+    },
+    {
+      "mode": "coordination",
+      "key_echo_ms": 42.530023001134396,
+      "escape_dispatch_ms": 41.91126500070095,
+      "escape_abort_signal_ms": 42.262685000896454,
+      "escape_agent_end_ms": 2004.975996002555,
+      "tool_wall_ms": 2070.915796000001,
+      "iterations": 15
+    },
+    {
+      "mode": "coordination",
+      "key_echo_ms": 111.26044300198555,
+      "escape_dispatch_ms": 100.05196099728346,
+      "escape_abort_signal_ms": 100.47401700168848,
+      "escape_agent_end_ms": 1965.5737989991903,
+      "tool_wall_ms": 2039.021315,
+      "iterations": 9
+    },
+    {
+      "mode": "coordination",
+      "key_echo_ms": 163.77441900223494,
+      "escape_dispatch_ms": 152.99956299364567,
+      "escape_abort_signal_ms": 153.28909999877214,
+      "escape_agent_end_ms": 1947.0510899946094,
+      "tool_wall_ms": 2025.0063979999995,
+      "iterations": 7
+    },
+    {
+      "mode": "block",
+      "key_echo_ms": 649.7070740014315,
+      "escape_dispatch_ms": 637.2035249993205,
+      "escape_abort_signal_ms": 637.5251099988818,
+      "escape_agent_end_ms": 1128.6588690057397,
+      "tool_wall_ms": 1350.2473520000003,
+      "iterations": 0
+    },
+    {
+      "mode": "block",
+      "key_echo_ms": 649.4106470048428,
+      "escape_dispatch_ms": 637.0401870012283,
+      "escape_abort_signal_ms": 637.3628539964557,
+      "escape_agent_end_ms": 1127.3780300021172,
+      "tool_wall_ms": 1350.1345139999994,
+      "iterations": 0
+    },
+    {
+      "mode": "block",
+      "key_echo_ms": 652.6424470022321,
+      "escape_dispatch_ms": 636.2276600003242,
+      "escape_abort_signal_ms": 636.5841780006886,
+      "escape_agent_end_ms": 1128.2919770032167,
+      "tool_wall_ms": 1350.2045019999987,
+      "iterations": 0
+    }
+  ],
+  "status": "failed",
+  "gates": {
+    "healthy_echo_under_100ms": false,
+    "healthy_escape_signal_under_100ms": false,
+    "detects_700ms_block": true
+  }
+}
