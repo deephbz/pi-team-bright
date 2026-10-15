@@ -6,7 +6,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MISSING_GENERATION_HELPER_MESSAGE = void 0;
 exports.linuxStartToken = linuxStartToken;
 exports.probeProcessGenerations = probeProcessGenerations;
-exports.probeProcessGeneration = probeProcessGeneration;
 const node_fs_1 = __importDefault(require("node:fs"));
 const node_path_1 = __importDefault(require("node:path"));
 const node_child_process_1 = require("node:child_process");
@@ -33,10 +32,33 @@ function parseReply(pid, line) {
 /** A poll uses one bounded helper invocation for the whole Team. */
 async function probeProcessGenerations(pids) {
     const unique = [...new Set(pids)].filter(pid => Number.isSafeInteger(pid) && pid > 1);
-    if (process.platform !== "darwin")
-        return new Map(unique.map(pid => [pid, probeProcessGeneration(pid)]));
     if (!unique.length)
         return new Map();
+    const platform = process.platform;
+    if (platform === "linux") {
+        let bootId;
+        try {
+            bootId = (await node_fs_1.default.promises.readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim();
+        }
+        catch {
+            return new Map(unique.map(pid => [pid, { kind: "unknown", reason: "boot_identity_unavailable" }]));
+        }
+        return new Map(await Promise.all(unique.map(async (pid) => {
+            let probe;
+            try {
+                const token = linuxStartToken(await node_fs_1.default.promises.readFile(`/proc/${pid}/stat`, "utf8"));
+                probe = bootId && token ? { kind: "found", generation: { pid, osBirthToken: token, bootId } }
+                    : { kind: "unknown", reason: "malformed_proc_stat" };
+            }
+            catch (error) {
+                const code = error.code;
+                probe = code === "ENOENT" || code === "ESRCH" ? { kind: "absent" } : { kind: "unknown", reason: code ?? "generation_read_failed" };
+            }
+            return [pid, probe];
+        })));
+    }
+    if (platform !== "darwin")
+        return new Map(unique.map(pid => [pid, { kind: "unknown", reason: "generation_verifier_unavailable" }]));
     const helper = node_path_1.default.resolve(__dirname, "../../native/bin/process-generation");
     return new Promise(resolve => {
         (0, node_child_process_1.execFile)(helper, unique.map(String), { encoding: "utf8", timeout: 2000 }, (error, stdout) => {
@@ -44,35 +66,4 @@ async function probeProcessGenerations(pids) {
             resolve(new Map(unique.map(pid => [pid, error ? helperFailure(error) : parseReply(pid, lines.get(pid) ?? "")])));
         });
     });
-}
-function probeProcessGeneration(pid) {
-    if (!Number.isSafeInteger(pid) || pid <= 1)
-        return { kind: "unknown", reason: "invalid_pid" };
-    try {
-        if (process.platform === "linux") {
-            let bootId;
-            try {
-                bootId = node_fs_1.default.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim();
-            }
-            catch {
-                return { kind: "unknown", reason: "boot_identity_unavailable" };
-            }
-            const osBirthToken = linuxStartToken(node_fs_1.default.readFileSync(`/proc/${pid}/stat`, "utf8"));
-            return bootId && osBirthToken ? { kind: "found", generation: { pid, osBirthToken, bootId } }
-                : { kind: "unknown", reason: "malformed_proc_stat" };
-        }
-        if (process.platform === "darwin") {
-            const helper = node_path_1.default.resolve(__dirname, "../../native/bin/process-generation");
-            const result = (0, node_child_process_1.spawnSync)(helper, [String(pid)], { encoding: "utf8", timeout: 2000 });
-            if (result.error || result.status !== 0)
-                return helperFailure(result.error);
-            return parseReply(pid, result.stdout);
-        }
-        return { kind: "unknown", reason: "generation_verifier_unavailable" };
-    }
-    catch (error) {
-        const code = error.code;
-        return code === "ENOENT" || code === "ESRCH" ? { kind: "absent" }
-            : { kind: "unknown", reason: code ?? "generation_read_failed" };
-    }
 }

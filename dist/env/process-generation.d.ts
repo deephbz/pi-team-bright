@@ -4,4 +4,3 @@ export declare const MISSING_GENERATION_HELPER_MESSAGE = "The macOS process-gene
 export declare function linuxStartToken(stat: string): string | undefined;
 /** A poll uses one bounded helper invocation for the whole Team. */
 export declare function probeProcessGenerations(pids: readonly number[]): Promise<Map<number, GenerationProbe>>;
-export declare function probeProcessGeneration(pid: number): GenerationProbe;
