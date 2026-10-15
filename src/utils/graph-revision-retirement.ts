@@ -2,7 +2,7 @@ import { missingGraphAuthority } from "./graph-authority-presence";
 import { hostEnv } from "../env/host-env";
 import fs from "node:fs";
 import path from "node:path";
-import { writeJsonAtomic } from "./atomic-json";
+import { writeJsonAtomicAsync } from "./atomic-json";
 import { withLock } from "./lock";
 import { graphRevisionRetirementPath, graphTaskAuthorityPath } from "./paths";
 import { readGraphTaskCoordinates } from "./graph-read-view";
@@ -126,7 +126,7 @@ export async function recordGraphRevisionRetirement(input: GraphRevisionRetireme
 }
 
 /** Same mutation while the caller owns the graph-revision retirement lock. */
-export function recordGraphRevisionRetirementLocked(input: GraphRevisionRetirementInput): GraphRevisionRetirementSnapshot {
+export async function recordGraphRevisionRetirementLocked(input: GraphRevisionRetirementInput): Promise<GraphRevisionRetirementSnapshot> {
   const file = graphRevisionRetirementPath(input.teamName);
   let prior: GraphRevisionRetirementSnapshot | undefined;
   try {
@@ -175,7 +175,7 @@ export function recordGraphRevisionRetirementLocked(input: GraphRevisionRetireme
       : candidate,
     history,
   };
-  writeJsonAtomic(file, snapshot);
+  await writeJsonAtomicAsync(file, snapshot);
   return snapshot;
 }
 

@@ -12,7 +12,7 @@ import type {
 export type { BroadcastMessageResult, ExpectedSenderBinding } from "./contracts";
 import { withLock } from "../utils/lock";
 import { inboxPath } from "../utils/paths";
-import { writeJsonAtomic } from "../utils/atomic-json";
+import { writeJsonAtomicAsync } from "../utils/atomic-json";
 
 export class MessageTeamDoesNotExistError extends Error {
   constructor(readonly teamName: string) {
@@ -101,7 +101,7 @@ export async function appendMessage(
       id: message.id || newMessageId(),
     };
     msgs.push(identifiedMessage);
-    writeJsonAtomic(p, msgs);
+    await writeJsonAtomicAsync(p, msgs);
     return identifiedMessage;
   });
 }
@@ -136,7 +136,7 @@ export async function readInbox(
     }
 
     if (changed) {
-      writeJsonAtomic(p, allMsgs);
+      await writeJsonAtomicAsync(p, allMsgs);
     }
 
     return result;
@@ -179,7 +179,7 @@ export async function readInboxForMembership(
         }
       }
     }
-    if (changed) writeJsonAtomic(p, identified.messages);
+    if (changed) await writeJsonAtomicAsync(p, identified.messages);
     return result;
   });
 }
@@ -222,7 +222,7 @@ export async function markMessagesRead(
       }
     }
     if (identified.changed || marked > 0) {
-      writeJsonAtomic(p, identified.messages);
+      await writeJsonAtomicAsync(p, identified.messages);
     }
     return marked;
   });
@@ -254,7 +254,7 @@ export async function markMessagesReadForMembership(
         marked += 1;
       }
     }
-    if (identified.changed || marked > 0) writeJsonAtomic(p, identified.messages);
+    if (identified.changed || marked > 0) await writeJsonAtomicAsync(p, identified.messages);
     return marked;
   });
 }

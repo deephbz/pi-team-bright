@@ -1,5 +1,6 @@
 import { hostEnv, type TimerHandle } from "../env/host-env";
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { withLock } from "../utils/lock";
 import type { TaskTeamEvent, TeamEvent, TeamEventInput, TeamEventType } from "./contracts";
@@ -373,12 +374,12 @@ function readJournal(teamName: string): TeamEvent[] {
   }
 }
 
-function readJournalTailCursor(teamName: string): bigint {
+async function readJournalTailCursor(teamName: string): Promise<bigint> {
   const journal = teamEventJournalPath(teamName);
   if (!fs.existsSync(journal)) return 0n;
-  const fd = fs.openSync(journal, "r+");
+  const handle = await fsp.open(journal, "r+");
   try {
-    const size = fs.fstatSync(fd).size;
+    const size = (await handle.stat()).size;
     if (size === 0) return 0n;
     const chunkSize = 4096;
     let end = size;
@@ -387,7 +388,7 @@ function readJournalTailCursor(teamName: string): bigint {
     while (end > 0 && newlineCount < 2) {
       const start = Math.max(0, end - chunkSize);
       const chunk = Buffer.alloc(end - start);
-      fs.readSync(fd, chunk, 0, chunk.length, start);
+      await handle.read(chunk, 0, chunk.length, start);
       bytes = Buffer.concat([chunk, bytes]);
       newlineCount = [...bytes].filter((byte) => byte === 10).length;
       end = start;
@@ -398,31 +399,31 @@ function readJournalTailCursor(teamName: string): bigint {
     if (!finalLine) return 0n;
     try {
       const event = parseEvent(finalLine, 0);
-      if (!complete) fs.writeSync(fd, Buffer.from("\n"), 0, 1, size);
+      if (!complete) await handle.write(Buffer.from("\n"), 0, 1, size);
       return parseCursor(event.cursor);
     } catch (error) {
       if (complete) throw error;
       // A malformed unterminated suffix is a torn write. Drop only that suffix.
       const priorLine = lines.at(-2) ?? "";
       const truncateAt = size - Buffer.byteLength(finalLine);
-      fs.ftruncateSync(fd, Math.max(0, truncateAt));
+      await handle.truncate(Math.max(0, truncateAt));
       if (!priorLine) return 0n;
       return parseCursor(parseEvent(priorLine, 0).cursor);
     }
   } finally {
-    fs.closeSync(fd);
+    await handle.close();
   }
 }
 
-function writeCursorProjection(teamName: string, cursor: string): void {
+async function writeCursorProjection(teamName: string, cursor: string): Promise<void> {
   const target = teamEventCursorStatePath(teamName);
   const directory = path.dirname(target);
   const temp = path.join(directory, `.${path.basename(target)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
-  fs.writeFileSync(temp, JSON.stringify({ schema: EVENT_SCHEMA, cursor, updatedAt: new Date(hostEnv().clock.now()).toISOString() }), {
+  await fsp.writeFile(temp, JSON.stringify({ schema: EVENT_SCHEMA, cursor, updatedAt: new Date(hostEnv().clock.now()).toISOString() }), {
     flag: "wx",
     mode: 0o600,
   });
-  fs.renameSync(temp, target);
+  await fsp.rename(temp, target);
 }
 
 /**
@@ -433,9 +434,9 @@ export async function appendTeamEvents(teamName: string, inputs: readonly TeamEv
   if (!inputs.length) return [];
   if (!fs.existsSync(configPath(teamName))) throw new Error(`Team ${teamName} not found`);
   const journal = teamEventJournalPath(teamName);
-  fs.mkdirSync(path.dirname(journal), { recursive: true });
+  await fsp.mkdir(path.dirname(journal), { recursive: true });
   return withLock(journal, async () => {
-    let cursor = readJournalTailCursor(teamName);
+    let cursor = await readJournalTailCursor(teamName);
     const events = inputs.map((input) => {
       cursor += 1n;
       const event = { ...input, cursor: cursor.toString(), at: new Date(hostEnv().clock.now()).toISOString() } as TeamEvent;
@@ -443,14 +444,14 @@ export async function appendTeamEvents(teamName: string, inputs: readonly TeamEv
       parseEvent(JSON.stringify(event), 0);
       return event;
     });
-    const fd = fs.openSync(journal, "a", 0o600);
+    const handle = await fsp.open(journal, "a", 0o600);
     try {
-      fs.writeSync(fd, `${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
-      fs.fsyncSync(fd);
+      await handle.writeFile(`${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
+      await handle.sync();
     } finally {
-      fs.closeSync(fd);
+      await handle.close();
     }
-    writeCursorProjection(teamName, cursor.toString());
+    await writeCursorProjection(teamName, cursor.toString());
     return events;
   });
 }

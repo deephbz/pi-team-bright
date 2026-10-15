@@ -92,8 +92,8 @@ describe("graph-only Task authority cutover", () => {
   it("replays a committed non-ready Task after enqueue failure once at Worker startup without bd", async () => {
     const teamName = name(); await team(teamName); const { graph, authority, publication } = composition(); await graph.applyGraph(teamName, definition);
     const task = (await graph.readTasks(teamName))[0];
-    const original = atomic.writeJsonAtomic;
-    const failure = vi.spyOn(atomic, "writeJsonAtomic").mockImplementation((file, data) => { if (file === taskDeliveryPath(teamName, "worker")) throw new Error("Injected spool failure"); return original(file, data); });
+    const original = atomic.writeJsonAtomicAsync;
+    const failure = vi.spyOn(atomic, "writeJsonAtomicAsync").mockImplementation(async (file, data) => { if (file === taskDeliveryPath(teamName, "worker")) throw new Error("Injected spool failure"); return original(file, data); });
     const result = await graph.transition(teamName, { taskId: task.id, operationId: "claim", expectedVersion: task.version as TaskVersionRef, transition: "claim", worker: "worker" }, "worker");
     expect(result).toMatchObject({ kind: "updated", task: { status: "in_progress" } });
     if (result.kind !== "updated") throw new Error("Claim failed");

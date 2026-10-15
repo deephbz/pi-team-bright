@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as journal from "./event-journal";
@@ -44,13 +45,18 @@ describe("Coordination event-journal ownership boundary", () => {
   it("appends a Task batch with consecutive cursors and one journal flush", async () => {
     const journalPath = teamEventJournalPath(teamName);
     const order: string[] = [];
-    const realFsync = fs.fsyncSync.bind(fs);
-    const realRename = fs.renameSync.bind(fs);
-    const fsync = vi.spyOn(fs, "fsyncSync").mockImplementation((fd) => {
-      order.push("fsync");
-      return realFsync(fd);
+    const realOpen = fsp.open.bind(fsp);
+    const realRename = fsp.rename.bind(fsp);
+    const open = vi.spyOn(fsp, "open").mockImplementation(async (...args) => {
+      const handle = await realOpen(...args);
+      const realSync = handle.sync.bind(handle);
+      vi.spyOn(handle, "sync").mockImplementation(async () => {
+        order.push("fsync");
+        return realSync();
+      });
+      return handle;
     });
-    const rename = vi.spyOn(fs, "renameSync").mockImplementation((from, to) => {
+    const rename = vi.spyOn(fsp, "rename").mockImplementation(async (from, to) => {
       order.push("rename");
       return realRename(from, to);
     });
@@ -60,13 +66,12 @@ describe("Coordination event-journal ownership boundary", () => {
       { type: "task", ref: { taskId: "batch-b", version: "v_0000000000000002" }, actor: "team-lead", change: "created", taskEvidence: { kind: "created", text: "B" } },
     ]);
     expect(events.map((event) => event.cursor)).toEqual(["1", "2"]);
-    expect(fsync).toHaveBeenCalledTimes(1);
     expect(order).toEqual(["fsync", "rename"]);
     expect(fullRead.mock.calls.filter(([file]) => file === journalPath)).toHaveLength(0);
     fullRead.mockRestore();
     rename.mockRestore();
     expect(journal.readTeamEvents(teamName).events).toHaveLength(2);
-    fsync.mockRestore();
+    open.mockRestore();
     expect(fs.existsSync(journalPath)).toBe(true);
   });
 

@@ -12,7 +12,7 @@ import {
 } from "../task-authority/graph-control";
 import type { GraphTaskCard } from "../task-authority/graph-control-schemas";
 import { projectGraphTaskCards as cards } from "../task-authority/graph-card";
-import { writeJsonAtomic } from "../utils/atomic-json";
+import { writeJsonAtomicAsync } from "../utils/atomic-json";
 import { loadGraphController, readGraphTaskCards, readGraphReadyCards } from "../utils/graph-read-view";
 import { withLock } from "../utils/lock";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../utils/paths";
@@ -95,7 +95,7 @@ export class DurableGraphTaskAuthority {
       if (fs.existsSync(configPath(teamName)) || fs.existsSync(path.join(teamDir(teamName), ".beads"))) {
         throw missingAuthority(teamName);
       }
-      writeJsonAtomic(file, new GraphTaskController().snapshot());
+      await writeJsonAtomicAsync(file, new GraphTaskController().snapshot());
     });
   }
 
@@ -159,7 +159,7 @@ export class DurableGraphTaskAuthority {
         throw error;
       }
       const snapshot = controller.snapshot();
-      if (!result.replayed) writeJsonAtomic(file, snapshot);
+      if (!result.replayed) await writeJsonAtomicAsync(file, snapshot);
       const after = cards(controller);
       const readyIds = new Set(controller.selectReadyFrontier().map((task) => task.id));
       const trace = controller.trace();

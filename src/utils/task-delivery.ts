@@ -12,7 +12,7 @@ import {
   taskOwnerTransitionOutboxPath,
 } from "./paths";
 import { readConfig } from "./teams";
-import { writeJsonAtomic } from "./atomic-json";
+import { writeJsonAtomicAsync } from "./atomic-json";
 import { Check } from "typebox/value";
 import { TaskCardSchema, type CanonicalTaskCard } from "../task-authority/task-domain";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
@@ -301,12 +301,12 @@ async function enqueueTaskProjectionWithConfig(
     if (existing) {
       if (!existing.taskProjection) {
         existing.taskProjection = record.taskProjection;
-        writeJsonAtomic(file, compactRecords(records));
+        await writeJsonAtomicAsync(file, compactRecords(records));
       }
       return existing;
     }
     records.push(record);
-    writeJsonAtomic(file, compactRecords(records));
+    await writeJsonAtomicAsync(file, compactRecords(records));
     return record;
   }));
 }
@@ -394,7 +394,7 @@ export async function reconcileTaskChanges(
         if (!matched || matched.retiredAt || matched.resolvedRecipients?.includes(recipient)) return undefined;
         if (matched.targets === undefined) {
           matched.targets = [{ recipient, recipientMembershipId: binding.membershipId, recipientSessionFile: binding.sessionFile, changeKind: record.changeKind }];
-          writeJsonAtomic(file, latest);
+          await writeJsonAtomicAsync(file, latest);
         }
         return matched.targets.find(candidate => candidate.recipient === recipient);
       });
@@ -410,7 +410,7 @@ export async function reconcileTaskChanges(
         && candidate.changeKind === record.changeKind && candidate.recordedAt === record.recordedAt);
       if (!matched || matched.retiredAt || matched.resolvedRecipients?.includes(recipient)) return;
       matched.resolvedRecipients = [...(matched.resolvedRecipients ?? []), recipient];
-      writeJsonAtomic(file, latest);
+      await writeJsonAtomicAsync(file, latest);
       count += 1;
     });
   }
@@ -431,7 +431,7 @@ async function retireRecoveryRecord(file: string, record: TaskDeliveryRecoveryRe
     if (index < 0 || records[index]?.retiredAt) return;
     const diagnostic = `${reason}: Task ${record?.taskId ?? "unknown"}, version ${record?.taskVersion ?? "unknown"}, recipient ${recipient}.`;
     records[index] = { ...records[index], retiredAt: new Date(hostEnv().clock.now()).toISOString(), recoveryDiagnostic: diagnostic } as TaskDeliveryRecoveryRecord;
-    writeJsonAtomic(file, records);
+    await writeJsonAtomicAsync(file, records);
     console.warn(`[pi-teams] ${diagnostic}`);
   });
 }
@@ -463,7 +463,7 @@ export async function recordTaskDeliveryRecovery(record: TaskDeliveryRecoveryRec
     });
     if (duplicate) return;
     records.push(record);
-    writeJsonAtomic(file, records);
+    await writeJsonAtomicAsync(file, records);
   }));
 }
 
@@ -499,7 +499,7 @@ export async function readTaskDeliveryTombstones(teamName: string, recipient: st
  */
 export async function retireGraphRevisionDeliveries(input: GraphRevisionRetirementInput): Promise<void> {
   await withGraphRevisionLease(input.teamName, async () => {
-    const snapshot = recordGraphRevisionRetirementLocked(input);
+    const snapshot = await recordGraphRevisionRetirementLocked(input);
     if (snapshot.current.authoritySequence !== input.authoritySequence) return;
     const current = new Set(snapshot.current.currentTasks.map((task) => `${task.taskId}\u0000${task.taskVersion}`));
     const retiredAt = snapshot.current.recordedAt;
@@ -520,7 +520,7 @@ export async function retireGraphRevisionDeliveries(input: GraphRevisionRetireme
             record.retiredByGraphVersion = retiredByGraphVersion;
             changed = true;
           }
-          if (changed) writeJsonAtomic(file, compactRecords(records));
+          if (changed) await writeJsonAtomicAsync(file, compactRecords(records));
         });
       }
     }
@@ -535,7 +535,7 @@ export async function retireGraphRevisionDeliveries(input: GraphRevisionRetireme
         record.retiredByGraphVersion = retiredByGraphVersion;
         changed = true;
       }
-      if (changed) writeJsonAtomic(recoveryFile, records);
+      if (changed) await writeJsonAtomicAsync(recoveryFile, records);
     });
 
     const outboxFile = taskOwnerTransitionOutboxPath(input.teamName);
@@ -552,7 +552,7 @@ export async function retireGraphRevisionDeliveries(input: GraphRevisionRetireme
         record.retiredByGraphVersion = retiredByGraphVersion;
         changed = true;
       }
-      if (changed) writeJsonAtomic(outboxFile, compactOwnerTransitionIntents(records));
+      if (changed) await writeJsonAtomicAsync(outboxFile, compactOwnerTransitionIntents(records));
     });
   });
 }
@@ -575,7 +575,7 @@ async function mutateRecords(
       mutate(record);
       count++;
     }
-    if (count > 0) writeJsonAtomic(file, compactRecords(records));
+    if (count > 0) await writeJsonAtomicAsync(file, compactRecords(records));
     return count;
   });
 }
@@ -638,7 +638,7 @@ async function persistTombstones(
       // Each observed delivery suppresses only its own presentation.
       byDeliveryId.set(item.deliveryId, item);
     }
-    writeJsonAtomic(file, [...byDeliveryId.values()]);
+    await writeJsonAtomicAsync(file, [...byDeliveryId.values()]);
   });
 }
 
