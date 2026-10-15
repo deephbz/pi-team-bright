@@ -6,7 +6,19 @@ import { SimWorld } from "./world";
 import { generationKey } from "./process-table";
 import { WORLD_TRACE_VERSION, type ActorRef, type Fault, type ReplayReceipt, type WorldStep, type WorldTrace } from "./trace-format";
 
-export const RUNNER_VERSION = "sim-c1/6";
+export const RUNNER_VERSION = "sim-c1/7";
+
+export class ReplayBoundExceededError extends Error {
+  readonly kind = "replay_bound_exceeded";
+  constructor(
+    readonly bounds: ReplayReceipt["bounds"],
+    readonly observed: { steps: number; virtualMs: number; lastOperation: string },
+  ) {
+    super(`Replay bound exceeded (${observed.steps}/${bounds.maxSteps} steps, ${observed.virtualMs}/${bounds.maxVirtualMs} ms; last ${observed.lastOperation})`);
+    this.name = "ReplayBoundExceededError";
+  }
+}
+
 export function actorKey(who: ActorRef): string { return `${who.team}/${who.actor}`; }
 
 /** Resolve only explicit references. Stale literal versions remain stale. */
@@ -219,7 +231,13 @@ export class WorldReplay {
     const epoch = this.world.scheduler.now;
     const initialOperations = this.world.scheduler.decisions.length;
     const check = () => {
-      if (this.world.scheduler.decisions.length - initialOperations > bounds.maxSteps || this.world.scheduler.now - epoch > bounds.maxVirtualMs) throw new Error(`Replay bound exceeded (${this.world.scheduler.decisions.length - initialOperations}/${bounds.maxSteps} steps, ${this.world.scheduler.now - epoch}/${bounds.maxVirtualMs} ms; last ${this.world.scheduler.decisions.at(-1)?.selected ?? "none"})`);
+      const steps = this.world.scheduler.decisions.length - initialOperations;
+      const virtualMs = this.world.scheduler.now - epoch;
+      if (steps > bounds.maxSteps || virtualMs > bounds.maxVirtualMs) {
+        throw new ReplayBoundExceededError(bounds, {
+          steps, virtualMs, lastOperation: this.world.scheduler.decisions.at(-1)?.selected ?? "none",
+        });
+      }
     };
     let previous = 0;
     for (const [index, input] of trace.steps.entries()) {
@@ -232,7 +250,10 @@ export class WorldReplay {
         await this.world.scheduler.step(true);
       }
       if (target > this.world.scheduler.now) this.world.scheduler.advance(target - this.world.scheduler.now);
-      this.world.scheduler.enqueue(`input:${index}:${input.step.kind}`, () => this.apply(input.step, index));
+      // Pi input promises belong to that actor. Death must drop their pending
+      // continuations just as it cancels their timers. OS inputs stay world-owned.
+      const actor = "who" in input.step && !input.step.kind.startsWith("os.") ? actorKey(input.step.who) : undefined;
+      this.world.scheduler.enqueue(`input:${index}:${input.step.kind}`, () => this.apply(input.step, index), { actor });
       await this.world.drain({ maxSteps: Math.max(1, bounds.maxSteps - (this.world.scheduler.decisions.length - initialOperations)) });
       check();
     }

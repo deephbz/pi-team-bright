@@ -3,16 +3,24 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import fc from "fast-check";
 import { expect, it } from "vitest";
-import { replayTrace, RUNNER_VERSION } from "./replay";
+import { ReplayBoundExceededError, replayTrace, RUNNER_VERSION } from "./replay";
 import { validateWorldTrace } from "./extract/validate";
 import type { WorldTrace } from "./trace-format";
 import deadPi from "./fixtures/traces/bound-pi-dead.json";
 
-type Outcome = { id: string; seed: number; status: "replayed" | "unsupported"; operations?: number; deadPiReuse?: boolean; error?: string };
+type Outcome = { id: string; seed: number; status: "replayed" | "unsupported"; operations?: number; deadPiReuse?: boolean; error?: string; failureKind?: ReplayBoundExceededError["kind"] };
 async function run(trace: WorldTrace, seed: number): Promise<Outcome> {
   validateWorldTrace(trace);
   try {
     const first = await replayTrace(trace, { seed });
+    if (["synthetic-escape", "synthetic-restart"].includes(trace.id)) {
+      // These lifecycle scenarios start after admission. Setup drives the real
+      // authorities until pending startup work completes; no fixed delay grants it.
+      const action = first.history.find(e => e.kind === "world.input" && "who" in e.step && e.step.who.actor === "w1");
+      expect(action).toBeDefined();
+      expect(first.history.some(e => e.kind === "durable.runtime" && e.record?.agentName === "w1"
+        && e.origin.kind === "setup" && e.sequence < action!.sequence)).toBe(true);
+    }
     const second = await replayTrace(trace, { receipt: first.receipt });
     expect(second).toEqual(first);
     const deadWorker = first.processes.findLast(process => process.actor === "team-1/w1")?.alive === false;
@@ -21,8 +29,10 @@ async function run(trace: WorldTrace, seed: number): Promise<Outcome> {
     return { id: trace.id, seed, status: "replayed", operations: first.decisions.length, deadPiReuse: deadWorker && reused };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    if (error instanceof ReplayBoundExceededError) {
+      return { id: trace.id, seed, status: "unsupported", failureKind: error.kind, error: message };
+    }
     const knownGaps: Record<string, string> = {
-      "synthetic-clock-gap": "Replay bound exceeded",
       "synthetic-pane-loss": "No such process",
       "synthetic-stale-binding": "Pi cross-Session fork allocation is not modeled yet",
     };
@@ -47,9 +57,13 @@ it("records bounded synthetic and fast-check real-actor campaign outcomes withou
   const report = { runnerVersion: RUNNER_VERSION, sourceRevision: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(), scope: "Bounded real-actor campaign; unsupported fixtures are gaps, not verified properties", generator: { seed: 20261012, numRuns: 12, samples }, fixtures, generated };
   console.info(JSON.stringify(report, null, 2));
   if (process.env.PI_SIM_RECORD_CAMPAIGN === "1") fs.writeFileSync(path.join(__dirname, "results/current-campaign.json"), JSON.stringify(report, null, 2) + "\n");
+  expect(fixtures.find(result => result.id === "synthetic-clock-gap")).toMatchObject({
+    status: "unsupported", failureKind: "replay_bound_exceeded",
+  });
   expect(generated.every(result => result.status === "replayed")).toBe(true);
   expect(fixtures.find(result => result.id === "synthetic-shutdown-resume")?.status).toBe("replayed");
   expect(fixtures.find(result => result.id === "synthetic-never-starts")?.status).toBe("replayed");
   expect(fixtures.find(result => result.id === "synthetic-bound-pi-dead")?.status).toBe("replayed");
   expect(fixtures.find(result => result.id === "synthetic-restart")?.status).toBe("replayed");
+  expect(fixtures.find(result => result.id === "synthetic-escape")?.status).toBe("replayed");
 }, 120000);
