@@ -515,7 +515,9 @@ describe("Task-native delivery", () => {
 
     await delivery.start([]);
 
-    expect(reconcileReady).toHaveBeenCalledOnce();
+    // The scan's own asynchronous record write can wake the watcher and request
+    // one idempotent rescan before start returns. Delivery stays exactly once.
+    expect(reconcileReady).toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledOnce();
     expect(sendMessage.mock.calls[0]?.[0]).toMatchObject({
       details: { deliveryIds: [record?.deliveryId] },
