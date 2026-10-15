@@ -128,6 +128,76 @@ describe("Coordination event-journal ownership boundary", () => {
     expect(journal.readTeamEventPages(teamName, { afterCursor: "100" }).map((page) => page.cursor)).toEqual(["121"]);
   });
 
+  it("reads a 10,000-event paging loop from one journal image", () => {
+    const journalPath = teamEventJournalPath(teamName);
+    const lines = Array.from({ length: 10_000 }, (_, index) => JSON.stringify({
+      type: "alert", cursor: String(index + 1), at: "2026-09-26T00:00:00Z",
+      alertId: `alert-${index + 1}`, from: "team-lead", to: "worker", kind: "attention", text: "event",
+    }));
+    const image = `${lines.join("\n")}\n`;
+    fs.mkdirSync(path.dirname(journalPath), { recursive: true });
+    fs.writeFileSync(journalPath, image);
+    const read = vi.spyOn(fs, "readSync");
+
+    let cursor = "0";
+    let pages = 0;
+    do {
+      const page = journal.readTeamEvents(teamName, { afterCursor: cursor, limit: 100 });
+      expect(page.events).toHaveLength(100);
+      pages++;
+      cursor = page.cursor;
+      if (!page.truncated) break;
+    } while (true);
+
+    expect(pages).toBe(100);
+    expect(cursor).toBe("10000");
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith(expect.any(Number), expect.any(Buffer), 0, Buffer.byteLength(image), 0);
+    read.mockRestore();
+  });
+
+  it("reads only appended bytes and rejects non-monotonic appended cursors", async () => {
+    const journalPath = teamEventJournalPath(teamName);
+    await journal.appendTeamEvent(teamName, {
+      type: "alert", alertId: "first", from: "team-lead", to: "worker", kind: "attention", text: "first",
+    });
+    journal.readTeamEvents(teamName);
+    const appended = `${JSON.stringify({ cursor: "2", type: "alert", alertId: "second", from: "team-lead", to: "worker", kind: "attention", text: "second", at: "2026-09-26T00:00:00Z" })}\n`;
+    fs.appendFileSync(journalPath, appended);
+    const read = vi.spyOn(fs, "readSync");
+    expect(journal.readTeamEvents(teamName).events).toHaveLength(2);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith(expect.any(Number), expect.any(Buffer), 0, Buffer.byteLength(appended), expect.any(Number));
+    read.mockRestore();
+
+    fs.appendFileSync(journalPath, `${JSON.stringify({ cursor: "2", type: "alert", alertId: "duplicate", from: "team-lead", to: "worker", kind: "attention", text: "duplicate", at: "2026-09-26T00:00:00Z" })}\n`);
+    expect(() => journal.readTeamEvents(teamName)).toThrow(/cursors must increase monotonically/);
+  });
+
+  it("revalidates replaced and truncated journals and fails closed on a torn suffix", async () => {
+    const journalPath = teamEventJournalPath(teamName);
+    await journal.appendTeamEvent(teamName, {
+      type: "alert", alertId: "first", from: "team-lead", to: "worker", kind: "attention", text: "first",
+    });
+    expect(journal.readTeamEvents(teamName).headCursor).toBe("1");
+
+    const replacement = `${JSON.stringify({ cursor: "7", type: "alert", alertId: "replacement", from: "team-lead", to: "worker", kind: "attention", text: "replacement", at: "2026-09-26T00:00:00Z" })}\n`;
+    const replacementPath = `${journalPath}.replacement`;
+    fs.writeFileSync(replacementPath, replacement);
+    fs.renameSync(replacementPath, journalPath);
+    expect(journal.readTeamEvents(teamName).headCursor).toBe("7");
+    fs.writeFileSync(journalPath, `${JSON.stringify({ cursor: "1", type: "alert", alertId: "truncated", from: "team-lead", to: "worker", kind: "attention", text: "truncated", at: "2026-09-26T00:00:00Z" })}\n`);
+    expect(journal.readTeamEvents(teamName).headCursor).toBe("1");
+
+    fs.appendFileSync(journalPath, '{"cursor":"2","type":"alert"');
+    expect(() => journal.readTeamEvents(teamName)).toThrow();
+    const recovered = await journal.appendTeamEvent(teamName, {
+      type: "alert", alertId: "recovered", from: "team-lead", to: "worker", kind: "attention", text: "recovered",
+    });
+    expect(recovered.cursor).toBe("2");
+    expect(journal.readTeamEvents(teamName).events.map((event) => event.cursor)).toEqual(["1", "2"]);
+  });
+
   it("keeps consumers on the canonical journal path", () => {
     for (const sourcePath of productionTypeScriptPaths(path.resolve("src"))) {
       expect(fs.readFileSync(sourcePath, "utf8")).not.toMatch(/utils\/team-events/);
