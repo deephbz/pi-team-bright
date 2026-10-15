@@ -8,7 +8,7 @@ import { DurableGraphTaskAuthority } from "../../src/adapters/durable-graph-task
 import { DurableGraphTaskStateDeliveryQuery } from "../../src/adapters/durable-graph-task-read";
 import { DurableTaskMutationPublication } from "../../src/adapters/durable-task-mutation-publication";
 import { DurableGraphTaskOrchestration } from "../../src/task-authority/graph-orchestration";
-import { GraphTaskController } from "../../src/task-authority/graph-control";
+import { GraphTaskController, GraphObservationRecovery } from "../../src/task-authority/graph-control";
 import { CoordinationObservationService } from "../../src/coordination/observation-service";
 import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/coordination/task-change-projection";
 import { snapshotEntry } from "../../test/support/branch-observation";
@@ -47,8 +47,8 @@ it.skipIf(!process.env.PTB_GRAPH_MEMO_OUTPUT)("measures unchanged and post-write
   baseline();
   let counts: Record<string, { count: number; ms: number }> = {};
   const rows: unknown[] = [];
-  for (const method of ["recover", "readTasks", "readAttempts", "derive"] as const) {
-    const target = (method === "recover" ? GraphTaskController : GraphTaskController.prototype) as any;
+  for (const method of ["recover", "readTasks", "readAttempts", "derive"] as const) for (const target of (method === "recover"
+    ? [GraphTaskController, GraphObservationRecovery.prototype] : [GraphTaskController.prototype]) as any[]) {
     const original = target[method];
     vi.spyOn(target, method).mockImplementation(function(this: unknown, ...args: unknown[]) {
       const start = performance.now();

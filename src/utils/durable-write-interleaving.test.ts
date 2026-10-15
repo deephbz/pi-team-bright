@@ -2,7 +2,8 @@ import fs from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { GraphTaskController, type GraphControlSnapshot } from "../task-authority/graph-control";
-import { readCurrentGraphTaskCoordinatesLocked, withGraphRevisionLease } from "./graph-revision-retirement";
+import { withGraphRevisionLease } from "./graph-revision-retirement";
+import { readGraphTaskCoordinates } from "./graph-read-view";
 import { graphTaskAuthorityPath, teamDir } from "./paths";
 import { nodeHostEnv } from "../env/host-env";
 
@@ -47,7 +48,7 @@ it("keeps readers and successor receipts fenced while an async graph replacement
     expect(visible.hasOperationReceipt("next")).toBe(false);
     // Delivery-currentness readers use a distinct lease and can see only the
     // complete old snapshot while the writer has not renamed its replacement.
-    const coordinates = await withGraphRevisionLease(team, async () => readCurrentGraphTaskCoordinatesLocked(team));
+    const coordinates = await withGraphRevisionLease(team, async () => readGraphTaskCoordinates(team));
     expect(coordinates).toEqual(new Set([`task\u0000${initial!.version}`]));
   } finally { release(); }
   const [committed, observed, successor] = await Promise.all([first, read, next]);

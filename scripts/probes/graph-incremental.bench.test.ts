@@ -48,8 +48,8 @@ it.skipIf(!process.env.PTB_GRAPH_INCREMENTAL_OUTPUT)("measures unchanged and pos
   baseline();
   let counts: Record<string, { count: number; ms: number }> = {};
   const rows: unknown[] = [];
-  for (const method of ["recover", "readTasks", "readAttempts", "derive"] as const) {
-    const target = (method === "recover" ? GraphTaskController : GraphTaskController.prototype) as any;
+  for (const method of ["recover", "readTasks", "readAttempts", "derive"] as const) for (const target of (method === "recover"
+    ? [GraphTaskController, graphControl.GraphObservationRecovery.prototype] : [GraphTaskController.prototype]) as any[]) {
     const original = target[method];
     vi.spyOn(target, method).mockImplementation(function(this: unknown, ...args: unknown[]) {
       const start = performance.now();
@@ -57,8 +57,8 @@ it.skipIf(!process.env.PTB_GRAPH_INCREMENTAL_OUTPUT)("measures unchanged and pos
       finally { const row = counts[method] ??= { count: 0, ms: 0 }; row.count++; row.ms += performance.now() - start; }
     });
   }
-  const validatorClass = (graphControl as any).GraphSnapshotValidator;
-  if (validatorClass) for (const method of ["revisionFingerprint", "validateRevision"] as const) {
+  const validatorClass = graphControl.GraphObservationRecovery;
+  for (const method of ["revisionFingerprint", "validateRevision"] as const) {
     const original = validatorClass.prototype[method];
     vi.spyOn(validatorClass.prototype, method).mockImplementation(function(this: unknown, ...args: unknown[]) {
       const start = performance.now();
@@ -102,7 +102,7 @@ it.skipIf(!process.env.PTB_GRAPH_INCREMENTAL_OUTPUT)("measures unchanged and pos
       }
     }
     const snapshot = JSON.parse(fs.readFileSync(`${dest}/task-authority/graph-control.json`, "utf8"));
-    fs.writeFileSync(process.env.PTB_GRAPH_INCREMENTAL_OUTPUT!, JSON.stringify({ incrementalValidationCounters: !!validatorClass, workers: workers.length, tasks: tasks.length, sourceBytes: fs.statSync("/tmp/ptb-freeze/graph-source/team/task-authority/graph-control.json").size,
+    fs.writeFileSync(process.env.PTB_GRAPH_INCREMENTAL_OUTPUT!, JSON.stringify({ incrementalValidationCounters: true, workers: workers.length, tasks: tasks.length, sourceBytes: fs.statSync("/tmp/ptb-freeze/graph-source/team/task-authority/graph-control.json").size,
       revisions: snapshot.graphRevisions.length, events: snapshot.events.length, projectedJsonBytes: Buffer.byteLength(JSON.stringify(tasks)), rows }, null, 2));
   } finally { delivery.stop(); service.clearPending(session); vi.restoreAllMocks(); }
 }, 240_000);
