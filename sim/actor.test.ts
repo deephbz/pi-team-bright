@@ -2,11 +2,44 @@ import { describe, expect, it } from "vitest";
 import { SimActor } from "./actor";
 import { SimWorld } from "./world";
 import { loadActorExtension } from "./actor-loader";
-import { replayTrace } from "./replay";
+import { ReplayBoundExceededError, replayTrace, WorldReplay } from "./replay";
 import type { WorldTrace } from "./trace-format";
+import deadPi from "./fixtures/traces/bound-pi-dead.json";
 
 /** Real extension factories use actor-scoped capabilities, including during module configuration. */
 describe("real extension actor harness", () => {
+  it.each([
+    { maxSteps: 0, maxVirtualMs: 100 },
+    { maxSteps: 100, maxVirtualMs: 0 },
+  ])("classifies replay bounds without matching diagnostics: %j", async bounds => {
+    const world = new SimWorld(1);
+    try {
+      const trace: WorldTrace = { version: 1, id: "bounded", source: "synthetic", assumptions: [],
+        setup: { ptbVersion: "v3.1", teams: [] },
+        steps: [{ at: 1, step: { kind: "fault.clear", source: "herdr" } }],
+      };
+      const error = await new WorldReplay(world).run(trace, bounds).catch(error => error);
+      expect(error).toBeInstanceOf(ReplayBoundExceededError);
+      expect(error).toMatchObject({ kind: "replay_bound_exceeded", bounds, observed: {
+        steps: 1, virtualMs: 1, lastOperation: "1:input:0:fault.clear",
+      } });
+      expect(error.message).toContain("1/");
+    } finally { world.dispose(); }
+  });
+
+  it("drops a killed Worker's pending startup input while the lead continues", async () => {
+    const trace = structuredClone(deadPi) as WorldTrace;
+    trace.id = "startup-input-owner";
+    for (const input of trace.steps) if (input.at >= 2) input.at = input.step.kind === "os.kill" ? 7 : 20;
+    const result = await replayTrace(trace, { seed: 2 });
+    expect((await replayTrace(trace, { receipt: result.receipt })).history).toEqual(result.history);
+    const death = result.history.find(e => e.kind === "process.death" && e.process.actorKey === "team-1/w1");
+    expect(death).toBeDefined();
+    const recovery = result.history.find(e => e.kind === "tool.result" && e.name === "ensure_worker" && e.sequence > death!.sequence);
+    expect(recovery?.kind === "tool.result" && recovery.result.details).toMatchObject({ kind: "attention", reason: "launch_pending" });
+    expect(result.history.some(e => e.kind === "durable.runtime" && e.record?.agentName === "w1")).toBe(false);
+  }, 15000);
+
   it("loads independent lead and Worker tool projections", async () => {
     const world = new SimWorld(1);
     try {
