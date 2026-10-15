@@ -1,4 +1,5 @@
 import { nodeHostEnv } from "../../src/env/host-env";
+import { writeJsonFixture } from "../../src/utils/test-write-json";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
@@ -134,7 +135,7 @@ async function durableFixture(policy: TeamConfigSyncLiveness = { waitSeconds: 12
   await teams.createTeam(name, sessionFile, "leader-agent", "Liveness fixture", undefined, undefined, undefined, undefined, undefined, undefined, policy);
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "liveness" }];
-  teams.writeConfigAtomic(paths.configPath(name), config);
+  writeJsonFixture(paths.configPath(name), config);
   const session = exactLeaderSessionId(`session-${name}`);
   port.setLeaderSessionFile(session, sessionFile);
   port.setBranchContext(session, ["root", "branch"]);
@@ -177,7 +178,7 @@ describe("hardened coordination liveness boundaries", () => {
 
     config.members.push(current);
     config.logicalWorkers = [{ name: "worker", scope: "Verify liveness." }];
-    teams.writeConfigAtomic(paths.configPath(name), config);
+    writeJsonFixture(paths.configPath(name), config);
     const publication = new DurableTaskMutationPublication();
     const graph = new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
     expect(await graph.applyGraph(name, { operationId: "assign", tasks: [{ key: "work", title: "Work", goal: "Verify liveness.", assignee: "worker" }] })).toMatchObject({ kind: "applied" });
@@ -393,7 +394,7 @@ describe("hardened coordination liveness boundaries", () => {
     const fixture = await durableFixture();
     const current = await teams.readConfig(fixture.name);
     current.members.push(member({ name: "worker", membershipId: "stale", sessionFile: "stale-session" }));
-    teams.writeConfigAtomic(paths.configPath(fixture.name), current);
+    writeJsonFixture(paths.configPath(fixture.name), current);
     const observation = await readWorkerRunObservation(fixture.name, current.members.at(-1)!, livenessQueries);
     expect(observation).toMatchObject({ state: "unknown", actuationPending: false });
     expect(livenessIsComplete([observation])).toBe(false);
